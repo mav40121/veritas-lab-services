@@ -10,7 +10,7 @@ export default function TrustPage() {
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-16">
       <h1 className="font-serif text-3xl font-bold mb-2">Trust & Security</h1>
-      <p className="text-sm text-muted-foreground mb-8">Effective Date: May 17, 2026 · Veritas Lab Services, LLC</p>
+      <p className="text-sm text-muted-foreground mb-8">Effective Date: October 15, 2026 · Veritas Lab Services, LLC</p>
 
       <div className="prose prose-sm dark:prose-invert max-w-none space-y-6 text-sm leading-relaxed">
 
@@ -71,7 +71,6 @@ export default function TrustPage() {
         <section>
           <h2 className="font-semibold text-base mb-2">8. Backups and Disaster Recovery</h2>
           <p>The production database is backed up nightly to an independent S3-compatible object storage provider (Cloudflare R2) in a different vendor than the application host. Backups are gzip-compressed, retained for two years (730 days), and pruned automatically. Each backup run is validated against a five-point integrity check (file size, SQLite structural integrity, user count, study count, table count); anomalies trigger an email alert. The backup destination is access-controlled with a bucket-scoped credential that cannot read or modify anything else in the operator's account.</p>
-          <p>Customer database snapshots are also available on request. Send a request to <a href="mailto:info@veritaslabservices.com" className="text-primary hover:underline">info@veritaslabservices.com</a> and we will provide a current snapshot within five business days.</p>
         </section>
 
         <section>
