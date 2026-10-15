@@ -486,16 +486,23 @@ export function blandAltmanSVG(avgs: number[], pctDiffs: number[], cliaError: nu
 const SERIES_COLORS = ["#0e8a82", "#d97706", "#7c3aed", "#2563eb", "#db2777", "#4b5563"];
 export type CompSeries = { name: string; x: number[]; y: number[] }; // x = primary values, y = this comparison
 
-function legendSVG(series: CompSeries[], xRight: number, yTop: number): string {
-  return series.map((sr, i) =>
-    `<text x="${xRight}" y="${yTop + i * 10}" text-anchor="end" font-size="7.5" fill="${SERIES_COLORS[i % SERIES_COLORS.length]}" font-weight="600">\u25CF ${escapeHtml(sr.name)}</text>`
-  ).join("");
+// Legend as one row under the chart title, so it never covers a data point.
+function legendSVG(series: CompSeries[], xLeft: number, y: number): string {
+  let x = xLeft;
+  return series.map((sr, i) => {
+    const label = `\u25CF ${sr.name}`;
+    const out = `<text x="${x}" y="${y}" font-size="7.5" fill="${SERIES_COLORS[i % SERIES_COLORS.length]}" font-weight="600">${escapeHtml(label)}</text>`;
+    x += label.length * 4.6 + 10;
+    return out;
+  }).join("");
 }
+let chartClipSeq = 0;
 
 export function scatterSeriesSVG(series: CompSeries[], xLabel: string, title: string, w = 320, h = 220): string {
   const allX = series.flatMap((sr) => sr.x), allY = series.flatMap((sr) => sr.y);
   if (!allX.length || !allY.length) return `<svg width="${w}" height="${h}"></svg>`;
-  const ml = 48, mr = 16, mt = 28, mb = 36;
+  const ml = 48, mr = 16, mt = 38, mb = 36;
+  const clipId = `mcclip${++chartClipSeq}`;
   const pw = w - ml - mr, ph = h - mt - mb;
   const lo = Math.min(...allX, ...allY), hi = Math.max(...allX, ...allY);
   const pad = (hi - lo) * 0.1 || 1;
@@ -522,7 +529,8 @@ export function scatterSeriesSVG(series: CompSeries[], xLabel: string, title: st
   return `<svg width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg" style="background:#f8fafc;border:1px solid #cdd1d6;border-radius:4px">
   <text x="${w / 2}" y="16" text-anchor="middle" font-size="10" font-weight="600" fill="#14141e">${escapeHtml(title)}</text>
   <rect x="${ml}" y="${mt}" width="${pw}" height="${ph}" fill="white" stroke="#cdd1d6" stroke-width="0.5"/>
-  ${grid}${identity}${marks}${legendSVG(series, ml + pw - 4, mt + 10)}
+  <defs><clipPath id="${clipId}"><rect x="${ml}" y="${mt}" width="${pw}" height="${ph}"/></clipPath></defs>
+  ${grid}<g clip-path="url(#${clipId})">${identity}${marks}</g>${legendSVG(series, ml, 29)}
   <text x="${ml + pw / 2}" y="${h - 4}" text-anchor="middle" font-size="9" fill="#646e78">${escapeHtml(xLabel)}</text>
   <text x="10" y="${mt + ph / 2}" text-anchor="middle" font-size="9" fill="#646e78" transform="rotate(-90,10,${mt + ph / 2})">Comparison analyzers</text>
 </svg>`;
@@ -545,7 +553,8 @@ export function blandAltmanSeriesSVG(series: CompSeries[], tea: number, absolute
   const minY = -span, maxY = span;
   const minX = Math.min(...allAvg), maxX = Math.max(...allAvg);
   const padX = (maxX - minX) * 0.1 || 1;
-  const ml = 48, mr = 16, mt = 28, mb = 36;
+  const ml = 48, mr = 16, mt = 38, mb = 36;
+  const clipId = `mcclip${++chartClipSeq}`;
   const pw = w - ml - mr, ph = h - mt - mb;
   const cx = (v: number) => ml + ((v - minX + padX) / (maxX - minX + 2 * padX)) * pw;
   const cy = (v: number) => mt + ph - ((v - minY) / (maxY - minY)) * ph;
@@ -566,7 +575,8 @@ export function blandAltmanSeriesSVG(series: CompSeries[], tea: number, absolute
   return `<svg width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg" style="background:#f8fafc;border:1px solid #cdd1d6;border-radius:4px">
   <text x="${w / 2}" y="16" text-anchor="middle" font-size="10" font-weight="600" fill="#14141e">Bland-Altman (limits ${limitLabel})</text>
   <rect x="${ml}" y="${mt}" width="${pw}" height="${ph}" fill="white" stroke="#cdd1d6" stroke-width="0.5"/>
-  ${grid}${zeroLine}${upper}${lower}${marks}${legendSVG(series, ml + pw - 4, mt + 10)}
+  <defs><clipPath id="${clipId}"><rect x="${ml}" y="${mt}" width="${pw}" height="${ph}"/></clipPath></defs>
+  ${grid}<g clip-path="url(#${clipId})">${zeroLine}${upper}${lower}${marks}</g>${legendSVG(series, ml, 29)}
   <text x="${ml + pw / 2}" y="${h - 4}" text-anchor="middle" font-size="9" fill="#646e78">Mean of Methods</text>
   <text x="10" y="${mt + ph / 2}" text-anchor="middle" font-size="9" fill="#646e78" transform="rotate(-90,10,${mt + ph / 2})">${yLabel}</text>
 </svg>`;
