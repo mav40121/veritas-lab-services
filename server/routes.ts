@@ -53,6 +53,8 @@ import { legacySeatForUser, seatForRequest } from "./seatContext";
 import { checkAuthToken, verifySessionJwt, issueSession, endSessions, touchSession, issuePurposeToken, verifyPurposeToken, describeDevice, clientIp } from "./sessionAuth";
 import { passwordProblem } from "@shared/passwordRule";
 import { registerTwoFactorRoutes, twoFactorLoginGate, setupResponse } from "./twoFactorRoutes";
+import { registerSsoRoutes } from "./ssoRoutes";
+import { ssoConfigForEmail } from "./sso";
 import { mfaRequirement, getMfa, isEnrolled, setTwoFactorEmailSender, forgetDevices } from "./twoFactor";
 import { labWideCorrelation, correlationPeerInstruments, describeCorrelationInstrument, rowComplexity, mapComplianceGaps } from "./labWideCorrelation";
 import { seedProfileFor, seedTeaFor, seedCalVerPoints, seedMethodCompQuant, seedMethodCompCategorical, seedStudyDate } from "./seedStudyProfiles";
@@ -4147,6 +4149,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (r?.error) throw new Error(r.error.message || String(r.error));
   } : null);
   registerTwoFactorRoutes(app, { sqlite: (db as any).$client, storage, authMiddleware, labScopeMiddleware, logAudit, buildSignIn, adminSecret: ADMIN_SECRET });
+  // Single sign-on (server/sso.ts, server/ssoRoutes.ts; Michael 2026-10-15, Q39 = 1).
+  registerSsoRoutes(app, { sqlite: (db as any).$client, storage, logAudit, buildSignIn, adminSecret: ADMIN_SECRET });
 
   // 2026-10-08 (St. Charles: "trace a QC failure, corrective action, and
   // resolution for a specific analyzer"): QC runs and equipment records point at
@@ -6874,6 +6878,16 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (rl.blocked) {
       res.setHeader("Retry-After", String(rl.retryAfterSec));
       return res.status(429).json({ error: "Too many login attempts. Please wait and try again." });
+    }
+    // Single sign-on (server/sso.ts): a domain that requires SSO cannot sign in with a password.
+    // Veritas support accounts keep their own sign-in. Decided by domain, so it reveals no account.
+    const ssoCfg = ssoConfigForEmail((db as any).$client, email);
+    if (ssoCfg && Number(ssoCfg.required) === 1) {
+      const su = storage.getUserByEmail(email);
+      const support = su ? Number(((db as any).$client.prepare("SELECT COALESCE(vls_support, 0) AS v FROM users WHERE id = ?").get(su.id) as any)?.v) === 1 : false;
+      if (!support) {
+        return res.status(403).json({ error: "Your organization signs in with single sign-on.", code: "SSO_REQUIRED", sso_start: `/api/auth/sso/start?email=${encodeURIComponent(email.toLowerCase())}` });
+      }
     }
     const user = storage.getUserByEmail(email);
     if (!user) { recordLoginFailure(rlKey); return res.status(401).json({ error: "Invalid email or password" }); }
@@ -19073,6 +19087,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   app.post("/api/auth/forgot-password", async (req, res) => {
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: "Email required" });
+    // Single sign-on required for this domain (server/sso.ts): no password to reset; the person signs
+    // in with their organization's account. Decided by domain, so it reveals no account.
+    if (Number(ssoConfigForEmail((db as any).$client, String(email))?.required) === 1) return res.json({ ok: true, sso_required: true });
     const user = storage.getUserByEmail(email.toLowerCase());
     // Always return 200 to prevent user enumeration
     if (!user) return res.json({ ok: true });

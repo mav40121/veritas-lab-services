@@ -53,6 +53,18 @@ const US_STATES = [
   "OK","OR","PA","RI","SC","SD","TN","TX","UT","VA","VT","WA","WI","WV","WY",
 ];
 
+const SSO_ERRORS: Record<string, string> = {
+  not_configured: "Single sign-on isn't set up for that email. Sign in with your password.",
+  provider_unavailable: "We couldn't reach your organization's sign-in. Try again in a minute.",
+  provider_refused: "Your organization's sign-in didn't finish. Try again, or contact your IT team.",
+  expired: "That sign-in took too long or was already used. Try again.",
+  token_rejected: "We couldn't verify the sign-in from your organization. Try again, or contact your IT team.",
+  no_email: "Your organization's sign-in didn't share an email address. Contact your IT team.",
+  domain_not_allowed: "That account isn't set up for single sign-on with VeritaAssure.",
+  no_account: "There's no VeritaAssure account for that email yet. Ask your lab's VeritaAssure admin to invite you.",
+  support_account: "Veritas support accounts sign in with their own password and two-factor code.",
+};
+
 export default function LoginPage() {
   const labRoute = useLabRoute();
   const { login } = useAuth();
@@ -110,6 +122,8 @@ export default function LoginPage() {
   // Two-factor sign-in: the code step or first-time setup, between the password and the session.
   const [mfaStep, setMfaStep] = useState<any>(null);
   const [mfaEmail, setMfaEmail] = useState("");
+  // Single sign-on (server/ssoRoutes.ts): a sign-in returning from the organization's login, or why it failed.
+  const [ssoError, setSsoError] = useState<string | null>(null);
 
   // Debounced hospital search
   useEffect(() => {
@@ -136,6 +150,37 @@ export default function LoginPage() {
     }, 300);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [hospitalQuery, hospitalState]);
+
+  // Returning from the organization's sign-in: /login?sso=<one-time code> or /login?sso_error=<reason>.
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    const code = p.get("sso");
+    const err = p.get("sso_error");
+    if (!code && !err) return;
+    window.history.replaceState(null, "", window.location.pathname);
+    if (err) { setSsoError(SSO_ERRORS[err] || SSO_ERRORS.provider_unavailable); return; }
+    void (async () => {
+      setLoading(true);
+      try {
+        const res = await apiRequest("POST", "/api/auth/sso/complete", { code });
+        const data = await res.json();
+        finishSignIn(data, data?.user?.email || "");
+      } catch { setSsoError(SSO_ERRORS.expired); }
+      finally { setLoading(false); }
+    })();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function handleSso() {
+    const email = loginForm.email.trim();
+    if (!email) { setSsoError("Enter your work email first, then choose Sign in with your organization."); return; }
+    setSsoError(null);
+    try {
+      const res = await apiRequest("POST", "/api/auth/sso/lookup", { email });
+      const data = await res.json();
+      if (data?.sso && data.start) { window.location.assign(data.start); return; }
+      setSsoError(`Single sign-on isn't set up for ${email.split("@")[1] || "that email"}. Sign in with your password.`);
+    } catch { setSsoError(SSO_ERRORS.provider_unavailable); }
+  }
 
   function handleLabTypeSelect(lt: LabType) {
     setLabType(lt);
@@ -173,12 +218,20 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     setSessionConflict(false);
+    setSsoError(null);
     try {
       const res = await apiRequest("POST", "/api/auth/login", { ...loginForm, device_token: rememberedDeviceToken(loginForm.email) });
       const data = await res.json();
       if (!res.ok) { toast({ title: data.error || "Login failed", variant: "destructive" }); return; }
       finishSignIn(data, loginForm.email);
-    } catch { toast({ title: "Login failed", variant: "destructive" }); }
+    } catch (err: any) {
+      // A domain that requires single sign-on: go to the organization's sign-in instead.
+      if (String(err?.message || "").includes("SSO_REQUIRED")) {
+        window.location.assign(`/api/auth/sso/start?email=${encodeURIComponent(loginForm.email.trim())}`);
+        return;
+      }
+      toast({ title: "Login failed", variant: "destructive" });
+    }
     finally { setLoading(false); }
   }
 
@@ -368,9 +421,21 @@ export default function LoginPage() {
                 ) : (
                   <form onSubmit={handleLogin} className="space-y-4">
                     <div className="space-y-1.5"><Label>Email</Label><Input type="email" value={loginForm.email} onChange={e => setLoginForm(f => ({ ...f, email: e.target.value }))} placeholder="you@lab.com" required /></div>
-                    <div className="space-y-1.5"><Label>Password</Label><Input type="password" value={loginForm.password} onChange={e => setLoginForm(f => ({ ...f, password: e.target.value }))} required /></div>
+                    <div className="space-y-1.5"><Label>Password</Label><Input type="password" value={loginForm.password} onChange={e => setLoginForm(f => ({ ...f, password: e.target.value }))} required data-testid="login-password" /></div>
                     <Button type="submit" disabled={loading} className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">{loading ? "Signing in..." : "Sign In"}</Button>
                     <p className="text-center text-xs text-muted-foreground"><a href="/reset-password" className="text-primary hover:underline">Forgot your password?</a></p>
+                    {!onStock && (
+                      <>
+                        <div className="flex items-center gap-3"><div className="flex-1 border-t" /><span className="text-[11px] text-muted-foreground">or</span><div className="flex-1 border-t" /></div>
+                        <Button type="button" variant="outline" className="w-full" onClick={() => void handleSso()} disabled={loading} data-testid="sso-button">
+                          Sign in with your organization
+                        </Button>
+                        <p className="text-center text-[11px] text-muted-foreground">Single sign-on, for hospitals that set it up with us. Enter your work email above first.</p>
+                      </>
+                    )}
+                    {ssoError && (
+                      <p role="alert" data-testid="sso-error" className="rounded-md border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">{ssoError}</p>
+                    )}
                   </form>
                 )}
               </TabsContent>
