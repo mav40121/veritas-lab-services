@@ -60,6 +60,7 @@ import { competencyDueColumns, competencySeedAtCreate, nextCompetencyDue } from 
 import { methodSignerOptions, nextMilestoneAfter, milestonesForComplexity, MILESTONE_LABEL, alignAnnualToMonth, MONTH_NAMES, type SignerCandidate, type MethodMilestone } from "@shared/competencySignoff";
 import { isManualMethod, groupProblem, suggestGroups, groupKey } from "@shared/competencyGrouping";
 import { quizImageProblem } from "@shared/quizImages";
+import { certificateExtras } from "./veritalabRegistry";
 
 // Express already URL-decodes route params before the handler runs, so
 // req.params.analyte for a request to ".../IG%25" arrives as "IG%". Calling
@@ -31201,6 +31202,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!hasLabCertAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaLab\u2122 subscription required" });
     const { cert_type, cert_name, cert_number, issuing_body, issued_date, expiration_date, lab_director, notes } = req.body;
     if (!cert_name?.trim()) return res.status(400).json({ error: "Certificate name required" });
+    // Certificate link + CLIA certificate type (VeritaLab CLIA site registry, REQ-072).
+    const extras = certificateExtras(req.body, null);
+    if (extras.error) return res.status(400).json({ error: extras.error });
 
     const now = new Date().toISOString();
     const result = (db as any).$client.prepare(
@@ -31208,6 +31212,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     ).run(req.userId, cert_type || "other", cert_name.trim(), cert_number || null, issuing_body || null, issued_date || null, expiration_date || null, lab_director || null, notes || null, now, now);
 
     const certId = Number(result.lastInsertRowid);
+    (db as any).$client.prepare("UPDATE lab_certificates SET link_url = ?, clia_certificate_type = ? WHERE id = ?").run(extras.link_url, extras.clia_certificate_type, certId);
     // write-path Shape A (batch 3): tag the ACTIVE lab, not the owner's default.
     try {
       const activeLab = resolveActiveLabForRequest(req.userId, req);
@@ -31231,6 +31236,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!existing) return res.status(404).json({ error: "Certificate not found" });
 
     const { cert_type, cert_name, cert_number, issuing_body, issued_date, expiration_date, lab_director, notes } = req.body;
+    const extras = certificateExtras(req.body, existing);
+    if (extras.error) return res.status(400).json({ error: extras.error });
     const now = new Date().toISOString();
 
     (db as any).$client.prepare(
@@ -31247,6 +31254,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       now,
       req.params.id
     );
+    (db as any).$client.prepare("UPDATE lab_certificates SET link_url = ?, clia_certificate_type = ? WHERE id = ?").run(extras.link_url, extras.clia_certificate_type, req.params.id);
 
     // Reschedule reminders if expiration_date changed
     const newExp = expiration_date ?? existing.expiration_date;
@@ -31291,6 +31299,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!hasLabCertAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaLab™ subscription required" });
     const { cert_type, cert_name, cert_number, issuing_body, issued_date, expiration_date, lab_director, notes } = req.body;
     if (!cert_name?.trim()) return res.status(400).json({ error: "Certificate name required" });
+    // Certificate link + CLIA certificate type (VeritaLab CLIA site registry, REQ-072).
+    const extras = certificateExtras(req.body, null);
+    if (extras.error) return res.status(400).json({ error: extras.error });
     const now = new Date().toISOString();
     const ownerRow = (db as any).$client.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(req.scope.labId) as any;
     const userIdForRow = ownerRow?.owner_user_id ?? req.userId;
@@ -31298,6 +31309,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       "INSERT INTO lab_certificates (user_id, lab_id, cert_type, cert_name, cert_number, issuing_body, issued_date, expiration_date, lab_director, notes, is_auto_populated, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)"
     ).run(userIdForRow, req.scope.labId, cert_type || "other", cert_name.trim(), cert_number || null, issuing_body || null, issued_date || null, expiration_date || null, lab_director || null, notes || null, now, now);
     const certId = Number(result.lastInsertRowid);
+    (db as any).$client.prepare("UPDATE lab_certificates SET link_url = ?, clia_certificate_type = ? WHERE id = ?").run(extras.link_url, extras.clia_certificate_type, certId);
     if (expiration_date) scheduleReminders(certId, userIdForRow, expiration_date);
     const cert = (db as any).$client.prepare("SELECT * FROM lab_certificates WHERE id = ?").get(certId);
     res.status(201).json(cert);
@@ -31316,6 +31328,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     ).get(req.params.id, req.scope.labId) as any;
     if (!existing) return res.status(404).json({ error: "Certificate not found" });
     const { cert_type, cert_name, cert_number, issuing_body, issued_date, expiration_date, lab_director, notes } = req.body;
+    const extras = certificateExtras(req.body, existing);
+    if (extras.error) return res.status(400).json({ error: extras.error });
     const now = new Date().toISOString();
     (db as any).$client.prepare(
       "UPDATE lab_certificates SET cert_type=?, cert_name=?, cert_number=?, issuing_body=?, issued_date=?, expiration_date=?, lab_director=?, notes=?, updated_at=? WHERE id=?"
@@ -31331,6 +31345,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       now,
       req.params.id
     );
+    (db as any).$client.prepare("UPDATE lab_certificates SET link_url = ?, clia_certificate_type = ? WHERE id = ?").run(extras.link_url, extras.clia_certificate_type, req.params.id);
     const newExp = expiration_date ?? existing.expiration_date;
     if (newExp) scheduleReminders(Number(req.params.id), existing.user_id, newExp);
     const cert = (db as any).$client.prepare("SELECT * FROM lab_certificates WHERE id = ?").get(req.params.id);
@@ -41645,6 +41660,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // VeritaMaintain temperature logs (/api/labs/:labId/temp-logs/*; St. Charles REQ-068)
   const { registerTemperatureLogRoutes } = await import('./temperatureLogs');
   registerTemperatureLogRoutes(app, authMiddleware, requireWriteAccess, requireModuleEdit);
+
+  // VeritaLab CLIA site registry (/api/labs/:labId/veritalab/registry/*, /api/veritalab/sites-overview; St. Charles REQ-072)
+  const { registerVeritaLabRegistryRoutes } = await import('./veritalabRegistry');
+  registerVeritaLabRegistryRoutes(app, authMiddleware, requireWriteAccess, requireModuleEdit);
 
   // VeritaOps routes (Cost-Per-Reportable-Test studies, PARKING_LOT #10)
   const { registerVeritaOpsRoutes } = await import('./veritaops');

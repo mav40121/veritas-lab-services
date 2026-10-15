@@ -22,11 +22,13 @@ import {
 import {
   Plus, Lock, Users, Award, FileDown, Edit2, Trash2, Upload, Download,
   FileText, AlertTriangle, CheckCircle2, Clock, X,
-  FileSignature, MapPin,
+  FileSignature, MapPin, Building2, Network, ExternalLink,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Cms116FormTab } from "@/components/veritalab/Cms116FormTab";
 import { StateRegistryTab } from "@/components/veritalab/StateRegistryTab";
+import { SiteRegistryTab } from "@/components/veritalab/SiteRegistryTab";
+import { AllSitesTab } from "@/components/veritalab/AllSitesTab";
 import { useToast } from "@/hooks/use-toast";
 
 // ── Types ──────────────────────────────────────────────────────────────
@@ -41,6 +43,9 @@ interface Certificate {
   expiration_date: string | null;
   lab_director: string | null;
   notes: string | null;
+  // CLIA site registry (REQ-072): where the certificate lives, and the CLIA certificate type.
+  link_url: string | null;
+  clia_certificate_type: string | null;
   is_auto_populated: number;
   is_active: number;
   document_count: number;
@@ -69,6 +74,15 @@ const CERT_TYPES = [
   // plumbing as the regulatory certs; the issuing_body is the vendor.
   { value: "vendor_agreement", label: "Vendor Agreement", issuing_body: "" },
   { value: "other", label: "Other", issuing_body: "" },
+];
+
+// CLIA certificate types (CMS-116 section II).
+const CLIA_CERT_TYPES = [
+  { value: "waiver", label: "Certificate of Waiver" },
+  { value: "ppm", label: "Certificate for Provider-Performed Microscopy (PPM)" },
+  { value: "compliance", label: "Certificate of Compliance" },
+  { value: "accreditation", label: "Certificate of Accreditation" },
+  { value: "registration", label: "Certificate of Registration" },
 ];
 
 const TYPE_COLORS: Record<string, string> = {
@@ -121,6 +135,8 @@ export default function VeritaLabAppPage() {
   const [formExpDate, setFormExpDate] = useState("");
   const [formDirector, setFormDirector] = useState("");
   const [formNotes, setFormNotes] = useState("");
+  const [formLink, setFormLink] = useState("");
+  const [formCliaType, setFormCliaType] = useState("");
 
   // Document state
   const [showDocModal, setShowDocModal] = useState(false);
@@ -173,6 +189,8 @@ export default function VeritaLabAppPage() {
     setFormExpDate("");
     setFormDirector("");
     setFormNotes("");
+    setFormLink("");
+    setFormCliaType("");
     setShowModal(true);
   }
 
@@ -186,6 +204,8 @@ export default function VeritaLabAppPage() {
     setFormExpDate(cert.expiration_date || "");
     setFormDirector(cert.lab_director || "");
     setFormNotes(cert.notes || "");
+    setFormLink(cert.link_url || "");
+    setFormCliaType(cert.clia_certificate_type || "");
     setShowModal(true);
   }
 
@@ -213,6 +233,8 @@ export default function VeritaLabAppPage() {
       expiration_date: formExpDate || null,
       lab_director: formDirector || null,
       notes: formNotes || null,
+      link_url: formLink.trim() || null,
+      clia_certificate_type: formType === "clia" ? (formCliaType || null) : null,
     };
 
     try {
@@ -424,7 +446,7 @@ export default function VeritaLabAppPage() {
             State Registry: per-state licensure authority lookup (data in Phase 2).
         */}
         <Tabs defaultValue="certificates" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 mb-4">
+          <TabsList className="flex flex-wrap h-auto w-full justify-start gap-1 mb-4">
             <TabsTrigger value="certificates" className="gap-1.5">
               <Award size={14} /> Certificates
             </TabsTrigger>
@@ -433,6 +455,12 @@ export default function VeritaLabAppPage() {
             </TabsTrigger>
             <TabsTrigger value="state-registry" className="gap-1.5">
               <MapPin size={14} /> State Registry
+            </TabsTrigger>
+            <TabsTrigger value="site-registry" className="gap-1.5" data-testid="tab-site-registry">
+              <Building2 size={14} /> Site Registry
+            </TabsTrigger>
+            <TabsTrigger value="all-sites" className="gap-1.5" data-testid="tab-all-sites">
+              <Network size={14} /> All Sites
             </TabsTrigger>
           </TabsList>
 
@@ -528,6 +556,16 @@ export default function VeritaLabAppPage() {
                         {cert.lab_director && (
                           <div><span className="font-medium text-foreground">Director:</span> {cert.lab_director}</div>
                         )}
+                        {cert.cert_type === "clia" && cert.clia_certificate_type && (
+                          <div><span className="font-medium text-foreground">Type:</span> {CLIA_CERT_TYPES.find(t => t.value === cert.clia_certificate_type)?.label || cert.clia_certificate_type}</div>
+                        )}
+                        {cert.link_url && (
+                          <div>
+                            <a href={cert.link_url} target="_blank" rel="noopener noreferrer" className="text-primary underline inline-flex items-center gap-1" data-testid={`cert-link-${cert.id}`}>
+                              Open certificate link <ExternalLink size={12} />
+                            </a>
+                          </div>
+                        )}
                       </div>
 
                       {cert.notes && (
@@ -607,6 +645,16 @@ export default function VeritaLabAppPage() {
           <TabsContent value="state-registry">
             <StateRegistryTab />
           </TabsContent>
+
+          {/* CLIA site registry (St. Charles REQ-072): this site's contacts, director history, fees, menu changes. */}
+          <TabsContent value="site-registry">
+            <SiteRegistryTab labId={activeLabId ?? null} isReadOnly={isReadOnly} />
+          </TabsContent>
+
+          {/* Every site the person manages, one line each, what needs attention first. */}
+          <TabsContent value="all-sites">
+            <AllSitesTab />
+          </TabsContent>
         </Tabs>
 
         {/* Add/Edit Certificate Modal */}
@@ -657,6 +705,26 @@ export default function VeritaLabAppPage() {
               <div>
                 <label className="text-sm font-medium mb-1 block">Laboratory Director</label>
                 <Input value={formDirector} onChange={e => setFormDirector(e.target.value)} placeholder="Name on certificate" />
+              </div>
+
+              {formType === "clia" && (
+                <div>
+                  <label className="text-sm font-medium mb-1 block">CLIA Certificate Type</label>
+                  <select
+                    className="h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                    value={formCliaType}
+                    onChange={e => setFormCliaType(e.target.value)}
+                    data-testid="cert-clia-type"
+                  >
+                    <option value="">Not specified</option>
+                    {CLIA_CERT_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                  </select>
+                </div>
+              )}
+
+              <div>
+                <label className="text-sm font-medium mb-1 block">Certificate Link</label>
+                <Input value={formLink} onChange={e => setFormLink(e.target.value)} placeholder="https://... where the certificate is kept (SharePoint, CMS, shared drive)" data-testid="cert-link-input" />
               </div>
 
               <div>
