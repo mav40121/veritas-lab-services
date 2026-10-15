@@ -22,6 +22,7 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import DOMPurify from "dompurify";
+import { QuizQuestionImage } from "@/components/QuizQuestionImage";
 import { clearAuth } from "@/lib/auth";
 import { useAuth } from "@/components/AuthContext";
 import { useLabRoute } from "@/hooks/useLabRoute";
@@ -1361,7 +1362,7 @@ interface PortalQuizTakePayload {
   question_format: string;
   randomize_questions: number;
   status: "assigned" | "completed";
-  questions: Array<{ id: string; question: string; type?: string; options: string[] }>;
+  questions: Array<{ id: string; question: string; type?: string; options: string[]; image?: string | null }>;
 }
 interface PortalQuizResultPayload {
   id: number;
@@ -1374,6 +1375,7 @@ interface PortalQuizResultPayload {
     id: string;
     question: string;
     options: string[];
+    image?: string | null;
     correct_answer: string;
     explanation?: string;
     selected_answer?: string;
@@ -1498,6 +1500,7 @@ function StaffPortalQuizzesView({
             {result.questions.map((q, qi) => (
               <div key={q.id} className="border border-border rounded p-3 bg-card">
                 <div className="text-xs font-semibold mb-1">Q{qi + 1}: {renderPrompt(q.question, result.question_format)}</div>
+                <QuizQuestionImage src={q.image} className="my-1 max-h-48 max-w-full rounded border border-border bg-white object-contain" />
                 <div className="space-y-0.5 text-xs">
                   {q.options.map((opt) => {
                     const letter = opt.charAt(0);
@@ -1544,6 +1547,7 @@ function StaffPortalQuizzesView({
           <div className="border border-border rounded-lg bg-card p-4 mb-3" data-testid="sp-quiz-question">
             <div className="text-xs text-muted-foreground mb-2">Question {currentQ + 1} of {taking.questions.length}</div>
             <div className="text-sm font-medium mb-3">{renderPrompt(q.question, taking.question_format)}</div>
+            <QuizQuestionImage src={q.image} className="mb-3 max-h-80 max-w-full rounded border border-border bg-white object-contain" />
             <div className="space-y-2">
               {q.options.map((opt) => {
                 const letter = opt.charAt(0);
