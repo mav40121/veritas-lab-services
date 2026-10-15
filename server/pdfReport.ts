@@ -1643,11 +1643,11 @@ export function buildCalVerHTML(study: Study, results: CalVerData): string {
     y: instrumentNames[0] && r.instruments[instrumentNames[0]] ? r.instruments[instrumentNames[0]].value : r.mean
   }));
   const scatterSvg = multiInst
-    ? scatterSeriesSVG(cvSeries, "Assigned Value", "Measured vs. Assigned", 320, 160, "Measured")
+    ? scatterSeriesSVG(cvSeries, "Assigned Value", "Measured vs. Assigned", 320, 150, "Measured")
     : scatterSVG(scatterPoints.map(p => p.x), scatterPoints.map(p => p.y), "Assigned Value", "Measured", "Scatter Plot", true);
   // BUG-059: recovery limits in the units of the criterion (an absolute TEa drew 100 +/- 400%).
   const recSeries: CompSeries[] = multiInst ? cvSeries : [{ name: instrumentNames[0] || "Mean", x: assignedVals, y: levelResults.map(r => r.mean) }];
-  const recoverySvg = recoverySeriesSVG(recSeries, study.cliaAllowableError, isAbsoluteTea(study), ((study as any).teaUnit || (study as any).tea_unit || "").trim(), 320, multiInst ? 160 : 220);
+  const recoverySvg = recoverySeriesSVG(recSeries, study.cliaAllowableError, isAbsoluteTea(study), ((study as any).teaUnit || (study as any).tea_unit || "").trim(), 320, multiInst ? 150 : 220);
   const multiKeyStats = multiInst ? `<table style="font-size:8pt;margin-bottom:6px">
     <thead><tr><th>Analyzer</th><th class="text-right">Slope</th><th class="text-right">R²</th><th class="text-right">Max % Recovery</th><th class="text-right">Min % Recovery</th><th class="text-right">Points Passing</th></tr></thead>
     <tbody>${instrumentNames.map((n, i) => {
@@ -2238,11 +2238,11 @@ export function buildMethodCompHTML(study: Study, results: MethodCompData): stri
   ${footerHTML()}
   ${headerHTML(study, (study as any)._cliaNumber)}
 
-  <div class="report-title-sub">Primary: ${abbreviateInstrumentName(primaryName)} | Comparison: ${comparisonNames.map(abbreviateInstrumentName).join(", ")}</div>
+  <div class="report-title-sub">Primary: ${abbreviateInstrumentName(primaryName)} | Comparison: ${comparisonNames.map(multiComp ? seriesNickname : abbreviateInstrumentName).join(", ")}</div>
 
   <div class="charts">${multiComp
-    ? scatterSeriesSVG(compSeries, `${abbreviateInstrumentName(primaryName)} (Primary)`, `Comparison analyzers vs. ${abbreviateInstrumentName(primaryName)}`, 320, 160)
-      + blandAltmanSeriesSVG(compSeries, study.cliaAllowableError, isAbsoluteTea(study), teaUnitP1, 320, 160)
+    ? scatterSeriesSVG(compSeries, `${abbreviateInstrumentName(primaryName)} (Primary)`, `Comparison analyzers vs. ${abbreviateInstrumentName(primaryName)}`, 320, 150)
+      + blandAltmanSeriesSVG(compSeries, study.cliaAllowableError, isAbsoluteTea(study), teaUnitP1, 320, 150)
     : p1CorrSvg + p1BaSvg}</div>
 
   <hr class="divider">
