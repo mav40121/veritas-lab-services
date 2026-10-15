@@ -57,3 +57,10 @@ jobs:
         # must be refused; and no server file but sessionAuth.ts may call
         # jwt.verify. Same throwaway DB and test secrets pattern as above.
         run: npm run test:session-signout
+
+      - name: Run two-factor sign-in integration test
+        # Two-factor sign-in Stage 2 (server/twoFactor.ts, server/twoFactorRoutes.ts): RFC 6238
+        # vectors; a password alone must not open an enrolled account; step tokens open nothing
+        # else; used codes fail; reset links, new accounts in a requiring lab and Veritas support
+        # accounts all land on the second step; lab owner switch and resets.
+        run: npm run test:two-factor

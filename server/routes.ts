@@ -52,6 +52,8 @@ import { resolveLegacyLabId as sharedResolveLegacyLabId } from "./labAccessGuard
 import { legacySeatForUser, seatForRequest } from "./seatContext";
 import { checkAuthToken, verifySessionJwt, issueSession, endSessions, touchSession, issuePurposeToken, verifyPurposeToken, describeDevice, clientIp } from "./sessionAuth";
 import { passwordProblem } from "@shared/passwordRule";
+import { registerTwoFactorRoutes, twoFactorLoginGate, setupResponse } from "./twoFactorRoutes";
+import { mfaRequirement, getMfa, isEnrolled, setTwoFactorEmailSender, forgetDevices } from "./twoFactor";
 import { labWideCorrelation, correlationPeerInstruments, describeCorrelationInstrument, rowComplexity, mapComplianceGaps } from "./labWideCorrelation";
 import { seedProfileFor, seedTeaFor, seedCalVerPoints, seedMethodCompQuant, seedMethodCompCategorical, seedStudyDate } from "./seedStudyProfiles";
 import type { LicenseContext } from "@shared/licenseText";
@@ -4112,6 +4114,26 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // VeritaShift Scheduler (Phase 1) routes.
   registerScheduleRoutes(app, authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit);
 
+  // Two-factor sign-in Stage 2 (server/twoFactorRoutes.ts; Michael Q170 = 1, mock Q171 = 1).
+  // Emailed sign-in codes go out through Resend from info@.
+  setTwoFactorEmailSender(resend ? async (to, code, purpose) => {
+    const what = purpose === "setup" ? "turn on two-factor sign-in" : "finish signing in";
+    const r: any = await resend.emails.send({
+      from: "VeritaAssure™ <info@veritaslabservices.com>",
+      to: [to],
+      subject: `Your VeritaAssure sign-in code: ${code}`,
+      html: `<div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#28251D">
+        <p style="font-size:15px;margin:0 0 12px">Your code to ${what}:</p>
+        <p style="font-size:30px;font-weight:700;letter-spacing:6px;margin:0 0 12px;color:#01696F">${code}</p>
+        <p style="font-size:13px;color:#555;margin:0 0 16px">It works for 10 minutes. If you did not try to sign in, change your password.</p>
+        <p style="font-size:11px;color:#999;margin:0">Veritas Lab Services, LLC. www.veritaslabservices.com</p></div>`,
+      text: `Your code to ${what}: ${code}
+It works for 10 minutes. If you did not try to sign in, change your password.`,
+    });
+    if (r?.error) throw new Error(r.error.message || String(r.error));
+  } : null);
+  registerTwoFactorRoutes(app, { sqlite: (db as any).$client, storage, authMiddleware, labScopeMiddleware, logAudit, buildSignIn, adminSecret: ADMIN_SECRET });
+
   // 2026-10-08 (St. Charles: "trace a QC failure, corrective action, and
   // resolution for a specific analyzer"): QC runs and equipment records point at
   // the analyzer through its VeritaMap instrument id, the test-system id IQCP,
@@ -5878,6 +5900,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       entityType: "password",
       ipAddress: req.ip,
     });
+    forgetDevices(sqlite, req.userId);
     let fresh: { token: string; sessionToken: string } | null = null;
     let ended: number;
     if (req.sessionSid) {
@@ -5933,8 +5956,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
     const hash = await bcrypt.hash(String(newPassword), 10);
     sqlite.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(hash, uid);
-    // A new password ends every sign-in, so the next login is clean.
+    // A new password ends every sign-in and every remembered computer, so the next login is clean.
     endSessions(sqlite, Number(uid), { reason: "password_reset" });
+    forgetDevices(sqlite, Number(uid));
     res.json({ ok: true, userId: uid });
   });
 
@@ -6663,8 +6687,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       } catch {}
     }
 
-    // Session-bound token (server/sessionAuth.ts).
-    const { token, sessionToken } = issueSession((db as any).$client, user.id, req);
+    // Session-bound token (server/sessionAuth.ts). A new account joining a lab that requires
+    // two-factor sign-in gets first-time setup instead (server/twoFactorRoutes.ts).
+    const regMfa = mfaRequirement((db as any).$client, user.id);
+    const regSession = regMfa.required ? null : issueSession((db as any).$client, user.id, req);
+    const token = regSession?.token;
+    const sessionToken = regSession?.sessionToken;
 
     const responsePlan = isSeatUser ? ownerPlan : selectedPlan;
     // Resolve subscriptionStatus + accessLevel from the same source /api/auth/me
@@ -6685,7 +6713,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const sp = legacySeatForUser((db as any).$client, user.id, "permissions") as any;
       try { registerSeatPermissions = JSON.parse(sp?.permissions || "{}"); } catch { registerSeatPermissions = {}; }
     }
-    res.json({ token, session_token: sessionToken, user: { id: user.id, email: user.email, name: user.name, plan: responsePlan, studyCredits: user.studyCredits, hasCompletedOnboarding: isSeatUser ? true : false, isSeatUser, seatPermissions: registerSeatPermissions, subscriptionExpiresAt: responseSubExpiry, subscriptionStatus: responseSubStatus, accessLevel: responseAccessLevel, cliaNumber: null, cliaLabName: null, cliaTier: null, seatCount: isSeatUser ? 0 : selectedSeatCount } });
+    res.json({ ...(regMfa.required ? setupResponse(user, regMfa) : { token, session_token: sessionToken }), user: { id: user.id, email: user.email, name: user.name, plan: responsePlan, studyCredits: user.studyCredits, hasCompletedOnboarding: isSeatUser ? true : false, isSeatUser, seatPermissions: registerSeatPermissions, subscriptionExpiresAt: responseSubExpiry, subscriptionStatus: responseSubStatus, accessLevel: responseAccessLevel, cliaNumber: null, cliaLabName: null, cliaTier: null, seatCount: isSeatUser ? 0 : selectedSeatCount } });
 
     // Send welcome email via Resend
     if (resend) {
@@ -6853,21 +6881,24 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       ipAddress: req.ip,
     });
 
+    // Two-factor sign-in (server/twoFactorRoutes.ts): an enrolled person, or one their lab
+    // requires, gets the code step or first-time setup before any session exists.
+    const gate = twoFactorLoginGate((db as any).$client, user, req);
+    if (gate.respond) return res.json(gate.respond);
+    res.json(buildSignIn(req, user, gate.mfaMethod));
+  });
+
+  // The sign-in response once the password (and the two-factor step, when it applies) checked
+  // out: the other-device prompt, or a new session-bound token plus the user summary the client
+  // stores. Shared by /api/auth/login and the two-factor routes.
+  function buildSignIn(req: any, user: any, mfaMethod: string | null): any {
     const userRow = (db as any).$client.prepare("SELECT has_completed_onboarding, subscription_expires_at, subscription_status, clia_number, clia_lab_name, clia_tier, seat_count, onboarding_seen FROM users WHERE id = ?").get(user.id) as any;
     const hasCompletedOnboarding = userRow?.has_completed_onboarding ?? 1;
-
-    // Check for seat access: user must be an account owner or have an active seat
-    const isOwner = true; // The user logging in owns their own account
-    const hasSeat = (db as any).$client.prepare(
-      "SELECT id FROM user_seats WHERE seat_email = ? AND status = 'active'"
-    ).get(email.toLowerCase());
 
     // Session conflict check
     const activeSession = (db as any).$client.prepare(
       "SELECT id, device_info, last_active FROM user_sessions WHERE user_id = ? AND is_active = 1 ORDER BY last_active DESC LIMIT 1"
     ).get(user.id) as any;
-
-    const deviceInfo = req.headers["user-agent"] || "Unknown";
 
     // Resolve seat info. #82: an owner's account-level plan and permissions are
     // their own, never a seat they hold on someone else's lab.
@@ -6900,8 +6931,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // Return session conflict - let frontend handle the force-logout choice.
       // The token here opens ONLY /api/auth/force-logout (purpose "conflict",
       // 10 minutes); the real session token comes back from that route.
-      const token = issuePurposeToken(user.id, "conflict");
-      return res.json({
+      const token = issuePurposeToken(user.id, "conflict", mfaMethod ? { mfa: mfaMethod } : {});
+      return {
         session_conflict: true,
         active_device: describeDevice(activeSession.device_info),
         last_active: activeSession.last_active,
@@ -6922,12 +6953,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           seatPermissions,
           ownerUserId,
         },
-      });
+      };
     }
 
     // No conflict - create new session (session-bound token, server/sessionAuth.ts)
-    const { token, sessionToken } = issueSession((db as any).$client, user.id, req);
-    res.json({
+    const { token, sessionToken } = issueSession((db as any).$client, user.id, req, { mfaMethod });
+    return {
       token, session_token: sessionToken,
       user: {
         id: user.id, email: user.email, name: user.name, plan: effectivePlan,
@@ -6944,8 +6975,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         seatPermissions,
         ownerUserId,
       },
-    });
-  });
+    };
+  }
 
   app.get("/api/auth/me", authMiddleware, (req: any, res) => {
     const user = storage.getUserById(req.userId);
@@ -19085,6 +19116,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // A reset password ends every existing sign-in (whoever held the old password is out),
     // then signs this browser in on a fresh session.
     endSessions((db as any).$client, user.id, { reason: "password_reset" });
+    forgetDevices((db as any).$client, user.id);
+    // Two-factor: a reset link proves the email, not the second factor, so a person who has
+    // two-factor on (or whose lab requires it) signs in through the code step instead.
+    if (isEnrolled(getMfa((db as any).$client, user.id)) || mfaRequirement((db as any).$client, user.id).required) {
+      return res.json({ ok: true, sign_in_required: true });
+    }
     const { token: newToken, sessionToken: resetSessionToken } = issueSession((db as any).$client, user.id, req);
     // #84 (2026-10-08): include the seat flags login returns, so a Staff login
     // that resets its password is not shown edit controls until the next login.
@@ -31078,7 +31115,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
     if (!storage.getUserById(userId)) return res.status(401).json({ error: "User not found" });
     const ended = endSessions(sqlite, userId, { reason: "signed_in_elsewhere" });
-    const { token, sessionToken } = issueSession(sqlite, userId, req);
+    const { token, sessionToken } = issueSession(sqlite, userId, req, { mfaMethod: typeof conflict?.mfa === "string" ? conflict.mfa : null });
     logAudit({ userId, module: "account", action: "update", entityType: "session.end_others", entityLabel: `${ended} other sign-in(s) ended from the sign-in page`, ipAddress: clientIp(req) ?? undefined });
     res.json({ ok: true, token, session_token: sessionToken });
   });

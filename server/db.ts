@@ -8229,3 +8229,72 @@ try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_veritaceu_profiles_lab ON veri
   addCol("user_sessions", "ended_reason", "ALTER TABLE user_sessions ADD COLUMN ended_reason TEXT");
   try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_user_sessions_user_active ON user_sessions(user_id, is_active)`); } catch {}
 }
+
+// Two-factor sign-in Stage 2 (Michael Q170 = 1, mock Q171 = 1; server/twoFactor.ts). user_mfa holds the
+// person's method and the sealed authenticator key (AES-256-GCM); recovery codes, emailed codes and
+// remembered computers are stored only as SHA-256 hashes. labs.mfa_required is the lab owner's
+// "require it for everyone" switch; labs.mfa_allow_remember is the shared-computer switch.
+// CREATE + ALTER blocks together per the NEW DB TABLE RULE.
+{
+  const addCol = (table: string, col: string, ddl: string) => {
+    const cols = (sqlite.prepare(`PRAGMA table_info(${table})`).all() as any[]).map((c: any) => c.name);
+    if (!cols.includes(col)) { try { sqlite.exec(ddl); } catch {} }
+  };
+  try {
+    sqlite.exec(`CREATE TABLE IF NOT EXISTS user_mfa (
+      user_id INTEGER PRIMARY KEY,
+      method TEXT,
+      totp_secret_enc TEXT,
+      pending_secret_enc TEXT,
+      pending_created_at TEXT,
+      enabled_at TEXT,
+      last_totp_step INTEGER,
+      updated_at TEXT
+    )`);
+  } catch {}
+  for (const [c, d] of [["method", "TEXT"], ["totp_secret_enc", "TEXT"], ["pending_secret_enc", "TEXT"], ["pending_created_at", "TEXT"], ["enabled_at", "TEXT"], ["last_totp_step", "INTEGER"], ["updated_at", "TEXT"]]) {
+    addCol("user_mfa", c, `ALTER TABLE user_mfa ADD COLUMN ${c} ${d}`);
+  }
+  try {
+    sqlite.exec(`CREATE TABLE IF NOT EXISTS user_mfa_recovery_codes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      code_hash TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      used_at TEXT
+    )`);
+  } catch {}
+  addCol("user_mfa_recovery_codes", "used_at", "ALTER TABLE user_mfa_recovery_codes ADD COLUMN used_at TEXT");
+  try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_mfa_recovery_user ON user_mfa_recovery_codes(user_id, used_at)`); } catch {}
+  try {
+    sqlite.exec(`CREATE TABLE IF NOT EXISTS mfa_email_codes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      purpose TEXT NOT NULL,
+      code_hash TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      used_at TEXT,
+      created_at TEXT NOT NULL
+    )`);
+  } catch {}
+  addCol("mfa_email_codes", "used_at", "ALTER TABLE mfa_email_codes ADD COLUMN used_at TEXT");
+  try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_mfa_email_codes_user ON mfa_email_codes(user_id, purpose, used_at)`); } catch {}
+  try {
+    sqlite.exec(`CREATE TABLE IF NOT EXISTS mfa_trusted_devices (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      token_hash TEXT NOT NULL,
+      user_agent TEXT,
+      created_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      revoked_at TEXT
+    )`);
+  } catch {}
+  addCol("mfa_trusted_devices", "user_agent", "ALTER TABLE mfa_trusted_devices ADD COLUMN user_agent TEXT");
+  addCol("mfa_trusted_devices", "revoked_at", "ALTER TABLE mfa_trusted_devices ADD COLUMN revoked_at TEXT");
+  try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_mfa_trusted_user ON mfa_trusted_devices(user_id, token_hash)`); } catch {}
+  addCol("labs", "mfa_required", "ALTER TABLE labs ADD COLUMN mfa_required INTEGER NOT NULL DEFAULT 0");
+  addCol("labs", "mfa_required_at", "ALTER TABLE labs ADD COLUMN mfa_required_at TEXT");
+  addCol("labs", "mfa_required_by", "ALTER TABLE labs ADD COLUMN mfa_required_by INTEGER");
+  addCol("labs", "mfa_allow_remember", "ALTER TABLE labs ADD COLUMN mfa_allow_remember INTEGER NOT NULL DEFAULT 1");
+}
