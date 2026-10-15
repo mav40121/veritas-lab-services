@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { Wrench, Lock, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { TemperatureLogsPanel } from "@/components/TemperatureLogsPanel";
 
 interface Equipment {
   id: number;
@@ -60,6 +61,7 @@ const EVENT_TYPES: { value: string; label: string }[] = [
   { value: "function_check", label: "Function check" },
   { value: "service", label: "Service" },
   { value: "repair", label: "Repair" },
+  { value: "troubleshooting", label: "Troubleshooting" },
 ];
 const TYPE_LABEL: Record<string, string> = Object.fromEntries(EVENT_TYPES.map(t => [t.value, t.label]));
 
@@ -176,6 +178,10 @@ export default function EquipmentAppPage() {
   const [evBy, setEvBy] = useState("");
   const [evNextDue, setEvNextDue] = useState("");
   const [evNotes, setEvNotes] = useState("");
+  // Troubleshooting entries record the problem, the action taken and the outcome (St. Charles REQ-070).
+  const [tsProblem, setTsProblem] = useState("");
+  const [tsAction, setTsAction] = useState("");
+  const [tsOutcome, setTsOutcome] = useState("");
   const [evSaving, setEvSaving] = useState(false);
 
   // History dialog
@@ -254,18 +260,25 @@ export default function EquipmentAppPage() {
   }
 
   function openLogEvent(e: Equipment) {
-    setEvForId(e.id); setEvType("calibration"); setEvDate(todayIso()); setEvBy(""); setEvNextDue(""); setEvNotes(""); setEvOpen(true);
+    setEvForId(e.id); setEvType("calibration"); setEvDate(todayIso()); setEvBy(""); setEvNextDue(""); setEvNotes(""); setTsProblem(""); setTsAction(""); setTsOutcome(""); setEvOpen(true);
   }
   async function saveEvent() {
     if (!activeLabId || !evForId || !evDate) return;
+    const isTs = evType === "troubleshooting";
+    if (isTs && (!tsProblem.trim() || !tsAction.trim() || !tsOutcome.trim())) {
+      toast({ title: "Enter the problem, the action taken and the outcome", variant: "destructive" }); return;
+    }
+    const notes = isTs
+      ? [`Problem: ${tsProblem.trim()}`, `Action taken: ${tsAction.trim()}`, `Outcome: ${tsOutcome.trim()}`, evNotes.trim() ? `Notes: ${evNotes.trim()}` : ""].filter(Boolean).join("\n")
+      : (evNotes || null);
     setEvSaving(true);
     try {
       const res = await fetch(`${API_BASE}/api/labs/${activeLabId}/equipment/${evForId}/events`, {
         method: "POST", headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ event_type: evType, event_date: evDate, performed_by: evBy || null, next_due_date: evNextDue || null, notes: evNotes || null }),
+        body: JSON.stringify({ event_type: evType, event_date: evDate, performed_by: evBy || null, next_due_date: evNextDue || null, notes }),
       });
       if (!res.ok) { const e = await res.json().catch(() => ({})); toast({ title: e.error || "Could not log event", variant: "destructive" }); return; }
-      toast({ title: "Maintenance logged", description: "Next-due updated from the entry or the PM interval." });
+      toast({ title: isTs ? "Troubleshooting logged" : "Maintenance logged", description: isTs ? "Recorded on this instrument's history. The maintenance due date is unchanged." : "Next-due updated from the entry or the PM interval." });
       setEvOpen(false); await load();
     } finally { setEvSaving(false); }
   }
@@ -315,7 +328,7 @@ export default function EquipmentAppPage() {
         <Wrench className="h-6 w-6 text-primary shrink-0" />
         <div>
           <h1 className="text-2xl font-bold leading-tight">VeritaMaintain&#8482;</h1>
-          <p className="text-sm text-muted-foreground">Instrument maintenance and function-check log</p>
+          <p className="text-sm text-muted-foreground">Instrument maintenance, function checks and temperature logs</p>
         </div>
         <div className="ml-auto">
           <Button size="sm" onClick={openAdd} disabled={isReadOnly}>+ Add instrument</Button>
@@ -392,6 +405,9 @@ export default function EquipmentAppPage() {
         </CardContent>
       </Card>
 
+      {/* Temperature logs (St. Charles REQ-068): storage units, readings, out-of-range corrective action. */}
+      <TemperatureLogsPanel labId={Number(activeLabId)} />
+
       {/* Add / edit equipment */}
       <Dialog open={eqOpen} onOpenChange={(o) => { if (!o) resetEqForm(); setEqOpen(o); }}>
         <DialogContent className="max-w-2xl">
@@ -440,7 +456,7 @@ export default function EquipmentAppPage() {
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Log maintenance</DialogTitle>
-            <DialogDescription>Record a completed maintenance activity. If you leave "next due" blank and the instrument has a PM interval, the next-due date is computed for you.</DialogDescription>
+            <DialogDescription>Record a completed maintenance activity or a troubleshooting event. If you leave "next due" blank and the instrument has a PM interval, the next-due date is computed for you (troubleshooting never changes it).</DialogDescription>
           </DialogHeader>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
@@ -453,7 +469,12 @@ export default function EquipmentAppPage() {
             <div><Label htmlFor="ev-date">Date <span className="text-red-600">*</span></Label><Input id="ev-date" type="date" value={evDate} onChange={e => setEvDate(e.target.value)} /></div>
             <div><Label htmlFor="ev-by">Performed by</Label><Input id="ev-by" value={evBy} onChange={e => setEvBy(e.target.value)} placeholder="Tech or vendor" /></div>
             <div><Label htmlFor="ev-next">Next due (optional)</Label><Input id="ev-next" type="date" value={evNextDue} onChange={e => setEvNextDue(e.target.value)} /></div>
-            <div className="sm:col-span-2"><Label htmlFor="ev-notes">Notes</Label><Textarea id="ev-notes" rows={2} value={evNotes} onChange={e => setEvNotes(e.target.value)} placeholder="Work performed, parts, results" /></div>
+            {evType === "troubleshooting" && (<>
+              <div className="sm:col-span-2"><Label htmlFor="ts-problem">Problem <span className="text-red-600">*</span></Label><Textarea id="ts-problem" rows={2} value={tsProblem} onChange={e => setTsProblem(e.target.value)} placeholder="What happened (error code, symptom, QC shift)" /></div>
+              <div className="sm:col-span-2"><Label htmlFor="ts-action">Action taken <span className="text-red-600">*</span></Label><Textarea id="ts-action" rows={2} value={tsAction} onChange={e => setTsAction(e.target.value)} placeholder="Steps taken, parts replaced, vendor contacted" /></div>
+              <div className="sm:col-span-2"><Label htmlFor="ts-outcome">Outcome <span className="text-red-600">*</span></Label><Textarea id="ts-outcome" rows={2} value={tsOutcome} onChange={e => setTsOutcome(e.target.value)} placeholder="Resolved and returned to service, or still open" /></div>
+            </>)}
+            <div className="sm:col-span-2"><Label htmlFor="ev-notes">{evType === "troubleshooting" ? "Additional notes" : "Notes"}</Label><Textarea id="ev-notes" rows={2} value={evNotes} onChange={e => setEvNotes(e.target.value)} placeholder="Work performed, parts, results" /></div>
           </div>
           <div className="flex justify-end gap-2 mt-2">
             <Button variant="outline" onClick={() => setEvOpen(false)} disabled={evSaving}>Cancel</Button>
@@ -467,7 +488,7 @@ export default function EquipmentAppPage() {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Maintenance history: {histName}</DialogTitle>
-            <DialogDescription>Every calibration, preventive maintenance, and service event, newest first.</DialogDescription>
+            <DialogDescription>Every calibration, preventive maintenance, service, repair and troubleshooting event, newest first.</DialogDescription>
           </DialogHeader>
           {histLoading ? (
             <p className="text-sm text-muted-foreground py-4">Loading...</p>
@@ -484,7 +505,7 @@ export default function EquipmentAppPage() {
                       <td className="py-2 pr-2">{TYPE_LABEL[ev.event_type] || ev.event_type}</td>
                       <td className="py-2 pr-2 text-muted-foreground">{ev.performed_by || "-"}</td>
                       <td className="py-2 pr-2 whitespace-nowrap">{ev.next_due_date || "-"}</td>
-                      <td className="py-2 pr-2 text-muted-foreground">{ev.notes || "-"}</td>
+                      <td className="py-2 pr-2 text-muted-foreground whitespace-pre-wrap">{ev.notes || "-"}</td>
                     </tr>
                   ))}
                 </tbody>

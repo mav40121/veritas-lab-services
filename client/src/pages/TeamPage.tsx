@@ -23,8 +23,8 @@ const credentials = [
 
 // David McCormick (added 2026-10-14 at Michael's request). His bio is his own blurb ("David McCormick_VLS_blurb.docx",
 // emailed to info@ 10/14), changed only for house rules: the em dash became a comma and VeritaAssure carries ™.
-// Title "Sales Partner" is Michael's pick (Q190 = 1), the title on David's signed partnership addendum. No photo on
-// file yet, so his card keeps the initials tile.
+// Title "Sales Partner" is Michael's pick (Q190 = 1), the title on David's signed partnership addendum. Headshot is the
+// photo David emailed to info@ 10/14 ("Dmc headshot", DM Headshot.jpeg), served from /public as-is.
 const davidHighlights = [
   { icon: Newspaper, text: "Co-founder, Medical Lab Management magazine (2012)" },
   { icon: Handshake, text: "Partnerships and client relationships, Veritas Lab Services" },
@@ -99,9 +99,15 @@ return (
           {/* David McCormick */}
           <div className="grid sm:grid-cols-3 gap-10 items-start mt-14 pt-14 border-t border-border" data-testid="team-member-david">
             <div className="flex flex-col items-center sm:items-start gap-4">
-              <div className="w-48 sm:w-full aspect-[4/5] rounded-2xl bg-primary/10 border-2 border-primary/20 flex items-center justify-center">
-                <span className="font-serif text-5xl font-bold text-primary">DM</span>
-              </div>
+              {/* David's own headshot, emailed 10/14; 427x640 portrait served from /public */}
+              <img
+                src="/david-mccormick.jpg"
+                alt="David McCormick, Sales Partner"
+                className="w-48 sm:w-full aspect-[4/5] object-cover object-top rounded-2xl border border-border shadow-sm"
+                width={427}
+                height={640}
+                data-testid="team-photo-david"
+              />
               <div className="text-center sm:text-left">
                 <h2 className="font-serif text-2xl font-bold">David McCormick</h2>
                 <p className="text-sm text-muted-foreground mt-0.5">Sales Partner</p>

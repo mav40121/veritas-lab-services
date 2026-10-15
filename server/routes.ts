@@ -59,6 +59,7 @@ import { incompleteElementCells as compIncompleteCells, incompleteElementCellsBy
 import { competencyDueColumns, competencySeedAtCreate, nextCompetencyDue } from "./competencySchedule";
 import { methodSignerOptions, nextMilestoneAfter, milestonesForComplexity, MILESTONE_LABEL, alignAnnualToMonth, MONTH_NAMES, type SignerCandidate, type MethodMilestone } from "@shared/competencySignoff";
 import { isManualMethod, groupProblem, suggestGroups, groupKey } from "@shared/competencyGrouping";
+import { quizImageProblem } from "@shared/quizImages";
 
 // Express already URL-decodes route params before the handler runs, so
 // req.params.analyte for a request to ".../IG%25" arrives as "IG%". Calling
@@ -4189,7 +4190,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/labs/:labId/qc/lots", authMiddleware, labScopeMiddleware, (req: any, res) => {
     const sqlite = (db as any).$client;
     const lots = sqlite.prepare(
-      "SELECT id, analyte, level, lot_number, manufacturer, mfr_mean, mfr_sd, mfr_sd_interval, mfr_range_low, mfr_range_high, expiration_date, opened_date, status, prior_lot_id, created_at, updated_at FROM qc_control_lots WHERE lab_id = ? ORDER BY (status = 'active') DESC, analyte ASC, lot_number ASC"
+      "SELECT id, analyte, level, lot_number, manufacturer, mfr_mean, mfr_sd, mfr_sd_interval, mfr_range_low, mfr_range_high, expiration_date, opened_date, out_of_use_date, status, prior_lot_id, created_at, updated_at FROM qc_control_lots WHERE lab_id = ? ORDER BY (status = 'active') DESC, analyte ASC, lot_number ASC"
     ).all(req.scope.labId) as any[];
     // basis = the mean/SD that judges the lot's next run (server/qcBasis.ts);
     // the chart draws it so the chart and the Westgard flags always agree.
@@ -4294,7 +4295,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!Number.isFinite(id) || id <= 0) {
       return res.status(400).json({ error: "valid :id required" });
     }
-    const { status } = req.body || {};
+    const { status, out_of_use_date } = req.body || {};
     if (!status || typeof status !== "string") {
       return res.status(400).json({ error: "status required" });
     }
@@ -4305,16 +4306,37 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     const sqlite = (db as any).$client;
     const lot = sqlite.prepare(
-      "SELECT id FROM qc_control_lots WHERE id = ? AND lab_id = ?"
+      "SELECT id, opened_date, out_of_use_date FROM qc_control_lots WHERE id = ? AND lab_id = ?"
     ).get(id, req.scope.labId) as any;
     if (!lot) return res.status(404).json({ error: "Control lot not found in this lab" });
 
+    // Out-of-use date (St. Charles REQ-067): retiring stamps it (the date sent, else the lab's today);
+    // re-activating clears it; a hold leaves it as is.
+    const nowIso = new Date().toISOString();
+    let outOfUse: string | null = lot.out_of_use_date || null;
+    if (s === "retired") {
+      if (out_of_use_date != null && out_of_use_date !== "") {
+        if (typeof out_of_use_date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(out_of_use_date)) {
+          return res.status(400).json({ error: "out_of_use_date must be YYYY-MM-DD" });
+        }
+        if (out_of_use_date > labLocalDate(nowIso)) return res.status(400).json({ error: "out_of_use_date cannot be in the future" });
+        if (lot.opened_date && out_of_use_date < lot.opened_date) {
+          return res.status(400).json({ error: "out_of_use_date cannot be before the lot was opened" });
+        }
+        outOfUse = out_of_use_date;
+      } else {
+        outOfUse = labLocalDate(nowIso);
+      }
+    } else if (s === "active") {
+      outOfUse = null;
+    }
+
     sqlite.prepare(
-      "UPDATE qc_control_lots SET status = ?, updated_at = ? WHERE id = ?"
-    ).run(s, new Date().toISOString(), id);
+      "UPDATE qc_control_lots SET status = ?, out_of_use_date = ?, updated_at = ? WHERE id = ?"
+    ).run(s, outOfUse, nowIso, id);
 
     const updated = sqlite.prepare(
-      "SELECT id, analyte, level, lot_number, manufacturer, mfr_mean, mfr_sd, mfr_sd_interval, mfr_range_low, mfr_range_high, expiration_date, opened_date, status, prior_lot_id, created_at, updated_at FROM qc_control_lots WHERE id = ?"
+      "SELECT id, analyte, level, lot_number, manufacturer, mfr_mean, mfr_sd, mfr_sd_interval, mfr_range_low, mfr_range_high, expiration_date, opened_date, out_of_use_date, status, prior_lot_id, created_at, updated_at FROM qc_control_lots WHERE id = ?"
     ).get(id);
     return res.json({ ok: true, lot: updated });
   });
@@ -4455,12 +4477,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         );
         const newId = Number(ins.lastInsertRowid);
         if (retirePrior) {
-          sqlite.prepare("UPDATE qc_control_lots SET status = 'retired', updated_at = ? WHERE id = ?").run(now, priorId);
+          // The replaced lot goes out of use the day the new one is opened (else the lab's today).
+          sqlite.prepare("UPDATE qc_control_lots SET status = 'retired', out_of_use_date = COALESCE(out_of_use_date, ?), updated_at = ? WHERE id = ?")
+            .run(opened_date || labLocalDate(now), now, priorId);
         }
         return newId;
       });
       const newId = run();
-      const cols = "id, analyte, level, lot_number, manufacturer, mfr_mean, mfr_sd, mfr_sd_interval, mfr_range_low, mfr_range_high, expiration_date, opened_date, status, prior_lot_id, created_at, updated_at";
+      const cols = "id, analyte, level, lot_number, manufacturer, mfr_mean, mfr_sd, mfr_sd_interval, mfr_range_low, mfr_range_high, expiration_date, opened_date, out_of_use_date, status, prior_lot_id, created_at, updated_at";
       const newLot = sqlite.prepare(`SELECT ${cols} FROM qc_control_lots WHERE id = ?`).get(newId);
       const updatedPrior = sqlite.prepare(`SELECT ${cols} FROM qc_control_lots WHERE id = ?`).get(priorId);
       return res.json({ ok: true, lot: newLot, prior: updatedPrior });
@@ -4495,7 +4519,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // prior). opened_date is user-entered and may be null, so it is not the
     // ordering key.
     const lots = sqlite.prepare(
-      "SELECT id, analyte, level, lot_number, manufacturer, mfr_mean, mfr_sd, mfr_sd_interval, expiration_date, opened_date, status, prior_lot_id, created_at FROM qc_control_lots WHERE lab_id = ? AND analyte = ? AND level = ? ORDER BY created_at ASC, id ASC"
+      "SELECT id, analyte, level, lot_number, manufacturer, mfr_mean, mfr_sd, mfr_sd_interval, expiration_date, opened_date, out_of_use_date, status, prior_lot_id, created_at FROM qc_control_lots WHERE lab_id = ? AND analyte = ? AND level = ? ORDER BY created_at ASC, id ASC"
     ).all(req.scope.labId, analyte, level) as any[];
     if (lots.length === 0) return res.json({ analyte, level, lots: [], points: [] });
     const lotIds = lots.map(l => l.id);
@@ -8784,6 +8808,85 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     },
   );
 
+  // Lot in-use / out-of-use log (St. Charles REQ-067, 2026-10-14). Recording work: any active member
+  // (staff included) may record it, so requireWriteAccess only. Dates are lab calendar dates (YYYY-MM-DD),
+  // never in the future; out of use cannot precede in use. One open record per item + lot.
+  const LOT_USE_REASONS = new Set(["finished", "expired", "recalled", "qc_failure", "damaged", "other"]);
+  const isIsoDay = (v: any) => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
+  const lotUseUserName = (sqlite: any, userId: number): string | null => {
+    const u = sqlite.prepare("SELECT name, email FROM users WHERE id = ?").get(userId) as any;
+    return u ? (u.name || u.email || null) : null;
+  };
+  const lotUseItem = (sqlite: any, itemId: number, labId: number): { item?: any; error?: 403 | 404 } => {
+    const item = sqlite.prepare("SELECT id, lab_id, item_name FROM inventory_items WHERE id = ?").get(itemId) as any;
+    if (!item) return { error: 404 };
+    if (Number(item.lab_id) !== Number(labId)) return { error: 403 };
+    return { item };
+  };
+
+  app.get("/api/labs/:labId/veritastock/items/:itemId/lot-use", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    const sqlite = (db as any).$client;
+    const itemId = Number(req.params.itemId);
+    if (!Number.isFinite(itemId)) return res.status(400).json({ error: "Invalid item id" });
+    const r = lotUseItem(sqlite, itemId, req.scope.labId);
+    if (r.error === 404) return res.status(404).json({ error: "Item not found" });
+    if (r.error === 403) return res.status(403).json({ error: "Item is not in this location" });
+    const rows = sqlite.prepare(
+      `SELECT id, lot_number, expiration_date, in_use_date, in_use_by_name, out_of_use_date, out_of_use_by_name, out_of_use_reason
+         FROM inventory_lot_use WHERE item_id = ? AND lab_id = ?
+        ORDER BY in_use_date DESC, id DESC`
+    ).all(itemId, req.scope.labId);
+    return res.json({ item_id: itemId, records: rows });
+  });
+
+  app.post("/api/labs/:labId/veritastock/items/:itemId/lot-use", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
+    const sqlite = (db as any).$client;
+    const itemId = Number(req.params.itemId);
+    if (!Number.isFinite(itemId)) return res.status(400).json({ error: "Invalid item id" });
+    const r = lotUseItem(sqlite, itemId, req.scope.labId);
+    if (r.error === 404) return res.status(404).json({ error: "Item not found" });
+    if (r.error === 403) return res.status(403).json({ error: "Item is not in this location" });
+    const lotNumber = String(req.body?.lot_number ?? "").trim() || null;
+    const expiration = req.body?.expiration_date ? String(req.body.expiration_date) : null;
+    const nowIso = new Date().toISOString();
+    const today = labLocalDate(nowIso);
+    const inUse = req.body?.in_use_date ? String(req.body.in_use_date) : today;
+    if (!isIsoDay(inUse)) return res.status(400).json({ error: "in_use_date must be YYYY-MM-DD" });
+    if (inUse > today) return res.status(400).json({ error: "in_use_date cannot be in the future" });
+    if (expiration && !isIsoDay(expiration)) return res.status(400).json({ error: "expiration_date must be YYYY-MM-DD" });
+    const open = sqlite.prepare(
+      "SELECT id FROM inventory_lot_use WHERE item_id = ? AND lab_id = ? AND COALESCE(lot_number,'') = ? AND out_of_use_date IS NULL"
+    ).get(itemId, req.scope.labId, lotNumber ?? "") as any;
+    if (open) return res.status(409).json({ error: "This lot is already in use. Take it out of use first." });
+    const info = sqlite.prepare(
+      `INSERT INTO inventory_lot_use (lab_id, item_id, lot_number, expiration_date, in_use_date, in_use_by_user_id, in_use_by_name, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(req.scope.labId, itemId, lotNumber, expiration, inUse, req.userId, lotUseUserName(sqlite, req.userId), nowIso, nowIso);
+    const row = sqlite.prepare("SELECT * FROM inventory_lot_use WHERE id = ?").get(info.lastInsertRowid);
+    return res.json({ ok: true, record: row });
+  });
+
+  app.patch("/api/labs/:labId/veritastock/lot-use/:id", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
+    const sqlite = (db as any).$client;
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) return res.status(400).json({ error: "Invalid id" });
+    const rec = sqlite.prepare("SELECT * FROM inventory_lot_use WHERE id = ? AND lab_id = ?").get(id, req.scope.labId) as any;
+    if (!rec) return res.status(404).json({ error: "Lot use record not found in this location" });
+    if (rec.out_of_use_date) return res.status(409).json({ error: "This lot is already out of use" });
+    const nowIso = new Date().toISOString();
+    const today = labLocalDate(nowIso);
+    const outOfUse = req.body?.out_of_use_date ? String(req.body.out_of_use_date) : today;
+    if (!isIsoDay(outOfUse)) return res.status(400).json({ error: "out_of_use_date must be YYYY-MM-DD" });
+    if (outOfUse > today) return res.status(400).json({ error: "out_of_use_date cannot be in the future" });
+    if (outOfUse < rec.in_use_date) return res.status(400).json({ error: "out_of_use_date cannot be before the in-use date" });
+    const reason = String(req.body?.out_of_use_reason || "finished").toLowerCase();
+    if (!LOT_USE_REASONS.has(reason)) return res.status(400).json({ error: "out_of_use_reason must be one of finished, expired, recalled, qc_failure, damaged, other" });
+    sqlite.prepare(
+      `UPDATE inventory_lot_use SET out_of_use_date = ?, out_of_use_by_user_id = ?, out_of_use_by_name = ?, out_of_use_reason = ?, updated_at = ? WHERE id = ?`
+    ).run(outOfUse, req.userId, lotUseUserName(sqlite, req.userId), reason, nowIso, id);
+    return res.json({ ok: true, record: sqlite.prepare("SELECT * FROM inventory_lot_use WHERE id = ?").get(id) });
+  });
+
   // POST /api/labs/:labId/veritastock/transfers/:batchId/accept — the
   // destination accepts a pending shipment. Stock lands at the destination
   // (the dest item is resolved or created per line, from the still-existing
@@ -10009,7 +10112,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       const parsed = JSON.parse(quiz.questions || "[]");
       let display = parsed.map((q: any) => ({
-        id: q.id, question: q.question, type: q.type, options: q.options,
+        id: q.id, question: q.question, type: q.type, options: q.options, image: q.image ?? null,
       }));
       if (quiz.randomize_questions === 1 || quiz.randomize_questions === true) {
         const arr = [...display];
@@ -10140,7 +10243,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const fullQs = questions.map((q: any) => {
         const ga = graded.find((a: any) => a.question_id === q.id);
         return {
-          id: q.id, question: q.question, options: q.options,
+          id: q.id, question: q.question, options: q.options, image: q.image ?? null,
           correct_answer: q.correct_answer, explanation: q.explanation,
           selected_answer: ga?.selected_answer, was_correct: ga?.correct,
         };
@@ -21583,7 +21686,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (days <= 30) return "due_soon";
     return "ok";
   }
-  const EQUIP_EVENT_TYPES = ["calibration", "preventive_maintenance", "service", "repair", "function_check"];
+  // "troubleshooting" (2026-10-14, St. Charles REQ-070): a problem / action / outcome record. It does not
+  // complete scheduled maintenance, so it never advances the PM next-due date.
+  const EQUIP_EVENT_TYPES = ["calibration", "preventive_maintenance", "service", "repair", "function_check", "troubleshooting"];
 
   app.get("/api/labs/:labId/equipment", authMiddleware, labScopeMiddleware, (req: any, res) => {
     if (!hasEquipmentAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "Equipment maintenance requires a suite subscription" });
@@ -21707,7 +21812,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const now = new Date().toISOString();
     // next_due: explicit value wins; else event_date + the instrument's PM interval.
     let nextDue: string | null = next_due_date || null;
-    if (!nextDue && ex.pm_interval_days) {
+    if (!nextDue && ex.pm_interval_days && event_type !== "troubleshooting") {
       const d = new Date(event_date + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + Number(ex.pm_interval_days));
       nextDue = d.toISOString().slice(0, 10);
     }
@@ -21980,7 +22085,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // PT trigger). All three reuse the CAPA workflow; source_type steers the UI.
   // internal_nce carries no accreditor deadline and its sign-off is gated to the
   // designated medical director or a lab owner/admin.
-  const VALID_FINDING_SOURCE_TYPES = ['inspection','pt_failure','internal_nce'];
+  const VALID_FINDING_SOURCE_TYPES = ['inspection','pt_failure','internal_nce','fda_deviation'];
+  // FDA product deviation (21 CFR 606.171, St. Charles REQ-065, 2026-10-14). Reportable when all three
+  // 606.171(b) criteria are met: (1) a deviation from cGMP/regulations/standards/specifications, or an
+  // unexpected or unforeseeable event, that may affect the product's safety, purity or potency; (2) it
+  // occurred in the facility or one under contract; (3) the product was distributed. A reportable event is
+  // due to CBER on Form FDA 3486 within 45 calendar days of acquiring the information (606.171(c)).
+  // Events that are not reportable are still investigated (606.171(f)); they get no report-by date.
+  const FDA_PRODUCT_TYPES = new Set(["red_cells", "whole_blood", "plasma", "platelets", "cryoprecipitate", "granulocytes", "source_plasma", "other"]);
+  const FDA_EVENT_KINDS = new Set(["deviation", "unexpected_event"]);
+  const fdaFlag = (v: any): number | null => (v === true || v === 1 || v === "1" || v === "yes") ? 1 : (v === false || v === 0 || v === "0" || v === "no") ? 0 : null;
+  const fdaReportDue = (infoDate: string | null, affects: number | null, inFacility: number | null, distributed: number | null): string | null => {
+    if (!infoDate || !/^\d{4}-\d{2}-\d{2}$/.test(infoDate)) return null;
+    if (affects !== 1 || inFacility !== 1 || distributed !== 1) return null;
+    const d = new Date(infoDate + "T00:00:00Z");
+    d.setUTCDate(d.getUTCDate() + 45);
+    return d.toISOString().slice(0, 10);
+  };
 
   // Resolve the set of accreditors a given lab is allowed to file findings
   // under. CMS is always included because every lab holds CLIA. "Other" is
@@ -22175,10 +22296,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   // PUT update finding
-  app.put("/api/findings/:id", authMiddleware, requireWriteAccess, requireModuleEdit("veritaresponse"), (req: any, res) => {
-    const dataUserId = req.ownerUserId ?? req.user?.userId;
-    const existing = userCanAccessFinding(req.params.id, req) as any;
-    if (!existing) return res.status(404).json({ error: "Finding not found" });
+  // Shared finding update for the legacy /api/findings/:id route and the lab-scoped
+  // /api/labs/:labId/findings/:id route. BUG-054 (2026-10-14): the finding page saves to the
+  // lab-scoped URL (findingUrl), which had no PUT route, so every Save returned 404 in production.
+  const updateFinding = (req: any, res: any, existing: any, gateLabId: number | null) => {
 
     const body = req.body || {};
     if (body.accreditor && !VALID_ACCREDITORS.includes(body.accreditor)) {
@@ -22195,7 +22316,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // flag after the fact) stay readable and editable in OTHER fields;
     // only attempts to switch TO a disallowed accreditor are blocked.
     if (body.accreditor && body.accreditor !== existing.accreditor) {
-      const labIdForGate = getUserPrimaryLabId(dataUserId);
+      const labIdForGate = gateLabId;
       const allowed = getLabAllowedAccreditors(labIdForGate);
       if (!allowed.has(body.accreditor)) {
         return res.status(400).json({
@@ -22207,9 +22328,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // Recompute due_date when accreditor or anchor_date changes
     const nextAccreditor = body.accreditor ?? existing.accreditor;
     const nextAnchor = body.anchor_date !== undefined ? body.anchor_date : existing.anchor_date;
-    const recomputed = (body.accreditor !== undefined || body.anchor_date !== undefined)
-      ? dueDateForFinding(nextAccreditor, nextAnchor)
-      : existing.due_date;
+    // An FDA product deviation's due date is its 606.171 report-by date; never recompute it from an accreditor.
+    const recomputed = existing.source_type === 'fda_deviation'
+      ? existing.due_date
+      : (body.accreditor !== undefined || body.anchor_date !== undefined)
+        ? dueDateForFinding(nextAccreditor, nextAnchor)
+        : existing.due_date;
 
     (db as any).$client.prepare(
       `UPDATE findings SET
@@ -22279,8 +22403,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch {}
     const updated = (db as any).$client.prepare("SELECT * FROM findings WHERE id = ?").get(req.params.id);
     res.json(updated);
+  };
+
+  app.put("/api/findings/:id", authMiddleware, requireWriteAccess, requireModuleEdit("veritaresponse"), (req: any, res) => {
+    const dataUserId = req.ownerUserId ?? req.user?.userId;
+    const existing = userCanAccessFinding(req.params.id, req) as any;
+    if (!existing) return res.status(404).json({ error: "Finding not found" });
+    return updateFinding(req, res, existing, getUserPrimaryLabId(dataUserId));
   });
 
+  app.put("/api/labs/:labId/findings/:id", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritaresponse"), (req: any, res) => {
+    const existing = (db as any).$client.prepare("SELECT * FROM findings WHERE id = ? AND lab_id = ?").get(Number(req.params.id), req.scope.labId) as any;
+    if (!existing) return res.status(404).json({ error: "Finding not found in this lab" });
+    return updateFinding(req, res, existing, req.scope.labId);
+  });
   // DELETE finding
   app.delete("/api/findings/:id", authMiddleware, requireWriteAccess, requireModuleEdit("veritaresponse"), (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user?.userId;
@@ -22872,7 +23008,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // not filed under an accreditor and carries no accreditor deadline; it stores
     // 'Other' as a neutral accreditor to satisfy the findings.accreditor NOT NULL
     // / CHECK column.
-    const isInternalNce = source_type === 'internal_nce';
+    const isFdaDeviation = source_type === 'fda_deviation';
+    const isInternalNce = source_type === 'internal_nce' || isFdaDeviation;
     const effectiveAccreditor = isInternalNce
       ? (accreditor && VALID_ACCREDITORS.includes(accreditor) ? accreditor : 'Other')
       : accreditor;
@@ -22930,6 +23067,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         ).run(event_date ?? null, discovered_by ?? null, Number(result.lastInsertRowid));
       } catch {}
     }
+    // FDA product deviation: stamp the 606.171 fields and the 45-day report-by date (as the due date).
+    if (isFdaDeviation) {
+      const b = req.body || {};
+      const infoDate = typeof b.fda_info_date === "string" && b.fda_info_date ? b.fda_info_date : (event_date ?? null);
+      const affects = fdaFlag(b.fda_affects_product), inFac = fdaFlag(b.fda_in_facility), dist = fdaFlag(b.fda_distributed);
+      const due = fdaReportDue(infoDate, affects, inFac, dist);
+      (db as any).$client.prepare(
+        `UPDATE findings SET fda_product_type = ?, fda_product_id = ?, fda_event_kind = ?, fda_affects_product = ?,
+           fda_in_facility = ?, fda_distributed = ?, fda_info_date = ?, fda_report_due = ?, due_date = ?,
+           standard_ref = COALESCE(standard_ref, '21 CFR 606.171') WHERE id = ?`
+      ).run(
+        FDA_PRODUCT_TYPES.has(b.fda_product_type) ? b.fda_product_type : null,
+        b.fda_product_id ? String(b.fda_product_id).slice(0, 80) : null,
+        FDA_EVENT_KINDS.has(b.fda_event_kind) ? b.fda_event_kind : null,
+        affects, inFac, dist, infoDate, due, due, Number(result.lastInsertRowid),
+      );
+    }
     try {
       (db as any).$client.prepare(
         `INSERT INTO finding_history (finding_id, event, by_user_id, payload) VALUES (?, ?, ?, ?)`
@@ -22946,6 +23100,44 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // MD-cosign and VeritaPolicy medical_director routing); owner/admin passes via
   // req.scope.role. Anyone else gets 403. Signing stamps signed_by/signed_at/
   // signoff_role, closes the finding, and writes an audit-trail row.
+  // FDA product deviation fields (St. Charles REQ-065). Updates the 606.171(b) criteria, the information
+  // date, the product, and the Form FDA 3486 submission; recomputes the 45-day report-by date.
+  app.patch("/api/labs/:labId/findings/:id/fda", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritaresponse"), (req: any, res) => {
+    const sqlite = (db as any).$client;
+    const f = sqlite.prepare("SELECT * FROM findings WHERE id = ? AND lab_id = ?").get(Number(req.params.id), req.scope.labId) as any;
+    if (!f) return res.status(404).json({ error: "Finding not found in this lab" });
+    if (f.source_type !== "fda_deviation") return res.status(400).json({ error: "Not an FDA product deviation" });
+    const b = req.body || {};
+    const isDay = (v: any) => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
+    const pick = (k: string) => (b[k] !== undefined ? b[k] : f[k]);
+    const infoDate = pick("fda_info_date") || null;
+    if (infoDate && !isDay(infoDate)) return res.status(400).json({ error: "fda_info_date must be YYYY-MM-DD" });
+    const submitted = pick("fda_submitted_date") || null;
+    if (submitted && !isDay(submitted)) return res.status(400).json({ error: "fda_submitted_date must be YYYY-MM-DD" });
+    if (submitted && infoDate && submitted < infoDate) return res.status(400).json({ error: "fda_submitted_date cannot be before the information date" });
+    const productType = pick("fda_product_type");
+    if (productType && !FDA_PRODUCT_TYPES.has(productType)) return res.status(400).json({ error: "fda_product_type is not a known product type" });
+    const kind = pick("fda_event_kind");
+    if (kind && !FDA_EVENT_KINDS.has(kind)) return res.status(400).json({ error: "fda_event_kind must be deviation or unexpected_event" });
+    const affects = b.fda_affects_product !== undefined ? fdaFlag(b.fda_affects_product) : f.fda_affects_product;
+    const inFac = b.fda_in_facility !== undefined ? fdaFlag(b.fda_in_facility) : f.fda_in_facility;
+    const dist = b.fda_distributed !== undefined ? fdaFlag(b.fda_distributed) : f.fda_distributed;
+    const due = fdaReportDue(infoDate, affects, inFac, dist);
+    const conf = pick("fda_confirmation_number");
+    sqlite.prepare(
+      `UPDATE findings SET fda_product_type = ?, fda_product_id = ?, fda_event_kind = ?, fda_affects_product = ?, fda_in_facility = ?,
+         fda_distributed = ?, fda_info_date = ?, fda_report_due = ?, due_date = ?, fda_submitted_date = ?, fda_confirmation_number = ?,
+         external_submission_ref = COALESCE(?, external_submission_ref), updated_at = datetime('now') WHERE id = ?`
+    ).run(productType || null, pick("fda_product_id") ? String(pick("fda_product_id")).slice(0, 80) : null, kind || null,
+      affects, inFac, dist, infoDate, due, due, submitted, conf ? String(conf).slice(0, 80) : null,
+      conf ? String(conf).slice(0, 80) : null, f.id);
+    try {
+      sqlite.prepare("INSERT INTO finding_history (finding_id, event, by_user_id, payload) VALUES (?, ?, ?, ?)")
+        .run(f.id, "fda_fields_updated", req.user?.userId ?? null, JSON.stringify({ fda_report_due: due, fda_submitted_date: submitted }));
+    } catch {}
+    return res.json(sqlite.prepare("SELECT * FROM findings WHERE id = ?").get(f.id));
+  });
+
   app.post("/api/labs/:labId/findings/:id/signoff", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
     const sqlite = (db as any).$client;
     const finding = sqlite.prepare("SELECT * FROM findings WHERE id = ? AND lab_id = ?").get(Number(req.params.id), req.scope.labId) as any;
@@ -24493,6 +24685,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         return res.status(400).json({ error: "question.method_group_name must be a string when present" });
       }
     }
+    // One picture per question, an uploaded image only (shared/quizImages.ts; REQ-074).
+    const imageProblem = quizImageProblem(questions);
+    if (imageProblem) return res.status(400).json({ error: imageProblem, code: "QUIZ_IMAGE_INVALID" });
     const mgIdsJson = Array.isArray(methodGroupIds) && methodGroupIds.length
       ? JSON.stringify(methodGroupIds.map((n: any) => Number(n)).filter((n: number) => Number.isFinite(n)))
       : null;
@@ -24597,6 +24792,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       question: q.question,
       type: q.type,
       options: q.options,
+      image: q.image ?? null,
     }));
     if (quiz.randomize_questions === 1 || quiz.randomize_questions === true) {
       // Fisher-Yates shuffle using crypto.getRandomValues / crypto.randomInt.
@@ -24646,7 +24842,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // post-hoc), only DELETE is blocked.
   app.put("/api/veritacomp/quizzes/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
-    const quiz = (db as any).$client.prepare("SELECT id, user_id FROM competency_quizzes WHERE id = ?").get(req.params.id) as any;
+    const quiz = (db as any).$client.prepare("SELECT id, user_id, randomize_questions, question_format FROM competency_quizzes WHERE id = ?").get(req.params.id) as any;
     if (!quiz) return res.status(404).json({ error: "Quiz not found" });
     if (quiz.user_id === 0) return res.status(403).json({ error: "Cannot edit a system-default quiz" });
     const owned = userCanAccessLabRow('competency_quizzes', req.params.id, req);
@@ -24671,11 +24867,20 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         return res.status(400).json({ error: "question.method_group_name must be a string when present" });
       }
     }
+    // One picture per question, an uploaded image only (shared/quizImages.ts; REQ-074).
+    const imageProblem = quizImageProblem(questions);
+    if (imageProblem) return res.status(400).json({ error: imageProblem, code: "QUIZ_IMAGE_INVALID" });
     const mgIdsJson = Array.isArray(methodGroupIds) && methodGroupIds.length
       ? JSON.stringify(methodGroupIds.map((n: any) => Number(n)).filter((n: number) => Number.isFinite(n)))
       : null;
-    const randomizeFlag = randomizeQuestions === true || randomizeQuestions === 1 ? 1 : 0;
-    const qFormat = questionFormat === "html" ? "html" : "plain";
+    // A field left out of the body keeps the quiz's own setting. Edit Quiz never sent these two, so every
+    // edit turned randomization off and an HTML-format quiz (reaction tables) back to plain text (BUG-055).
+    const randomizeFlag = randomizeQuestions === undefined
+      ? (quiz.randomize_questions ? 1 : 0)
+      : (randomizeQuestions === true || randomizeQuestions === 1 ? 1 : 0);
+    const qFormat = questionFormat === undefined
+      ? (quiz.question_format === "html" ? "html" : "plain")
+      : (questionFormat === "html" ? "html" : "plain");
     (db as any).$client.prepare(
       "UPDATE competency_quizzes SET title = ?, method_group_id = ?, method_group_name = ?, method_group_ids = ?, questions = ?, randomize_questions = ?, question_format = ? WHERE id = ?"
     ).run(
@@ -35139,6 +35344,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         return res.status(400).json({ error: "question.method_group_name must be a string when present" });
       }
     }
+    // One picture per question, an uploaded image only (shared/quizImages.ts; REQ-074).
+    const imageProblem = quizImageProblem(questions);
+    if (imageProblem) return res.status(400).json({ error: imageProblem, code: "QUIZ_IMAGE_INVALID" });
     const program = (db as any).$client.prepare("SELECT id, user_id, lab_id FROM competency_programs WHERE id = ?").get(programId) as any;
     if (!program) return res.status(404).json({ error: "Program not found" });
     const mgIdsJson = Array.isArray(methodGroupIds) && methodGroupIds.length
@@ -35211,6 +35419,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         return res.status(400).json({ error: "question.method_group_name must be a string when present" });
       }
     }
+    // One picture per question, an uploaded image only (shared/quizImages.ts; REQ-074).
+    const imageProblem = quizImageProblem(questions);
+    if (imageProblem) return res.status(400).json({ error: imageProblem, code: "QUIZ_IMAGE_INVALID" });
     const mgIdsJson = Array.isArray(methodGroupIds) && methodGroupIds.length
       ? JSON.stringify(methodGroupIds.map((n: any) => Number(n)).filter((n: number) => Number.isFinite(n)))
       : null;
@@ -41430,6 +41641,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // VeritaStock recall tracker (/api/labs/:labId/veritastock/recalls/*)
   const { registerStockRecallRoutes } = await import('./stockRecalls');
   registerStockRecallRoutes(app, authMiddleware, requireWriteAccess, requireModuleEdit);
+
+  // VeritaMaintain temperature logs (/api/labs/:labId/temp-logs/*; St. Charles REQ-068)
+  const { registerTemperatureLogRoutes } = await import('./temperatureLogs');
+  registerTemperatureLogRoutes(app, authMiddleware, requireWriteAccess, requireModuleEdit);
 
   // VeritaOps routes (Cost-Per-Reportable-Test studies, PARKING_LOT #10)
   const { registerVeritaOpsRoutes } = await import('./veritaops');

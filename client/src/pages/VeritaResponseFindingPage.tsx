@@ -407,6 +407,72 @@ function EffectivenessPanel({ activeLabId, findingId, completionDate, canEdit, o
   );
 }
 
+// FDA product deviation panel (21 CFR 606.171, St. Charles REQ-065, 2026-10-14). Shows the 606.171(b)
+// reportability answers and the 45-day report-by date, and records the Form FDA 3486 submission.
+function FdaDeviationPanel({ finding, labId, onSaved }: { finding: any; labId: number | null; onSaved: (f: any) => void }) {
+  const { toast } = useToast();
+  const [submitted, setSubmitted] = useState<string>(finding.fda_submitted_date || "");
+  const [conf, setConf] = useState<string>(finding.fda_confirmation_number || "");
+  const [saving, setSaving] = useState(false);
+  const yn = (v: any) => (v === 1 ? "Yes" : v === 0 ? "No" : "Not answered");
+  const allYes = finding.fda_affects_product === 1 && finding.fda_in_facility === 1 && finding.fda_distributed === 1;
+  const anyNo = finding.fda_affects_product === 0 || finding.fda_in_facility === 0 || finding.fda_distributed === 0;
+  const PRODUCT: Record<string, string> = { red_cells: "Red blood cells", whole_blood: "Whole blood", plasma: "Plasma", platelets: "Platelets", cryoprecipitate: "Cryoprecipitate", granulocytes: "Granulocytes", source_plasma: "Source plasma", other: "Other" };
+  const save = async () => {
+    if (!labId) return;
+    setSaving(true);
+    try {
+      const r = await fetch(`${API_BASE}/api/labs/${labId}/findings/${finding.id}/fda`, {
+        method: "PATCH", headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ fda_submitted_date: submitted || null, fda_confirmation_number: conf.trim() || null }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) { toast({ title: j.error || "Could not save the FDA submission", variant: "destructive" }); return; }
+      toast({ title: "FDA submission saved" });
+      onSaved(j);
+    } finally { setSaving(false); }
+  };
+  return (
+    <Card data-testid="fda-deviation-panel">
+      <CardHeader className="py-3 px-4 border-b">
+        <CardTitle className="text-base font-semibold">FDA product deviation (21 CFR 606.171)</CardTitle>
+      </CardHeader>
+      <CardContent className="p-4 space-y-3 text-sm">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-xs">
+          <div><span className="font-medium">Product:</span> {PRODUCT[finding.fda_product_type] || "Not recorded"}{finding.fda_product_id ? ` (${finding.fda_product_id})` : ""}</div>
+          <div><span className="font-medium">Type of event:</span> {finding.fda_event_kind === "deviation" ? "Deviation from cGMP, regulations, standards or specifications" : finding.fda_event_kind === "unexpected_event" ? "Unexpected or unforeseeable event" : "Not recorded"}</div>
+          <div><span className="font-medium">Information acquired:</span> {finding.fda_info_date || "Not recorded"}</div>
+          <div><span className="font-medium">May affect safety, purity or potency:</span> {yn(finding.fda_affects_product)}</div>
+          <div><span className="font-medium">Occurred in this or a contract facility:</span> {yn(finding.fda_in_facility)}</div>
+          <div><span className="font-medium">Product distributed:</span> {yn(finding.fda_distributed)}</div>
+        </div>
+        <div className="text-xs rounded px-2 py-1.5 bg-muted/40" data-testid="fda-report-due">
+          {allYes
+            ? (finding.fda_report_due
+                ? <span className="font-medium text-rose-700 dark:text-rose-300">Reportable. Submit Form FDA 3486 to CBER by {finding.fda_report_due} (45 calendar days).</span>
+                : <span className="font-medium text-rose-700 dark:text-rose-300">Reportable. Record the date the information was acquired to set the report-by date.</span>)
+            : anyNo
+              ? <span>Not reportable under 606.171(b). Investigate and document it in the corrective action below (606.171(f)).</span>
+              : <span className="text-muted-foreground">Reportability not yet determined.</span>}
+        </div>
+        {allYes && (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+            <div className="space-y-1">
+              <Label className="text-xs" htmlFor="fda-submitted">Submitted to FDA on</Label>
+              <Input id="fda-submitted" type="date" value={submitted} onChange={(e) => setSubmitted(e.target.value)} className="h-8 text-sm" data-testid="fda-submitted" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs" htmlFor="fda-conf">FDA confirmation / BPDR number</Label>
+              <Input id="fda-conf" value={conf} onChange={(e) => setConf(e.target.value)} className="h-8 text-sm" data-testid="fda-conf" />
+            </div>
+            <Button size="sm" className="bg-[#006064] hover:bg-[#004d50] text-white" onClick={save} disabled={saving || !labId} data-testid="fda-save">{saving ? "Saving..." : "Save FDA submission"}</Button>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function VeritaResponseFindingPage() {
   // #84 Phase 3: editing, saving and deleting a finding is VeritaResponse setup.
   const isReadOnly = useIsReadOnly("veritaresponse");
@@ -1168,6 +1234,10 @@ export default function VeritaResponseFindingPage() {
           </Card>
         );
       })()}
+
+      {finding.source_type === "fda_deviation" && (
+        <FdaDeviationPanel finding={finding} labId={activeLabId ?? null} onSaved={(f) => setFinding((prev: any) => ({ ...prev, ...f }))} />
+      )}
 
       {/* #36: internal NCE write-up PDF. Shown for internal-event findings; no
           accreditor gate. Floor: event description + corrective action. */}

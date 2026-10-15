@@ -4166,6 +4166,58 @@ sqlite.exec(`
   } catch {}
 }
 
+// 2026-10-14 VeritaMaintain temperature logs (St. Charles REQ-068; server/temperatureLogs.ts). Storage units
+// carry the lab's own acceptable range (never defaulted) and readings-per-day; readings carry initials, the
+// person signed in, and the corrective action required when a reading is out of range (42 CFR 493.1252(b)).
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS temp_log_units (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    unit_type TEXT NOT NULL DEFAULT 'refrigerator',
+    location TEXT,
+    min_value REAL,
+    max_value REAL,
+    scale TEXT NOT NULL DEFAULT 'C',
+    readings_per_day INTEGER NOT NULL DEFAULT 1,
+    active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE TABLE IF NOT EXISTS temp_log_readings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    unit_id INTEGER NOT NULL,
+    reading_date TEXT NOT NULL,
+    reading_time TEXT,
+    value REAL NOT NULL,
+    in_range INTEGER NOT NULL DEFAULT 1,
+    initials TEXT,
+    recorded_by_user_id INTEGER,
+    recorded_by_name TEXT,
+    corrective_action TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_temp_units_lab ON temp_log_units(lab_id, active);
+  CREATE INDEX IF NOT EXISTS idx_temp_readings_unit ON temp_log_readings(unit_id, reading_date);
+  CREATE INDEX IF NOT EXISTS idx_temp_readings_lab ON temp_log_readings(lab_id, reading_date);
+`);
+{
+  // NEW DB TABLE RULE: an older live copy gets any missing columns.
+  try {
+    const unitCols = (sqlite.prepare("PRAGMA table_info(temp_log_units)").all() as { name: string }[]).map((c) => c.name);
+    for (const [c, t] of [["lab_id", "INTEGER"], ["name", "TEXT"], ["unit_type", "TEXT"], ["location", "TEXT"], ["min_value", "REAL"], ["max_value", "REAL"],
+      ["scale", "TEXT"], ["readings_per_day", "INTEGER"], ["active", "INTEGER"], ["created_at", "TEXT"], ["updated_at", "TEXT"]] as Array<[string, string]>) {
+      if (!unitCols.includes(c)) { try { sqlite.exec(`ALTER TABLE temp_log_units ADD COLUMN ${c} ${t}`); } catch {} }
+    }
+    const readingCols = (sqlite.prepare("PRAGMA table_info(temp_log_readings)").all() as { name: string }[]).map((c) => c.name);
+    for (const [c, t] of [["lab_id", "INTEGER"], ["unit_id", "INTEGER"], ["reading_date", "TEXT"], ["reading_time", "TEXT"], ["value", "REAL"], ["in_range", "INTEGER"],
+      ["initials", "TEXT"], ["recorded_by_user_id", "INTEGER"], ["recorded_by_name", "TEXT"], ["corrective_action", "TEXT"], ["created_at", "TEXT"]] as Array<[string, string]>) {
+      if (!readingCols.includes(c)) { try { sqlite.exec(`ALTER TABLE temp_log_readings ADD COLUMN ${c} ${t}`); } catch {} }
+    }
+  } catch {}
+}
+
 // 2026-10-08 Competency reminders and escalation (St. Charles; Michael: weekly
 // supervisor digest, escalate to the director the day a competency goes
 // overdue then weekly, plus a monthly 90/60/30 report). Per-lab settings and a
@@ -5052,6 +5104,40 @@ sqlite.exec(`
 }
 try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_inv_lots_item ON inventory_lots(item_id)"); } catch {}
 try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_inv_lots_lab_exp ON inventory_lots(lab_id, expiration_date)"); } catch {}
+// 2026-10-14 (St. Charles REQ-067): when each lot was put in use and taken out of use. A separate log,
+// not columns on inventory_lots, because a lot row is deleted once its quantity reaches zero
+// (inventoryLots.reconcileLots) and the in-use history must outlive the stock. Keyed by item + lot number.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS inventory_lot_use (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    item_id INTEGER NOT NULL,
+    lot_number TEXT,
+    expiration_date TEXT,
+    in_use_date TEXT NOT NULL,
+    in_use_by_user_id INTEGER,
+    in_use_by_name TEXT,
+    out_of_use_date TEXT,
+    out_of_use_by_user_id INTEGER,
+    out_of_use_by_name TEXT,
+    out_of_use_reason TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )
+`);
+{
+  // NEW DB TABLE RULE: an older live copy gets any missing columns.
+  const cols = (sqlite.prepare("PRAGMA table_info(inventory_lot_use)").all() as { name: string }[]).map((c) => c.name);
+  const need: Array<[string, string]> = [
+    ["lab_id", "INTEGER"], ["item_id", "INTEGER"], ["lot_number", "TEXT"], ["expiration_date", "TEXT"],
+    ["in_use_date", "TEXT"], ["in_use_by_user_id", "INTEGER"], ["in_use_by_name", "TEXT"],
+    ["out_of_use_date", "TEXT"], ["out_of_use_by_user_id", "INTEGER"], ["out_of_use_by_name", "TEXT"],
+    ["out_of_use_reason", "TEXT"], ["created_at", "TEXT"], ["updated_at", "TEXT"],
+  ];
+  for (const [c, t] of need) if (!cols.includes(c)) { try { sqlite.exec(`ALTER TABLE inventory_lot_use ADD COLUMN ${c} ${t}`); } catch {} }
+}
+try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_inv_lot_use_item ON inventory_lot_use(item_id)"); } catch {}
+try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_inv_lot_use_lab ON inventory_lot_use(lab_id, in_use_date)"); } catch {}
 // One-shot backfill: seed one lot per item that has stock but no lot row yet,
 // mirroring its current (lot_number, expiration_date, quantity_on_hand). Gated on
 // NOT EXISTS so subsequent boots are no-ops (boot-migration-no-cascading-writes
@@ -6527,6 +6613,21 @@ sqlite.exec(`
       if (!have.has("event_date")) sqlite.exec("ALTER TABLE findings ADD COLUMN event_date TEXT");
       if (!have.has("discovered_by")) sqlite.exec("ALTER TABLE findings ADD COLUMN discovered_by TEXT");
       if (!have.has("signoff_role")) sqlite.exec("ALTER TABLE findings ADD COLUMN signoff_role TEXT");
+      // FDA product deviation (2026-10-14, St. Charles REQ-065): source_type 'fda_deviation'. The three
+      // 21 CFR 606.171(b) criteria are stored as the lab answered them (1/0/NULL); fda_info_date is the date
+      // the lab acquired information reasonably suggesting a reportable event (606.171(c)); fda_report_due is
+      // that date + 45 calendar days when all three criteria are met; the submission date and the FDA
+      // confirmation number record the Form FDA 3486 filing.
+      if (!have.has("fda_product_type")) sqlite.exec("ALTER TABLE findings ADD COLUMN fda_product_type TEXT");
+      if (!have.has("fda_product_id")) sqlite.exec("ALTER TABLE findings ADD COLUMN fda_product_id TEXT");
+      if (!have.has("fda_event_kind")) sqlite.exec("ALTER TABLE findings ADD COLUMN fda_event_kind TEXT");
+      if (!have.has("fda_affects_product")) sqlite.exec("ALTER TABLE findings ADD COLUMN fda_affects_product INTEGER");
+      if (!have.has("fda_in_facility")) sqlite.exec("ALTER TABLE findings ADD COLUMN fda_in_facility INTEGER");
+      if (!have.has("fda_distributed")) sqlite.exec("ALTER TABLE findings ADD COLUMN fda_distributed INTEGER");
+      if (!have.has("fda_info_date")) sqlite.exec("ALTER TABLE findings ADD COLUMN fda_info_date TEXT");
+      if (!have.has("fda_report_due")) sqlite.exec("ALTER TABLE findings ADD COLUMN fda_report_due TEXT");
+      if (!have.has("fda_submitted_date")) sqlite.exec("ALTER TABLE findings ADD COLUMN fda_submitted_date TEXT");
+      if (!have.has("fda_confirmation_number")) sqlite.exec("ALTER TABLE findings ADD COLUMN fda_confirmation_number TEXT");
     }
   } catch {
     // fresh DB: CREATE TABLE above handled it
@@ -6811,6 +6912,9 @@ try { (sqlite.prepare(`PRAGMA table_info(founding_lab_applications)`).all() as a
   ensure("qc_control_lots", "mfr_range_high",     "ALTER TABLE qc_control_lots ADD COLUMN mfr_range_high REAL");
   ensure("qc_control_lots", "expiration_date",    "ALTER TABLE qc_control_lots ADD COLUMN expiration_date TEXT");
   ensure("qc_control_lots", "opened_date",        "ALTER TABLE qc_control_lots ADD COLUMN opened_date TEXT");
+  // 2026-10-14 (St. Charles REQ-067): the date a control lot was taken out of use. opened_date is its
+  // in-use date; out_of_use_date is stamped when the lot is retired (or replaced by a changeover).
+  ensure("qc_control_lots", "out_of_use_date",    "ALTER TABLE qc_control_lots ADD COLUMN out_of_use_date TEXT");
   ensure("qc_control_lots", "status",             "ALTER TABLE qc_control_lots ADD COLUMN status TEXT NOT NULL DEFAULT 'active'");
   // prior_lot_id links a replacement lot to the lot it succeeds, forming a
   // per-(analyte, level) changeover chain. NULL = the first lot of a line.
