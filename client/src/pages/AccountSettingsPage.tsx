@@ -1180,9 +1180,18 @@ function ChangePasswordCard() {
 
 // Two-factor sign-in (Stage 2, mock Q171 = 1). Turn it on (authenticator app or email codes),
 // new recovery codes, move to a new phone, and turn it off when no lab requires it.
+// A lab owner's switch covers their whole system (Michael 2026-10-15, recording 1): turning it on
+// here also requires it for everyone in every lab they own; turning it off lifts that.
 interface TwoFactorStatus {
   enabled: boolean; method: "totp" | "email" | null; enabledAt: string | null; recoveryCodesLeft: number;
   email: string | null; required: boolean; requiredBy: string; canTurnOff: boolean; isDemo: boolean;
+  systemLabs: { id: number; name: string }[]; systemPeople: number; systemRequired: boolean;
+}
+
+function systemText(s: TwoFactorStatus): string {
+  const names = s.systemLabs.map((l) => l.name).join(", ");
+  const people = s.systemPeople === 1 ? "1 other person" : `${s.systemPeople} other people`;
+  return `${s.systemLabs.length === 1 ? "your lab" : `all ${s.systemLabs.length} of your labs`} (${names}; ${people})`;
 }
 
 function TwoFactorCard() {
@@ -1208,8 +1217,20 @@ function TwoFactorCard() {
     } finally { setBusy(false); }
   }
 
+  async function requireSystem() {
+    setBusy(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/auth/mfa/require-system`, { method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() }, body: "{}" });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) { toast({ title: body?.error || "That didn't work", variant: "destructive" }); return; }
+      toast({ title: "Two-factor sign-in is now required for everyone in your labs" });
+      refresh();
+    } finally { setBusy(false); }
+  }
+
   const methodText = data.method === "email" ? "Email codes" : "Authenticator app";
   const on = data.enabled;
+  const owner = (data.systemLabs || []).length > 0;
   const needsPassword = (mode === "move" || mode === "codes" || mode === "off") && !passwordOk && !codes;
 
   return (
@@ -1224,7 +1245,8 @@ function TwoFactorCard() {
         {mode === "setup" || (mode === "move" && passwordOk) ? (
           <TwoFactorSetup
             password={mode === "move" ? password : undefined}
-            onDone={() => { toast({ title: "Two-factor sign-in is on" }); reset(); refresh(); }}
+            requireSystem={mode === "setup" && owner}
+            onDone={() => { toast({ title: mode === "setup" && owner ? "Two-factor sign-in is on, and required for everyone in your labs" : "Two-factor sign-in is on" }); reset(); refresh(); }}
             onCancel={reset}
           />
         ) : codes ? (
@@ -1232,6 +1254,11 @@ function TwoFactorCard() {
         ) : needsPassword ? (
           <div className="space-y-2">
             <Label htmlFor="mfa-password">Enter your current password to continue</Label>
+            {mode === "off" && data.systemRequired && (
+              <p className="text-xs text-muted-foreground" data-testid="mfa-off-system-note">
+                Turning it off also stops requiring it for everyone in {systemText(data)}.
+              </p>
+            )}
             <Input id="mfa-password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
             <div className="flex gap-2">
               <Button size="sm" disabled={!password || busy} onClick={() => {
@@ -1257,17 +1284,34 @@ function TwoFactorCard() {
               <Button size="sm" variant="outline" onClick={() => setMode("move")}>{data.method === "email" ? "Use an authenticator app" : "Move to a new phone"}</Button>
               {data.canTurnOff && <Button size="sm" variant="outline" onClick={() => setMode("off")}>Turn off</Button>}
             </div>
+            {owner && (data.systemRequired ? (
+              <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs" data-testid="mfa-system-on">
+                Required for everyone in {systemText(data)}. People without it set it up at their next sign-in.
+              </p>
+            ) : (
+              <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs space-y-2" data-testid="mfa-system-off">
+                <p>Not yet required for the people in {systemText(data)}.</p>
+                <Button size="sm" variant="outline" disabled={busy} onClick={() => void requireSystem()} data-testid="mfa-require-system">
+                  Require it for everyone in my labs
+                </Button>
+              </div>
+            ))}
             {data.required && (
               <p className="rounded-md border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
-                {data.requiredBy === "Veritas Lab Services" ? "Veritas Lab Services accounts require two-factor sign-in" : "Your lab requires two-factor sign-in"}, so it cannot be turned off here.
+                {data.requiredBy === "Veritas Lab Services" ? "Veritas Lab Services accounts require two-factor sign-in" : `${data.requiredBy || "Your lab"} requires two-factor sign-in`}, so it cannot be turned off here.
               </p>
             )}
           </>
         ) : (
           <>
             <p className="text-sm text-muted-foreground">
-              After your password, enter a 6-digit code from an app on your phone, or one we email you. {data.required ? `${data.requiredBy} requires it, so you'll set it up at your next sign-in, or now.` : "Anyone can turn it on for their own account."}
+              After your password, enter a 6-digit code from an app on your phone, or one we email you. {data.required ? `${data.requiredBy} requires it, so you'll set it up at your next sign-in, or now.` : owner ? "" : "Anyone can turn it on for their own account."}
             </p>
+            {owner && (
+              <p className="rounded-md border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-950/30 dark:text-amber-200" data-testid="mfa-system-warning">
+                As the lab owner, turning it on here also requires it for everyone in {systemText(data)}. Each person sets it up at their next sign-in.
+              </p>
+            )}
             <Button size="sm" onClick={() => setMode("setup")}>Turn on</Button>
           </>
         )}

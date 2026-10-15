@@ -5,7 +5,7 @@
 //   1. Account settings: Two-factor card OFF -> Turn on -> QR + key -> code -> recovery codes -> ON
 //   2. Sign out, sign in: password, then the 6-digit step; a wrong code shows an error; the right one
 //      reaches the dashboard
-//   3. Lab members page: the owner's Two-factor card; Require turns on and the person list shows it
+//   3. Lab members page: the owner's Two-factor card; turning it on in Account settings already requires it here
 //   4. light, dark and 390px; no horizontal page scroll on the sign-in step
 // Run: PW_BASE=http://localhost:5195 SCRATCH_DB=<db> OUT=<dir> node scripts/verify-two-factor-ui.mjs
 import { createRequire } from "node:module";
@@ -120,11 +120,11 @@ for (const [scheme, width] of [["light", 1280], ["dark", 390]]) {
     await card.waitFor({ timeout: 10000 });
     await card.scrollIntoViewIfNeeded();
     if (scheme === "light") {
-      check("3a. the lab card lists the owner (On) and the member (Off)", (await card.innerText()).includes("Kim Bravo") && (await card.innerText()).includes("Jordan Ellis"));
-      await page.getByTestId("two-factor-require-toggle").click();
-      await page.waitForTimeout(1200);
+      check("3a. the lab card lists the owner and the member", (await card.innerText()).includes("Kim Bravo") && (await card.innerText()).includes("Jordan Ellis"));
+      // The owner turned it on in Account settings, which covers their whole system (Michael 2026-10-15),
+      // so the lab is already required and its own switch is locked on.
       const t = await card.innerText();
-      check("3b. Require turns on; the member shows Set up at next sign-in", t.includes("On since") && t.includes("Set up at next sign-in"), t.replace(/\s+/g, " ").slice(0, 200));
+      check("3b. the owner's switch already requires it here; the member shows Set up at next sign-in", t.includes("On for the whole system") && t.includes("Set up at next sign-in") && await page.getByTestId("two-factor-require-toggle").isDisabled(), t.replace(/\s+/g, " ").slice(0, 200));
     }
     await card.screenshot({ path: `${OUT}/two-factor-lab-card-${scheme}.png` });
     await ctx.close();

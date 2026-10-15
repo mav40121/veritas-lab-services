@@ -181,12 +181,13 @@ export function RecoveryCodesPanel({ codes, onContinue, continueLabel = "I saved
 }
 
 // ── First-time setup (or moving to a new phone) ─────────────────────────
-export function TwoFactorSetup({ mfaToken, requiredBy, emailHint, allowRemember, password, onDone, onCancel }: {
+export function TwoFactorSetup({ mfaToken, requiredBy, emailHint, allowRemember, password, requireSystem, onDone, onCancel }: {
   mfaToken?: string;               // sign-in setup; absent = from Account settings (session)
   requiredBy?: string;
   emailHint?: string;
   allowRemember?: boolean;
   password?: string;               // Account settings: needed to move an existing two-factor
+  requireSystem?: boolean;         // Account settings, lab owner: also require it for everyone in their labs
   onDone: (result: any) => void;   // sign-in: the sign-in payload; Account settings: { ok: true }
   onCancel: () => void;
 }) {
@@ -218,7 +219,7 @@ export function TwoFactorSetup({ mfaToken, requiredBy, emailHint, allowRemember,
   async function turnOn() {
     if (code.length !== 6) return;
     setBusy(true); setError(null);
-    const r = await post("/api/auth/mfa/setup/confirm", { mfa_token: mfaToken, code, method, remember: !!allowRemember && remember }, withSession);
+    const r = await post("/api/auth/mfa/setup/confirm", { mfa_token: mfaToken, code, method, remember: !!allowRemember && remember, require_system: !!requireSystem }, withSession);
     setBusy(false);
     if (!r.ok) { setCode(""); setError(r.status === 401 ? "This step expired. Start again." : (r.data?.error || "That code didn't work.")); return; }
     setResult(r.data);

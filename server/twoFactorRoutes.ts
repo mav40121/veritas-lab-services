@@ -5,17 +5,23 @@
 //   sign-in      POST /api/auth/mfa/verify, /api/auth/mfa/email-code
 //   setup        POST /api/auth/mfa/setup/start, /api/auth/mfa/setup/confirm
 //   own account  GET /api/auth/mfa, POST /api/auth/mfa/recovery-codes, /api/auth/mfa/turn-off
+//   owner system POST /api/auth/mfa/require-system (and setup/confirm with require_system: true)
 //   lab owner    GET/PUT /api/labs/:labId/two-factor, POST /api/labs/:labId/two-factor/reset/:userId
 //   Veritas      POST /api/admin/two-factor/reset (ADMIN_SECRET)
 // A sign-in step is opened by a 10-minute purpose token from login: "mfa" (enrolled person) or
 // "mfa_setup" (required but not set up). Neither opens any other route.
+//
+// Owner whole-system switch (Michael 2026-10-15, recording 1): "if you turn it on as the lab owner, you
+// are turning it on for your entire system. So all of your users will be required to have it." When an
+// owner turns two-factor on from Account settings, users.mfa_system_required covers every lab they own
+// and every lab in an organization they are billing owner of; turning their own off lifts it.
 import bcrypt from "bcryptjs";
 import QRCode from "qrcode";
 import {
   getMfa, isEnrolled, mfaRequirement, startTotpSetup, confirmTotpSetup, enableEmailMethod, checkTotp,
   replaceRecoveryCodes, useRecoveryCode, recoveryCodesLeft, emailSendWait, issueEmailCode, checkEmailCode,
   sendEmailCode, maskEmail, rememberDevice, deviceTrusted, codeLockWait, recordCodeFailure, clearCodeFailures,
-  resetTwoFactor,
+  resetTwoFactor, systemLabs, systemPeopleCount, isSystemRequired, setSystemRequired, labSystemOwner,
 } from "./twoFactor";
 import { otpauthUrl, groupKey } from "./totp";
 import { checkAuthToken, issuePurposeToken, verifyPurposeToken, endSessions, clientIp } from "./sessionAuth";
@@ -178,6 +184,7 @@ export function registerTwoFactorRoutes(app: any, deps: {
     if (method === "email") enableEmailMethod(sqlite, user.id);
     const recoveryCodes = replaceRecoveryCodes(sqlite, user.id);
     audit(req, user.id, "two_factor.enable", method === "email" ? "Two-factor sign-in turned on (email codes)" : "Two-factor sign-in turned on (authenticator app)");
+    if (via === "session" && req.body?.require_system === true) requireForSystem(req, user.id);
     if (via !== "session") {
       const out = buildSignIn(req, user, method);
       const rq = mfaRequirement(sqlite, user.id);
@@ -191,7 +198,8 @@ export function registerTwoFactorRoutes(app: any, deps: {
   app.get("/api/auth/mfa", authMiddleware, (req: any, res: any) => {
     const user = storage.getUserById(req.userId);
     const row = getMfa(sqlite, req.userId);
-    const rq = mfaRequirement(sqlite, req.userId);
+    // What requires it apart from the person's own whole-system switch (which their Turn off lifts).
+    const rq = mfaRequirement(sqlite, req.userId, { ignoreOwnSystem: true });
     res.json({
       enabled: isEnrolled(row),
       method: row?.enabled_at ? row.method : null,
@@ -201,6 +209,9 @@ export function registerTwoFactorRoutes(app: any, deps: {
       required: rq.required,
       requiredBy: requiredByText(rq),
       canTurnOff: isEnrolled(row) && !rq.required,
+      systemLabs: req.isDemo ? [] : systemLabs(sqlite, req.userId),
+      systemPeople: req.isDemo ? 0 : systemPeopleCount(sqlite, req.userId),
+      systemRequired: isSystemRequired(sqlite, req.userId),
       isDemo: !!req.isDemo,
     });
   });
@@ -219,14 +230,38 @@ export function registerTwoFactorRoutes(app: any, deps: {
     res.json({ recovery_codes: codes });
   });
 
+  /** The owner's whole-system switch on: every lab they own or whose organization they are billing owner of. */
+  function requireForSystem(req: any, userId: number): number {
+    const labs = systemLabs(sqlite, userId);
+    if (!labs.length || isSystemRequired(sqlite, userId)) return labs.length;
+    setSystemRequired(sqlite, userId, true);
+    audit(req, userId, "two_factor.system_required", `Required two-factor sign-in for everyone in ${labs.length === 1 ? "1 lab" : `${labs.length} labs`}: ${labs.map((l) => l.name).join(", ")}`);
+    return labs.length;
+  }
+
+  // An owner who already has two-factor on (set up before this switch existed, or at a sign-in
+  // another lab required) turns the whole-system requirement on here.
+  app.post("/api/auth/mfa/require-system", authMiddleware, (req: any, res: any) => {
+    if (req.isDemo) return res.status(403).json({ error: "demo_restricted", message: "This action is disabled in the live demo." });
+    if (!isEnrolled(getMfa(sqlite, req.userId))) return res.status(409).json({ error: "Turn on two-factor for your own account first.", code: "MFA_NOT_ON" });
+    if (!systemLabs(sqlite, req.userId).length) return res.status(409).json({ error: "You don't own a lab, so there is no system to require it for.", code: "NO_SYSTEM" });
+    const n = requireForSystem(req, req.userId);
+    res.json({ ok: true, systemRequired: true, labs: n });
+  });
+
   app.post("/api/auth/mfa/turn-off", authMiddleware, async (req: any, res: any) => {
     if (req.isDemo) return res.status(403).json({ error: "demo_restricted", message: "This action is disabled in the live demo." });
-    const rq = mfaRequirement(sqlite, req.userId);
-    if (rq.required) return res.status(409).json({ error: "Your lab requires two-factor sign-in, so it cannot be turned off here.", code: "MFA_REQUIRED" });
+    const rq = mfaRequirement(sqlite, req.userId, { ignoreOwnSystem: true });
+    if (rq.required) {
+      const by = requiredByText(rq);
+      return res.status(409).json({ error: `${by && by !== "Veritas Lab Services" ? by : "Your lab"} requires two-factor sign-in, so it cannot be turned off here.`, code: "MFA_REQUIRED" });
+    }
     if (!(await passwordOk(req.userId, req.body?.password))) return res.status(401).json({ error: "Your current password is incorrect.", code: "PASSWORD_REQUIRED" });
+    const wasSystem = isSystemRequired(sqlite, req.userId);
+    if (wasSystem) setSystemRequired(sqlite, req.userId, false);
     resetTwoFactor(sqlite, req.userId);
-    audit(req, req.userId, "two_factor.disable", "Two-factor sign-in turned off");
-    res.json({ ok: true });
+    audit(req, req.userId, "two_factor.disable", wasSystem ? "Two-factor sign-in turned off; it is no longer required for everyone in this person's labs" : "Two-factor sign-in turned off");
+    res.json({ ok: true, systemRequired: false });
   });
 
   // ── Lab owner: require it, allow "remember this computer", see who has it, reset ──
@@ -254,13 +289,15 @@ export function registerTwoFactorRoutes(app: any, deps: {
            OR u.id IN (SELECT seat_user_id FROM user_seats WHERE lab_id = l.id AND status = 'active' AND seat_user_id IS NOT NULL)
         ORDER BY (u.id = l.owner_user_id) DESC, u.name COLLATE NOCASE`
     ).all(labId) as any[];
-    const required = Number(lab?.req) === 1;
+    const sysOwner = labSystemOwner(sqlite, labId);
+    const required = Number(lab?.req) === 1 || !!sysOwner;
     res.json({
       labId,
       labName: lab?.lab_name,
       required,
       requiredAt: lab?.mfa_required_at || null,
       requiredByName: lab?.by_name || null,
+      requiredBySystem: sysOwner?.name || null,
       allowRemember: Number(lab?.rem) === 1,
       people: people.filter((p) => Number(p.vls) !== 1).map((p) => ({
         userId: p.user_id,
@@ -279,6 +316,10 @@ export function registerTwoFactorRoutes(app: any, deps: {
     const labId = Number(req.scope.labId);
     const now = new Date().toISOString();
     const lab = sqlite.prepare("SELECT lab_name, COALESCE(mfa_required,0) AS req, COALESCE(mfa_allow_remember,1) AS rem FROM labs WHERE id = ?").get(labId) as any;
+    const sysOwner = labSystemOwner(sqlite, labId);
+    if (req.body?.required === false && sysOwner) {
+      return res.status(409).json({ error: `${sysOwner.name} requires two-factor sign-in for every lab in their system. That is changed in their Account settings.`, code: "SYSTEM_REQUIRED" });
+    }
     if (typeof req.body?.required === "boolean" && (req.body.required ? 1 : 0) !== Number(lab.req)) {
       if (req.body.required) sqlite.prepare("UPDATE labs SET mfa_required = 1, mfa_required_at = ?, mfa_required_by = ?, updated_at = ? WHERE id = ?").run(now, req.userId, now, labId);
       else sqlite.prepare("UPDATE labs SET mfa_required = 0, mfa_required_at = NULL, mfa_required_by = NULL, updated_at = ? WHERE id = ?").run(now, labId);
@@ -316,13 +357,16 @@ export function registerTwoFactorRoutes(app: any, deps: {
   app.post("/api/admin/two-factor/reset", (req: any, res: any) => {
     const secret = (req.headers["x-admin-secret"] || req.body?.secret) as string | undefined;
     if (secret !== adminSecret) return res.status(403).json({ error: "Forbidden" });
-    const { userId, email } = req.body || {};
+    const { userId, email, clearSystem } = req.body || {};
     let uid = Number(userId) || null;
     if (!uid && email) uid = (sqlite.prepare("SELECT id FROM users WHERE lower(email) = lower(?)").get(String(email)) as any)?.id ?? null;
     if (!uid || !storage.getUserById(uid)) return res.status(404).json({ error: "User not found" });
     resetTwoFactor(sqlite, uid);
+    // A reset alone keeps an owner's whole-system switch (they set up again at next sign-in); clearSystem lifts it.
+    const lifted = clearSystem === true && isSystemRequired(sqlite, uid);
+    if (lifted) setSystemRequired(sqlite, uid, false);
     const ended = endSessions(sqlite, uid, { reason: "two_factor_reset" });
-    logAudit({ userId: 0, module: "admin", action: "update", entityType: "two_factor.reset", entityId: uid, entityLabel: `Veritas reset two-factor sign-in; ${ended} sign-in(s) ended`, ipAddress: clientIp(req) ?? undefined });
-    res.json({ ok: true, userId: uid, signedOut: ended });
+    logAudit({ userId: 0, module: "admin", action: "update", entityType: "two_factor.reset", entityId: uid, entityLabel: `Veritas reset two-factor sign-in${lifted ? " and lifted the whole-system requirement" : ""}; ${ended} sign-in(s) ended`, ipAddress: clientIp(req) ?? undefined });
+    res.json({ ok: true, userId: uid, signedOut: ended, systemRequired: isSystemRequired(sqlite, uid) });
   });
 }
