@@ -78,6 +78,8 @@ db.exec(`
   INSERT INTO veritamap_instrument_tests (instrument_id, map_id, analyte, specialty, complexity) VALUES (1, 1, 'Sodium', 'General Chemistry', 'MODERATE'), (2, 1, 'Sodium', 'General Chemistry', 'MODERATE');
   INSERT INTO veritamap_tests (map_id, analyte, specialty, complexity, updated_at) VALUES (1, 'Sodium', 'General Chemistry', 'MODERATE', '2026-10-01');
   INSERT INTO studies (id, lab_id, test_name, instrument, study_type, status, lifecycle_state, date) VALUES (1, 99, 'Sodium', 'Fred, Roche cobas 8000 (c702 module), Barney, Roche cobas 8000 (c702 module)', 'cal_ver_correlation', 'pass', 'completed', '2026-10-15');
+  -- BUG-061: an abandoned unsigned draft for the same analyte and analyzers must not block the cal ver stamp.
+  INSERT INTO studies (id, lab_id, test_name, instrument, study_type, status, lifecycle_state, date) VALUES (2, 99, 'Sodium', 'Fred, Roche cobas 8000 (c702 module), Barney, Roche cobas 8000 (c702 module)', 'cal_ver_correlation', 'fail', 'draft', '2026-10-14');
 `);
 const row = () => db.prepare("SELECT last_cal_ver, last_method_comp FROM veritamap_tests WHERE analyte = 'Sodium'").get() as any;
 stampMapDatesFromStudies(db, 99);
@@ -85,7 +87,7 @@ const unsigned = row();
 db.prepare("UPDATE studies SET lifecycle_state = 'finalized', finalized_at = '2026-10-15T15:00:00Z' WHERE id = 1").run();
 stampMapDatesFromStudies(db, 99);
 const signed = row();
-check("6. map stamp: unsigned stamps the correlation date only; signed also stamps cal ver",
+check("6. map stamp: unsigned stamps the correlation date only; signed also stamps cal ver, even beside an unsigned draft (BUG-061)",
   unsigned.last_method_comp === "2026-10-15" && !unsigned.last_cal_ver && signed.last_cal_ver === "2026-10-15" && signed.last_method_comp === "2026-10-15",
   JSON.stringify({ unsigned, signed }));
 

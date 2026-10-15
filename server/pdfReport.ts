@@ -1871,11 +1871,11 @@ export function buildCalVerCorrelationHTML(study: Study, results: CalVerCorrelat
   }
   narrative += cvPass
     ? `<b>Calibration verification: each level on each analyzer was individually evaluated against the ${adj} acceptance criterion (${label}) of ${teaStr} ${authority} (42 CFR §493.1255(b)(3)). All levels on every analyzer satisfied this criterion.</b> `
-    : `<b>Calibration verification: each level on each analyzer was individually evaluated against the ${adj} acceptance criterion (${label}) of ${teaStr} ${authority} (42 CFR §493.1255(b)(3)). One or more levels did not satisfy this criterion (${cvFailing.map(seriesNickname).join(", ")}).</b> `;
+    : `<b>Calibration verification: each level on each analyzer was individually evaluated against the ${adj} acceptance criterion (${label}) of ${teaStr} ${authority} (42 CFR §493.1255(b)(3)). ${cvFailing.length ? `One or more levels did not satisfy this criterion (${cvFailing.map(seriesNickname).join(", ")}).` : "No analyzer readings were entered."}</b> `;
   if (comps.length) {
     narrative += mcPass
       ? `<b>Correlation: each sample on each comparison analyzer was individually evaluated against the same criterion relative to ${pNick} (42 CFR §493.1281(a)). All samples on every comparison analyzer satisfied this criterion.</b> `
-      : `<b>Correlation: each sample on each comparison analyzer was individually evaluated against the same criterion relative to ${pNick} (42 CFR §493.1281(a)). One or more samples did not satisfy this criterion (${mcFailing.map(seriesNickname).join(", ")}).</b> `;
+      : `<b>Correlation: each sample on each comparison analyzer was individually evaluated against the same criterion relative to ${pNick} (42 CFR §493.1281(a)). ${mcFailing.length ? `One or more samples did not satisfy this criterion (${mcFailing.map(seriesNickname).join(", ")}).` : "No comparison analyzer readings were entered."}</b> `;
   }
   narrative += `The comparison used ${escapeHtml(material)}, not patient specimens. Final approval and clinical determination must be made by the laboratory director or designee.`;
   const narrativeBox = `

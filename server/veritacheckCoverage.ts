@@ -454,11 +454,20 @@ export function stampMapDatesFromStudies(
     (want[analyte] ||= {});
     if (!want[analyte][field] || want[analyte][field] < d) want[analyte][field] = d;
   };
+  const studyById = new Map<number, Study>(studies.map((s) => [s.id, s]));
   for (const r of cov.rows) {
-    // Stamp last_cal_ver from a signed passing on-instrument study, whether it is
-    // still satisfied ("covered") or now recurrence-due ("missing"); the map date
-    // reflects when cal-ver was last performed regardless of the next-due status.
-    if (r.signed && r.status === "missing") for (const sid of r.studyIds) put(r.analyte, "last_cal_ver", dateById.get(sid));
+    // Stamp last_cal_ver from the signed passing on-instrument studies, whether the
+    // cycle is still satisfied or now recurrence-due; the map date reflects when
+    // cal-ver was last performed and signed. BUG-061 (2026-10-15): this used to need
+    // r.signed, which is true only when EVERY matched study is signed, so one
+    // abandoned unsigned draft for the same analyte and analyzer kept the map blank
+    // while the Coverage Report counted the signed study. Exempt rows and "review"
+    // rows (studies only on other analyzers) still stamp nothing.
+    if (r.status === "exempt" || r.status === "review") continue;
+    for (const sid of r.studyIds) {
+      const s = studyById.get(sid);
+      if (s && s.lifecycle_state === "finalized" && !isFailVerdict(s.status)) put(r.analyte, "last_cal_ver", dateById.get(sid));
+    }
   }
   for (const mc of cov.methodComparisons) {
     if (mc.hasStudy && mc.studyId != null) put(mc.analyte, "last_method_comp", dateById.get(mc.studyId));

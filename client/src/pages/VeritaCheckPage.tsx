@@ -1593,6 +1593,8 @@ export default function VeritaCheckPage() {
     ? dataPoints.filter(dp => dp.expectedCategory && instrumentNames.slice(1).some(n => dp.instrumentCategories?.[n])).length
     : studyType === "method_comparison"
     ? dataPoints.filter(dp => instrumentNames.filter(n => dp.instrumentValues[n] !== null).length >= 2).length
+    : studyType === "cal_ver_correlation"
+    ? dataPoints.filter(dp => dp.expectedValue !== null && instrumentNames.filter(n => dp.instrumentValues[n] != null).length >= 2).length
     : dataPoints.filter(dp => dp.expectedValue !== null && instrumentNames.some(n => dp.instrumentValues[n] !== null)).length;
 
   // Multi-Lab Tier 2 Phase 3: post to lab-scoped endpoint when we are on a

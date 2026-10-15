@@ -212,11 +212,12 @@ function generateNarrative(results: StudyResults, study: Study): string {
 
   if (isCalVerCorrelation(results)) {
     const cv = results.calVer, mc = results.correlation;
-    const nAnalyzers = new Set(cv.levelResults.flatMap((r) => Object.keys(r.instruments || {}))).size;
+    let nAnalyzers = 0;
+    try { nAnalyzers = (typeof study.instruments === "string" ? JSON.parse(study.instruments) : (study.instruments as any) || []).length; } catch { nAnalyzers = 0; }
     const material = String((study as any).material || "").trim() || "calibration verification material with assigned values";
     narrative = `${cv.levelResults.length} known-value samples for ${study.testName} were run on ${nAnalyzers} analyzers. `
       + `Calibration verification: ${cv.overallPass ? "all levels on every analyzer were within" : "one or more levels were outside"} the adopted acceptance criterion against the assigned values (${cv.passCount}/${cv.totalCount}). `
-      + (mc ? `Correlation against ${results.primary}: ${mc.overallPass ? "all samples on every comparison analyzer were within" : "one or more samples were outside"} the same criterion (${mc.passCount}/${mc.totalCount}). ` : "")
+      + (mc && mc.totalCount > 0 ? `Correlation against ${results.primary}: ${mc.overallPass ? "all samples on every comparison analyzer were within" : "one or more samples were outside"} the same criterion (${mc.passCount}/${mc.totalCount}). ` : `Correlation against ${results.primary}: no comparison analyzer readings were entered. `)
       + `The comparison used ${material}, not patient specimens. Final approval and clinical determination must be made by the laboratory director or designee.`;
     return narrative;
   }
