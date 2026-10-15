@@ -8303,3 +8303,65 @@ try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_veritaceu_profiles_lab ON veri
   addCol("users", "mfa_system_required", "ALTER TABLE users ADD COLUMN mfa_system_required INTEGER NOT NULL DEFAULT 0");
   addCol("users", "mfa_system_required_at", "ALTER TABLE users ADD COLUMN mfa_system_required_at TEXT");
 }
+
+// Single sign-on (Michael 2026-10-15, Q39 = 1; server/sso.ts, server/ssoRoutes.ts). OpenID Connect,
+// Microsoft Entra first. sso_configs: one per customer identity provider, routed by email domain,
+// optional or required; a client secret (when the provider uses one) is sealed like the two-factor
+// keys. sso_login_states: the single-use state/nonce/PKCE record for one sign-in round trip (state
+// stored only as a SHA-256 hash). sso_handoffs: the single-use 60-second code that carries a finished
+// sign-in from the callback redirect to the sign-in page, so no session token ever rides in a URL.
+// CREATE + ALTER blocks together per the NEW DB TABLE RULE.
+{
+  const addCol = (table: string, col: string, ddl: string) => {
+    const cols = (sqlite.prepare(`PRAGMA table_info(${table})`).all() as any[]).map((c: any) => c.name);
+    if (!cols.includes(col)) { try { sqlite.exec(ddl); } catch {} }
+  };
+  try {
+    sqlite.exec(`CREATE TABLE IF NOT EXISTS sso_configs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      organization_id INTEGER,
+      name TEXT NOT NULL,
+      issuer TEXT NOT NULL,
+      client_id TEXT NOT NULL,
+      client_secret_enc TEXT,
+      email_domains TEXT NOT NULL DEFAULT '[]',
+      required INTEGER NOT NULL DEFAULT 0,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )`);
+  } catch {}
+  addCol("sso_configs", "organization_id", "ALTER TABLE sso_configs ADD COLUMN organization_id INTEGER");
+  addCol("sso_configs", "client_secret_enc", "ALTER TABLE sso_configs ADD COLUMN client_secret_enc TEXT");
+  addCol("sso_configs", "email_domains", "ALTER TABLE sso_configs ADD COLUMN email_domains TEXT NOT NULL DEFAULT '[]'");
+  addCol("sso_configs", "required", "ALTER TABLE sso_configs ADD COLUMN required INTEGER NOT NULL DEFAULT 0");
+  addCol("sso_configs", "enabled", "ALTER TABLE sso_configs ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1");
+  addCol("sso_configs", "updated_at", "ALTER TABLE sso_configs ADD COLUMN updated_at TEXT");
+  try {
+    sqlite.exec(`CREATE TABLE IF NOT EXISTS sso_login_states (
+      state_hash TEXT PRIMARY KEY,
+      config_id INTEGER NOT NULL,
+      nonce TEXT NOT NULL,
+      code_verifier TEXT NOT NULL,
+      redirect_uri TEXT NOT NULL,
+      email_hint TEXT,
+      created_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      used_at TEXT
+    )`);
+  } catch {}
+  addCol("sso_login_states", "email_hint", "ALTER TABLE sso_login_states ADD COLUMN email_hint TEXT");
+  addCol("sso_login_states", "used_at", "ALTER TABLE sso_login_states ADD COLUMN used_at TEXT");
+  try {
+    sqlite.exec(`CREATE TABLE IF NOT EXISTS sso_handoffs (
+      code_hash TEXT PRIMARY KEY,
+      user_id INTEGER NOT NULL,
+      config_id INTEGER,
+      created_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      used_at TEXT
+    )`);
+  } catch {}
+  addCol("sso_handoffs", "config_id", "ALTER TABLE sso_handoffs ADD COLUMN config_id INTEGER");
+  addCol("sso_handoffs", "used_at", "ALTER TABLE sso_handoffs ADD COLUMN used_at TEXT");
+}

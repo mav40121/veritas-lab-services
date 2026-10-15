@@ -69,3 +69,9 @@ jobs:
         # owner (San Carlos lab 2, 2026-10-15). repair-lab-admins demotes it to admin and never touches
         # the real owner; the Members PATCH lets the real owner fix one and still protects their own row.
         run: npm run test:stale-owner-row
+      - name: Run single sign-on integration test
+        # Single sign-on (server/sso.ts, server/ssoRoutes.ts) against a mock OpenID Connect provider:
+        # forged, unsigned, HMAC, expired, wrong-audience, wrong-issuer and wrong-nonce tokens refused;
+        # state and handoff single-use; PKCE; domain, no-account and support-account refusals; required
+        # SSO blocks password sign-in and password reset for its domain.
+        run: npm run test:sso
