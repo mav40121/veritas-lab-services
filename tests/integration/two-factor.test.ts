@@ -306,7 +306,7 @@ async function main() {
     check("15p. a lab the owner adds later is covered automatically", (await login(P.email)).body?.mfa_setup_required === true);
 
     // Turning the owner's own off lifts it for everyone.
-    const gOffWrong = await req("POST", "/api/auth/mfa/turn-off", { password: "not-it" }, G.token);
+    const gOffWrong = await req("POST", "/api/auth/mfa/turn-off", { password: pw("wrong") }, G.token);
     check("15q. turning it off needs the owner's password", gOffWrong.status === 401 && (await req("GET", "/api/auth/mfa", undefined, G.token)).body?.systemRequired === true);
     const gOffOk = await req("POST", "/api/auth/mfa/turn-off", { password: PW }, G.token);
     check("15r. the owner turns it off: their own two-factor and the system requirement both end", gOffOk.status === 200 && (await req("GET", "/api/auth/mfa", undefined, G.token)).body?.systemRequired === false && !sqlite.prepare("SELECT 1 FROM user_mfa WHERE user_id = ?").get(G.id));
