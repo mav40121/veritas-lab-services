@@ -21,6 +21,7 @@ import { registerExportSecret, revokeExportSecret } from "./exportAllContext";
 import { resolveVersionFilePath } from "./veritapolicyApproval";
 import { SCAN_ITEMS } from "../client/src/lib/veritaScanData";
 import { logAudit } from "./audit";
+import { issuePurposeToken, verifyPurposeToken } from "./sessionAuth";
 
 export const EXPORT_RETENTION_MS = 24 * 60 * 60 * 1000;
 
@@ -592,18 +593,18 @@ export function registerExportAllRoutes(app: any, deps: { sqlite: any; authMiddl
   });
 
   // A short-lived link the browser follows with a plain anchor download (no fetch + blob; see downloadPdfToken).
+  // Purpose tokens (server/sessionAuth.ts) open nothing else: checkAuthToken refuses any token with a purpose.
   app.post("/api/labs/:labId/export-all/:exportId/download-token", authMiddleware, ownerOnly, (req: any, res: any) => {
     const labId = Number(req.params.labId);
     const ready = readyExports(labId).find((r) => r.id === req.params.exportId);
     if (!ready) return res.status(404).json({ error: "That download has expired. Build a new one." });
-    const token = jwt.sign({ purpose: "export_all_download", labId, exportId: ready.id, userId: req.userId }, process.env.JWT_SECRET!, { expiresIn: "15m" });
+    const token = issuePurposeToken(req.userId, "export_all_download", { labId, exportId: ready.id });
     res.json({ url: `/api/export-all/file/${token}`, filename: ready.filename });
   });
 
   app.get("/api/export-all/file/:token", (req: any, res: any) => {
-    let p: any;
-    try { p = jwt.verify(req.params.token, process.env.JWT_SECRET!); } catch { return res.status(404).json({ error: "This download link has expired." }); }
-    if (p?.purpose !== "export_all_download") return res.status(404).json({ error: "This download link has expired." });
+    const p = verifyPurposeToken(req.params.token, "export_all_download");
+    if (!p) return res.status(404).json({ error: "This download link has expired." });
     const lab = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(Number(p.labId)) as any;
     if (!lab || Number(lab.owner_user_id) !== Number(p.userId)) return res.status(403).json({ error: "Only the lab owner can download all of the lab's records." });
     const ready = readyExports(Number(p.labId)).find((r) => r.id === p.exportId);
