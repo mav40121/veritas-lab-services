@@ -88,7 +88,7 @@ export default function TrustPage() {
 
         <section>
           <h2 className="font-semibold text-base mb-2">9. Availability</h2>
-          <p>An independent monitoring service checks the site from outside our hosting around the clock, and the results are public on our status page: [STATUS PAGE LINK: pending]. We publish what we measure rather than a number we have not yet measured.</p>
+          <p>Our uptime target is 99.5% per month. An independent monitoring service checks the site from outside our hosting every 5 minutes, and the results are public on our status page: [STATUS PAGE LINK: pending].</p>
         </section>
 
         <section>
