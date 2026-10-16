@@ -8365,3 +8365,29 @@ try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_veritaceu_profiles_lab ON veri
   addCol("sso_handoffs", "config_id", "ALTER TABLE sso_handoffs ADD COLUMN config_id INTEGER");
   addCol("sso_handoffs", "used_at", "ALTER TABLE sso_handoffs ADD COLUMN used_at TEXT");
 }
+
+// Content-Security-Policy violation reports (2026-10-16, Q47 = 1; server/securityHeaders.ts). The CSP
+// ships as Report-Only first; browsers POST what would have been blocked to /api/csp-report. One row
+// per (directive, blocked origin, page path) with a running count, so the enforce decision rests on
+// real traffic. No query strings, users or IPs are stored. CREATE + ALTER blocks per the NEW DB TABLE RULE.
+{
+  const addCol = (table: string, col: string, ddl: string) => {
+    const cols = (sqlite.prepare(`PRAGMA table_info(${table})`).all() as any[]).map((c: any) => c.name);
+    if (!cols.includes(col)) { try { sqlite.exec(ddl); } catch {} }
+  };
+  try {
+    sqlite.exec(`CREATE TABLE IF NOT EXISTS csp_reports (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      directive TEXT NOT NULL,
+      blocked TEXT NOT NULL,
+      page TEXT NOT NULL,
+      count INTEGER NOT NULL DEFAULT 1,
+      first_seen TEXT NOT NULL,
+      last_seen TEXT NOT NULL,
+      UNIQUE(directive, blocked, page)
+    )`);
+  } catch {}
+  addCol("csp_reports", "count", "ALTER TABLE csp_reports ADD COLUMN count INTEGER NOT NULL DEFAULT 1");
+  addCol("csp_reports", "first_seen", "ALTER TABLE csp_reports ADD COLUMN first_seen TEXT");
+  addCol("csp_reports", "last_seen", "ALTER TABLE csp_reports ADD COLUMN last_seen TEXT");
+}
