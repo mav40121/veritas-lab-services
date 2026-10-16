@@ -19,7 +19,9 @@
 //        BACKUP_S3_ENDPOINT, BACKUP_S3_BUCKET,
 //        BACKUP_S3_ACCESS_KEY_ID, BACKUP_S3_SECRET_ACCESS_KEY
 //
-// Schedule: server/index.ts wires runNightlyBackup() at 04:00 UTC.
+// Schedule: server/index.ts wires runNightlyBackup() at 04:00 UTC (kept 730 days) and, since
+// 2026-10-16, runHourlyBackup() at :30 past every hour (kept 7 days). Both take a consistent
+// snapshot with SQLite's online backup API (snapshotToGz).
 //
 // Integrity verification: each run records a 5-point health check on the
 // production DB to backup_integrity_log. Resend alert fires on any
@@ -237,32 +239,49 @@ export function checkBackupIntegrity(gzippedFileBytes: number): { ok: boolean; c
   return { ok: allOk, checks };
 }
 
-export async function runNightlyBackup() {
-  const client = getS3Client();
-  if (!client) {
-    console.log("[backup] Skipped: one or more of BACKUP_S3_ENDPOINT, BACKUP_S3_BUCKET, BACKUP_S3_ACCESS_KEY_ID, BACKUP_S3_SECRET_ACCESS_KEY is not set");
-    return;
-  }
+// ─── Tiers (2026-10-16, Q47 = 1) ────────────────────────────────────────────
+// nightly: the original tier, kept RETENTION_DAYS; its key prefix is unchanged so existing copies and the
+//          restore self-test keep working.
+// hourly:  kept 7 days, so at most one hour of work can be lost (the nightly tier alone allowed up to 24).
+export type BackupTier = "nightly" | "hourly";
+export const TIER_PREFIX: Record<BackupTier, string> = { nightly: "veritas-backup-", hourly: "veritas-hourly-" };
+export const TIER_RETENTION_DAYS: Record<BackupTier, number> = { nightly: RETENTION_DAYS, hourly: 7 };
 
-  const startedAt = Date.now();
-  console.log(`[backup] Starting nightly off-site backup to S3 bucket ${S3_BUCKET}`);
+export function backupKey(tier: BackupTier, when: Date = new Date()): string {
+  return `${TIER_PREFIX[tier]}${when.toISOString().replace(/[:.]/g, "-")}.db.gz`;
+}
 
+// Keys of one tier older than that tier's retention. Other tiers and other objects are never touched.
+export function keysToPrune(tier: BackupTier, objects: Array<{ Key?: string; LastModified?: Date }>, nowMs: number = Date.now()): string[] {
+  const cutoff = nowMs - TIER_RETENTION_DAYS[tier] * 24 * 60 * 60 * 1000;
+  return objects
+    .filter((o) => o.Key && o.Key.startsWith(TIER_PREFIX[tier]) && o.Key.endsWith(".db.gz") && o.LastModified && o.LastModified.getTime() < cutoff)
+    .map((o) => o.Key as string);
+}
+
+// Every object under a prefix. ListObjectsV2 returns at most 1,000 per call; the nightly tier alone
+// reaches 730, so without paging the newest copies could fall off the first page.
+async function listAll(client: S3Client, prefix: string): Promise<Array<{ Key?: string; LastModified?: Date }>> {
+  const out: Array<{ Key?: string; LastModified?: Date }> = [];
+  let token: string | undefined;
+  do {
+    const page: any = await client.send(new ListObjectsV2Command({ Bucket: S3_BUCKET, Prefix: prefix, MaxKeys: 1000, ContinuationToken: token }));
+    out.push(...(page.Contents || []));
+    token = page.IsTruncated ? page.NextContinuationToken : undefined;
+  } while (token);
+  return out;
+}
+
+// A consistent copy of the live database, gzipped to gzPath. Uses SQLite's online backup API, which is
+// safe while the app is writing; the old raw file read could catch a half-written page, which was
+// tolerable at 04:00 but not hourly during the working day. Returns the gzipped size.
+export async function snapshotToGz(sqlite: any, gzPath: string): Promise<number> {
+  const tmpDb = `${gzPath}.snapshot.db`;
   try {
-    const sqlite = (db as any).$client;
-    // WAL checkpoint so all WAL-pending writes land in the main DB file
-    // before we read it. Matches the on-demand /api/admin/backup-db flow.
-    sqlite.pragma("wal_checkpoint(TRUNCATE)");
-    const dbPath: string = sqlite.name;
-
-    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const filename = `veritas-backup-${timestamp}.db.gz`;
-    const tmpPath = `/tmp/${filename}`;
-
-    // Gzip the SQLite file to /tmp so the upload is smaller and so we can
-    // stream from disk rather than holding the whole DB in memory.
+    await sqlite.backup(tmpDb);
     await new Promise<void>((resolve, reject) => {
-      const source = fs.createReadStream(dbPath);
-      const dest = fs.createWriteStream(tmpPath);
+      const source = fs.createReadStream(tmpDb);
+      const dest = fs.createWriteStream(gzPath);
       const gzip = zlib.createGzip();
       source.on("error", reject);
       dest.on("error", reject);
@@ -270,8 +289,36 @@ export async function runNightlyBackup() {
       dest.on("finish", resolve);
       source.pipe(gzip).pipe(dest);
     });
+    return fs.statSync(gzPath).size;
+  } finally {
+    try { fs.unlinkSync(tmpDb); } catch {}
+  }
+}
 
-    const compressedBytes = fs.statSync(tmpPath).size;
+let lastHourlyFailureNotifyAt = 0;
+
+export async function runNightlyBackup() { return runBackup("nightly"); }
+export async function runHourlyBackup() { return runBackup("hourly"); }
+
+export async function runBackup(tier: BackupTier) {
+  const client = getS3Client();
+  if (!client) {
+    console.log("[backup] Skipped: one or more of BACKUP_S3_ENDPOINT, BACKUP_S3_BUCKET, BACKUP_S3_ACCESS_KEY_ID, BACKUP_S3_SECRET_ACCESS_KEY is not set");
+    return;
+  }
+
+  const startedAt = Date.now();
+  console.log(`[backup] Starting ${tier} off-site backup to S3 bucket ${S3_BUCKET}`);
+
+  try {
+    const sqlite = (db as any).$client;
+    // Nightly: WAL checkpoint first, as before (keeps the WAL file small; the online backup below
+    // includes WAL content either way). Matches the on-demand /api/admin/backup-db flow.
+    if (tier === "nightly") sqlite.pragma("wal_checkpoint(TRUNCATE)");
+
+    const filename = backupKey(tier);
+    const tmpPath = `/tmp/${filename}`;
+    const compressedBytes = await snapshotToGz(sqlite, tmpPath);
 
     await client.send(new PutObjectCommand({
       Bucket: S3_BUCKET,
@@ -289,8 +336,8 @@ export async function runNightlyBackup() {
     // Integrity verification: 5-point check on the production DB, logged
     // to backup_integrity_log, alert on any failure. The upload above is
     // unaffected; integrity issues do not block the backup, they surface
-    // it so the operator can investigate.
-    try {
+    // it so the operator can investigate. Nightly only: one row a day, as before.
+    if (tier === "nightly") try {
       const integrity = checkBackupIntegrity(compressedBytes);
       if (integrity.ok) {
         console.log("[backup] Integrity check passed: 5/5");
@@ -303,33 +350,27 @@ export async function runNightlyBackup() {
       console.error("[backup] Integrity check itself threw:", intErr?.message || intErr);
     }
 
-    // Retention: list all backups in the bucket, delete ones older than
-    // RETENTION_DAYS. The API token is bucket-scoped so this only sees
-    // files in this bucket, not anything else in the operator's account.
-    const cutoffMs = Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000;
-    const listed = await client.send(new ListObjectsV2Command({
-      Bucket: S3_BUCKET,
-      MaxKeys: 1000,
-    }));
-
+    // Retention: this tier's copies older than its retention (nightly 730 days, hourly 7). Listed by
+    // prefix with paging. The API token is bucket-scoped so this only sees files in this bucket.
     let pruned = 0;
-    for (const obj of listed.Contents || []) {
-      if (!obj.Key || !obj.LastModified) continue;
-      if (obj.LastModified.getTime() < cutoffMs) {
-        try {
-          await client.send(new DeleteObjectCommand({ Bucket: S3_BUCKET, Key: obj.Key }));
-          pruned++;
-        } catch (err: any) {
-          console.error(`[backup] Failed to prune ${obj.Key}: ${err?.message || err}`);
-        }
+    for (const key of keysToPrune(tier, await listAll(client, TIER_PREFIX[tier]))) {
+      try {
+        await client.send(new DeleteObjectCommand({ Bucket: S3_BUCKET, Key: key }));
+        pruned++;
+      } catch (err: any) {
+        console.error(`[backup] Failed to prune ${key}: ${err?.message || err}`);
       }
     }
-    if (pruned > 0) console.log(`[backup] Pruned ${pruned} backup(s) older than ${RETENTION_DAYS} days`);
+    if (pruned > 0) console.log(`[backup] Pruned ${pruned} ${tier} backup(s) older than ${TIER_RETENTION_DAYS[tier]} days`);
 
   } catch (err: any) {
-    console.error("[backup] FAILED:", err?.message || err);
+    console.error(`[backup] ${tier} FAILED:`, err?.message || err);
     if (err?.stack) console.error(err.stack);
-    await notifyFailure(err instanceof Error ? err : new Error(String(err)));
+    // Hourly failures alert at most once per 6 hours (an R2 outage would otherwise send 24 a day).
+    if (tier === "nightly" || Date.now() - lastHourlyFailureNotifyAt > 6 * 60 * 60 * 1000) {
+      if (tier === "hourly") lastHourlyFailureNotifyAt = Date.now();
+      await notifyFailure(err instanceof Error ? err : new Error(`${tier}: ${String(err)}`));
+    }
   }
 }
 
@@ -420,12 +461,13 @@ export async function restoreSelfTest(): Promise<RestoreSelfTestResult> {
   if (!client) {
     return { ran: false, verdict: "SKIP", skippedReason: "backup S3 env not configured" };
   }
-  const listed = await client.send(new ListObjectsV2Command({ Bucket: S3_BUCKET, MaxKeys: 1000 }));
-  const backups = (listed.Contents || [])
-    .filter((o) => o.Key && o.Key.startsWith("veritas-backup-") && o.Key.endsWith(".db.gz") && o.LastModified)
+  // The newest copy of either tier (hourly once that tier runs), listed by prefix with paging.
+  const listed = [...await listAll(client, TIER_PREFIX.nightly), ...await listAll(client, TIER_PREFIX.hourly)];
+  const backups = listed
+    .filter((o) => o.Key && o.Key.endsWith(".db.gz") && o.LastModified)
     .sort((a, b) => (b.LastModified as Date).getTime() - (a.LastModified as Date).getTime());
   if (backups.length === 0) {
-    return { ran: false, verdict: "FAIL", skippedReason: "no veritas-backup-*.db.gz objects in bucket" };
+    return { ran: false, verdict: "FAIL", skippedReason: "no veritas-backup-* or veritas-hourly-* .db.gz objects in bucket" };
   }
   const latest = backups[0];
   const tmpGz = `/tmp/restore-selftest-${Date.now()}.db.gz`;
