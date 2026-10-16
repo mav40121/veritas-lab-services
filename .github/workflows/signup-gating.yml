@@ -75,6 +75,10 @@ jobs:
         # state and handoff single-use; PKCE; domain, no-account and support-account refusals; required
         # SSO blocks password sign-in and password reset for its domain.
         run: npm run test:sso
+      - name: Run QC monthly review reviewer integration test
+        # BUG-066: the QC monthly review PDF names the person who signed the review and its date, never the
+        # person downloading; an unsigned month prints Pending signature with no date.
+        run: npm run test:qc-review-reviewer
       - name: Run document formats integration test
         # VeritaPolicy/VeritaDC: XLSX, XLS, PNG, JPG and TXT besides DOCX/PDF/HTML; format from the file's bytes;
         # escaped previews; upload -> render -> download per format; unsupported files refused with a clear 400.
