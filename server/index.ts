@@ -236,7 +236,6 @@ app.use((req, res, next) => {
     console.error("[snapshot] Scheduler setup error:", err.message);
   }
 
-  // Schedule daily TLS cert-expiry check (2026-09-29). Runs ~20s after boot so a
   // Nightly PHI scan (Q56 item 4, 2026-10-16): server/phiNightly.ts, 05:00 UTC daily, logs to phi_scan_log and
   // emails info@ on any finding. Before this the scan ran only when called by hand.
   try {
@@ -254,6 +253,7 @@ app.use((req, res, next) => {
     console.error("[phi-scan] Scheduler setup error:", err.message);
   }
 
+  // Schedule daily TLS cert-expiry check (2026-09-29). Runs ~20s after boot so a
   // bad cert surfaces right on deploy, then daily at midnight UTC, mirroring the
   // snapshot scheduler. Alerts via Resend when a public cert is expired, expiring
   // within 14 days, or unreachable. Born from the Sanford incident: a lapsed www
