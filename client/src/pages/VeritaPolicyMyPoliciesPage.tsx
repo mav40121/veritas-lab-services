@@ -447,6 +447,8 @@ export default function VeritaPolicyMyPoliciesPage() {
         title: "Uploaded",
         description: `${body.title} created in draft.`,
       });
+      // PHI guard (Q56 item 4): the upload saved, but the server found what looks like patient information.
+      if (body?.phiWarning) toast({ title: "Possible patient information in this file", description: body.phiWarning, variant: "destructive", duration: 20000 });
       setUploadOpen(false);
       resetUpload();
       invalidateAll();
@@ -644,6 +646,7 @@ export default function VeritaPolicyMyPoliciesPage() {
         title: "New version uploaded",
         description: `Version ${body?.version_number} now current; status reset to draft.`,
       });
+      if (body?.phiWarning) toast({ title: "Possible patient information in this file", description: body.phiWarning, variant: "destructive", duration: 20000 });
       setNewVersionDoc(null);
       setNewVersionFile(null);
       setNewVersionSummary("");

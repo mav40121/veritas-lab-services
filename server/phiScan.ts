@@ -22,33 +22,10 @@
 
 import type Database from "better-sqlite3";
 
-export interface PhiDetector {
-  name: string;
-  label: string;
-  re: RegExp;
-}
-
-// Shape-detectable HIPAA identifiers that effectively never appear legitimately
-// in this platform. Each requires a strong anchor (a dash-formatted SSN, or a
-// labeled MRN/DOB/patient-name) to keep false positives near zero.
-export const PHI_DETECTORS: PhiDetector[] = [
-  { name: "ssn", label: "Social Security number", re: /\b\d{3}-\d{2}-\d{4}\b/ },
-  {
-    name: "mrn",
-    label: "Medical record number",
-    re: /\b(?:mrn|medical record (?:number|no\.?|#))\b[\s:#]*\d{4,}/i,
-  },
-  {
-    name: "dob",
-    label: "Date of birth",
-    re: /\b(?:dob|date of birth)\b[\s:]*\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}\b/i,
-  },
-  {
-    name: "patient_name",
-    label: "Labeled patient name",
-    re: /\b(?:patient(?:'s)? name|pt name)\b\s*[:#]/i,
-  },
-];
+// The detectors live in shared/phiPatterns.ts so the upload check and the in-app warning use the same rules.
+import { PHI_DETECTORS, type PhiDetector } from "../shared/phiPatterns";
+export { PHI_DETECTORS };
+export type { PhiDetector };
 
 export interface PhiFinding {
   table: string;

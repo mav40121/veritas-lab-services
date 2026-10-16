@@ -781,6 +781,7 @@ import { SCAN_ITEMS as VERITASCAN_SCAN_ITEMS } from "../client/src/lib/veritaSca
 import { exportAllPlanBypass, exportAllMiddleware } from "./exportAllContext";
 import { registerExportAllRoutes } from "./exportAll";
 import { findBackfillItems, clearBackfillItems, summarizeByLab } from "./competencyBackfillCleanup";
+import { checkUploadForPhi, checkUploadedFileForPhi } from "./phiUploadCheck";
 const VERITASCAN_ITEM_BY_ID: Record<number, any> = Object.fromEntries(
   VERITASCAN_SCAN_ITEMS.map((it: any) => [it.id, it])
 );
@@ -17734,7 +17735,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const m = require("multer");
     const multerUpload = m({ storage: m.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } }).single("file");
     const upload = (rq: any, rs: any, cb: (e: any) => void) => multerUpload(rq, rs, (e: any) => runInVlsContext(rq, () => cb(e)));
-    upload(req, res, (err: any) => {
+    upload(req, res, async (err: any) => {
       if (err) return res.status(400).json({ error: err.code === "LIMIT_FILE_SIZE" ? "File too large (max 25 MB)." : "Upload failed." });
       const sqlite = (db as any).$client;
       const orgRow = sqlite.prepare("SELECT organization_id FROM labs WHERE id = ?").get(req.scope.labId) as any;
@@ -17759,7 +17760,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       );
       const row = sqlite.prepare("SELECT id, title, description, category, url, doc_kind, file_name, file_type, file_size, hipaa_acknowledged, added_by_user_id, created_at, updated_at FROM system_documents WHERE id = ?").get(id);
       console.log(`[repository/documents] org=${orgId} lab=${req.scope.labId} uploaded FILE doc ${id} (${req.file.size}b, hipaa-ack) by user ${uid}`);
-      res.json({ ok: true, document: row });
+      // PHI guard (Q56 item 4): warn, never block. server/phiUploadCheck.ts
+      const phiCheck = await checkUploadedFileForPhi(req.file);
+      res.json({ ok: true, document: row, phiWarning: phiCheck.message });
     });
   });
 
@@ -31595,7 +31598,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   const multer = require("multer");
   const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } }); // 20MB max
 
-  app.post("/api/veritalab/certificates/:id/documents", authMiddleware, requireWriteAccess, requireModuleEdit('veritalab'), upload.single("file"), (req: any, res: any) => {
+  app.post("/api/veritalab/certificates/:id/documents", authMiddleware, requireWriteAccess, requireModuleEdit('veritalab'), upload.single("file"), async (req: any, res: any) => {
     if (!hasLabCertAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaLab\u2122 subscription required" });
     const cert = userCanAccessCertificate(req.params.id, req);
     if (!cert) return res.status(404).json({ error: "Certificate not found" });
@@ -31624,6 +31627,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       file_size: req.file.size,
       mime_type: req.file.mimetype,
       uploaded_at: now,
+      // PHI guard (Q56 item 4): warn, never block. server/phiUploadCheck.ts
+      phiWarning: (await checkUploadedFileForPhi(req.file)).message,
     });
   });
 
@@ -37364,6 +37369,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         let added = 0;
         let replaced = 0;
         const skipped: string[] = [];
+        const possiblePhi: { file: string; found: string[] }[] = [];
         const existing = sqlite.prepare('SELECT policy_id FROM veritapolicy_lab_artifacts WHERE lab_id = ?').all(labId) as { policy_id: string }[];
         const before = new Set(existing.map((r) => r.policy_id));
 
@@ -37372,6 +37378,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           if (!pid) { skipped.push(`${e.name} (could not parse policy_id)`); continue; }
           upsert.run(labId, pid, e.name.split('/').pop() || e.name, e.buf, 'admin_upload');
           if (before.has(pid)) replaced += 1; else added += 1;
+          // PHI guard (Q56 item 4): report, never block, so Veritas can ask the lab for a corrected file.
+          const phi = await checkUploadForPhi(e.buf, 'docx');
+          if (phi.found.length) possiblePhi.push({ file: e.name, found: phi.found });
         }
 
         res.json({
@@ -37382,6 +37391,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           added,
           replaced,
           skipped,
+          possiblePhi,
         });
       } catch (err: any) {
         console.error('VeritaPolicy bulk artifact upload error:', err);
@@ -38357,6 +38367,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     async (req: any, res) => {
       if (!req.file) return res.status(400).json({ error: "File required" });
       const format = canonicalFormatFromMimeAndName(req.file.mimetype, req.file.originalname, req.file.buffer);
+      // PHI guard (Q56 item 4): warn, never block; templates carry labeled blanks. server/phiUploadCheck.ts
+      const phiCheck = format ? await checkUploadForPhi(req.file.buffer, format) : null;
       if (!format) {
         return res
           .status(400)
@@ -38479,7 +38491,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         ipAddress: req.ip,
         userAgent: req.headers["user-agent"] as string | undefined,
       });
-      res.status(201).json({ id: documentId, version_id: versionId, title });
+      res.status(201).json({ id: documentId, version_id: versionId, title, phiWarning: phiCheck?.message ?? null });
     }
   );
 
@@ -40154,6 +40166,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       if (!Number.isFinite(id)) return res.status(400).json({ error: "Bad id" });
       if (!req.file) return res.status(400).json({ error: "File required" });
       const format = canonicalFormatFromMimeAndName(req.file.mimetype, req.file.originalname, req.file.buffer);
+      // PHI guard (Q56 item 4): warn, never block; templates carry labeled blanks. server/phiUploadCheck.ts
+      const phiCheck = format ? await checkUploadForPhi(req.file.buffer, format) : null;
       if (!format) {
         return res.status(400).json({ error: `Accepted files: ${ACCEPTED_DOC_DESCRIPTION}. The file's contents must match its type.` });
       }
@@ -40223,7 +40237,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         ipAddress: req.ip,
         userAgent: req.headers["user-agent"] as string | undefined,
       });
-      res.status(201).json({ version_id: versionId, version_number: nextVer });
+      res.status(201).json({ version_id: versionId, version_number: nextVer, phiWarning: phiCheck?.message ?? null });
     }
   );
 

@@ -237,6 +237,23 @@ app.use((req, res, next) => {
   }
 
   // Schedule daily TLS cert-expiry check (2026-09-29). Runs ~20s after boot so a
+  // Nightly PHI scan (Q56 item 4, 2026-10-16): server/phiNightly.ts, 05:00 UTC daily, logs to phi_scan_log and
+  // emails info@ on any finding. Before this the scan ran only when called by hand.
+  try {
+    const { runNightlyPhiScan } = await import("./phiNightly");
+    const { db: phiDb } = await import("./db");
+    const runPhi = () => runNightlyPhiScan((phiDb as any).$client).catch((err: any) => console.error("[phi-scan] Run failed:", err?.message || err));
+    const now = new Date();
+    const next = new Date(now);
+    next.setUTCHours(5, 0, 0, 0);
+    if (next.getTime() <= now.getTime()) next.setUTCDate(next.getUTCDate() + 1);
+    const ms = next.getTime() - now.getTime();
+    setTimeout(() => { runPhi(); setInterval(runPhi, 24 * 60 * 60 * 1000); }, ms);
+    console.log(`[phi-scan] Nightly scan scheduled in ${Math.round(ms / 60000)} minutes`);
+  } catch (err: any) {
+    console.error("[phi-scan] Scheduler setup error:", err.message);
+  }
+
   // bad cert surfaces right on deploy, then daily at midnight UTC, mirroring the
   // snapshot scheduler. Alerts via Resend when a public cert is expired, expiring
   // within 14 days, or unreachable. Born from the Sanford incident: a lapsed www

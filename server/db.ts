@@ -8391,3 +8391,28 @@ try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_veritaceu_profiles_lab ON veri
   addCol("csp_reports", "first_seen", "ALTER TABLE csp_reports ADD COLUMN first_seen TEXT");
   addCol("csp_reports", "last_seen", "ALTER TABLE csp_reports ADD COLUMN last_seen TEXT");
 }
+
+// Nightly PHI scan log (Q56 item 4, 2026-10-16): one row per nightly run of server/phiScan.ts (counts only, never
+// the matched text), the evidence a customer's IT review can be shown. CREATE + ALTER per the NEW DB TABLE RULE.
+{
+  const addCol = (table: string, col: string, ddl: string) => {
+    const cols = (sqlite.prepare(`PRAGMA table_info(${table})`).all() as any[]).map((c: any) => c.name);
+    if (!cols.includes(col)) { try { sqlite.exec(ddl); } catch {} }
+  };
+  try {
+    sqlite.exec(`CREATE TABLE IF NOT EXISTS phi_scan_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      scanned_at TEXT NOT NULL,
+      tables_scanned INTEGER NOT NULL DEFAULT 0,
+      columns_scanned INTEGER NOT NULL DEFAULT 0,
+      rows_scanned INTEGER NOT NULL DEFAULT 0,
+      finding_count INTEGER NOT NULL DEFAULT 0,
+      by_detector_json TEXT
+    )`);
+  } catch {}
+  addCol("phi_scan_log", "tables_scanned", "ALTER TABLE phi_scan_log ADD COLUMN tables_scanned INTEGER NOT NULL DEFAULT 0");
+  addCol("phi_scan_log", "columns_scanned", "ALTER TABLE phi_scan_log ADD COLUMN columns_scanned INTEGER NOT NULL DEFAULT 0");
+  addCol("phi_scan_log", "rows_scanned", "ALTER TABLE phi_scan_log ADD COLUMN rows_scanned INTEGER NOT NULL DEFAULT 0");
+  addCol("phi_scan_log", "finding_count", "ALTER TABLE phi_scan_log ADD COLUMN finding_count INTEGER NOT NULL DEFAULT 0");
+  addCol("phi_scan_log", "by_detector_json", "ALTER TABLE phi_scan_log ADD COLUMN by_detector_json TEXT");
+}
