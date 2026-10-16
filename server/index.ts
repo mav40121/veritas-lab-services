@@ -536,6 +536,25 @@ app.use((req, res, next) => {
     console.error("[litestream] Continuous backup setup error:", err?.message || err);
   }
 
+  // Weekly copy of all records (2026-10-16): Mondays 09:00 UTC, for each lab whose owner turned it on, build the
+  // export-all zip and email the owner that it is ready (server/exportAll.ts runWeeklyExports). One lab at a time.
+  try {
+    const { runWeeklyExports } = await import("./exportAll");
+    const { db: wkDb } = await import("./db");
+    const runWeekly = () => runWeeklyExports((wkDb as any).$client, `http://127.0.0.1:${Number(process.env.PORT || 5000)}`)
+      .catch((err: any) => console.error("[export-all] Weekly run failed:", err?.message || err));
+    const now = new Date();
+    const next = new Date(now);
+    next.setUTCHours(9, 0, 0, 0);
+    next.setUTCDate(next.getUTCDate() + ((8 - next.getUTCDay()) % 7)); // next Monday (today if Monday)
+    if (next.getTime() <= now.getTime()) next.setUTCDate(next.getUTCDate() + 7);
+    const ms = next.getTime() - now.getTime();
+    setTimeout(() => { runWeekly(); setInterval(runWeekly, 7 * 24 * 60 * 60 * 1000); }, ms);
+    console.log(`[export-all] Weekly copies scheduled in ${Math.round(ms / 3600000)} hours`);
+  } catch (err: any) {
+    console.error("[export-all] Weekly scheduler setup error:", err?.message || err);
+  }
+
   // Hourly off-site backup at :30 past every hour (2026-10-16, Q47 = 1): at most one hour of work can be
   // lost. Kept 7 days (server/backup.ts TIER_RETENTION_DAYS); the nightly tier above is unchanged.
   try {

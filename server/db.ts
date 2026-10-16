@@ -8434,3 +8434,9 @@ try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_veritaceu_profiles_lab ON veri
   addCol("continuous_backup_probe", "written_at", "ALTER TABLE continuous_backup_probe ADD COLUMN written_at TEXT");
   addCol("continuous_backup_probe", "note", "ALTER TABLE continuous_backup_probe ADD COLUMN note TEXT");
 }
+
+// Weekly copy of all records (2026-10-16, server/exportAll.ts runWeeklyExports): opt-in per lab, owner only.
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(labs)").all() as any[]).map((c: any) => c.name);
+  if (!cols.includes("weekly_export_enabled")) { try { sqlite.exec("ALTER TABLE labs ADD COLUMN weekly_export_enabled INTEGER NOT NULL DEFAULT 0"); } catch {} }
+}
