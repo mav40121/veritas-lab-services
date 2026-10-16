@@ -29,7 +29,9 @@ export default function TrustPage() {
           <h2 className="font-semibold text-base mb-2">3. How Your Data Is Protected</h2>
           <ul className="list-disc pl-5 space-y-2">
             <li><strong>Encryption in transit:</strong> All traffic to and from veritaslabservices.com uses TLS 1.2 or higher. The apex domain redirects to https://www.veritaslabservices.com and HTTP requests are rejected.</li>
-            <li><strong>Authentication:</strong> Sessions are managed via JSON Web Tokens (JWT) signed with a per-deployment secret. Account passwords are hashed using bcrypt before storage; we do not store plaintext passwords.</li>
+            <li><strong>Authentication:</strong> Account passwords must be at least 8 characters with 3 of 4 character types, and are hashed using bcrypt before storage; we do not store plaintext passwords. Every sign-in is a server-side session: signing out, changing a password or resetting one ends access at once, and each person can see their signed-in devices and sign any of them out.</li>
+            <li><strong>Two-factor sign-in:</strong> a code from an authenticator app or an emailed code, with one-time recovery codes. A lab owner can require it for everyone in every lab they own, and "Remember this computer" can be switched off for shared computers. Veritas support accounts always use it.</li>
+            <li><strong>Single sign-on:</strong> customers on Microsoft Entra can have their staff sign in with their hospital account (OpenID Connect), set up with their IT, optional or required by email domain. Other OpenID Connect providers are available on request.</li>
             <li><strong>Multi-lab isolation:</strong> Every record in the database is scoped to a specific lab via a foreign key. API endpoints enforce per-lab membership checks before returning data, so a member of Lab A cannot read or modify records belonging to Lab B even if they share infrastructure.</li>
             <li><strong>Payment data:</strong> Credit card numbers and full payment details are handled entirely by Stripe (PCI DSS Level 1 certified). We never see, store, or log card numbers.</li>
           </ul>
