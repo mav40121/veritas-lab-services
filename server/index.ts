@@ -521,6 +521,21 @@ app.use((req, res, next) => {
     console.error("[backup] Scheduler setup error:", err.message);
   }
 
+  // Continuous backup (2026-10-16): Litestream streams every change to R2 about once a second. Runs as a child process
+  // so a Litestream problem never stops the app; see server/continuousBackup.ts. On shutdown it gets a final sync.
+  try {
+    const { startContinuousBackup, stopContinuousBackup } = await import("./continuousBackup");
+    const { db: cbDb } = await import("./db");
+    const cb = startContinuousBackup((cbDb as any).$client);
+    if (cb.enabled) {
+      for (const sig of ["SIGTERM", "SIGINT"] as const) {
+        process.once(sig, () => { stopContinuousBackup().finally(() => process.exit(0)); });
+      }
+    }
+  } catch (err: any) {
+    console.error("[litestream] Continuous backup setup error:", err?.message || err);
+  }
+
   // Hourly off-site backup at :30 past every hour (2026-10-16, Q47 = 1): at most one hour of work can be
   // lost. Kept 7 days (server/backup.ts TIER_RETENTION_DAYS); the nightly tier above is unchanged.
   try {

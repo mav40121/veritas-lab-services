@@ -36,6 +36,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     xdg-utils \
   && rm -rf /var/lib/apt/lists/*
 
+# Litestream: continuous backup of the SQLite database to R2 (server/continuousBackup.ts). Pinned release,
+# checksum-verified from the release's checksums.txt; its own layer so it is cached between builds.
+ARG LITESTREAM_VERSION=0.5.17
+ARG LITESTREAM_SHA256=a191a0928884d1820fab1f866ede1d0d5811c323d0587bf863a43481a82a7668
+RUN wget -q -O /tmp/litestream.deb "https://github.com/benbjohnson/litestream/releases/download/v${LITESTREAM_VERSION}/litestream-${LITESTREAM_VERSION}-linux-x86_64.deb" \
+  && echo "${LITESTREAM_SHA256}  /tmp/litestream.deb" | sha256sum -c - \
+  && dpkg -i /tmp/litestream.deb \
+  && rm /tmp/litestream.deb \
+  && litestream version
+
 WORKDIR /app
 
 # Copy package files first for dependency caching

@@ -406,7 +406,7 @@ export interface BackupFileVerification {
   counts: { userCount: number; realUserCount: number; studyCount: number; tableCount: number };
 }
 
-function countCore(sqlite: Database.Database) {
+export function countCore(sqlite: Database.Database) {
   const one = (sql: string): number => {
     try {
       return (sqlite.prepare(sql).get() as any).c as number;
