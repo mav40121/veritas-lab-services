@@ -79,6 +79,10 @@ jobs:
         # Download all records: every table classified, owner-only, works after cancellation and trial expiry,
         # only this lab's rows, no sign-in secrets, plan gates open only for the export job.
         run: npm run test:export-all
+      - name: Run no-boot competency backfill integration test
+        # BUG-068: a server start must never write record values into a lab; blank competency elements stay
+        # blank and entered values are untouched after a restart.
+        run: npm run test:no-boot-competency-backfill
       - name: Run QC monthly review reviewer integration test
         # BUG-066: the QC monthly review PDF names the person who signed the review and its date, never the
         # person downloading; an unsigned month prints Pending signature with no date.
