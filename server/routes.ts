@@ -780,6 +780,7 @@ import { IQCP_QUESTION_BANK, evaluatePrescreen, type PrescreenAnswers } from "./
 import { SCAN_ITEMS as VERITASCAN_SCAN_ITEMS } from "../client/src/lib/veritaScanData";
 import { exportAllPlanBypass, exportAllMiddleware } from "./exportAllContext";
 import { registerExportAllRoutes } from "./exportAll";
+import { findBackfillItems, clearBackfillItems, summarizeByLab } from "./competencyBackfillCleanup";
 const VERITASCAN_ITEM_BY_ID: Record<number, any> = Object.fromEntries(
   VERITASCAN_SCAN_ITEMS.map((it: any) => [it.id, it])
 );
@@ -1421,6 +1422,40 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // is the cross-system master overview. Env-overridable; defaults to Michael's
   // address. Not a secret.
   const OPERATOR_OVERVIEW_EMAIL = (process.env.OPERATOR_EMAIL || "verilabguy@gmail.com").trim();
+
+  // BUG-068 cleanup (Q52 = 1): clear the made-up competency values the old startup backfill wrote. Dry run unless
+  // dryRun is false. Never touches a signed assessment or a lab in excludeLabIds (the demo lab). One audit row per
+  // item changed, filed under the lab owner. server/competencyBackfillCleanup.ts.
+  app.post("/api/admin/competency/clear-backfill-values", (req: any, res) => {
+    const secret = (req.headers["x-admin-secret"] || req.body?.secret) as string | undefined;
+    if (!secret || secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const sqlite = (db as any).$client;
+    const dryRun = req.body?.dryRun !== false;
+    const excludeLabIds = Array.isArray(req.body?.excludeLabIds) ? req.body.excludeLabIds.map(Number).filter((n: number) => Number.isFinite(n)) : [];
+    const found = findBackfillItems(sqlite, { excludeLabIds });
+    const report = {
+      dryRun,
+      excludeLabIds,
+      toClear: { items: found.toClear.length, byLab: summarizeByLab(found.toClear) },
+      leftSigned: { items: found.skippedSigned.length, byLab: summarizeByLab(found.skippedSigned) },
+      leftExcluded: { items: found.skippedExcluded.length, byLab: summarizeByLab(found.skippedExcluded) },
+      itemIds: found.toClear.map((i) => i.itemId),
+    };
+    if (dryRun) return res.json(report);
+    const fieldsCleared = clearBackfillItems(sqlite, found.toClear);
+    const owners = new Map<number, number>();
+    for (const it of found.toClear) {
+      if (it.labId != null && !owners.has(it.labId)) owners.set(it.labId, Number((sqlite.prepare("SELECT owner_user_id AS o FROM labs WHERE id = ?").get(it.labId) as any)?.o || 0));
+      logAudit({
+        userId: 0, ownerUserId: it.labId != null ? owners.get(it.labId) : undefined, module: "admin", action: "update",
+        entityType: "competency_assessment_item", entityId: it.itemId,
+        entityLabel: `BUG-068 cleanup: cleared made-up values (${it.clear.join(", ")}) on ${it.employee || "assessment " + it.assessmentId}`,
+        after: { cleared: it.clear, assessmentId: it.assessmentId, labId: it.labId }, ipAddress: req.ip,
+      });
+    }
+    console.log(`[admin/clear-backfill-values] cleared ${fieldsCleared} field(s) on ${found.toClear.length} item(s); left ${found.skippedSigned.length} signed, ${found.skippedExcluded.length} excluded`);
+    res.json({ ...report, fieldsCleared });
+  });
 
   // Plan display name mapping
   const PLAN_DISPLAY_NAMES: Record<string, string> = {
