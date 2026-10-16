@@ -44,7 +44,7 @@ app.use((req, res, next) => {
 // Security response headers. Improves trust signals for corporate URL reputation
 // crawlers (Microsoft SmartScreen, Cisco Umbrella, Forcepoint, McAfee TrustedSource).
 // Content-Security-Policy (2026-10-16): built from the production index.html (inline scripts allowed
-// by exact hash only) and sent as Report-Only until CSP_ENFORCE=1, because a wrong CSP can silently
+// by exact hash only). Enforced by default since 2026-10-16; CSP_REPORT_ONLY=1 reverts to report-only, because a wrong CSP can silently
 // break the React app, fonts, GA4, and Stripe Checkout. See server/securityHeaders.ts.
 let cspValue: string | null | undefined;
 app.use((req, res, next) => {

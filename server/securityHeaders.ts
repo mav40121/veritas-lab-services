@@ -4,7 +4,7 @@
 // flags a missing CSP first). Rolled out in two steps because a wrong CSP silently breaks the React
 // app, fonts, GA4 and Stripe Checkout (see the note in server/index.ts):
 //   1. Report-Only (default): browsers report what WOULD be blocked to POST /api/csp-report; nothing breaks.
-//   2. Enforced: set CSP_ENFORCE=1 in Railway env once the reports are clean.
+//   2. Enforced by default since 2026-10-16 (reports were clean apart from the GA collect call, now allowed); CSP_REPORT_ONLY=1 reverts.
 // Inline scripts are allowed by exact sha256 hash only (the GA4 bootstrap in index.html and the two
 // one-line flags server/static.ts injects), never by 'unsafe-inline'.
 
@@ -45,7 +45,7 @@ export function buildCsp(scriptHashes: string[]): string {
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com data:",
     "img-src 'self' data: blob: https:",
-    "connect-src 'self' https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com https://*.sentry.io",
+    "connect-src 'self' https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com https://www.google.com https://*.sentry.io",
     "frame-src 'self' blob:",
     "media-src 'self' blob:",
     "worker-src 'self' blob:",
@@ -59,8 +59,10 @@ export function buildCsp(scriptHashes: string[]): string {
   ].join("; ");
 }
 
+// Enforced by default since 2026-10-16 (Q56: one would-be block in production Report-Only, Google Analytics' collect
+// call to www.google.com, now allowed). CSP_REPORT_ONLY=1 switches back to report-only without a code change.
 export function cspHeaderName(): string {
-  return process.env.CSP_ENFORCE === "1" ? "Content-Security-Policy" : "Content-Security-Policy-Report-Only";
+  return process.env.CSP_REPORT_ONLY === "1" ? "Content-Security-Policy-Report-Only" : "Content-Security-Policy";
 }
 
 // Built once from the production index.html. Null when there is no built index.html (dev server: Vite

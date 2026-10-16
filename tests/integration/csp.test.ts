@@ -5,7 +5,7 @@
 //      server/static.ts injects; hashed after CRLF -> LF normalization, as browsers do (a Windows-built
 //      index.html has CRLF and the raw hash never matched: the first enforced crawl blocked GA4)
 //   2. the policy: no 'unsafe-inline' / 'unsafe-eval' in script-src, frame-ancestors, base-uri, report-uri
-//   3. Report-Only unless CSP_ENFORCE=1
+//   3. enforced by default; Report-Only with CSP_REPORT_ONLY=1
 //   4. report parsing keeps only directive, blocked origin and the page path (no query, ids collapsed)
 //   5. POST /api/csp-report counts by (directive, blocked, page) and returns 204; the admin read is secret-gated
 // Run: npm run test:csp
@@ -49,11 +49,12 @@ async function main() {
   check("2b. clickjacking, base-tag and form hijack are closed; reports go to /api/csp-report", ["frame-ancestors 'self'", "base-uri 'self'", "form-action 'self'", "default-src 'self'", "report-uri /api/csp-report"].every((d) => csp.includes(d)));
 
   // 3) mode
-  delete process.env.CSP_ENFORCE;
-  check("3a. Report-Only by default", cspHeaderName() === "Content-Security-Policy-Report-Only");
-  process.env.CSP_ENFORCE = "1";
-  check("3b. enforced with CSP_ENFORCE=1", cspHeaderName() === "Content-Security-Policy");
-  delete process.env.CSP_ENFORCE;
+  delete process.env.CSP_REPORT_ONLY;
+  check("3a. enforced by default", cspHeaderName() === "Content-Security-Policy");
+  process.env.CSP_REPORT_ONLY = "1";
+  check("3b. Report-Only with CSP_REPORT_ONLY=1", cspHeaderName() === "Content-Security-Policy-Report-Only");
+  delete process.env.CSP_REPORT_ONLY;
+  check("3c. Google Analytics' www.google.com collect call is allowed", buildCsp([]).includes("connect-src 'self' https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com https://www.google.com"));
 
   // 4) parsing
   const legacy = { "csp-report": { "document-uri": "https://www.veritaslabservices.com/labs/34/veritacomp-app/102?tab=x&email=a@b.com", "effective-directive": "script-src-elem", "blocked-uri": "https://evil.example.com/x.js?token=123" } };
@@ -84,7 +85,7 @@ async function main() {
     const no = await fetch(base + "/api/admin/csp-reports");
     const yes = await fetch(base + `/api/admin/csp-reports?secret=${process.env.ADMIN_SECRET}`);
     const body = await yes.json() as any;
-    check("5d. admin read needs the secret", no.status === 403 && yes.status === 200 && body.rows?.length === 2 && body.mode === "Content-Security-Policy-Report-Only", `${no.status}/${yes.status}`);
+    check("5d. admin read needs the secret", no.status === 403 && yes.status === 200 && body.rows?.length === 2 && body.mode === "Content-Security-Policy", `${no.status}/${yes.status}`);
   } finally {
     server.close();
   }
