@@ -11,6 +11,8 @@
 //   6. owner only: an admin member and an outsider are refused; a download link for another lab is refused
 //   7. an expired trial lab's owner still gets the zip
 //   8. the export context needs the job secret AND a loopback socket
+//  10. version 2: one PDF per VeritaCheck study (from the same results the study page shows); drafts and other labs'
+//      studies are not included; a study whose report cannot be built is listed on Contents with the reason
 //   9. weekly copy: off by default, owner-only switch; the weekly run builds only for labs that turned it on and
 //      emails the owner with no download link; only the newest weekly copy is kept, for 7 days (regular: 24 hours)
 // Run: npm run test:export-all
@@ -76,6 +78,10 @@ async function main() {
     const study = (uid: number, lab: number | null, name: string) => sqlite.prepare("INSERT INTO studies (user_id, test_name, instrument, analyst, date, study_type, clia_allowable_error, data_points, instruments, created_at, lab_id) VALUES (?, ?, 'XN-1000', 'IT', '2026-10-01', 'precision', 0.1, '[]', '[]', ?, ?)").run(uid, name, now, lab);
     study(A.id, LA, "Sodium Lab A");
     study(B.id, LB, "Sodium Lab B");
+    // A real calibration verification (5 levels, one analyzer) and a draft, for the study-report PDFs (version 2).
+    const calPts = [50, 100, 150, 200, 250].map((v, i) => ({ level: i + 1, expectedValue: v, instrumentValues: { "XN-1000": v * 1.01 } }));
+    sqlite.prepare("INSERT INTO studies (user_id, test_name, instrument, analyst, date, study_type, clia_allowable_error, data_points, instruments, status, created_at, lab_id) VALUES (?, 'Glucose CalVer A', 'XN-1000', 'IT', '2026-10-02', 'cal_ver', 0.1, ?, '[\"XN-1000\"]', 'pass', ?, ?)").run(A.id, JSON.stringify(calPts), now, LA);
+    sqlite.prepare("INSERT INTO studies (user_id, test_name, instrument, analyst, date, study_type, clia_allowable_error, data_points, instruments, status, created_at, lab_id) VALUES (?, 'Draft Potassium A', 'XN-1000', 'IT', '2026-10-03', 'cal_ver', 0.1, '[]', '[]', 'draft', ?, ?)").run(A.id, now, LA);
     sqlite.prepare("INSERT INTO inventory_items (account_id, item_name, lab_id) VALUES (?, 'Legacy gloves A', NULL)").run(A.id);
     // VeritaStaff: A's staff lab, and B's staff lab created WITH id = LA so its staff rows carry lab_id = LA numerically
     const slA = Number(sqlite.prepare("INSERT INTO staff_labs (user_id, lab_name, clia_number, created_at, updated_at, tier2_lab_id) VALUES (?, 'IT Export Lab A', '11D1111111', ?, ?, ?)").run(A.id, now, now, LA).lastInsertRowid);
@@ -186,6 +192,11 @@ async function main() {
     const notIncluded: string[] = [];
     idx.getWorksheet("Contents")?.eachRow((r: any, i: number) => { if (i > 1 && !String(r.getCell(5).value || "").startsWith("Included")) notIncluded.push(`${r.getCell(3).value}: ${r.getCell(5).value}`); });
     console.log(`   reports not included (expected where the lab has no data for them): ${notIncluded.join(" | ") || "none"}`);
+    const studyPdfs = names.filter((n) => n.startsWith("Reports/VeritaCheck/Studies/") && n.endsWith(".pdf"));
+    const calPdf = studyPdfs.find((n) => n.includes("CalVer_Glucose_CalVer_A_2026-10-02"));
+    const calBytes = calPdf ? Buffer.from(await ex.zip.file(calPdf).async("uint8array")) : Buffer.alloc(0);
+    check("10a. the calibration verification study is in the zip as its PDF report", !!calPdf && calBytes.subarray(0, 5).toString() === "%PDF-" && calBytes.length > 10000, `${calPdf} ${calBytes.length} bytes`);
+    check("10b. drafts and other labs' studies have no PDF", !studyPdfs.some((n) => /Draft_Potassium_A|Sodium_Lab_B/.test(n)), studyPdfs.join(", "));
     check("2f. Index opens on About, Contents lists the files", idx.worksheets[0].name === "About" && (idx.getWorksheet("Contents")?.rowCount || 0) > 5, `${idx.worksheets.map((w: any) => w.name).join(",")} rows ${idx.getWorksheet("Contents")?.rowCount}`);
 
     // 6c) another lab's owner cannot use a token for this lab's export

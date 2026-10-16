@@ -9,8 +9,9 @@
 //   Reports/<Module>/...           the app's own exports (maps, coverage, scans, competency bundle, QC reviews,
 //                                  IQCP plans, delegations, registers, policy master list), fetched over loopback
 // It works after a subscription ends or a trial expires (BUG-067): the job's own loopback requests pass the plan
-// gates (server/exportAllContext.ts). The finished zip is kept on the volume for 24 hours. VeritaCheck study PDFs
-// are version 2 (they are built in the browser today).
+// gates (server/exportAllContext.ts). The finished zip is kept on the volume for 24 hours.
+// Version 2 (2026-10-16): Reports/VeritaCheck/Studies holds one PDF per VeritaCheck study, built on the server from
+// the same results the study page shows (server/studyPdf.ts, client/src/lib/studyResults.ts). Drafts are not included.
 //
 // Weekly copy (2026-10-16, opt-in per lab: labs.weekly_export_enabled): every Monday the same zip is built for each
 // lab that turned it on and the owner is emailed that it is ready. The email carries no download link: the owner
@@ -26,6 +27,7 @@ import { resolveVersionFilePath } from "./veritapolicyApproval";
 import { SCAN_ITEMS } from "../client/src/lib/veritaScanData";
 import { logAudit } from "./audit";
 import { issuePurposeToken, verifyPurposeToken } from "./sessionAuth";
+import { buildStudyPdf } from "./studyPdf";
 
 export const EXPORT_RETENTION_MS = 24 * 60 * 60 * 1000;
 export const WEEKLY_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
@@ -502,6 +504,32 @@ export async function buildExportZip(sqlite: any, ctx: ExportCtx, opts: { base: 
     revokeExportSecret(secret);
   }
 
+  // 2b) VeritaCheck study reports: one PDF per study (drafts excluded), the same studies as the records workbook. A
+  // study whose report cannot be built is listed in the index with the reason instead of being dropped silently.
+  {
+    const where = whereFor("studies");
+    const rows = sqlite.prepare(`SELECT * FROM studies WHERE ${where} AND COALESCE(status, '') <> 'draft' ORDER BY date, id`).all(paramsFor(where, ctx)) as any[];
+    const owner = sqlite.prepare("SELECT id, name, email, plan FROM users WHERE id = ?").get(ctx.ownerUserId);
+    const used = new Set<string>();
+    let i = 0;
+    let built = 0;
+    for (const row of rows) {
+      i++;
+      job.step = `Building study reports (${i} of ${rows.length})`;
+      try {
+        const { buffer, filename } = await buildStudyPdf(sqlite, row, ctx.lab, owner);
+        let name = filename;
+        for (let k = 2; used.has(name); k++) name = filename.replace(/\.pdf$/i, `_${k}.pdf`);
+        used.add(name);
+        zip.file(`Reports/VeritaCheck/Studies/${name}`, buffer);
+        built++;
+      } catch (e: any) {
+        manifest.push({ folder: "Reports/VeritaCheck/Studies", file: "", what: `Study ${row.id}: ${row.test_name} (${row.study_type}, ${row.date})`, count: "", status: `Not included: ${String(e?.message || e).slice(0, 160)}` });
+      }
+    }
+    manifest.push({ folder: "Reports/VeritaCheck/Studies", file: "", what: "VeritaCheck study reports (PDF), one per study; drafts not included", count: `${built} of ${rows.length}`, status: rows.length ? (built === rows.length ? "Included" : "Included, with exceptions listed") : "Nothing to include" });
+  }
+
   // 3) Index.xlsx
   job.step = "Writing the index";
   const wb = new ExcelJS.Workbook();
@@ -516,7 +544,7 @@ export async function buildExportZip(sqlite: any, ctx: ExportCtx, opts: { base: 
     ["Source", "h"],
     ["Built by VeritaAssure™ when the lab owner chose Download all records. The download link is kept for 24 hours.", "p"],
     ["Coverage gaps", "h"],
-    ["Not in this version: VeritaCheck study PDFs (study data is in the VeritaCheck records workbook). Never exported: passwords, sign-in codes, invite links, billing-processor identifiers, and organization-level documents of a multi-lab system. Records saved before multi-lab support carry no lab and are included under the owner's account. Anything missing: info@veritaslabservices.com", "p"],
+    ["Reports/VeritaCheck/Studies has one PDF report per VeritaCheck study (drafts are not included); a study whose report could not be built is listed on the Contents sheet with the reason. Never exported: passwords, sign-in codes, invite links, billing-processor identifiers, and organization-level documents of a multi-lab system. Records saved before multi-lab support carry no lab and are included under the owner's account. Anything missing: info@veritaslabservices.com", "p"],
   ]);
   await about.protect(protectPwd, { ...PROTECT, sort: false, autoFilter: false });
   const contents = addTableSheet(wb, "Contents", ["Folder", "File", "What it is", "Size or rows", "Status"],
