@@ -33,6 +33,12 @@ async function samples() {
   const ws = wb.addWorksheet("QC Log");
   ws.addRow(["Date", "Level", "Result"]);
   ws.addRow(["2026-10-01", "L1", "<script>alert(1)</script>"]);
+  // A temperature log like St. Charles' QC forms: reading + the NIST thermometer offset found by VLOOKUP.
+  const t = wb.addWorksheet("Temp Log");
+  t.addRow(["Thermometer", "Reading C", "Corrected C"]);
+  t.addRow(["T-12", 4.2, { formula: "B2+VLOOKUP(A2,Offsets!A:B,2,FALSE)" }]);
+  const off = wb.addWorksheet("Offsets");
+  off.addRow(["T-12", -0.3]);
   const xlsx = Buffer.from(await wb.xlsx.writeBuffer());
   const z = new JSZip();
   z.file("[Content_Types].xml", "<Types/>");
@@ -113,6 +119,13 @@ async function main() {
       const dct = d.headers.get("content-type") || "";
       const dbytes = Buffer.from(await d.arrayBuffer());
       check(`3. ${name}: upload 201, stored as ${row?.file_format}, preview ${renderWant}, download ${dlWant} with the same bytes`, up.status === 201 && !!id && row?.file_format === name.split(".").pop()?.replace("jpeg","jpg") && ok && d.status === 200 && dct.includes(dlWant) && dbytes.equals(buf), `up ${up.status} fmt ${row?.file_format} render ${r.status} ${ct} dl ${d.status} ${dct}`);
+      if (name.endsWith(".xlsx")) {
+        // What we tell customers: a workbook keeps its formulas (lookups included) and works in Excel after download.
+        const back = new ExcelJS.Workbook();
+        await back.xlsx.load(dbytes as any);
+        const cell: any = back.getWorksheet("Temp Log")?.getCell("C2").value;
+        check("3g. the downloaded Excel workbook keeps its formula, VLOOKUP included", String(cell?.formula || "") === "B2+VLOOKUP(A2,Offsets!A:B,2,FALSE)", JSON.stringify(cell));
+      }
     }
     const bad = await upload(Buffer.from([0x4d, 0x5a, 0x90, 0x00, 0x03]), "tool.exe", "application/octet-stream");
     check("3f. an unsupported file is refused with a 400 that names the accepted types", bad.status === 400 && /Excel/.test(bad.body?.error || "") && /PNG or JPG/.test(bad.body?.error || ""), JSON.stringify(bad.body));
