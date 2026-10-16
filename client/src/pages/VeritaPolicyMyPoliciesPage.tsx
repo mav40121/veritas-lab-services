@@ -2234,7 +2234,7 @@ export default function VeritaPolicyMyPoliciesPage() {
             />
           ) : (
             <div
-              className="prose prose-sm max-w-none border rounded p-4 bg-white overflow-x-auto"
+              className="prose prose-sm max-w-none min-w-0 border rounded p-4 bg-white overflow-x-auto"
               dangerouslySetInnerHTML={{ __html: viewHtml }}
             />
           )}

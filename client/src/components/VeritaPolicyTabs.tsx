@@ -32,7 +32,8 @@ export function VeritaPolicyTabs({ active }: { active: Tab }) {
   if (!activeLabId) return null;
   const base = `/labs/${activeLabId}/veritapolicy-app`;
   return (
-    <div className="flex gap-1 border-b border-border" data-testid="veritapolicy-tabs">
+    // Scrolls inside its own row on a phone instead of widening the page (BUG-030 class; 2026-10-16).
+    <div className="flex gap-1 border-b border-border overflow-x-auto" data-testid="veritapolicy-tabs">
       {TABS.map((t) => {
         const href = t.sub ? `${base}/${t.sub}` : base;
         const isActive = t.key === active;
@@ -41,7 +42,7 @@ export function VeritaPolicyTabs({ active }: { active: Tab }) {
           <Link key={t.key} href={href}>
             <a
               data-testid={`veritapolicy-tab-${t.key}`}
-              className={`inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              className={`inline-flex shrink-0 whitespace-nowrap items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
                 isActive
                   ? "border-primary text-primary"
                   : "border-transparent text-muted-foreground hover:text-foreground"
