@@ -329,9 +329,8 @@ export async function runBackup(tier: BackupTier) {
 
   try {
     const sqlite = (db as any).$client;
-    // Nightly: WAL checkpoint first, as before (keeps the WAL file small; the online backup below
-    // includes WAL content either way). Matches the on-demand /api/admin/backup-db flow.
-    if (tier === "nightly") sqlite.pragma("wal_checkpoint(TRUNCATE)");
+    // No forced checkpoint (2026-10-16): in WAL mode Litestream owns checkpoints (server/continuousBackup.ts), and
+    // SQLite's online backup below includes WAL content either way. Before WAL the forced checkpoint did nothing.
 
     const filename = backupKey(tier);
     // The key can carry a folder (another service's scope, BUG-082), which would point the local temp file at a
