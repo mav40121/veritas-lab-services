@@ -497,6 +497,26 @@ app.use((req, res, next) => {
     console.error("[backup] Scheduler setup error:", err.message);
   }
 
+  // Hourly off-site backup at :30 past every hour (2026-10-16, Q47 = 1): at most one hour of work can be
+  // lost. Kept 7 days (server/backup.ts TIER_RETENTION_DAYS); the nightly tier above is unchanged.
+  try {
+    const { runHourlyBackup } = await import("./backup");
+    const now = new Date();
+    const next = new Date(now);
+    next.setUTCMinutes(30, 0, 0);
+    if (next.getTime() <= now.getTime()) next.setUTCHours(next.getUTCHours() + 1);
+    const msUntil = next.getTime() - now.getTime();
+    setTimeout(() => {
+      runHourlyBackup().catch((err) => console.error("[backup] Hourly run failed:", err?.message || err));
+      setInterval(() => {
+        runHourlyBackup().catch((err) => console.error("[backup] Hourly run failed:", err?.message || err));
+      }, 60 * 60 * 1000);
+    }, msUntil);
+    console.log(`[backup] Hourly off-site backup scheduled in ${Math.round(msUntil / 60000)} minutes`);
+  } catch (err: any) {
+    console.error("[backup] Hourly scheduler setup error:", err.message);
+  }
+
   // Schedule nightly VeritaMap consistency check at 04:30 UTC (after the 04:00
   // backup). Read-only: re-derives the compliance view (veritamap_tests) from
   // the instrument source of truth and emails info@ if anything has drifted, so

@@ -75,6 +75,10 @@ jobs:
         # state and handoff single-use; PKCE; domain, no-account and support-account refusals; required
         # SSO blocks password sign-in and password reset for its domain.
         run: npm run test:sso
+      - name: Run backup tiers integration test
+        # server/backup.ts: hourly + nightly key names, per-tier pruning (7 / 730 days), consistent online
+        # snapshot taken during writes, skip without S3 env.
+        run: npm run test:backup-tiers
       - name: Run VeritaComp non-technical checklist integration test
         # BUG-064: a non-technical program's checklist is edited after it exists (Overview tab). Letters past Z,
         # blank/empty lists refused with nothing changed, audit-logged edits, saved assessments keep their items,
