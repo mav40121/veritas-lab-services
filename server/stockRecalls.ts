@@ -19,6 +19,7 @@ import { logAudit } from "./audit";
 import { logConsumption } from "./consumptionLedger";
 import { reconcileLots } from "./inventoryLots";
 import { hasOpsAccess } from "./veritabench";
+import { checkUploadedFileForPhi } from "./phiUploadCheck";
 import {
   RECALL_NOTICE_TYPES, RECALL_NOTICE_TYPE_LABELS, type RecallNoticeType,
   isYmd, nextBusinessDay, resolveOpenedDate, parseLotNumbers, normalizeLot,
@@ -408,7 +409,7 @@ export function registerStockRecallRoutes(
   });
 
   // ── Files ─────────────────────────────────────────────────────────────
-  app.post(`${RECALLS}/:id/documents`, ...edit, upload.single("file"), (req: any, res: any) => {
+  app.post(`${RECALLS}/:id/documents`, ...edit, upload.single("file"), async (req: any, res: any) => {
     if (gate(req, res)) return;
     const sqlite = sqliteOf();
     const row = loadCase(req);
@@ -420,7 +421,9 @@ export function registerStockRecallRoutes(
       "INSERT INTO stock_recall_documents (recall_id, lab_id, kind, original_filename, mime_type, file_size, file_data, uploaded_by, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
     ).run(row.id, row.lab_id, kind, String(req.file.originalname || "file").slice(0, 200), req.file.mimetype || null, req.file.size, req.file.buffer, req.userId, new Date().toISOString());
     logEvent(sqlite, row.id, row.lab_id, req.userId, "file_added", { kind, filename: req.file.originalname });
-    res.status(201).json({ id: Number(r.lastInsertRowid), kind, original_filename: req.file.originalname, file_size: req.file.size, download_name: kind === "notice" ? noticeFilename(row, req.file.originalname) : req.file.originalname });
+    // PHI guard (Q56 item 4): warn, never block. server/phiUploadCheck.ts
+    const phiWarning = (await checkUploadedFileForPhi(req.file)).message;
+    res.status(201).json({ id: Number(r.lastInsertRowid), kind, original_filename: req.file.originalname, file_size: req.file.size, download_name: kind === "notice" ? noticeFilename(row, req.file.originalname) : req.file.originalname, phiWarning });
   });
 
   app.get(`${RECALLS}/:id/documents/:docId`, ...read, (req: any, res) => {

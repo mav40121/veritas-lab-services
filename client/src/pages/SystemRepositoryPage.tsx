@@ -4,6 +4,7 @@ import { Link } from "wouter";
 import { useAuth } from "@/components/AuthContext";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
+import { useToast } from "@/hooks/use-toast";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -44,6 +45,7 @@ export default function SystemRepositoryPage() {
   const [hipaaAck, setHipaaAck] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const { toast } = useToast();
 
   function resetForm() {
     setForm({ title: "", url: "", category: "", description: "" });
@@ -99,6 +101,8 @@ export default function SystemRepositoryPage() {
       }
       const j = await r.json().catch(() => ({}));
       if (!r.ok) { setFormError(j.error || "Could not add the document."); return; }
+      // PHI guard (Q56 item 4): the file saved, but the server found what looks like patient information.
+      if (j?.phiWarning) toast({ title: "Possible patient information in this file", description: j.phiWarning, variant: "destructive", duration: 20000 });
       resetForm();
       setShowAdd(false);
       await load();

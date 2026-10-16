@@ -299,18 +299,21 @@ function CaseFormDialog({ base, open, onOpenChange, onCreated, existing }: {
       payload.local_date = localToday();
       const created = await api(base, { method: "POST", json: payload });
       let note = `Due ${fmtDate(created.due_date)}.`;
+      let phiWarning: string | null = null;
       if (file) {
         const fd = new FormData();
         fd.append("kind", "notice");
         fd.append("file", file);
-        try { await api(`${base}/${created.id}/documents`, { method: "POST", body: fd }); }
+        try { phiWarning = (await api(`${base}/${created.id}/documents`, { method: "POST", body: fd }))?.phiWarning ?? null; }
         catch (e: any) { note += ` The notice file did not upload (${e.message}); add it on the case.`; }
       }
       if (notify && (activeRecipients.length > 0 || payload.assigned_user_id)) {
         try { const n = await api(`${base}/${created.id}/notify`, { method: "POST", json: { stage: "intake", local_date: localToday() } }); note += ` Emailed ${n.sent_to.length} ${n.sent_to.length === 1 ? "person" : "people"}.`; }
         catch (e: any) { note += ` The email did not go out (${e.message}); send it from the case.`; }
       }
-      toast({ title: "Recall logged", description: note });
+      // PHI guard (Q56 item 4): one notice shows at a time, so a patient-information warning carries the note with it.
+      if (phiWarning) toast({ title: "Recall logged. Possible patient information in the notice file", description: `${phiWarning} ${note}`, variant: "destructive", duration: 20000 });
+      else toast({ title: "Recall logged", description: note });
       qc.invalidateQueries({ queryKey: [base] });
       onCreated?.(created.id);
     } catch (e: any) {
@@ -606,7 +609,12 @@ function FilesCard({ base, c, onDone }: { base: string; c: CaseDetail; onDone: (
     if (!file) return;
     setUploading(true);
     const fd = new FormData(); fd.append("kind", kind); fd.append("file", file);
-    try { await api(`${base}/${c.id}/documents`, { method: "POST", body: fd }); toast({ title: "File added" }); onDone(); }
+    try {
+      const r = await api(`${base}/${c.id}/documents`, { method: "POST", body: fd });
+      if (r?.phiWarning) toast({ title: "Possible patient information in this file", description: r.phiWarning, variant: "destructive", duration: 20000 });
+      else toast({ title: "File added" });
+      onDone();
+    }
     catch (e: any) { toast({ title: "Upload failed", description: e.message, variant: "destructive" }); }
     finally { setUploading(false); }
   };

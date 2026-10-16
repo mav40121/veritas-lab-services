@@ -322,7 +322,10 @@ export default function VeritaLabAppPage() {
       });
 
       if (res.ok) {
-        toast({ title: "Document uploaded" });
+        const body = await res.json().catch(() => ({}));
+        // PHI guard (Q56 item 4): the file saved, but the server found what looks like patient information.
+        if (body?.phiWarning) toast({ title: "Possible patient information in this file", description: body.phiWarning, variant: "destructive", duration: 20000 });
+        else toast({ title: "Document uploaded" });
         // Refresh documents list
         const docsRes = await fetch(`${API_BASE}/api/veritalab/certificates/${certId}/documents`, { headers: authHeaders() });
         if (docsRes.ok) setDocuments(await docsRes.json());

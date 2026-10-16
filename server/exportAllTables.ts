@@ -264,6 +264,7 @@ export const EXPORT_TABLES: Record<string, ExportTable> = {
   schedule_bookings: exclude("Veritas Lab Services demo-booking calendar, not the lab's records."),
   backup_integrity_log: exclude("Veritas system monitoring."),
   csp_reports: exclude("Veritas system monitoring."),
+  phi_scan_log: exclude("Veritas system monitoring (counts only)."),
   nightly_snapshots: exclude("Daily counts Veritas derives from the records; the records themselves are exported."),
   pt_vendor_programs: exclude(REFERENCE),
   state_lab_licensure_registry: exclude(REFERENCE),

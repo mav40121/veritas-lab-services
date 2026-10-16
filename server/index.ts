@@ -44,7 +44,7 @@ app.use((req, res, next) => {
 // Security response headers. Improves trust signals for corporate URL reputation
 // crawlers (Microsoft SmartScreen, Cisco Umbrella, Forcepoint, McAfee TrustedSource).
 // Content-Security-Policy (2026-10-16): built from the production index.html (inline scripts allowed
-// by exact hash only) and sent as Report-Only until CSP_ENFORCE=1, because a wrong CSP can silently
+// by exact hash only). Enforced by default since 2026-10-16; CSP_REPORT_ONLY=1 reverts to report-only, because a wrong CSP can silently
 // break the React app, fonts, GA4, and Stripe Checkout. See server/securityHeaders.ts.
 let cspValue: string | null | undefined;
 app.use((req, res, next) => {
@@ -234,6 +234,23 @@ app.use((req, res, next) => {
     scheduleNightlySnapshot();
   } catch (err: any) {
     console.error("[snapshot] Scheduler setup error:", err.message);
+  }
+
+  // Nightly PHI scan (Q56 item 4, 2026-10-16): server/phiNightly.ts, 05:00 UTC daily, logs to phi_scan_log and
+  // emails info@ on any finding. Before this the scan ran only when called by hand.
+  try {
+    const { runNightlyPhiScan } = await import("./phiNightly");
+    const { db: phiDb } = await import("./db");
+    const runPhi = () => runNightlyPhiScan((phiDb as any).$client).catch((err: any) => console.error("[phi-scan] Run failed:", err?.message || err));
+    const now = new Date();
+    const next = new Date(now);
+    next.setUTCHours(5, 0, 0, 0);
+    if (next.getTime() <= now.getTime()) next.setUTCDate(next.getUTCDate() + 1);
+    const ms = next.getTime() - now.getTime();
+    setTimeout(() => { runPhi(); setInterval(runPhi, 24 * 60 * 60 * 1000); }, ms);
+    console.log(`[phi-scan] Nightly scan scheduled in ${Math.round(ms / 60000)} minutes`);
+  } catch (err: any) {
+    console.error("[phi-scan] Scheduler setup error:", err.message);
   }
 
   // Schedule daily TLS cert-expiry check (2026-09-29). Runs ~20s after boot so a

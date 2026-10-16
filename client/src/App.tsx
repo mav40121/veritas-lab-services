@@ -10,6 +10,7 @@ import { useEffect, useState, Suspense } from "react";
 import { lazyWithReload as lazy } from "@/lib/lazyChunk";
 import { queryClient } from "./lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
+import { PhiGuard } from "@/components/PhiGuard";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider, useAuth } from "@/components/AuthContext";
@@ -617,6 +618,7 @@ function AppContent() {
       <SiteFooter />
       <BackToTop />
       <Toaster />
+      <PhiGuard />
       <SubscriptionModal />
       <StudyCreditsModal />
     </div>
