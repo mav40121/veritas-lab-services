@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import path from "path";
 import fs from "fs";
+import os from "os";
 import { storage } from "./storage";
 import { blockNonOperatorSeat } from "./seatAccess";
 import { isDelegationPosition, isDelegationComplexity, sanitizeResponsibilities, DELEGATION_CATALOG, DELEGATION_POSITIONS, DELEGATION_COMPLEXITIES } from "./directorDelegation";
@@ -35476,15 +35477,16 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   });
 
   // ── ADMIN: Download raw SQLite database file (REAL external backup) ──────
-  app.get("/api/admin/backup-db", (req, res) => {
+  app.get("/api/admin/backup-db", async (req, res) => {
     const secret = (req.query.secret as string || req.headers["x-admin-secret"] as string);
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
     try {
       const sqlite = (db as any).$client;
-      // WAL checkpoint to ensure all data is in the main DB file
-      sqlite.pragma('wal_checkpoint(TRUNCATE)');
-      const dbPath = sqlite.name;
+      // A consistent copy via SQLite's online backup, not the raw file: in WAL mode (continuous backup, 2026-10-16)
+      // the main file alone can miss recent changes, and a forced checkpoint would fight Litestream's.
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const dbPath = path.join(os.tmpdir(), `veritas-backup-download-${timestamp}.db`);
+      await sqlite.backup(dbPath);
       // Audit: admin downloaded the full database. userId=0 indicates the
       // request used the admin secret rather than a user session.
       logAudit({
@@ -35498,6 +35500,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       res.setHeader('Content-Type', 'application/x-sqlite3');
       res.setHeader('Content-Disposition', `attachment; filename="veritas-backup-${timestamp}.db"`);
       const fileStream = fs.createReadStream(dbPath);
+      const cleanup = () => { try { fs.unlinkSync(dbPath); } catch {} };
+      fileStream.on("close", cleanup);
+      res.on("close", () => { fileStream.destroy(); cleanup(); });
       fileStream.pipe(res);
     } catch (err: any) {
       console.error('[backup-db] Error:', err.message);
@@ -35586,6 +35591,34 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     } catch (err: any) {
       console.error('[restore-self-test] Error:', err?.message);
       res.status(500).json({ error: err?.message || "self-test failed" });
+    }
+  });
+
+  // ── ADMIN: continuous backup (Litestream) status and restore self-test ────
+  // Status: whether Litestream is running, its recent log lines, the journal mode and Litestream's own local status.
+  // Restore test: writes a probe row, waits, restores the replica to a temp file in the container, checks integrity
+  // and that the probe made it, compares counts with live, deletes the temp file. See server/continuousBackup.ts.
+  app.get("/api/admin/continuous-backup", async (req, res) => {
+    const secret = (req.query.secret as string || req.headers["x-admin-secret"] as string);
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    try {
+      const { continuousBackupStatus, litestreamLocalStatus } = await import("./continuousBackup");
+      const sqlite = (db as any).$client;
+      res.json({ ...continuousBackupStatus(), journalMode: String(sqlite.pragma("journal_mode", { simple: true })), local: await litestreamLocalStatus() });
+    } catch (err: any) {
+      res.status(500).json({ error: err?.message || "status failed" });
+    }
+  });
+  app.get("/api/admin/continuous-backup/restore-test", async (req, res) => {
+    const secret = (req.query.secret as string || req.headers["x-admin-secret"] as string);
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    try {
+      const { continuousRestoreSelfTest } = await import("./continuousBackup");
+      const waitMs = Math.min(60000, Math.max(1000, Number(req.query.waitMs) || 5000));
+      res.json(await continuousRestoreSelfTest((db as any).$client, waitMs));
+    } catch (err: any) {
+      console.error('[continuous-backup] Restore test error:', err?.message);
+      res.status(500).json({ error: err?.message || "restore test failed" });
     }
   });
 

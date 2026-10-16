@@ -78,6 +78,19 @@ jobs:
       - name: Run PHI guard integration test
         # Shared detectors; uploads warn (templates with blank fields do not); nightly scan logs counts, never values.
         run: npm run test:phi-guard
+      - name: Install Litestream (same pinned, checksum-verified release as the Dockerfile)
+        run: |
+          wget -q -O /tmp/litestream.deb "https://github.com/benbjohnson/litestream/releases/download/v0.5.17/litestream-0.5.17-linux-x86_64.deb"
+          echo "a191a0928884d1820fab1f866ede1d0d5811c323d0587bf863a43481a82a7668  /tmp/litestream.deb" | sha256sum -c -
+          sudo dpkg -i /tmp/litestream.deb
+          litestream version
+      - name: Run continuous backup integration test
+        # Litestream round trip on Linux against a local folder replica: WAL switch, a change made 5 s before a
+        # restore is in the restored copy, integrity ok, a killed Litestream restarts, shutdown stops it.
+        env:
+          LITESTREAM_BIN: litestream
+          LITESTREAM_FILE_REPLICA: /tmp/litestream-replica
+        run: npm run test:continuous-backup
       - name: Run clear-backfill-values integration test
         # BUG-068 cleanup: clears only the made-up competency values; signed records, excluded labs and real values untouched.
         run: npm run test:clear-backfill-values

@@ -8416,3 +8416,21 @@ try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_veritaceu_profiles_lab ON veri
   addCol("phi_scan_log", "finding_count", "ALTER TABLE phi_scan_log ADD COLUMN finding_count INTEGER NOT NULL DEFAULT 0");
   addCol("phi_scan_log", "by_detector_json", "ALTER TABLE phi_scan_log ADD COLUMN by_detector_json TEXT");
 }
+
+// Continuous-backup restore probes (2026-10-16): server/continuousBackup.ts writes one timestamped row before each
+// restore self-test and checks the restored copy contains it, which measures the real data-loss window. No lab data.
+{
+  const addCol = (table: string, col: string, ddl: string) => {
+    const cols = (sqlite.prepare(`PRAGMA table_info(${table})`).all() as any[]).map((c: any) => c.name);
+    if (!cols.includes(col)) { try { sqlite.exec(ddl); } catch {} }
+  };
+  try {
+    sqlite.exec(`CREATE TABLE IF NOT EXISTS continuous_backup_probe (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      written_at TEXT NOT NULL,
+      note TEXT
+    )`);
+  } catch {}
+  addCol("continuous_backup_probe", "written_at", "ALTER TABLE continuous_backup_probe ADD COLUMN written_at TEXT");
+  addCol("continuous_backup_probe", "note", "ALTER TABLE continuous_backup_probe ADD COLUMN note TEXT");
+}
