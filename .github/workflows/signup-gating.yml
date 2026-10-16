@@ -75,6 +75,9 @@ jobs:
         # state and handoff single-use; PKCE; domain, no-account and support-account refusals; required
         # SSO blocks password sign-in and password reset for its domain.
         run: npm run test:sso
+      - name: Run clear-backfill-values integration test
+        # BUG-068 cleanup: clears only the made-up competency values; signed records, excluded labs and real values untouched.
+        run: npm run test:clear-backfill-values
       - name: Run export-all integration test
         # Download all records: every table classified, owner-only, works after cancellation and trial expiry,
         # only this lab's rows, no sign-in secrets, plan gates open only for the export job.
