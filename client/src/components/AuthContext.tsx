@@ -1,6 +1,6 @@
 import { createContext, useContext, useMemo, useState, useCallback } from "react";
 import { setAuth, clearAuth, getUser, getToken, authHeaders, type AuthUser } from "@/lib/auth";
-import { API_BASE } from "@/lib/queryClient";
+import { API_BASE, queryClient } from "@/lib/queryClient";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { useMemberships, type Membership } from "@/hooks/useMemberships";
 import { pickCurrentMembership } from "@/lib/currentLab";
@@ -42,7 +42,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const activeLabId = useActiveLabId();
   const { data: memberships } = useMemberships();
 
-  const login = useCallback((t: string, u: AuthUser) => { setAuth(t, u); setToken(t); setRawUser(u); }, []);
+  const login = useCallback((t: string, u: AuthUser) => {
+    // BUG-063: a different account signing in without signing out first must not inherit the
+    // previous account's cached data (its lab list sent the new account to the old account's
+    // lab). setAuth also forgets the old account's remembered lab.
+    const previousId = getUser()?.id;
+    setAuth(t, u);
+    if (previousId != null && previousId !== u?.id) queryClient.clear();
+    setToken(t);
+    setRawUser(u);
+  }, []);
   // Server-notify logout so user_sessions.is_active flips to 0 BEFORE local state
   // clears (otherwise the next login sees a stale active session and loops the
   // "Another session is active" warning). Fire-and-forget so a network failure

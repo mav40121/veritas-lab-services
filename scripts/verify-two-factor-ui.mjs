@@ -86,7 +86,7 @@ for (const [scheme, width] of [["light", 1280], ["dark", 390]]) {
   await page.goto(`${BASE}/login`, { waitUntil: "networkidle" });
   await page.getByPlaceholder("you@lab.com").fill(email);
   await page.locator('input[type="password"]').first().fill(PW);
-  await page.getByRole("button", { name: "Sign In" }).click();
+  await page.getByRole("button", { name: "Sign In", exact: true }).click();
   await page.getByTestId("two-factor-signin").waitFor({ timeout: 10000 });
   const tag = `[${scheme} ${width}px]`;
   check(`2a. ${tag} after the password, the 6-digit step appears (not signed in yet)`, (await page.evaluate(() => localStorage.getItem("veritas_token"))) === null);

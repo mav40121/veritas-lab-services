@@ -117,7 +117,7 @@ for (const scheme of ["light", "dark"]) {
   await page.goto(`${BASE}/login`, { waitUntil: "networkidle" });
   await page.getByPlaceholder("you@lab.com").fill(kimEmail);
   await page.locator('input[type="password"]').first().fill(PW);
-  await page.getByRole("button", { name: "Sign In" }).click();
+  await page.getByRole("button", { name: "Sign In", exact: true }).click();
   await page.getByTestId("two-factor-setup").waitFor({ timeout: 10000 });
   const s = await page.getByTestId("two-factor-setup").innerText();
   check("4a. the member lands on first-time setup naming the lab, not signed in yet", s.includes("Riverside Outpatient Lab (QA)") && (await page.evaluate(() => localStorage.getItem("veritas_token"))) === null, s.replace(/\s+/g, " ").slice(0, 160));

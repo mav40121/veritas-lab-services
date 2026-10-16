@@ -48,9 +48,15 @@ export interface AuthUser {
 }
 
 export function setAuth(token: string, user: AuthUser) {
+  // BUG-063: signing in as a DIFFERENT account without signing out first (a join link,
+  // SSO, or the login page in a browser that still held another account) kept the
+  // previous account's remembered lab, so the new account opened at a lab URL it does
+  // not belong to. Forget that lab whenever the account changes.
+  const previousId = _user?.id;
   _token = token;
   _user = user;
   try {
+    if (previousId != null && previousId !== user?.id) localStorage.removeItem(ACTIVE_LAB_KEY);
     localStorage.setItem(TOKEN_KEY, token);
     localStorage.setItem(USER_KEY, JSON.stringify(user));
   } catch {}
