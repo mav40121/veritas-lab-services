@@ -75,15 +75,15 @@ test.describe("Staff Portal policies module", () => {
     const meta = await metaResp.json();
     expect(typeof meta.version_id).toBe("number");
     expect(typeof meta.file_hash).toBe("string");
-    expect(["docx", "pdf", "html"]).toContain(meta.file_format);
+    expect(["docx", "pdf", "html", "xlsx", "xls", "png", "jpg", "txt"]).toContain(meta.file_format);
 
     const renderResp = await request.get(`${BASE}/api/staff-portal-session/policies/${docId}/render`, {
       headers: { Authorization: `Bearer ${SP_TOKEN}` },
     });
     expect(renderResp.status()).toBe(200);
     const ct = renderResp.headers()["content-type"] || "";
-    if (meta.file_format === "pdf") {
-      expect(ct).toContain("application/pdf");
+    if (meta.file_format === "pdf" || meta.file_format === "png" || meta.file_format === "jpg") {
+      expect(ct).toContain(meta.file_format === "pdf" ? "application/pdf" : meta.file_format === "png" ? "image/png" : "image/jpeg");
     } else {
       const data = await renderResp.json();
       expect(data.format).toBe("html");

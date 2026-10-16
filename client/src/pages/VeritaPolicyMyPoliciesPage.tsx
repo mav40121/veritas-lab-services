@@ -1207,6 +1207,7 @@ export default function VeritaPolicyMyPoliciesPage() {
   const [viewLoading, setViewLoading] = useState(false);
   const [viewHtml, setViewHtml] = useState<string>("");
   const [viewPdfUrl, setViewPdfUrl] = useState<string>("");
+  const [viewIsImage, setViewIsImage] = useState(false);
   const [viewTampered, setViewTampered] = useState(false);
   const [viewSignoffs, setViewSignoffs] = useState<any[]>([]);
   const [downloadingSigReport, setDownloadingSigReport] = useState(false);
@@ -1246,6 +1247,7 @@ export default function VeritaPolicyMyPoliciesPage() {
     setViewDoc(doc);
     setViewHtml("");
     setViewPdfUrl("");
+    setViewIsImage(false);
     setViewTampered(false);
     setViewSignoffs([]);
     setViewVersions([]);
@@ -1266,20 +1268,20 @@ export default function VeritaPolicyMyPoliciesPage() {
         .then((r) => r.json())
         .then((body) => setViewVersions(body?.versions || []))
         .catch(() => {});
-      if (doc.current_file_format === "pdf") {
-        const res = await fetch(
-          `/api/labs/${activeLabId}/veritapolicy/documents/${doc.id}/render`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
+      // PDF and images come back as the file itself; every other format (Word, HTML, Excel, text) as JSON
+      // with HTML. Decide by the response type, not the stored format (2026-10-16: more file types).
+      const res = await fetch(
+        `/api/labs/${activeLabId}/veritapolicy/documents/${doc.id}/render`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const ctype = res.headers.get("Content-Type") || "";
+      if (!ctype.includes("application/json")) {
         if (!res.ok) throw new Error("Render failed");
         if (res.headers.get("X-VeritaPolicy-Tamper") === "yes") setViewTampered(true);
         const blob = await res.blob();
+        setViewIsImage(ctype.startsWith("image/"));
         setViewPdfUrl(URL.createObjectURL(blob));
       } else {
-        const res = await fetch(
-          `/api/labs/${activeLabId}/veritapolicy/documents/${doc.id}/render`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
         const body = await res.json();
         if (!res.ok) throw new Error(body?.error || "Render failed");
         setViewHtml(body.html || "");
@@ -1302,6 +1304,7 @@ export default function VeritaPolicyMyPoliciesPage() {
     setViewDoc(null);
     setViewHtml("");
     setViewPdfUrl("");
+    setViewIsImage(false);
     setViewTampered(false);
     setViewSignoffs([]);
     setViewVersions([]);
@@ -1651,7 +1654,7 @@ export default function VeritaPolicyMyPoliciesPage() {
               />
               <div className="font-medium">No policies uploaded yet</div>
               <div className="text-sm text-muted-foreground">
-                Drag a DOCX or PDF in, or click Upload Policy to start.
+                Click Upload Policy to add a Word, PDF, Excel, image or text file.
               </div>
               <Button hidden={isReadOnly} onClick={() => setUploadOpen(true)}>
                 <Upload size={14} className="mr-1.5" /> Upload Policy
@@ -1915,10 +1918,10 @@ export default function VeritaPolicyMyPoliciesPage() {
           </DialogHeader>
           <div className="space-y-3">
             <div>
-              <Label className="text-xs">File (DOCX or PDF, up to 25 MB)</Label>
+              <Label className="text-xs">File (Word, PDF, HTML, Excel, PNG/JPG image or text; up to 25 MB)</Label>
               <Input
                 type="file"
-                accept=".docx,.pdf,.html,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                accept=".docx,.pdf,.html,.htm,.xlsx,.xls,.png,.jpg,.jpeg,.txt"
                 onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
               />
               {uploadFile && (
@@ -2216,6 +2219,13 @@ export default function VeritaPolicyMyPoliciesPage() {
             <div className="p-6 flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="animate-spin" size={14} /> Loading...
             </div>
+          ) : viewPdfUrl && viewIsImage ? (
+            <img
+              src={viewPdfUrl}
+              alt={viewDoc?.title || "Policy"}
+              className="max-w-full max-h-[70vh] mx-auto border rounded"
+              data-testid="policy-view-image"
+            />
           ) : viewPdfUrl ? (
             <iframe
               src={viewPdfUrl}
@@ -2224,7 +2234,7 @@ export default function VeritaPolicyMyPoliciesPage() {
             />
           ) : (
             <div
-              className="prose prose-sm max-w-none border rounded p-4 bg-white"
+              className="prose prose-sm max-w-none min-w-0 border rounded p-4 bg-white overflow-x-auto"
               dangerouslySetInnerHTML={{ __html: viewHtml }}
             />
           )}
@@ -2634,10 +2644,10 @@ export default function VeritaPolicyMyPoliciesPage() {
               marked stale.
             </p>
             <div>
-              <Label className="text-xs">File (DOCX, PDF, or HTML)</Label>
+              <Label className="text-xs">File (Word, PDF, HTML, Excel, PNG/JPG image or text; up to 25 MB)</Label>
               <Input
                 type="file"
-                accept=".docx,.pdf,.html,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                accept=".docx,.pdf,.html,.htm,.xlsx,.xls,.png,.jpg,.jpeg,.txt"
                 onChange={(e) => setNewVersionFile(e.target.files?.[0] || null)}
               />
               {newVersionFile && (

@@ -986,7 +986,8 @@ function LinkedPolicySection({ docId }: { docId: number }) {
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = `Policy_${policyId}.pdf`;
+        // PDF or image policy (2026-10-16: more file types); name the file by what came back.
+        a.download = `Policy_${policyId}.${ct.startsWith("image/png") ? "png" : ct.startsWith("image/jpeg") ? "jpg" : "pdf"}`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
