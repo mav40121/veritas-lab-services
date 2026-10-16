@@ -13,7 +13,7 @@ import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { db } from "../../server/db";
-import { backupKey, keysToPrune, snapshotToGz, verifyBackupGzFile, runHourlyBackup, TIER_PREFIX, backupScope, backupTempPath } from "../../server/backup";
+import { backupKey, keysToPrune, snapshotToGz, verifyBackupGzFile, runHourlyBackup, TIER_PREFIX, backupScope, backupTempPath, backupAlertSubject } from "../../server/backup";
 
 (globalThis as any).require ??= createRequire(import.meta.url);
 
@@ -34,6 +34,9 @@ async function main() {
   // BUG-082 follow-up: the VeritaStock hourly backup failed with "directory does not exist" because the temp file
   // was named after the scoped key. The temp path must be flat.
   check("1f. a scoped key gives a flat temp file path", backupTempPath("veritastock/veritas-hourly-x.db.gz") === "/tmp/veritastock_veritas-hourly-x.db.gz" && backupTempPath("veritas-hourly-x.db.gz") === "/tmp/veritas-hourly-x.db.gz", backupTempPath("veritastock/veritas-hourly-x.db.gz"));
+  // The 16:30 alert on 2026-10-16 said "Nightly" for the VeritaStock service's hourly copy.
+  const subj = [backupAlertSubject("hourly", { RAILWAY_SERVICE_NAME: "VeritaStock" }), backupAlertSubject("nightly", { RAILWAY_SERVICE_NAME: "radiant-quietude" })];
+  check("1g. the failure alert names the tier, and the service when it is not the main app", subj[0] === "[VeritaAssure] Hourly backup FAILED (VeritaStock service)" && subj[1] === "[VeritaAssure] Nightly backup FAILED", JSON.stringify(subj));
 
   const now = Date.parse("2026-10-16T12:00:00Z");
   const day = 24 * 60 * 60 * 1000;

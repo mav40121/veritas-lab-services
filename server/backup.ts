@@ -77,15 +77,24 @@ function getS3Client() {
   return s3Client;
 }
 
-async function notifyFailure(err: Error) {
+// Which tier failed, and on which Railway service: one bucket serves the main app and VeritaStock (BUG-082), and the
+// 2026-10-16 16:30 alert said "Nightly" for VeritaStock's hourly copy, so the reader could not tell what broke.
+export function backupAlertSubject(tier: BackupTier, env: NodeJS.ProcessEnv = process.env): string {
+  const svc = String(env.RAILWAY_SERVICE_NAME || "").trim();
+  const other = !!backupScope(env);
+  return `[VeritaAssure] ${tier === "hourly" ? "Hourly" : "Nightly"} backup FAILED${other ? ` (${svc} service)` : ""}`;
+}
+
+async function notifyFailure(err: Error, tier: BackupTier) {
   if (!process.env.RESEND_API_KEY) return;
   try {
     const resend = new Resend(process.env.RESEND_API_KEY);
+    const svc = String(process.env.RAILWAY_SERVICE_NAME || "the main app");
     await resend.emails.send({
       from: "VeritaAssure System <info@veritaslabservices.com>",
       to: FAILURE_NOTIFY_TO,
-      subject: "[VeritaAssure] Nightly backup FAILED",
-      html: `<p>The nightly off-site backup job failed at ${new Date().toISOString()}.</p>
+      subject: backupAlertSubject(tier),
+      html: `<p>The ${tier} off-site backup job on the ${svc} Railway service failed at ${new Date().toISOString()}.</p>
              <p><strong>Error:</strong> ${err.message}</p>
              <pre style="background:#f4f4f4;padding:12px;border-radius:6px;font-size:11px;overflow:auto;">${err.stack || "no stack"}</pre>
              <p>Check Railway logs and the R2 bucket. The on-demand <code>/api/admin/backup-db</code> endpoint is unaffected and can be used as a fallback.</p>`,
@@ -110,7 +119,7 @@ async function notifyIntegrityIssue(checks: Record<string, any>, filename: strin
     await resend.emails.send({
       from: "VeritaAssure System <info@veritaslabservices.com>",
       to: FAILURE_NOTIFY_TO,
-      subject: "[VeritaAssure] Backup integrity check ANOMALY",
+      subject: `[VeritaAssure] Backup integrity check ANOMALY${backupScope() ? ` (${process.env.RAILWAY_SERVICE_NAME} service)` : ""}`,
       html: `<p>The nightly off-site backup uploaded successfully (${filename}), but one or more integrity checks did not pass at ${new Date().toISOString()}.</p>
              <p>The backup file is in R2 and recoverable. This alert is so you can investigate whether the anomaly reflects a real data issue or an expected operational change (e.g., a test account intentionally deleted).</p>
              <table style="border-collapse:collapse;font-size:12px">
@@ -387,7 +396,7 @@ export async function runBackup(tier: BackupTier) {
     // Hourly failures alert at most once per 6 hours (an R2 outage would otherwise send 24 a day).
     if (tier === "nightly" || Date.now() - lastHourlyFailureNotifyAt > 6 * 60 * 60 * 1000) {
       if (tier === "hourly") lastHourlyFailureNotifyAt = Date.now();
-      await notifyFailure(err instanceof Error ? err : new Error(`${tier}: ${String(err)}`));
+      await notifyFailure(err instanceof Error ? err : new Error(`${tier}: ${String(err)}`), tier);
     }
   }
 }
