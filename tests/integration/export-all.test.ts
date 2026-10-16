@@ -11,6 +11,8 @@
 //   6. owner only: an admin member and an outsider are refused; a download link for another lab is refused
 //   7. an expired trial lab's owner still gets the zip
 //   8. the export context needs the job secret AND a loopback socket
+//   9. weekly copy: off by default, owner-only switch; the weekly run builds only for labs that turned it on and
+//      emails the owner with no download link; only the newest weekly copy is kept, for 7 days (regular: 24 hours)
 // Run: npm run test:export-all
 
 import http from "node:http";
@@ -22,7 +24,7 @@ import { createRequire } from "node:module";
 import jwt from "jsonwebtoken";
 import { registerRoutes } from "../../server/routes";
 import { db } from "../../server/db";
-import { unclassifiedTables } from "../../server/exportAll";
+import { unclassifiedTables, runWeeklyExports, setWeeklyExportMailerForTest, cleanupExports, zipPathFor } from "../../server/exportAll";
 import { registerExportSecret, revokeExportSecret, exportAllMiddleware, exportAllPlanBypass } from "../../server/exportAllContext";
 import { resolveVersionFilePath } from "../../server/veritapolicyApproval";
 
@@ -209,6 +211,34 @@ async function main() {
     revokeExportSecret(sec);
     const afterRevoke = await probe("127.0.0.1");
     check("8. the export context needs the job secret and a loopback socket, and ends when revoked", fromLoop && !fromOutside && !afterRevoke, `loopback ${fromLoop}, outside ${fromOutside}, revoked ${afterRevoke}`);
+
+    // 9) weekly copy
+    const wDefault = await call("GET", `/api/labs/${LA}/export-all`, undefined, A.tok, LA);
+    const wByAdmin = await call("PUT", `/api/labs/${LA}/export-all/weekly`, { enabled: true }, C.tok, LA);
+    const wBad = await call("PUT", `/api/labs/${LA}/export-all/weekly`, { enabled: "yes" }, A.tok, LA);
+    const wOn = await call("PUT", `/api/labs/${LA}/export-all/weekly`, { enabled: true }, A.tok, LA);
+    check("9a. the weekly copy is off by default and only the owner turns it on", wDefault.body.weekly === false && wByAdmin.status === 403 && wBad.status === 400 && wOn.status === 200 && wOn.body.weekly === true, `${wDefault.body.weekly} ${wByAdmin.status} ${wBad.status} ${wOn.status}`);
+    const mails: any[] = [];
+    setWeeklyExportMailerForTest(async (m) => { mails.push(m); });
+    const run1 = await runWeeklyExports(sqlite, base);
+    const run2 = await runWeeklyExports(sqlite, base);
+    setWeeklyExportMailerForTest(null);
+    check("9b. the weekly run builds a copy only for the lab that turned it on and emails its owner", run1.labs === 1 && run1.built === 1 && run2.built === 1 && mails.length === 2 && mails[0].to === A.email && mails[0].subject === "Your weekly copy of IT Export Lab A records is ready", JSON.stringify({ run1, to: mails[0]?.to, subject: mails[0]?.subject }));
+    const html = String(mails[0]?.html || "");
+    check("9c. the email carries no download link, points to the signed-in page, has no em dash", !/export-all|download-token|\/api\//.test(html) && html.includes(`/labs/${LA}/members`) && !html.includes("—"), html.match(/href="[^"]+"/g)?.join(" ") || "");
+    const readyW = (await call("GET", `/api/labs/${LA}/export-all`, undefined, A.tok, LA)).body.ready.filter((r: any) => r.weekly);
+    const days = readyW[0] ? Math.round((Date.parse(readyW[0].expiresAt) - Date.parse(readyW[0].createdAt)) / 86400000) : -1;
+    check("9d. only the newest weekly copy is kept, for 7 days", readyW.length === 1 && days === 7, `${readyW.length} weekly copies, ${days} days`);
+    const weeklyZip = readyW[0] ? zipPathFor(LA, readyW[0].id) : "";
+    const regularZip = ex.ready ? zipPathFor(LA, ex.ready.id) : "";
+    cleanupExports(Date.now() + 2 * 86400000);
+    const at2d = { weekly: fs.existsSync(weeklyZip), regular: fs.existsSync(regularZip) };
+    cleanupExports(Date.now() + 8 * 86400000);
+    const at8d = { weekly: fs.existsSync(weeklyZip) };
+    check("9e. cleanup keeps a weekly copy 7 days and a regular download 24 hours", !!weeklyZip && !!regularZip && at2d.weekly && !at2d.regular && !at8d.weekly, JSON.stringify({ at2d, at8d }));
+    await call("PUT", `/api/labs/${LA}/export-all/weekly`, { enabled: false }, A.tok, LA);
+    const run3 = await runWeeklyExports(sqlite, base);
+    check("9f. turned off, the weekly run builds nothing", run3.labs === 0 && run3.built === 0, JSON.stringify(run3));
   } catch (e: any) {
     console.error(e);
     failures++;
