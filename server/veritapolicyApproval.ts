@@ -92,27 +92,102 @@ export function readVersionBuffer(relativePath: string): Buffer {
 }
 
 // Map an uploaded MIME type to the canonical file extension we store.
-// We accept DOCX, PDF, and plain HTML (rare; some labs export from
-// SharePoint as HTML). Reject anything else; uploaders see a 400.
+// Accepted document formats (2026-10-16, Q47 = 1: "we accept fewer document file types"). DOCX, PDF and
+// HTML as before, plus Excel (.xlsx; legacy .xls is stored and downloadable but not previewed, since ExcelJS
+// cannot read it and SheetJS is not used), PNG/JPG images, and plain text.
+export type DocFormat = "docx" | "pdf" | "html" | "xlsx" | "xls" | "png" | "jpg" | "txt";
+export const ACCEPTED_DOC_DESCRIPTION = "Word (DOCX), PDF, HTML, Excel (XLSX or XLS), image (PNG or JPG) or text (TXT)";
+
+const startsWith = (b: Buffer | undefined, sig: number[]) => !!b && b.length >= sig.length && sig.every((v, i) => b[i] === v);
+
+// The format, decided from the file's own bytes where the format has a signature, so a renamed or
+// mislabelled file is never stored as the wrong type (DOCX and XLSX are both ZIP files; the part names
+// inside tell them apart). HTML and text have no signature, so their name or MIME type decides, and text
+// must be valid UTF-8 with no NUL bytes. Without a buffer (legacy callers) the name/MIME rules apply.
 export function canonicalFormatFromMimeAndName(
   mimetype: string,
-  originalName: string
-): "docx" | "pdf" | "html" | null {
+  originalName: string,
+  buffer?: Buffer
+): DocFormat | null {
   const lowerName = originalName.toLowerCase();
-  if (
-    mimetype ===
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
-    lowerName.endsWith(".docx")
-  ) {
-    return "docx";
+  const ext = (lowerName.match(/\.([a-z0-9]+)$/) || [])[1] || "";
+  if (buffer) {
+    if (startsWith(buffer, [0x25, 0x50, 0x44, 0x46, 0x2d])) return "pdf"; // %PDF-
+    if (startsWith(buffer, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) return "png";
+    if (startsWith(buffer, [0xff, 0xd8, 0xff])) return "jpg";
+    if (startsWith(buffer, [0x50, 0x4b, 0x03, 0x04])) {
+      // ZIP: OOXML part names are stored uncompressed in the local headers.
+      const head = buffer.subarray(0, Math.min(buffer.length, 2 * 1024 * 1024)).toString("latin1");
+      if (head.includes("word/")) return "docx";
+      if (head.includes("xl/")) return "xlsx";
+      return null;
+    }
+    if (startsWith(buffer, [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1])) return ext === "xls" ? "xls" : null; // OLE: legacy Excel only
+    if (buffer.includes(0)) return null;
+    if (ext === "html" || ext === "htm" || mimetype === "text/html") return "html";
+    if (ext === "txt" || mimetype === "text/plain") {
+      try { new TextDecoder("utf-8", { fatal: true }).decode(buffer); return "txt"; } catch { return null; }
+    }
+    return null;
   }
-  if (mimetype === "application/pdf" || lowerName.endsWith(".pdf")) {
-    return "pdf";
-  }
-  if (mimetype === "text/html" || lowerName.endsWith(".html") || lowerName.endsWith(".htm")) {
-    return "html";
-  }
+  if (mimetype === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" || ext === "docx") return "docx";
+  if (mimetype === "application/pdf" || ext === "pdf") return "pdf";
+  if (mimetype === "text/html" || ext === "html" || ext === "htm") return "html";
+  if (mimetype === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" || ext === "xlsx") return "xlsx";
+  if (mimetype === "application/vnd.ms-excel" || ext === "xls") return "xls";
+  if (mimetype === "image/png" || ext === "png") return "png";
+  if (mimetype === "image/jpeg" || ext === "jpg" || ext === "jpeg") return "jpg";
+  if (mimetype === "text/plain" || ext === "txt") return "txt";
   return null;
+}
+
+// Download Content-Type for each stored format.
+export const DOC_MIME: Record<DocFormat, string> = {
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  pdf: "application/pdf",
+  html: "text/html; charset=utf-8",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  xls: "application/vnd.ms-excel",
+  png: "image/png",
+  jpg: "image/jpeg",
+  txt: "text/plain; charset=utf-8",
+};
+
+// Formats the render routes send as the raw file (the viewer shows them in a frame or an image tag).
+export function inlineDocContentType(format: string): string | null {
+  return format === "pdf" ? "application/pdf" : format === "png" ? "image/png" : format === "jpg" ? "image/jpeg" : null;
+}
+
+const escapeHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+// The HTML preview for every format the render routes return as JSON, other than DOCX (mammoth, above):
+// HTML as stored; text escaped in a <pre>; XLSX as one escaped table per sheet (capped); XLS a download note.
+export async function htmlForStoredFormat(buffer: Buffer, format: string): Promise<string> {
+  if (format === "txt") return `<pre style="white-space:pre-wrap;font-family:inherit">${escapeHtml(buffer.toString("utf-8"))}</pre>`;
+  if (format === "xls") return "<p>This is an older Excel file (.xls). Use Download to open it in Excel.</p>";
+  if (format === "xlsx") {
+    const { default: ExcelJS } = await import("exceljs");
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buffer as any);
+    const MAX_ROWS = 2000, MAX_COLS = 60;
+    const parts: string[] = [];
+    wb.eachSheet((ws: any) => {
+      parts.push(`<h3>${escapeHtml(String(ws.name || "Sheet"))}</h3>`);
+      const rows: string[] = [];
+      let n = 0;
+      ws.eachRow({ includeEmpty: false }, (row: any) => {
+        if (n++ >= MAX_ROWS) return;
+        const cells: string[] = [];
+        const count = Math.min(row.cellCount || 0, MAX_COLS);
+        for (let c = 1; c <= count; c++) cells.push(`<td>${escapeHtml(String(row.getCell(c).text ?? ""))}</td>`);
+        rows.push(`<tr>${cells.join("")}</tr>`);
+      });
+      parts.push(rows.length ? `<table border="1" cellpadding="4" style="border-collapse:collapse">${rows.join("")}</table>` : "<p>(empty sheet)</p>");
+      if (n > MAX_ROWS) parts.push(`<p>Showing the first ${MAX_ROWS} rows. Use Download for the full workbook.</p>`);
+    });
+    return parts.join("") || "<p>(no sheets)</p>";
+  }
+  return buffer.toString("utf-8");
 }
 
 // Try to extract a clean title from the file. DOCX: pull from core
@@ -121,7 +196,7 @@ export function canonicalFormatFromMimeAndName(
 // filename. The lab user can rename afterward.
 export async function extractTitle(
   buffer: Buffer,
-  format: "docx" | "pdf" | "html",
+  format: DocFormat,
   originalName: string
 ): Promise<string> {
   const fallback = originalName.replace(/\.[^/.]+$/, "").trim();

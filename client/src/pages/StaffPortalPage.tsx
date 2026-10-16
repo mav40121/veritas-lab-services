@@ -422,7 +422,7 @@ interface PortalPolicyRender {
   next_review_date: string | null;
   version_id: number;
   version_number: number | null;
-  file_format: "docx" | "pdf" | "html";
+  file_format: "docx" | "pdf" | "html" | "xlsx" | "xls" | "png" | "jpg" | "txt";
   file_hash: string;
 }
 
@@ -441,6 +441,7 @@ function StaffPortalPoliciesView({
   const [meta, setMeta] = useState<PortalPolicyRender | null>(null);
   const [renderHtml, setRenderHtml] = useState<string | null>(null);
   const [renderPdfUrl, setRenderPdfUrl] = useState<string | null>(null);
+  const [renderIsImage, setRenderIsImage] = useState(false);
   const [renderError, setRenderError] = useState<string | null>(null);
   const [typedName, setTypedName] = useState<string>(`${employee.first_name}${employee.middle_initial ? ` ${employee.middle_initial}.` : ""} ${employee.last_name}`.trim());
   const [signing, setSigning] = useState(false);
@@ -475,6 +476,7 @@ function StaffPortalPoliciesView({
     setMeta(null);
     setRenderHtml(null);
     if (renderPdfUrl) { URL.revokeObjectURL(renderPdfUrl); setRenderPdfUrl(null); }
+    setRenderIsImage(false);
     setRenderError(null);
     setSignError(null);
 
@@ -498,8 +500,10 @@ function StaffPortalPoliciesView({
         if (!r) throw new Error("Render request lost");
         if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `Render HTTP ${r.status}`);
         const ct = r.headers.get("content-type") || "";
-        if (ct.startsWith("application/pdf")) {
+        if (ct.startsWith("application/pdf") || ct.startsWith("image/")) {
+          // PDF and image policies come back as the file itself (2026-10-16: more file types).
           const blob = await r.blob();
+          setRenderIsImage(ct.startsWith("image/"));
           setRenderPdfUrl(URL.createObjectURL(blob));
         } else {
           const d = await r.json();
@@ -514,6 +518,7 @@ function StaffPortalPoliciesView({
     setMeta(null);
     setRenderHtml(null);
     if (renderPdfUrl) { URL.revokeObjectURL(renderPdfUrl); setRenderPdfUrl(null); }
+    setRenderIsImage(false);
     setRenderError(null);
     setSignError(null);
   }
@@ -597,7 +602,15 @@ function StaffPortalPoliciesView({
                 dangerouslySetInnerHTML={{ __html: renderHtml }}
               />
             )}
-            {renderPdfUrl !== null && (
+            {renderPdfUrl !== null && renderIsImage && (
+              <img
+                src={renderPdfUrl}
+                alt={meta?.title || "Policy"}
+                className="max-w-full max-h-[70vh] mx-auto border rounded"
+                data-testid="sp-policies-detail-image"
+              />
+            )}
+            {renderPdfUrl !== null && !renderIsImage && (
               <object
                 data={renderPdfUrl}
                 type="application/pdf"

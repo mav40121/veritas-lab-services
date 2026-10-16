@@ -75,6 +75,10 @@ jobs:
         # state and handoff single-use; PKCE; domain, no-account and support-account refusals; required
         # SSO blocks password sign-in and password reset for its domain.
         run: npm run test:sso
+      - name: Run document formats integration test
+        # VeritaPolicy/VeritaDC: XLSX, XLS, PNG, JPG and TXT besides DOCX/PDF/HTML; format from the file's bytes;
+        # escaped previews; upload -> render -> download per format; unsupported files refused with a clear 400.
+        run: npm run test:document-formats
       - name: Run Content-Security-Policy integration test
         # server/securityHeaders.ts: inline-script hashes (CRLF-normalized), no unsafe-inline/eval, Report-Only
         # unless CSP_ENFORCE=1, privacy-safe report parsing, /api/csp-report counting, secret-gated admin read.
