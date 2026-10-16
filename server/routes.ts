@@ -195,6 +195,7 @@ function headerRowHeight(headers: string[], colWidths: number[]): number {
 }
 
 import { logAudit } from "./audit";
+import { normalizeChecklistItems } from "@shared/competencyChecklist";
 import { buildCompetencyRegisterRows, generateCompetencyRegisterExcel } from "./competencyRegisterExcel";
 import {
   deriveCompetencyStatus, competencyView,
@@ -23348,6 +23349,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const { name, department, type, mapId, methodGroups, checklistItems } = req.body;
       if (!name?.trim()) return res.status(400).json({ error: "Program name required" });
       if (!["technical", "waived", "nontechnical"].includes(type)) return res.status(400).json({ error: "Invalid type" });
+      const checklist = type === "nontechnical" && Array.isArray(checklistItems) ? normalizeChecklistItems(checklistItems) : null;
+      if (checklist && "error" in checklist) return res.status(400).json({ error: checklist.error });
       const now = new Date().toISOString();
       const dataUserId = req.ownerUserId ?? req.user.userId;
       const result = (db as any).$client.prepare(
@@ -23377,14 +23380,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       }
 
       // Insert checklist items for nontechnical type
-      if (type === "nontechnical" && Array.isArray(checklistItems)) {
-        const stmt = (db as any).$client.prepare(
-          "INSERT INTO competency_checklist_items (program_id, label, description, sort_order) VALUES (?, ?, ?, ?)"
-        );
-        checklistItems.forEach((item: any, idx: number) => {
-          stmt.run(programId, item.label || String.fromCharCode(65 + idx), item.description, idx);
-        });
-      }
+      if (checklist) replaceChecklistItems((db as any).$client, programId, checklist.items);
 
       res.json({ id: programId, name: name.trim(), department: department || "Chemistry", type, map_id: mapId || null, created_at: now, updated_at: now });
     } catch (e: any) {
@@ -23400,6 +23396,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const { name, department, type, mapId, methodGroups, checklistItems } = req.body;
       if (!name?.trim()) return res.status(400).json({ error: "Program name required" });
       if (!["technical", "waived", "nontechnical"].includes(type)) return res.status(400).json({ error: "Invalid type" });
+      const checklist = type === "nontechnical" && Array.isArray(checklistItems) ? normalizeChecklistItems(checklistItems) : null;
+      if (checklist && "error" in checklist) return res.status(400).json({ error: checklist.error });
       const now = new Date().toISOString();
       const dataUserId = req.ownerUserId ?? req.user.userId;
       const result = (db as any).$client.prepare(
@@ -23427,14 +23425,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         }
       }
 
-      if (type === "nontechnical" && Array.isArray(checklistItems)) {
-        const stmt = (db as any).$client.prepare(
-          "INSERT INTO competency_checklist_items (program_id, label, description, sort_order) VALUES (?, ?, ?, ?)"
-        );
-        checklistItems.forEach((item: any, idx: number) => {
-          stmt.run(programId, item.label || String.fromCharCode(65 + idx), item.description, idx);
-        });
-      }
+      if (checklist) replaceChecklistItems((db as any).$client, programId, checklist.items);
 
       res.json({ id: programId, name: name.trim(), department: department || "Chemistry", type, map_id: mapId || null, created_at: now, updated_at: now });
     } catch (e: any) {
@@ -23743,27 +23734,39 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     for (const g of existing) if (!kept.has(g.id)) del.run(g.id);
   };
 
+  // Non-technical checklist items, replaced as a whole in one transaction (items are an ordered list;
+  // saved assessments keep their own copy of the items they were done on, so nothing else changes).
+  const replaceChecklistItems = (client: any, programId: number | string, items: { label: string; description: string }[]) => {
+    client.transaction(() => {
+      client.prepare("DELETE FROM competency_checklist_items WHERE program_id = ?").run(programId);
+      const ins = client.prepare("INSERT INTO competency_checklist_items (program_id, label, description, sort_order) VALUES (?, ?, ?, ?)");
+      items.forEach((it, idx) => ins.run(programId, it.label, it.description, idx));
+    })();
+  };
+  const saveChecklistEdit = (req: any, program: any, items: { label: string; description: string }[]) => {
+    const client = (db as any).$client;
+    const before = client.prepare("SELECT label, description FROM competency_checklist_items WHERE program_id = ? ORDER BY sort_order").all(program.id);
+    replaceChecklistItems(client, program.id, items);
+    logAudit({ userId: req.userId ?? req.user?.userId, ownerUserId: req.ownerUserId ?? req.userId ?? req.user?.userId, module: "veritacomp", action: "update", entityType: "program_checklist", entityId: String(program.id), entityLabel: program.name || undefined, before: { items: before }, after: { items }, ipAddress: req.ip });
+  };
+
   app.put("/api/competency/programs/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const program = userCanAccessLabRow('competency_programs', req.params.id, req);
     if (!program) return res.status(404).json({ error: "Program not found" });
     const { name, department, methodGroups, checklistItems } = req.body;
+    // 2026-10-16 (BUG-064): the program's checklist is now edited after the program exists (Overview tab).
+    const checklist = Array.isArray(checklistItems) ? normalizeChecklistItems(checklistItems) : null;
+    if (checklist && "error" in checklist) return res.status(400).json({ error: checklist.error });
+    if (checklist && program.type !== "nontechnical") return res.status(400).json({ error: "Only a non-technical competency has a checklist." });
     const now = new Date().toISOString();
     if (name) (db as any).$client.prepare("UPDATE competency_programs SET name = ?, updated_at = ? WHERE id = ?").run(name.trim(), now, req.params.id);
     if (department) (db as any).$client.prepare("UPDATE competency_programs SET department = ?, updated_at = ? WHERE id = ?").run(department, now, req.params.id);
     // Save method groups, keeping the ids of groups that stay (see saveMethodGroupsKeepingIds).
     if (Array.isArray(methodGroups)) saveMethodGroupsKeepingIds((db as any).$client, req.params.id, methodGroups);
     // Replace checklist items
-    if (Array.isArray(checklistItems)) {
-      (db as any).$client.prepare("DELETE FROM competency_checklist_items WHERE program_id = ?").run(req.params.id);
-      const stmt = (db as any).$client.prepare(
-        "INSERT INTO competency_checklist_items (program_id, label, description, sort_order) VALUES (?, ?, ?, ?)"
-      );
-      checklistItems.forEach((item: any, idx: number) => {
-        stmt.run(req.params.id, item.label || String.fromCharCode(65 + idx), item.description, idx);
-      });
-    }
+    if (checklist) saveChecklistEdit(req, program, checklist.items);
     (db as any).$client.prepare("UPDATE competency_programs SET updated_at = ? WHERE id = ?").run(now, req.params.id);
     res.json({ ok: true });
   });
@@ -23873,6 +23876,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const { name, department, type, mapId, methodGroups, checklistItems } = req.body;
     if (!name?.trim()) return res.status(400).json({ error: "Program name required" });
     if (!["technical", "waived", "nontechnical"].includes(type)) return res.status(400).json({ error: "Invalid type" });
+    const checklist = type === "nontechnical" && Array.isArray(checklistItems) ? normalizeChecklistItems(checklistItems) : null;
+    if (checklist && "error" in checklist) return res.status(400).json({ error: checklist.error });
     const now = new Date().toISOString();
     const labId = req.scope.labId;
     const ownerRow = (db as any).$client.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(labId) as any;
@@ -23892,14 +23897,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // BUG-050 (2026-10-14): save the non-technical checklist items sent with the new program, as the unscoped route
     // always did. This lab-scoped port dropped them, so every non-technical program created in a lab had an empty
     // checklist and its assessments had nothing to check off (Michael's "Plating Media", lab 3).
-    if (type === "nontechnical" && Array.isArray(checklistItems)) {
-      const stmt = (db as any).$client.prepare(
-        "INSERT INTO competency_checklist_items (program_id, label, description, sort_order) VALUES (?, ?, ?, ?)"
-      );
-      checklistItems.forEach((item: any, idx: number) => {
-        stmt.run(programId, item.label || String.fromCharCode(65 + idx), item.description, idx);
-      });
-    }
+    if (checklist) replaceChecklistItems((db as any).$client, programId, checklist.items);
     res.json({ id: programId, name: name.trim(), department: department || "Chemistry", type, map_id: mapId || null, created_at: now, updated_at: now });
   });
 
@@ -23936,20 +23934,16 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     ).get(req.params.id, req.scope.labId);
     if (!program) return res.status(404).json({ error: "Program not found" });
     const { name, department, methodGroups, checklistItems } = req.body;
+    // 2026-10-16 (BUG-064): the program's checklist is now edited after the program exists (Overview tab).
+    const checklist = Array.isArray(checklistItems) ? normalizeChecklistItems(checklistItems) : null;
+    if (checklist && "error" in checklist) return res.status(400).json({ error: checklist.error });
+    if (checklist && program.type !== "nontechnical") return res.status(400).json({ error: "Only a non-technical competency has a checklist." });
     const now = new Date().toISOString();
     if (name) (db as any).$client.prepare("UPDATE competency_programs SET name = ?, updated_at = ? WHERE id = ?").run(name.trim(), now, req.params.id);
     if (department) (db as any).$client.prepare("UPDATE competency_programs SET department = ?, updated_at = ? WHERE id = ?").run(department, now, req.params.id);
     // Save method groups, keeping the ids of groups that stay (see saveMethodGroupsKeepingIds).
     if (Array.isArray(methodGroups)) saveMethodGroupsKeepingIds((db as any).$client, req.params.id, methodGroups);
-    if (Array.isArray(checklistItems)) {
-      (db as any).$client.prepare("DELETE FROM competency_checklist_items WHERE program_id = ?").run(req.params.id);
-      const stmt = (db as any).$client.prepare(
-        "INSERT INTO competency_checklist_items (program_id, label, description, sort_order) VALUES (?, ?, ?, ?)"
-      );
-      checklistItems.forEach((item: any, idx: number) => {
-        stmt.run(req.params.id, item.label || String.fromCharCode(65 + idx), item.description, idx);
-      });
-    }
+    if (checklist) saveChecklistEdit(req, program, checklist.items);
     (db as any).$client.prepare("UPDATE competency_programs SET updated_at = ? WHERE id = ?").run(now, req.params.id);
     res.json({ ok: true });
   });
