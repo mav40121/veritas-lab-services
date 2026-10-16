@@ -1401,15 +1401,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Public one-click demo login (VeritaStock deployment only).
   registerDemoLogin(app);
 
-  // ── DEMO COMPETENCY DATA BACKFILL (runs once on startup) ────────────────
-  try {
-    (db as any).$client.prepare(`UPDATE competency_assessment_items SET el1_specimen_id = '0326:C147', el1_observer_initials = 'MV' WHERE el1_specimen_id IS NULL OR el1_specimen_id = ''`).run();
-    (db as any).$client.prepare(`UPDATE competency_assessment_items SET el2_evidence = '0326:C147 - Sodium 141 mmol/L reported correctly, critical value callback documented per SOP', el2_date = '2026-01-16' WHERE el2_evidence IS NULL OR el2_evidence = '' OR el2_evidence = 'Reviewed result reporting including critical values'`).run();
-    (db as any).$client.prepare(`UPDATE competency_assessment_items SET el5_sample_type = 'CAP PT Survey', el5_sample_id = 'CAP-2026-C-01', el5_acceptable = 1 WHERE el5_sample_id IS NULL OR el5_sample_id = ''`).run();
-    (db as any).$client.prepare(`UPDATE competency_assessment_items SET el6_quiz_id = 'Q-AU5800-001', el6_score = 100, el6_date_taken = '2026-01-18' WHERE el6_quiz_id IS NULL OR el6_quiz_id = ''`).run();
-  } catch (e: any) {
-    console.log("Demo competency backfill skipped:", e.message);
-  }
+  // BUG-068 (2026-10-16): a "demo competency data backfill" used to run here on every start. It filled
+  // blank element fields in EVERY lab's competency_assessment_items with made-up evidence (specimen
+  // 0326:C147 observed by MV, a sodium result, PT sample CAP-2026-C-01, quiz Q-AU5800-001 scored 100).
+  // Removed. Nothing at startup may write record values into a lab; the demo lab gets its data from
+  // server/seedDemo.ts, scoped to the demo account. tests/integration/no-boot-competency-backfill.test.ts pins it.
 
   // ── ADMIN ────────────────────────────────────────────────────────────────
   const ADMIN_SECRET = process.env.ADMIN_SECRET!;
