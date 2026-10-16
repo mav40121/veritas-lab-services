@@ -10,7 +10,7 @@ export default function TrustPage() {
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-16">
       <h1 className="font-serif text-3xl font-bold mb-2">Trust & Security</h1>
-      <p className="text-sm text-muted-foreground mb-8">Effective Date: October 15, 2026 · Veritas Lab Services, LLC</p>
+      <p className="text-sm text-muted-foreground mb-8">Effective Date: October 16, 2026 · Veritas Lab Services, LLC</p>
 
       <div className="prose prose-sm dark:prose-invert max-w-none space-y-6 text-sm leading-relaxed">
 
@@ -49,7 +49,7 @@ export default function TrustPage() {
           <p>The VeritaResponse&trade; finding-management module enforces this in-app: it is labeled a "PHI-free zone" and instructs users to reference patients or samples by internal case number, never by name or MRN. Specimen concentration values entered into VeritaCheck&trade; should likewise be de-identified before entry.</p>
           <p>We also check for patient information at four points, using one set of patterns (a Social Security number, or a labeled medical record number, date of birth or patient name):</p>
           <ul className="list-disc pl-5 space-y-1">
-            <li><strong>At sign-up:</strong> every account acknowledges that VeritaAssure&trade; is not for patient information, and the acknowledgment is recorded with its date and time.</li>
+            <li><strong>At sign-up:</strong> signing up requires acknowledging that VeritaAssure&trade; is not for patient information, and the acknowledgment is recorded with its date and time.</li>
             <li><strong>As you type:</strong> when the text in a field looks like patient information, a warning asks you to remove it. The check runs in your browser and the text is not sent anywhere.</li>
             <li><strong>On upload:</strong> every stored upload is checked. Word, Excel, text and web files are read, and if one looks like it carries patient identifiers, the person who uploaded it is asked to remove them and upload a corrected version. Blank form templates (for example "Patient Name: ____") do not trigger it.</li>
             <li><strong>Nightly:</strong> the whole database is scanned for the same patterns. Each run is logged with counts only, never the matched text, and any finding comes to Veritas so we can work with the lab to remove it.</li>
@@ -88,7 +88,7 @@ export default function TrustPage() {
 
         <section>
           <h2 className="font-semibold text-base mb-2">9. Availability</h2>
-          <p>Our uptime target is 99.5% per month. An independent monitoring service checks the site from outside our hosting every 5 minutes, and the results are public on our status page: [STATUS PAGE LINK: pending].</p>
+          <p>Our uptime target is 99.5% per month. An independent monitoring service checks the site from outside our hosting every 5 minutes, and the results are public on our status page: <a href="https://stats.uptimerobot.com/NkcaSEJU2B" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">stats.uptimerobot.com/NkcaSEJU2B</a>.</p>
         </section>
 
         <section>
