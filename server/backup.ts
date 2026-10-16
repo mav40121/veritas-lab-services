@@ -259,6 +259,11 @@ const SCOPE = backupScope();
 export const TIER_PREFIX: Record<BackupTier, string> = { nightly: `${SCOPE}veritas-backup-`, hourly: `${SCOPE}veritas-hourly-` };
 export const TIER_RETENTION_DAYS: Record<BackupTier, number> = { nightly: RETENTION_DAYS, hourly: 7 };
 
+// Local temp file for an upload. Flattened: a scoped key (veritastock/...) must not point at a missing folder.
+export function backupTempPath(key: string, dir = "/tmp"): string {
+  return `${dir}/${key.replace(/\//g, "_")}`;
+}
+
 export function backupKey(tier: BackupTier, when: Date = new Date()): string {
   return `${TIER_PREFIX[tier]}${when.toISOString().replace(/[:.]/g, "-")}.db.gz`;
 }
@@ -329,7 +334,9 @@ export async function runBackup(tier: BackupTier) {
     if (tier === "nightly") sqlite.pragma("wal_checkpoint(TRUNCATE)");
 
     const filename = backupKey(tier);
-    const tmpPath = `/tmp/${filename}`;
+    // The key can carry a folder (another service's scope, BUG-082), which would point the local temp file at a
+    // directory that does not exist; the temp file only needs a unique flat name.
+    const tmpPath = backupTempPath(filename);
     const compressedBytes = await snapshotToGz(sqlite, tmpPath);
 
     await client.send(new PutObjectCommand({
