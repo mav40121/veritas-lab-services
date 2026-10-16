@@ -13,7 +13,7 @@ import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { db } from "../../server/db";
-import { backupKey, keysToPrune, snapshotToGz, verifyBackupGzFile, runHourlyBackup, TIER_PREFIX } from "../../server/backup";
+import { backupKey, keysToPrune, snapshotToGz, verifyBackupGzFile, runHourlyBackup, TIER_PREFIX, backupScope } from "../../server/backup";
 
 (globalThis as any).require ??= createRequire(import.meta.url);
 
@@ -27,6 +27,10 @@ async function main() {
   const when = new Date("2026-10-16T13:30:00.000Z");
   check("1a. hourly key", backupKey("hourly", when) === "veritas-hourly-2026-10-16T13-30-00-000Z.db.gz", backupKey("hourly", when));
   check("1b. nightly key keeps the original prefix", backupKey("nightly", when).startsWith("veritas-backup-") && TIER_PREFIX.nightly === "veritas-backup-");
+  // BUG-082: only the main app writes the plain names; any other service (VeritaStock) writes into its own folder.
+  check("1c. the main app keeps the plain names", backupScope({ RAILWAY_SERVICE_NAME: "radiant-quietude" }) === "" && backupScope({}) === "", JSON.stringify([backupScope({ RAILWAY_SERVICE_NAME: "radiant-quietude" }), backupScope({})]));
+  check("1d. the VeritaStock service writes into its own folder", backupScope({ RAILWAY_SERVICE_NAME: "VeritaStock" }) === "veritastock/", backupScope({ RAILWAY_SERVICE_NAME: "VeritaStock" }));
+  check("1e. a scoped copy is never listed or pruned as a main-app copy", !"veritastock/veritas-hourly-x.db.gz".startsWith(TIER_PREFIX.hourly) && keysToPrune("hourly", [{ Key: "veritastock/veritas-hourly-old.db.gz", LastModified: new Date(0) }]).length === 0, "");
 
   const now = Date.parse("2026-10-16T12:00:00Z");
   const day = 24 * 60 * 60 * 1000;

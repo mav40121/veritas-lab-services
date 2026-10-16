@@ -244,7 +244,19 @@ export function checkBackupIntegrity(gzippedFileBytes: number): { ok: boolean; c
 //          restore self-test keep working.
 // hourly:  kept 7 days, so at most one hour of work can be lost (the nightly tier alone allowed up to 24).
 export type BackupTier = "nightly" | "hourly";
-export const TIER_PREFIX: Record<BackupTier, string> = { nightly: "veritas-backup-", hourly: "veritas-hourly-" };
+// BUG-082 (2026-10-16): the VeritaStock service runs this same code against the same bucket, so its small database
+// was saved under the same names as VeritaAssure's, every night since it went live (130 of 274 copies) and every
+// hour since today. Anything that picks "the newest backup" could pick the wrong database. Every service other
+// than the main app now writes into its own folder; the main app keeps its existing names, so its history and
+// its pruning are unchanged.
+export function backupScope(env: Record<string, string | undefined> = process.env): string {
+  const svc = String(env.RAILWAY_SERVICE_NAME || "").trim();
+  const main = String(env.BACKUP_MAIN_SERVICE || "radiant-quietude").trim();
+  if (!svc || svc === main) return "";
+  return svc.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") + "/";
+}
+const SCOPE = backupScope();
+export const TIER_PREFIX: Record<BackupTier, string> = { nightly: `${SCOPE}veritas-backup-`, hourly: `${SCOPE}veritas-hourly-` };
 export const TIER_RETENTION_DAYS: Record<BackupTier, number> = { nightly: RETENTION_DAYS, hourly: 7 };
 
 export function backupKey(tier: BackupTier, when: Date = new Date()): string {
