@@ -13,7 +13,7 @@ import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { db } from "../../server/db";
-import { backupKey, keysToPrune, snapshotToGz, verifyBackupGzFile, runHourlyBackup, TIER_PREFIX, backupScope } from "../../server/backup";
+import { backupKey, keysToPrune, snapshotToGz, verifyBackupGzFile, runHourlyBackup, TIER_PREFIX, backupScope, backupTempPath } from "../../server/backup";
 
 (globalThis as any).require ??= createRequire(import.meta.url);
 
@@ -31,6 +31,9 @@ async function main() {
   check("1c. the main app keeps the plain names", backupScope({ RAILWAY_SERVICE_NAME: "radiant-quietude" }) === "" && backupScope({}) === "", JSON.stringify([backupScope({ RAILWAY_SERVICE_NAME: "radiant-quietude" }), backupScope({})]));
   check("1d. the VeritaStock service writes into its own folder", backupScope({ RAILWAY_SERVICE_NAME: "VeritaStock" }) === "veritastock/", backupScope({ RAILWAY_SERVICE_NAME: "VeritaStock" }));
   check("1e. a scoped copy is never listed or pruned as a main-app copy", !"veritastock/veritas-hourly-x.db.gz".startsWith(TIER_PREFIX.hourly) && keysToPrune("hourly", [{ Key: "veritastock/veritas-hourly-old.db.gz", LastModified: new Date(0) }]).length === 0, "");
+  // BUG-082 follow-up: the VeritaStock hourly backup failed with "directory does not exist" because the temp file
+  // was named after the scoped key. The temp path must be flat.
+  check("1f. a scoped key gives a flat temp file path", backupTempPath("veritastock/veritas-hourly-x.db.gz") === "/tmp/veritastock_veritas-hourly-x.db.gz" && backupTempPath("veritas-hourly-x.db.gz") === "/tmp/veritas-hourly-x.db.gz", backupTempPath("veritastock/veritas-hourly-x.db.gz"));
 
   const now = Date.parse("2026-10-16T12:00:00Z");
   const day = 24 * 60 * 60 * 1000;
