@@ -4832,7 +4832,7 @@ return (
                 }}>
                   <FlaskConical size={13} className="mr-1.5" />Load Demo Data
                 </Button>
-                <span className="text-xs text-muted-foreground">Milford creatinine calibration verification example</span>
+                <span className="text-xs text-muted-foreground">Demo Creatinine Data</span>
               </div>
             </TabsContent>
           </Tabs>
