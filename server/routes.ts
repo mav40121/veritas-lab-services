@@ -27,6 +27,7 @@ import { Resend } from "resend";
 import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCompetencyPDF, generateEmployeeCompetencyRecordPDF, generateCMS209PDF, generateVeritaPTPDF, generateCms2567PDF, validateCms2567POC, generateCapResponsePDF, validateCapResponse, generateTjcEscPDF, validateTjcEsc, generateColaResponsePDF, validateColaResponse, generateAabbNerPDF, validateAabbNer, generateInternalNcePDF, validateInternalNce, generateCeuTranscriptPDF } from "./pdfReport";
 import { storePdfToken, claimPdfToken } from "./pdfTokens";
 import { labLocalDate } from "./dateLocal";
+import { studyRowToClient, resolveInstrumentDisplay } from "./studyPdf";
 import { scanPhi } from "./phiScan";
 import { evaluateQcRun, rulesForRun } from "./qcWestgard";
 import { resolveBasis, computeBasis, basisConfig, sampleStats, type QcBasis } from "./qcBasis";
@@ -12226,78 +12227,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // study.dataPoints, study.teaIsPercentage, etc.) — without this map the
   // dashboard renders "TEa: ±NaN%" and StudyResultsPage throws inside
   // JSON.parse(undefined dataPoints), tripping the ErrorBoundary.
-  const studyRowToClient = (row: any): any => {
-    if (!row) return row;
-    return {
-      id: row.id,
-      userId: row.user_id,
-      createdByUserId: row.created_by_user_id,
-      testName: row.test_name,
-      instrument: row.instrument,
-      analyst: row.analyst,
-      date: row.date,
-      studyType: row.study_type,
-      cliaAllowableError: row.clia_allowable_error,
-      dataPoints: row.data_points,
-      instruments: row.instruments,
-      status: row.status,
-      teaIsPercentage: row.tea_is_percentage,
-      teaUnit: row.tea_unit,
-      cliaAbsoluteFloor: row.clia_absolute_floor,
-      cliaAbsoluteUnit: row.clia_absolute_unit,
-      // Frozen at write time. NULL on legacy rows = render the old
-      // value-only TEa line (no parenthetical).
-      cliaPresetLabel: row.clia_preset_label,
-      // Director's explicit Coverage attribution (Phase 1/2 allocation work).
-      coverageAnalyte: row.coverage_analyte,
-      instrumentMeta: row.instrument_meta,
-      // Phase 1 simple-precision parity fields (added 2026-05-20). Mapped
-      // from snake_case DB columns to camelCase so the client + PDF
-      // builder see them on lab-scoped GETs (which use raw SQL rather
-      // than drizzle's auto-mapped Study type).
-      vendorSd: row.vendor_sd,
-      vendorSdConcentration: row.vendor_sd_concentration,
-      targetMean: row.target_mean,
-      targetCv: row.target_cv,
-      // EE Day 2 QC traceability fields (2026-05-20).
-      controlLot: row.control_lot,
-      reagentLot: row.reagent_lot,
-      comment: row.comment,
-      resultUnits: row.result_units,
-      material: row.material,
-      // 2026-06-09 (Michael L feedback): optional per-study AMR.
-      // Blank values disable the coverage analysis; renderer
-      // short-circuits via shouldRenderAmrCoverage.
-      amrLow: row.amr_low,
-      amrHigh: row.amr_high,
-      amrUnits: row.amr_units,
-      censoringPolicy: row.censoring_policy,
-      lifecycle_state: row.lifecycle_state,
-      // 2026-07-31 (San Carlos): the sign-off identity fields were added to the
-      // studies table + written by the finalize handler, but never mapped here,
-      // so every lab-scoped GET dropped them. Result: the study page rendered
-      // "Signed Off by [blank] on [blank]" and the PDF director-review block had
-      // no signer to print, even though the DB held finalized_signature.
-      finalized_at: row.finalized_at,
-      finalized_by_user_id: row.finalized_by_user_id,
-      finalized_signature: row.finalized_signature,
-      amends_study_id: row.amends_study_id,
-      archived_at: row.archived_at,
-      archived_by_user_id: row.archived_by_user_id,
-      archive_reason: row.archive_reason,
-      verdict_override_justification: row.verdict_override_justification,
-      verdict_override_at: row.verdict_override_at,
-      verdict_override_by_user_id: row.verdict_override_by_user_id,
-      verdict_before_override: row.verdict_before_override,
-      // Sign-off group membership. Needed by the My Studies list so a study
-      // already assigned to a VeritaCheck sign-off group shows its group at a
-      // glance (was previously dropped here, so the client's "In group" cue
-      // never rendered even after a study was added).
-      signoff_group_id: row.signoff_group_id,
-      createdAt: row.created_at,
-      lab_id: row.lab_id,
-    };
-  };
+  // Moved to server/studyPdf.ts (2026-10-16) so the export-all job shapes studies exactly like these routes.
 
   app.get("/api/labs/:labId/studies", authMiddleware, labScopeMiddleware, (req: any, res) => {
     // 2026-06-01: drafts pin to the top of the dashboard regardless of
@@ -13115,23 +13045,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
       if (cliaLabName) { (study as any)._labName = cliaLabName; }
 
-      // Resolve VeritaMap-linked instrument data for report rendering
+      // Resolve VeritaMap-linked instrument data for report rendering (shared with export-all: server/studyPdf.ts)
       if (study.instrumentMeta) {
-        try {
-          const meta = typeof study.instrumentMeta === "string" ? JSON.parse(study.instrumentMeta) : study.instrumentMeta;
-          const resolved: Record<string, { model: string; nickname: string | null; serial_number: string | null }> = {};
-          for (const [idx, entry] of Object.entries(meta) as [string, any][]) {
-            if (entry?.instrument_id) {
-              const row = (db as any).$client.prepare("SELECT instrument_name, nickname, serial_number FROM veritamap_instruments WHERE id = ?").get(entry.instrument_id) as any;
-              if (row) {
-                resolved[idx] = { model: row.instrument_name, nickname: row.nickname || null, serial_number: row.serial_number || null };
-              } else {
-                resolved[idx] = { model: entry.model, nickname: entry.nickname, serial_number: entry.serial_number };
-              }
-            }
-          }
-          (study as any)._instrumentDisplay = resolved;
-        } catch {}
+        const resolved = resolveInstrumentDisplay((db as any).$client, study.instrumentMeta);
+        if (resolved) (study as any)._instrumentDisplay = resolved;
       }
 
       const pdfBuffer = await generatePDFBuffer(study, results, cliaNumber, preferredStandards as any, licenseCtx ?? licenseCtxFromReq(req));
