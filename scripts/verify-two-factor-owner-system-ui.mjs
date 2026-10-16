@@ -65,7 +65,7 @@ let ownerToken = reg.body.token, ownerUser = reg.body.user, key = "";
   check("1a. before Turn on, the owner is told it covers both labs and the people in them", warn.includes("As the lab owner") && warn.includes("all 2 of your labs") && warn.includes("Riverside Outpatient Lab (QA)") && warn.includes("1 other person"), warn);
   await card.screenshot({ path: `${OUT}/two-factor-owner-off-light.png` });
   await card.getByRole("button", { name: "Turn on" }).click();
-  await page.waitForFunction(() => /[A-Z2-7]{4}/.test(document.querySelector('[data-testid="mfa-key"]')?.textContent || ""));
+  await page.getByTestId("mfa-key").filter({ hasText: /[A-Z2-7]{4}/ }).waitFor(); // selector wait: the enforced CSP blocks waitForFunction's eval
   key = (await page.getByTestId("mfa-key").innerText()).trim();
   await page.getByTestId("mfa-setup-code").click();
   await page.keyboard.type(hotp(key, step()), { delay: 40 });
