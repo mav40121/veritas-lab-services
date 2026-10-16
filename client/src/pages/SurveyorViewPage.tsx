@@ -72,6 +72,7 @@ export default function SurveyorViewPage() {
   const [viewDoc, setViewDoc] = useState<SurveyorDoc | null>(null);
   const [viewHtml, setViewHtml] = useState<string>("");
   const [viewPdfUrl, setViewPdfUrl] = useState<string>("");
+  const [viewIsImage, setViewIsImage] = useState(false);
   const [viewTampered, setViewTampered] = useState(false);
   const [viewSignoffs, setViewSignoffs] = useState<Signoff[]>([]);
   const [viewStaffSignatures, setViewStaffSignatures] = useState<any[]>([]);
@@ -81,6 +82,7 @@ export default function SurveyorViewPage() {
     setViewDoc(doc);
     setViewHtml("");
     setViewPdfUrl("");
+    setViewIsImage(false);
     setViewTampered(false);
     setViewSignoffs([]);
     setViewStaffSignatures([]);
@@ -90,14 +92,16 @@ export default function SurveyorViewPage() {
         .then((r) => r.json())
         .then((b) => { setViewSignoffs(b?.signoffs || []); setViewStaffSignatures(b?.staffSignatures || []); })
         .catch(() => {});
-      if (doc.current_file_format === "pdf") {
-        const res = await fetch(`/api/surveyor/${token}/policies/${doc.id}/render`);
+      // PDF and images come back as the file itself, everything else as JSON with HTML (2026-10-16).
+      const res = await fetch(`/api/surveyor/${token}/policies/${doc.id}/render`);
+      const ctype = res.headers.get("Content-Type") || "";
+      if (!ctype.includes("application/json")) {
         if (!res.ok) throw new Error("Render failed");
         if (res.headers.get("X-VeritaPolicy-Tamper") === "yes") setViewTampered(true);
         const blob = await res.blob();
+        setViewIsImage(ctype.startsWith("image/"));
         setViewPdfUrl(URL.createObjectURL(blob));
       } else {
-        const res = await fetch(`/api/surveyor/${token}/policies/${doc.id}/render`);
         const body = await res.json();
         if (!res.ok) throw new Error(body?.error || "Render failed");
         setViewHtml(body.html || "");
@@ -115,6 +119,7 @@ export default function SurveyorViewPage() {
     setViewDoc(null);
     setViewHtml("");
     setViewPdfUrl("");
+    setViewIsImage(false);
     setViewTampered(false);
     setViewSignoffs([]);
   };
@@ -316,6 +321,8 @@ export default function SurveyorViewPage() {
               <div className="p-6 flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="animate-spin" size={14} /> Loading...
               </div>
+            ) : viewPdfUrl && viewIsImage ? (
+              <img src={viewPdfUrl} alt={viewDoc?.title || "Policy"} className="max-w-full max-h-[70vh] mx-auto border rounded" />
             ) : viewPdfUrl ? (
               <iframe
                 src={viewPdfUrl}

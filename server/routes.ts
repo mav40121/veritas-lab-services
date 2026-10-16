@@ -7821,7 +7821,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       ).get(documentId, labId) as any;
       if (!row) return res.status(404).json({ error: "Not found" });
 
-      const { readVersionBuffer, hashBuffer, renderDocxToHtml } = require("./veritapolicyApproval");
+      const { readVersionBuffer, hashBuffer, renderDocxToHtml, inlineDocContentType, htmlForStoredFormat } = require("./veritapolicyApproval");
       let buffer: Buffer;
       try {
         buffer = readVersionBuffer(row.file_path);
@@ -7839,15 +7839,15 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           return res.status(500).json({ error: "Render failed" });
         }
       }
-      if (row.file_format === "pdf") {
+      if (inlineDocContentType(row.file_format)) {
         if (tampered) res.setHeader("X-VeritaPolicy-Tamper", "yes");
         res.setHeader("Access-Control-Expose-Headers", "X-VeritaPolicy-Tamper");
-        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader("Content-Type", inlineDocContentType(row.file_format) as string);
         res.setHeader("Content-Disposition", "inline");
         return res.send(buffer);
       }
       // html
-      res.json({ format: "html", html: buffer.toString("utf-8"), version_id: row.version_id, file_hash: actualHash, tampered: !!tampered });
+      res.json({ format: "html", html: await htmlForStoredFormat(buffer, row.file_format), version_id: row.version_id, file_hash: actualHash, tampered: !!tampered });
     } catch (err: any) {
       console.error("[staff-portal-session/policies render] error:", err);
       return res.status(500).json({ error: err.message || "policy_render_failed" });
@@ -37774,6 +37774,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     canonicalFormatFromMimeAndName,
     extractTitle,
     renderDocxToHtml,
+    inlineDocContentType,
+    htmlForStoredFormat,
+    DOC_MIME,
+    ACCEPTED_DOC_DESCRIPTION,
     writeAuditLog,
     canUserApproveStep,
     canUserApproveStepDelegated,
@@ -38354,11 +38358,11 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     policyUpload.single("file"),
     async (req: any, res) => {
       if (!req.file) return res.status(400).json({ error: "File required" });
-      const format = canonicalFormatFromMimeAndName(req.file.mimetype, req.file.originalname);
+      const format = canonicalFormatFromMimeAndName(req.file.mimetype, req.file.originalname, req.file.buffer);
       if (!format) {
         return res
           .status(400)
-          .json({ error: "Only DOCX, PDF, or HTML files are accepted" });
+          .json({ error: `Accepted files: ${ACCEPTED_DOC_DESCRIPTION}. The file's contents must match its type.` });
       }
       const sqlite = (db as any).$client;
       const labId = req.scope.labId;
@@ -38567,12 +38571,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         });
         res.setHeader("X-VeritaPolicy-Tamper", "yes");
       }
-      const mime =
-        row.file_format === "pdf"
-          ? "application/pdf"
-          : row.file_format === "docx"
-          ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-          : "text/html";
+      const mime = (DOC_MIME as any)[row.file_format] || "application/octet-stream";
       const safeTitle = String(row.title || "policy").replace(/[^A-Za-z0-9_-]+/g, "_");
       res.setHeader("Content-Type", mime);
       res.setHeader(
@@ -38696,17 +38695,17 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           return res.status(500).json({ error: "Render failed" });
         }
       }
-      if (row.file_format === "pdf") {
+      if (inlineDocContentType(row.file_format)) {
         if (tampered) res.setHeader("X-VeritaPolicy-Tamper", "yes");
         res.setHeader("Access-Control-Expose-Headers", "X-VeritaPolicy-Tamper");
-        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader("Content-Type", inlineDocContentType(row.file_format) as string);
         res.setHeader("Content-Disposition", "inline");
         return res.send(buffer);
       }
       // html
       res.json({
         format: "html",
-        html: fillPlaceholders(buffer.toString("utf-8")),
+        html: fillPlaceholders(await htmlForStoredFormat(buffer, row.file_format)),
         messages: [],
         tampered: !!tampered,
       });
@@ -40057,16 +40056,16 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         return res.status(500).json({ error: "Render failed" });
       }
     }
-    if (row.file_format === "pdf") {
+    if (inlineDocContentType(row.file_format)) {
       if (tampered) res.setHeader("X-VeritaPolicy-Tamper", "yes");
       res.setHeader("Access-Control-Expose-Headers", "X-VeritaPolicy-Tamper");
-      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Type", inlineDocContentType(row.file_format) as string);
       res.setHeader("Content-Disposition", "inline");
       return res.send(buffer);
     }
     res.json({
       format: "html",
-      html: buffer.toString("utf-8"),
+      html: await htmlForStoredFormat(buffer, row.file_format),
       messages: [],
       tampered: !!tampered,
     });
@@ -40156,9 +40155,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const id = Number(req.params.id);
       if (!Number.isFinite(id)) return res.status(400).json({ error: "Bad id" });
       if (!req.file) return res.status(400).json({ error: "File required" });
-      const format = canonicalFormatFromMimeAndName(req.file.mimetype, req.file.originalname);
+      const format = canonicalFormatFromMimeAndName(req.file.mimetype, req.file.originalname, req.file.buffer);
       if (!format) {
-        return res.status(400).json({ error: "Only DOCX, PDF, or HTML accepted" });
+        return res.status(400).json({ error: `Accepted files: ${ACCEPTED_DOC_DESCRIPTION}. The file's contents must match its type.` });
       }
       const sqlite = (db as any).$client;
       const doc = sqlite
@@ -40278,14 +40277,14 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           return res.status(500).json({ error: "Render failed" });
         }
       }
-      if (row.file_format === "pdf") {
+      if (inlineDocContentType(row.file_format)) {
         if (tampered) res.setHeader("X-VeritaPolicy-Tamper", "yes");
         res.setHeader("Access-Control-Expose-Headers", "X-VeritaPolicy-Tamper");
-        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader("Content-Type", inlineDocContentType(row.file_format) as string);
         res.setHeader("Content-Disposition", "inline");
         return res.send(buffer);
       }
-      res.json({ format: "html", html: buffer.toString("utf-8"), messages: [], tampered: !!tampered });
+      res.json({ format: "html", html: await htmlForStoredFormat(buffer, row.file_format), messages: [], tampered: !!tampered });
     }
   );
 
