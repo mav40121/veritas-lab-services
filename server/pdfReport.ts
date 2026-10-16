@@ -5719,7 +5719,7 @@ export function buildCompetencyHTML(input: CompetencyPDFInput): string {
       for (const ci of checklistItems) {
         html += `<tr style="height:22px;">
           <td><strong>${esc(ci.label || "")}</strong></td>
-          <td>${esc(ci.description || "")}</td>
+          <td style="white-space:pre-line">${esc(ci.description || "")}</td>
           <td>&nbsp;</td>
           <td>&nbsp;</td>
           <td>&nbsp;</td>
@@ -5729,7 +5729,7 @@ export function buildCompetencyHTML(input: CompetencyPDFInput): string {
       for (const item of items) {
         html += `<tr>
           <td><strong>${esc(item.nt_item_label || item.item_label || "")}</strong></td>
-          <td>${esc(item.nt_item_description || item.item_description || "")}</td>
+          <td style="white-space:pre-line">${esc(item.nt_item_description || item.item_description || "")}</td>
           <td>${esc(item.nt_date_met || item.date_met || "")}</td>
           <td>${esc(item.nt_employee_initials || item.employee_initials || "")}</td>
           <td>${esc(item.nt_supervisor_initials || item.supervisor_initials || "")}</td>

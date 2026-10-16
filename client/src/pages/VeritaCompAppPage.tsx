@@ -1,5 +1,5 @@
 import { NaReasonPresets } from "@/components/competency/NaReasonPresets";
-import { useState, useEffect, useMemo, useRef, type ReactNode } from "react";
+import { useState, useEffect, useLayoutEffect, useMemo, useRef, type ReactNode, type ComponentProps } from "react";
 import DOMPurify from "dompurify";
 import { Link, useLocation, useParams } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -15,6 +15,7 @@ import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { useMemberships } from "@/hooks/useMemberships";
 import { useLabRoute } from "@/hooks/useLabRoute";
 import { downloadPdfToken } from "@/lib/utils";
+import { checklistLabel, matchSavedChecklistRows, CHECKLIST_MAX_ITEMS, CHECKLIST_MAX_DESCRIPTION } from "@shared/competencyChecklist";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -70,6 +71,8 @@ import {
   Pencil,
   MoreHorizontal,
   HelpCircle,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -319,6 +322,101 @@ const DEFAULT_CHECKLISTS: Record<string, { label: string; description: string }[
     { label: "K", description: "Downtime operations" },
   ],
 };
+
+// 2026-10-16 (BUG-064): a department with no list of its own used to start from Chemistry's analyzer
+// checklist ("Manual Procedures" opened with "Analyzer operation" and "Calibration"). It now starts from
+// the items every department list above shares; the lab edits it to fit.
+const GENERIC_CHECKLIST: { label: string; description: string }[] = [
+  "Tour Department",
+  "Policies and Procedures",
+  "Quality Control",
+  "Maintenance",
+  "Releasing results / LIS",
+  "Downtime operations",
+].map((description, i) => ({ label: checklistLabel(i), description }));
+
+function defaultChecklistFor(department: string): { label: string; description: string }[] {
+  return (DEFAULT_CHECKLISTS[department] || GENERIC_CHECKLIST).map(it => ({ ...it }));
+}
+
+// A textarea as tall as its text, wrapped lines included (a detailed item must be readable in full).
+function AutoGrowTextarea(props: ComponentProps<typeof Textarea>) {
+  const ref = useRef<HTMLTextAreaElement | null>(null);
+  const fit = () => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight + 2}px`;
+  };
+  useLayoutEffect(fit, [props.value]);
+  useEffect(() => {
+    window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
+  }, []);
+  return <Textarea ref={ref} rows={1} {...props} />;
+}
+
+// The non-technical checklist editor: used when a program is set up (New Program, the header shortcut)
+// and on an existing program's Overview tab. Items are re-lettered by position (A..Z, AA, ...).
+function ChecklistItemsEditor({
+  items,
+  onChange,
+}: {
+  items: { label: string; description: string }[];
+  onChange: (items: { label: string; description: string }[]) => void;
+}) {
+  const relabel = (list: { label: string; description: string }[]) => list.map((it, i) => ({ ...it, label: checklistLabel(i) }));
+  const move = (i: number, d: -1 | 1) => {
+    const j = i + d;
+    if (j < 0 || j >= items.length) return;
+    const next = [...items];
+    [next[i], next[j]] = [next[j], next[i]];
+    onChange(relabel(next));
+  };
+  return (
+    <div className="space-y-2" data-testid="checklist-editor">
+      {items.map((item, i) => (
+        <div key={i} className="flex items-start gap-2" data-testid="checklist-editor-row">
+          <span className="text-xs font-bold text-muted-foreground w-7 shrink-0 pt-2">{checklistLabel(i)}.</span>
+          <AutoGrowTextarea
+            value={item.description}
+            onChange={e => {
+              const next = [...items];
+              next[i] = { ...next[i], description: e.target.value };
+              onChange(next);
+            }}
+            maxLength={CHECKLIST_MAX_DESCRIPTION}
+            className="text-sm min-h-9 py-1.5 resize-none overflow-hidden"
+            placeholder="Describe the item"
+            aria-label={`Item ${checklistLabel(i)}`}
+          />
+          <div className="flex shrink-0">
+            <Button type="button" variant="ghost" size="icon" className="h-8 w-7 text-muted-foreground" disabled={i === 0} onClick={() => move(i, -1)} aria-label={`Move item ${checklistLabel(i)} up`}>
+              <ArrowUp size={14} />
+            </Button>
+            <Button type="button" variant="ghost" size="icon" className="h-8 w-7 text-muted-foreground" disabled={i === items.length - 1} onClick={() => move(i, 1)} aria-label={`Move item ${checklistLabel(i)} down`}>
+              <ArrowDown size={14} />
+            </Button>
+            <Button type="button" variant="ghost" size="icon" className="h-8 w-7 text-muted-foreground hover:text-destructive" onClick={() => onChange(relabel(items.filter((_, j) => j !== i)))} aria-label={`Remove item ${checklistLabel(i)}`}>
+              <X size={14} />
+            </Button>
+          </div>
+        </div>
+      ))}
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        disabled={items.length >= CHECKLIST_MAX_ITEMS}
+        onClick={() => onChange([...items, { label: checklistLabel(items.length), description: "" }])}
+        data-testid="checklist-add-item"
+      >
+        <Plus size={13} className="mr-1" />
+        Add item
+      </Button>
+    </div>
+  );
+}
 
 // ── Helpers ─────────────────────────────────────────────────────────────
 
@@ -1325,6 +1423,12 @@ function QuickCompetencyDialog({
   const inDept = ofType.filter(p => deptOf(p) === department);
   const [programId, setProgramId] = useState<number | null>(inDept[0]?.id ?? null);
   useEffect(() => { setProgramId(inDept[0]?.id ?? null); }, [department]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Non-technical, new program: the department's starting checklist, which can be changed before it is set up
+  // (the old New Program wizard's checklist step; BUG-064).
+  const [checklist, setChecklist] = useState(() => defaultChecklistFor(department));
+  const [checklistOpen, setChecklistOpen] = useState(false);
+  useEffect(() => { setChecklist(defaultChecklistFor(department)); }, [department]);
+  const checklistBlank = checklist.length === 0 || checklist.some(it => !it.description.trim());
   const [busy, setBusy] = useState(false);
   const label = type === "waived" ? "Waived competency" : "Non-technical competency";
   const newName = `${department} ${type === "waived" ? "waived testing" : "non-technical"} competency`;
@@ -1347,7 +1451,7 @@ function QuickCompetencyDialog({
           department,
           type,
           mapId: null,
-          checklistItems: type === "nontechnical" ? (DEFAULT_CHECKLISTS[department] || DEFAULT_CHECKLISTS["Chemistry"] || []) : undefined,
+          checklistItems: type === "nontechnical" ? checklist : undefined,
         }),
       });
       if (!res.ok) {
@@ -1365,7 +1469,7 @@ function QuickCompetencyDialog({
 
   return (
     <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="max-w-md">
+      <DialogContent className={`${checklistOpen ? "max-w-xl" : "max-w-md"} max-h-[85vh] overflow-y-auto`}>
         <DialogHeader>
           <DialogTitle>{label}</DialogTitle>
         </DialogHeader>
@@ -1400,9 +1504,40 @@ function QuickCompetencyDialog({
               {department} has no {type === "waived" ? "waived" : "non-technical"} competency yet. Continue sets up "{newName}" and opens the form.
             </p>
           )}
+          {type === "nontechnical" && inDept.length === 0 && (
+            <div className="rounded-md border border-border p-3 space-y-2" data-testid="quick-checklist">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-sm font-medium">Checklist: {checklist.length} item{checklist.length === 1 ? "" : "s"}</div>
+                <Button type="button" variant="ghost" size="sm" className="h-7" onClick={() => setChecklistOpen(o => !o)} data-testid="quick-checklist-toggle">
+                  {checklistOpen ? "Done" : "Review or change"}
+                </Button>
+              </div>
+              {checklistOpen ? (
+                <ChecklistItemsEditor items={checklist} onChange={setChecklist} />
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  {checklist.slice(0, 4).map(it => it.description.split("\n")[0]).join(", ")}{checklist.length > 4 ? ", ..." : ""}
+                </p>
+              )}
+              <p className="text-xs text-muted-foreground">You can change the checklist later on the competency's Overview tab.</p>
+            </div>
+          )}
+          {type === "nontechnical" && programId != null && (
+            <p className="text-xs text-muted-foreground">
+              The form uses this competency's checklist.{" "}
+              <button
+                type="button"
+                className="text-primary hover:underline"
+                onClick={() => navigate(labRoute(`/veritacomp-app/${programId}?editChecklist=1`))}
+                data-testid="quick-edit-checklist"
+              >
+                Change the checklist first
+              </button>
+            </p>
+          )}
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" onClick={onClose}>Cancel</Button>
-            <Button onClick={go} disabled={busy} data-testid="quick-continue">{busy ? "Setting up..." : "Continue"}</Button>
+            <Button onClick={go} disabled={busy || (type === "nontechnical" && inDept.length === 0 && checklistBlank)} data-testid="quick-continue">{busy ? "Setting up..." : "Continue"}</Button>
           </div>
         </div>
       </DialogContent>
@@ -1574,8 +1709,7 @@ function NewProgramWizard({ onClose, onCreated }: { onClose: () => void; onCreat
   // Auto-populate checklist for nontechnical
   useEffect(() => {
     if (type === "nontechnical") {
-      const defaults = DEFAULT_CHECKLISTS[department] || DEFAULT_CHECKLISTS["Chemistry"] || [];
-      setChecklistItems(defaults);
+      setChecklistItems(defaultChecklistFor(department));
     }
   }, [type, department]);
 
@@ -1736,48 +1870,12 @@ function NewProgramWizard({ onClose, onCreated }: { onClose: () => void; onCreat
             <p className="text-sm text-muted-foreground">
               Customize the checklist items for this department. Items are pre-populated based on common {department} competency areas.
             </p>
-            {checklistItems.map((item, i) => (
-              <div key={i} className="flex items-center gap-2">
-                <span className="text-xs font-bold text-muted-foreground w-6 shrink-0">{item.label}.</span>
-                <Input
-                  value={item.description}
-                  onChange={e => {
-                    const updated = [...checklistItems];
-                    updated[i] = { ...updated[i], description: e.target.value };
-                    setChecklistItems(updated);
-                  }}
-                  className="text-sm"
-                />
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive"
-                  onClick={() => {
-                    const updated = checklistItems.filter((_, j) => j !== i);
-                    // Re-label
-                    setChecklistItems(updated.map((item, idx) => ({ ...item, label: String.fromCharCode(65 + idx) })));
-                  }}
-                >
-                  <X size={14} />
-                </Button>
-              </div>
-            ))}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setChecklistItems([
-                ...checklistItems,
-                { label: String.fromCharCode(65 + checklistItems.length), description: "" },
-              ])}
-            >
-              <Plus size={13} className="mr-1" />
-              Add Item
-            </Button>
+            <ChecklistItemsEditor items={checklistItems} onChange={setChecklistItems} />
             <div className="flex justify-between pt-2">
               <Button variant="outline" size="sm" onClick={() => setStep(1)}>
                 <ChevronLeft className="h-3.5 w-3.5 mr-1" /> Back
               </Button>
-              <Button size="sm" disabled={checklistItems.length === 0} onClick={() => setStep(3)}>
+              <Button size="sm" disabled={checklistItems.length === 0 || checklistItems.some(it => !it.description.trim())} onClick={() => setStep(3)}>
                 Next <ChevronRight className="h-3.5 w-3.5 ml-1" />
               </Button>
             </div>
@@ -1903,8 +2001,9 @@ function ProgramDetailView({ programId }: { programId: number }) {
       <Button variant="ghost" size="sm" className="mb-4 -ml-2" onClick={() => navigate(activeLabId ? `/labs/${activeLabId}/veritacomp-app` : "/veritacomp-app")}>
         <ChevronLeft className="h-4 w-4 mr-1" /> All Programs
       </Button>
-      <div className="flex items-start justify-between gap-4 mb-6">
-        <div>
+      {/* BUG-064 sweep (BUG-030 class): the button row and the tab row ran past a phone screen (602px at 390). */}
+      <div className="flex flex-col md:flex-row md:items-start justify-between gap-4 mb-6">
+        <div className="min-w-0">
           <div className="flex items-center gap-2 mb-1 flex-wrap">
             <h1 className="text-2xl font-bold tracking-tight">{program.name}</h1>
             <Badge variant="outline" className={`text-xs ${typeBadgeColor(program.type)}`}>
@@ -1914,7 +2013,7 @@ function ProgramDetailView({ programId }: { programId: number }) {
           </div>
           <p className="text-sm text-muted-foreground">{program.department} Department</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 md:shrink-0">
           {/* Wave G PR G1: paper worksheet download. Renders the six-element
               framework (or waived 4-method, or nontechnical checklist) with
               blank fields so the tech can hand-complete and the lab can
@@ -1951,12 +2050,12 @@ function ProgramDetailView({ programId }: { programId: number }) {
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-border mb-6 gap-0">
+      <div className="flex border-b border-border mb-6 gap-0 overflow-x-auto">
         {tabs.map(tab => (
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
-            className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+            className={`flex shrink-0 whitespace-nowrap items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
               activeTab === tab.key
                 ? "border-primary text-foreground"
                 : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
@@ -1988,6 +2087,93 @@ function ProgramDetailView({ programId }: { programId: number }) {
             qc.invalidateQueries({ queryKey: [programDetailUrl] });
           }}
         />
+      )}
+    </div>
+  );
+}
+
+// ── Non-technical checklist (Overview tab) ─────────────────────────────
+// 2026-10-16 (BUG-064, Michael: "it appears we can no longer edit the checklists?"): the checklist could
+// only be edited inside the New Program wizard, and the 10/14 header shortcut skips the wizard, so a
+// program's checklist could not be changed at all once it existed. Saving replaces the program's list;
+// assessments already saved keep their own copy of the items they were done on.
+
+function ChecklistCard({ program }: { program: Program }) {
+  const isReadOnly = useIsReadOnly("veritacomp");
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const activeLabId = useActiveLabId();
+  const programDetailKey = activeLabId
+    ? `/api/labs/${activeLabId}/competency/programs/${program.id}`
+    : `/api/competency/programs/${program.id}`;
+  const current = (program.checklistItems || []).map(it => ({ label: it.label, description: it.description }));
+  const [editing, setEditing] = useState(() => !isReadOnly && typeof window !== "undefined" && window.location.search.includes("editChecklist=1"));
+  const [draft, setDraft] = useState(() => current.length ? current : defaultChecklistFor(program.department));
+  const [saving, setSaving] = useState(false);
+  const blank = draft.length === 0 || draft.some(it => !it.description.trim());
+
+  const startEdit = () => { setDraft(current.length ? current : defaultChecklistFor(program.department)); setEditing(true); };
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch(`${API_BASE}${programDetailKey}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ checklistItems: draft.map(it => ({ description: it.description })) }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast({ title: "Checklist not saved", description: err.error || `HTTP ${res.status}`, variant: "destructive" });
+        return;
+      }
+      await qc.invalidateQueries({ queryKey: [programDetailKey] });
+      setEditing(false);
+      toast({ title: "Checklist saved", description: `${draft.length} item${draft.length === 1 ? "" : "s"}. New assessments and the blank template use it now.` });
+    } catch {
+      toast({ title: "Checklist not saved", description: "Network error. Nothing was saved.", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="border border-border rounded-lg p-4 bg-card" data-testid="checklist-card">
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <div className="text-sm font-semibold">Checklist</div>
+        {!editing && !isReadOnly && (
+          <Button size="sm" variant="outline" onClick={startEdit} data-testid="checklist-edit">
+            <Pencil className="h-3.5 w-3.5 mr-1.5" />
+            Edit checklist
+          </Button>
+        )}
+      </div>
+      {editing ? (
+        <div className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            Add, reword, reorder or remove items. Saved assessments keep the items they were done on; an unsigned assessment reopened with Edit picks up this list.
+          </p>
+          <ChecklistItemsEditor items={draft} onChange={setDraft} />
+          <div className="flex justify-end gap-2 pt-1">
+            <Button size="sm" variant="outline" onClick={() => { setEditing(false); setDraft(current); }} disabled={saving}>Cancel</Button>
+            <Button size="sm" onClick={save} disabled={saving || blank} data-testid="checklist-save">
+              {saving ? "Saving..." : "Save checklist"}
+            </Button>
+          </div>
+        </div>
+      ) : current.length === 0 ? (
+        <p className="text-xs text-muted-foreground" data-testid="checklist-empty">
+          No checklist items yet.{!isReadOnly && " Edit checklist adds them."}
+        </p>
+      ) : (
+        <ol className="space-y-1.5 text-sm" data-testid="checklist-list">
+          {current.map(it => (
+            <li key={it.label} className="flex gap-2">
+              <span className="font-bold text-muted-foreground w-7 shrink-0">{it.label}.</span>
+              <span className="whitespace-pre-line">{it.description}</span>
+            </li>
+          ))}
+        </ol>
       )}
     </div>
   );
@@ -2080,6 +2266,8 @@ function OverviewTab({ program }: { program: Program & { employees: Employee[]; 
           )}
         </div>
       </div>
+
+      {program.type === "nontechnical" && <ChecklistCard program={program} />}
 
       {/* Employee roster */}
       <div className="border border-border rounded-lg p-4 bg-card">
@@ -3334,12 +3522,22 @@ function NewAssessmentDialog({
       setWaivedItems(map);
       if (methods.length) setWaivedMethods(Array.from(new Set(methods)).sort((a, b) => a - b));
     } else {
+      // Match saved rows to the program's CURRENT checklist by wording first, then letter, so a checklist
+      // edited since this assessment was saved (reordered, item removed) keeps each row's data on its item.
+      const saved = items
+        .filter(it => it.nt_item_label || it.item_label)
+        .map(it => ({
+          label: String(it.nt_item_label || it.item_label),
+          description: String(it.nt_item_description || it.item_description || ""),
+          data: { dateMet: it.nt_date_met || it.date_met || "", empInitials: it.nt_employee_initials || it.employee_initials || "", supInitials: it.nt_supervisor_initials || it.supervisor_initials || "" } as NonTechItemData,
+        }));
+      const currentItems = (program.checklistItems || []).map(c => ({ label: c.label, description: c.description }));
+      const match = matchSavedChecklistRows(currentItems, saved);
       const map: Record<string, NonTechItemData> = {};
-      for (const it of items) {
-        const label = it.nt_item_label || it.item_label;
-        if (!label) continue;
-        map[label] = { dateMet: it.nt_date_met || it.date_met || "", empInitials: it.nt_employee_initials || it.employee_initials || "", supInitials: it.nt_supervisor_initials || it.supervisor_initials || "" } as NonTechItemData;
-      }
+      currentItems.forEach((c, i) => {
+        const j = match[i];
+        map[c.label] = j != null ? saved[j].data : { dateMet: "", empInitials: "", supInitials: "" };
+      });
       setNonTechItems(map);
     }
     didHydrate.current = true;
@@ -3385,14 +3583,18 @@ function NewAssessmentDialog({
     enabled: !!employeeInstrumentsUrl,
   });
 
-  // Initialize nontechnical items
+  // Initialize nontechnical items. Fill only the items that have no entry yet: this effect runs right
+  // after the edit-mode hydration above, and replacing the whole map wiped the saved dates and initials
+  // of an unsigned assessment reopened with Edit (BUG-064).
   useEffect(() => {
     if (program.type === "nontechnical" && program.checklistItems) {
-      const init: Record<string, NonTechItemData> = {};
-      for (const item of program.checklistItems) {
-        init[item.label] = { dateMet: "", empInitials: "", supInitials: "" };
-      }
-      setNonTechItems(init);
+      setNonTechItems(prev => {
+        const next: Record<string, NonTechItemData> = {};
+        for (const item of program.checklistItems) {
+          next[item.label] = prev[item.label] || { dateMet: "", empInitials: "", supInitials: "" };
+        }
+        return next;
+      });
     }
   }, [program]);
 
@@ -4329,7 +4531,10 @@ function NewAssessmentDialog({
           {/* ── NON-TECHNICAL COMPETENCY FORM ── */}
           {program.type === "nontechnical" && program.checklistItems && (
             <div className="space-y-3">
-              <div className="text-sm font-semibold">Non-Technical Checklist Items</div>
+              <div>
+                <div className="text-sm font-semibold">Non-Technical Checklist Items</div>
+                <p className="text-xs text-muted-foreground">From this competency's checklist, which is changed on its Overview tab.</p>
+              </div>
               <div className="border border-border rounded-lg overflow-hidden">
                 <table className="w-full text-xs">
                   <thead>
@@ -4346,8 +4551,8 @@ function NewAssessmentDialog({
                       const cell = nonTechItems[item.label] || { dateMet: "", empInitials: "", supInitials: "" };
                       return (
                         <tr key={item.label} className="border-t border-border">
-                          <td className="p-2 font-bold">{item.label}.</td>
-                          <td className="p-2">{item.description}</td>
+                          <td className="p-2 font-bold align-top">{item.label}.</td>
+                          <td className="p-2 whitespace-pre-line">{item.description}</td>
                           <td className="p-1.5">
                             <Input type="date" className="text-xs h-7" value={cell.dateMet} onChange={e => setNonTechItems(prev => ({ ...prev, [item.label]: { ...cell, dateMet: e.target.value } }))} />
                           </td>
