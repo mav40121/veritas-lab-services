@@ -7,6 +7,7 @@ import { seedSlotsForAnalyte } from "./verificationSlots";
 import { blockNonOperatorSeat } from "./seatAccess";
 import { getCanonicalMDLs, getCanonicalMDLProvenance, computeSystematicErrorAtMDL } from "./canonicalMDLs";
 import { teaAllowanceAt } from "./teaAllowance";
+import { exportAllPlanBypass } from "./exportAllContext";
 import {
   shouldRender as shouldRenderAmrCoverage,
   computeAmrCoverage,
@@ -98,6 +99,7 @@ const ALLOWED_PLANS = [
 // route. req.scope.lab is set by labScopeMiddleware (scoped routes) or the
 // authMiddleware active-lab fallback (unscoped routes). 2026-10-02.
 function hasVeritaCheckAccess(user: any, lab?: any): boolean {
+  if (exportAllPlanBypass(lab)) return true; // export-all job (server/exportAllContext.ts)
   const plan = lab?.plan ?? user?.plan;
   return ALLOWED_PLANS.includes(plan);
 }

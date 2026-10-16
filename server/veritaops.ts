@@ -9,6 +9,7 @@ import { storePdfToken } from "./pdfTokens";
 import { generateCprtPdf } from "./veritaopsPdf";
 import { resolveRowForMutation, resolveLegacyLabId } from "./labAccessGuard";
 import { blockNonOperatorSeat } from "./seatAccess";
+import { exportAllPlanBypass } from "./exportAllContext";
 
 // Plain-language tier labels. Used by the client to show what is in the
 // final CPRT number for a given study.
@@ -109,6 +110,7 @@ function pickInputs(body: any): Record<string, any> {
 }
 
 function hasOpsAccess(user: any, lab?: any): boolean {
+  if (exportAllPlanBypass(lab)) return true; // export-all job (server/exportAllContext.ts)
   const plan = lab?.plan ?? user?.plan;
   return [
     "annual", "professional", "lab", "complete",

@@ -11,7 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Loader2, UserPlus, ShieldCheck, ShieldOff, Trash2, Crown, ArrowRightLeft, Clock, Link as LinkIcon, RotateCw, X, KeyRound, Copy, Check, MapPin, Stethoscope, Pencil } from "lucide-react";
+import { Loader2, UserPlus, ShieldCheck, ShieldOff, Trash2, Crown, ArrowRightLeft, Clock, Link as LinkIcon, RotateCw, X, KeyRound, Copy, Check, MapPin, Stethoscope, Pencil, Download } from "lucide-react";
 
 interface LabMember {
   membership_id: number;
@@ -644,6 +644,8 @@ export default function LabMembersPage() {
 
       {canManage && activeLabId && <TwoFactorLabCard labId={activeLabId} />}
 
+      {isOwner && activeLabId && <ExportAllCard labId={activeLabId} />}
+
       {isOwner && (
         <Card>
           <CardHeader>
@@ -708,6 +710,75 @@ export default function LabMembersPage() {
 // uncheck an existing location), so it can never lock anyone out; to remove a
 // location, use the per-location Remove on that lab's Members page. Owner/admin
 // only, shown on the VeritaStock deployment when the enterprise has >1 location.
+
+// Download all of this lab's records (exit terms, Q47 = 1 and Q50 = 1). Owner only. Builds one zip in the
+// background (records for every module, stored files, the app's reports); the finished file is kept 24 hours.
+// It keeps working after a subscription ends. Server: server/exportAll.ts. The file is fetched with a plain
+// anchor download from a short-lived link (never fetch + blob; see downloadPdfToken in lib/utils).
+interface ExportAllStatus {
+  job: { id: string; status: "running" | "done" | "failed"; step: string; startedAt: string; error?: string } | null;
+  ready: Array<{ id: string; filename: string; size: number; createdAt: string; expiresAt: string }>;
+}
+const fmtBytes = (n: number) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
+function ExportAllCard({ labId }: { labId: number }) {
+  const { toast } = useToast();
+  const key = `/api/labs/${labId}/export-all`;
+  const { data } = useQuery<ExportAllStatus>({
+    queryKey: [key],
+    queryFn: getQueryFn({ on401: "throw" }),
+    retry: false,
+    refetchInterval: (q: any) => (q.state.data?.job?.status === "running" ? 2000 : false),
+  });
+  const running = data?.job?.status === "running";
+  const start = useMutation({
+    mutationFn: async () => (await apiRequest("POST", key, {})).json(),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: [key] }),
+    onError: (err: any) => toast({ title: "Could not start the download", description: cleanErr(err), variant: "destructive" }),
+  });
+  const download = useMutation({
+    mutationFn: async (id: string) => (await apiRequest("POST", `${key}/${id}/download-token`, {})).json(),
+    onSuccess: (r: { url: string; filename: string }) => {
+      const a = document.createElement("a");
+      a.href = r.url;
+      a.download = r.filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    },
+    onError: (err: any) => toast({ title: "Could not download", description: cleanErr(err), variant: "destructive" }),
+  });
+  const latest = data?.ready?.[0];
+  return (
+    <Card data-testid="export-all-card">
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2"><Download size={16} /> Download all of this lab's records</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3 text-sm">
+        <p className="text-muted-foreground">
+          One zip with every record this lab keeps in VeritaAssure™: a workbook per module, stored documents including every policy version, and the reports the modules produce. It works after a subscription ends. Only the lab owner can build or download it, and each download is kept for 24 hours.
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button size="sm" onClick={() => start.mutate()} disabled={running || start.isPending} data-testid="export-all-build">
+            {(running || start.isPending) && <Loader2 className="animate-spin mr-1" size={14} />}
+            {running ? "Building..." : latest ? "Build a new download" : "Build the download"}
+          </Button>
+          {latest && !running && (
+            <Button size="sm" variant="outline" onClick={() => download.mutate(latest.id)} disabled={download.isPending} data-testid="export-all-download">
+              <Download size={14} className="mr-1" /> Download ({fmtBytes(latest.size)})
+            </Button>
+          )}
+        </div>
+        {running && <p className="text-xs text-muted-foreground" data-testid="export-all-step">{data?.job?.step}...</p>}
+        {data?.job?.status === "failed" && <p className="text-xs text-destructive" data-testid="export-all-error">{data.job.error}</p>}
+        {latest && !running && (
+          <p className="text-xs text-muted-foreground" data-testid="export-all-ready">
+            Built {new Date(latest.createdAt).toLocaleString("en-US")}. Available until {new Date(latest.expiresAt).toLocaleString("en-US")}.
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 // Two-factor sign-in for the lab (Stage 2, mock Q171 = 1). The owner or an admin requires it for
 // everyone, allows or switches off "Remember this computer" (shared computers), sees who has it on,

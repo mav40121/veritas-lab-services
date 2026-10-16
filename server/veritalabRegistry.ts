@@ -13,9 +13,11 @@
 import type { Express } from "express";
 import { db } from "./db";
 import { labLocalDate } from "./dateLocal";
+import { exportAllPlanBypass } from "./exportAllContext";
 
 // Same explicit plan allowlist as routes.ts hasLabCertAccess.
 function hasRegistryAccess(user: any, lab?: any): boolean {
+  if (exportAllPlanBypass(lab)) return true; // export-all job (server/exportAllContext.ts)
   const plan = lab?.plan ?? user?.plan;
   return ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "clinic", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(plan);
 }

@@ -24,6 +24,7 @@ import { buildIntacctCSV, preflightIntacct, type IntacctExportConfig, type Vendo
 import { forecastFromGoal, chainGap, staffingGridFte, DEFAULT_HOURS_PER_FTE_YEAR } from "@shared/operationsForecast";
 import { generateLeverageReportPDF, type LeverageReportData } from "./leverageReport";
 import { generatePiReportPDF } from "./piReport";
+import { exportAllPlanBypass } from "./exportAllContext";
 
 // PR 4 helper: builds a lower-cased-name keyed map of VendorRecordForPdf
 // from the lab's stock_vendors directory. The PDF renderer uses this to
@@ -150,6 +151,7 @@ function bencheLicenseCtx(req: any): LicenseContext {
 const SUITE_PLANS = ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "waived", "clinic", "community", "hospital", "large_hospital", "enterprise"];
 
 export function hasOpsAccess(user: any, lab?: any) {
+  if (exportAllPlanBypass(lab)) return true; // export-all job (server/exportAllContext.ts)
   const plan = lab?.plan ?? user?.plan;
   return SUITE_PLANS.includes(plan);
 }
