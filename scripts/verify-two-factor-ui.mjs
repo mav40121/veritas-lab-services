@@ -58,7 +58,7 @@ const typeCode = async (page, testId, code) => { await page.getByTestId(testId).
   await card.screenshot({ path: `${OUT}/two-factor-card-off-dark.png` });
   await card.getByRole("button", { name: "Turn on" }).click();
   await page.getByTestId("mfa-key").waitFor();
-  await page.waitForFunction(() => /[A-Z2-7]{4}/.test(document.querySelector('[data-testid="mfa-key"]')?.textContent || ""));
+  await page.getByTestId("mfa-key").filter({ hasText: /[A-Z2-7]{4}/ }).waitFor(); // selector wait: the enforced CSP blocks waitForFunction's eval
   const key = (await page.getByTestId("mfa-key").innerText()).trim();
   check("1b. setup shows a QR code and the typed key", (await page.locator('[data-testid="mfa-qr"] svg').count()) === 1 && /^[A-Z2-7 ]{20,}$/.test(key), key.slice(0, 9) + "...");
   await card.screenshot({ path: `${OUT}/two-factor-setup-dark.png` });

@@ -717,7 +717,8 @@ export default function LabMembersPage() {
 // anchor download from a short-lived link (never fetch + blob; see downloadPdfToken in lib/utils).
 interface ExportAllStatus {
   job: { id: string; status: "running" | "done" | "failed"; step: string; startedAt: string; error?: string } | null;
-  ready: Array<{ id: string; filename: string; size: number; createdAt: string; expiresAt: string }>;
+  ready: Array<{ id: string; filename: string; size: number; createdAt: string; expiresAt: string; weekly?: boolean }>;
+  weekly?: boolean;
 }
 const fmtBytes = (n: number) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 function ExportAllCard({ labId }: { labId: number }) {
@@ -747,6 +748,15 @@ function ExportAllCard({ labId }: { labId: number }) {
     },
     onError: (err: any) => toast({ title: "Could not download", description: cleanErr(err), variant: "destructive" }),
   });
+  const setWeekly = useMutation({
+    mutationFn: async (enabled: boolean) => (await apiRequest("PUT", `${key}/weekly`, { enabled })).json(),
+    onSuccess: (r: { weekly: boolean }) => {
+      queryClient.invalidateQueries({ queryKey: [key] });
+      toast({ title: r.weekly ? "Weekly copy turned on" : "Weekly copy turned off", description: r.weekly ? "A new copy is built every Monday and you get an email when it is ready." : undefined });
+    },
+    onError: (err: any) => toast({ title: "Could not change the weekly copy", description: cleanErr(err), variant: "destructive" }),
+  });
+  const weeklyOn = !!data?.weekly;
   const latest = data?.ready?.[0];
   return (
     <Card data-testid="export-all-card">
@@ -757,6 +767,21 @@ function ExportAllCard({ labId }: { labId: number }) {
         <p className="text-muted-foreground">
           One zip with every record this lab keeps in VeritaAssure™: a workbook per module, stored documents including every policy version, and the reports the modules produce. It works after a subscription ends. Only the lab owner can build or download it, and each download is kept for 24 hours.
         </p>
+        <div className="rounded-md border border-border p-3 flex items-start justify-between gap-3">
+          <div>
+            <p className="font-semibold">Build a copy every week</p>
+            <p className="text-xs text-muted-foreground" data-testid="export-all-weekly-text">
+              {weeklyOn
+                ? "On. Every Monday a new copy is built and kept for 7 days, and you get an email when it is ready. The email has no download link: sign in here to download."
+                : "Off. Turn it on to keep a recent copy of your records without having to remember to build one."}
+            </p>
+          </div>
+          <button type="button" role="switch" aria-checked={weeklyOn} aria-label="Build a copy every week" data-testid="export-all-weekly-toggle"
+            disabled={!data || setWeekly.isPending} onClick={() => setWeekly.mutate(!weeklyOn)}
+            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-60 ${weeklyOn ? "bg-primary" : "bg-muted-foreground/30"}`}>
+            <span className={`inline-block h-5 w-5 rounded-full bg-white shadow transition-transform ${weeklyOn ? "translate-x-5" : "translate-x-0.5"}`} />
+          </button>
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button size="sm" onClick={() => start.mutate()} disabled={running || start.isPending} data-testid="export-all-build">
             {(running || start.isPending) && <Loader2 className="animate-spin mr-1" size={14} />}
@@ -772,7 +797,7 @@ function ExportAllCard({ labId }: { labId: number }) {
         {data?.job?.status === "failed" && <p className="text-xs text-destructive" data-testid="export-all-error">{data.job.error}</p>}
         {latest && !running && (
           <p className="text-xs text-muted-foreground" data-testid="export-all-ready">
-            Built {new Date(latest.createdAt).toLocaleString("en-US")}. Available until {new Date(latest.expiresAt).toLocaleString("en-US")}.
+            {latest.weekly ? "Weekly copy built" : "Built"} {new Date(latest.createdAt).toLocaleString("en-US")}. Available until {new Date(latest.expiresAt).toLocaleString("en-US")}.
           </p>
         )}
       </CardContent>

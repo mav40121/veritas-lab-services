@@ -11,6 +11,10 @@
 // It works after a subscription ends or a trial expires (BUG-067): the job's own loopback requests pass the plan
 // gates (server/exportAllContext.ts). The finished zip is kept on the volume for 24 hours. VeritaCheck study PDFs
 // are version 2 (they are built in the browser today).
+//
+// Weekly copy (2026-10-16, opt-in per lab: labs.weekly_export_enabled): every Monday the same zip is built for each
+// lab that turned it on and the owner is emailed that it is ready. The email carries no download link: the owner
+// signs in to download, so a forwarded email opens nothing. A weekly copy is kept 7 days, and only the newest one.
 
 import fs from "fs";
 import path from "path";
@@ -24,6 +28,8 @@ import { logAudit } from "./audit";
 import { issuePurposeToken, verifyPurposeToken } from "./sessionAuth";
 
 export const EXPORT_RETENTION_MS = 24 * 60 * 60 * 1000;
+export const WEEKLY_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+const retentionMs = (meta: any) => (meta?.weekly ? WEEKLY_RETENTION_MS : EXPORT_RETENTION_MS);
 
 export function exportDir(): string {
   if (process.env.EXPORT_ALL_DIR) return process.env.EXPORT_ALL_DIR;
@@ -314,11 +320,14 @@ export interface ExportJob {
   error?: string;
   filename?: string;
   size?: number;
+  weekly?: boolean;
 }
 
 const jobs = new Map<string, ExportJob>();
 const runningByLab = new Map<number, string>();
 
+// Each copy is kept for its own retention (24 hours; weekly copies 7 days), read from its sidecar. A file with no
+// sidecar (a zip still being written, or a leftover) is removed after 24 hours.
 export function cleanupExports(now = Date.now()): number {
   const dir = exportDir();
   let removed = 0;
@@ -326,7 +335,20 @@ export function cleanupExports(now = Date.now()): number {
   for (const sub of fs.readdirSync(dir)) {
     const p = path.join(dir, sub);
     if (!fs.statSync(p).isDirectory()) continue;
+    const keep = new Set<string>();
+    for (const f of fs.readdirSync(p).filter((n) => n.endsWith(".json"))) {
+      try {
+        const meta = JSON.parse(fs.readFileSync(path.join(p, f), "utf-8"));
+        if (now - new Date(meta.createdAt).getTime() > retentionMs(meta)) {
+          for (const g of [f, `${meta.id}.zip`]) { try { fs.unlinkSync(path.join(p, g)); removed++; } catch { /* already gone */ } }
+        } else {
+          keep.add(f);
+          keep.add(`${meta.id}.zip`);
+        }
+      } catch { /* a bad sidecar falls through to the age rule below */ }
+    }
     for (const f of fs.readdirSync(p)) {
+      if (keep.has(f)) continue;
       const fp = path.join(p, f);
       try { if (now - fs.statSync(fp).mtimeMs > EXPORT_RETENTION_MS) { fs.unlinkSync(fp); removed++; } } catch { /* ignore */ }
     }
@@ -334,7 +356,7 @@ export function cleanupExports(now = Date.now()): number {
   return removed;
 }
 
-export function readyExports(labId: number): Array<{ id: string; filename: string; size: number; createdAt: string; expiresAt: string }> {
+export function readyExports(labId: number): Array<{ id: string; filename: string; size: number; createdAt: string; expiresAt: string; weekly: boolean }> {
   const p = path.join(exportDir(), `lab-${labId}`);
   if (!fs.existsSync(p)) return [];
   const out: any[] = [];
@@ -345,8 +367,8 @@ export function readyExports(labId: number): Array<{ id: string; filename: strin
       const zip = path.join(p, `${meta.id}.zip`);
       if (!fs.existsSync(zip)) continue;
       const created = new Date(meta.createdAt).getTime();
-      if (Date.now() - created > EXPORT_RETENTION_MS) continue;
-      out.push({ id: meta.id, filename: meta.filename, size: fs.statSync(zip).size, createdAt: meta.createdAt, expiresAt: new Date(created + EXPORT_RETENTION_MS).toISOString() });
+      if (Date.now() - created > retentionMs(meta)) continue;
+      out.push({ id: meta.id, filename: meta.filename, size: fs.statSync(zip).size, createdAt: meta.createdAt, expiresAt: new Date(created + retentionMs(meta)).toISOString(), weekly: !!meta.weekly });
     } catch { /* ignore a bad sidecar */ }
   }
   return out.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
@@ -523,15 +545,15 @@ export async function buildExportZip(sqlite: any, ctx: ExportCtx, opts: { base: 
   const safeLab = labName.replace(/[^a-zA-Z0-9_\- ]/g, "").trim().replace(/\s+/g, "_") || "Lab";
   const filename = `${safeLab}_VeritaAssure_Records_${today}.zip`;
   const size = fs.statSync(file).size;
-  fs.writeFileSync(path.join(dir, `${job.id}.json`), JSON.stringify({ id: job.id, filename, createdAt: new Date().toISOString(), userId: job.userId, files: manifest.length }));
+  fs.writeFileSync(path.join(dir, `${job.id}.json`), JSON.stringify({ id: job.id, filename, createdAt: new Date().toISOString(), userId: job.userId, files: manifest.length, weekly: !!job.weekly }));
   return { file, filename, size };
 }
 
-export function startExportJob(sqlite: any, labId: number, userId: number, base: string): ExportJob {
+export function startExportJob(sqlite: any, labId: number, userId: number, base: string, opts: { weekly?: boolean } = {}): ExportJob {
   const running = runningByLab.get(labId);
   if (running && jobs.get(running)?.status === "running") return jobs.get(running)!;
   cleanupExports();
-  const job: ExportJob = { id: crypto.randomBytes(12).toString("hex"), labId, userId, status: "running", step: "Starting", startedAt: new Date().toISOString() };
+  const job: ExportJob = { id: crypto.randomBytes(12).toString("hex"), labId, userId, status: "running", step: "Starting", startedAt: new Date().toISOString(), weekly: !!opts.weekly };
   jobs.set(job.id, job);
   runningByLab.set(labId, job.id);
   const ctx = exportContext(sqlite, labId);
@@ -540,6 +562,7 @@ export function startExportJob(sqlite: any, labId: number, userId: number, base:
       if (!ctx) throw new Error("Lab not found");
       const out = await buildExportZip(sqlite, ctx, { base, job });
       Object.assign(job, { status: "done", step: "Ready", finishedAt: new Date().toISOString(), filename: out.filename, size: out.size });
+      if (job.weekly) removeOlderWeeklyCopies(labId, job.id);
     } catch (e: any) {
       console.error(`[export-all] lab ${labId} job ${job.id} failed:`, e?.message || e);
       Object.assign(job, { status: "failed", step: "Failed", finishedAt: new Date().toISOString(), error: "The download could not be built. Please try again, or contact info@veritaslabservices.com." });
@@ -550,10 +573,89 @@ export function startExportJob(sqlite: any, labId: number, userId: number, base:
   return job;
 }
 
+// Only the newest weekly copy is kept (the volume is small).
+function removeOlderWeeklyCopies(labId: number, keepId: string) {
+  for (const r of readyExports(labId)) {
+    if (!r.weekly || r.id === keepId) continue;
+    for (const f of [`${r.id}.zip`, `${r.id}.json`]) { try { fs.unlinkSync(path.join(exportDir(), `lab-${labId}`, f)); } catch { /* already gone */ } }
+  }
+}
+
 export function latestJob(labId: number): ExportJob | null {
   let latest: ExportJob | null = null;
   for (const j of jobs.values()) if (j.labId === labId && (!latest || j.startedAt > latest.startedAt)) latest = j;
   return latest;
+}
+
+// ── Weekly copy ───────────────────────────────────────────────────────────────────────────────────────────
+
+export type WeeklyMail = { to: string; subject: string; html: string };
+export type WeeklyMailer = (m: WeeklyMail) => Promise<void>;
+let weeklyMailerOverride: WeeklyMailer | null = null;
+/** Test hook: capture mail instead of sending it. */
+export function setWeeklyExportMailerForTest(m: WeeklyMailer | null) { weeklyMailerOverride = m; }
+
+async function weeklyMailer(): Promise<WeeklyMailer | null> {
+  if (weeklyMailerOverride) return weeklyMailerOverride;
+  if (!process.env.RESEND_API_KEY) return null;
+  const { Resend } = await import("resend");
+  const resend = new Resend(process.env.RESEND_API_KEY);
+  return async (m) => {
+    const r: any = await resend.emails.send({ from: "VeritaAssure™ <info@veritaslabservices.com>", to: m.to, subject: m.subject, html: m.html });
+    if (r?.error) throw new Error(r.error.message || String(r.error));
+  };
+}
+
+const escHtml = (v: any) => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+// No download link in the email on purpose: the owner signs in to download, so a forwarded email opens nothing.
+export function weeklyCopyEmail(labId: number, labName: string, builtAt: Date): { subject: string; html: string } {
+  const link = `https://www.veritaslabservices.com/labs/${labId}/members`;
+  const until = new Date(builtAt.getTime() + WEEKLY_RETENTION_MS).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });
+  const lab = escHtml(labName);
+  const html = `
+    <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:24px">
+      <h2 style="color:#01696F;margin-bottom:16px">Your weekly copy is ready</h2>
+      <p style="margin-bottom:12px">This week's copy of every record ${lab} keeps in VeritaAssure™ is built: a workbook per module, stored documents including every policy version, and the reports the modules produce, in one zip file.</p>
+      <p style="margin-bottom:20px">Sign in and open Download all records to save it. It is kept until ${until}. This email has no download link on purpose: only the lab owner, signed in, can download the copy.</p>
+      <a href="${link}" style="display:inline-block;background:#01696F;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600">Open Download all records</a>
+      <p style="color:#666;font-size:12px;margin-top:20px">You get this email because weekly copies are turned on for ${lab}. To stop them, turn off "Build a copy every week" on the same page.</p>
+      <hr style="border:none;border-top:1px solid #eee;margin:24px 0"/>
+      <p style="color:#999;font-size:12px">VeritaAssure™ | Veritas Lab Services, LLC</p>
+    </div>`;
+  return { subject: `Your weekly copy of ${labName} records is ready`, html };
+}
+
+export interface WeeklyRunResult { labs: number; built: number; emailed: number; failed: Array<{ labId: number; error: string }>; noMailer: boolean }
+
+// One lab at a time, so the weekly run never builds several zips at once.
+export async function runWeeklyExports(sqlite: any, base: string, opts: { timeoutMs?: number } = {}): Promise<WeeklyRunResult> {
+  const labs = sqlite.prepare(`
+    SELECT l.id, l.lab_name, l.owner_user_id, u.email
+    FROM labs l JOIN users u ON u.id = l.owner_user_id
+    WHERE COALESCE(l.weekly_export_enabled, 0) = 1
+    ORDER BY l.id`).all() as any[];
+  const mailer = await weeklyMailer();
+  const result: WeeklyRunResult = { labs: labs.length, built: 0, emailed: 0, failed: [], noMailer: !mailer };
+  for (const lab of labs) {
+    try {
+      const job = startExportJob(sqlite, lab.id, lab.owner_user_id, base, { weekly: true });
+      const deadline = Date.now() + (opts.timeoutMs ?? 20 * 60 * 1000);
+      while (job.status === "running" && Date.now() < deadline) await new Promise((r) => setTimeout(r, 500));
+      if (job.status !== "done") throw new Error(job.status === "running" ? "timed out" : job.error || "build failed");
+      result.built++;
+      if (mailer && lab.email) {
+        const m = weeklyCopyEmail(lab.id, lab.lab_name || "your lab", new Date());
+        await mailer({ ...m, to: lab.email });
+        result.emailed++;
+      }
+    } catch (e: any) {
+      result.failed.push({ labId: lab.id, error: String(e?.message || e) });
+      console.error(`[export-all] weekly copy for lab ${lab.id} failed:`, e?.message || e);
+    }
+  }
+  console.log(`[export-all] weekly copies: ${result.built}/${result.labs} built, ${result.emailed} emailed, ${result.failed.length} failed`);
+  return result;
 }
 
 // ── Routes ────────────────────────────────────────────────────────────────────────────────────────────────
@@ -589,7 +691,20 @@ export function registerExportAllRoutes(app: any, deps: { sqlite: any; authMiddl
   app.get("/api/labs/:labId/export-all", authMiddleware, ownerOnly, (req: any, res: any) => {
     const labId = Number(req.params.labId);
     cleanupExports();
-    res.json({ job: latestJob(labId), ready: readyExports(labId) });
+    const weekly = !!(sqlite.prepare("SELECT COALESCE(weekly_export_enabled, 0) AS w FROM labs WHERE id = ?").get(labId) as any)?.w;
+    res.json({ job: latestJob(labId), ready: readyExports(labId), weekly });
+  });
+
+  // Weekly copy on/off (owner only).
+  app.put("/api/labs/:labId/export-all/weekly", authMiddleware, ownerOnly, (req: any, res: any) => {
+    const labId = Number(req.params.labId);
+    if (typeof req.body?.enabled !== "boolean") return res.status(400).json({ error: "enabled must be true or false" });
+    const before = !!(sqlite.prepare("SELECT COALESCE(weekly_export_enabled, 0) AS w FROM labs WHERE id = ?").get(labId) as any)?.w;
+    sqlite.prepare("UPDATE labs SET weekly_export_enabled = ? WHERE id = ?").run(req.body.enabled ? 1 : 0, labId);
+    try {
+      logAudit({ userId: req.userId, ownerUserId: req.userId, module: "account", action: "update", entityType: "export_all_weekly", entityId: labId, entityLabel: "Weekly copy of all records", before: { enabled: before }, after: { enabled: req.body.enabled } });
+    } catch { /* audit failure does not block */ }
+    res.json({ weekly: req.body.enabled });
   });
 
   // A short-lived link the browser follows with a plain anchor download (no fetch + blob; see downloadPdfToken).
