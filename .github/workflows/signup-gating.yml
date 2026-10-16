@@ -75,6 +75,10 @@ jobs:
         # state and handoff single-use; PKCE; domain, no-account and support-account refusals; required
         # SSO blocks password sign-in and password reset for its domain.
         run: npm run test:sso
+      - name: Run backup tiers integration test
+        # server/backup.ts: hourly + nightly key names, per-tier pruning (7 / 730 days), consistent online
+        # snapshot taken during writes, skip without S3 env.
+        run: npm run test:backup-tiers
       - name: Run Content-Security-Policy integration test
         # server/securityHeaders.ts: inline-script hashes (CRLF-normalized), no unsafe-inline/eval, Report-Only
         # unless CSP_ENFORCE=1, privacy-safe report parsing, /api/csp-report counting, secret-gated admin read.
