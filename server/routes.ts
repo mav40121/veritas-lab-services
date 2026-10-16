@@ -195,6 +195,7 @@ function headerRowHeight(headers: string[], colWidths: number[]): number {
 }
 
 import { logAudit } from "./audit";
+import { summarizeCspReport, cspHeaderName } from "./securityHeaders";
 import { normalizeChecklistItems } from "@shared/competencyChecklist";
 import { buildCompetencyRegisterRows, generateCompetencyRegisterExcel } from "./competencyRegisterExcel";
 import {
@@ -4152,6 +4153,30 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   registerTwoFactorRoutes(app, { sqlite: (db as any).$client, storage, authMiddleware, labScopeMiddleware, logAudit, buildSignIn, adminSecret: ADMIN_SECRET });
   // Single sign-on (server/sso.ts, server/ssoRoutes.ts; Michael 2026-10-15, Q39 = 1).
   registerSsoRoutes(app, { sqlite: (db as any).$client, storage, logAudit, buildSignIn, adminSecret: ADMIN_SECRET });
+
+  // Content-Security-Policy violation reports (2026-10-16, Q47 = 1; server/securityHeaders.ts). Public:
+  // browsers send these without credentials. Bounded: 64 KB bodies, counts only, at most 2,000 distinct
+  // (directive, blocked origin, page) rows; nothing identifying is stored.
+  app.post("/api/csp-report", express.json({ type: ["application/csp-report", "application/reports+json", "application/json"], limit: "64kb" }), (req: any, res) => {
+    try {
+      const client = (db as any).$client;
+      const now = new Date().toISOString();
+      const rows = (client.prepare("SELECT COUNT(*) AS c FROM csp_reports").get() as any).c as number;
+      const upd = client.prepare("UPDATE csp_reports SET count = count + 1, last_seen = ? WHERE directive = ? AND blocked = ? AND page = ?");
+      const ins = client.prepare("INSERT OR IGNORE INTO csp_reports (directive, blocked, page, count, first_seen, last_seen) VALUES (?, ?, ?, 1, ?, ?)");
+      for (const r of summarizeCspReport(req.body)) {
+        const changed = upd.run(now, r.directive, r.blocked, r.page).changes;
+        if (!changed && rows < 2000) ins.run(r.directive, r.blocked, r.page, now, now);
+      }
+    } catch {}
+    res.status(204).end();
+  });
+  app.get("/api/admin/csp-reports", (req, res) => {
+    const secret = (req.headers["x-admin-secret"] || req.query.secret) as string | undefined;
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    const rows = (db as any).$client.prepare("SELECT directive, blocked, page, count, first_seen, last_seen FROM csp_reports ORDER BY last_seen DESC LIMIT 500").all();
+    res.json({ mode: cspHeaderName(), rows });
+  });
 
   // 2026-10-08 (St. Charles: "trace a QC failure, corrective action, and
   // resolution for a specific analyzer"): QC runs and equipment records point at

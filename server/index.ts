@@ -14,6 +14,8 @@ if (process.env.SENTRY_DSN) {
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
+import path from "path";
+import { loadCsp, cspHeaderName } from "./securityHeaders";
 import { createServer } from "http";
 
 // Fail loud if required secrets are missing - catches Railway env var misconfigurations at deploy time
@@ -25,6 +27,8 @@ if (missingSecrets.length > 0) {
 }
 
 const app = express();
+// Do not announce the framework (a pentest flags X-Powered-By: Express; 2026-10-16, Q47 = 1).
+app.disable("x-powered-by");
 app.set("trust proxy", true);
 const httpServer = createServer(app);
 
@@ -39,10 +43,13 @@ app.use((req, res, next) => {
 
 // Security response headers. Improves trust signals for corporate URL reputation
 // crawlers (Microsoft SmartScreen, Cisco Umbrella, Forcepoint, McAfee TrustedSource).
-// Intentionally omits Content-Security-Policy: a wrong CSP can silently break the
-// React app, fonts, GA4, and Stripe Checkout. Add CSP later as a separate scoped
-// task with explicit testing.
+// Content-Security-Policy (2026-10-16): built from the production index.html (inline scripts allowed
+// by exact hash only) and sent as Report-Only until CSP_ENFORCE=1, because a wrong CSP can silently
+// break the React app, fonts, GA4, and Stripe Checkout. See server/securityHeaders.ts.
+let cspValue: string | null | undefined;
 app.use((req, res, next) => {
+  if (cspValue === undefined) cspValue = process.env.NODE_ENV === "production" ? loadCsp(path.resolve(__dirname, "public", "index.html")) : null;
+  if (cspValue) res.setHeader(cspHeaderName(), cspValue);
   // HSTS: force HTTPS for one year, including subdomains. Cert is Let's Encrypt
   // and we are 100% HTTPS today, so this is safe to commit to.
   res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
