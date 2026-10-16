@@ -778,6 +778,8 @@ import { IQCP_QUESTION_BANK, evaluatePrescreen, type PrescreenAnswers } from "./
 // Used as a fallback when client-sent referenceItems are missing accreditor fields
 // (e.g. stale browser bundles). Pure data module, safe to import on the server.
 import { SCAN_ITEMS as VERITASCAN_SCAN_ITEMS } from "../client/src/lib/veritaScanData";
+import { exportAllPlanBypass, exportAllMiddleware } from "./exportAllContext";
+import { registerExportAllRoutes } from "./exportAll";
 const VERITASCAN_ITEM_BY_ID: Record<number, any> = Object.fromEntries(
   VERITASCAN_SCAN_ITEMS.map((it: any) => [it.id, it])
 );
@@ -1398,6 +1400,10 @@ function writeLabAuditEntry(labId: number, changedByUserId: number, fieldName: s
 const BOOT_TIMESTAMP = new Date().toISOString();
 
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
+  // Download all records (server/exportAll.ts): the export job's own loopback requests carry a per-job secret;
+  // this runs them inside the export context so the plan gates let them through. Must precede every route.
+  app.use(exportAllMiddleware);
+
   // Public one-click demo login (VeritaStock deployment only).
   registerDemoLogin(app);
 
@@ -4152,6 +4158,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (r?.error) throw new Error(r.error.message || String(r.error));
   } : null);
   registerTwoFactorRoutes(app, { sqlite: (db as any).$client, storage, authMiddleware, labScopeMiddleware, logAudit, buildSignIn, adminSecret: ADMIN_SECRET });
+  registerExportAllRoutes(app, { sqlite: (db as any).$client, authMiddleware, httpServer });
   // Single sign-on (server/sso.ts, server/ssoRoutes.ts; Michael 2026-10-15, Q39 = 1).
   registerSsoRoutes(app, { sqlite: (db as any).$client, storage, logAudit, buildSignIn, adminSecret: ADMIN_SECRET });
 
@@ -5189,6 +5196,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // hasCheckAccess pattern, minus the "only" carve-outs that ship one
   // module without the other.
   function hasQcImportAccess(user: any, lab?: any): boolean {
+    if (exportAllPlanBypass(lab)) return true; // export-all job (server/exportAllContext.ts)
     const plan = lab?.plan ?? user?.plan;
     return [
       "annual", "starter", "professional", "lab", "complete",
@@ -7339,7 +7347,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // getAccessLevel/requireWriteAccess grant lapsed PAYING labs: a trial does
     // not get to keep browsing the product after it ends. Scoped to this lab
     // only, so the member can still log in and use any other lab they belong to.
-    if (Number(labFields.is_trial) === 1 && labFields.subscription_expires_at) {
+    if (Number(labFields.is_trial) === 1 && labFields.subscription_expires_at && !exportAllPlanBypass({ id: labId })) {
       if (new Date() >= new Date(labFields.subscription_expires_at)) {
         return res.status(403).json({
           error: "This trial has ended. Contact Veritas Lab Services to continue.",
@@ -13436,6 +13444,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // Phase 4.3a: optional `lab` second arg. When given, prefers lab plan +
   // subscription_status over user-level state.
   function hasMapAccess(user: any, lab?: any) {
+    if (exportAllPlanBypass(lab)) return true; // export-all job (server/exportAllContext.ts)
     if (!user) return false;
     const status = lab?.subscription_status ?? user.subscriptionStatus;
     if (status === 'active') return true;
@@ -17065,6 +17074,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
   // Check access: annual, lab, or veritascan plan
   function hasScanAccess(user: any, lab?: any) {
+    if (exportAllPlanBypass(lab)) return true; // export-all job (server/exportAllContext.ts)
     const plan = lab?.plan ?? user?.plan;
     return ["annual", "professional", "lab", "complete", "veritascan", "clinic", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(plan);
   }
@@ -17579,6 +17589,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // VeritaScan access also has Evidence Library access, and that demo /
   // legacy plan strings on existing labs do not silently get blocked.
   function hasEvidenceLibraryAccess(lab?: any, user?: any): boolean {
+    if (exportAllPlanBypass(lab)) return true; // export-all job (server/exportAllContext.ts)
     return hasScanAccess(user, lab);
   }
 
@@ -17613,7 +17624,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
       // Lab identity from the active lab (CLAUDE.md §7).
       const user = await storage.getUserById(req.userId);
-      const labName = req.scope?.lab?.name || null;
+      // labScopeMiddleware carries lab_name (there is no .name), so this read blank and the workbook said "Lab" (BUG-067 finding).
+      const labName = req.scope?.lab?.lab_name || null;
       const cliaNumber = req.scope?.lab?.clia_number || null;
       const preparedBy = user?.name || null;
 
@@ -19564,6 +19576,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
   // ── CUMSUM TRACKER ──────────────────────────────────────────────────────
   function hasCheckAccess(user: any, lab?: any) {
+    if (exportAllPlanBypass(lab)) return true; // export-all job (server/exportAllContext.ts)
     const plan = lab?.plan ?? user?.plan;
     return ["annual", "starter", "professional", "lab", "complete", "per_study", "clinic", "waived", "community", "hospital", "large_hospital", "enterprise", "veritacheck_only"].includes(plan) || (user?.userId && user.userId <= 11);
   }
@@ -21777,6 +21790,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // event log. Lab-scoped; gated on the same suite plan set as the other
   // modules. maintenance_status is derived from next_due_date at read time.
   function hasEquipmentAccess(user: any, lab?: any) {
+    if (exportAllPlanBypass(lab)) return true; // export-all job (server/exportAllContext.ts)
     const plan = lab?.plan ?? user?.plan;
     return ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "clinic", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(plan);
   }
@@ -23273,6 +23287,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // ── VERITACOMP ─────────────────────────────────────────────────────────
 
   function hasCompetencyAccess(user: any, lab?: any) {
+    if (exportAllPlanBypass(lab)) return true; // export-all job (server/exportAllContext.ts)
     const plan = lab?.plan ?? user?.plan;
     return ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "clinic", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(plan);
   }
@@ -25959,6 +25974,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // ── VERITASTAFF ──────────────────────────────────────────────────────────
 
   function hasStaffAccess(user: any, lab?: any) {
+    if (exportAllPlanBypass(lab)) return true; // export-all job (server/exportAllContext.ts)
     const plan = lab?.plan ?? user?.plan;
     return ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "clinic", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(plan);
   }
@@ -29362,6 +29378,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // "one login, real-time readiness" pitch. Each module block is independently
   // try/caught so one query failing never blanks the whole pane.
   function hasReadinessAccess(user: any, lab?: any) {
+    if (exportAllPlanBypass(lab)) return true; // export-all job (server/exportAllContext.ts)
     const plan = lab?.plan ?? user?.plan;
     return ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "clinic", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(plan);
   }
@@ -31286,6 +31303,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // ── VERITALAB ──────────────────────────────────────────────────────────
 
   function hasLabCertAccess(user: any, lab?: any) {
+    if (exportAllPlanBypass(lab)) return true; // export-all job (server/exportAllContext.ts)
     const plan = lab?.plan ?? user?.plan;
     return ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "clinic", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(plan);
   }
@@ -32238,6 +32256,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
   // ── VERITAPT - Proficiency Testing Tracker ─────────────────────────────
   function hasPTAccess(user: any, lab?: any) {
+    if (exportAllPlanBypass(lab)) return true; // export-all job (server/exportAllContext.ts)
     const plan = lab?.plan ?? user?.plan;
     return ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "clinic", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(plan);
   }

@@ -8,6 +8,7 @@ import { blockNonOperatorSeat } from "./seatAccess";
 import { preserveMapLink, applyMapSignoffWriteback, deriveMapLink, analyteFromTaskName } from "./veritatrackMapSync";
 import { labLocalDate } from "./dateLocal";
 import { labWideCorrelation } from "./labWideCorrelation";
+import { exportAllPlanBypass } from "./exportAllContext";
 
 function trackLicenseCtx(req: any): LicenseContext {
   const u = req?.user || null;
@@ -103,6 +104,7 @@ export function registerVeritaTrackRoutes(
   }
 
   function hasTrackAccess(user: any, lab?: any) {
+    if (exportAllPlanBypass(lab)) return true; // export-all job (server/exportAllContext.ts)
     const plan = lab?.plan ?? user?.plan;
     return [
       "annual","professional","lab","complete","waived","clinic",

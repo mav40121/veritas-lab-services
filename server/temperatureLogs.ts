@@ -13,11 +13,13 @@
 import type { Express } from "express";
 import { db } from "./db";
 import { labLocalDate } from "./dateLocal";
+import { exportAllPlanBypass } from "./exportAllContext";
 
 export const TEMP_UNIT_TYPES = ["refrigerator", "freezer", "incubator", "room", "water_bath", "heat_block", "platelet_incubator", "other"] as const;
 
 // Same explicit plan allowlist as VeritaMaintain equipment (routes.ts hasEquipmentAccess).
 function hasTempLogAccess(user: any, lab?: any): boolean {
+  if (exportAllPlanBypass(lab)) return true; // export-all job (server/exportAllContext.ts)
   const plan = lab?.plan ?? user?.plan;
   return ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "clinic", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(plan);
 }
