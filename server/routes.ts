@@ -25506,11 +25506,24 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       ? (db as any).$client.prepare(sql).all(labId, windowStart)
       : (db as any).$client.prepare(sql).all(labId)) as any[];
 
-    if (assessments.length === 0) {
-      return res.status(404).json({ error: "No locked assessments in the selected window", periodMonths, count: 0 });
+    // BUG-065 (2026-10-16): per-method sign-off (Q156/Q158, 10/13) records each signed method in
+    // competency_method_signoffs and never locks an assessment, so the bundle used to leave out every
+    // competency signed that way. Include one competency record PDF (the same document as Download record)
+    // per person with a method sign-off in the window. Revoked sign-offs do not count.
+    const signedStaff = (windowStart
+      ? (db as any).$client.prepare(
+          "SELECT staff_employee_id AS id, MAX(signed_date) AS last_signed, COUNT(*) AS n FROM competency_method_signoffs WHERE lab_id = ? AND revoked_at IS NULL AND date(signed_date) >= date(?) GROUP BY staff_employee_id"
+        ).all(labId, windowStart)
+      : (db as any).$client.prepare(
+          "SELECT staff_employee_id AS id, MAX(signed_date) AS last_signed, COUNT(*) AS n FROM competency_method_signoffs WHERE lab_id = ? AND revoked_at IS NULL GROUP BY staff_employee_id"
+        ).all(labId)) as Array<{ id: number; last_signed: string; n: number }>;
+
+    if (assessments.length === 0 && signedStaff.length === 0) {
+      return res.status(404).json({ error: "No signed competencies in the selected window", periodMonths, count: 0 });
     }
 
-    const compLab = (db as any).$client.prepare("SELECT id, lab_name, clia_number FROM labs WHERE id = ?").get(labId) as any;
+    // primary_regime selected so NYS-CLEP labs get the NYS rendering (it was passed but never selected).
+    const compLab = (db as any).$client.prepare("SELECT id, lab_name, clia_number, primary_regime FROM labs WHERE id = ?").get(labId) as any;
     const labName: string = compLab?.lab_name || "Clinical Laboratory";
     const cliaNumber: string = compLab?.clia_number || "";
 
@@ -25566,6 +25579,34 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       }
     }
 
+    // BUG-065: one competency record per person with method sign-offs in the window.
+    for (const s of signedStaff) {
+      const view = assembleEmployeeCompetencyView((db as any).$client, labId, Number(s.id));
+      const nm = view?.employee ? [view.employee.first_name, view.employee.last_name].filter(Boolean).join(" ") || view.employee.name || "Unknown" : `Staff ${s.id}`;
+      const parts = String(nm).trim().split(/\s+/);
+      const last = parts[parts.length - 1] || "Unknown";
+      const first = parts.slice(0, -1).join("_") || "Unknown";
+      let candidate = `${last}_${first}_Competency_Record.pdf`.replace(/[^a-zA-Z0-9_\-.]/g, "_");
+      let k = 2;
+      while (usedFilenames.has(candidate)) { candidate = `${last}_${first}_Competency_Record_${k}.pdf`.replace(/[^a-zA-Z0-9_\-.]/g, "_"); k += 1; }
+      usedFilenames.add(candidate);
+      const a = { employee_name: nm, program_name: `Competency record (${s.n} method sign-off${s.n === 1 ? "" : "s"})`, assessment_type: "Signed by method", assessment_date: s.last_signed, completion_date: s.last_signed };
+      if (!view) {
+        bundleRows.push({ a, filename: candidate, ok: false, error: "Not on the active VeritaStaff roster" });
+        continue;
+      }
+      try {
+        const pdfBuffer = await generateEmployeeCompetencyRecordPDF({
+          labName, cliaNumber: cliaNumber || undefined, employee: view.employee, elementCount: view.elementCount, testSystems: view.testSystems,
+        }, licenseCtxFromReq(req));
+        zip.file(candidate, pdfBuffer);
+        bundleRows.push({ a, filename: candidate, ok: true });
+      } catch (err: any) {
+        console.error(`Survey bundle: record PDF failed for staff ${s.id}:`, err?.message);
+        bundleRows.push({ a, filename: candidate, ok: false, error: err?.message || "PDF generation failed" });
+      }
+    }
+
     // Build Index.xlsx per CLAUDE.md §6 (About + Bundle sheets, brand teal,
     // password protection, identity in three layers).
     const { default: ExcelJS } = await import("exceljs");
@@ -25597,16 +25638,16 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const aBlank = () => { about.getRow(aRow).height = 8; aRow += 1; };
 
     aSection("About this bundle");
-    aBody("This zip is a single, surveyor-ready package of every locked VeritaComp competency assessment for this laboratory in the selected window. The Bundle sheet lists each PDF, its employee, program, assessment type, dates, and folder. The PDFs themselves carry the regulatory determination, the 6 CLIA elements, and the signature region.");
+    aBody("This zip is a single, surveyor-ready package of the signed VeritaComp competencies for this laboratory in the selected window: every locked competency assessment, and for competencies signed method by method, each person's competency record showing every signed method. The Bundle sheet lists each PDF, its employee, program, type, dates, and folder. The PDFs themselves carry the regulatory determination, the CLIA elements, and the signatures.");
     aBlank();
     aSection("How to use this workbook");
     aBody("Open the Bundle sheet. The Filename column lists each PDF in this zip in alphabetical order by employee. Filter the Employee column to find one technician's records, or sort by Assessment Date for chronological order.");
     aBlank();
     aSection("Window");
-    aBody(periodMonths ? `This bundle covers the last ${periodMonths} months of locked assessments (assessment date >= ${windowStart || ""}).` : "This bundle covers all locked assessments on file for this laboratory, with no window cutoff.");
+    aBody(periodMonths ? `This bundle covers the last ${periodMonths} months: locked assessments dated on or after ${windowStart || ""}, and anyone with a method signed on or after that date.` : "This bundle covers all signed competencies on file for this laboratory, with no window cutoff.");
     aBlank();
     aSection("What is NOT included");
-    aBody("Draft (unlocked) assessments are excluded. An assessment is locked when the supervisor clicks Sign and Complete, which stamps the completion date and prevents further edits. Drafts are not surveyor-defensible evidence.");
+    aBody("Unsigned work is excluded: draft assessments, and methods not yet signed off. A method sign-off that was revoked does not count. Drafts are not surveyor-defensible evidence.");
     aBlank();
     aSection("Disclaimer");
     aBody("This bundle is a convenience export of the per-assessment PDF reports that VeritaComp generated when each competency was completed. The PDFs themselves are the audit-grade record. If there is a conflict between this workbook and a per-assessment PDF, the per-assessment PDF governs. The laboratory director is responsible for the accuracy of the underlying data.");
