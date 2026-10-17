@@ -1525,6 +1525,16 @@ for (const [col, colType] of newCompItemCols) {
 // list). Flag it so it is excluded from the program picker and can be resolved.
 try { sqlite.exec("ALTER TABLE competency_programs ADD COLUMN is_implicit INTEGER NOT NULL DEFAULT 0"); } catch {}
 
+// New-hire evaluations (2026-10-16, Sampson REQ-076): a non-technical program marked record_kind 'evaluation' is a
+// 30/60/90-day evaluation titled Evaluation, not Competency (shared/competencyEvaluation.ts). Every existing program
+// is a competency.
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(competency_programs)").all() as Array<{ name: string }>).map((c) => c.name);
+  if (!cols.includes("record_kind")) {
+    try { sqlite.exec("ALTER TABLE competency_programs ADD COLUMN record_kind TEXT NOT NULL DEFAULT 'competency'"); } catch {}
+  }
+}
+
 // Per-method competency sign-off (2026-10-13, Michael Q156/Q158): one row per person, per method (instrument), per
 // competency (initial, 6-month, first annual, annual). Signing freezes that method's items (items.signoff_id); the
 // person's other methods stay open. revoked_at reopens the method (Unlock). The signer is a VeritaStaff person whose
