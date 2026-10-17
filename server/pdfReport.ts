@@ -12,6 +12,7 @@ import { stampPdfAuthor } from "./pdfMeta";
 import { labLocalDate } from "./dateLocal";
 import type { Study } from "@shared/schema";
 import { isQuizImage } from "@shared/quizImages";
+import { assessmentTypeLabel, evaluationDueDate } from "@shared/competencyEvaluation";
 import { existsSync as _teaExistsSync, readFileSync as _teaReadFileSync } from "fs";
 import { resolve as _teaResolve } from "path";
 import {
@@ -5189,8 +5190,11 @@ export function buildCompetencyHTML(input: CompetencyPDFInput): string {
   const isTechnical = assessment.competency_type === "technical";
   const isWaived = assessment.competency_type === "waived";
   const isNonTech = assessment.competency_type === "nontechnical";
+  // New-hire evaluation (2026-10-16, Sampson REQ-076): a non-technical program marked record_kind 'evaluation'. Every
+  // title, label and sign-off line on it says Evaluation, never Competency.
+  const isEvaluation = isNonTech && assessment.program_record_kind === "evaluation";
 
-  const typeLabel = isTechnical ? "Technical Competency Assessment" : isWaived ? "Waived Testing Competency Assessment" : "Non-Technical Competency Assessment";
+  const typeLabel = isEvaluation ? "New-Hire Evaluation" : isTechnical ? "Technical Competency Assessment" : isWaived ? "Waived Testing Competency Assessment" : "Non-Technical Competency Assessment";
   // Wave F PR F1 (2026-06-06) cites §493.1235 (the competency-assessment policy
   // standard) in the header. BUG-029 (2026-10-11): §493.1235 is a single sentence
   // with no paragraphs (eCFR 2026-10-01); the six elements on pages 2+ are listed
@@ -5200,7 +5204,14 @@ export function buildCompetencyHTML(input: CompetencyPDFInput): string {
   const standardRef = isTechnical ? "HR.01.06.01 EP 18 &middot; 42 CFR &sect;493.1235" : isWaived ? "WT.03.01.01 EP 5 &middot; 42 CFR &sect;493.15" : "HR.01.06.01 EP 5/6";
 
   const passColor = assessment.status === "pass" ? "#437A22" : assessment.status === "fail" ? "#A12C7B" : "#d97706";
-  const passLabel = assessment.status === "pass" ? "PASS" : assessment.status === "fail" ? "FAIL" : "REMEDIATION REQUIRED";
+  const passLabel = isEvaluation
+    ? (assessment.status === "pass" ? "SATISFACTORY" : assessment.status === "fail" ? "UNSATISFACTORY" : "IMPROVEMENT PLAN REQUIRED")
+    : (assessment.status === "pass" ? "PASS" : assessment.status === "fail" ? "FAIL" : "REMEDIATION REQUIRED");
+  // An evaluation's Type row names the 30, 60 or 90-day evaluation and its due date from the hire date.
+  const evalDue = isEvaluation ? evaluationDueDate(assessment.employee_hire_date, assessment.assessment_type) : null;
+  const typeRowLabel = isEvaluation
+    ? (input.blank ? "30-Day / 60-Day / 90-Day Evaluation" : `${assessmentTypeLabel(assessment.assessment_type)} Evaluation${evalDue ? ` (due ${evalDue})` : ""}`)
+    : assessmentTypeLabel(assessment.assessment_type || "initial");
 
   let html = `<!DOCTYPE html><html><head><meta charset="utf-8">
 <style>
@@ -5265,7 +5276,7 @@ export function buildCompetencyHTML(input: CompetencyPDFInput): string {
     <div class="col">
       <div class="row"><span class="lbl">Employee:</span><span class="val">${esc(assessment.employee_name)}</span></div>
       <div class="row"><span class="lbl">Date of Hire:</span><span class="val">${esc(assessment.employee_hire_date) || "-"}</span></div>
-      <div class="row"><span class="lbl">Type:</span><span class="val">${({initial:"Initial",["6month"]:"6-Month",annual:"Annual",reassessment:"Reassessment",orientation:"Orientation",duty_change:"Duty Change"} as Record<string,string>)[(assessment.assessment_type || "initial")] || (assessment.assessment_type || "initial").replace("_", " ").toUpperCase()}</span></div>
+      <div class="row"><span class="lbl">Type:</span><span class="val">${esc(typeRowLabel)}</span></div>
       <div class="row"><span class="lbl">Date:</span><span class="val">${dateStr}</span></div>
     </div>
   </div>`;
@@ -5277,7 +5288,7 @@ export function buildCompetencyHTML(input: CompetencyPDFInput): string {
       <div><span style="color:#888;font-size:7pt;">Title:</span> <strong>${esc(assessment.evaluator_title) || "-"}</strong></div>
       <div><span style="color:#888;font-size:7pt;">Initials:</span> <strong>${esc(assessment.evaluator_initials) || "-"}</strong></div>
     </div>
-    <div class="note">Evaluator must be Lab Director or designee, Technical Consultant (moderate complexity), or Technical Supervisor (high complexity) as appropriate for this employee's testing category.</div>
+    ${isEvaluation ? "" : `<div class="note">Evaluator must be Lab Director or designee, Technical Consultant (moderate complexity), or Technical Supervisor (high complexity) as appropriate for this employee's testing category.</div>`}
   </div>`;
 
   // #91: an employee competency record can carry waived test systems (two of four
@@ -5408,12 +5419,12 @@ export function buildCompetencyHTML(input: CompetencyPDFInput): string {
   const supervisorPrintLine = `${esc(assessment.evaluator_name) || ""}${assessment.evaluator_initials ? " (" + esc(assessment.evaluator_initials) + ")" : ""}`;
   html += `<div class="ack-box">
     <div class="title">Employee Acknowledgement</div>
-    <div class="text">Prior to performing laboratory duties, the following are completed:</div>
+    ${isEvaluation ? `<div class="text">By signing below, the employee acknowledges that this evaluation has been reviewed with them.</div>` : `<div class="text">Prior to performing laboratory duties, the following are completed:</div>
     <ul>
       <li>The laboratory director or designee documents that staff have completed orientation and have demonstrated competence in performing their required duties.</li>
       <li>The staff member affirms, in writing, that they can perform the duties for which orientation was provided.</li>
     </ul>
-    <div class="text" style="margin-top:6px;">By signing below, the employee acknowledges that this competency assessment has been reviewed with them and that they understand the duties for which they have been assessed competent.</div>
+    <div class="text" style="margin-top:6px;">By signing below, the employee acknowledges that this competency assessment has been reviewed with them and that they understand the duties for which they have been assessed competent.</div>`}
     <div class="sig-grid" style="margin-top:10px;">
       <div>
         <div class="sig-line" style="min-height:24px;border-bottom:1px solid #1a1a1a;"></div>
@@ -5709,9 +5720,9 @@ export function buildCompetencyHTML(input: CompetencyPDFInput): string {
     // Non-technical checklist
     html += `<div class="page-break"></div>`;
     html += `<div class="section">
-      <div class="section-header">Non-Technical Competency Checklist - ${esc(assessment.department)}</div>
+      <div class="section-header">${isEvaluation ? "New-Hire Evaluation Checklist" : "Non-Technical Competency Checklist"} - ${esc(assessment.department)}</div>
       <table>
-        <tr><th style="width:5%">#</th><th>Competency Item</th><th style="width:12%">Date Met</th><th style="width:10%">Emp Init</th><th style="width:10%">Sup Init</th></tr>`;
+        <tr><th style="width:5%">#</th><th>${isEvaluation ? "Evaluation Item" : "Competency Item"}</th><th style="width:12%">Date Met</th><th style="width:10%">Emp Init</th><th style="width:10%">Sup Init</th></tr>`;
     // Wave G PR G1: blank-worksheet branch for nontechnical programs.
     // Render one row per checklist item from the program with blank
     // date/initials cells so the supervisor can hand-complete on paper.
@@ -5751,14 +5762,16 @@ export function buildCompetencyHTML(input: CompetencyPDFInput): string {
   html += `<div class="section">
     <div class="section-header">Evaluator Sign-Off</div>
     <div style="border:1.5px solid #01696F;border-radius:6px;padding:16px 18px;background:#f8fafb;margin-top:8px;">
-      <div style="font-size:9pt;font-weight:700;color:#01696F;margin-bottom:10px;text-align:center;">COMPETENCY ASSESSMENT COMPLETION</div>
-      <div style="font-size:8.5pt;margin-bottom:12px;text-align:center;">All required elements have been assessed and documented above.</div>
+      <div style="font-size:9pt;font-weight:700;color:#01696F;margin-bottom:10px;text-align:center;">${isEvaluation ? "EVALUATION COMPLETION" : "COMPETENCY ASSESSMENT COMPLETION"}</div>
+      <div style="font-size:8.5pt;margin-bottom:12px;text-align:center;">${isEvaluation ? "Every item has been evaluated and documented above." : "All required elements have been assessed and documented above."}</div>
       <div style="text-align:center;margin-bottom:14px;">
         <span style="font-size:10pt;font-weight:800;color:${input.blank ? "#444" : passColor};letter-spacing:1px;">Overall Determination: ${input.blank ? "____________" : passLabel}</span>
       </div>
       <div style="font-size:8pt;margin-bottom:6px;font-weight:600;">Evaluator Certification:</div>
       <div style="font-size:7.5pt;font-style:italic;line-height:1.6;margin-bottom:14px;color:#333;">
-        &ldquo;I certify that I have directly assessed this employee&rsquo;s competency using the methods documented above and that the results accurately reflect the employee&rsquo;s performance.&rdquo;
+        ${isEvaluation
+          ? "&ldquo;I certify that I have evaluated this employee using the items documented above and that the results accurately reflect the employee&rsquo;s performance.&rdquo;"
+          : "&ldquo;I certify that I have directly assessed this employee&rsquo;s competency using the methods documented above and that the results accurately reflect the employee&rsquo;s performance.&rdquo;"}
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:10px;">
         <div>

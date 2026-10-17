@@ -127,3 +127,7 @@ jobs:
         # blank/empty lists refused with nothing changed, audit-logged edits, saved assessments keep their items,
         # technical programs refused, cross-lab 404, legacy route validated.
         run: npm run test:competency-checklist
+      - name: Run VeritaComp new-hire evaluation integration test
+        # Sampson REQ-076: 30/60/90-day evaluations titled Evaluation, due from hire date, types checked, new hires
+        # with no instrument listed, kept out of competency compliance, PDF never says competency.
+        run: npm run test:competency-evaluation

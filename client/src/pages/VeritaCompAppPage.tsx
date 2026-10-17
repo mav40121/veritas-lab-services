@@ -16,6 +16,7 @@ import { useMemberships } from "@/hooks/useMemberships";
 import { useLabRoute } from "@/hooks/useLabRoute";
 import { downloadPdfToken } from "@/lib/utils";
 import { checklistLabel, matchSavedChecklistRows, CHECKLIST_MAX_ITEMS, CHECKLIST_MAX_DESCRIPTION } from "@shared/competencyChecklist";
+import { assessmentTypeLabel, evaluationDueDate } from "@shared/competencyEvaluation";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -102,6 +103,8 @@ interface Program {
   name: string;
   department: string;
   type: "technical" | "waived" | "nontechnical";
+  // "evaluation" = a new-hire evaluation (non-technical, 30/60/90-day, titled Evaluation). 2026-10-16.
+  record_kind?: "competency" | "evaluation";
   map_id: number | null;
   created_at: string;
   updated_at: string;
@@ -432,10 +435,16 @@ function typeBadgeColor(type: string) {
   return "bg-amber-500/10 text-amber-600 border-amber-500/20";
 }
 
-function typeLabel(type: string) {
+function typeLabel(type: string, recordKind?: string | null) {
+  if (recordKind === "evaluation") return "New-Hire Evaluation";
   if (type === "technical") return "Technical";
   if (type === "waived") return "Waived";
   return "Non-Technical";
+}
+
+// "Technical Competency", or "New-Hire Evaluation" for an evaluation (never "Evaluation Competency").
+function programKindLabel(type: string, recordKind?: string | null) {
+  return recordKind === "evaluation" ? "New-Hire Evaluation" : `${typeLabel(type)} Competency`;
 }
 
 // ── Main Component ──────────────────────────────────────────────────────
@@ -979,6 +988,8 @@ function ProgramListView() {
   // 2026-10-14 (Michael): waived, non-technical and quizzes straight from the header, without first
   // building a program. QuickCompetencyDialog finds (or quietly sets up) the department's program.
   const [quickType, setQuickType] = useState<"waived" | "nontechnical" | null>(null);
+  // 2026-10-16 (Sampson REQ-076): 30, 60 and 90-day new-hire evaluations, one per job title.
+  const [evaluationOpen, setEvaluationOpen] = useState(false);
   const [quizHubOpen, setQuizHubOpen] = useState(false);
 
   // Multi-Lab Tier 2 Phase 3.5b: list reads from the lab-scoped endpoint.
@@ -1042,6 +1053,12 @@ function ProgramListView() {
             <Button variant="outline" onClick={() => setQuickType("nontechnical")} disabled={readOnly} data-testid="quick-nontechnical">
               <Plus className="h-4 w-4 mr-1.5" />
               Non-technical competency
+            </Button>
+          </PermissionTooltip>
+          <PermissionTooltip disabled={readOnly} reason={lockReason}>
+            <Button variant="outline" onClick={() => setEvaluationOpen(true)} disabled={readOnly} data-testid="quick-evaluation">
+              <Plus className="h-4 w-4 mr-1.5" />
+              New-hire evaluation
             </Button>
           </PermissionTooltip>
           <Button onClick={() => setQuizHubOpen(true)} data-testid="quick-quizzes">
@@ -1192,7 +1209,7 @@ function ProgramListView() {
                       <span className="font-semibold text-sm leading-tight truncate">{p.name}</span>
                       <Badge variant="outline" className={`text-[10px] ${typeBadgeColor(p.type)}`}>
                         {typeIcon(p.type)}
-                        <span className="ml-1">{typeLabel(p.type)}</span>
+                        <span className="ml-1">{typeLabel(p.type, p.record_kind)}</span>
                       </Badge>
                       <span className="text-xs text-muted-foreground">{p.department}</span>
                     </div>
@@ -1247,6 +1264,13 @@ function ProgramListView() {
         />
       )}
       {quizHubOpen && <QuizHubDialog programs={programs ?? []} onClose={() => setQuizHubOpen(false)} />}
+      {evaluationOpen && (
+        <NewHireEvaluationDialog
+          programs={programs ?? []}
+          onClose={() => setEvaluationOpen(false)}
+          onCreated={() => qc.invalidateQueries({ queryKey: [programsListUrl] })}
+        />
+      )}
 
       {wizardOpen && (
         <NewProgramWizard
@@ -1417,7 +1441,8 @@ function QuickCompetencyDialog({
   const labRoute = useLabRoute();
   const activeLabId = useActiveLabId();
   const { toast } = useToast();
-  const ofType = programs.filter(p => p.type === type);
+  // A new-hire evaluation has its own button and is never a department's non-technical competency.
+  const ofType = programs.filter(p => p.type === type && p.record_kind !== "evaluation");
   const deptOf = (p: Program) => ((p.department || "").trim()) || "Other";
   const [department, setDepartment] = useState<string>(ofType[0] ? deptOf(ofType[0]) : (type === "waived" ? "Point of Care" : DEPARTMENTS[0]));
   const inDept = ofType.filter(p => deptOf(p) === department);
@@ -1538,6 +1563,117 @@ function QuickCompetencyDialog({
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="outline" onClick={onClose}>Cancel</Button>
             <Button onClick={go} disabled={busy || (type === "nontechnical" && inDept.length === 0 && checklistBlank)} data-testid="quick-continue">{busy ? "Setting up..." : "Continue"}</Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// New-hire evaluation (2026-10-16, Natalie Lamb, Sampson Regional: "We have to do a 30 day, 60 day and 90 day eval
+// on each employee when they are hired. I have 8 different job titles."). Each job title is its own program with its own
+// checklist, titled Evaluation. Pick a job title that is already set up, or name a new one and enter its checklist; the
+// evaluation form opens next with the 30, 60 and 90-day choices.
+function NewHireEvaluationDialog({
+  programs,
+  onClose,
+  onCreated,
+}: {
+  programs: Program[];
+  onClose: () => void;
+  onCreated: () => void;
+}) {
+  const [, navigate] = useLocation();
+  const labRoute = useLabRoute();
+  const activeLabId = useActiveLabId();
+  const { toast } = useToast();
+  const NEW = "new";
+  const evaluations = programs.filter(p => p.type === "nontechnical" && p.record_kind === "evaluation");
+  const [choice, setChoice] = useState<string>(evaluations[0] ? String(evaluations[0].id) : NEW);
+  const [jobTitle, setJobTitle] = useState("");
+  const [department, setDepartment] = useState<string>(DEPARTMENTS[0]);
+  const [checklist, setChecklist] = useState<{ label: string; description: string }[]>([{ label: checklistLabel(0), description: "" }]);
+  const [busy, setBusy] = useState(false);
+  const isNew = choice === NEW;
+  const newName = `${jobTitle.trim()} new-hire evaluation`;
+  const nameTaken = isNew && jobTitle.trim() !== "" && evaluations.some(p => p.name.trim().toLowerCase() === newName.toLowerCase());
+  const checklistBlank = checklist.length === 0 || checklist.some(it => !it.description.trim());
+  const canContinue = !busy && (!isNew || (jobTitle.trim() !== "" && !nameTaken && !checklistBlank));
+
+  async function go() {
+    if (!isNew) {
+      navigate(labRoute(`/veritacomp-app/${choice}?newAssessment=1`));
+      return;
+    }
+    setBusy(true);
+    try {
+      const url = activeLabId ? `${API_BASE}/api/labs/${activeLabId}/competency/programs` : `${API_BASE}/api/competency/programs`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ name: newName, department, type: "nontechnical", recordKind: "evaluation", mapId: null, checklistItems: checklist }),
+      });
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({}));
+        throw new Error(e.error || "Could not set it up");
+      }
+      const data = await res.json();
+      onCreated();
+      navigate(labRoute(`/veritacomp-app/${data.id}?newAssessment=1`));
+    } catch (e: any) {
+      toast({ title: "Could not start the evaluation", description: e.message, variant: "destructive" });
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className={`${isNew ? "max-w-xl" : "max-w-md"} max-h-[85vh] overflow-y-auto`}>
+        <DialogHeader>
+          <DialogTitle>New-hire evaluation</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 pt-1" data-testid="evaluation-dialog">
+          <p className="text-sm text-muted-foreground">
+            30, 60 and 90-day evaluations, dated from the hire date. Each job title has its own checklist. The evaluation form opens next.
+          </p>
+          <div>
+            <label className="text-sm font-medium mb-1 block">Job title</label>
+            <Select value={choice} onValueChange={setChoice}>
+              <SelectTrigger data-testid="evaluation-job-title"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {evaluations.map(p => <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>)}
+                <SelectItem value={NEW}>Add a job title...</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {isNew && (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-sm font-medium mb-1 block">New job title</label>
+                  <Input value={jobTitle} onChange={e => setJobTitle(e.target.value)} placeholder="e.g. Phlebotomist" maxLength={80} data-testid="evaluation-new-title" />
+                </div>
+                <div>
+                  <label className="text-sm font-medium mb-1 block">Department</label>
+                  <Select value={department} onValueChange={setDepartment}>
+                    <SelectTrigger data-testid="evaluation-department"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {DEPARTMENTS.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              {nameTaken && <p className="text-xs text-destructive">"{newName}" is already set up. Pick it from the list instead.</p>}
+              <div className="rounded-md border border-border p-3 space-y-2" data-testid="evaluation-checklist">
+                <div className="text-sm font-medium">Evaluation items</div>
+                <ChecklistItemsEditor items={checklist} onChange={setChecklist} />
+                <p className="text-xs text-muted-foreground">You can change these later on the evaluation's Overview tab.</p>
+              </div>
+            </>
+          )}
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={onClose}>Cancel</Button>
+            <Button onClick={go} disabled={!canContinue} data-testid="evaluation-continue">{busy ? "Setting up..." : "Continue"}</Button>
           </div>
         </div>
       </DialogContent>
@@ -2008,7 +2144,7 @@ function ProgramDetailView({ programId }: { programId: number }) {
             <h1 className="text-2xl font-bold tracking-tight">{program.name}</h1>
             <Badge variant="outline" className={`text-xs ${typeBadgeColor(program.type)}`}>
               {typeIcon(program.type)}
-              <span className="ml-1">{typeLabel(program.type)}</span>
+              <span className="ml-1">{typeLabel(program.type, program.record_kind)}</span>
             </Badge>
           </div>
           <p className="text-sm text-muted-foreground">{program.department} Department</p>
@@ -2029,7 +2165,7 @@ function ProgramDetailView({ programId }: { programId: number }) {
                 );
                 if (!r.ok) throw new Error(await r.text());
                 const { token } = await r.json();
-                const typeLabel = program.type === "technical" ? "Technical" : program.type === "waived" ? "Waived" : "NonTechnical";
+                const typeLabel = program.record_kind === "evaluation" ? "Evaluation" : program.type === "technical" ? "Technical" : program.type === "waived" ? "Waived" : "NonTechnical";
                 const safeName = (program.name || "Program").replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
                 const date = new Date().toISOString().split("T")[0];
                 downloadPdfToken(token, `VeritaComp_BLANK_${typeLabel}_${safeName}_${date}.pdf`);
@@ -2044,7 +2180,7 @@ function ProgramDetailView({ programId }: { programId: number }) {
           </Button>
           <Button onClick={() => setNewAssessmentOpen(true)} hidden={isReadOnly}>
             <Plus className="h-4 w-4 mr-1.5" />
-            New Assessment
+            {program.record_kind === "evaluation" ? "New Evaluation" : "New Assessment"}
           </Button>
         </div>
       </div>
@@ -2129,7 +2265,7 @@ function ChecklistCard({ program }: { program: Program }) {
       }
       await qc.invalidateQueries({ queryKey: [programDetailKey] });
       setEditing(false);
-      toast({ title: "Checklist saved", description: `${draft.length} item${draft.length === 1 ? "" : "s"}. New assessments and the blank template use it now.` });
+      toast({ title: "Checklist saved", description: `${draft.length} item${draft.length === 1 ? "" : "s"}. New ${program.record_kind === "evaluation" ? "evaluations" : "assessments"} and the blank template use it now.` });
     } catch {
       toast({ title: "Checklist not saved", description: "Network error. Nothing was saved.", variant: "destructive" });
     } finally {
@@ -2249,7 +2385,7 @@ function OverviewTab({ program }: { program: Program & { employees: Employee[]; 
       <div className="border border-border rounded-lg p-4 bg-card">
         <div className="text-sm font-semibold mb-3">Program Details</div>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
-          <div><span className="text-xs text-muted-foreground block">Type</span>{typeLabel(program.type)} Competency</div>
+          <div><span className="text-xs text-muted-foreground block">Type</span>{programKindLabel(program.type, program.record_kind)}</div>
           <div><span className="text-xs text-muted-foreground block">Department</span>{program.department}</div>
           <div><span className="text-xs text-muted-foreground block">Created</span>{new Date(program.created_at).toLocaleDateString()}</div>
           {program.type === "technical" && (
@@ -2419,7 +2555,7 @@ function AssessmentsTab({ program, onNewAssessment, onEdit }: { program: Program
       return;
     }
     const { token } = await res.json();
-    downloadPdfToken(token, `VeritaComp_Assessment_${assessmentId}.pdf`);
+    downloadPdfToken(token, `VeritaComp_${program.record_kind === "evaluation" ? "Evaluation" : "Assessment"}_${assessmentId}.pdf`);
   };
 
   const deleteAssessment = async (id: number) => {
@@ -2497,11 +2633,13 @@ function AssessmentsTab({ program, onNewAssessment, onEdit }: { program: Program
     return (
       <div className="text-center py-12 border border-dashed border-border rounded-xl">
         <ClipboardCheck className="h-12 w-12 mx-auto text-muted-foreground/40 mb-3" />
-        <p className="font-semibold mb-1">No assessments yet</p>
-        <p className="text-sm text-muted-foreground mb-5">{isReadOnly ? "Assessments recorded for this program will appear here." : "Create your first competency assessment."}</p>
+        <p className="font-semibold mb-1">{program.record_kind === "evaluation" ? "No evaluations yet" : "No assessments yet"}</p>
+        <p className="text-sm text-muted-foreground mb-5">{program.record_kind === "evaluation"
+          ? (isReadOnly ? "Evaluations recorded for this job title will appear here." : "Record the first 30, 60 or 90-day evaluation.")
+          : (isReadOnly ? "Assessments recorded for this program will appear here." : "Create your first competency assessment.")}</p>
         <Button onClick={onNewAssessment} hidden={isReadOnly}>
           <Plus className="h-4 w-4 mr-1.5" />
-          New Assessment
+          {program.record_kind === "evaluation" ? "New Evaluation" : "New Assessment"}
         </Button>
       </div>
     );
@@ -2540,7 +2678,9 @@ function AssessmentsTab({ program, onNewAssessment, onEdit }: { program: Program
       a.status === "pass" ? "text-emerald-600 bg-emerald-500/10 border-emerald-500/20" :
       a.status === "fail" ? "text-red-600 bg-red-500/10 border-red-500/20" :
       "text-amber-600 bg-amber-500/10 border-amber-500/20";
-    const passLabel = inProgress ? "In progress" : a.status === "pass" ? "Pass" : a.status === "fail" ? "Fail" : "Remediation";
+    const passLabel = inProgress ? "In progress"
+      : program.record_kind === "evaluation" ? (a.status === "pass" ? "Satisfactory" : a.status === "fail" ? "Unsatisfactory" : "Improvement plan")
+      : a.status === "pass" ? "Pass" : a.status === "fail" ? "Fail" : "Remediation";
     return (
       <Card key={a.id} className="hover:border-primary/30 transition-colors">
             <CardContent className="p-4">
@@ -2549,7 +2689,7 @@ function AssessmentsTab({ program, onNewAssessment, onEdit }: { program: Program
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <span className="font-semibold text-sm">{a.employee_name}</span>
                     <Badge variant="outline" className={`text-[10px] ${passColor}`}>{passLabel}</Badge>
-                    <span className="text-xs text-muted-foreground">{a.assessment_type.replace("_", " ")}</span>
+                    <span className="text-xs text-muted-foreground">{assessmentTypeLabel(a.assessment_type)}</span>
                     {(a as any).locked === 1 && (a as any).completion_date && (
                       <Badge variant="outline" className="text-[10px] text-emerald-700 bg-emerald-500/10 border-emerald-500/30">
                         Signed {String((a as any).completion_date).split("T")[0]}
@@ -2630,7 +2770,7 @@ function AssessmentsTab({ program, onNewAssessment, onEdit }: { program: Program
                   >
                     Audit
                   </Button>
-                  <Button variant="ghost" size="icon" className="h-8 w-8" title="Download PDF" onClick={() => downloadPdf(a.id)}>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" title="Download PDF" onClick={() => downloadPdf(a.id)} data-testid="assessment-pdf">
                     <FileDown className="h-4 w-4" />
                   </Button>
                   <ConfirmDialog
@@ -3182,7 +3322,7 @@ function SettingsTab({ program }: { program: Program }) {
       <div className="border border-border rounded-lg p-4 bg-card">
         <div className="text-sm font-semibold mb-2">Program Information</div>
         <div className="text-xs text-muted-foreground space-y-1">
-          <div>Type: {typeLabel(program.type)}</div>
+          <div>Type: {typeLabel(program.type, program.record_kind)}</div>
           <div>Department: {program.department}</div>
           <div>Created: {new Date(program.created_at).toLocaleString()}</div>
           <div>Last Updated: {new Date(program.updated_at).toLocaleString()}</div>
@@ -3455,7 +3595,9 @@ function NewAssessmentDialog({
   const [waivedItems, setWaivedItems] = useState<Record<number, WaivedItemData>>({});
 
   // Non-technical
-  const [ntAssessmentType, setNtAssessmentType] = useState(editing?.assessment_type || "orientation");
+  // A new-hire evaluation (2026-10-16) takes the 30, 60 and 90-day types instead.
+  const isEvaluation = program.record_kind === "evaluation";
+  const [ntAssessmentType, setNtAssessmentType] = useState(editing?.assessment_type || (isEvaluation ? "30day" : "orientation"));
   const [nonTechItems, setNonTechItems] = useState<Record<string, NonTechItemData>>({});
   const [ntCompletionDate, setNtCompletionDate] = useState("");
 
@@ -3860,7 +4002,7 @@ function NewAssessmentDialog({
     <Dialog open onOpenChange={onClose}>
       <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{editing ? "Edit" : "New"} {typeLabel(program.type)} Assessment</DialogTitle>
+          <DialogTitle>{isEvaluation ? `${editing ? "Edit " : ""}New-Hire Evaluation` : `${editing ? "Edit" : "New"} ${typeLabel(program.type)} Assessment`}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-5">
@@ -3890,7 +4032,9 @@ function NewAssessmentDialog({
                 </Select>
                 {rosterOnlyCount > 0 && (
                   <p className="text-[11px] text-muted-foreground mt-1" data-testid="assessment-roster-hint">
-                    {rosterOnlyCount} from the VeritaStaff roster, assigned to this program's instruments.
+                    {program.type === "nontechnical"
+                      ? `${rosterOnlyCount} from the VeritaStaff roster.`
+                      : `${rosterOnlyCount} from the VeritaStaff roster, assigned to this program's instruments.`}
                   </p>
                 )}
               </div>
@@ -3923,16 +4067,35 @@ function NewAssessmentDialog({
             )}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-medium block mb-1">Assessment Type</label>
+                <label className="text-xs font-medium block mb-1">{isEvaluation ? "Evaluation" : "Assessment Type"}</label>
                 {program.type === "nontechnical" ? (
+                  <>
                   <Select value={ntAssessmentType} onValueChange={setNtAssessmentType}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger data-testid="nt-assessment-type"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="orientation">Orientation</SelectItem>
-                      <SelectItem value="reassessment">2-Year Reassessment</SelectItem>
-                      <SelectItem value="duty_change">Duty Change</SelectItem>
+                      {isEvaluation ? (
+                        <>
+                          <SelectItem value="30day">30-Day</SelectItem>
+                          <SelectItem value="60day">60-Day</SelectItem>
+                          <SelectItem value="90day">90-Day</SelectItem>
+                        </>
+                      ) : (
+                        <>
+                          <SelectItem value="orientation">Orientation</SelectItem>
+                          <SelectItem value="reassessment">2-Year Reassessment</SelectItem>
+                          <SelectItem value="duty_change">Duty Change</SelectItem>
+                        </>
+                      )}
                     </SelectContent>
                   </Select>
+                  {isEvaluation && (
+                    <p className="text-[11px] text-muted-foreground mt-1" data-testid="evaluation-due">
+                      {evaluationDueDate(currentEmployee?.hire_date, ntAssessmentType)
+                        ? `Due ${evaluationDueDate(currentEmployee?.hire_date, ntAssessmentType)}, from the hire date.`
+                        : "The due date shows once the employee has a hire date."}
+                    </p>
+                  )}
+                  </>
                 ) : (
                   <Select value={assessmentType} onValueChange={setAssessmentType}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
@@ -3946,7 +4109,7 @@ function NewAssessmentDialog({
                 )}
               </div>
               <div>
-                <label className="text-xs font-medium block mb-1">Assessment Date</label>
+                <label className="text-xs font-medium block mb-1">{isEvaluation ? "Evaluation Date" : "Assessment Date"}</label>
                 <Input type="date" value={assessmentDate} onChange={e => setAssessmentDate(e.target.value)} />
               </div>
             </div>
@@ -3957,6 +4120,8 @@ function NewAssessmentDialog({
               * San Carlos: they need to document "this competency reviews
               * 2026-01-01 through 2026-12-31" for the annual cycle.
               */}
+            {/* A 30, 60 or 90-day evaluation has no review period: it is dated from the hire date (2026-10-16). */}
+            {!isEvaluation && (
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-medium block mb-1">Review Period Start</label>
@@ -3967,6 +4132,7 @@ function NewAssessmentDialog({
                 <Input type="date" value={reviewPeriodEnd} onChange={e => setReviewPeriodEnd(e.target.value)} />
               </div>
             </div>
+            )}
             {/*
               * Folder (PR A of the customer-blockers wave, 2026-06-05).
               * Free-text grouping label. Autocomplete from the lab's already-
@@ -4013,7 +4179,9 @@ function NewAssessmentDialog({
                 <Input placeholder="MV" value={evaluatorInitials} onChange={e => setEvaluatorInitials(e.target.value)} maxLength={10} />
               </div>
             </div>
-            <p className="text-[10px] italic text-muted-foreground">Moderate complexity testing: Technical Consultant required. High complexity testing: Technical Supervisor required. Waived testing: General Supervisor required.</p>
+            {!isEvaluation && (
+              <p className="text-[10px] italic text-muted-foreground">Moderate complexity testing: Technical Consultant required. High complexity testing: Technical Supervisor required. Waived testing: General Supervisor required.</p>
+            )}
           </div>
 
           {/* ── TECHNICAL COMPETENCY FORM ── */}
@@ -4532,8 +4700,8 @@ function NewAssessmentDialog({
           {program.type === "nontechnical" && program.checklistItems && (
             <div className="space-y-3">
               <div>
-                <div className="text-sm font-semibold">Non-Technical Checklist Items</div>
-                <p className="text-xs text-muted-foreground">From this competency's checklist, which is changed on its Overview tab.</p>
+                <div className="text-sm font-semibold">{isEvaluation ? "Evaluation Items" : "Non-Technical Checklist Items"}</div>
+                <p className="text-xs text-muted-foreground">From this {isEvaluation ? "evaluation" : "competency"}'s checklist, which is changed on its Overview tab.</p>
               </div>
               <div className="border border-border rounded-lg overflow-hidden">
                 <table className="w-full text-xs">
@@ -4600,7 +4768,9 @@ function NewAssessmentDialog({
               {(["pass", "fail", "remediation"] as const).map(s => (
                 <label key={s} className={`flex items-center gap-2 text-xs cursor-pointer px-3 py-1.5 rounded-full border ${status === s ? (s === "pass" ? "border-emerald-500 bg-emerald-50 text-emerald-700" : s === "fail" ? "border-red-500 bg-red-50 text-red-700" : "border-amber-500 bg-amber-50 text-amber-700") : "border-border"}`}>
                   <input type="radio" name="status" checked={status === s} onChange={() => setStatus(s)} className="sr-only" />
-                  {s === "pass" ? "Pass" : s === "fail" ? "Fail" : "Remediation Required"}
+                  {isEvaluation
+                    ? (s === "pass" ? "Satisfactory" : s === "fail" ? "Unsatisfactory" : "Improvement Plan Required")
+                    : (s === "pass" ? "Pass" : s === "fail" ? "Fail" : "Remediation Required")}
                 </label>
               ))}
             </div>
@@ -4609,11 +4779,17 @@ function NewAssessmentDialog({
           {/* ── Employee Acknowledgement (TJC language) ── */}
           <div className="border-2 border-primary/30 rounded-lg p-4 bg-primary/[0.02]">
             <div className="text-xs font-bold text-primary mb-2">Employee Acknowledgement</div>
-            <p className="text-[10px] text-muted-foreground leading-relaxed mb-1">Prior to performing laboratory duties, the following are completed:</p>
-            <ul className="text-[10px] text-muted-foreground list-disc ml-4 mb-3 space-y-0.5">
-              <li>The laboratory director or designee documents that staff have completed orientation and have demonstrated competence in performing their required duties.</li>
-              <li>The staff member affirms, in writing, that they can perform the duties for which orientation was provided.</li>
-            </ul>
+            {isEvaluation ? (
+              <p className="text-[10px] text-muted-foreground leading-relaxed mb-3">The employee signs that this evaluation has been reviewed with them.</p>
+            ) : (
+              <>
+                <p className="text-[10px] text-muted-foreground leading-relaxed mb-1">Prior to performing laboratory duties, the following are completed:</p>
+                <ul className="text-[10px] text-muted-foreground list-disc ml-4 mb-3 space-y-0.5">
+                  <li>The laboratory director or designee documents that staff have completed orientation and have demonstrated competence in performing their required duties.</li>
+                  <li>The staff member affirms, in writing, that they can perform the duties for which orientation was provided.</li>
+                </ul>
+              </>
+            )}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <div className="text-[10px] font-semibold text-muted-foreground">Employee</div>
@@ -4641,8 +4817,9 @@ function NewAssessmentDialog({
               size="sm"
               disabled={!employeeId || creating || (program.type === "waived" && waivedMethods.length < 2) || (program.type === "technical" && (program.methodGroups?.length ?? 0) === 0)}
               onClick={handleCreate}
+              data-testid="assessment-save"
             >
-              {creating ? "Saving..." : "Save Assessment"}
+              {creating ? "Saving..." : isEvaluation ? "Save Evaluation" : "Save Assessment"}
             </Button>
           </div>
         </div>

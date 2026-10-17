@@ -200,6 +200,7 @@ function headerRowHeight(headers: string[], colWidths: number[]): number {
 import { logAudit } from "./audit";
 import { summarizeCspReport, cspHeaderName } from "./securityHeaders";
 import { normalizeChecklistItems } from "@shared/competencyChecklist";
+import { assessmentTypeLabel, assessmentTypeProblem, isEvaluationProgram, normalizeRecordKind } from "@shared/competencyEvaluation";
 import { buildCompetencyRegisterRows, generateCompetencyRegisterExcel } from "./competencyRegisterExcel";
 import {
   deriveCompetencyStatus, competencyView,
@@ -20997,7 +20998,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (!userId) return res.status(404).json({ error: "Demo data not found" });
 
     const assessment = (db as any).$client.prepare(
-      `SELECT a.*, p.name as program_name, p.department, p.type as program_type,
+      `SELECT a.*, p.name as program_name, p.department, p.type as program_type, p.record_kind as program_record_kind,
               e.name as employee_name, e.title as employee_title, e.hire_date as employee_hire_date, e.lis_initials as employee_lis_initials
        FROM competency_assessments a
        JOIN competency_programs p ON a.program_id = p.id
@@ -23477,11 +23478,14 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     for (const g of client.prepare("SELECT instruments FROM competency_method_groups WHERE program_id = ?").all(program.id) as any[]) {
       try { for (const n of JSON.parse(g.instruments || "[]")) if (n) wanted.add(String(n).trim().toLowerCase()); } catch { /* malformed group JSON: ignore */ }
     }
+    // A non-technical program (and a new-hire evaluation, 2026-10-16) covers people who may test on nothing: a new
+    // hire, a processor, a clerk. So it lists every active staff member, not only those with an instrument.
+    const nonTech = program.type === "nontechnical";
     const rows = client.prepare(
       `SELECT se.id, se.first_name, se.last_name, se.title, se.hire_date, vi.instrument_name
          FROM staff_employees se
-         JOIN staff_employee_instruments sei ON sei.employee_id = se.id
-         JOIN veritamap_instruments vi ON vi.id = sei.instrument_id
+         ${nonTech ? "LEFT " : ""}JOIN staff_employee_instruments sei ON sei.employee_id = se.id
+         ${nonTech ? "LEFT " : ""}JOIN veritamap_instruments vi ON vi.id = sei.instrument_id
         WHERE se.tier2_lab_id = ? AND se.status = 'active'
         ORDER BY se.last_name, se.first_name`
     ).all(labId) as any[];
@@ -23497,7 +23501,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         const name = `${r.first_name || ""} ${r.last_name || ""}`.trim() || `Employee ${r.id}`;
         byStaff.set(r.id, { id: r.id, name, title: r.title || "", hire_date: r.hire_date || null, instruments: new Set() });
       }
-      byStaff.get(r.id)!.instruments.add(inst);
+      if (inst) byStaff.get(r.id)!.instruments.add(inst);
     }
     const ownerRow = client.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(labId) as any;
     const ownerUserId = ownerRow?.owner_user_id ?? req.userId;
@@ -23510,7 +23514,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         ).run(ownerUserId, labId, s.name, s.title, s.hire_date, now, s.id);
         comp = { id: Number(r.lastInsertRowid), name: s.name, status: "active" };
       }
-      return { id: comp.id, name: comp.name || s.name, title: s.title, status: comp.status || "active", staff_employee_id: s.id, instruments: Array.from(s.instruments).sort() };
+      return { id: comp.id, name: comp.name || s.name, title: s.title, hire_date: s.hire_date, status: comp.status || "active", staff_employee_id: s.id, instruments: Array.from(s.instruments).sort() };
     }).filter((e) => e.status === "active");
     res.json({ programId: program.id, matchedBy: wanted.size > 0 ? "program-instruments" : "any-instrument", instruments: Array.from(wanted).sort(), employees });
   });
@@ -23816,6 +23820,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const { name, department, type, mapId, methodGroups, checklistItems } = req.body;
     if (!name?.trim()) return res.status(400).json({ error: "Program name required" });
     if (!["technical", "waived", "nontechnical"].includes(type)) return res.status(400).json({ error: "Invalid type" });
+    // New-hire evaluation (2026-10-16): a non-technical program with its own checklist, titled Evaluation.
+    const recordKind = normalizeRecordKind(req.body?.recordKind);
+    if (recordKind === "evaluation" && type !== "nontechnical") return res.status(400).json({ error: "A new-hire evaluation is a non-technical program." });
     const checklist = type === "nontechnical" && Array.isArray(checklistItems) ? normalizeChecklistItems(checklistItems) : null;
     if (checklist && "error" in checklist) return res.status(400).json({ error: checklist.error });
     const now = new Date().toISOString();
@@ -23823,8 +23830,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const ownerRow = (db as any).$client.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(labId) as any;
     const userIdForRow = ownerRow?.owner_user_id ?? req.userId;
     const result = (db as any).$client.prepare(
-      "INSERT INTO competency_programs (user_id, lab_id, name, department, type, map_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
-    ).run(userIdForRow, labId, name.trim(), department || "Chemistry", type, mapId || null, now, now);
+      "INSERT INTO competency_programs (user_id, lab_id, name, department, type, map_id, record_kind, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    ).run(userIdForRow, labId, name.trim(), department || "Chemistry", type, mapId || null, recordKind, now, now);
     const programId = Number(result.lastInsertRowid);
     if (type === "technical" && Array.isArray(methodGroups)) {
       const stmt = (db as any).$client.prepare(
@@ -23838,7 +23845,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // always did. This lab-scoped port dropped them, so every non-technical program created in a lab had an empty
     // checklist and its assessments had nothing to check off (Michael's "Plating Media", lab 3).
     if (checklist) replaceChecklistItems((db as any).$client, programId, checklist.items);
-    res.json({ id: programId, name: name.trim(), department: department || "Chemistry", type, map_id: mapId || null, created_at: now, updated_at: now });
+    res.json({ id: programId, name: name.trim(), department: department || "Chemistry", type, map_id: mapId || null, record_kind: recordKind, created_at: now, updated_at: now });
   });
 
   app.get("/api/labs/:labId/competency/employees", authMiddleware, labScopeMiddleware, (req: any, res) => {
@@ -23930,6 +23937,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const program = userCanAccessLabRow('competency_programs', programId, req);
     if (!program) return res.status(404).json({ error: "Program not found" });
+    const typeProblem = assessmentTypeProblem(program as any, assessmentType || "initial");
+    if (typeProblem) return res.status(400).json({ error: typeProblem });
     const emp = userCanAccessLabRow('competency_employees', employeeId, req);
     if (!emp) return res.status(404).json({ error: "Employee not found" });
     const now = new Date().toISOString();
@@ -24010,7 +24019,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     (db as any).$client.prepare("UPDATE competency_programs SET updated_at = ? WHERE id = ?").run(now, programId);
 
     // VeritaScan integration: auto-complete competency items
-    if (status === "pass") {
+    // A new-hire evaluation is not a competency, so it never marks VeritaScan competency items compliant.
+    if (status === "pass" && !isEvaluationProgram(program as any)) {
       autoCompleteCompetencyScanItems(dataUserId, competencyType || "technical");
     }
 
@@ -24255,6 +24265,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       "SELECT * FROM competency_programs WHERE id = ? AND lab_id = ?"
     ).get(programId, labId);
     if (!program) return res.status(404).json({ error: "Program not found" });
+    // New-hire evaluation (2026-10-16): 30, 60 and 90-day types only on an evaluation program, and only there.
+    const typeProblem = assessmentTypeProblem(program, assessmentType || "initial");
+    if (typeProblem) return res.status(400).json({ error: typeProblem });
     // Phase B1 of the employee-table unification (2026-06-06): the dialog
     // can pass either `employeeId` (the competency_employees.id, legacy path)
     // OR `staffEmployeeId` (the staff_employees.id, new path). If the staff
@@ -24374,7 +24387,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       }
     }
     (db as any).$client.prepare("UPDATE competency_programs SET updated_at = ? WHERE id = ?").run(now, programId);
-    if (status === "pass") {
+    // A new-hire evaluation is not a competency, so it never marks VeritaScan competency items compliant.
+    if (status === "pass" && !isEvaluationProgram(program)) {
       const ownerRow = (db as any).$client.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(labId) as any;
       const userIdForScan = ownerRow?.owner_user_id ?? req.userId;
       autoCompleteCompetencyScanItems(userIdForScan, competencyType || "technical");
@@ -24672,7 +24686,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const assessment = (db as any).$client.prepare(
-      `SELECT a.*, p.name as program_name, p.department, p.type as program_type,
+      `SELECT a.*, p.name as program_name, p.department, p.type as program_type, p.record_kind as program_record_kind,
               e.name as employee_name, e.title as employee_title, e.hire_date as employee_hire_date, e.lis_initials as employee_lis_initials
        FROM competency_assessments a
        JOIN competency_programs p ON a.program_id = p.id
@@ -25196,7 +25210,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   app.get("/api/labs/:labId/competency/assessments/:id/pdf", authMiddleware, labScopeMiddleware, async (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const assessment = (db as any).$client.prepare(
-      `SELECT a.*, p.name as program_name, p.department, p.type as program_type,
+      `SELECT a.*, p.name as program_name, p.department, p.type as program_type, p.record_kind as program_record_kind,
               e.name as employee_name, e.title as employee_title, e.hire_date as employee_hire_date, e.lis_initials as employee_lis_initials
        FROM competency_assessments a
        JOIN competency_programs p ON a.program_id = p.id
@@ -25228,7 +25242,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const pdfBuffer = await generateCompetencyPDF({ assessment, items, methodGroups, checklistItems, labName, quizResults, cliaNumber: cliaForComp, elementDocuments, primaryRegime: compLab?.primary_regime }, licenseCtxFromReq(req));
       const safeName = assessment.employee_name.replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
       const date = new Date().toISOString().split("T")[0];
-      const typeLabel = assessment.program_type === "technical" ? "Technical" : assessment.program_type === "waived" ? "Waived" : "NonTechnical";
+      const typeLabel = assessment.program_record_kind === "evaluation" ? "Evaluation" : assessment.program_type === "technical" ? "Technical" : assessment.program_type === "waived" ? "Waived" : "NonTechnical";
       const filename = `VeritaComp_${typeLabel}_${safeName}_${date}.pdf`;
       const veritacompToken = storePdfToken(pdfBuffer, filename);
       if (compLab) markLabReportingLocks(compLab.id);
@@ -25279,6 +25293,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       program_id: program.id,
       employee_id: 0,
       competency_type: program.type,
+      program_record_kind: program.record_kind,
       program_name: program.name,
       department: program.department,
       employee_name: "",
@@ -25308,7 +25323,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       }, licenseCtxFromReq(req));
       const safeName = (program.name || "Program").replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
       const date = new Date().toISOString().split("T")[0];
-      const typeLabel = program.type === "technical" ? "Technical" : program.type === "waived" ? "Waived" : "NonTechnical";
+      const typeLabel = program.record_kind === "evaluation" ? "Evaluation" : program.type === "technical" ? "Technical" : program.type === "waived" ? "Waived" : "NonTechnical";
       const filename = `VeritaComp_BLANK_${typeLabel}_${safeName}_${date}.pdf`;
       const token = storePdfToken(pdfBuffer, filename);
       return res.json({ token });
@@ -25462,7 +25477,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       windowStart = d.toISOString().split("T")[0];
     }
 
-    const sqlBase = `SELECT a.*, p.name as program_name, p.department, p.type as program_type,
+    const sqlBase = `SELECT a.*, p.name as program_name, p.department, p.type as program_type, p.record_kind as program_record_kind,
             e.name as employee_name, e.title as employee_title, e.hire_date as employee_hire_date, e.lis_initials as employee_lis_initials
        FROM competency_assessments a
        JOIN competency_programs p ON a.program_id = p.id
@@ -25508,7 +25523,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const parts = nameRaw.split(/\s+/);
       const last = parts[parts.length - 1] || "Unknown";
       const first = parts.slice(0, -1).join("_") || "Unknown";
-      const typeMap: Record<string, string> = { initial: "Initial", "6month": "6Month", annual: "Annual", reassessment: "Reassessment", orientation: "Orientation", duty_change: "DutyChange" };
+      const typeMap: Record<string, string> = { initial: "Initial", "6month": "6Month", annual: "Annual", reassessment: "Reassessment", orientation: "Orientation", duty_change: "DutyChange", "30day": "30Day", "60day": "60Day", "90day": "90Day" };
       const typeLabel = typeMap[a.assessment_type] || String(a.assessment_type || "Assessment").replace(/[^a-zA-Z0-9]/g, "");
       const date = a.assessment_date || "no-date";
       let base = `${last}_${first}_${typeLabel}_${date}`.replace(/[^a-zA-Z0-9_\-]/g, "_");
@@ -25663,7 +25678,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const r = bundle.addRow({
         employee: row.a.employee_name || "",
         program: row.a.program_name || "",
-        type: ({initial:"Initial","6month":"6-Month",annual:"Annual",reassessment:"Reassessment",orientation:"Orientation",duty_change:"Duty Change"} as Record<string,string>)[row.a.assessment_type] || row.a.assessment_type || "",
+        type: row.a.assessment_type ? assessmentTypeLabel(row.a.assessment_type) : "",
         assessment_date: row.a.assessment_date || "",
         review_period_start: row.a.review_period_start || "",
         review_period_end: row.a.review_period_end || "",
@@ -25713,7 +25728,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   app.get("/api/veritacomp/assessments/:id/pdf", authMiddleware, async (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const assessment = (db as any).$client.prepare(
-      `SELECT a.*, p.name as program_name, p.department, p.type as program_type,
+      `SELECT a.*, p.name as program_name, p.department, p.type as program_type, p.record_kind as program_record_kind,
               e.name as employee_name, e.title as employee_title, e.hire_date as employee_hire_date, e.lis_initials as employee_lis_initials
        FROM competency_assessments a
        JOIN competency_programs p ON a.program_id = p.id
@@ -25752,7 +25767,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const pdfBuffer = await generateCompetencyPDF({ assessment, items, methodGroups, checklistItems, labName, quizResults, cliaNumber: cliaForComp }, licenseCtxFromReq(req));
       const safeName = assessment.employee_name.replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
       const date = new Date().toISOString().split("T")[0];
-      const typeLabel = assessment.program_type === "technical" ? "Technical" : assessment.program_type === "waived" ? "Waived" : "NonTechnical";
+      const typeLabel = assessment.program_record_kind === "evaluation" ? "Evaluation" : assessment.program_type === "technical" ? "Technical" : assessment.program_type === "waived" ? "Waived" : "NonTechnical";
       const filename = `VeritaComp_${typeLabel}_${safeName}_${date}.pdf`;
       const veritacompToken = storePdfToken(pdfBuffer, filename);
       if (compLab) markLabReportingLocks(compLab.id);
@@ -25785,7 +25800,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   app.post("/api/competency/pdf/:assessmentId", authMiddleware, async (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const assessment = (db as any).$client.prepare(
-      `SELECT a.*, p.name as program_name, p.department, p.type as program_type,
+      `SELECT a.*, p.name as program_name, p.department, p.type as program_type, p.record_kind as program_record_kind,
               e.name as employee_name, e.title as employee_title, e.hire_date as employee_hire_date, e.lis_initials as employee_lis_initials
        FROM competency_assessments a
        JOIN competency_programs p ON a.program_id = p.id
@@ -25832,7 +25847,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
       const safeName = assessment.employee_name.replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
       const date = new Date().toISOString().split("T")[0];
-      const typeLabel = assessment.program_type === "technical" ? "Technical" : assessment.program_type === "waived" ? "Waived" : "NonTechnical";
+      const typeLabel = assessment.program_record_kind === "evaluation" ? "Evaluation" : assessment.program_type === "technical" ? "Technical" : assessment.program_type === "waived" ? "Waived" : "NonTechnical";
       const filename = `VeritaStaff_${typeLabel}_${safeName}_${date}.pdf`;
 
       const veritastaffToken = storePdfToken(pdfBuffer, filename);
@@ -29217,7 +29232,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
        FROM competency_assessments a
        JOIN competency_programs p ON a.program_id = p.id
        JOIN competency_employees e ON a.employee_id = e.id
-       WHERE p.lab_id = ?
+       WHERE p.lab_id = ? AND COALESCE(p.record_kind, 'competency') <> 'evaluation'
        ORDER BY a.employee_id, a.program_id, a.assessment_date DESC, a.id DESC`
     ).all(labId) as Array<{
       id: number; employee_id: number; program_id: number; assessment_date: string; status: string;
@@ -29494,7 +29509,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       `SELECT a.employee_id, a.program_id, a.assessment_date, a.status
        FROM competency_assessments a
        JOIN competency_programs p ON a.program_id = p.id
-       WHERE p.lab_id = ?
+       WHERE p.lab_id = ? AND COALESCE(p.record_kind, 'competency') <> 'evaluation'
        ORDER BY a.employee_id, a.program_id, a.assessment_date DESC, a.id DESC`
     ).all(labId) as Array<{ employee_id: number; program_id: number; assessment_date: string; status: string }>;
     const pairLastFail = new Map<string, { hasLaterPass: boolean }>();
@@ -29542,7 +29557,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
     // ── Per-program drill-down (signals A + C only) ──
     const programs = client.prepare(
-      `SELECT id, name FROM competency_programs WHERE lab_id = ? ORDER BY name`
+      `SELECT id, name FROM competency_programs WHERE lab_id = ? AND COALESCE(record_kind, 'competency') <> 'evaluation' ORDER BY name`
     ).all(labId) as Array<{ id: number; name: string }>;
     // Pull all assessments for the lab once; group per program below.
     const allByProgram = new Map<number, Array<{ employee_id: number; assessment_date: string; status: string }>>();
@@ -29890,7 +29905,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       `SELECT id, name FROM competency_employees WHERE lab_id = ? AND status = 'active' ORDER BY name`
     ).all(labId) as Array<{ id: number; name: string }>;
     const programRows = sqlite.prepare(
-      `SELECT id, name FROM competency_programs WHERE lab_id = ? ORDER BY name`
+      `SELECT id, name FROM competency_programs WHERE lab_id = ? AND COALESCE(record_kind, 'competency') <> 'evaluation' ORDER BY name`
     ).all(labId) as Array<{ id: number; name: string }>;
     const existingAsmt = sqlite.prepare(
       `SELECT a.id, a.program_id, a.employee_id, a.completion_date, a.locked
