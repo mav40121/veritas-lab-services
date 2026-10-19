@@ -3710,6 +3710,7 @@ sqlite.exec(`
     age_min_days INTEGER NOT NULL DEFAULT 0,
     age_max_days INTEGER NOT NULL DEFAULT 999999,
     sex TEXT NOT NULL DEFAULT 'A',
+    specimen_type TEXT NOT NULL DEFAULT '',
     band_label TEXT,
     ref_range_low TEXT,
     ref_range_high TEXT,
@@ -3723,21 +3724,30 @@ sqlite.exec(`
     ref_attested_by TEXT,
     ref_attested_title TEXT,
     ref_locked INTEGER NOT NULL DEFAULT 0,
-    UNIQUE(map_id, analyte, age_min_days, age_max_days, sex)
+    UNIQUE(map_id, analyte, age_min_days, age_max_days, sex, specimen_type)
   );
 `);
 
-// VeritaMap AMR values -- per lab, per instrument, per analyte
+// VeritaMap AMR values -- per lab, per instrument, per analyte, per specimen type ('' = all specimen types), with the
+// lab-entered reportable range and maximum dilution (2026-10-19, REQ-079 / REQ-080).
 sqlite.exec(`
   CREATE TABLE IF NOT EXISTS veritamap_amr_values (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     map_id INTEGER NOT NULL,
     instrument_id INTEGER NOT NULL,
     analyte TEXT NOT NULL,
+    specimen_type TEXT NOT NULL DEFAULT '',
     amr_low TEXT,
     amr_high TEXT,
+    reportable_low TEXT,
+    reportable_high TEXT,
+    max_dilution TEXT,
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-    UNIQUE(map_id, instrument_id, analyte)
+    amr_attested_at TEXT,
+    amr_attested_by TEXT,
+    amr_attested_title TEXT,
+    amr_locked INTEGER NOT NULL DEFAULT 0,
+    UNIQUE(map_id, instrument_id, analyte, specimen_type)
   );
 `);
 
@@ -3837,6 +3847,122 @@ sqlite.exec(`
       console.log(`[db] veritamap_analyte_values rebuilt with age/sex bands: ${before} -> ${after} rows`);
     } catch (err: any) {
       console.error("[db] veritamap_analyte_values band rebuild FAILED:", err.message);
+      throw err;
+    }
+  }
+}
+
+// 2026-10-19: specimen type and reportable range (Lindsay Webber, Redington-Fairview, REQ-079 / REQ-080: "Take calcium
+// for example. With a Vitros we run urine and serum/plasma using the same reagent. The fluid types have different
+// reference ranges and AMRs ... could you make it so that you could add another fluid band?" and "add reportable range
+// in addition to reference and AMR ... that incorporates the highest possible dilution factor").
+//
+// specimen_type joins both unique keys ('' = all specimen types, NOT NULL for the same reason age_max_days is: SQLite
+// treats NULLs as DISTINCT in a UNIQUE constraint). SQLite cannot widen a UNIQUE constraint in place, so each table gets
+// the create-copy-drop-rename rebuild, guarded on specimen_type so it runs once and is a no-op on a fresh DB. Every
+// existing row becomes "all specimen types", which is exactly what it meant before, and every attestation and MEC
+// review column is carried across (losing them would destroy 42 CFR 493.1253 attestations). The row count is checked
+// inside the transaction, so a short copy rolls back and the server refuses to start rather than lose values.
+{
+  const avCols = (sqlite.prepare("PRAGMA table_info(veritamap_analyte_values)").all() as { name: string }[]).map(c => c.name);
+  if (avCols.length > 0 && !avCols.includes("specimen_type")) {
+    const rebuild = sqlite.transaction(() => {
+      const before = (sqlite.prepare("SELECT COUNT(*) as n FROM veritamap_analyte_values").get() as { n: number }).n;
+      sqlite.exec("DROP TABLE IF EXISTS veritamap_analyte_values_rebuild");
+      sqlite.exec(`
+        CREATE TABLE veritamap_analyte_values_rebuild (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          map_id INTEGER NOT NULL,
+          analyte TEXT NOT NULL,
+          age_min_days INTEGER NOT NULL DEFAULT 0,
+          age_max_days INTEGER NOT NULL DEFAULT 999999,
+          sex TEXT NOT NULL DEFAULT 'A',
+          specimen_type TEXT NOT NULL DEFAULT '',
+          band_label TEXT,
+          ref_range_low TEXT,
+          ref_range_high TEXT,
+          critical_low TEXT,
+          critical_high TEXT,
+          units TEXT,
+          updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+          mec_reviewed_at TEXT,
+          mec_reviewed_by TEXT,
+          ref_attested_at TEXT,
+          ref_attested_by TEXT,
+          ref_attested_title TEXT,
+          ref_locked INTEGER NOT NULL DEFAULT 0,
+          UNIQUE(map_id, analyte, age_min_days, age_max_days, sex, specimen_type)
+        )
+      `);
+      sqlite.exec(`
+        INSERT INTO veritamap_analyte_values_rebuild
+          (id, map_id, analyte, age_min_days, age_max_days, sex, specimen_type, band_label,
+           ref_range_low, ref_range_high, critical_low, critical_high, units, updated_at,
+           mec_reviewed_at, mec_reviewed_by, ref_attested_at, ref_attested_by, ref_attested_title, ref_locked)
+        SELECT id, map_id, analyte, age_min_days, age_max_days, sex, '', band_label,
+           ref_range_low, ref_range_high, critical_low, critical_high, units, updated_at,
+           mec_reviewed_at, mec_reviewed_by, ref_attested_at, ref_attested_by, ref_attested_title, ref_locked
+        FROM veritamap_analyte_values
+      `);
+      sqlite.exec("DROP TABLE veritamap_analyte_values");
+      sqlite.exec("ALTER TABLE veritamap_analyte_values_rebuild RENAME TO veritamap_analyte_values");
+      const after = (sqlite.prepare("SELECT COUNT(*) as n FROM veritamap_analyte_values").get() as { n: number }).n;
+      if (after !== before) throw new Error(`row count changed ${before} -> ${after}`);
+      return [before, after];
+    });
+    try {
+      const [b, a] = rebuild();
+      console.log(`[db] veritamap_analyte_values rebuilt with specimen_type: ${b} -> ${a} rows`);
+    } catch (err: any) {
+      console.error("[db] veritamap_analyte_values specimen_type rebuild FAILED:", err.message);
+      throw err;
+    }
+  }
+
+  const amrCols = (sqlite.prepare("PRAGMA table_info(veritamap_amr_values)").all() as { name: string }[]).map(c => c.name);
+  if (amrCols.length > 0 && !amrCols.includes("specimen_type")) {
+    const rebuild = sqlite.transaction(() => {
+      const before = (sqlite.prepare("SELECT COUNT(*) as n FROM veritamap_amr_values").get() as { n: number }).n;
+      sqlite.exec("DROP TABLE IF EXISTS veritamap_amr_values_rebuild");
+      sqlite.exec(`
+        CREATE TABLE veritamap_amr_values_rebuild (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          map_id INTEGER NOT NULL,
+          instrument_id INTEGER NOT NULL,
+          analyte TEXT NOT NULL,
+          specimen_type TEXT NOT NULL DEFAULT '',
+          amr_low TEXT,
+          amr_high TEXT,
+          reportable_low TEXT,
+          reportable_high TEXT,
+          max_dilution TEXT,
+          updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+          amr_attested_at TEXT,
+          amr_attested_by TEXT,
+          amr_attested_title TEXT,
+          amr_locked INTEGER NOT NULL DEFAULT 0,
+          UNIQUE(map_id, instrument_id, analyte, specimen_type)
+        )
+      `);
+      sqlite.exec(`
+        INSERT INTO veritamap_amr_values_rebuild
+          (id, map_id, instrument_id, analyte, specimen_type, amr_low, amr_high, updated_at,
+           amr_attested_at, amr_attested_by, amr_attested_title, amr_locked)
+        SELECT id, map_id, instrument_id, analyte, '', amr_low, amr_high, updated_at,
+           amr_attested_at, amr_attested_by, amr_attested_title, amr_locked
+        FROM veritamap_amr_values
+      `);
+      sqlite.exec("DROP TABLE veritamap_amr_values");
+      sqlite.exec("ALTER TABLE veritamap_amr_values_rebuild RENAME TO veritamap_amr_values");
+      const after = (sqlite.prepare("SELECT COUNT(*) as n FROM veritamap_amr_values").get() as { n: number }).n;
+      if (after !== before) throw new Error(`row count changed ${before} -> ${after}`);
+      return [before, after];
+    });
+    try {
+      const [b, a] = rebuild();
+      console.log(`[db] veritamap_amr_values rebuilt with specimen_type and reportable range: ${b} -> ${a} rows`);
+    } catch (err: any) {
+      console.error("[db] veritamap_amr_values specimen_type rebuild FAILED:", err.message);
       throw err;
     }
   }
