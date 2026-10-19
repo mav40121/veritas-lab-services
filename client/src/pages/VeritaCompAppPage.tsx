@@ -15,7 +15,7 @@ import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { useMemberships } from "@/hooks/useMemberships";
 import { useLabRoute } from "@/hooks/useLabRoute";
 import { downloadPdfToken } from "@/lib/utils";
-import { checklistLabel, matchSavedChecklistRows, CHECKLIST_MAX_ITEMS, CHECKLIST_MAX_DESCRIPTION } from "@shared/competencyChecklist";
+import { checklistLabel, matchSavedChecklistRows, checklistItemsForType, CHECKLIST_STAGES, CHECKLIST_MAX_ITEMS, CHECKLIST_MAX_DESCRIPTION } from "@shared/competencyChecklist";
 import { assessmentTypeLabel, evaluationDueDate } from "@shared/competencyEvaluation";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Button } from "@/components/ui/button";
@@ -129,6 +129,7 @@ interface ChecklistItem {
   label: string;
   description: string;
   sort_order: number;
+  stage?: string | null; // new-hire evaluation stage ("30day" | "60day" | "90day"); null = every stage
 }
 
 interface Employee {
@@ -360,15 +361,20 @@ function AutoGrowTextarea(props: ComponentProps<typeof Textarea>) {
 }
 
 // The non-technical checklist editor: used when a program is set up (New Program, the header shortcut)
-// and on an existing program's Overview tab. Items are re-lettered by position (A..Z, AA, ...).
+// and on an existing program's Overview tab. Items are re-lettered by position (A..Z, AA, ...). On a new-hire
+// evaluation (stages) each item also picks its stage: the 30, 60 or 90-day evaluation, or every stage.
+type EditableChecklistItem = { label: string; description: string; stage?: string | null };
+const EVERY_STAGE = "all";
 function ChecklistItemsEditor({
   items,
   onChange,
+  stages = false,
 }: {
-  items: { label: string; description: string }[];
-  onChange: (items: { label: string; description: string }[]) => void;
+  items: EditableChecklistItem[];
+  onChange: (items: EditableChecklistItem[]) => void;
+  stages?: boolean;
 }) {
-  const relabel = (list: { label: string; description: string }[]) => list.map((it, i) => ({ ...it, label: checklistLabel(i) }));
+  const relabel = (list: EditableChecklistItem[]) => list.map((it, i) => ({ ...it, label: checklistLabel(i) }));
   const move = (i: number, d: -1 | 1) => {
     const j = i + d;
     if (j < 0 || j >= items.length) return;
@@ -381,6 +387,8 @@ function ChecklistItemsEditor({
       {items.map((item, i) => (
         <div key={i} className="flex items-start gap-2" data-testid="checklist-editor-row">
           <span className="text-xs font-bold text-muted-foreground w-7 shrink-0 pt-2">{checklistLabel(i)}.</span>
+          {/* On a phone the stage picker sits under the item text, so the text keeps the row's width. */}
+          <div className="flex-1 min-w-0 flex flex-col sm:flex-row gap-2">
           <AutoGrowTextarea
             value={item.description}
             onChange={e => {
@@ -393,6 +401,25 @@ function ChecklistItemsEditor({
             placeholder="Describe the item"
             aria-label={`Item ${checklistLabel(i)}`}
           />
+          {stages && (
+            <Select
+              value={item.stage || EVERY_STAGE}
+              onValueChange={v => {
+                const next = [...items];
+                next[i] = { ...next[i], stage: v === EVERY_STAGE ? null : v };
+                onChange(next);
+              }}
+            >
+              <SelectTrigger className="h-9 w-full sm:w-[120px] shrink-0 text-xs" aria-label={`Stage for item ${checklistLabel(i)}`} data-testid={`checklist-stage-${i}`}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={EVERY_STAGE}>Every stage</SelectItem>
+                {CHECKLIST_STAGES.map(s => <SelectItem key={s} value={s}>{assessmentTypeLabel(s)}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          )}
+          </div>
           <div className="flex shrink-0">
             <Button type="button" variant="ghost" size="icon" className="h-8 w-7 text-muted-foreground" disabled={i === 0} onClick={() => move(i, -1)} aria-label={`Move item ${checklistLabel(i)} up`}>
               <ArrowUp size={14} />
@@ -1592,7 +1619,7 @@ function NewHireEvaluationDialog({
   const [choice, setChoice] = useState<string>(evaluations[0] ? String(evaluations[0].id) : NEW);
   const [jobTitle, setJobTitle] = useState("");
   const [department, setDepartment] = useState<string>(DEPARTMENTS[0]);
-  const [checklist, setChecklist] = useState<{ label: string; description: string }[]>([{ label: checklistLabel(0), description: "" }]);
+  const [checklist, setChecklist] = useState<EditableChecklistItem[]>([{ label: checklistLabel(0), description: "", stage: null }]);
   const [busy, setBusy] = useState(false);
   const isNew = choice === NEW;
   const newName = `${jobTitle.trim()} new-hire evaluation`;
@@ -1666,8 +1693,8 @@ function NewHireEvaluationDialog({
               {nameTaken && <p className="text-xs text-destructive">"{newName}" is already set up. Pick it from the list instead.</p>}
               <div className="rounded-md border border-border p-3 space-y-2" data-testid="evaluation-checklist">
                 <div className="text-sm font-medium">Evaluation items</div>
-                <ChecklistItemsEditor items={checklist} onChange={setChecklist} />
-                <p className="text-xs text-muted-foreground">You can change these later on the evaluation's Overview tab.</p>
+                <ChecklistItemsEditor items={checklist} onChange={setChecklist} stages />
+                <p className="text-xs text-muted-foreground">Set each item's stage, or leave it on Every stage. A 30-day evaluation shows the 30-Day and every-stage items. You can change these later on the evaluation's Overview tab.</p>
               </div>
             </>
           )}
@@ -2242,9 +2269,10 @@ function ChecklistCard({ program }: { program: Program }) {
   const programDetailKey = activeLabId
     ? `/api/labs/${activeLabId}/competency/programs/${program.id}`
     : `/api/competency/programs/${program.id}`;
-  const current = (program.checklistItems || []).map(it => ({ label: it.label, description: it.description }));
+  const isEval = program.type === "nontechnical" && program.record_kind === "evaluation";
+  const current: EditableChecklistItem[] = (program.checklistItems || []).map(it => ({ label: it.label, description: it.description, stage: it.stage ?? null }));
   const [editing, setEditing] = useState(() => !isReadOnly && typeof window !== "undefined" && window.location.search.includes("editChecklist=1"));
-  const [draft, setDraft] = useState(() => current.length ? current : defaultChecklistFor(program.department));
+  const [draft, setDraft] = useState<EditableChecklistItem[]>(() => current.length ? current : defaultChecklistFor(program.department));
   const [saving, setSaving] = useState(false);
   const blank = draft.length === 0 || draft.some(it => !it.description.trim());
 
@@ -2256,7 +2284,7 @@ function ChecklistCard({ program }: { program: Program }) {
       const res = await fetch(`${API_BASE}${programDetailKey}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ checklistItems: draft.map(it => ({ description: it.description })) }),
+        body: JSON.stringify({ checklistItems: draft.map(it => ({ description: it.description, stage: isEval ? it.stage ?? null : null })) }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -2289,7 +2317,7 @@ function ChecklistCard({ program }: { program: Program }) {
           <p className="text-xs text-muted-foreground">
             Add, reword, reorder or remove items. Saved assessments keep the items they were done on; an unsigned assessment reopened with Edit picks up this list.
           </p>
-          <ChecklistItemsEditor items={draft} onChange={setDraft} />
+          <ChecklistItemsEditor items={draft} onChange={setDraft} stages={isEval} />
           <div className="flex justify-end gap-2 pt-1">
             <Button size="sm" variant="outline" onClick={() => { setEditing(false); setDraft(current); }} disabled={saving}>Cancel</Button>
             <Button size="sm" onClick={save} disabled={saving || blank} data-testid="checklist-save">
@@ -2307,6 +2335,11 @@ function ChecklistCard({ program }: { program: Program }) {
             <li key={it.label} className="flex gap-2">
               <span className="font-bold text-muted-foreground w-7 shrink-0">{it.label}.</span>
               <span className="whitespace-pre-line">{it.description}</span>
+              {isEval && (
+                <Badge variant="outline" className="ml-auto shrink-0 h-5 text-[10px]" data-testid={`checklist-stage-badge-${it.label}`}>
+                  {it.stage ? assessmentTypeLabel(it.stage) : "Every stage"}
+                </Badge>
+              )}
             </li>
           ))}
         </ol>
@@ -3599,6 +3632,12 @@ function NewAssessmentDialog({
   const isEvaluation = program.record_kind === "evaluation";
   const [ntAssessmentType, setNtAssessmentType] = useState(editing?.assessment_type || (isEvaluation ? "30day" : "orientation"));
   const [nonTechItems, setNonTechItems] = useState<Record<string, NonTechItemData>>({});
+  // The items this record shows and saves: on a new-hire evaluation, the chosen stage's items plus the every-stage
+  // items (shared/competencyChecklist.ts); on a competency, the whole checklist.
+  const stageItems = useMemo(
+    () => checklistItemsForType(program.checklistItems || [], isEvaluation ? ntAssessmentType : null),
+    [program.checklistItems, isEvaluation, ntAssessmentType],
+  );
   const [ntCompletionDate, setNtCompletionDate] = useState("");
 
   // Edit mode: hydrate per-element / waived / non-tech state once from the
@@ -3673,7 +3712,7 @@ function NewAssessmentDialog({
           description: String(it.nt_item_description || it.item_description || ""),
           data: { dateMet: it.nt_date_met || it.date_met || "", empInitials: it.nt_employee_initials || it.employee_initials || "", supInitials: it.nt_supervisor_initials || it.supervisor_initials || "" } as NonTechItemData,
         }));
-      const currentItems = (program.checklistItems || []).map(c => ({ label: c.label, description: c.description }));
+      const currentItems = checklistItemsForType(program.checklistItems || [], isEvaluation ? ntAssessmentType : null).map(c => ({ label: c.label, description: c.description }));
       const match = matchSavedChecklistRows(currentItems, saved);
       const map: Record<string, NonTechItemData> = {};
       currentItems.forEach((c, i) => {
@@ -3925,7 +3964,7 @@ function NewAssessmentDialog({
         });
       }
     } else {
-      for (const item of (program.checklistItems || [])) {
+      for (const item of stageItems) {
         const cell = nonTechItems[item.label] || { dateMet: "", empInitials: "", supInitials: "" };
         items.push({
           itemLabel: item.label,
@@ -4715,7 +4754,10 @@ function NewAssessmentDialog({
                     </tr>
                   </thead>
                   <tbody>
-                    {program.checklistItems.map(item => {
+                    {isEvaluation && stageItems.length === 0 && (
+                      <tr><td colSpan={5} className="p-3 text-muted-foreground" data-testid="evaluation-stage-empty">No items for the {assessmentTypeLabel(ntAssessmentType)} evaluation. Set each item's stage on the Overview tab.</td></tr>
+                    )}
+                    {stageItems.map(item => {
                       const cell = nonTechItems[item.label] || { dateMet: "", empInitials: "", supInitials: "" };
                       return (
                         <tr key={item.label} className="border-t border-border">

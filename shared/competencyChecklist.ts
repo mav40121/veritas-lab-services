@@ -20,11 +20,28 @@ export function checklistLabel(index: number): string {
   return s;
 }
 
-export type ChecklistItemInput = { label?: string; description?: string } | string;
+export type ChecklistItemInput = { label?: string; description?: string; stage?: string | null } | string;
+
+// New-hire evaluation stages (2026-10-19, Natalie Lamb, Sampson Regional: her forms list different items for the
+// 30, 60 and 90-day evaluations, "I would need them separately"). An item of an evaluation program may belong to one
+// stage; null means every stage. A 30-day evaluation shows the 30-day items plus the every-stage items, and so on.
+// Competency programs never carry a stage.
+export const CHECKLIST_STAGES = ["30day", "60day", "90day"] as const;
+export type ChecklistStage = (typeof CHECKLIST_STAGES)[number];
+export function isChecklistStage(v: unknown): v is ChecklistStage {
+  return typeof v === "string" && (CHECKLIST_STAGES as readonly string[]).includes(v);
+}
+// The items an assessment of this type shows. Only the 30, 60 and 90-day types filter; every other type (and an
+// unknown one) sees the whole checklist, so a competency program is never affected.
+export function checklistItemsForType<T extends { stage?: string | null }>(items: T[], assessmentType: string | null | undefined): T[] {
+  if (!isChecklistStage(assessmentType)) return items;
+  return items.filter((it) => !it.stage || it.stage === assessmentType);
+}
 
 // Clean a checklist for saving: trims each description, keeps line breaks (detailed items), re-letters
-// by position, and rejects an empty list, a blank item, or an oversized one.
-export function normalizeChecklistItems(raw: unknown): { items: { label: string; description: string }[] } | { error: string } {
+// by position, and rejects an empty list, a blank item, or an oversized one. A stage is kept only when it is one of
+// the three evaluation stages; anything else that is not empty is refused rather than guessed.
+export function normalizeChecklistItems(raw: unknown): { items: { label: string; description: string; stage: ChecklistStage | null }[] } | { error: string } {
   if (!Array.isArray(raw)) return { error: "The checklist must be a list of items." };
   if (raw.length === 0) return { error: "A non-technical checklist needs at least one item." };
   if (raw.length > CHECKLIST_MAX_ITEMS) return { error: `A checklist can have up to ${CHECKLIST_MAX_ITEMS} items.` };
@@ -38,7 +55,10 @@ export function normalizeChecklistItems(raw: unknown): { items: { label: string;
   if (blank >= 0) return { error: `Item ${checklistLabel(blank)} is blank. Type the item or remove it.` };
   const long = descriptions.findIndex((d) => d.length > CHECKLIST_MAX_DESCRIPTION);
   if (long >= 0) return { error: `Item ${checklistLabel(long)} is longer than ${CHECKLIST_MAX_DESCRIPTION} characters.` };
-  return { items: descriptions.map((description, i) => ({ label: checklistLabel(i), description })) };
+  const stages = raw.map((it: any) => (it && typeof it === "object" && it.stage != null && it.stage !== "" ? it.stage : null));
+  const badStage = stages.findIndex((s) => s !== null && !isChecklistStage(s));
+  if (badStage >= 0) return { error: `Item ${checklistLabel(badStage)} has an unknown stage. Use 30-Day, 60-Day, 90-Day or every stage.` };
+  return { items: descriptions.map((description, i) => ({ label: checklistLabel(i), description, stage: stages[i] as ChecklistStage | null })) };
 }
 
 // Match a saved assessment's checklist rows to the program's current checklist when an unsigned

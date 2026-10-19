@@ -23740,16 +23740,20 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
   // Non-technical checklist items, replaced as a whole in one transaction (items are an ordered list;
   // saved assessments keep their own copy of the items they were done on, so nothing else changes).
-  const replaceChecklistItems = (client: any, programId: number | string, items: { label: string; description: string }[]) => {
+  // An item's stage (30, 60 or 90-day) is kept only on a new-hire evaluation program; on a competency it is dropped,
+  // so every caller (both create routes, both edit routes) gets the same rule from here.
+  const replaceChecklistItems = (client: any, programId: number | string, items: { label: string; description: string; stage?: string | null }[]) => {
+    const prog = client.prepare("SELECT type, record_kind FROM competency_programs WHERE id = ?").get(programId) as any;
+    const staged = isEvaluationProgram(prog);
     client.transaction(() => {
       client.prepare("DELETE FROM competency_checklist_items WHERE program_id = ?").run(programId);
-      const ins = client.prepare("INSERT INTO competency_checklist_items (program_id, label, description, sort_order) VALUES (?, ?, ?, ?)");
-      items.forEach((it, idx) => ins.run(programId, it.label, it.description, idx));
+      const ins = client.prepare("INSERT INTO competency_checklist_items (program_id, label, description, sort_order, stage) VALUES (?, ?, ?, ?, ?)");
+      items.forEach((it, idx) => ins.run(programId, it.label, it.description, idx, staged ? it.stage ?? null : null));
     })();
   };
-  const saveChecklistEdit = (req: any, program: any, items: { label: string; description: string }[]) => {
+  const saveChecklistEdit = (req: any, program: any, items: { label: string; description: string; stage?: string | null }[]) => {
     const client = (db as any).$client;
-    const before = client.prepare("SELECT label, description FROM competency_checklist_items WHERE program_id = ? ORDER BY sort_order").all(program.id);
+    const before = client.prepare("SELECT label, description, stage FROM competency_checklist_items WHERE program_id = ? ORDER BY sort_order").all(program.id);
     replaceChecklistItems(client, program.id, items);
     logAudit({ userId: req.userId ?? req.user?.userId, ownerUserId: req.ownerUserId ?? req.userId ?? req.user?.userId, module: "veritacomp", action: "update", entityType: "program_checklist", entityId: String(program.id), entityLabel: program.name || undefined, before: { items: before }, after: { items }, ipAddress: req.ip });
   };

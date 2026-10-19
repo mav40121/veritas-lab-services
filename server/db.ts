@@ -462,6 +462,7 @@ sqlite.exec(`
     label TEXT NOT NULL,
     description TEXT NOT NULL,
     sort_order INTEGER NOT NULL DEFAULT 0,
+    stage TEXT,
     FOREIGN KEY (program_id) REFERENCES competency_programs(id)
   );
 
@@ -1532,6 +1533,16 @@ try { sqlite.exec("ALTER TABLE competency_programs ADD COLUMN is_implicit INTEGE
   const cols = (sqlite.prepare("PRAGMA table_info(competency_programs)").all() as Array<{ name: string }>).map((c) => c.name);
   if (!cols.includes("record_kind")) {
     try { sqlite.exec("ALTER TABLE competency_programs ADD COLUMN record_kind TEXT NOT NULL DEFAULT 'competency'"); } catch {}
+  }
+}
+
+// Evaluation stages (2026-10-19, Sampson REQ-076): an evaluation checklist item may belong to the 30, 60 or 90-day
+// evaluation only (shared/competencyChecklist.ts checklistItemsForType). NULL = every stage, which is what every
+// existing item means.
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(competency_checklist_items)").all() as Array<{ name: string }>).map((c) => c.name);
+  if (!cols.includes("stage")) {
+    try { sqlite.exec("ALTER TABLE competency_checklist_items ADD COLUMN stage TEXT"); } catch {}
   }
 }
 
