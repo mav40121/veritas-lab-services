@@ -5727,10 +5727,12 @@ export function buildCompetencyHTML(input: CompetencyPDFInput): string {
     // Render one row per checklist item from the program with blank
     // date/initials cells so the supervisor can hand-complete on paper.
     if (input.blank) {
+      // The blank evaluation worksheet covers all three stages, so a stage-only item says which stage it is for.
       for (const ci of checklistItems) {
+        const stageTag = isEvaluation && ci.stage ? `${assessmentTypeLabel(ci.stage)}: ` : "";
         html += `<tr style="height:22px;">
           <td><strong>${esc(ci.label || "")}</strong></td>
-          <td style="white-space:pre-line">${esc(ci.description || "")}</td>
+          <td style="white-space:pre-line">${esc(stageTag + (ci.description || ""))}</td>
           <td>&nbsp;</td>
           <td>&nbsp;</td>
           <td>&nbsp;</td>
