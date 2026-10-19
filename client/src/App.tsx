@@ -152,6 +152,7 @@ const StaffGatedShift = staffLoginGate(VeritaShiftPage, "VeritaShift™");
 const StaffGatedOps = staffLoginGate(VeritaOpsAppPage, "VeritaOps™");
 const RequestInvoicePage = lazy(() => import("@/pages/RequestInvoicePage"));
 import { OnboardingBanner } from "@/components/OnboardingBanner";
+import { analyticsAllowed, ensureAnalyticsLoaded, syncAnalyticsOptOut } from "@/lib/analytics";
 
 function BackToTop() {
   const [visible, setVisible] = useState(false);
@@ -281,11 +282,15 @@ function CanonicalUpdater() {
 }
 
 // Fires a GA4 page_view on every route change (including initial load,
-// since gtag config uses send_page_view:false to avoid double-counting)
+// since gtag config uses send_page_view:false to avoid double-counting).
+// Signed-out visitors only: GA never loads or collects inside the logged-in app (lib/analytics.ts).
 function GATracker() {
   const [location] = useLocation();
 
   useEffect(() => {
+    syncAnalyticsOptOut();
+    if (!analyticsAllowed()) return;
+    ensureAnalyticsLoaded();
     if (typeof window.gtag === 'function') {
       window.gtag('event', 'page_view', {
         page_path: location,
