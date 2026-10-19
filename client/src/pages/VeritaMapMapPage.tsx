@@ -1,3 +1,4 @@
+import { normalizeSpecimen, SPECIMEN_SUGGESTIONS, SPECIMEN_MAX_LENGTH, specimenLabel } from "@shared/veritamapSpecimen";
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Link, useRoute, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -164,22 +165,29 @@ interface AnalyteValues {
   age_min_days?: number;
   age_max_days?: number;
   sex?: string;
+  // Specimen type (2026-10-19, REQ-079): the third part of the band. "" = all specimen types.
+  specimen_type?: string;
   band_label?: string | null;
 }
 
 // Mirrors ALL_AGES_BAND in server/routes.ts. age_max_days is an UNBOUNDED
 // sentinel rather than null because SQLite treats NULLs as DISTINCT inside a
 // UNIQUE index (see server/db.ts).
-const ALL_AGES = { age_min_days: 0, age_max_days: 999999, sex: "A", band_label: "All ages" };
+const ALL_AGES = { age_min_days: 0, age_max_days: 999999, sex: "A", specimen_type: "", band_label: "All ages" };
 const isAllAgesBand = (b?: AnalyteValues) =>
-  !b || ((b.age_min_days ?? 0) === ALL_AGES.age_min_days && (b.age_max_days ?? ALL_AGES.age_max_days) === ALL_AGES.age_max_days && (b.sex ?? "A") === ALL_AGES.sex);
+  !b || ((b.age_min_days ?? 0) === ALL_AGES.age_min_days && (b.age_max_days ?? ALL_AGES.age_max_days) === ALL_AGES.age_max_days && (b.sex ?? "A") === ALL_AGES.sex && (b.specimen_type ?? "") === "");
 const sameBand = (a: AnalyteValues, b: AnalyteValues) =>
   (a.age_min_days ?? 0) === (b.age_min_days ?? 0) &&
   (a.age_max_days ?? ALL_AGES.age_max_days) === (b.age_max_days ?? ALL_AGES.age_max_days) &&
-  (a.sex ?? "A") === (b.sex ?? "A");
+  (a.sex ?? "A") === (b.sex ?? "A") &&
+  (a.specimen_type ?? "") === (b.specimen_type ?? "");
 // Display name for a band. Falls back to deriving one so a row written by an
 // older client (band_label null) still reads sensibly.
 function bandName(b: AnalyteValues): string {
+  const specimen = b.specimen_type ? ` · ${b.specimen_type}` : "";
+  return ageSexName(b) + specimen;
+}
+function ageSexName(b: AnalyteValues): string {
   if (b.band_label) return b.band_label;
   const min = b.age_min_days ?? 0;
   const max = b.age_max_days ?? ALL_AGES.age_max_days;
@@ -193,13 +201,21 @@ function bandName(b: AnalyteValues): string {
   return age + (s === "F" ? ", female" : s === "M" ? ", male" : "");
 }
 
-interface AmrValues {
-  [instrumentId: number]: {
-    amr_low?: string | null; amr_high?: string | null;
-    amr_attested_at?: string | null; amr_attested_by?: string | null;
-    amr_attested_title?: string | null; amr_locked?: number | null;
-  };
+interface AmrEntry {
+  amr_low?: string | null; amr_high?: string | null;
+  amr_attested_at?: string | null; amr_attested_by?: string | null;
+  amr_attested_title?: string | null; amr_locked?: number | null;
+  // 2026-10-19 (REQ-079 / REQ-080): AMR rows are per specimen type, with the lab-entered reportable range.
+  specimen_type?: string;
+  reportable_low?: string | null; reportable_high?: string | null; max_dilution?: string | null;
 }
+// One analyte's AMR rows for the instruments that run it, keyed `${instrumentId}::${specimenType}`.
+type AmrRowsByKey = Record<string, AmrEntry>;
+// The editor's working copy for the active specimen type, keyed by instrument id.
+interface AmrValues {
+  [instrumentId: number]: AmrEntry;
+}
+type AmrSaveValues = { amr_low: string; amr_high: string; reportable_low: string; reportable_high: string; max_dilution: string; specimen_type: string };
 
 interface MapDetail {
   id: number;
@@ -809,10 +825,10 @@ interface TestRowProps {
   onChangeMany?: (analyte: string, updates: Partial<TestRecord>) => void;
   onRowMount?: (el: HTMLTableRowElement | null) => void;
   analyteBands?: AnalyteValues[];
-  amrValues?: AmrValues;
+  amrValues?: AmrRowsByKey;
   onSaveAnalyteValues?: (analyte: string, values: AnalyteValues) => void;
   onDeleteAnalyteBand?: (analyte: string, band: AnalyteValues) => Promise<void>;
-  onSaveAmrValues?: (analyte: string, instrumentId: number, values: { amr_low: string; amr_high: string }) => void;
+  onSaveAmrValues?: (analyte: string, instrumentId: number, values: AmrSaveValues) => void;
   onEditCorrelation?: (test: TestRecord, corr: CorrelationRecord | null) => void;
   readOnly?: boolean;
   colCount: number;
@@ -1278,7 +1294,7 @@ function TestRow({ test, onChange, onChangeMany, onRowMount, analyteBands, amrVa
     [analyteBands],
   );
   const [activeBandKey, setActiveBandKey] = React.useState<string>("");
-  const bandKey = (b: AnalyteValues) => `${b.age_min_days ?? 0}:${b.age_max_days ?? ALL_AGES.age_max_days}:${b.sex ?? "A"}`;
+  const bandKey = (b: AnalyteValues) => `${b.age_min_days ?? 0}:${b.age_max_days ?? ALL_AGES.age_max_days}:${b.sex ?? "A"}:${b.specimen_type ?? ""}`;
   const activeBand = React.useMemo(
     () => bands.find(b => bandKey(b) === activeBandKey) ?? bands[0],
     [bands, activeBandKey],
@@ -1291,17 +1307,29 @@ function TestRow({ test, onChange, onChangeMany, onRowMount, analyteBands, amrVa
     age_min_days: String(activeBand?.age_min_days ?? ALL_AGES.age_min_days),
     age_max_days: String(activeBand?.age_max_days ?? ALL_AGES.age_max_days),
     sex: String(activeBand?.sex ?? ALL_AGES.sex),
+    specimen_type: String(activeBand?.specimen_type ?? ""),
   }), [activeBand]);
+  // The AMR and reportable range shown below belong to the active band's specimen type ("" = all specimen types).
+  const activeSpecimen = activeBand?.specimen_type ?? "";
+  const amrForSpecimen = React.useMemo<AmrValues>(() => {
+    const out: AmrValues = {};
+    for (const inst of test.instruments ?? []) {
+      const row = amrValues?.[`${inst.id}::${activeSpecimen}`];
+      if (row) out[inst.id] = row;
+    }
+    return out;
+  }, [amrValues, activeSpecimen, test.instruments]);
   const [addingBand, setAddingBand] = React.useState(false);
   const [newBandMinY, setNewBandMinY] = React.useState("0");
   const [newBandMaxY, setNewBandMaxY] = React.useState("18");
   const [newBandSex, setNewBandSex] = React.useState("A");
+  const [newBandSpecimen, setNewBandSpecimen] = React.useState("");
   const [bandBusy, setBandBusy] = React.useState(false);
   // TestRow validates the add-band form locally and needs to tell the user why a
   // band was refused, so it needs its own toast; the page-level one is not in scope here.
   const { toast } = useToast();
   const [localAv, setLocalAv] = React.useState<AnalyteValues>(activeBand || {});
-  const [localAmr, setLocalAmr] = React.useState<AmrValues>(amrValues || {});
+  const [localAmr, setLocalAmr] = React.useState<AmrValues>(amrForSpecimen);
   const [saving, setSaving] = React.useState(false);
   // Wave A4 provenance mini-forms. attestFor: "ref" or an instrument id.
   const [attestFor, setAttestFor] = React.useState<"ref" | number | null>(null);
@@ -1347,7 +1375,16 @@ function TestRow({ test, onChange, onChangeMany, onRowMount, analyteBands, amrVa
     avEditsRef.current += 1;
     setLocalAv(v => ({ ...v, ...patch }));
   };
-  const editAmr = (instId: number, patch: { amr_low?: string; amr_high?: string }) => {
+  // The AMR save body: this instrument's AMR, reportable range and maximum dilution for the active specimen type.
+  const amrSaveBody = (instId: number): AmrSaveValues => ({
+    amr_low: localAmr[instId]?.amr_low || "",
+    amr_high: localAmr[instId]?.amr_high || "",
+    reportable_low: localAmr[instId]?.reportable_low || "",
+    reportable_high: localAmr[instId]?.reportable_high || "",
+    max_dilution: localAmr[instId]?.max_dilution || "",
+    specimen_type: activeSpecimen,
+  });
+  const editAmr = (instId: number, patch: { amr_low?: string; amr_high?: string; reportable_low?: string; reportable_high?: string; max_dilution?: string }) => {
     amrEditsRef.current.set(instId, (amrEditsRef.current.get(instId) ?? 0) + 1);
     setLocalAmr(v => ({ ...v, [instId]: { ...v[instId], ...patch } }));
   };
@@ -1371,17 +1408,22 @@ function TestRow({ test, onChange, onChangeMany, onRowMount, analyteBands, amrVa
   // The parent derives amrValues inline from amrValuesMap, so its identity
   // changes on every parent render; key the sync on the VALUES instead, and
   // never overwrite an instrument the user is mid-edit on.
-  const amrSig = JSON.stringify(amrValues || {});
+  const amrSig = JSON.stringify(amrForSpecimen) + "|" + activeSpecimen;
+  const lastSpecimenRef = React.useRef<string>(activeSpecimen);
   React.useEffect(() => {
-    const dirty = new Set(amrDirtyIds());
+    // Switching to a band with another specimen type swaps the AMR rows and discards an unsaved AMR edit, as a band
+    // switch already does for the reference range, so a value typed for one specimen is never saved under another.
+    const switched = lastSpecimenRef.current !== activeSpecimen;
+    lastSpecimenRef.current = activeSpecimen;
+    const dirty = new Set(switched ? [] : amrDirtyIds());
     if (dirty.size === 0) {
       amrEditsRef.current.clear();
       amrSavedRef.current.clear();
-      setLocalAmr(amrValues || {});
+      setLocalAmr(amrForSpecimen);
       return;
     }
     setLocalAmr(v => {
-      const next: AmrValues = { ...(amrValues || {}) };
+      const next: AmrValues = { ...amrForSpecimen };
       for (const id of dirty) if (v[id]) next[id] = v[id];
       return next;
     });
@@ -1440,10 +1482,7 @@ function TestRow({ test, onChange, onChangeMany, onRowMount, analyteBands, amrVa
           const prevSaved = amrSavedRef.current.get(inst.id) ?? 0;
           amrSavedRef.current.set(inst.id, Math.max(prevSaved, carried.get(inst.id) ?? 0));
           try {
-            await onSaveAmrValues(test.analyte, inst.id, {
-              amr_low: localAmr[inst.id].amr_low || "",
-              amr_high: localAmr[inst.id].amr_high || "",
-            });
+            await onSaveAmrValues(test.analyte, inst.id, amrSaveBody(inst.id));
           } catch (err) {
             amrSavedRef.current.set(inst.id, prevSaved);
             throw err;
@@ -1457,7 +1496,7 @@ function TestRow({ test, onChange, onChangeMany, onRowMount, analyteBands, amrVa
     }, 1500);
     return () => { if (amrAutosaveTimer.current) clearTimeout(amrAutosaveTimer.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [localAmr, onSaveAmrValues, test.analyte, flashSaved, readOnly]);
+  }, [localAmr, onSaveAmrValues, test.analyte, flashSaved, readOnly, activeSpecimen]);
 
   React.useEffect(() => () => {
     if (savedFadeTimer.current) clearTimeout(savedFadeTimer.current);
@@ -1778,7 +1817,7 @@ function TestRow({ test, onChange, onChangeMany, onRowMount, analyteBands, amrVa
                   {/* Not "Values for": the panel heading above already reads
                       "Lab-Established Values for <analyte>", and two labels
                       opening the same way reads as a repeat. */}
-                  <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide mr-1">Age / sex band</span>
+                  <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wide mr-1">Band</span>
                   {bands.map(b => {
                     const active = bandKey(b) === bandKey(activeBand);
                     return (
@@ -1796,7 +1835,7 @@ function TestRow({ test, onChange, onChangeMany, onRowMount, analyteBands, amrVa
               )}
               {!readOnly && onSaveAnalyteValues && !addingBand && (
                 <button type="button" className="text-[11px] text-primary hover:underline px-1" onClick={() => setAddingBand(true)}>
-                  + Add age/sex band
+                  + Add band (age, sex or specimen)
                 </button>
               )}
               {!readOnly && onDeleteAnalyteBand && bands.length > 1 && !isAllAgesBand(activeBand) && !activeBand.ref_locked && (
@@ -1838,6 +1877,21 @@ function TestRow({ test, onChange, onChangeMany, onRowMount, analyteBands, amrVa
                   <option value="M">Male</option>
                 </select>
               </div>
+              <div>
+                <label className="text-[10px] text-muted-foreground font-medium block mb-1">Specimen type</label>
+                <Input
+                  className="h-7 text-xs w-40"
+                  list={`specimen-suggestions-${test.analyte}`}
+                  value={newBandSpecimen}
+                  maxLength={SPECIMEN_MAX_LENGTH}
+                  onChange={e => setNewBandSpecimen(e.target.value)}
+                  placeholder="blank = all specimen types"
+                  data-testid="new-band-specimen"
+                />
+                <datalist id={`specimen-suggestions-${test.analyte}`}>
+                  {SPECIMEN_SUGGESTIONS.map(sp => <option key={sp} value={sp} />)}
+                </datalist>
+              </div>
               <Button
                 size="sm"
                 className="h-7 text-xs"
@@ -1851,7 +1905,12 @@ function TestRow({ test, onChange, onChangeMany, onRowMount, analyteBands, amrVa
                     toast({ title: "Check the age range", description: "From-age must be a number less than the to-age. Leave the to-age blank for no upper limit.", variant: "destructive" });
                     return;
                   }
-                  const candidate: AnalyteValues = { age_min_days: minD, age_max_days: maxD, sex: newBandSex };
+                  const sp = normalizeSpecimen(newBandSpecimen);
+                  if ("error" in sp) {
+                    toast({ title: "Check the specimen type", description: sp.error, variant: "destructive" });
+                    return;
+                  }
+                  const candidate: AnalyteValues = { age_min_days: minD, age_max_days: maxD, sex: newBandSex, specimen_type: sp.specimen };
                   if (bands.some(b => sameBand(b, candidate))) {
                     toast({ title: "That band already exists", description: `${test.analyte} already has ${bandName(candidate)}.`, variant: "destructive" });
                     return;
@@ -1863,6 +1922,7 @@ function TestRow({ test, onChange, onChangeMany, onRowMount, analyteBands, amrVa
                     if (onSaveAnalyteValues) await onSaveAnalyteValues(test.analyte, { ...candidate, units: localAv.units ?? null });
                     setActiveBandKey(bandKey(candidate));
                     setAddingBand(false);
+                    setNewBandSpecimen("");
                   } catch { /* handler toasts */ }
                   finally { setBandBusy(false); }
                 }}
@@ -1996,7 +2056,7 @@ function TestRow({ test, onChange, onChangeMany, onRowMount, analyteBands, amrVa
                       setProvBusy(true);
                       try {
                         if (attestFor === "ref") await onProvenance("attest-ref", test.analyte, { attested_by: attestBy.trim(), attested_title: attestTitle.trim(), ...bandFields });
-                        else await onProvenance("attest-amr", test.analyte, { attested_by: attestBy.trim(), attested_title: attestTitle.trim() }, attestFor);
+                        else await onProvenance("attest-amr", test.analyte, { attested_by: attestBy.trim(), attested_title: attestTitle.trim(), specimen_type: activeSpecimen }, attestFor);
                         setAttestFor(null);
                       } finally { setProvBusy(false); }
                     }}>
@@ -2010,16 +2070,25 @@ function TestRow({ test, onChange, onChangeMany, onRowMount, analyteBands, amrVa
           {/* AMR per instrument */}
           {instruments.length > 0 && (
             <div className="mb-3">
-              <label className="text-[10px] text-muted-foreground font-medium block mb-1">AMR (Analytical Measurement Range) - per instrument</label>
+              <label className="text-[10px] text-muted-foreground font-medium block mb-1">
+                AMR (Analytical Measurement Range) and reportable range - per instrument{activeSpecimen ? `, ${activeSpecimen}` : ""}
+              </label>
+              {activeSpecimen && (
+                <p className="text-[10px] text-muted-foreground mb-1" data-testid="amr-specimen-hint">
+                  For {activeSpecimen} only. Left blank, the export uses the values entered for all specimen types.
+                </p>
+              )}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
                 {instruments.map(inst => {
                   const amrLocked = !!localAmr[inst.id]?.amr_locked;
                   return (
-                  <div key={inst.id} className="flex items-center gap-2 bg-background rounded border border-border px-2 py-1.5">
+                  <div key={inst.id} className="bg-background rounded border border-border px-2 py-1.5 space-y-1" data-testid={`amr-card-${inst.id}`}>
+                  <div className="flex items-center gap-2">
                     <span className="text-[10px] font-medium min-w-[100px] truncate text-foreground">{inst.instrument_name}</span>
                     <Input
                       className="h-6 text-xs w-20"
                       placeholder="Low"
+                      data-testid={`amr-low-${inst.id}`}
                       value={localAmr[inst.id]?.amr_low || ""}
                       disabled={amrLocked || readOnly}
                       onChange={e => editAmr(inst.id, { amr_low: e.target.value })}
@@ -2028,6 +2097,7 @@ function TestRow({ test, onChange, onChangeMany, onRowMount, analyteBands, amrVa
                     <Input
                       className="h-6 text-xs w-20"
                       placeholder="High"
+                      data-testid={`amr-high-${inst.id}`}
                       value={localAmr[inst.id]?.amr_high || ""}
                       disabled={amrLocked || readOnly}
                       onChange={e => editAmr(inst.id, { amr_high: e.target.value })}
@@ -2040,7 +2110,7 @@ function TestRow({ test, onChange, onChangeMany, onRowMount, analyteBands, amrVa
                         </span>
                         {canUnlock && (
                           <button type="button" className="text-[10px] underline text-amber-700 hover:text-amber-900" disabled={provBusy}
-                            onClick={async () => { setProvBusy(true); try { await onProvenance("unlock-amr", test.analyte, undefined, inst.id); } finally { setProvBusy(false); } }}>
+                            onClick={async () => { setProvBusy(true); try { await onProvenance("unlock-amr", test.analyte, { specimen_type: activeSpecimen }, inst.id); } finally { setProvBusy(false); } }}>
                             Unlock
                           </button>
                         )}
@@ -2050,6 +2120,37 @@ function TestRow({ test, onChange, onChangeMany, onRowMount, analyteBands, amrVa
                         Attest
                       </button>
                     ) : null)}
+                  </div>
+                  {/* Reportable range (2026-10-19, REQ-080): lab-entered with its maximum dilution; never calculated. */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-[10px] text-muted-foreground min-w-[100px]">Reportable</span>
+                    <Input
+                      className="h-6 text-xs w-20"
+                      placeholder="Low"
+                      value={localAmr[inst.id]?.reportable_low || ""}
+                      disabled={readOnly}
+                      onChange={e => editAmr(inst.id, { reportable_low: e.target.value })}
+                      data-testid={`reportable-low-${inst.id}`}
+                    />
+                    <span className="text-[10px] text-muted-foreground">to</span>
+                    <Input
+                      className="h-6 text-xs w-20"
+                      placeholder="High"
+                      value={localAmr[inst.id]?.reportable_high || ""}
+                      disabled={readOnly}
+                      onChange={e => editAmr(inst.id, { reportable_high: e.target.value })}
+                      data-testid={`reportable-high-${inst.id}`}
+                    />
+                    <Input
+                      className="h-6 text-xs w-20"
+                      placeholder="Max dilution"
+                      title="Maximum dilution, e.g. 1:10"
+                      value={localAmr[inst.id]?.max_dilution || ""}
+                      disabled={readOnly}
+                      onChange={e => editAmr(inst.id, { max_dilution: e.target.value })}
+                      data-testid={`max-dilution-${inst.id}`}
+                    />
+                  </div>
                   </div>
                   );
                 })}
@@ -2068,10 +2169,7 @@ function TestRow({ test, onChange, onChangeMany, onRowMount, analyteBands, amrVa
                   avSavedRef.current = avEditsRef.current;
                   for (const inst of instruments) {
                     if (onSaveAmrValues && localAmr[inst.id]) {
-                      await onSaveAmrValues(test.analyte, inst.id, {
-                        amr_low: localAmr[inst.id].amr_low || "",
-                        amr_high: localAmr[inst.id].amr_high || "",
-                      });
+                      await onSaveAmrValues(test.analyte, inst.id, amrSaveBody(inst.id));
                       amrSavedRef.current.set(inst.id, amrEditsRef.current.get(inst.id) ?? 0);
                     }
                   }
@@ -2227,7 +2325,17 @@ export default function VeritaMapMapPage() {
   // Analyte values and AMR values keyed by analyte and instId::analyte respectively
   // analyte -> its age/sex bands. Almost always a single "All ages" band.
   const [analyteValuesMap, setAnalyteValuesMap] = useState<Record<string, AnalyteValues[]>>({});
-  const [amrValuesMap, setAmrValuesMap] = useState<Record<string, { amr_low?: string; amr_high?: string }>>({});
+  // Key: `${instrumentId}::${analyte}::${specimenType}` ("" = all specimen types, 2026-10-19).
+  const [amrValuesMap, setAmrValuesMap] = useState<Record<string, AmrEntry>>({});
+  // One analyte's AMR rows, keyed `${instrumentId}::${specimenType}`, built once per change rather than per row.
+  const amrByAnalyte = React.useMemo(() => {
+    const out: Record<string, AmrRowsByKey> = {};
+    for (const [k, v] of Object.entries(amrValuesMap)) {
+      const [inst, analyte, ...rest] = k.split("::");
+      (out[analyte] ??= {})[`${inst}::${rest.join("::")}`] = v;
+    }
+    return out;
+  }, [amrValuesMap]);
 
   // Correlation edit modal state
   const [corrModalOpen, setCorrModalOpen] = useState(false);
@@ -2427,8 +2535,8 @@ export default function VeritaMapMapPage() {
       }).catch(() => {});
     fetch(`${API_BASE}${mapApiBase}/amr-values`, { headers: authHeaders() })
       .then(r => r.json()).then((rows: any[]) => {
-        const m: Record<string, { amr_low?: string; amr_high?: string }> = {};
-        for (const row of rows) m[`${row.instrument_id}::${row.analyte}`] = row;
+        const m: Record<string, AmrEntry> = {};
+        for (const row of rows) m[`${row.instrument_id}::${row.analyte}::${row.specimen_type || ""}`] = row;
         setAmrValuesMap(m);
       }).catch(() => {});
   }, [mapId, mapApiBase]);
@@ -2466,7 +2574,7 @@ export default function VeritaMapMapPage() {
     const res = await fetch(`${API_BASE}${mapApiBase}/analyte-values/${encodeURIComponent(analyte)}/band`, {
       method: "DELETE",
       headers: { ...authHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify({ age_min_days: band.age_min_days ?? 0, age_max_days: band.age_max_days ?? ALL_AGES.age_max_days, sex: band.sex ?? "A" }),
+      body: JSON.stringify({ age_min_days: band.age_min_days ?? 0, age_max_days: band.age_max_days ?? ALL_AGES.age_max_days, sex: band.sex ?? "A", specimen_type: band.specimen_type ?? "" }),
     });
     if (!res.ok) {
       const msg = await res.json().then((d: any) => d?.error).catch(() => null);
@@ -2478,7 +2586,7 @@ export default function VeritaMapMapPage() {
   }, [mapId, mapApiBase, toast]);
 
   // Save AMR values (per instrument)
-  const handleSaveAmrValues = useCallback(async (analyte: string, instrumentId: number, values: { amr_low: string; amr_high: string }) => {
+  const handleSaveAmrValues = useCallback(async (analyte: string, instrumentId: number, values: AmrSaveValues) => {
     const res = await fetch(`${API_BASE}${mapApiBase}/amr-values/${instrumentId}/${encodeURIComponent(analyte)}`, {
       method: "PUT",
       headers: { ...authHeaders(), "Content-Type": "application/json" },
@@ -2489,7 +2597,9 @@ export default function VeritaMapMapPage() {
       toast({ title: "AMR not saved", description: msg || "Server error. Please try again.", variant: "destructive" });
       throw new Error(msg || `amr-values save failed (${res.status})`);
     }
-    setAmrValuesMap(prev => ({ ...prev, [`${instrumentId}::${analyte}`]: { ...prev[`${instrumentId}::${analyte}`], ...values } }));
+    const saved = await res.json().catch(() => null);
+    const key = `${instrumentId}::${analyte}::${values.specimen_type || ""}`;
+    setAmrValuesMap(prev => ({ ...prev, [key]: saved && !saved.error ? saved : { ...prev[key], ...values } }));
   }, [mapId, mapApiBase, toast]);
 
   // Wave A4 provenance actions: MEC review on critical values, 493.1253
@@ -2518,7 +2628,7 @@ export default function VeritaMapMapPage() {
     const row = await r.json();
     if (!r.ok) { alert(row?.error || "Action failed"); return; }
     if (action === "attest-amr" || action === "unlock-amr") {
-      setAmrValuesMap(prev => ({ ...prev, [`${instrumentId}::${analyte}`]: row }));
+      setAmrValuesMap(prev => ({ ...prev, [`${instrumentId}::${analyte}::${row.specimen_type || ""}`]: row }));
     } else {
       // The analyte's entry is an ARRAY of bands; replace only the band the
       // server returned (it used to overwrite the whole array with one row,
@@ -3167,12 +3277,7 @@ export default function VeritaMapMapPage() {
                       else rowRefs.current.delete(test.analyte);
                     }}
                     analyteBands={analyteValuesMap[test.analyte]}
-                    amrValues={Object.fromEntries(
-                      (test.instruments ?? []).map(inst => [
-                        inst.id,
-                        amrValuesMap[`${inst.id}::${test.analyte}`] || {}
-                      ])
-                    )}
+                    amrValues={amrByAnalyte[test.analyte]}
                     onSaveAnalyteValues={handleSaveAnalyteValues}
                     onDeleteAnalyteBand={handleDeleteAnalyteBand}
                     onSaveAmrValues={handleSaveAmrValues}

@@ -201,6 +201,7 @@ import { logAudit } from "./audit";
 import { summarizeCspReport, cspHeaderName } from "./securityHeaders";
 import { normalizeChecklistItems } from "@shared/competencyChecklist";
 import { assessmentTypeLabel, assessmentTypeProblem, isEvaluationProgram, normalizeRecordKind } from "@shared/competencyEvaluation";
+import { normalizeSpecimen, normalizeReportableField, specimenLabel } from "@shared/veritamapSpecimen";
 import { buildCompetencyRegisterRows, generateCompetencyRegisterExcel } from "./competencyRegisterExcel";
 import {
   deriveCompetencyStatus, competencyView,
@@ -14832,7 +14833,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // bands existed. ageMaxDays is the UNBOUNDED sentinel (see server/db.ts: it is
   // NOT NULL on purpose, because SQLite treats NULLs as DISTINCT in a UNIQUE
   // index and a nullable upper bound would silently allow duplicate rows).
-  const ALL_AGES_BAND = { ageMinDays: 0, ageMaxDays: 999999, sex: "A", label: "All ages" } as const;
+  // specimen "" = all specimen types (2026-10-19, REQ-079): the third part of the band, with age and sex.
+  const ALL_AGES_BAND = { ageMinDays: 0, ageMaxDays: 999999, sex: "A", specimen: "", label: "All ages" } as const;
   const BAND_SEXES = new Set(["A", "F", "M"]); // A = any/all. Allowlist, not blocklist.
 
   // Human label for a band, used when the caller does not supply one. Days are
@@ -14854,9 +14856,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // exactly as before. Returns an error string instead of guessing on bad input:
   // a reference range or critical value filed against the wrong age band is a
   // clinical error, not a formatting one.
-  function parseBand(body: any): { band: { ageMinDays: number; ageMaxDays: number; sex: string; label: string } } | { error: string } {
+  function parseBand(body: any): { band: { ageMinDays: number; ageMaxDays: number; sex: string; specimen: string; label: string } } | { error: string } {
     const hasBand =
-      body?.age_min_days !== undefined || body?.age_max_days !== undefined || body?.sex !== undefined;
+      body?.age_min_days !== undefined || body?.age_max_days !== undefined || body?.sex !== undefined || body?.specimen_type !== undefined;
     if (!hasBand) return { band: { ...ALL_AGES_BAND } };
 
     const minD = body.age_min_days === undefined ? ALL_AGES_BAND.ageMinDays : Number(body.age_min_days);
@@ -14868,17 +14870,19 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (maxD > ALL_AGES_BAND.ageMaxDays) return { error: `age_max_days must be <= ${ALL_AGES_BAND.ageMaxDays} (the unbounded sentinel)` };
     if (minD >= maxD) return { error: "age_min_days must be less than age_max_days" };
     if (!BAND_SEXES.has(sex)) return { error: `sex must be one of ${Array.from(BAND_SEXES).join(", ")} (A = any)` };
+    const sp = normalizeSpecimen(body.specimen_type);
+    if ("error" in sp) return { error: sp.error };
 
     const label = String(body.band_label ?? "").trim() || deriveBandLabel(minD, maxD, sex);
-    return { band: { ageMinDays: minD, ageMaxDays: maxD, sex, label } };
+    return { band: { ageMinDays: minD, ageMaxDays: maxD, sex, specimen: sp.specimen, label } };
   }
   // Band-keyed row address (#68, 2026-10-07): the provenance actions below
   // (MEC review, 493.1253 attestation, unlock) used to match on (map_id,
   // analyte) alone and therefore stamped or unlocked EVERY age/sex band of the
   // analyte at once. Every read and write of a single band goes through this.
-  const BAND_WHERE = "map_id = ? AND analyte = ? AND age_min_days = ? AND age_max_days = ? AND sex = ?";
-  const bandArgs = (mapId: number, analyte: string, band: { ageMinDays: number; ageMaxDays: number; sex: string }) =>
-    [mapId, analyte, band.ageMinDays, band.ageMaxDays, band.sex] as const;
+  const BAND_WHERE = "map_id = ? AND analyte = ? AND age_min_days = ? AND age_max_days = ? AND sex = ? AND specimen_type = ?";
+  const bandArgs = (mapId: number, analyte: string, band: { ageMinDays: number; ageMaxDays: number; sex: string; specimen: string }) =>
+    [mapId, analyte, band.ageMinDays, band.ageMaxDays, band.sex, band.specimen] as const;
 
   // GET analyte-values. Returns EVERY band; a single-band analyte looks exactly
   // like it did before bands existed. Ordered so the response is stable and the
@@ -14886,7 +14890,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   app.get("/api/labs/:labId/veritamap/maps/:id/analyte-values", authMiddleware, labScopeMiddleware, requireMapInActiveLab, (req: any, res) => {
     if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap™ subscription required" });
     const values = (db as any).$client.prepare(
-      "SELECT * FROM veritamap_analyte_values WHERE map_id = ? ORDER BY analyte, age_min_days, age_max_days DESC, sex"
+      "SELECT * FROM veritamap_analyte_values WHERE map_id = ? ORDER BY analyte, specimen_type, age_min_days, age_max_days DESC, sex"
     ).all(Number(req.params.id));
     res.json(values);
   });
@@ -14901,8 +14905,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // Scoped to the band being written: the lock check must read the same row the
     // PUT writes. Keyed on analyte alone it could read a different band's lock.
     const existing = (db as any).$client.prepare(
-      "SELECT ref_range_low, ref_range_high, ref_locked FROM veritamap_analyte_values WHERE map_id = ? AND analyte = ? AND age_min_days = ? AND age_max_days = ? AND sex = ?"
-    ).get(mapId, analyte, band.ageMinDays, band.ageMaxDays, band.sex) as any;
+      "SELECT ref_range_low, ref_range_high, ref_locked FROM veritamap_analyte_values WHERE map_id = ? AND analyte = ? AND age_min_days = ? AND age_max_days = ? AND sex = ? AND specimen_type = ?"
+    ).get(mapId, analyte, band.ageMinDays, band.ageMaxDays, band.sex, band.specimen) as any;
     if (!existing?.ref_locked) return null;
     const refChanged =
       (body?.ref_range_low || null) !== (existing.ref_range_low || null) ||
@@ -14932,10 +14936,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // they now originate from a request body.
     (db as any).$client.prepare(`
       INSERT INTO veritamap_analyte_values
-        (map_id, analyte, age_min_days, age_max_days, sex, band_label,
+        (map_id, analyte, age_min_days, age_max_days, sex, specimen_type, band_label,
          ref_range_low, ref_range_high, critical_low, critical_high, units, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(map_id, analyte, age_min_days, age_max_days, sex) DO UPDATE SET
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(map_id, analyte, age_min_days, age_max_days, sex, specimen_type) DO UPDATE SET
         band_label = excluded.band_label,
         ref_range_low = excluded.ref_range_low,
         ref_range_high = excluded.ref_range_high,
@@ -14944,12 +14948,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         units = excluded.units,
         updated_at = excluded.updated_at
     `).run(
-      mapId, analyte, band.ageMinDays, band.ageMaxDays, band.sex, band.label,
+      mapId, analyte, band.ageMinDays, band.ageMaxDays, band.sex, band.specimen, band.label,
       ref_range_low || null, ref_range_high || null, critical_low || null, critical_high || null, units || null, now,
     );
     const row = (db as any).$client.prepare(
-      "SELECT * FROM veritamap_analyte_values WHERE map_id = ? AND analyte = ? AND age_min_days = ? AND age_max_days = ? AND sex = ?"
-    ).get(mapId, analyte, band.ageMinDays, band.ageMaxDays, band.sex);
+      "SELECT * FROM veritamap_analyte_values WHERE map_id = ? AND analyte = ? AND age_min_days = ? AND age_max_days = ? AND sex = ? AND specimen_type = ?"
+    ).get(mapId, analyte, band.ageMinDays, band.ageMaxDays, band.sex, band.specimen);
     res.json(row);
   });
 
@@ -14965,9 +14969,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if ("error" in parsed) return res.status(400).json({ error: parsed.error });
     const band = parsed.band;
     const existing = (db as any).$client.prepare(
-      "SELECT * FROM veritamap_analyte_values WHERE map_id = ? AND analyte = ? AND age_min_days = ? AND age_max_days = ? AND sex = ?"
-    ).get(mapId, analyte, band.ageMinDays, band.ageMaxDays, band.sex) as any;
-    if (!existing) return res.status(404).json({ error: "band not found", analyte, band: { age_min_days: band.ageMinDays, age_max_days: band.ageMaxDays, sex: band.sex } });
+      "SELECT * FROM veritamap_analyte_values WHERE map_id = ? AND analyte = ? AND age_min_days = ? AND age_max_days = ? AND sex = ? AND specimen_type = ?"
+    ).get(mapId, analyte, band.ageMinDays, band.ageMaxDays, band.sex, band.specimen) as any;
+    if (!existing) return res.status(404).json({ error: "band not found", analyte, band: { age_min_days: band.ageMinDays, age_max_days: band.ageMaxDays, sex: band.sex, specimen_type: band.specimen } });
     // An attested band is locked per 493.1253; deleting it would drop the
     // attested values without going through unlock-ref, which is auditable.
     if (existing.ref_locked) {
@@ -14980,8 +14984,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       ipAddress: req.ip,
     });
     (db as any).$client.prepare(
-      "DELETE FROM veritamap_analyte_values WHERE map_id = ? AND analyte = ? AND age_min_days = ? AND age_max_days = ? AND sex = ?"
-    ).run(mapId, analyte, band.ageMinDays, band.ageMaxDays, band.sex);
+      "DELETE FROM veritamap_analyte_values WHERE map_id = ? AND analyte = ? AND age_min_days = ? AND age_max_days = ? AND sex = ? AND specimen_type = ?"
+    ).run(mapId, analyte, band.ageMinDays, band.ageMaxDays, band.sex, band.specimen);
     const remaining = (db as any).$client.prepare(
       "SELECT * FROM veritamap_analyte_values WHERE map_id = ? AND analyte = ? ORDER BY age_min_days"
     ).all(mapId, analyte);
@@ -15094,7 +15098,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   app.get("/api/labs/:labId/veritamap/maps/:id/amr-values", authMiddleware, labScopeMiddleware, requireMapInActiveLab, (req: any, res) => {
     if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap™ subscription required" });
     const values = (db as any).$client.prepare(
-      "SELECT * FROM veritamap_amr_values WHERE map_id = ? ORDER BY analyte, instrument_id"
+      "SELECT * FROM veritamap_amr_values WHERE map_id = ? ORDER BY analyte, instrument_id, specimen_type"
     ).all(Number(req.params.id));
     res.json(values);
   });
@@ -15103,10 +15107,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // Wave A4 helper: a director-attested AMR is LOCKED per 42 CFR 493.1253.
   // Shared by the lab-scoped AND legacy AMR PUTs so the lock cannot be
   // bypassed.
-  function amrLockConflict(mapId: number, instrumentId: number, analyte: string, body: any): string | null {
+  function amrLockConflict(mapId: number, instrumentId: number, analyte: string, body: any, specimen = ""): string | null {
     const existing = (db as any).$client.prepare(
-      "SELECT amr_low, amr_high, amr_locked FROM veritamap_amr_values WHERE map_id = ? AND instrument_id = ? AND analyte = ?"
-    ).get(mapId, instrumentId, analyte) as any;
+      "SELECT amr_low, amr_high, amr_locked FROM veritamap_amr_values WHERE map_id = ? AND instrument_id = ? AND analyte = ? AND specimen_type = ?"
+    ).get(mapId, instrumentId, analyte, specimen) as any;
     if (!existing?.amr_locked) return null;
     const changed =
       (body?.amr_low || null) !== (existing.amr_low || null) ||
@@ -15122,16 +15126,54 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // server refuses to churn the DB for an unchanged value. Shared by the
   // lab-scoped AND legacy AMR PUTs. Returns the current row (or a blank shape
   // when no row exists and the request is blank) for a no-op, else null.
-  function amrUnchangedRow(mapId: number, instrumentId: number, analyte: string, body: any): any | null {
+  function amrUnchangedRow(mapId: number, instrumentId: number, analyte: string, body: any, specimen = ""): any | null {
     const current = (db as any).$client.prepare(
-      "SELECT * FROM veritamap_amr_values WHERE map_id = ? AND instrument_id = ? AND analyte = ?"
-    ).get(mapId, instrumentId, analyte) as any;
+      "SELECT * FROM veritamap_amr_values WHERE map_id = ? AND instrument_id = ? AND analyte = ? AND specimen_type = ?"
+    ).get(mapId, instrumentId, analyte, specimen) as any;
     const sameLow = (body?.amr_low || null) === (current?.amr_low ?? null);
     const sameHigh = (body?.amr_high || null) === (current?.amr_high ?? null);
     if (!sameLow || !sameHigh) return null;
+    // Reportable range fields (2026-10-19): a field the body leaves out is kept, so it counts as unchanged.
+    for (const k of ["reportable_low", "reportable_high", "max_dilution"]) {
+      if (body && k in body && (String(body[k] ?? "").trim() || null) !== (current?.[k] ?? null)) return null;
+    }
     // noop:true is ignored by the client but shows in the request log, so a
     // stale tab's repeated PUTs are visibly non-writes in production.
-    return { ...(current ?? { map_id: mapId, instrument_id: instrumentId, analyte, amr_low: null, amr_high: null }), noop: true };
+    return { ...(current ?? { map_id: mapId, instrument_id: instrumentId, analyte, specimen_type: specimen, amr_low: null, amr_high: null }), noop: true };
+  }
+
+  // Save one AMR row (2026-10-19): per instrument, analyte and specimen type ('' = all specimen types), with the
+  // lab-entered reportable range and maximum dilution (REQ-080). The conflict target names the table's full unique key.
+  // A reportable field the body leaves out keeps its stored value, so a client that only sends the AMR (an older tab,
+  // the legacy route) never blanks a reportable range. Nothing is calculated for the lab.
+  function saveAmrRow(mapId: number, instrumentId: number, analyte: string, specimen: string, body: any): { row: any } | { error: string } {
+    const db_ = (db as any).$client;
+    const current = db_.prepare(
+      "SELECT * FROM veritamap_amr_values WHERE map_id = ? AND instrument_id = ? AND analyte = ? AND specimen_type = ?"
+    ).get(mapId, instrumentId, analyte, specimen) as any;
+    const fields: Record<string, string | null> = {};
+    for (const [k, name] of [["reportable_low", "Reportable low"], ["reportable_high", "Reportable high"], ["max_dilution", "Maximum dilution"]] as const) {
+      if (body && k in body) {
+        const n = normalizeReportableField(body[k], name);
+        if ("error" in n) return { error: n.error };
+        fields[k] = n.value;
+      } else {
+        fields[k] = current?.[k] ?? null;
+      }
+    }
+    const now = new Date().toISOString();
+    db_.prepare(`
+      INSERT INTO veritamap_amr_values (map_id, instrument_id, analyte, specimen_type, amr_low, amr_high, reportable_low, reportable_high, max_dilution, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(map_id, instrument_id, analyte, specimen_type) DO UPDATE SET
+        amr_low = excluded.amr_low,
+        amr_high = excluded.amr_high,
+        reportable_low = excluded.reportable_low,
+        reportable_high = excluded.reportable_high,
+        max_dilution = excluded.max_dilution,
+        updated_at = excluded.updated_at
+    `).run(mapId, instrumentId, analyte, specimen, body?.amr_low || null, body?.amr_high || null, fields.reportable_low, fields.reportable_high, fields.max_dilution, now);
+    return { row: db_.prepare("SELECT * FROM veritamap_amr_values WHERE map_id = ? AND instrument_id = ? AND analyte = ? AND specimen_type = ?").get(mapId, instrumentId, analyte, specimen) };
   }
 
   app.put("/api/labs/:labId/veritamap/maps/:id/amr-values/:instId/:analyte", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritamap'), requireMapInActiveLab, (req: any, res) => {
@@ -15139,24 +15181,16 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const mapId = Number(req.params.id);
     const instrumentId = Number(req.params.instId);
     const analyte = safeDecodeParam(req.params.analyte);
-    const lockErr = amrLockConflict(mapId, instrumentId, analyte, req.body);
+    const specParsed = normalizeSpecimen(req.body?.specimen_type);
+    if ("error" in specParsed) return res.status(400).json({ error: specParsed.error });
+    const specimen = specParsed.specimen;
+    const lockErr = amrLockConflict(mapId, instrumentId, analyte, req.body, specimen);
     if (lockErr) return res.status(409).json({ error: lockErr });
-    const unchanged = amrUnchangedRow(mapId, instrumentId, analyte, req.body);
+    const unchanged = amrUnchangedRow(mapId, instrumentId, analyte, req.body, specimen);
     if (unchanged) return res.json(unchanged);
-    const { amr_low, amr_high } = req.body;
-    const now = new Date().toISOString();
-    (db as any).$client.prepare(`
-      INSERT INTO veritamap_amr_values (map_id, instrument_id, analyte, amr_low, amr_high, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?)
-      ON CONFLICT(map_id, instrument_id, analyte) DO UPDATE SET
-        amr_low = excluded.amr_low,
-        amr_high = excluded.amr_high,
-        updated_at = excluded.updated_at
-    `).run(mapId, instrumentId, analyte, amr_low || null, amr_high || null, now);
-    const row = (db as any).$client.prepare(
-      "SELECT * FROM veritamap_amr_values WHERE map_id = ? AND instrument_id = ? AND analyte = ?"
-    ).get(mapId, instrumentId, analyte);
-    res.json(row);
+    const saved = saveAmrRow(mapId, instrumentId, analyte, specimen, req.body);
+    if ("error" in saved) return res.status(400).json({ error: saved.error });
+    res.json(saved.row);
   });
 
   // POST attest-amr / unlock-amr: same 493.1253 attestation flow as the
@@ -15166,27 +15200,30 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const mapId = Number(req.params.id);
     const instrumentId = Number(req.params.instId);
     const analyte = safeDecodeParam(req.params.analyte);
+    const specParsed = normalizeSpecimen(req.body?.specimen_type);
+    if ("error" in specParsed) return res.status(400).json({ error: specParsed.error });
+    const specimen = specParsed.specimen;
     const { attested_by, attested_title } = req.body || {};
     if (!attested_by?.trim() || !attested_title?.trim()) {
       return res.status(400).json({ error: "attested_by and attested_title are required" });
     }
     const row = (db as any).$client.prepare(
-      "SELECT * FROM veritamap_amr_values WHERE map_id = ? AND instrument_id = ? AND analyte = ?"
-    ).get(mapId, instrumentId, analyte) as any;
+      "SELECT * FROM veritamap_amr_values WHERE map_id = ? AND instrument_id = ? AND analyte = ? AND specimen_type = ?"
+    ).get(mapId, instrumentId, analyte, specimen) as any;
     if (!row || !row.amr_low || !row.amr_high) {
       return res.status(400).json({ error: "Enter the verified AMR first; an empty AMR cannot be attested" });
     }
     const now = new Date().toISOString();
     logAudit({
       userId: req.user?.userId, ownerUserId: req.ownerUserId, module: "veritamap",
-      action: "update", entityType: "amr_attestation", entityId: `${mapId}:${instrumentId}:${analyte}`,
+      action: "update", entityType: "amr_attestation", entityId: `${mapId}:${instrumentId}:${analyte}${specimen ? `:${specimen}` : ""}`,
       entityLabel: analyte, before: { amr_locked: row.amr_locked }, after: { amr_attested_by: attested_by.trim(), amr_attested_title: attested_title.trim(), amr_locked: 1 },
       ipAddress: req.ip,
     });
     (db as any).$client.prepare(
-      "UPDATE veritamap_amr_values SET amr_attested_at = ?, amr_attested_by = ?, amr_attested_title = ?, amr_locked = 1, updated_at = ? WHERE map_id = ? AND instrument_id = ? AND analyte = ?"
-    ).run(now, attested_by.trim(), attested_title.trim(), now, mapId, instrumentId, analyte);
-    res.json((db as any).$client.prepare("SELECT * FROM veritamap_amr_values WHERE map_id = ? AND instrument_id = ? AND analyte = ?").get(mapId, instrumentId, analyte));
+      "UPDATE veritamap_amr_values SET amr_attested_at = ?, amr_attested_by = ?, amr_attested_title = ?, amr_locked = 1, updated_at = ? WHERE map_id = ? AND instrument_id = ? AND analyte = ? AND specimen_type = ?"
+    ).run(now, attested_by.trim(), attested_title.trim(), now, mapId, instrumentId, analyte, specimen);
+    res.json((db as any).$client.prepare("SELECT * FROM veritamap_amr_values WHERE map_id = ? AND instrument_id = ? AND analyte = ? AND specimen_type = ?").get(mapId, instrumentId, analyte, specimen));
   });
 
   app.post("/api/labs/:labId/veritamap/maps/:id/amr-values/:instId/:analyte/unlock", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritamap'), requireMapInActiveLab, (req: any, res) => {
@@ -15198,20 +15235,23 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const mapId = Number(req.params.id);
     const instrumentId = Number(req.params.instId);
     const analyte = safeDecodeParam(req.params.analyte);
+    const specParsed = normalizeSpecimen(req.body?.specimen_type);
+    if ("error" in specParsed) return res.status(400).json({ error: specParsed.error });
+    const specimen = specParsed.specimen;
     const row = (db as any).$client.prepare(
-      "SELECT * FROM veritamap_amr_values WHERE map_id = ? AND instrument_id = ? AND analyte = ?"
-    ).get(mapId, instrumentId, analyte) as any;
+      "SELECT * FROM veritamap_amr_values WHERE map_id = ? AND instrument_id = ? AND analyte = ? AND specimen_type = ?"
+    ).get(mapId, instrumentId, analyte, specimen) as any;
     if (!row?.amr_locked) return res.status(400).json({ error: "AMR is not locked" });
     logAudit({
       userId: req.user?.userId, ownerUserId: req.ownerUserId, module: "veritamap",
-      action: "update", entityType: "amr_attestation", entityId: `${mapId}:${instrumentId}:${analyte}`,
+      action: "update", entityType: "amr_attestation", entityId: `${mapId}:${instrumentId}:${analyte}${specimen ? `:${specimen}` : ""}`,
       entityLabel: analyte, before: { amr_locked: 1, amr_attested_by: row.amr_attested_by, amr_attested_at: row.amr_attested_at }, after: { amr_locked: 0, reason: req.body?.reason || null },
       ipAddress: req.ip,
     });
     (db as any).$client.prepare(
-      "UPDATE veritamap_amr_values SET amr_attested_at = NULL, amr_attested_by = NULL, amr_attested_title = NULL, amr_locked = 0, updated_at = ? WHERE map_id = ? AND instrument_id = ? AND analyte = ?"
-    ).run(new Date().toISOString(), mapId, instrumentId, analyte);
-    res.json((db as any).$client.prepare("SELECT * FROM veritamap_amr_values WHERE map_id = ? AND instrument_id = ? AND analyte = ?").get(mapId, instrumentId, analyte));
+      "UPDATE veritamap_amr_values SET amr_attested_at = NULL, amr_attested_by = NULL, amr_attested_title = NULL, amr_locked = 0, updated_at = ? WHERE map_id = ? AND instrument_id = ? AND analyte = ? AND specimen_type = ?"
+    ).run(new Date().toISOString(), mapId, instrumentId, analyte, specimen);
+    res.json((db as any).$client.prepare("SELECT * FROM veritamap_amr_values WHERE map_id = ? AND instrument_id = ? AND analyte = ? AND specimen_type = ?").get(mapId, instrumentId, analyte, specimen));
   });
 
   // Bulk upsert tests (used when building from instrument or updating)
@@ -16407,7 +16447,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // last, which was nondeterministic and, once a lab had real bands, would have
     // silently dropped values out of a document a surveyor reads.
     const analyteValuesRaw = (db as any).$client.prepare(
-      "SELECT * FROM veritamap_analyte_values WHERE map_id = ? ORDER BY analyte, age_min_days, age_max_days DESC, sex"
+      "SELECT * FROM veritamap_analyte_values WHERE map_id = ? ORDER BY analyte, specimen_type, age_min_days, age_max_days DESC, sex"
     ).all(req.params.id);
     const analyteValueBands: Record<string, any[]> = {};
     for (const av of analyteValuesRaw) {
@@ -16418,9 +16458,17 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const amrValuesRaw = (db as any).$client.prepare(
       "SELECT * FROM veritamap_amr_values WHERE map_id = ?"
     ).all(req.params.id);
-    // Key: `${instrumentId}::${analyte}`
+    // Key: `${instrumentId}::${analyte}::${specimenType}` ('' = all specimen types, 2026-10-19 REQ-079)
     const amrValuesMap: Record<string, any> = {};
-    for (const av of amrValuesRaw) amrValuesMap[`${av.instrument_id}::${av.analyte}`] = av;
+    const amrSpecimensByAnalyte: Record<string, Set<string>> = {};
+    for (const av of amrValuesRaw) {
+      const sp = av.specimen_type || "";
+      amrValuesMap[`${av.instrument_id}::${av.analyte}::${sp}`] = av;
+      // A specimen-type AMR row counts only when the lab entered something in it (a blanked row adds no export row).
+      if (["amr_low", "amr_high", "reportable_low", "reportable_high", "max_dilution"].some((k) => av[k])) {
+        (amrSpecimensByAnalyte[av.analyte] ??= new Set()).add(sp);
+      }
+    }
 
     // Fetch correlations for every test on this map. For each correlation row,
     // we need to know the partner test (analyte + map name) regardless of which
@@ -16608,11 +16656,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const headers = [
         "Analyte", "Instruments", "Serial Number", "Department", "Specialty", "Complexity",
         "Number of Instruments", "CFR Section", "Correlation Required",
-        "Age / Sex Band",
+        "Age / Sex Band", "Specimen Type",
         "Units of Measure", "Reference Range Low", "Reference Range High",
         "Critical Low", "Critical High",
         "MEC Reviewed/Approved",
         "AMR Low (per instrument)", "AMR High (per instrument)",
+        "Reportable Range Low (per instrument)", "Reportable Range High (per instrument)", "Maximum Dilution (per instrument)",
         "Reference Range Attestation (42 CFR 493.1253)", "AMR Attestation (42 CFR 493.1253, per instrument)",
         "Last Calibration Verification Date", "Calibration Verification Status",
         "Last Correlation / Method Comparison Date", "Correlation / Method Comparison Status",
@@ -16623,8 +16672,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       // Column widths
       const colWidths = [
         22, 55, 20, 18, 20, 14, 22, 14, 20,
-        22,
-        18, 20, 20, 16, 16, 26, 16, 22, 34, 34,
+        22, 18,
+        18, 20, 20, 16, 16, 26, 16, 22, 22, 22, 20, 34, 34,
         30, 28, 36, 36, 18, 18, 18, 18, 30, 50,
       ];
       ws.columns = headers.map((h, i) => ({ header: h, key: `col${i}`, width: colWidths[i] ?? 18 }));
@@ -16668,28 +16717,35 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         // "all AMR info is displaying in the AMR low column. It does not separate out into the AMR high column"). One
         // instrument: the bare value, so the cell is a number a lab can sort and compare. More than one: each value
         // is named for its instrument, in the same order in both columns.
-        const amrSide = (side: "amr_low" | "amr_high") => instruments.map((inst: any) => {
-          const v = amrValuesMap[`${inst.id}::${t.analyte}`]?.[side] || NE;
-          return instruments.length === 1 ? v : `${inst.instrument_name}: ${v}`;
-        }).join("; ");
-        const amrLowCell = amrSide("amr_low");
-        const amrHighCell = amrSide("amr_high");
-
-        const amrAttestCell = instruments.map((inst: any) => {
-          const amrEntry = amrValuesMap[`${inst.id}::${t.analyte}`];
+        // Specimen type (2026-10-19, REQ-079): a row's AMR and reportable range come from that specimen type's AMR row,
+        // falling back to the instrument's all-specimen row ('') when the lab entered none for that specimen type.
+        const amrEntryFor = (inst: any, sp: string) =>
+          amrValuesMap[`${inst.id}::${t.analyte}::${sp}`] ?? (sp ? amrValuesMap[`${inst.id}::${t.analyte}::`] : undefined);
+        const perInstrument = (sp: string, side: "amr_low" | "amr_high" | "reportable_low" | "reportable_high" | "max_dilution") =>
+          instruments.map((inst: any) => {
+            const v = amrEntryFor(inst, sp)?.[side] || NE;
+            return instruments.length === 1 ? v : `${inst.instrument_name}: ${v}`;
+          }).join("; ");
+        const amrAttestFor = (sp: string) => instruments.map((inst: any) => {
+          const amrEntry = amrEntryFor(inst, sp);
           if (!amrEntry?.amr_low || !amrEntry?.amr_high) return null;
           return amrEntry.amr_locked
             ? `${inst.instrument_name}: attested by ${amrEntry.amr_attested_by} on ${String(amrEntry.amr_attested_at).slice(0, 10)}`
             : `${inst.instrument_name}: pending`;
         }).filter(Boolean).join("; ");
-
         // No values entered at all -> a single row of "Not established", exactly
         // as before bands existed. Never fabricate a band the lab did not state.
+        // A specimen type with an AMR but no reference-range band of its own still gets a row (reference cells
+        // "Not established"), so an AMR entered for urine is never dropped from the export.
         const bands: any[] = analyteValueBands[t.analyte] ?? [];
-        const bandList: any[] = bands.length ? bands : [null];
-
+        const bandList: any[] = bands.length ? [...bands] : [null];
+        const bandSpecimens = new Set(bands.map((b: any) => b.specimen_type || ""));
+        for (const sp of Array.from(amrSpecimensByAnalyte[t.analyte] ?? [])) {
+          if (sp && !bandSpecimens.has(sp)) bandList.push({ specimen_type: sp, amr_only: true });
+        }
         return bandList.map((av: any) => {
-          const bandLabel = !av
+          const sp: string = av?.specimen_type || "";
+          const bandLabel = !av || av.amr_only
             ? ALL_AGES_BAND.label
             : (av.band_label || deriveBandLabel(av.age_min_days ?? ALL_AGES_BAND.ageMinDays, av.age_max_days ?? ALL_AGES_BAND.ageMaxDays, av.sex ?? ALL_AGES_BAND.sex));
           const units = av?.units || NE;
@@ -16719,16 +16775,20 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
             cfr,
             correlReq,
             bandLabel,
+            specimenLabel(sp),
             units,
             refLow,
             refHigh,
             critLow,
             critHigh,
             mecCell,
-            amrLowCell || NE,
-            amrHighCell || NE,
+            perInstrument(sp, "amr_low") || NE,
+            perInstrument(sp, "amr_high") || NE,
+            perInstrument(sp, "reportable_low") || NE,
+            perInstrument(sp, "reportable_high") || NE,
+            perInstrument(sp, "max_dilution") || NE,
             refAttestCell,
-            amrAttestCell,
+            amrAttestFor(sp),
             t.last_cal_ver || "",
             calVerStatus,
             t.last_method_comp || "",
@@ -16781,7 +16841,11 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const numCol = colOf("Number of Instruments");
       const complexityCol = colOf("Complexity");
       const correlCol = colOf("Correlation Required");
-      const neCols = [10, 11, 12, 13, 14, 15]; // 1-indexed: columns that may show 'Not established'
+      // Columns that may show 'Not established', by name (the old [10..15] was off by one after the band column and
+      // missed the AMR columns).
+      const neCols = ["Units of Measure", "Reference Range Low", "Reference Range High", "Critical Low", "Critical High",
+        "AMR Low (per instrument)", "AMR High (per instrument)", "Reportable Range Low (per instrument)",
+        "Reportable Range High (per instrument)", "Maximum Dilution (per instrument)"].map(colOf);
       for (let r = 2; r <= rows.length + 1; r++) {
         const row = ws.getRow(r);
         const isEvenRow = r % 2 === 0; // row 2=even, row 3=odd, ...
@@ -16855,15 +16919,16 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
       // ── Add notes to lab-entered value header cells ──
       const labNote = "CLIA requires each laboratory to establish and verify these values for their specific instruments and patient population. Values shown are lab-entered only. \"Not established\" indicates the lab has not yet entered a value.";
-      // Wave A4: AMR pair shifted to 16-17 by the MEC column at 15.
-      for (const col of [10, 11, 12, 13, 14, 16, 17]) {
+      // By header name (the fixed numbers had drifted onto the wrong columns after the band and MEC columns went in).
+      for (const col of neCols) {
         headerRow.getCell(col).note = labNote;
       }
+      headerRow.getCell(colOf("Specimen Type")).note = "The specimen type the reference range, AMR and reportable range on this row apply to. All specimen types means the value is not specific to one.";
       // Wave A4 provenance header notes.
-      headerRow.getCell(15).note = "The Medical Executive Committee reviews and adopts the facility's critical values; this column records those values.";
+      headerRow.getCell(colOf("MEC Reviewed/Approved")).note = "The Medical Executive Committee reviews and adopts the facility's critical values; this column records those values.";
       const attestNote = "Reference ranges and AMR are verified by the laboratory per 42 CFR 493.1253. This column records the medical director or designee attestation that locks the value in VeritaMap.";
-      headerRow.getCell(18).note = attestNote;
-      headerRow.getCell(19).note = attestNote;
+      headerRow.getCell(colOf("Reference Range Attestation (42 CFR 493.1253)")).note = attestNote;
+      headerRow.getCell(colOf("AMR Attestation (42 CFR 493.1253, per instrument)")).note = attestNote;
 
 
 
@@ -16962,10 +17027,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // caller-supplied bands.
     (db as any).$client.prepare(`
       INSERT INTO veritamap_analyte_values
-        (map_id, analyte, age_min_days, age_max_days, sex, band_label,
+        (map_id, analyte, age_min_days, age_max_days, sex, specimen_type, band_label,
          ref_range_low, ref_range_high, critical_low, critical_high, units, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(map_id, analyte, age_min_days, age_max_days, sex) DO UPDATE SET
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(map_id, analyte, age_min_days, age_max_days, sex, specimen_type) DO UPDATE SET
         ref_range_low = excluded.ref_range_low,
         ref_range_high = excluded.ref_range_high,
         critical_low = excluded.critical_low,
@@ -16973,12 +17038,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         units = excluded.units,
         updated_at = excluded.updated_at
     `).run(
-      mapId, analyte, ALL_AGES_BAND.ageMinDays, ALL_AGES_BAND.ageMaxDays, ALL_AGES_BAND.sex, ALL_AGES_BAND.label,
+      mapId, analyte, ALL_AGES_BAND.ageMinDays, ALL_AGES_BAND.ageMaxDays, ALL_AGES_BAND.sex, ALL_AGES_BAND.specimen, ALL_AGES_BAND.label,
       ref_range_low || null, ref_range_high || null, critical_low || null, critical_high || null, units || null, now,
     );
     const row = (db as any).$client.prepare(
-      "SELECT * FROM veritamap_analyte_values WHERE map_id = ? AND analyte = ? AND age_min_days = ? AND age_max_days = ? AND sex = ?"
-    ).get(mapId, analyte, ALL_AGES_BAND.ageMinDays, ALL_AGES_BAND.ageMaxDays, ALL_AGES_BAND.sex);
+      "SELECT * FROM veritamap_analyte_values WHERE map_id = ? AND analyte = ? AND age_min_days = ? AND age_max_days = ? AND sex = ? AND specimen_type = ?"
+    ).get(mapId, analyte, ALL_AGES_BAND.ageMinDays, ALL_AGES_BAND.ageMaxDays, ALL_AGES_BAND.sex, ALL_AGES_BAND.specimen);
     res.json(row);
   });
 
@@ -16987,7 +17052,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap\u2122 subscription required" });
     const mapId = Number(req.params.id);
     const values = (db as any).$client.prepare(
-      "SELECT * FROM veritamap_amr_values WHERE map_id = ? ORDER BY analyte, instrument_id"
+      "SELECT * FROM veritamap_amr_values WHERE map_id = ? ORDER BY analyte, instrument_id, specimen_type"
     ).all(mapId);
     res.json(values);
   });
@@ -16998,30 +17063,22 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const mapId = Number(req.params.id);
     const instrumentId = Number(req.params.instId);
     const analyte = safeDecodeParam(req.params.analyte);
+    const specParsed = normalizeSpecimen(req.body?.specimen_type);
+    if ("error" in specParsed) return res.status(400).json({ error: specParsed.error });
+    const specimen = specParsed.specimen;
     // Wave A4: enforce the 493.1253 attestation lock on the legacy PUT too.
     {
-      const lockErr = amrLockConflict(mapId, instrumentId, analyte, req.body);
+      const lockErr = amrLockConflict(mapId, instrumentId, analyte, req.body, specimen);
       if (lockErr) return res.status(409).json({ error: lockErr });
     }
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const map = userCanAccessMap(mapId, req);
     if (!map) return res.status(404).json({ error: "Map not found" });
-    const unchanged = amrUnchangedRow(mapId, instrumentId, analyte, req.body);
+    const unchanged = amrUnchangedRow(mapId, instrumentId, analyte, req.body, specimen);
     if (unchanged) return res.json(unchanged);
-    const { amr_low, amr_high } = req.body;
-    const now = new Date().toISOString();
-    (db as any).$client.prepare(`
-      INSERT INTO veritamap_amr_values (map_id, instrument_id, analyte, amr_low, amr_high, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?)
-      ON CONFLICT(map_id, instrument_id, analyte) DO UPDATE SET
-        amr_low = excluded.amr_low,
-        amr_high = excluded.amr_high,
-        updated_at = excluded.updated_at
-    `).run(mapId, instrumentId, analyte, amr_low || null, amr_high || null, now);
-    const row = (db as any).$client.prepare(
-      "SELECT * FROM veritamap_amr_values WHERE map_id = ? AND instrument_id = ? AND analyte = ?"
-    ).get(mapId, instrumentId, analyte);
-    res.json(row);
+    const saved = saveAmrRow(mapId, instrumentId, analyte, specimen, req.body);
+    if ("error" in saved) return res.status(400).json({ error: saved.error });
+    res.json(saved.row);
   });
 
   // ── VERITASCAN ───────────────────────────────────────────────────────────

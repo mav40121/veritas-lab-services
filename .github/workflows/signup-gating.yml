@@ -134,3 +134,6 @@ jobs:
       - name: Run VeritaMap AMR export columns integration test
         # BUG-086 (Lindsay Webber 10/19): AMR low in AMR Low, AMR high in AMR High, per instrument.
         run: npm run test:veritamap-amr-export
+      - name: Run VeritaMap specimen type and reportable range integration test
+        # REQ-079/080 (Lindsay Webber 10/19): migration keeps rows and attestations; urine bands and AMRs separate; locks per specimen; export rows.
+        run: npm run test:veritamap-specimen-reportable
