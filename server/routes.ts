@@ -16612,7 +16612,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         "Units of Measure", "Reference Range Low", "Reference Range High",
         "Critical Low", "Critical High",
         "MEC Reviewed/Approved",
-        "AMR Low", "AMR High (per instrument)",
+        "AMR Low (per instrument)", "AMR High (per instrument)",
         "Reference Range Attestation (42 CFR 493.1253)", "AMR Attestation (42 CFR 493.1253, per instrument)",
         "Last Calibration Verification Date", "Calibration Verification Status",
         "Last Correlation / Method Comparison Date", "Correlation / Method Comparison Status",
@@ -16664,13 +16664,16 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         const precStatus = isWaived ? "N/A (Waived)" : getComplianceStatus(t.last_precision, 6);
         const sopStatus = getComplianceStatus(t.last_sop_review, 24);
 
-        // AMR: one entry per instrument that runs this analyte
-        const amrLines = instruments.map((inst: any) => {
-          const amrEntry = amrValuesMap[`${inst.id}::${t.analyte}`];
-          const lo = amrEntry?.amr_low || NE;
-          const hi = amrEntry?.amr_high || NE;
-          return `${inst.instrument_name}: ${lo} - ${hi}`;
+        // AMR: low in the AMR Low column, high in the AMR High column (Lindsay Webber, Redington-Fairview, 2026-10-19:
+        // "all AMR info is displaying in the AMR low column. It does not separate out into the AMR high column"). One
+        // instrument: the bare value, so the cell is a number a lab can sort and compare. More than one: each value
+        // is named for its instrument, in the same order in both columns.
+        const amrSide = (side: "amr_low" | "amr_high") => instruments.map((inst: any) => {
+          const v = amrValuesMap[`${inst.id}::${t.analyte}`]?.[side] || NE;
+          return instruments.length === 1 ? v : `${inst.instrument_name}: ${v}`;
         }).join("; ");
+        const amrLowCell = amrSide("amr_low");
+        const amrHighCell = amrSide("amr_high");
 
         const amrAttestCell = instruments.map((inst: any) => {
           const amrEntry = amrValuesMap[`${inst.id}::${t.analyte}`];
@@ -16722,8 +16725,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
             critLow,
             critHigh,
             mecCell,
-            amrLines || NE,
-            "", // AMR High (per instrument) -- shown inline in AMR Low column above
+            amrLowCell || NE,
+            amrHighCell || NE,
             refAttestCell,
             amrAttestCell,
             t.last_cal_ver || "",
