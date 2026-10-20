@@ -30,9 +30,14 @@ test.describe("VeritaComp assessment dialog: roster employees by instrument", ()
     await expect(hint, "roster hint appears (employees came from VeritaStaff)").toBeVisible();
     await expect(dialog.getByText("No active employees for this program"), "no dead-end notice").toHaveCount(0);
 
+    // BUG-090 (2026-10-20): a new record starts with NO person chosen (preselecting the first name filed a
+    // Sampson evaluation under the wrong employee); the roster member is offered and must be picked.
     const trigger = dialog.getByTestId("assessment-employee-select");
-    await expect(trigger, "employee select defaults to the roster member").toContainText(EXPECT);
+    await expect(trigger, "no person is preselected").toContainText("Choose a person");
+    await expect(dialog.getByTestId("assessment-save"), "save waits for a person").toBeDisabled();
     await trigger.click();
     await expect(page.getByRole("option", { name: EXPECT }), "roster member is an option").toBeVisible();
+    await page.getByRole("option", { name: EXPECT }).click();
+    await expect(trigger, "the picked roster member is selected").toContainText(EXPECT);
   });
 });

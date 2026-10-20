@@ -24,3 +24,8 @@ export const OWNER_EMAIL =
 // overridable for staging / preview deployments.
 export const OWNER_CLIA =
   process.env.OWNER_CLIA ?? "55D5555555";
+
+// Where the "[VeritaAssure] New signup" alert goes: the business inbox, not the owner's personal Gmail
+// (Michael 2026-10-20: "Lets have those go to info@"). Env-overridable for staging.
+export const SIGNUP_ALERT_TO =
+  process.env.SIGNUP_ALERT_TO ?? "info@veritaslabservices.com";
