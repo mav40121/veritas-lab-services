@@ -218,7 +218,7 @@ import { cliaAnalytes, ptCategoryLinks } from "./cliaAnalytes";
 import { createAnalyteMatcher, nzKey, specialtyCategory } from "./ptAnalyteMatcher";
 import { validateVendorPrograms, PT_VENDORS } from "./ptVendorCatalog";
 import { hasCanonicalTea } from "./backfillAbsoluteFloor";
-import { DEMO_USER_EMAIL } from "./constants";
+import { DEMO_USER_EMAIL, SIGNUP_ALERT_TO } from "./constants";
 
 // Per parking-lot #1: VeritaCheck artifacts (PDF narratives, persisted
 // summary text) must say "Lab-Set Internal Goal" for analytes without a
@@ -6813,7 +6813,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         : `${escape(selectedPlan)} (selected) -> ${escape(responsePlan)} (effective, inherited from owner)`;
       resend.emails.send({
         from: "VeritaAssure\u2122 <info@veritaslabservices.com>",
-        to: ["verilabguy@gmail.com"],
+        // Business inbox, not Michael's personal Gmail (Michael 2026-10-20: "Lets have those go to info@").
+        to: [SIGNUP_ALERT_TO],
         subject: `[VeritaAssure] New signup: ${safe(name)} (${flowTag} / ${safe(responsePlan)})`,
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 640px; margin: 0 auto; padding: 24px; background: #ffffff; color: #1B2B2B;">
