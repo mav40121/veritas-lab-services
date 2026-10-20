@@ -42,6 +42,7 @@ import { auditSystemOwnership } from "./systemOwnershipAudit";
 import { computeBackfillCandidates } from "./organizationBackfill";
 import { orgSeatCapForOwner } from "./organizationSeats";
 import { labSeatSummary } from "./labSeats";
+import { EMPLOYEE_HIRE_DATE_SQL, withStaffHireDates } from "./competencyHireDate";
 import { orgRoleForUserOnLab, labRoleFromOrgRole, transferBlockedOutOfOrg, isActiveOrgMember, resolveOwnerOrgId } from "./organizationRoles";
 import { planProvisionLabs, accreditationFlagsFor, operatorOverviewGrant } from "./organizationProvision";
 import { validateSystemDocument } from "./systemRepository";
@@ -21059,7 +21060,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
     const assessment = (db as any).$client.prepare(
       `SELECT a.*, p.name as program_name, p.department, p.type as program_type, p.record_kind as program_record_kind,
-              e.name as employee_name, e.title as employee_title, e.hire_date as employee_hire_date, e.lis_initials as employee_lis_initials
+              e.name as employee_name, e.title as employee_title, ${EMPLOYEE_HIRE_DATE_SQL} as employee_hire_date, e.lis_initials as employee_lis_initials
        FROM competency_assessments a
        JOIN competency_programs p ON a.program_id = p.id
        JOIN competency_employees e ON a.employee_id = e.id
@@ -23447,7 +23448,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const checklistItems = (db as any).$client.prepare(
       "SELECT * FROM competency_checklist_items WHERE program_id = ? ORDER BY sort_order"
     ).all(program.id);
-    const employees = (db as any).$client.prepare(employeesSql).all(employeesArg);
+    const employees = withStaffHireDates((db as any).$client, (db as any).$client.prepare(employeesSql).all(employeesArg) as any[]);
     // Phase B3 lite (2026-06-06): LEFT JOIN staff_employees via the FK
     // added in PR #566. When the FK is set, staff_* columns carry the
     // canonical VeritaStaff name/credentials. When NULL (unmatched rows
@@ -23456,7 +23457,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const assessments = (db as any).$client.prepare(
       `SELECT a.*,
               e.name as employee_name, e.title as employee_title,
-              e.hire_date as employee_hire_date, e.lis_initials as employee_lis_initials,
+              ${EMPLOYEE_HIRE_DATE_SQL} as employee_hire_date, e.lis_initials as employee_lis_initials,
               se.id as staff_employee_id, se.first_name as staff_first_name,
               se.last_name as staff_last_name, se.middle_initial as staff_middle_initial,
               se.title as staff_title, se.hire_date as staff_hire_date
@@ -23794,7 +23795,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         ? "SELECT * FROM competency_employees WHERE lab_id = ? ORDER BY name"
         : "SELECT * FROM competency_employees WHERE user_id = ? ORDER BY name"
     ).all(activeLabId ?? dataUserId);
-    res.json(employees);
+    res.json(withStaffHireDates((db as any).$client, employees as any[]));
   });
 
   app.post("/api/competency/employees", authMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
@@ -23917,7 +23918,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const employees = (db as any).$client.prepare(
       "SELECT * FROM competency_employees WHERE lab_id = ? ORDER BY name"
     ).all(req.scope.labId);
-    res.json(employees);
+    res.json(withStaffHireDates((db as any).$client, employees as any[]));
   });
 
   app.post("/api/labs/:labId/competency/employees", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
@@ -24751,7 +24752,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const assessment = (db as any).$client.prepare(
       `SELECT a.*, p.name as program_name, p.department, p.type as program_type, p.record_kind as program_record_kind,
-              e.name as employee_name, e.title as employee_title, e.hire_date as employee_hire_date, e.lis_initials as employee_lis_initials
+              e.name as employee_name, e.title as employee_title, ${EMPLOYEE_HIRE_DATE_SQL} as employee_hire_date, e.lis_initials as employee_lis_initials
        FROM competency_assessments a
        JOIN competency_programs p ON a.program_id = p.id
        JOIN competency_employees e ON a.employee_id = e.id
@@ -24770,7 +24771,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const program = userCanAccessLabRow('competency_programs', req.params.id, req);
     if (!program) return res.status(404).json({ error: "Program not found" });
     const assessments = (db as any).$client.prepare(
-      `SELECT a.*, e.name as employee_name, e.title as employee_title, e.hire_date as employee_hire_date
+      `SELECT a.*, e.name as employee_name, e.title as employee_title, ${EMPLOYEE_HIRE_DATE_SQL} as employee_hire_date
        FROM competency_assessments a
        JOIN competency_employees e ON a.employee_id = e.id
        WHERE a.program_id = ?
@@ -25275,7 +25276,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const assessment = (db as any).$client.prepare(
       `SELECT a.*, p.name as program_name, p.department, p.type as program_type, p.record_kind as program_record_kind,
-              e.name as employee_name, e.title as employee_title, e.hire_date as employee_hire_date, e.lis_initials as employee_lis_initials
+              e.name as employee_name, e.title as employee_title, ${EMPLOYEE_HIRE_DATE_SQL} as employee_hire_date, e.lis_initials as employee_lis_initials
        FROM competency_assessments a
        JOIN competency_programs p ON a.program_id = p.id
        JOIN competency_employees e ON a.employee_id = e.id
@@ -25542,7 +25543,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     }
 
     const sqlBase = `SELECT a.*, p.name as program_name, p.department, p.type as program_type, p.record_kind as program_record_kind,
-            e.name as employee_name, e.title as employee_title, e.hire_date as employee_hire_date, e.lis_initials as employee_lis_initials
+            e.name as employee_name, e.title as employee_title, ${EMPLOYEE_HIRE_DATE_SQL} as employee_hire_date, e.lis_initials as employee_lis_initials
        FROM competency_assessments a
        JOIN competency_programs p ON a.program_id = p.id
        JOIN competency_employees e ON a.employee_id = e.id
@@ -25793,7 +25794,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const assessment = (db as any).$client.prepare(
       `SELECT a.*, p.name as program_name, p.department, p.type as program_type, p.record_kind as program_record_kind,
-              e.name as employee_name, e.title as employee_title, e.hire_date as employee_hire_date, e.lis_initials as employee_lis_initials
+              e.name as employee_name, e.title as employee_title, ${EMPLOYEE_HIRE_DATE_SQL} as employee_hire_date, e.lis_initials as employee_lis_initials
        FROM competency_assessments a
        JOIN competency_programs p ON a.program_id = p.id
        JOIN competency_employees e ON a.employee_id = e.id
@@ -25865,7 +25866,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const assessment = (db as any).$client.prepare(
       `SELECT a.*, p.name as program_name, p.department, p.type as program_type, p.record_kind as program_record_kind,
-              e.name as employee_name, e.title as employee_title, e.hire_date as employee_hire_date, e.lis_initials as employee_lis_initials
+              e.name as employee_name, e.title as employee_title, ${EMPLOYEE_HIRE_DATE_SQL} as employee_hire_date, e.lis_initials as employee_lis_initials
        FROM competency_assessments a
        JOIN competency_programs p ON a.program_id = p.id
        JOIN competency_employees e ON a.employee_id = e.id

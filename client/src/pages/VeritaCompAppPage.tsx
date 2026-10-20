@@ -2706,7 +2706,13 @@ function AssessmentsTab({ program, onNewAssessment, onEdit }: { program: Program
     const aItems = (a.items || []) as any[];
     const coveredGroups = Array.from(new Set(aItems.map((i) => i.method_group_id).filter((x) => x != null)))
       .map((id) => ({ id: Number(id), name: program.methodGroups?.find((m) => m.id === Number(id))?.name ?? undefined }));
-    const inProgress = !locked && program.type === "technical" && (aItems.length === 0 || incompleteElementCells(aItems, coveredGroups, compElementCount).length > 0);
+    // Non-technical records and new-hire evaluations (BUG-090, 2026-10-20): unsigned and any item not yet met
+    // (date + employee and supervisor initials) reads "In progress", so a partly filled evaluation saved along the
+    // way is not shown as Satisfactory.
+    const inProgress = !locked && (
+      (program.type === "technical" && (aItems.length === 0 || incompleteElementCells(aItems, coveredGroups, compElementCount).length > 0)) ||
+      (program.type === "nontechnical" && (aItems.length === 0 || aItems.some((i) => !i.passed)))
+    );
     const passColor = inProgress ? "text-amber-700 bg-amber-500/10 border-amber-500/30" :
       a.status === "pass" ? "text-emerald-600 bg-emerald-500/10 border-emerald-500/20" :
       a.status === "fail" ? "text-red-600 bg-red-500/10 border-red-500/20" :
@@ -2717,7 +2723,9 @@ function AssessmentsTab({ program, onNewAssessment, onEdit }: { program: Program
     return (
       <Card key={a.id} className="hover:border-primary/30 transition-colors">
             <CardContent className="p-4">
-              <div className="flex items-start gap-3">
+              {/* Narrow screens: the action buttons drop under the record and wrap; the button row was 395px wide and
+                  pushed a 390px phone page sideways (found with BUG-090, 2026-10-20). */}
+              <div className="flex flex-col sm:flex-row sm:items-start gap-3">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <span className="font-semibold text-sm">{a.employee_name}</span>
@@ -2739,7 +2747,7 @@ function AssessmentsTab({ program, onNewAssessment, onEdit }: { program: Program
                     <div className="text-xs text-amber-600 mt-1">Remediation: {a.remediation_plan}</div>
                   )}
                 </div>
-                <div className="flex items-center gap-1 shrink-0">
+                <div className="flex flex-wrap items-center gap-1 sm:shrink-0" data-testid="assessment-card-actions">
                   {(a as any).locked !== 1 && !isReadOnly && (
                     <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" title="Add or correct data on this assessment (specimen IDs, observer, QC dates, evaluator)" data-testid="edit-assessment" onClick={() => onEdit(a)}>
                       <Pencil className="h-3.5 w-3.5 mr-1" /> Edit
@@ -2818,8 +2826,46 @@ function AssessmentsTab({ program, onNewAssessment, onEdit }: { program: Program
                   </ConfirmDialog>
                 </div>
               </div>
-              {/* 6-element summary table */}
-              {a.items && a.items.length > 0 && (
+              {/* Evaluation / non-technical checklist: its own items, Met or Not yet. The 6 CLIA elements below are for
+                  technical and waived records; on an evaluation they showed six "Incomplete" rows that do not apply
+                  (found with BUG-090, 2026-10-20). A signed record counts an item met when it has a date. */}
+              {program.type === "nontechnical" && a.items && a.items.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-border" data-testid="assessment-card-items">
+                  <div className="text-xs font-semibold mb-2">{program.record_kind === "evaluation" ? "Evaluation items" : "Checklist items"}</div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="text-muted-foreground border-b">
+                          <th className="text-left py-1 pr-2">#</th>
+                          <th className="text-left py-1 pr-2">Item</th>
+                          <th className="text-center py-1">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(a.items as any[]).map((i, idx) => {
+                          const date = i.nt_date_met || i.date_met || "";
+                          const met = locked ? !!date : !!i.passed;
+                          return (
+                            <tr key={i.id ?? idx} className="border-b border-border/50">
+                              <td className="py-1 pr-2">{i.nt_item_label || i.item_label || idx + 1}</td>
+                              <td className="py-1 pr-2">{i.nt_item_description || i.item_description || ""}</td>
+                              <td className="py-1 text-center">
+                                <Badge className={met
+                                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px]"
+                                  : "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 text-[10px]"}>
+                                  {met ? (date ? `Met ${String(date).split("T")[0]}` : "Met") : "Not yet"}
+                                </Badge>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+              {/* 6-element summary table (technical and waived records) */}
+              {program.type !== "nontechnical" && a.items && a.items.length > 0 && (
                 <div className="mt-3 pt-3 border-t border-border">
                   <div className="text-xs font-semibold mb-2">{isNys ? "8 NYS CLEP Competency Elements" : "6 CLIA Competency Elements"}</div>
                   <div className="overflow-x-auto">
@@ -3496,7 +3542,9 @@ function NewAssessmentDialog({
     enabled: !!eligibleUrl,
   });
   const activeEmployees = useMemo(() => {
-    const list = employees.filter(e => e.status === "active");
+    const rosterHire = new Map((eligible?.employees || []).map(e => [e.id, e.hire_date] as const));
+    const list = employees.filter(e => e.status === "active")
+      .map(e => (!e.hire_date && rosterHire.get(e.id) ? { ...e, hire_date: rosterHire.get(e.id)! } : e));
     const seen = new Set(list.map(e => e.id));
     for (const e of eligible?.employees || []) {
       if (!seen.has(e.id)) { list.push(e); seen.add(e.id); }
@@ -3506,12 +3554,10 @@ function NewAssessmentDialog({
   // Hint count = roster members assigned to this program's instruments (whether
   // or not they were already bridged on an earlier open), so the hint is stable.
   const rosterOnlyCount = (eligible?.employees || []).length;
-  const selectedEmployee = activeEmployees.length > 0 ? activeEmployees[0] : null;
-  const [employeeId, setEmployeeId] = useState<number | null>(editing?.employee_id ?? selectedEmployee?.id ?? null);
-  // The roster list arrives after mount: default the selection once it does.
-  useEffect(() => {
-    if (employeeId == null && activeEmployees.length > 0) setEmployeeId(activeEmployees[0].id);
-  }, [activeEmployees, employeeId]);
+  // A new record starts with NO person chosen. Defaulting to the first name on the list filed a Sampson
+  // new-hire evaluation under the wrong employee (BUG-090, 2026-10-20); the Save button stays disabled
+  // until a person is picked. Editing keeps the record's own employee.
+  const [employeeId, setEmployeeId] = useState<number | null>(editing?.employee_id ?? null);
   const [assessmentType, setAssessmentType] = useState(editing?.assessment_type || "initial");
   const [assessmentDate, setAssessmentDate] = useState(editing?.assessment_date || new Date().toISOString().split("T")[0]);
   // Customer-blockers wave 2026-06-05: review period (item #5 from VeritaComp
@@ -3966,17 +4012,23 @@ function NewAssessmentDialog({
     } else {
       for (const item of stageItems) {
         const cell = nonTechItems[item.label] || { dateMet: "", empInitials: "", supInitials: "" };
+        // Only an item someone worked on takes the record's date and evaluator initials as defaults. A part-done
+        // evaluation saved along the way must not stamp a date and initials on items not yet met, or they look
+        // done when it is reopened (BUG-090, 2026-10-20).
+        const touched = !!(cell.dateMet || cell.empInitials || cell.supInitials);
+        const metDate = cell.dateMet || (touched ? assessmentDate : null);
+        const supInit = cell.supInitials || (touched ? evaluatorInitials : "");
         items.push({
           itemLabel: item.label,
           itemDescription: item.description,
           ntItemLabel: item.label,
           ntItemDescription: item.description,
-          ntDateMet: cell.dateMet || assessmentDate,
+          ntDateMet: metDate,
           ntEmployeeInitials: cell.empInitials,
-          ntSupervisorInitials: cell.supInitials || evaluatorInitials,
-          dateMet: cell.dateMet || assessmentDate,
+          ntSupervisorInitials: supInit,
+          dateMet: metDate,
           employeeInitials: cell.empInitials,
-          supervisorInitials: cell.supInitials || evaluatorInitials,
+          supervisorInitials: supInit,
           passed: !!(cell.dateMet && cell.empInitials && cell.supInitials),
         });
       }
@@ -4064,7 +4116,7 @@ function NewAssessmentDialog({
               <div>
                 <label className="text-xs font-medium block mb-1">Employee</label>
                 <Select value={employeeId ? String(employeeId) : ""} onValueChange={v => setEmployeeId(parseInt(v))}>
-                  <SelectTrigger data-testid="assessment-employee-select"><SelectValue placeholder="Select employee..." /></SelectTrigger>
+                  <SelectTrigger data-testid="assessment-employee-select"><SelectValue placeholder="Choose a person..." /></SelectTrigger>
                   <SelectContent>
                     {activeEmployees.map(e => <SelectItem key={e.id} value={String(e.id)} data-testid={`assessment-employee-option-${e.id}`}>{e.name}</SelectItem>)}
                   </SelectContent>
