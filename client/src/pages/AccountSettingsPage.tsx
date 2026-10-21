@@ -372,6 +372,14 @@ export default function AccountSettingsPage() {
     fetchSeats();
   }, []);
 
+  // Only a CLIA number someone has typed is format-checked. The value already on file, including a pending
+  // placeholder like "PENDING-UNCNASH-2026", never blocks a save: every card on this page sends the whole form, and
+  // labs work without a real CLIA (#1633). The server applies the same rule. (Michael 2026-10-21, UNC Health Nash.)
+  const cliaInvalid = cliaNumber.trim().length > 0 && !validateClia(cliaNumber).ok;
+  const cliaEdited = cliaNumber.trim() !== String(settings?.clia_number ?? "").trim();
+  const cliaNeedsFix = cliaInvalid && cliaEdited;
+  const cliaPlaceholderOnFile = cliaInvalid && !cliaEdited;
+
   const saveMutation = useMutation({
     mutationFn: async () => {
       const res = await fetch(`${API_BASE}/api/account/settings`, {
@@ -472,10 +480,15 @@ export default function AccountSettingsPage() {
               onChange={(e) => setCliaNumber(e.target.value)}
               placeholder="e.g. 22D0070843"
               disabled={isLoading || !!settings?.is_seat || !!settings?.clia_locked}
-              aria-invalid={cliaNumber.trim().length > 0 && !validateClia(cliaNumber).ok}
+              aria-invalid={cliaNeedsFix}
             />
-            {cliaNumber.trim().length > 0 && !validateClia(cliaNumber).ok && (
+            {cliaNeedsFix && (
               <p className="text-xs text-destructive">{CLIA_FORMAT_HINT}</p>
+            )}
+            {cliaPlaceholderOnFile && (
+              <p className="text-xs text-muted-foreground" data-testid="clia-pending-note">
+                Not a CLIA number yet. Enter the lab's 10-character CLIA number when you have it; everything else works without it.
+              </p>
             )}
             {!settings?.is_seat && settings?.clia_locked && (
               <p className="text-xs text-muted-foreground" title="Locked once the first report was generated under this lab.">
@@ -504,7 +517,7 @@ export default function AccountSettingsPage() {
               disabled={
                 saveMutation.isPending ||
                 isLoading ||
-                (cliaNumber.trim().length > 0 && !validateClia(cliaNumber).ok)
+                cliaNeedsFix
               }
               className="bg-primary hover:bg-primary/90 text-primary-foreground"
             >

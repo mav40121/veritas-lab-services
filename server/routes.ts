@@ -33226,21 +33226,6 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
       const { clia_number, clia_lab_name, preferred_standards, accreditation_choice, preferredPtVendor } = req.body;
 
-      // CLIA format validation (D3, parking-lot #13). Save-time only —
-      // existing rows continue to load and display unchanged. Validation
-      // applies when the caller is sending a non-empty new value. An
-      // empty/undefined clia_number means "don't change CLIA on this save"
-      // OR "clear CLIA" (downstream code uses `clia_number || null`),
-      // neither of which should be format-rejected here.
-      let normalizedClia: string | null | undefined = clia_number;
-      if (typeof clia_number === "string" && clia_number.trim().length > 0) {
-        const v = validateClia(clia_number);
-        if (!v.ok) {
-          return res.status(400).json({ error: v.error || "Invalid CLIA number format." });
-        }
-        normalizedClia = v.normalized;
-      }
-
       // Resolve the lab to update: prefer the active lab from URL context,
       // fall back to legacy resolveLabForUser for backward compat. This
       // is the same pattern as the GET handler above and ensures the
@@ -33258,6 +33243,25 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       // was made that way). Staff create labs with the admin provisioning routes.
       if (!lab) {
         return res.status(409).json({ error: LAB_SETUP_BY_STAFF_MESSAGE, code: "LAB_SETUP_BY_STAFF" });
+      }
+
+      // CLIA format validation (D3, parking-lot #13). Save-time only, and only for a NEW value. An
+      // empty/undefined clia_number means "don't change CLIA on this save" OR "clear CLIA" (downstream
+      // code uses `clia_number || null`), neither of which is format-rejected. A value equal to the one
+      // already on file is not a change either: every card on the settings page sends the whole form,
+      // so a pending placeholder (lab 21 "PENDING-UNCNASH-2026") made the accreditation and PT vendor
+      // saves fail with the CLIA format error. Labs work without a real CLIA (#1633); the number is
+      // checked when someone actually enters one. (Michael 2026-10-21, UNC Health Nash.)
+      let normalizedClia: string | null | undefined = clia_number;
+      const cliaUnchanged = typeof clia_number === "string" && clia_number.trim() === String(lab.clia_number ?? "").trim();
+      if (cliaUnchanged) {
+        normalizedClia = lab.clia_number ?? null;
+      } else if (typeof clia_number === "string" && clia_number.trim().length > 0) {
+        const v = validateClia(clia_number);
+        if (!v.ok) {
+          return res.status(400).json({ error: v.error || "Invalid CLIA number format." });
+        }
+        normalizedClia = v.normalized;
       }
 
       // Check lock state for CLIA and lab name. The CLIA lock freezes a number that reports already
