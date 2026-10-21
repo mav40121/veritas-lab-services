@@ -94,6 +94,11 @@ const REFS = {
     url: "https://clsi.org/standards/products/hematology/documents/h20/",
     source: "CLSI",
   },
+  rumke1958: {
+    label: "Rümke CL (1958) - Variability of results of cell differentiation in blood smears, Ned Tijdschr Geneeskd 102:2505-8 (the original paper, in Dutch)",
+    url: "https://pubmed.ncbi.nlm.nih.gov/13622829/",
+    source: "PubMed",
+  },
   cfr4931281: {
     label: "42 CFR §493.1281 - Comparison of test results",
     url: "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1281",
@@ -705,6 +710,7 @@ export default function StudyGuidePage() {
             regulation="42 CFR §493.1281 (comparison of test results); CLSI H20 is the methodology standard"
             passFail="Each cell class is acceptable when the reference (automated) percentage falls within the exact binomial (Rümke) 95 percent confidence interval of the manual count at the number of cells counted. The overall study passes only when every class falls within its Rümke limits. Because the limits come from binomial sampling error, low-frequency classes (basophils, eosinophils) receive a wider allowance and high-frequency classes a tighter one. Your laboratory director or designee makes the final acceptability determination."
             refs={[
+              REFS.rumke1958,
               REFS.clsiH20,
               REFS.cfr4931281,
               REFS.cliaVerificationBrochure,
