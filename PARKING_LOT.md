@@ -84,7 +84,7 @@ flagged as unverified because the operator does not hold the CAP MOL
 The other 11 CAP modules (ANP, CHM, COM, CYP, DRA, GEN, HEM, IMM,
 MIC, POC, TRM, URN) were verified against the 12 MAS files held on
 the operator's local drive at
-`C:/Users/veril/OneDrive/Desktop/Lab/Regulatory/2026 Cap checklists/`.
+`C:/Users/veril/OneDrive - veritaslabservices com/Lab/Regulatory/2026 Cap checklists/`.
 The MOL module's MAS xlsx is the only one missing from that set.
 
 **Fix shape:** Operator obtains `MAS_MOL_12092025_Long_*.xlsx` from

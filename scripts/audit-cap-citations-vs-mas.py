@@ -10,7 +10,7 @@ separate, human review.
 import glob, os, re, sys
 import openpyxl
 
-folder = sys.argv[1] if len(sys.argv) > 1 else r"C:/Users/veril/OneDrive/Desktop/Lab/Regulatory/2026 Cap checklists"
+folder = sys.argv[1] if len(sys.argv) > 1 else r"C:/Users/veril/OneDrive - veritaslabservices com/Lab/Regulatory/2026 Cap checklists"
 src = open(os.path.join(os.path.dirname(__file__), "..", "server", "veritapolicyMasterList.ts"), encoding="utf-8").read()
 objs = re.findall(r'\{[^{}]*"policy_id"[^{}]*\}', src, re.S)
 cited = set()

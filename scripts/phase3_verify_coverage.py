@@ -30,7 +30,7 @@ REPO_ROOT  = Path(__file__).resolve().parent.parent
 DATA_DIR   = REPO_ROOT / "server" / "policyTemplates" / "data"
 DEPREC_DIR = DATA_DIR / "deprecated"
 REPORT_PATH = REPO_ROOT / "scripts" / "phase3_coverage_report.md"
-ALSO_COPY_TO = Path(r"C:\Users\veril\OneDrive\Desktop\Lab\Verita Products\Phase3_Coverage_Report.md")
+ALSO_COPY_TO = Path(r"C:\Users\veril\OneDrive - veritaslabservices com\Lab\Verita Products\Phase3_Coverage_Report.md")
 
 # Full source-to-combined map across all 8 clusters.
 CLUSTER_MAP = {

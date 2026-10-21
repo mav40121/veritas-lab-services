@@ -23,7 +23,7 @@ Run:
   python scripts/veritapolicy_phase2_template_builder.py 11 20 5    # specific ids
 
 Output:
-  C:/Users/veril/OneDrive/Desktop/Lab/Verita Products/VeritaPolicy/templates/
+  C:/Users/veril/OneDrive - veritaslabservices com/Lab/Verita Products/VeritaPolicy/templates/
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
 
 DATA_DIR = Path(__file__).parent.parent / "server" / "policyTemplates" / "data"
-OUTPUT_DIR = Path(r"C:\Users\veril\OneDrive\Desktop\Lab\Verita Products\VeritaPolicy\templates")
+OUTPUT_DIR = Path(r"C:\Users\veril\OneDrive - veritaslabservices com\Lab\Verita Products\VeritaPolicy\templates")
 
 TEAL = RGBColor(0x01, 0x69, 0x6F)
 TEAL_LIGHT = "E6F2F2"

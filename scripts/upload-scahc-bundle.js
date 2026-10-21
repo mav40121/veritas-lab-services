@@ -22,7 +22,7 @@ const PROD_HOST = process.env.PROD_HOST || "https://www.veritaslabservices.com";
 if (!ADMIN_SECRET) { console.error("ADMIN_SECRET env var is required"); process.exit(1); }
 if (!LAB_ID) { console.error("SCAHC_LAB_ID env var is required"); process.exit(1); }
 
-const BUNDLE_DIR = "C:\\Users\\veril\\OneDrive\\Desktop\\Lab\\Verita Products";
+const BUNDLE_DIR = "C:\\Users\\veril\\OneDrive - veritaslabservices com\\Lab\\Verita Products";
 
 function findLatestBundle() {
   const candidates = fs.readdirSync(BUNDLE_DIR)

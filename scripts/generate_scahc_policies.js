@@ -6,7 +6,7 @@
  *         server/policyTemplates/data/<NNN>_<slug>.json           (each VeritaPolicy template)
  *         server/veritapolicyMasterList.ts                        (for citations / accreditor crosswalk)
  *
- * Writes: C:\Users\veril\OneDrive\Desktop\Lab\Verita Products\SCAHC_Policies_Bundle_<date>.zip
+ * Writes: C:\Users\veril\OneDrive - veritaslabservices com\Lab\Verita Products\SCAHC_Policies_Bundle_<date>.zip
  *
  * Each DOCX inside the zip is the SCAHC scaffold with these tags filled:
  *   {policy_name}    -- title cell + footer
@@ -38,7 +38,7 @@ const DATA_DIR     = path.join(REPO, "server", "policyTemplates", "data");
 const MASTER_LIST  = path.join(REPO, "server", "veritapolicyMasterList.ts");
 
 const TODAY = new Date().toISOString().slice(0, 10);
-const OUT_ZIP = `C:\\Users\\veril\\OneDrive\\Desktop\\Lab\\Verita Products\\SCAHC_Policies_Bundle_${TODAY}.zip`;
+const OUT_ZIP = `C:\\Users\\veril\\OneDrive - veritaslabservices com\\Lab\\Verita Products\\SCAHC_Policies_Bundle_${TODAY}.zip`;
 
 // SCAHC lab context. Phase 2 will pull these from the labs row at request time.
 const SCAHC = {
