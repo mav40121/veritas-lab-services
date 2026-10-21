@@ -219,7 +219,7 @@ import { cliaAnalytes, ptCategoryLinks } from "./cliaAnalytes";
 import { createAnalyteMatcher, nzKey, specialtyCategory } from "./ptAnalyteMatcher";
 import { validateVendorPrograms, PT_VENDORS } from "./ptVendorCatalog";
 import { hasCanonicalTea } from "./backfillAbsoluteFloor";
-import { DEMO_USER_EMAIL, SIGNUP_ALERT_TO } from "./constants";
+import { DEMO_USER_EMAIL, SIGNUP_ALERT_TO, BUSINESS_NOTICE_TO } from "./constants";
 
 // Per parking-lot #1: VeritaCheck artifacts (PDF narratives, persisted
 // summary text) must say "Lab-Set Internal Goal" for analytes without a
@@ -6363,7 +6363,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         try {
           await resend.emails.send({
             from: "VeritaAssure\u2122 <info@veritaslabservices.com>",
-            to: ["info@veritaslabservices.com", "verilabguy@gmail.com"],
+            to: [BUSINESS_NOTICE_TO],
             subject: `New invoice request: ${lab_name} - ${tier} x ${seatCount}`,
             html: `
 <div style="font-family: Arial, sans-serif; max-width: 600px; color: #1a1a1a;">
@@ -13625,7 +13625,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         const labLabel = labRow?.lab_name || userRow?.clia_lab_name || "Unknown lab";
         await resend.emails.send({
           from: "VeritaAssure™ <info@veritaslabservices.com>",
-          to: ["info@veritaslabservices.com", "verilabguy@gmail.com"],
+          to: [BUSINESS_NOTICE_TO],
           subject: `New VeritaMap instrument request: ${cleanName}`,
           html: `
 <div style="font-family: Arial, sans-serif; max-width: 600px; color: #1a1a1a;">

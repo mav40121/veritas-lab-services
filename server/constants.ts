@@ -29,3 +29,8 @@ export const OWNER_CLIA =
 // (Michael 2026-10-20: "Lets have those go to info@"). Env-overridable for staging.
 export const SIGNUP_ALERT_TO =
   process.env.SIGNUP_ALERT_TO ?? "info@veritaslabservices.com";
+
+// Where the internal "New invoice request" and "New VeritaMap instrument request" notices go: the business inbox
+// only, no copy to the personal Gmail (Michael 2026-10-20, Q20 = 1). Env-overridable for staging.
+export const BUSINESS_NOTICE_TO =
+  process.env.BUSINESS_NOTICE_TO ?? "info@veritaslabservices.com";
