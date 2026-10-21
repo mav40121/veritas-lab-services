@@ -12,7 +12,7 @@ Runs automated checks on all 96 policy templates:
 8. Required phrasing (medical director or designee; verification not validation)
 
 Outputs:
-  C:/Users/veril/OneDrive/Desktop/Lab/Verita Products/VeritaPolicy/Phase2_QA_Report.xlsx
+  C:/Users/veril/OneDrive - veritaslabservices com/Lab/Verita Products/VeritaPolicy/Phase2_QA_Report.xlsx
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ from openpyxl.styles import Font, PatternFill, Alignment
 
 DATA_DIR = Path(__file__).parent.parent / "server" / "policyTemplates" / "data"
 MASTER_LIST_TS = Path(__file__).parent.parent / "server" / "veritapolicyMasterList.ts"
-OUTPUT = Path(r"C:\Users\veril\OneDrive\Desktop\Lab\Verita Products\VeritaPolicy\Phase2_QA_Report.xlsx")
+OUTPUT = Path(r"C:\Users\veril\OneDrive - veritaslabservices com\Lab\Verita Products\VeritaPolicy\Phase2_QA_Report.xlsx")
 
 TEAL = "01696F"
 FAIL_FILL = "FCE4EC"

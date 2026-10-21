@@ -10,7 +10,7 @@ Run:
   python scripts/veritapolicy_phase0_triage.py
 
 Output:
-  C:/Users/veril/OneDrive/Desktop/Lab/Verita Products/VeritaPolicy/Phase0_Triage.xlsx
+  C:/Users/veril/OneDrive - veritaslabservices com/Lab/Verita Products/VeritaPolicy/Phase0_Triage.xlsx
 
 Requires: python-docx, openpyxl, pdfplumber, pywin32 (for .doc files via
 Word COM automation on Windows).
@@ -35,8 +35,8 @@ from openpyxl.utils import get_column_letter
 # ───────────────────────────────────────────────────────────────────────────
 # Config
 # ───────────────────────────────────────────────────────────────────────────
-SOURCE_ROOT = Path(r"C:\Users\veril\OneDrive\Desktop\Lab\Documents to be moved\P and P")
-OUTPUT_DIR  = Path(r"C:\Users\veril\OneDrive\Desktop\Lab\Verita Products\VeritaPolicy")
+SOURCE_ROOT = Path(r"C:\Users\veril\OneDrive - veritaslabservices com\Lab\Documents to be moved\P and P")
+OUTPUT_DIR  = Path(r"C:\Users\veril\OneDrive - veritaslabservices com\Lab\Verita Products\VeritaPolicy")
 OUTPUT_XLSX = OUTPUT_DIR / "Phase0_Triage.xlsx"
 MASTER_LIST_TS = Path(__file__).parent.parent / "server" / "veritapolicyMasterList.ts"
 

@@ -21,7 +21,7 @@ const __dirname = path.dirname(__filename);
 const REPO_ROOT = path.resolve(__dirname, "..");
 
 const POLICY_ID = process.argv[2] || "110";
-const OUT_PATH = process.argv[3] || "C:\\Users\\veril\\OneDrive\\Desktop\\Lab\\Verita Products\\VeritaPolicy_Sample_110_InfectionPrevention.docx";
+const OUT_PATH = process.argv[3] || "C:\\Users\\veril\\OneDrive - veritaslabservices com\\Lab\\Verita Products\\VeritaPolicy_Sample_110_InfectionPrevention.docx";
 
 // Riverside demo lab fixture per CLAUDE.md §7.
 const LAB = { lab_name: "Riverside Regional Medical Center", clia_number: "22D0999999" };

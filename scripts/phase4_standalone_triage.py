@@ -14,7 +14,7 @@ Categories:
 
 Output:
   scripts/Phase4_Standalone_Triage.md
-  C:\\Users\\veril\\OneDrive\\Desktop\\Lab\\Verita Products\\Phase4_Standalone_Triage.md
+  C:\\Users\\veril\\OneDrive - veritaslabservices com\\Lab\\Verita Products\\Phase4_Standalone_Triage.md
 """
 import json, os, re, shutil
 from pathlib import Path
@@ -23,7 +23,7 @@ REPO = Path(__file__).resolve().parent.parent
 DATA = REPO / "server" / "policyTemplates" / "data"
 ML   = REPO / "server" / "veritapolicyMasterList.ts"
 OUT  = REPO / "scripts" / "Phase4_Standalone_Triage.md"
-DESK = Path(r"C:\Users\veril\OneDrive\Desktop\Lab\Verita Products\Phase4_Standalone_Triage.md")
+DESK = Path(r"C:\Users\veril\OneDrive - veritaslabservices com\Lab\Verita Products\Phase4_Standalone_Triage.md")
 
 # Editorial classification per template ID. Based on subspecialty scope and
 # how many real-world labs would actually use it.

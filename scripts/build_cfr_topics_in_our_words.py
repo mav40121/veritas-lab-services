@@ -30,7 +30,7 @@ import pandas as pd
 
 
 MASTER_XLSX = pathlib.Path(
-    r"C:\Users\veril\OneDrive\Desktop\Lab\Regulatory"
+    r"C:\Users\veril\OneDrive - veritaslabservices com\Lab\Regulatory"
     r"\aaa Truth Master Document\veritaassure_master_citation_index_v0.11.xlsx"
 )
 OUT_TS = pathlib.Path(
