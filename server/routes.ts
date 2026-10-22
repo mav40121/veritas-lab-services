@@ -3448,12 +3448,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       ).get(labOwnerId, normalizedEmail, Number(labId)) as any;
       if (deactivated) {
         sqlite.prepare(
-          "UPDATE user_seats SET seat_user_id = ?, status = ?, invited_at = ?, accepted_at = ?, permissions = ?, invite_token = ?, lab_id = ?, seat_type = ? WHERE id = ?"
-        ).run(seatUserId, newStatus, now, seatUserId ? now : null, permJson, inviteToken, Number(labId), seatType, deactivated.id);
+          "UPDATE user_seats SET seat_user_id = ?, status = ?, invited_at = ?, accepted_at = ?, permissions = ?, invite_token = ?, lab_id = ?, seat_type = ?, invite_role = ? WHERE id = ?"
+        ).run(seatUserId, newStatus, now, seatUserId ? now : null, permJson, inviteToken, Number(labId), seatType, resolvedRole, deactivated.id);
       } else {
         sqlite.prepare(
-          "INSERT INTO user_seats (owner_user_id, seat_email, seat_user_id, invited_at, status, permissions, invite_token, lab_id, seat_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
-        ).run(labOwnerId, normalizedEmail, seatUserId, now, newStatus, permJson, inviteToken, Number(labId), seatType);
+          "INSERT INTO user_seats (owner_user_id, seat_email, seat_user_id, invited_at, status, permissions, invite_token, lab_id, seat_type, invite_role) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        ).run(labOwnerId, normalizedEmail, seatUserId, now, newStatus, permJson, inviteToken, Number(labId), seatType, resolvedRole);
       }
       if (seatUserId) {
         sqlite.prepare(
@@ -6591,12 +6591,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         // staff_employee_id so the Staff Portal branch below can link
         // staff_employees.user_id and grant lab_members against the
         // seat's own lab_id (NOT the inviter's primary lab).
-        "SELECT id, owner_user_id, seat_type, lab_id, staff_employee_id FROM user_seats WHERE invite_token = ? AND status = 'pending'"
+        "SELECT id, owner_user_id, seat_type, lab_id, staff_employee_id, invite_role FROM user_seats WHERE invite_token = ? AND status = 'pending'"
       ).get(reqInviteToken) as any;
     }
     if (!seatInvite) {
       seatInvite = (db as any).$client.prepare(
-        "SELECT id, owner_user_id, seat_type, lab_id, staff_employee_id FROM user_seats WHERE seat_email = ? AND status = 'pending'"
+        "SELECT id, owner_user_id, seat_type, lab_id, staff_employee_id, invite_role FROM user_seats WHERE seat_email = ? AND status = 'pending'"
       ).get(email.toLowerCase()) as any;
     }
 
@@ -6684,10 +6684,14 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           ).get(targetLabId, user.id) as any;
           if (!dupMember) {
             const nowIso = new Date().toISOString();
+            // 2026-10-22: grant the role chosen at invite. This was hard-coded 'staff', so an admin invite to a person
+            // with no account yet landed as staff and the owner had to promote them (Tim Uicker, lab 21). Only an
+            // explicit 'admin' is honored; read-and-sign (staff_portal) seats and older invites stay 'staff'.
+            const grantedRole = !isStaffPortal && seatInvite.invite_role === "admin" ? "admin" : "staff";
             (db as any).$client.prepare(
               `INSERT INTO lab_members (lab_id, user_id, role, permissions_json, status, is_primary_lab, accepted_at, created_at, updated_at)
-               VALUES (?, ?, 'staff', '{}', 'active', 0, ?, ?, ?)`
-            ).run(targetLabId, user.id, nowIso, nowIso, nowIso);
+               VALUES (?, ?, ?, '{}', 'active', 0, ?, ?, ?)`
+            ).run(targetLabId, user.id, grantedRole, nowIso, nowIso, nowIso);
             const newMembership = (db as any).$client.prepare(
               "SELECT * FROM lab_members WHERE lab_id = ? AND user_id = ?"
             ).get(targetLabId, user.id);
@@ -10427,6 +10431,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         pendingInvites = sqlite.prepare(`
           SELECT id AS seat_id, seat_email, invited_at, status, invite_token, lab_id,
                  COALESCE(seat_type, 'active') AS seat_type,
+                 COALESCE(invite_role, 'staff') AS invite_role,
                  COALESCE(invitee_name, (SELECT TRIM(COALESCE(se.first_name, '') || ' ' || COALESCE(se.last_name, '')) FROM staff_employees se WHERE se.id = user_seats.staff_employee_id)) AS invitee_name
           FROM user_seats
           WHERE owner_user_id = ?
@@ -10716,12 +10721,13 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       ).get(labOwnerId, normalizedEmail, req.scope.labId) as any;
       if (deactivated) {
         sqlite.prepare(
-          "UPDATE user_seats SET seat_user_id = ?, status = ?, invited_at = ?, accepted_at = ?, permissions = ?, invite_token = ?, lab_id = ?, seat_type = ?, invitee_name = ? WHERE id = ?"
-        ).run(seatUserId, newStatus, now, seatUserId ? now : null, permJson, inviteToken, req.scope.labId, seatType, inviteeName, deactivated.id);
+          "UPDATE user_seats SET seat_user_id = ?, status = ?, invited_at = ?, accepted_at = ?, permissions = ?, invite_token = ?, lab_id = ?, seat_type = ?, invitee_name = ?, invite_role = ? WHERE id = ?"
+        ).run(seatUserId, newStatus, now, seatUserId ? now : null, permJson, inviteToken, req.scope.labId, seatType, inviteeName, role, deactivated.id);
       } else {
+        // invite_role (2026-10-22): kept on the seat so sign-up grants the chosen role to a person who has no account yet.
         sqlite.prepare(
-          "INSERT INTO user_seats (owner_user_id, seat_email, seat_user_id, invited_at, status, permissions, invite_token, lab_id, seat_type, invitee_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-        ).run(labOwnerId, normalizedEmail, seatUserId, now, newStatus, permJson, inviteToken, req.scope.labId, seatType, inviteeName);
+          "INSERT INTO user_seats (owner_user_id, seat_email, seat_user_id, invited_at, status, permissions, invite_token, lab_id, seat_type, invitee_name, invite_role) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        ).run(labOwnerId, normalizedEmail, seatUserId, now, newStatus, permJson, inviteToken, req.scope.labId, seatType, inviteeName, role);
       }
       // Create lab_members row when the invited user already has an account.
       if (seatUserId) {
