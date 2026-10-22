@@ -28207,177 +28207,46 @@
   "Cepheid GeneXpert Xpress": {
     "vendor": "Cepheid",
     "category": "Molecular",
-    "testCount": 42,
+    "testCount": 9,
     "tests": {
-      "SARS-CoV-2 (COVID-19)": {
-        "complexity": "MODERATE",
-        "specialty": "Microbiology"
-      },
-      "SARS-CoV-2 / Flu A / Flu B / RSV (4-plex)": {
-        "complexity": "MODERATE",
-        "specialty": "Microbiology"
-      },
       "Xpress SARS-CoV-2 plus": {
-        "complexity": "MODERATE",
-        "specialty": "Microbiology"
+        "complexity": "WAIVED",
+        "specialty": "Virology"
       },
-      "Influenza A": {
-        "complexity": "MODERATE",
-        "specialty": "Microbiology"
-      },
-      "Influenza B": {
-        "complexity": "MODERATE",
-        "specialty": "Microbiology"
+      "Xpress CoV-2/Flu/RSV plus": {
+        "complexity": "WAIVED",
+        "specialty": "Virology"
       },
       "Xpress Flu (A/B)": {
-        "complexity": "MODERATE",
-        "specialty": "Microbiology"
+        "complexity": "WAIVED",
+        "specialty": "Virology"
       },
       "Xpress Flu/RSV": {
-        "complexity": "MODERATE",
-        "specialty": "Microbiology"
-      },
-      "RSV": {
-        "complexity": "MODERATE",
-        "specialty": "Microbiology"
+        "complexity": "WAIVED",
+        "specialty": "Virology"
       },
       "Xpress Strep A": {
-        "complexity": "MODERATE",
-        "specialty": "Microbiology"
+        "complexity": "WAIVED",
+        "specialty": "Bacteriology"
       },
-      "Strep A": {
-        "complexity": "MODERATE",
-        "specialty": "Microbiology"
+      "Xpress MVP: bacterial vaginosis-associated bacteria": {
+        "complexity": "WAIVED",
+        "specialty": "Bacteriology"
       },
-      "Strep B (GBS)": {
-        "complexity": "MODERATE",
-        "specialty": "Microbiology"
+      "Xpress MVP: Trichomonas vaginalis": {
+        "complexity": "WAIVED",
+        "specialty": "Parasitology"
       },
-      "Clostridioides difficile (C. difficile)": {
-        "complexity": "MODERATE",
-        "specialty": "Microbiology"
+      "Xpress MVP: Candida (yeast)": {
+        "complexity": "WAIVED",
+        "specialty": "Mycology"
       },
-      "Xpert C. difficile/Epi": {
-        "complexity": "MODERATE",
-        "specialty": "Microbiology"
-      },
-      "MRSA NxG (active surveillance)": {
-        "complexity": "MODERATE",
-        "specialty": "Microbiology"
-      },
-      "SA Nasal Complete (MRSA + MSSA, pre-surgical)": {
-        "complexity": "MODERATE",
-        "specialty": "Microbiology"
-      },
-      "MRSA/SA SSTI (skin & soft tissue)": {
-        "complexity": "MODERATE",
-        "specialty": "Microbiology"
-      },
-      "MRSA/SA Blood Culture (BC)": {
-        "complexity": "MODERATE",
-        "specialty": "Microbiology"
-      },
-      "Carba-R (KPC, NDM, VIM, IMP, OXA-48)": {
-        "complexity": "MODERATE",
-        "specialty": "Microbiology"
-      },
-      "vanA / vanB (VRE)": {
-        "complexity": "MODERATE",
-        "specialty": "Microbiology"
-      },
-      "MTB/RIF (Tuberculosis)": {
-        "complexity": "MODERATE",
-        "specialty": "Microbiology"
-      },
-      "MTB/RIF Ultra": {
-        "complexity": "MODERATE",
-        "specialty": "Microbiology"
-      },
-      "MTB/XDR": {
-        "complexity": "HIGH",
-        "specialty": "Microbiology"
-      },
-      "CT/NG (Chlamydia/Gonorrhea)": {
-        "complexity": "MODERATE",
-        "specialty": "Microbiology"
-      },
-      "Trichomonas vaginalis": {
-        "complexity": "MODERATE",
-        "specialty": "Microbiology"
-      },
-      "TV + MG (Trich + M. genitalium)": {
-        "complexity": "MODERATE",
-        "specialty": "Microbiology"
-      },
-      "HSV 1 & 2": {
-        "complexity": "MODERATE",
-        "specialty": "Microbiology"
-      },
-      "HPV (high-risk + 16/18/45 genotype)": {
-        "complexity": "MODERATE",
-        "specialty": "Microbiology"
-      },
-      "HIV-1 Viral Load": {
-        "complexity": "MODERATE",
-        "specialty": "Microbiology"
-      },
-      "HIV-1 Qualitative (early infant diagnosis)": {
-        "complexity": "HIGH",
-        "specialty": "Microbiology"
-      },
-      "HCV Viral Load": {
-        "complexity": "MODERATE",
-        "specialty": "Microbiology"
-      },
-      "HCV Viral Load Fingerstick": {
-        "complexity": "MODERATE",
-        "specialty": "Microbiology"
-      },
-      "HBV Viral Load": {
-        "complexity": "MODERATE",
-        "specialty": "Microbiology"
-      },
-      "CMV Viral Load": {
-        "complexity": "MODERATE",
-        "specialty": "Microbiology"
-      },
-      "BK Virus (BKV) Viral Load": {
-        "complexity": "MODERATE",
-        "specialty": "Microbiology"
-      },
-      "EBV Viral Load": {
-        "complexity": "MODERATE",
-        "specialty": "Microbiology"
-      },
-      "Mpox (monkeypox / non-variola orthopox)": {
-        "complexity": "MODERATE",
-        "specialty": "Microbiology"
-      },
-      "Norovirus GI/GII": {
-        "complexity": "MODERATE",
-        "specialty": "Microbiology"
-      },
-      "Ebola virus (Xpert Ebola)": {
-        "complexity": "HIGH",
-        "specialty": "Microbiology"
-      },
-      "Factor II (G20210A) genotype": {
-        "complexity": "HIGH",
-        "specialty": "Hemostasis"
-      },
-      "Factor V Leiden (G1691A) genotype": {
-        "complexity": "HIGH",
-        "specialty": "Hemostasis"
-      },
-      "BCR-ABL Ultra (CML monitoring)": {
-        "complexity": "HIGH",
-        "specialty": "Hematology"
-      },
-      "BCR-ABL p210 / p190": {
-        "complexity": "HIGH",
-        "specialty": "Hematology"
+      "Xpert HCV (HCV RNA, fingerstick)": {
+        "complexity": "WAIVED",
+        "specialty": "General Immunology"
       }
-    }
+    },
+    "menuLastVerifiedAt": "2026-10-22"
   },
   "Cepheid GeneXpert XVI": {
     "vendor": "Cepheid",
@@ -32887,13 +32756,18 @@
   "Beta-hCG Card (Manual)": {
     "vendor": "Manual / No Instrument",
     "category": "Manual Procedures",
-    "testCount": 1,
+    "testCount": 2,
     "tests": {
       "hCG (serum, qualitative)": {
         "specialty": "Endocrinology",
         "complexity": "MODERATE"
+      },
+      "hCG (urine, qualitative)": {
+        "complexity": "WAIVED",
+        "specialty": "Endocrinology"
       }
-    }
+    },
+    "menuLastVerifiedAt": "2026-10-22"
   },
   "Influenza A/B Rapid (Manual Kit)": {
     "vendor": "Manual / No Instrument",
@@ -43040,5 +42914,33 @@
       }
     },
     "menuLastVerifiedAt": "2026-10-13"
+  },
+  "Clinical Innovations ROM Plus": {
+    "vendor": "Clinical Innovations",
+    "category": "Manual Procedures",
+    "testCount": 2,
+    "tests": {
+      "Alpha-fetoprotein (AFP), amniotic fluid": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "IGFBP-1 (insulin-like growth factor binding protein 1)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      }
+    },
+    "menuLastVerifiedAt": "2026-10-22"
+  },
+  "Alcor Scientific miniiSED": {
+    "vendor": "Alcor Scientific",
+    "category": "ESR",
+    "testCount": 1,
+    "tests": {
+      "Erythrocyte Sedimentation Rate (ESR)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      }
+    },
+    "menuLastVerifiedAt": "2026-10-22"
   }
 }

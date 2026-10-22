@@ -120,6 +120,8 @@ const CHEMISTRY_SPECIALTY_ORDER = [
   "Blood Bank",
 ];
 
+// 2026-10-22 (Angela Cedeno, Raleigh General): the CMS microbiology subspecialties, so a custom test can carry
+// Virology or Parasitology (each has its own PT section, 42 CFR 493.917 / 493.919) instead of only "Microbiology".
 const CUSTOM_TEST_SPECIALTIES = [
   "General Chemistry",
   "Hematology",
@@ -128,6 +130,11 @@ const CUSTOM_TEST_SPECIALTIES = [
   "Blood Gas",
   "Blood Bank",
   "Microbiology",
+  "Bacteriology",
+  "Mycobacteriology",
+  "Mycology",
+  "Parasitology",
+  "Virology",
   "Immunology",
   "Endocrinology",
   "Toxicology",
