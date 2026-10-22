@@ -36,7 +36,8 @@ import { DocumentLinkDialog, STAFF_DOC_TYPES, expirationStatus } from "@/compone
 import { EmployeeInstrumentsPickerDialog, type LabInstrument, instrumentLabel } from "@/components/EmployeeInstrumentsPickerDialog";
 import { InstrumentStaffAssignDialog } from "@/components/InstrumentStaffAssignDialog";
 import { RosterMembersPrompt, rosterPromptKey, type RosterMember } from "@/components/RosterMembersPrompt";
-import { getStaffTitleLabel, getStaffTitleGroups } from "@shared/staffTitles";
+import { getStaffTitleLabel, getCredentialPickerGroups, buildCredentialFields, parseCredentialFields } from "@shared/staffTitles";
+import { CLIA_ROLE_QUALIFICATIONS, tsQualificationsFor, QUALIFICATION_FOOTNOTE } from "@shared/cliaRoleQualifications";
 import { FREE_CEU_CATALOG, FREE_CEU_VERIFIED } from "@shared/freeCeuCatalog";
 
 // ── Types ──────────────────────────────────────────────────────────────
@@ -1015,6 +1016,8 @@ function EmployeeDialog({ open, onOpenChange, employee, lab, fromMember = null }
   });
   const [roles, setRoles] = useState<{ role: string; specialtyNumber: number | null; allSpecialties?: boolean }[]>([]);
   const [saving, setSaving] = useState(false);
+  // Custom credential being typed (one not in the picker, e.g. a state license).
+  const [customCred, setCustomCred] = useState("");
   // CMS-209 Part B: the lab's director-set specialty list, so the "Entire lab"
   // TC/TS option can show what it expands to (and warn when the list is empty).
   const [labSpecialties, setLabSpecialties] = useState<number[]>([]);
@@ -1068,9 +1071,11 @@ function EmployeeDialog({ open, onOpenChange, employee, lab, fromMember = null }
         canViewAudit: employee.can_view_audit === 1,
       });
       setRoles(employee.roles.map((r) => ({ role: r.role, specialtyNumber: r.specialty_number, allSpecialties: !!r.all_specialties })));
+      setCustomCred("");
     } else {
       setForm({ lastName: fromMember?.lastName ?? "", firstName: fromMember?.firstName ?? "", middleInitial: "", title: "", titleCode: "", hireDate: "", qualificationsText: "", qualificationsVerifiedAt: "", qualificationsVerifiedBy: "", highestComplexity: "H", performsTesting: true, canAdjustInventory: false, canViewAudit: false });
       setRoles([]);
+      setCustomCred("");
     }
   }, [employee, open, fromMember]);
 
@@ -1147,7 +1152,7 @@ function EmployeeDialog({ open, onOpenChange, employee, lab, fromMember = null }
       const res = await fetch(url, {
         method,
         headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ ...form, roles, ...(!isEdit && fromMember && activeLabId ? { loginUserId: fromMember.userId } : {}) }),
+        body: JSON.stringify({ ...form, ...pendingCredFields(), roles, ...(!isEdit && fromMember && activeLabId ? { loginUserId: fromMember.userId } : {}) }),
       });
       if (!res.ok) throw new Error(await res.text());
       await queryClient.invalidateQueries({ predicate: (q) => typeof q.queryKey[0] === 'string' && (q.queryKey[0] as string).endsWith('/staff/employees') });
@@ -1170,39 +1175,37 @@ function EmployeeDialog({ open, onOpenChange, employee, lab, fromMember = null }
   const tcAllLab = roles.some((r) => r.role === "TC" && r.allSpecialties);
   const tsAllLab = roles.some((r) => r.role === "TS" && r.allSpecialties);
 
-  // Wave G PR G6 (2026-06-06). Inline CLIA role qualification reminders.
-  // Paraphrased from 42 CFR §§493.1405, 493.1411, 493.1417, 493.1441,
-  // 493.1443, 493.1447, 493.1449, 493.1461, 493.1489. Specific board
-  // certifications and grandfather clauses are summarized; the cite gives
-  // the lab director the exact regulation to consult before hiring.
-  // Surfaced only when a role is selected so the dialog stays compact for
-  // labs that just want to add a TP and move on.
-  const CLIA_ROLE_QUALIFICATIONS: Record<string, { high: string; moderate: string }> = {
-    LD: {
-      high: "MD/DO/DPM with 1 year of high-complexity laboratory training/experience after residency; or PhD in a chemical/biological/clinical lab science with board certification (ABCC, ABMG, ABMM, ABMS, etc.). 42 CFR §493.1443.",
-      moderate: "MD/DO/DPM, or PhD with board certification, or MS/BS in chemical/biological/clinical lab science with documented training and experience. 42 CFR §493.1405.",
-    },
-    CC: {
-      high: "MD/DO with current license and qualified by training and experience to consult on patient testing. 42 CFR §493.1417.",
-      moderate: "Same as high complexity. 42 CFR §493.1417.",
-    },
-    TC: {
-      high: "Not used at high complexity (see TS instead).",
-      moderate: "MD/DO/DPM; or PhD/MS/BS in chemical/biological/clinical lab science with 1-2 years experience in the assigned specialty. 42 CFR §493.1411.",
-    },
-    TS: {
-      high: "MD/DO/DPM with 1 year specialty experience; or PhD with 1 year experience and specialty-specific board certification; or MS with 2 years of high-complexity testing experience in the specialty. 42 CFR §493.1449.",
-      moderate: "Not used at moderate complexity (see TC instead).",
-    },
-    GS: {
-      high: "MD/DO/DPM, or PhD/MS, or BS with 2 years of high-complexity testing experience, or AS with 2 years of high-complexity experience plus 20 CEUs. 42 CFR §493.1461.",
-      moderate: "Not used at moderate complexity. 42 CFR §493.1459.",
-    },
-    TP: {
-      high: "MD/DO/DPM, or PhD/MS/BS in chemical/biological/clinical lab science, or AS/equivalent with documented training and experience. 42 CFR §493.1489.",
-      moderate: "MD/DO/DPM, PhD/MS/BS, AS, or high school diploma/GED with documented training before reporting patient results. 42 CFR §§493.1421-1423.",
-    },
-  };
+  // Wave G PR G6 (2026-06-06). Inline CLIA role qualification reminders,
+  // surfaced only when a role is selected so the dialog stays compact.
+  // 2026-10-21: the text lives in shared/cliaRoleQualifications.ts (checked
+  // against eCFR, pinned by scripts/verify-clia-role-qualifications.mjs), and
+  // TS shows one line per specialty picked (42 CFR 493.1449(c)-(i)).
+  const tsQualSpecs = tsAllLab
+    ? (labSpecialties.length > 0 ? labSpecialties : Object.keys(CMS_SPECIALTIES).map(Number))
+    : tsSpecs;
+  const tsQualLines = tsQualificationsFor(tsQualSpecs);
+
+  // 2026-10-21 (Angie Cedeno): several credentials per person, plus custom
+  // entries. title/title_code stay the stored source of truth; the chips are
+  // parsed from them and every change rebuilds both (shared/staffTitles.ts).
+  const cred = parseCredentialFields(form.title, form.titleCode);
+  const credBuiltTitle = buildCredentialFields(cred.codes, cred.customs).title;
+  function setCred(codes: string[], customs: string[]) {
+    const next = buildCredentialFields(codes, customs);
+    setForm({ ...form, title: next.title, titleCode: next.titleCode });
+  }
+  function addCustomCred() {
+    const v = customCred.trim();
+    if (!v) return;
+    setCred(cred.codes, [...cred.customs, v]);
+    setCustomCred("");
+  }
+  // A custom credential typed but not yet added still counts on Save.
+  function pendingCredFields(): { title?: string; titleCode?: string } {
+    const v = customCred.trim();
+    return v ? buildCredentialFields(cred.codes, [...cred.customs, v]) : {};
+  }
+
   const complexityForQual: "high" | "moderate" = complexity === "moderate" ? "moderate" : "high";
   const activeRolesForReminder = Array.from(new Set(roles.map(r => r.role)));
 
@@ -1232,49 +1235,69 @@ function EmployeeDialog({ open, onOpenChange, employee, lab, fromMember = null }
               <Input value={form.middleInitial} onChange={(e) => setForm({ ...form, middleInitial: e.target.value })} maxLength={1} />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-sm font-medium">Credentials/Title</label>
-              {/* Wave F PR F2: controlled vocabulary with free-text "Other" escape hatch.
-                  Picking a canonical code populates `title` with the display label so the
-                  surveyor-facing rendering (employee cards, list rows) stays unchanged.
-                  Picking OTHER reveals the free-text Input below, which writes directly
-                  to `title` while title_code stays "OTHER" for query stability. */}
-              <Select
-                value={form.titleCode || "__none"}
-                onValueChange={(v) => {
-                  if (v === "__none") {
-                    setForm({ ...form, titleCode: "", title: "" });
-                  } else if (v === "OTHER") {
-                    // Keep whatever the lab already typed in `title`; only the code changes.
-                    setForm({ ...form, titleCode: "OTHER" });
-                  } else {
-                    setForm({ ...form, titleCode: v, title: getStaffTitleLabel(v) });
-                  }
-                }}
-              >
-                <SelectTrigger><SelectValue placeholder="Select credential…" /></SelectTrigger>
+          <div data-testid="employee-credentials">
+            <label className="text-sm font-medium">Credentials/Title</label>
+            {/* 2026-10-21: any number of credentials. Picked ones show as chips in
+                a fixed order (degree, ASCP, ASCPi, AMT), then custom entries. The
+                stored title is the chips joined with ", ", so every place that
+                renders the title is unchanged. */}
+            <div className="flex flex-wrap gap-1.5 mt-1 mb-2 min-h-[26px]" data-testid="credential-chips">
+              {cred.codes.length + cred.customs.length === 0 && (
+                <span className="text-xs text-muted-foreground self-center">None added</span>
+              )}
+              {cred.codes.map((code) => (
+                <span key={code} className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-xs font-medium" data-testid="credential-chip">
+                  {getStaffTitleLabel(code)}
+                  <button type="button" aria-label={`Remove ${getStaffTitleLabel(code)}`} className="text-muted-foreground hover:text-foreground leading-none"
+                    onClick={() => setCred(cred.codes.filter((c) => c !== code), cred.customs)}>×</button>
+                </span>
+              ))}
+              {cred.customs.map((c, i) => (
+                <span key={`custom-${i}`} className="inline-flex items-center gap-1 rounded-full border border-dashed border-primary/40 px-2 py-0.5 text-xs font-medium" data-testid="credential-chip">
+                  {c}
+                  <button type="button" aria-label={`Remove ${c}`} className="text-muted-foreground hover:text-foreground leading-none"
+                    onClick={() => setCred(cred.codes, cred.customs.filter((_, j) => j !== i))}>×</button>
+                </span>
+              ))}
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <Select value="" onValueChange={(v) => setCred([...cred.codes, v], cred.customs)}>
+                <SelectTrigger data-testid="credential-add"><SelectValue placeholder="Add a credential…" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__none">(not specified)</SelectItem>
-                  {Object.entries(getStaffTitleGroups()).map(([group, opts]) => (
-                    <SelectGroup key={group}>
-                      <SelectLabel>{group}</SelectLabel>
-                      {opts.map((o) => (
-                        <SelectItem key={o.code} value={o.code}>{o.label}</SelectItem>
-                      ))}
-                    </SelectGroup>
-                  ))}
+                  {Object.entries(getCredentialPickerGroups()).map(([group, opts]) => {
+                    const left = opts.filter((o) => !cred.codes.includes(o.code));
+                    if (left.length === 0) return null;
+                    return (
+                      <SelectGroup key={group}>
+                        <SelectLabel>{group}</SelectLabel>
+                        {left.map((o) => (
+                          <SelectItem key={o.code} value={o.code}>{o.label}</SelectItem>
+                        ))}
+                      </SelectGroup>
+                    );
+                  })}
                 </SelectContent>
               </Select>
-              {form.titleCode === "OTHER" && (
+              <div className="flex gap-1">
                 <Input
-                  className="mt-2"
-                  value={form.title}
-                  onChange={(e) => setForm({ ...form, title: e.target.value })}
-                  placeholder="Type credential exactly as written…"
+                  value={customCred}
+                  onChange={(e) => setCustomCred(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCustomCred(); } }}
+                  placeholder="Other, as written…"
+                  data-testid="credential-custom-input"
                 />
-              )}
+                <Button type="button" variant="outline" size="sm" className="h-9" onClick={addCustomCred} disabled={!customCred.trim()} data-testid="credential-custom-add">
+                  Add
+                </Button>
+              </div>
             </div>
+            {form.title && form.title !== credBuiltTitle && (
+              <p className="text-xs text-muted-foreground mt-1" data-testid="credential-legacy-title">
+                Shown on the roster as "{form.title}" until the credentials are changed.
+              </p>
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-sm font-medium">Hire Date</label>
               <Input type="date" min={DATE_MIN} max={dateMax()} value={form.hireDate} onChange={(e) => setForm({ ...form, hireDate: e.target.value })} />
@@ -1394,21 +1417,35 @@ function EmployeeDialog({ open, onOpenChange, employee, lab, fromMember = null }
                 The dialog stays compact when no role is selected. */}
             {activeRolesForReminder.length > 0 && (
               <div className="mb-3 rounded-md border border-blue-500/30 bg-blue-500/5 px-3 py-2">
-                <div className="text-[10px] font-semibold uppercase tracking-wide text-blue-800 mb-1.5">
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-blue-800 dark:text-blue-300 mb-1.5">
                   Minimum CLIA qualifications ({complexityForQual} complexity)
                 </div>
-                <ul className="space-y-1 text-[11px] text-blue-900">
+                <ul className="space-y-1 text-[11px] text-blue-900 dark:text-blue-100" data-testid="clia-qual-reminder">
                   {activeRolesForReminder.map(role => {
                     const entry = CLIA_ROLE_QUALIFICATIONS[role];
                     if (!entry) return null;
                     return (
-                      <li key={role} className="flex gap-1.5">
-                        <span className="font-mono font-bold shrink-0">{role}:</span>
-                        <span className="leading-snug">{entry[complexityForQual]}</span>
+                      <li key={role}>
+                        <div className="flex gap-1.5">
+                          <span className="font-mono font-bold shrink-0">{role}:</span>
+                          <span className="leading-snug">{entry[complexityForQual]}</span>
+                        </div>
+                        {role === "TS" && complexityForQual === "high" && (
+                          tsQualLines.length > 0 ? (
+                            <ul className="mt-1 ml-6 space-y-1 list-disc" data-testid="ts-specialty-quals">
+                              {tsQualLines.map((q) => (
+                                <li key={q.label} className="leading-snug"><span className="font-semibold">{q.label}:</span> {q.text}</li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <div className="mt-1 ml-6 italic leading-snug">Pick the TS specialties below to see the requirement for each.</div>
+                          )
+                        )}
                       </li>
                     );
                   })}
                 </ul>
+                <p className="mt-1.5 text-[10px] leading-snug text-blue-900/80 dark:text-blue-200/80">{QUALIFICATION_FOOTNOTE}</p>
               </div>
             )}
 

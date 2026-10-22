@@ -14,6 +14,16 @@
 // "OTHER" is a permanent escape hatch for credentials we have not yet
 // codified (state-specific licenses, foreign credentials, AAB/NCA legacy
 // holders). The free-text path remains for those cases.
+//
+// 2026-10-21 (Angie Cedeno): one person often holds several credentials
+// ("BS / BA, MLT(ASCP), MT(AMT)"), and ASCP's international credentials
+// (ASCPi) were missing. An employee now carries any number of codified
+// credentials plus any number of custom entries:
+//   title      = display string, labels in option order then custom entries,
+//                joined with ", " (renders unchanged everywhere it did before)
+//   title_code = the codes joined with ",", plus "OTHER" when there is a custom
+//                entry. A single legacy code ("MLS_ASCP") is the one-element case.
+// buildCredentialFields / parseCredentialFields convert between the two.
 
 export interface StaffTitleOption {
   /** Codified value stored in staff_employees.title_code. */
@@ -21,7 +31,7 @@ export interface StaffTitleOption {
   /** Canonical display label shown in the UI and stored in title. */
   label: string;
   /** Short grouping for the Select widget. */
-  group: "Degree" | "ASCP" | "AMT" | "Other";
+  group: "Degree" | "ASCP" | "ASCPi" | "AMT" | "Other";
   /**
    * Keyword fragments used by the boot backfill. Matched case-insensitively
    * against the existing free-text title. First-match wins, so order the
@@ -54,11 +64,28 @@ export const STAFF_TITLE_OPTIONS: StaffTitleOption[] = [
   { code: "MLT_ASCP", label: "MLT(ASCP)",  group: "ASCP", keywords: ["mlt(ascp)", "mlt (ascp)", "mlt ascp", "medical laboratory technician"] },
   { code: "MT_ASCP",  label: "MT(ASCP)",   group: "ASCP", keywords: ["mt(ascp)", "mt (ascp)", "mt ascp", "medical technologist"] },
 
+  // ── ASCP BOC international credentials (ASCPi). No backfill keywords:
+  //    the boot backfill in server/db.ts mirrors the keyword lists in SQL,
+  //    and these are picked by hand, never inferred.
+  { code: "MLS_ASCPI", label: "MLS(ASCPi)", group: "ASCPi", keywords: [] },
+  { code: "MLT_ASCPI", label: "MLT(ASCPi)", group: "ASCPi", keywords: [] },
+  { code: "MB_ASCPI",  label: "MB(ASCPi)",  group: "ASCPi", keywords: [] },
+  { code: "BB_ASCPI",  label: "BB(ASCPi)",  group: "ASCPi", keywords: [] },
+  { code: "C_ASCPI",   label: "C(ASCPi)",   group: "ASCPi", keywords: [] },
+  { code: "H_ASCPI",   label: "H(ASCPi)",   group: "ASCPi", keywords: [] },
+  { code: "M_ASCPI",   label: "M(ASCPi)",   group: "ASCPi", keywords: [] },
+  { code: "CT_ASCPI",  label: "CT(ASCPi)",  group: "ASCPi", keywords: [] },
+  { code: "HTL_ASCPI", label: "HTL(ASCPi)", group: "ASCPi", keywords: [] },
+  { code: "HT_ASCPI",  label: "HT(ASCPi)",  group: "ASCPi", keywords: [] },
+  { code: "PBT_ASCPI", label: "PBT(ASCPi)", group: "ASCPi", keywords: [] },
+
   // ── AMT credentials ───────────────────────────────────────────────
   { code: "MT_AMT",   label: "MT(AMT)",    group: "AMT", keywords: ["mt(amt)", "mt (amt)", "mt amt"] },
   { code: "MLT_AMT",  label: "MLT(AMT)",   group: "AMT", keywords: ["mlt(amt)", "mlt (amt)", "mlt amt"] },
 
   // ── Escape hatch ──────────────────────────────────────────────────
+  // Marks a custom (free-text) entry in title_code. Not offered in the picker:
+  // custom entries are typed into their own box.
   { code: "OTHER",    label: "Other (free text)", group: "Other", keywords: [] },
 ];
 
@@ -95,4 +122,56 @@ export function getStaffTitleGroups(): Record<string, StaffTitleOption[]> {
     groups[opt.group].push(opt);
   }
   return groups;
+}
+
+/** Picker groups: every codified credential, without the OTHER marker. */
+export function getCredentialPickerGroups(): Record<string, StaffTitleOption[]> {
+  const groups = getStaffTitleGroups();
+  delete groups.Other;
+  return groups;
+}
+
+const CODED = STAFF_TITLE_OPTIONS.filter((o) => o.code !== "OTHER");
+
+/**
+ * Codes (any order, duplicates and unknown codes dropped) plus custom entries
+ * -> the stored title and title_code. Codes come out in option order; custom
+ * entries keep their order after them. A custom entry that matches a codified
+ * label (case-insensitive, spaces ignored) is stored as that code instead.
+ */
+export function buildCredentialFields(codes: string[], customs: string[]): { title: string; titleCode: string } {
+  const norm = (v: string) => v.toLowerCase().replace(/\s+/g, "");
+  const picked = new Set(codes);
+  const extra: string[] = [];
+  for (const raw of customs) {
+    const c = raw.trim();
+    if (!c) continue;
+    const hit = CODED.find((o) => norm(o.label) === norm(c));
+    if (hit) picked.add(hit.code);
+    else if (!extra.some((e) => norm(e) === norm(c))) extra.push(c);
+  }
+  const ordered = CODED.filter((o) => picked.has(o.code));
+  const title = [...ordered.map((o) => o.label), ...extra].join(", ");
+  const titleCode = [...ordered.map((o) => o.code), ...(extra.length ? ["OTHER"] : [])].join(",");
+  return { title, titleCode };
+}
+
+/**
+ * Stored title + title_code -> the codes and custom entries to show in the
+ * picker. Handles the legacy single-code rows: when the stored title is not the
+ * labels the codes would build (a keyword-backfilled title such as "Medical
+ * Laboratory Scientist"), the codes still show and the title is left as stored
+ * until someone changes the credentials.
+ */
+export function parseCredentialFields(title: string | null | undefined, titleCode: string | null | undefined): { codes: string[]; customs: string[] } {
+  const parts = (titleCode || "").split(",").map((c) => c.trim()).filter(Boolean);
+  const codes = CODED.filter((o) => parts.includes(o.code)).map((o) => o.code);
+  const t = (title || "").trim();
+  const prefix = CODED.filter((o) => codes.includes(o.code)).map((o) => o.label).join(", ");
+  let rest = "";
+  if (!prefix) rest = t;
+  else if (t === prefix) rest = "";
+  else if (t.startsWith(prefix + ", ")) rest = t.slice(prefix.length + 2);
+  const customs = rest ? rest.split(", ").map((c) => c.trim()).filter(Boolean) : [];
+  return { codes, customs };
 }
