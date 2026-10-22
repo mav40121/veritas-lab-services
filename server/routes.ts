@@ -60,6 +60,7 @@ import { registerTwoFactorRoutes, twoFactorLoginGate, setupResponse } from "./tw
 import { registerSsoRoutes } from "./ssoRoutes";
 import { ssoConfigForEmail } from "./sso";
 import { mfaRequirement, getMfa, isEnrolled, setTwoFactorEmailSender, forgetDevices } from "./twoFactor";
+import { resealAll } from "./secretRotation";
 import { labWideCorrelation, correlationPeerInstruments, describeCorrelationInstrument, rowComplexity, mapComplianceGaps } from "./labWideCorrelation";
 import { seedProfileFor, seedTeaFor, seedCalVerPoints, seedMethodCompQuant, seedMethodCompCategorical, seedStudyDate } from "./seedStudyProfiles";
 import type { LicenseContext } from "@shared/licenseText";
@@ -35508,6 +35509,34 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       fileStream.pipe(res);
     } catch (err: any) {
       console.error('[backup-db] Error:', err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ── ADMIN: re-seal sealed secrets after a key rotation (2026-10-21) ─────
+  // Counts the authenticator keys, pending enrollments and SSO client secrets by which key opens them, and with
+  // dryRun:false re-seals the ones only MFA_KEY_PREVIOUS opens. Dry run unless dryRun is exactly false. Returns
+  // counts only, never a secret. See server/secretRotation.ts for the rotation order.
+  app.post("/api/admin/rotation/reseal", (req, res) => {
+    const secret = (req.body?.secret || req.headers["x-admin-secret"]) as string;
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    const dryRun = req.body?.dryRun !== false;
+    try {
+      const result = resealAll((db as any).$client, dryRun);
+      if (!dryRun) {
+        const resealed = result.columns.reduce((n, c) => n + c.resealed, 0);
+        logAudit({
+          userId: 0,
+          module: "account",
+          action: "update",
+          entityType: "admin.secret_reseal",
+          entityLabel: `re-sealed ${resealed} value(s) under the current key`,
+          ipAddress: req.ip,
+        });
+      }
+      res.json(result);
+    } catch (err: any) {
+      console.error("[rotation/reseal] Error:", err.message);
       res.status(500).json({ error: err.message });
     }
   });

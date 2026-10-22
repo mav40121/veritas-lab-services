@@ -29,13 +29,27 @@ from collections import defaultdict
 import pandas as pd
 
 
-MASTER_XLSX = pathlib.Path(
+TRUTH_DIR = pathlib.Path(
     r"C:\Users\veril\OneDrive - veritaslabservices com\Lab\Regulatory"
-    r"\aaa Truth Master Document\veritaassure_master_citation_index_v0.11.xlsx"
+    r"\aaa Truth Master Document"
 )
-OUT_TS = pathlib.Path(
-    r"C:\Users\veril\projects\veritas-lab-services\server\cfrTopicsInOurWords.ts"
-)
+
+
+def latest_master() -> pathlib.Path:
+    """Highest veritaassure_master_citation_index_v0.NN.xlsx (numeric, so v0.12 > v0.9)."""
+    found = []
+    for f in TRUTH_DIR.glob("veritaassure_master_citation_index_v*.xlsx"):
+        m = re.search(r"_v(\d+)\.(\d+)\.xlsx$", f.name)
+        if m:
+            found.append(((int(m.group(1)), int(m.group(2))), f))
+    if not found:
+        raise SystemExit(f"no master citation index in {TRUTH_DIR}")
+    return max(found)[1]
+
+
+MASTER_XLSX = latest_master()
+# Written into THIS checkout (worktree-safe), not a hardcoded clone path.
+OUT_TS = pathlib.Path(__file__).resolve().parents[1] / "server" / "cfrTopicsInOurWords.ts"
 
 
 def main() -> int:
@@ -75,8 +89,8 @@ def main() -> int:
 
     # Write TS file with deterministic ordering for diff stability.
     lines = [
-        "// Auto-generated from server/scripts/build_cfr_topics_in_our_words.py.",
-        "// Source: veritaassure_master_citation_index_v0.11.xlsx CFR_Library.topic_in_our_words.",
+        "// Auto-generated from scripts/build_cfr_topics_in_our_words.py.",
+        f"// Source: {MASTER_XLSX.name} CFR_Library.topic_in_our_words.",
         "// Re-run the script when master is updated.",
         "//",
         "// Safe-mode rule: only CFR cites where master has a single section_title",

@@ -29,19 +29,23 @@ function unsubSecret(): string {
   return process.env.JWT_SECRET || process.env.ADMIN_SECRET || "veritas-newsletter-fallback-secret";
 }
 
+const tokenWith = (secret: string, email: string) =>
+  crypto.createHmac("sha256", secret).update(`unsub:${String(email).toLowerCase().trim()}`).digest("hex").slice(0, 32);
+
 export function unsubscribeToken(email: string): string {
-  return crypto
-    .createHmac("sha256", unsubSecret())
-    .update(`unsub:${String(email).toLowerCase().trim()}`)
-    .digest("hex")
-    .slice(0, 32);
+  return tokenWith(unsubSecret(), email);
 }
 
+// Secret rotation (2026-10-21): unsubscribe links in emails already sent were signed with the old JWT_SECRET, and an
+// opt-out link has to keep working after a send (CAN-SPAM). UNSUBSCRIBE_SECRET_PREVIOUS = that old secret; it is only
+// ever used to VERIFY an unsubscribe link, never to sign one, and never for sign-in.
 export function verifyUnsubscribeToken(email: string, token: string): boolean {
-  const expected = Buffer.from(unsubscribeToken(email));
   const given = Buffer.from(String(token || ""));
-  if (expected.length !== given.length) return false;
-  return crypto.timingSafeEqual(expected, given);
+  const candidates = [unsubSecret(), process.env.UNSUBSCRIBE_SECRET_PREVIOUS].filter((x): x is string => !!x);
+  return candidates.some((secret) => {
+    const expected = Buffer.from(tokenWith(secret, email));
+    return expected.length === given.length && crypto.timingSafeEqual(expected, given);
+  });
 }
 
 export function unsubscribeUrl(email: string): string {
