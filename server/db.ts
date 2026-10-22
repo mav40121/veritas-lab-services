@@ -8322,6 +8322,12 @@ try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_veritaceu_profiles_lab ON veri
   if (!cols.includes("invitee_name")) {
     try { sqlite.exec("ALTER TABLE user_seats ADD COLUMN invitee_name TEXT"); } catch {}
   }
+  // 2026-10-22 (Michael: "when I invite someone to an admin seat, after they accept they are falling into a staff
+  // seat"): the role chosen at invite ('admin' | 'staff'), applied when a person with no account yet accepts. Before
+  // this column the role lived only in the invite email, and sign-up hard-coded 'staff'. NULL = staff (older invites).
+  if (!cols.includes("invite_role")) {
+    try { sqlite.exec("ALTER TABLE user_seats ADD COLUMN invite_role TEXT"); } catch {}
+  }
 }
 
 // Veritas support access (2026-10-08, docs/design/VLS_Support_Access_Design.docx).

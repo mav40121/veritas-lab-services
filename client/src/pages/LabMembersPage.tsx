@@ -35,6 +35,7 @@ interface PendingInvite {
   invite_token: string | null;
   seat_type: "active" | "view_only";
   invitee_name?: string | null;
+  invite_role?: "admin" | "staff";
 }
 
 interface SeatLimits {
@@ -171,6 +172,9 @@ export default function LabMembersPage() {
   // (PLAN_VIEW_ONLY_SEATS + $99/yr extras) was retired 2026-06-08 for the
   // Staff Portal flat bands; the dropdown that set this was removed.
   const inviteSeatType = "active" as const;
+  // Names are required only for read-and-sign Staff (that invite creates the VeritaStaff roster entry); Admin and
+  // Medical Director give their name on the join page.
+  const namesRequired = inviteRole === "staff";
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: [`/api/labs/${activeLabId}/members`] });
 
@@ -401,7 +405,7 @@ export default function LabMembersPage() {
                 <div className="flex items-end">
                   <Button
                     onClick={() => inviteMutation.mutate()}
-                    disabled={inviteMutation.isPending || !inviteEmail.includes("@") || !inviteFirstName.trim() || !inviteLastName.trim()}
+                    disabled={inviteMutation.isPending || !inviteEmail.includes("@") || (namesRequired && (!inviteFirstName.trim() || !inviteLastName.trim()))}
                     data-testid="invite-send-btn"
                   >
                     {inviteMutation.isPending && <Loader2 className="animate-spin mr-1" size={14} />} Send invite
@@ -409,17 +413,24 @@ export default function LabMembersPage() {
                 </div>
               </div>
               {/* Bug 2 (2026-10-09): first and last name for EVERY role. They were
-                  Staff-only, a holdover from the retired kiosk. */}
+                  Staff-only, a holdover from the retired kiosk.
+                  2026-10-22 (Michael: "we should be able to invite without the first and last name, they just get
+                  prompted to fill those in on acceptance"): optional for Admin and Medical Director, whose join page asks
+                  for the full name (pre-filled when given). Still required for read-and-sign Staff, because that invite
+                  creates the person's VeritaStaff roster entry right away. */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <div>
-                    <Label htmlFor="invite-first" className="text-xs">First name</Label>
+                    <Label htmlFor="invite-first" className="text-xs">First name{namesRequired ? "" : " (optional)"}</Label>
                     <Input id="invite-first" value={inviteFirstName} onChange={e => setInviteFirstName(e.target.value)} placeholder="First name" data-testid="invite-first-name" />
                   </div>
                   <div>
-                    <Label htmlFor="invite-last" className="text-xs">Last name</Label>
+                    <Label htmlFor="invite-last" className="text-xs">Last name{namesRequired ? "" : " (optional)"}</Label>
                     <Input id="invite-last" value={inviteLastName} onChange={e => setInviteLastName(e.target.value)} placeholder="Last name" data-testid="invite-last-name" />
                   </div>
                 </div>
+                {!namesRequired && (
+                  <p className="text-xs text-muted-foreground" data-testid="invite-names-optional-hint">They enter their name when they accept.</p>
+                )}
             </div>
             <p className="text-xs text-muted-foreground">
               Three kinds of access. Admin / active seats are your writers: they create studies, upload policies, and enter or review data, and they count against your tier's active-seat cap. Staff seats are read and sign: bench staff who read and sign policies, record QC, and take inventory. They draw from your Staff Portal band, not your active seats, so adding them does not use an active seat. Medical Director is one free seat and is the person VeritaPolicy approvals and QC co-sign route to. The owner can also set or change the Medical Director on any existing member in the table below, the owner included.
@@ -589,6 +600,11 @@ export default function LabMembersPage() {
                             <Clock size={11} />
                             {expired ? `Expired (${daysPending}d)` : "Pending invitation"}
                           </span>
+                          {inv.invite_role === "admin" && (
+                            <span className="ml-1 inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium border bg-teal-50 text-teal-800 border-teal-200 dark:bg-teal-500/15 dark:text-teal-200 dark:border-teal-500/40" data-testid="pending-invite-role">
+                              <ShieldCheck size={11} /> Admin
+                            </span>
+                          )}
                         </td>
                         <td className="py-2 pr-3">{seatTypeBadge(inv.seat_type || "active")}</td>
                         <td className="py-2 pr-3 text-muted-foreground dark:text-slate-300" data-testid="pending-invite-date">{fmtDate(inv.invited_at)}</td>
