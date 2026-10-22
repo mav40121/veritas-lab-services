@@ -13,7 +13,7 @@
 // never asked.
 //
 // Secrets: the authenticator key is sealed with AES-256-GCM (key derived from MFA_KEY, else
-// JWT_SECRET). Recovery codes, emailed codes and remembered-computer tokens are stored only as
+// JWT_SECRET; during a key rotation MFA_KEY_PREVIOUS still opens older values, see previousSealKey). Recovery codes, emailed codes and remembered-computer tokens are stored only as
 // SHA-256 hashes; each is high-entropy or short-lived, and every code check is rate limited
 // (10 wrong codes per person per 15 minutes, the same rule as wrong passwords).
 import crypto from "crypto";
@@ -29,8 +29,17 @@ const EMAIL_SEND_MAX_PER_WINDOW = 5;
 
 const sha = (s: string) => crypto.createHash("sha256").update(s).digest("hex");
 
+const keyFrom = (source: string): Buffer => crypto.createHash("sha256").update("veritas-mfa-v1:" + source).digest();
 function sealKey(): Buffer {
-  return crypto.createHash("sha256").update("veritas-mfa-v1:" + (process.env.MFA_KEY || process.env.JWT_SECRET || "")).digest();
+  return keyFrom(process.env.MFA_KEY || process.env.JWT_SECRET || "");
+}
+// Secret rotation (Railway env-var disclosure, 2026-10-21). MFA_KEY_PREVIOUS = the seal source in use before the
+// rotation: the old MFA_KEY, or the old JWT_SECRET when MFA_KEY was not set. It only OPENS values sealed before the
+// rotation (authenticator keys, SSO client secrets) until /api/admin/rotation/reseal has re-sealed them; it never
+// seals, and nothing else (sign-in, admin) reads it. Remove it from the environment once the reseal reports 0 previous.
+function previousSealKey(): Buffer | null {
+  const p = process.env.MFA_KEY_PREVIOUS;
+  return p ? keyFrom(p) : null;
 }
 export function sealSecret(plain: string): string {
   const iv = crypto.randomBytes(12);
@@ -38,16 +47,29 @@ export function sealSecret(plain: string): string {
   const ct = Buffer.concat([c.update(plain, "utf8"), c.final()]);
   return ["v1", iv.toString("base64"), c.getAuthTag().toString("base64"), ct.toString("base64")].join(":");
 }
-export function openSecret(sealed: string | null | undefined): string | null {
+function openWith(key: Buffer, sealed: string | null | undefined): string | null {
   try {
     const [v, iv, tag, ct] = String(sealed || "").split(":");
     if (v !== "v1") return null;
-    const d = crypto.createDecipheriv("aes-256-gcm", sealKey(), Buffer.from(iv, "base64"));
+    const d = crypto.createDecipheriv("aes-256-gcm", key, Buffer.from(iv, "base64"));
     d.setAuthTag(Buffer.from(tag, "base64"));
     return Buffer.concat([d.update(Buffer.from(ct, "base64")), d.final()]).toString("utf8");
   } catch {
     return null;
   }
+}
+export function openSecret(sealed: string | null | undefined): string | null {
+  const current = openWith(sealKey(), sealed);
+  if (current !== null) return current;
+  const prev = previousSealKey();
+  return prev ? openWith(prev, sealed) : null;
+}
+/** Which key opens a sealed value: "current", "previous" (re-seal it), "unreadable", or "empty". */
+export function sealedKeyStatus(sealed: string | null | undefined): "current" | "previous" | "unreadable" | "empty" {
+  if (!sealed) return "empty";
+  if (openWith(sealKey(), sealed) !== null) return "current";
+  const prev = previousSealKey();
+  return prev && openWith(prev, sealed) !== null ? "previous" : "unreadable";
 }
 
 export interface MfaRow {
