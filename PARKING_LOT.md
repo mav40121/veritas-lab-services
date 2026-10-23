@@ -741,6 +741,18 @@ Receipts: an integration test for the derivation (linked, unlinked fallback, una
 
 ---
 
+### 105. Tissue storage module: slides, blocks and tissue with full tracking
+
+**Effort:** L (3-5 weeks) for a first module (items by storage location, chain of custody, retention clock, approved discard); XL with barcode scanning and storage maps
+**Importance:** High. Every lab with anatomic pathology or cytology must keep slides, blocks and tissue for set periods and produce any of them on request; today that tracking lives in paper logs and spreadsheets, and a lab that cannot find a block or prove when it was discarded has a citation.
+
+**What:** A new module for the physical archive of anatomic pathology and cytology material. Full tracking means every slide, block and wet tissue container is registered at accession (case, part, block or slide, stain), filed to a location down to cabinet, drawer and slot, and every movement is logged (filed, pulled, sent for consult or a legal request, returned) with who, when, why and the receiving party. Each item type runs its own retention clock, and discard needs a supervisor's approval and records the date. CLIA sets the floor (42 CFR 493.1105(a)(7), eCFR as of 2026-10-01): "Retain cytology slide preparations for at least 5 years from the date of examination", "Retain histopathology slides for at least 10 years from the date of examination", "Retain pathology specimen blocks for at least 2 years from the date of examination", and "Preserve remnants of tissue for pathology examination until a diagnosis is made on the specimen"; 493.1105(b) also requires provisions to keep them available if the laboratory closes. Accreditor retention periods (the CAP anatomic pathology checklist and others) are longer for some items and must be sourced before the build, not assumed. Open questions for the scope: which accreditor periods to carry, the outside consult and loan workflow, reuse of the VeritaStock barcode work (#29) for scanning, and the tie to the cytology primary screening workload log built for UNC Nash. A new module also changes the public module count (eighteen today) and every module list.
+
+**Source:** Michael 2026-10-23: "put in parking lot: Tissue storage module with full tracking".
+**Status:** Open. Parked, not scoped.
+
+---
+
 ## CLOSED (audit trail)
 
 ### C96. Dead statement in db.ts: a roster "unique index" that can never be created (was #90)
