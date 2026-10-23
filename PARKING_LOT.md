@@ -741,15 +741,28 @@ Receipts: an integration test for the derivation (linked, unlinked fallback, una
 
 ---
 
-### 105. Tissue storage module: slides, blocks and tissue with full tracking
+### 105. Tissue sub-module in VeritaStock: human tissue for implant, tracked from receipt to the patient
 
-**Effort:** L (3-5 weeks) for a first module (items by storage location, chain of custody, retention clock, approved discard); XL with barcode scanning and storage maps
-**Importance:** High. Every lab with anatomic pathology or cytology must keep slides, blocks and tissue for set periods and produce any of them on request; today that tracking lives in paper logs and spreadsheets, and a lab that cannot find a block or prove when it was discarded has a citation.
+**Effort:** M to L (2-4 weeks) for a tissue sub-module built on VeritaStock's receiving, lot and expiration, and recall pieces, plus the issue, implant and disposition record and a perpetual log; more if the tissue ID is barcode-scanned.
+**Importance:** High. Every hospital that stores or implants human tissue (bone grafts and putty, skin substitutes, amniotic membrane, tendons) must trace each graft from the supplier to the patient and back. FDA requires the tracking (21 CFR 1271.290) and TJC surveys it under its transplant safety standards. Heywood runs it today on a paper form and a macro workbook, and VeritaStock already has the receiving, lot, expiration and recall parts.
 
-**What:** A new module for the physical archive of anatomic pathology and cytology material. Full tracking means every slide, block and wet tissue container is registered at accession (case, part, block or slide, stain), filed to a location down to cabinet, drawer and slot, and every movement is logged (filed, pulled, sent for consult or a legal request, returned) with who, when, why and the receiving party. Each item type runs its own retention clock, and discard needs a supervisor's approval and records the date. CLIA sets the floor (42 CFR 493.1105(a)(7), eCFR as of 2026-10-01): "Retain cytology slide preparations for at least 5 years from the date of examination", "Retain histopathology slides for at least 10 years from the date of examination", "Retain pathology specimen blocks for at least 2 years from the date of examination", and "Preserve remnants of tissue for pathology examination until a diagnosis is made on the specimen"; 493.1105(b) also requires provisions to keep them available if the laboratory closes. Accreditor retention periods (the CAP anatomic pathology checklist and others) are longer for some items and must be sourced before the build, not assumed. Open questions for the scope: which accreditor periods to carry, the outside consult and loan workflow, reuse of the VeritaStock barcode work (#29) for scanning, and the tie to the cytology primary screening workload log built for UNC Nash. A new module also changes the public module count (eighteen today) and every module list.
+**What:** Michael supplied Heywood Hospital's blood bank tissue form (BB FORM.xlsm) as the core of the module, built as a sub-module of VeritaStock rather than a nineteenth module. The form's workflow, which the sub-module should follow:
+- Receipt, by Materials Management and then the blood bank (date, time, by): tissue type and supplier picked from a catalog (36 products on the form, for example DBX bone putty from Musculoskeletal Transplant Foundation and Apligraf from Organogenesis), quantity or size, the supplier's ID number, expiration date, transport temperature on receipt with the action taken, and package integrity.
+- Issue: date and time, issued by the tech and to the courier, delivered to, recipient, requesting physician, with read-back checks (source ID read back, expiration acceptable, integrity acceptable at issue).
+- Implant: date and time implanted, reconstitution (time, by, solution, solution lot and expiration), implanted by, and the supplier's tissue usage card completed and returned (date).
+- Other disposition (wasted, returned, expired) with a description and who did it.
+- A perpetual log of every unit, built from the entries.
 
-**Source:** Michael 2026-10-23: "put in parking lot: Tissue storage module with full tracking".
-**Status:** Open. Parked, not scoped.
+The federal rule (21 CFR 1271.290, eCFR as of 2026-10-01) requires a tracking system that "enables the tracking of all HCT/Ps from: (i) The donor to the consignee or final disposition; and (ii) The consignee or final disposition to the donor", keyed on the supplier's "distinct identification code". The hospital is the consignee in that chain.
+
+Open questions for the scope:
+- Patient identifiers. The form records the recipient's name and medical record number, and VeritaAssure stores no PHI. Options: record only the tissue ID and an encounter or case reference the hospital resolves in its own EHR, or put the account under a BAA. This must be settled before any build.
+- The TJC transplant safety standard numbers and the record retention period to carry, sourced from the current standard before the build.
+- Storage monitoring: freezer and refrigerator temperatures for stored tissue, and whether that ties to VeritaMaintain or VeritaStock.
+- Whether the supplier usage card prints from the record.
+
+**Source:** Michael 2026-10-23: "put in parking lot: Tissue storage module with full tracking", then "use this as the core of the tissue module. It can be a sub module within veritastock", with Heywood's BB FORM.xlsm (copy at VLS Leads\Heywood Healthcare\Heywood_BB_Tissue_Form_from_Michael_2026-10-23.xlsm).
+**Status:** Open. Parked, not scoped. The first draft of this entry read "tissue" as anatomic pathology slides and blocks; corrected the same day from the form.
 
 ---
 
