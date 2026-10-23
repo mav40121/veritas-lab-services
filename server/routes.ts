@@ -3172,6 +3172,104 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
   });
 
+  // Admin: build the FIRST lab for an EXISTING user who has none (2026-10-23, a self-signup the operator sets up,
+  // Krista McKnight / Shriners Children's Ohio). The two routes above do not cover this case: provision-comp-lab
+  // needs an existing primary lab (inversion guard) and provision-owner-lab needs an email with no account. Creates
+  // the comped lab, an owner membership with is_primary_lab=1, points users.lab_id / default_lab_id at it, and adopts
+  // the user's rows that have no lab yet into it (the same tables, same rule as the boot backfills in db.ts, scoped to
+  // this one user), so work done before the lab existed shows inside it. The user's own plan is left as it is: the lab
+  // plan governs lab-scoped access, so a time-limited comp ends with the lab. Refuses a user who already has a lab.
+  //   Body: { secret, userId, labName, cliaNumber?, plan, accreditationBody?, expiresAt, dryRun? }
+  app.post("/api/admin/provision-first-lab", (req, res) => {
+    const { secret, userId, labName, cliaNumber, plan, accreditationBody, expiresAt, dryRun } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    if (!Number.isFinite(Number(userId)) || !String(labName ?? "").trim()) {
+      return res.status(400).json({ error: "userId and labName required (cliaNumber is optional)" });
+    }
+    const validPlans = ["clinic", "waived", "community", "hospital", "enterprise", "large_hospital", "veritacheck_only"];
+    if (!validPlans.includes(plan)) return res.status(400).json({ error: `plan must be one of: ${validPlans.join(", ")}` });
+    if (typeof expiresAt !== "string" || Number.isNaN(Date.parse(expiresAt))) {
+      return res.status(400).json({ error: "expiresAt (ISO datetime) is required: a first lab is a comp with an end date" });
+    }
+    const validAccreditors = [null, undefined, "", "CAP", "TJC", "COLA", "AABB"];
+    if (!validAccreditors.includes(accreditationBody)) {
+      return res.status(400).json({ error: "accreditationBody must be CAP, TJC, COLA, AABB, or omitted" });
+    }
+    const sqlite = (db as any).$client;
+    const uid = Number(userId);
+    const user = sqlite.prepare("SELECT id, email, name, lab_id FROM users WHERE id = ?").get(uid) as any;
+    if (!user) return res.status(404).json({ error: "User not found" });
+    const memberships = (sqlite.prepare("SELECT COUNT(*) AS n FROM lab_members WHERE user_id = ? AND status = 'active'").get(uid) as any).n;
+    if (memberships > 0 || user.lab_id != null) {
+      return res.status(409).json({ error: "This user already has a lab; use provision-comp-lab for another one.", activeMemberships: memberships, labId: user.lab_id });
+    }
+    const cliaTrim = String(cliaNumber ?? "").trim() || null;
+    const cliaConflict = cliaTrim ? sqlite.prepare("SELECT id, lab_name FROM labs WHERE clia_number = ?").get(cliaTrim) as any : null;
+    if (cliaConflict) return res.status(409).json({ error: `CLIA ${cliaTrim} already in use by lab id=${cliaConflict.id} (${cliaConflict.lab_name})` });
+
+    // Tables whose rows carry the creating user's id and get the lab stamped by the boot backfills (db.ts); inventory
+    // items key the owner as account_id. Only tables and columns that exist are touched.
+    const ADOPT: [string, string][] = [
+      ...["studies", "findings", "veritapolicy_settings", "veritapolicy_lab_policies", "veritapolicy_requirement_status",
+        "veritapolicy_master_status", "lab_certificates", "lab_certificate_documents", "lab_certificate_reminders",
+        "veritatrack_tasks", "veritatrack_signoffs", "pt_enrollments", "pt_events", "pt_corrective_actions",
+        "pt_enrollments_v2", "aa_records", "competency_programs", "competency_employees", "competency_quizzes",
+        "veritascan_scans", "veritamap_maps", "cumsum_trackers"].map((t) => [t, "user_id"] as [string, string]),
+      ["inventory_items", "account_id"],
+    ];
+    const adoptable = ADOPT.filter(([t, col]) => {
+      const cols = (sqlite.prepare(`PRAGMA table_info(${t})`).all() as any[]).map((c) => c.name);
+      return cols.includes("lab_id") && cols.includes(col);
+    });
+    const pending = adoptable.map(([t, col]) => ({ table: t, rows: (sqlite.prepare(`SELECT COUNT(*) AS n FROM ${t} WHERE ${col} = ? AND lab_id IS NULL`).get(uid) as any).n }))
+      .filter((x) => x.rows > 0);
+    if (dryRun === true) {
+      return res.json({ ok: true, dryRun: true, user: { id: user.id, email: user.email }, labName: String(labName).trim(), plan, expiresAt, adopt: pending });
+    }
+
+    const now = new Date().toISOString();
+    let newLabId = 0;
+    const adopted: { table: string; rows: number }[] = [];
+    try {
+      sqlite.exec("BEGIN");
+      const labResult = sqlite.prepare(
+        `INSERT INTO labs (
+          clia_number, lab_name, owner_user_id,
+          accreditation_cap, accreditation_tjc, accreditation_cola, accreditation_aabb,
+          clia_locked, lab_name_locked,
+          plan, subscription_status, subscription_expires_at, plan_expires_at,
+          stripe_customer_id, stripe_subscription_id,
+          created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?, 'active', ?, ?, NULL, NULL, ?, ?)`
+      ).run(
+        cliaTrim, String(labName).trim(), uid,
+        accreditationBody === "CAP" ? 1 : 0, accreditationBody === "TJC" ? 1 : 0,
+        accreditationBody === "COLA" ? 1 : 0, accreditationBody === "AABB" ? 1 : 0,
+        plan, expiresAt, expiresAt, now, now,
+      );
+      newLabId = Number(labResult.lastInsertRowid);
+      sqlite.prepare(
+        `INSERT INTO lab_members (lab_id, user_id, role, permissions_json, status, is_primary_lab, accepted_at, created_at, updated_at)
+         VALUES (?, ?, 'owner', '{}', 'active', 1, ?, ?, ?)`
+      ).run(newLabId, uid, now, now, now);
+      sqlite.prepare("UPDATE users SET lab_id = ?, default_lab_id = ? WHERE id = ? AND lab_id IS NULL").run(newLabId, newLabId, uid);
+      for (const [t, col] of adoptable) {
+        const r = sqlite.prepare(`UPDATE ${t} SET lab_id = ? WHERE ${col} = ? AND lab_id IS NULL`).run(newLabId, uid);
+        if (r.changes > 0) adopted.push({ table: t, rows: r.changes });
+      }
+      sqlite.exec("COMMIT");
+    } catch (err: any) {
+      try { sqlite.exec("ROLLBACK"); } catch {}
+      console.error("[provision-first-lab] failed:", err.message);
+      return res.status(500).json({ error: err.message || "Failed to provision first lab" });
+    }
+    const lab = sqlite.prepare("SELECT * FROM labs WHERE id = ?").get(newLabId);
+    const membership = sqlite.prepare("SELECT * FROM lab_members WHERE lab_id = ? AND user_id = ?").get(newLabId, uid);
+    auditLabMembership("create", membership, 0, (req.headers["x-forwarded-for"] as string) || null, "admin/provision-first-lab");
+    console.log(`[provision-first-lab] lab_id=${newLabId} (${String(labName).trim()}) owner user_id=${uid} plan=${plan} expires=${expiresAt} adopted=${JSON.stringify(adopted)}`);
+    res.json({ ok: true, lab, membership, user: { id: user.id, email: user.email, name: user.name }, adopted });
+  });
+
   // Admin: provision a brand-new OWNER + their lab in one shot. This is the
   // piece provision-comp-lab was missing: it requires an EXISTING user with a
   // primary lab, which a net-new prospect does not have. This creates the owner
