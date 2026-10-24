@@ -33,17 +33,17 @@ function buildCascade(data) {
   return c;
 }
 function searchInstruments(data, query) {
-  const q = String(query).trim().toLowerCase();
+  const q = String(query).trim();
   if (q.length < 2) return [];
+  const squash = (s) => String(s).toLowerCase().replace(/[^a-z0-9]/g, "");
+  const words = q.split(/\s+/).map(squash).filter(Boolean);
+  if (words.length === 0) return [];
   const out = [];
   for (const [name, info] of Object.entries(data)) {
-    if (
-      name.toLowerCase().includes(q) ||
-      String(info.vendor || "").toLowerCase().includes(q) ||
-      String(info.category || "").toLowerCase().includes(q)
-    ) out.push(name);
+    const fields = [name, info.vendor || "", info.category || "", ...(info.aliases || [])].map(squash);
+    if (words.every((w) => fields.some((f) => f.includes(w)))) out.push(name);
   }
-  return out.sort().slice(0, 50);
+  return out.sort((a, b) => a.localeCompare(b)).slice(0, 50);
 }
 
 let pass = 0, fail = 0;
@@ -54,9 +54,12 @@ const vendors = Object.values(DATA).map((x) => x.vendor);
 check("no bare 'Siemens' vendor remains", !vendors.includes("Siemens"));
 check("'Siemens Healthineers' is the single Siemens bucket", vendors.filter((v) => v === "Siemens Healthineers").length >= 40);
 
-// --- Atellica entries intact (Lisa's Milford map depends on these keys) ---
-check("Siemens Atellica CH 930 present with 106 tests", DATA["Siemens Atellica CH 930"]?.testCount === 106);
-check("Siemens Atellica CI 1900 present with 123 tests", DATA["Siemens Atellica CI 1900"]?.testCount === 123);
+// --- Atellica entries intact (Lisa's Milford map depends on these keys). The FDA menu work (BUG-009) grew both menus
+// after this check was written (106 -> 138, 123 -> 137), so it checks the floor and that testCount matches the menu. ---
+for (const [k, floor] of [["Siemens Atellica CH 930", 106], ["Siemens Atellica CI 1900", 123]]) {
+  const e = DATA[k];
+  check(`${k} present with at least ${floor} tests and a matching testCount`, !!e && e.testCount >= floor && e.testCount === Object.keys(e.tests).length);
+}
 
 // --- Cascade compound-category split ---
 const cascade = buildCascade(DATA);
@@ -78,6 +81,20 @@ check("search 'atellica' includes the CH 930", atell.includes("Siemens Atellica 
 check("search 'atellica' returns distinct keys (no dup rows)", new Set(atell).size === atell.length);
 check("search by vendor 'siemens' finds Atellica CH 930", searchInstruments(DATA, "siemens").includes("Siemens Atellica CH 930"));
 check("search shorter than 2 chars returns nothing", searchInstruments(DATA, "a").length === 0);
+
+// --- REQ-101 (Lifepoint Georgetown, 2026-10-23): the names on the analyzer, typed any way, find the entry ---
+for (const q of ["CA-600", "CA600", "ca 600", "Sysmex CA-660", "CA-620", "Sysmex CA-600 series"]) {
+  check(`search '${q}' finds Siemens CA-600`, searchInstruments(DATA, q).includes("Siemens CA-600"));
+}
+for (const q of ["Sedimat-15", "Sedimat 15", "sedimat"]) {
+  check(`search '${q}' finds Polymedco Sedimat 15 Plus`, searchInstruments(DATA, q).includes("Polymedco Sedimat 15 Plus"));
+}
+check("search 'Binax Legionella' finds the BinaxNOW Legionella card", searchInstruments(DATA, "Binax Legionella").includes("Abbott BinaxNOW Legionella Urinary Antigen Card"));
+check("search 'Binax Strep pneumo' finds the BinaxNOW S. pneumoniae card", searchInstruments(DATA, "Binax Strep pneumo").includes("Abbott BinaxNOW Streptococcus pneumoniae Antigen Card"));
+check("search 'Binax Legionella' does not return the Strep card", !searchInstruments(DATA, "Binax Legionella").includes("Abbott BinaxNOW Streptococcus pneumoniae Antigen Card"));
+check("search 'sysmex' still lists the Sysmex XN-1000", searchInstruments(DATA, "sysmex").includes("Sysmex XN-1000"));
+check("search 'blood gas' still finds Blood Gas instruments", searchInstruments(DATA, "blood gas").some((n) => DATA[n].category === "Blood Gas"));
+check("search of punctuation only returns nothing", searchInstruments(DATA, "--").length === 0);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);
