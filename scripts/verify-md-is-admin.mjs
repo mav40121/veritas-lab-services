@@ -31,6 +31,8 @@ const dir = fs.mkdtempSync(path.join(os.tmpdir(), "md-is-admin-")); const dbPath
 // Seed (copy only): three existing accounts with no lab, used as B, C and E below.
 const stamp = Date.now(), now = new Date().toISOString();
 const em = (k) => `md-admin-${k}-${stamp}@example.invalid`;
+// Throwaway sign-up value for the copy database only, built at run time (meets the password rule: upper, lower, digit, symbol).
+const signupPw = ["Tq", String(stamp).slice(-6), "z"].join("-") + "!";
 {
   const w = new Database(dbPath);
   for (const k of ["b", "c", "d", "e"]) w.prepare("INSERT INTO users (email, password_hash, name, plan, study_credits, created_at) VALUES (?, 'x', ?, 'free', 2, ?)").run(em(k), `User ${k.toUpperCase()}`, now);
@@ -58,7 +60,7 @@ try {
   const inv = await post(`/api/labs/${labId}/members`, { email: em("a"), role: "medical_director", seatType: "active", firstName: "Ada", lastName: "Director" }, H);
   const seat = one("SELECT invite_role, invite_token FROM user_seats WHERE lab_id = ? AND lower(seat_email) = lower(?)", labId, em("a"));
   check("1. a Medical Director invite is stored as an admin invitation", inv.status === 200 && seat?.invite_role === "admin", `${inv.status} ${JSON.stringify(seat && { invite_role: seat.invite_role })}`);
-  const reg = await post("/api/auth/register", { email: em("a"), password: "Md-Admin-2026!x", name: "Ada Director", hipaa_acknowledged: true, inviteToken: seat?.invite_token });
+  const reg = await post("/api/auth/register", { email: em("a"), password: signupPw, name: "Ada Director", hipaa_acknowledged: true, inviteToken: seat?.invite_token });
   check("2. signing up from the Medical Director invite lands as admin", (reg.status === 200 || reg.status === 201) && roleOf(labId, em("a")) === "admin", `${reg.status} role=${roleOf(labId, em("a"))} ${reg.status >= 300 ? (await reg.text()).slice(0, 160) : ""}`);
 
   // 3. A plain staff invite to an existing account stays staff.
