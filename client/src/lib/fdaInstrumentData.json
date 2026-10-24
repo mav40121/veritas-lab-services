@@ -24736,6 +24736,7 @@
   "Siemens CA-600": {
     "vendor": "Siemens Healthineers",
     "category": "Coagulation",
+    "aliases": ["Sysmex CA-600 series", "Sysmex CA-620", "Sysmex CA-660"],
     "testCount": 7,
     "tests": {
       "Activated partial thromboplastin time (APTT)": {
@@ -42942,5 +42943,41 @@
       }
     },
     "menuLastVerifiedAt": "2026-10-22"
+  },
+  "Polymedco Sedimat 15 Plus": {
+    "vendor": "Polymedco",
+    "category": "ESR",
+    "testCount": 1,
+    "tests": {
+      "Erythrocyte Sedimentation Rate (ESR)": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      }
+    },
+    "menuLastVerifiedAt": "2026-10-23"
+  },
+  "Abbott BinaxNOW Legionella Urinary Antigen Card": {
+    "vendor": "Abbott",
+    "category": "Manual Procedures",
+    "testCount": 1,
+    "tests": {
+      "Legionella pneumophila serogroup 1 antigen": {
+        "complexity": "MODERATE",
+        "specialty": "Bacteriology"
+      }
+    },
+    "menuLastVerifiedAt": "2026-10-23"
+  },
+  "Abbott BinaxNOW Streptococcus pneumoniae Antigen Card": {
+    "vendor": "Abbott",
+    "category": "Manual Procedures",
+    "testCount": 1,
+    "tests": {
+      "Streptococcus pneumoniae antigen": {
+        "complexity": "MODERATE",
+        "specialty": "Bacteriology"
+      }
+    },
+    "menuLastVerifiedAt": "2026-10-23"
   }
 }

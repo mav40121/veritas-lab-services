@@ -60,6 +60,8 @@ interface FDATest {
 interface FDAInstrument {
   vendor: string;
   category: string;
+  // Other names the same analyzer is sold or registered under (e.g. the Siemens CA-600 is FDA's Sysmex CA-620 / CA-660).
+  aliases?: string[];
   testCount: number;
   tests: Record<string, FDATest>;
 }
@@ -1577,19 +1579,21 @@ export default function VeritaMapBuildPage() {
     return cascade[selectedDepartment]?.[selectedVendor] ?? [];
   }, [selectedDepartment, selectedVendor, cascade, isOtherDepartment, isOtherVendor]);
 
-  // Global instrument search across the whole catalog (name, vendor, category).
+  // Global instrument search across the whole catalog (name, vendor, category, aliases).
   // Lets a user type "Atellica" and pick the exact model regardless of how it
-  // is filed in the department/vendor cascade.
+  // is filed in the department/vendor cascade. Every word typed must appear in
+  // one of those fields, ignoring case, spaces and punctuation, so "CA600",
+  // "CA 600", "Sysmex CA-660" and "Sedimat-15" all find their entry (REQ-101).
   const instrumentSearchResults = useMemo(() => {
-    const q = instrumentSearch.trim().toLowerCase();
+    const q = instrumentSearch.trim();
     if (q.length < 2) return [] as { name: string; info: FDAInstrument }[];
+    const squash = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const words = q.split(/\s+/).map(squash).filter(Boolean);
+    if (words.length === 0) return [] as { name: string; info: FDAInstrument }[];
     const out: { name: string; info: FDAInstrument }[] = [];
     for (const [name, info] of Object.entries(INSTRUMENT_DATA)) {
-      if (
-        name.toLowerCase().includes(q) ||
-        (info.vendor || "").toLowerCase().includes(q) ||
-        (info.category || "").toLowerCase().includes(q)
-      ) {
+      const fields = [name, info.vendor || "", info.category || "", ...(info.aliases || [])].map(squash);
+      if (words.every((w) => fields.some((f) => f.includes(w)))) {
         out.push({ name, info });
       }
     }
@@ -1796,6 +1800,9 @@ export default function VeritaMapBuildPage() {
                               <span className="text-[10px] text-muted-foreground shrink-0">{info.testCount} tests</span>
                             </div>
                             <span className="text-[11px] text-muted-foreground">{info.vendor} · {info.category}</span>
+                            {info.aliases && info.aliases.length > 0 && (
+                              <span className="block text-[11px] text-muted-foreground">Also listed as: {info.aliases.join(", ")}</span>
+                            )}
                           </button>
                         ))
                       )}
