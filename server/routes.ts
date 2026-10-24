@@ -42,6 +42,7 @@ import { auditSystemOwnership } from "./systemOwnershipAudit";
 import { computeBackfillCandidates } from "./organizationBackfill";
 import { orgSeatCapForOwner } from "./organizationSeats";
 import { labSeatSummary } from "./labSeats";
+import { promoteMedicalDirectorToAdmin, medicalDirectorPromotionPreview } from "./medicalDirectorRole";
 import { EMPLOYEE_HIRE_DATE_SQL, withStaffHireDates } from "./competencyHireDate";
 import { orgRoleForUserOnLab, labRoleFromOrgRole, transferBlockedOutOfOrg, isActiveOrgMember, resolveOwnerOrgId } from "./organizationRoles";
 import { planProvisionLabs, accreditationFlagsFor, operatorOverviewGrant } from "./organizationProvision";
@@ -2459,6 +2460,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       INSERT INTO lab_members (lab_id, user_id, role, permissions_json, status, is_primary_lab, accepted_at, created_at, updated_at)
       VALUES (?, ?, ?, '{}', 'active', ?, ?, ?, ?)
     `).run(Number(labId), Number(userId), resolvedRole, primaryFlag, now, now, now);
+    promoteMedicalDirectorToAdmin(sqlite, Number(labId)); // the lab's medical director is an admin (2026-10-23)
     const membership = sqlite.prepare(
       "SELECT * FROM lab_members WHERE lab_id = ? AND user_id = ?"
     ).get(Number(labId), Number(userId));
@@ -2961,9 +2963,32 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       console.error("[admin/set-lab-medical-director] update failed:", err.message);
       return res.status(500).json({ error: err.message || "Failed to set medical director" });
     }
+    const promoted = promoteMedicalDirectorToAdmin(sqlite, Number(labId)); // the medical director is an admin (2026-10-23)
     const after = sqlite.prepare("SELECT id, medical_director_email, medical_director_name FROM labs WHERE id = ?").get(Number(labId));
-    console.log(`[admin/set-lab-medical-director] lab_id=${labId}: ${before.medical_director_email ?? "(none)"} -> ${nextEmail ?? "(cleared)"}`);
-    res.json({ ok: true, before, after });
+    console.log(`[admin/set-lab-medical-director] lab_id=${labId}: ${before.medical_director_email ?? "(none)"} -> ${nextEmail ?? "(cleared)"} promoted=${JSON.stringify(promoted)}`);
+    res.json({ ok: true, before, after, promoted });
+  });
+
+  // Admin: one-time correction (2026-10-23). Raise every lab's designated medical director to admin where they are an
+  // active member below admin, and mark pending invitations for them as admin invitations. Dry run unless dryRun is
+  // exactly false. Owners are never touched; nobody is demoted (server/medicalDirectorRole.ts).
+  app.post("/api/admin/promote-medical-directors", (req, res) => {
+    const secret = (req.headers["x-admin-secret"] || req.body?.secret) as string | undefined;
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const dryRun = req.body?.dryRun !== false;
+    const sqlite = (db as any).$client;
+    const labs = sqlite.prepare(
+      "SELECT id, lab_name FROM labs WHERE medical_director_email IS NOT NULL AND TRIM(medical_director_email) != '' ORDER BY id"
+    ).all() as { id: number; lab_name: string }[];
+    const changes: any[] = [];
+    for (const lab of labs) {
+      const preview = medicalDirectorPromotionPreview(sqlite, lab.id);
+      if (preview.members.length === 0 && preview.invites === 0) continue;
+      const applied = dryRun ? null : promoteMedicalDirectorToAdmin(sqlite, lab.id);
+      changes.push({ labId: lab.id, labName: lab.lab_name, members: preview.members, pendingInvites: preview.invites, applied });
+    }
+    console.log(`[admin/promote-medical-directors] dryRun=${dryRun} labsWithMd=${labs.length} labsChanged=${changes.length}`);
+    res.json({ ok: true, dryRun, labsWithMedicalDirector: labs.length, changes });
   });
 
   // Admin: deactivate all user_seats rows where seat_user_id = ?. Used to
@@ -3565,6 +3590,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       console.error("[admin/create-lab-invite] DB insert failed:", err.message);
       return res.status(500).json({ error: err.message || "Failed to create invite" });
     }
+    promoteMedicalDirectorToAdmin(sqlite, Number(labId)); // the lab's medical director is an admin (2026-10-23)
     const seat = sqlite.prepare(
       "SELECT id, owner_user_id, seat_email, seat_user_id, status, lab_id, invite_token, permissions, invited_at FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND lab_id = ?"
     ).get(labOwnerId, normalizedEmail, Number(labId));
@@ -6790,6 +6816,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
               `INSERT INTO lab_members (lab_id, user_id, role, permissions_json, status, is_primary_lab, accepted_at, created_at, updated_at)
                VALUES (?, ?, ?, '{}', 'active', 0, ?, ?, ?)`
             ).run(targetLabId, user.id, grantedRole, nowIso, nowIso, nowIso);
+            // The lab's medical director is an admin (2026-10-23): covers an MD who signs up from any invite.
+            if (!isStaffPortal) promoteMedicalDirectorToAdmin((db as any).$client, targetLabId);
             const newMembership = (db as any).$client.prepare(
               "SELECT * FROM lab_members WHERE lab_id = ? AND user_id = ?"
             ).get(targetLabId, user.id);
@@ -8899,6 +8927,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           try { sqlite.prepare("UPDATE users SET default_lab_id = ? WHERE id = ?").run(def, targetUserId); } catch {}
         });
         tx();
+        for (const lid of wanted) promoteMedicalDirectorToAdmin(sqlite, lid); // the medical director is an admin (2026-10-23)
 
         try {
           const defName = locations.find((l) => l.id === def)?.lab_name || `lab ${def}`;
@@ -10628,6 +10657,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     } catch (err: any) {
       console.error("[labs/:labId/medical-director] audit write failed:", err.message);
     }
+    promoteMedicalDirectorToAdmin(sqlite, req.scope.labId); // the medical director is an admin (2026-10-23)
     res.json({ ok: true, medicalDirector: email ? { email, name } : null });
   });
 
@@ -10852,6 +10882,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       console.error("[labs/:labId/members POST] DB insert failed:", err.message);
       return res.status(500).json({ error: err.message || "Failed to invite member" });
     }
+    // The lab's medical director is an admin (2026-10-23, Michael): an MD invite becomes an admin invite, and an MD
+    // who already has an account joins as admin.
+    promoteMedicalDirectorToAdmin(sqlite, req.scope.labId);
     if (seatUserId) {
       const newMembership = sqlite.prepare(
         "SELECT * FROM lab_members WHERE lab_id = ? AND user_id = ? ORDER BY id DESC LIMIT 1"
@@ -31136,6 +31169,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
             `INSERT INTO lab_members (lab_id, user_id, role, permissions_json, status, is_primary_lab, accepted_at, created_at, updated_at)
              VALUES (?, ?, 'staff', ?, 'active', 0, ?, ?, ?)`
           ).run(inviterPrimary.lab_id, seatUserId, permJson, now, now, now);
+          promoteMedicalDirectorToAdmin((db as any).$client, inviterPrimary.lab_id); // the medical director is an admin (2026-10-23)
           const newMembership = (db as any).$client.prepare(
             "SELECT * FROM lab_members WHERE lab_id = ? AND user_id = ?"
           ).get(inviterPrimary.lab_id, seatUserId);
