@@ -105,6 +105,8 @@ def parse_fields(body: str) -> dict:
         start = m.end()
         end = matches[i + 1].start() if i + 1 < len(matches) else len(body)
         value = (m.group(2) + "\n" + body[start:end]).strip()
+        # The last field of an entry can run into the "---" rule that separates entries; drop it.
+        value = re.sub(r"\n\s*-{3,}\s*$", "", value).strip()
         # Collapse any leftover **bold** wrappers in value for cleanliness.
         out[label] = value
     return out
