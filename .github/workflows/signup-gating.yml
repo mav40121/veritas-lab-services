@@ -64,6 +64,12 @@ jobs:
         # else; used codes fail; reset links, new accounts in a requiring lab and Veritas support
         # accounts all land on the second step; lab owner switch and resets.
         run: npm run test:two-factor
+      - name: Run system security settings integration test
+        # System security settings (server/securityPolicy.ts; Michael Q27 = 1): idle sign-out, password
+        # expiry, history, lockout, inactive accounts and the symbol rule each bite inside the owner's
+        # system and stay off outside it; owners unlock and turn accounts back on; every password write
+        # goes through setUserPassword.
+        run: npm run test:security-settings
       - name: Run stale lab-owner row integration test
         # A leftover lab_members 'owner' row on someone who is not labs.owner_user_id gave a second
         # owner (San Carlos lab 2, 2026-10-15). repair-lab-admins demotes it to admin and never touches

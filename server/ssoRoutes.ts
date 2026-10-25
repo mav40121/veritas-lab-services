@@ -10,6 +10,7 @@
 import { ssoConfigForEmail, ssoConfigById, discover, newSignIn, saveSignInState, takeSignInState, authorizeUrl,
   exchangeCode, verifyIdToken, emailFromClaims, newHandoff, takeHandoff, parseDomains, domainOf, entraIssuer,
   normalizeDomains, sealClientSecret, SsoTokenError } from "./sso";
+import { effectivePolicy, isInactive } from "./securityPolicy";
 
 type SignInBuilder = (req: any, user: any, mfaMethod: string | null) => any;
 
@@ -80,6 +81,8 @@ export function registerSsoRoutes(app: any, deps: {
     if (!user) return fail(res, "no_account", email);
     const u = sqlite.prepare("SELECT COALESCE(vls_support, 0) AS vls FROM users WHERE id = ?").get(user.id) as any;
     if (Number(u?.vls) === 1) return fail(res, "support_account", email);
+    // System security settings: an account turned off for inactivity stays off until an owner turns it back on.
+    if (isInactive(sqlite, user.id, effectivePolicy(sqlite, user.id))) return fail(res, "account_inactive", email);
     logAudit({ userId: user.id, module: "account", action: "create", entityType: "session", entityLabel: `${email} (single sign-on: ${cfg.name})`, ipAddress: req.ip });
     res.redirect(302, `/login?sso=${encodeURIComponent(newHandoff(sqlite, user.id, cfg.id))}`);
   });

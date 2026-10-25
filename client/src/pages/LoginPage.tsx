@@ -63,7 +63,13 @@ const SSO_ERRORS: Record<string, string> = {
   domain_not_allowed: "That account isn't set up for single sign-on with VeritaAssure.",
   no_account: "There's no VeritaAssure account for that email yet. Ask your lab's VeritaAssure admin to invite you.",
   support_account: "Veritas support accounts sign in with their own password and two-factor code.",
+  account_inactive: "This account was turned off because it hadn't been used for a while. Ask your lab owner to turn it back on.",
 };
+
+/** The server's message from an apiRequest error ("423: {...}"), when there is one. */
+function serverError(err: any): { error?: string; code?: string } {
+  try { return JSON.parse(String(err?.message || "").replace(/^\d+:\s*/, "")); } catch { return {}; }
+}
 
 export default function LoginPage() {
   const labRoute = useLabRoute();
@@ -124,6 +130,16 @@ export default function LoginPage() {
   const [mfaEmail, setMfaEmail] = useState("");
   // Single sign-on (server/ssoRoutes.ts): a sign-in returning from the organization's login, or why it failed.
   const [ssoError, setSsoError] = useState<string | null>(null);
+  // System security settings (server/securityPolicy.ts): an expired password is changed here before
+  // sign-in finishes; a lockout, a turned-off account or an idle sign-out is explained in plain words.
+  const [expiredStep, setExpiredStep] = useState<any>(null);
+  const [notice, setNotice] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    const q = new URLSearchParams(window.location.search);
+    if (q.get("reason") !== "idle") return null;
+    const m = Number(q.get("minutes")) || 0;
+    return m ? `You were signed out after ${m} minutes without activity. Sign in again to continue.` : "You were signed out after a period without activity. Sign in again to continue.";
+  });
 
   // Debounced hospital search
   useEffect(() => {
@@ -223,6 +239,7 @@ export default function LoginPage() {
       const res = await apiRequest("POST", "/api/auth/login", { ...loginForm, device_token: rememberedDeviceToken(loginForm.email) });
       const data = await res.json();
       if (!res.ok) { toast({ title: data.error || "Login failed", variant: "destructive" }); return; }
+      setNotice(null);
       finishSignIn(data, loginForm.email);
     } catch (err: any) {
       // A domain that requires single sign-on: go to the organization's sign-in instead.
@@ -230,7 +247,9 @@ export default function LoginPage() {
         window.location.assign(`/api/auth/sso/start?email=${encodeURIComponent(loginForm.email.trim())}`);
         return;
       }
-      toast({ title: "Login failed", variant: "destructive" });
+      const se = serverError(err);
+      if (se.code === "ACCOUNT_LOCKED" || se.code === "ACCOUNT_INACTIVE") { setNotice(se.error || null); return; }
+      toast({ title: se.error || "Login failed", variant: "destructive" });
     }
     finally { setLoading(false); }
   }
@@ -238,6 +257,11 @@ export default function LoginPage() {
   // After the password (and the two-factor step, when it applies): the two-factor step, the
   // other-device prompt, or the signed-in session.
   function finishSignIn(data: any, email: string) {
+    if (data.password_expired) {
+      setExpiredStep({ ...data, email });
+      return;
+    }
+    setExpiredStep(null);
     if (data.mfa_required || data.mfa_setup_required) {
       setMfaEmail(email);
       setMfaStep(data);
@@ -368,7 +392,9 @@ export default function LoginPage() {
         </div>
         <Card>
           <CardContent className="pt-5">
-            {mfaStep ? (
+            {expiredStep ? (
+              <PasswordExpiredStep step={expiredStep} onDone={(r) => finishSignIn(r, expiredStep.email)} onCancel={() => setExpiredStep(null)} />
+            ) : mfaStep ? (
               mfaStep.mfa_setup_required ? (
                 <TwoFactorSetup
                   mfaToken={mfaStep.mfa_token}
@@ -432,6 +458,9 @@ export default function LoginPage() {
                         </Button>
                         <p className="text-center text-[11px] text-muted-foreground">Single sign-on, for hospitals that set it up with us. Enter your work email above first.</p>
                       </>
+                    )}
+                    {notice && (
+                      <p role="alert" data-testid="login-notice" className="rounded-md border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">{notice}</p>
                     )}
                     {ssoError && (
                       <p role="alert" data-testid="sso-error" className="rounded-md border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">{ssoError}</p>
@@ -694,5 +723,44 @@ export default function LoginPage() {
         {!onStock && <p className="text-xs text-center text-muted-foreground mt-4">You can also run a study as a guest without an account.</p>}
       </div>
     </div>
+  );
+}
+
+// System security settings: the owner's password expiry. The person sets a new password here (the rule,
+// the organization's symbol rule and password history are checked on the server), then sign-in carries on.
+function PasswordExpiredStep({ step, onDone, onCancel }: { step: any; onDone: (r: any) => void; onCancel: () => void }) {
+  const [pw, setPw] = useState("");
+  const [pw2, setPw2] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setErr(null);
+    const problem = passwordProblem(pw) || (step.require_symbol && !/[^A-Za-z0-9]/.test(pw) ? "Password must include a symbol (for example ! # $ or %)." : null);
+    if (problem) { setErr(problem); return; }
+    if (pw !== pw2) { setErr("The two passwords don't match."); return; }
+    setBusy(true);
+    try {
+      const res = await apiRequest("POST", "/api/auth/password-expired", { token: step.expired_token, newPassword: pw });
+      onDone(await res.json());
+    } catch (e2: any) {
+      setErr(serverError(e2).error || "That didn't work. Sign in again.");
+    } finally { setBusy(false); }
+  }
+  return (
+    <form onSubmit={submit} className="space-y-4" data-testid="password-expired-step">
+      <div>
+        <p className="font-medium text-sm">Your password has expired</p>
+        <p className="text-xs text-muted-foreground mt-1">
+          Your organization requires a new password every {step.expiry_days} days. Choose a new one to finish signing in.
+        </p>
+      </div>
+      <div className="space-y-1.5"><Label htmlFor="expired-new">New password</Label><Input id="expired-new" type="password" autoComplete="new-password" value={pw} onChange={(e) => setPw(e.target.value)} required /></div>
+      <div className="space-y-1.5"><Label htmlFor="expired-confirm">Confirm new password</Label><Input id="expired-confirm" type="password" autoComplete="new-password" value={pw2} onChange={(e) => setPw2(e.target.value)} required /></div>
+      <p className="text-xs text-muted-foreground">{PASSWORD_RULE_TEXT}{step.require_symbol ? " Your organization also requires a symbol." : ""}</p>
+      {err && <p role="alert" className="text-xs text-red-600">{err}</p>}
+      <Button type="submit" disabled={busy || !pw || !pw2} className="w-full">{busy ? "Saving..." : "Set new password and sign in"}</Button>
+      <Button type="button" variant="outline" className="w-full" onClick={onCancel}>Cancel</Button>
+    </form>
   );
 }

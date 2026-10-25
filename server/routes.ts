@@ -61,6 +61,11 @@ import { registerTwoFactorRoutes, twoFactorLoginGate, setupResponse } from "./tw
 import { registerSsoRoutes } from "./ssoRoutes";
 import { ssoConfigForEmail } from "./sso";
 import { mfaRequirement, getMfa, isEnrolled, setTwoFactorEmailSender, forgetDevices } from "./twoFactor";
+import {
+  effectivePolicy, policyForLab, getOwnerSettings, passwordProblemFor, setUserPassword, recordNewPassword, passwordExpired,
+  isLocked, recordPasswordFailure, clearPasswordFailures, isInactive,
+} from "./securityPolicy";
+import { registerSecuritySettingsRoutes } from "./securitySettingsRoutes";
 import { resealAll } from "./secretRotation";
 import { labWideCorrelation, correlationPeerInstruments, describeCorrelationInstrument, rowComplexity, mapComplianceGaps } from "./labWideCorrelation";
 import { seedProfileFor, seedTeaFor, seedCalVerPoints, seedMethodCompQuant, seedMethodCompCategorical, seedStudyDate } from "./seedStudyProfiles";
@@ -878,12 +883,18 @@ function requireWriteAccess(req: any, res: any, next: any) {
 // Any employee_id in the query or body that is not that row is refused here,
 // once, for every route (policy sign, quiz attempt, inventory adjust,
 // competency sign/edit and their reads), instead of trusting the client.
+// System security settings (server/securityPolicy.ts): the reply when a session ended for inactivity.
+function idleEndedBody(minutes?: number) {
+  return { error: `You were signed out after ${minutes || "too many"} minutes without activity. Please sign in again.`, code: "SESSION_IDLE" };
+}
+
 export function staffPortalAuthMiddleware(req: any, res: any, next: any) {
   const auth = req.headers.authorization;
   if (!auth?.startsWith("Bearer ")) return res.status(401).json({ error: "Unauthorized" });
   const sqlite = (db as any).$client;
   const check = checkAuthToken(sqlite, auth.slice(7));
   if (!check.ok) {
+    if (check.reason === "idle") return res.status(401).json(idleEndedBody(check.idleMinutes));
     return check.code === "session_ended"
       ? res.status(401).json({ error: "Your session has ended. Please sign in again.", code: "SESSION_ENDED" })
       : res.status(401).json({ error: "Invalid or expired token" });
@@ -917,6 +928,7 @@ function authMiddleware(req: any, res: any, next: any) {
     // signed-in-elsewhere or password-changed session stops working at once.
     const check = checkAuthToken((db as any).$client, auth.slice(7));
     if (!check.ok) {
+      if (check.reason === "idle") return res.status(401).json(idleEndedBody(check.idleMinutes));
       return check.code === "session_ended"
         ? res.status(401).json({ error: "Your session has ended. Please sign in again.", code: "SESSION_ENDED" })
         : res.status(401).json({ error: "Invalid token" });
@@ -4324,6 +4336,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   registerExportAllRoutes(app, { sqlite: (db as any).$client, authMiddleware, httpServer });
   // Single sign-on (server/sso.ts, server/ssoRoutes.ts; Michael 2026-10-15, Q39 = 1).
   registerSsoRoutes(app, { sqlite: (db as any).$client, storage, logAudit, buildSignIn, adminSecret: ADMIN_SECRET });
+  // System security settings (server/securityPolicy.ts; Michael Q27 = 1, 2026-10-25).
+  registerSecuritySettingsRoutes(app, { sqlite: (db as any).$client, storage, authMiddleware, labScopeMiddleware, logAudit });
 
   // Content-Security-Policy violation reports (2026-10-16, Q47 = 1; server/securityHeaders.ts). Public:
   // browsers send these without credentials. Bounded: 64 KB bodies, counts only, at most 2,000 distinct
@@ -6057,8 +6071,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (!userRow) return res.status(404).json({ error: "User not found" });
     const valid = await bcrypt.compare(String(currentPassword), userRow.password_hash);
     if (!valid) return res.status(401).json({ error: "Current password is incorrect" });
-    const newHash = await bcrypt.hash(String(newPassword), 10);
-    sqlite.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(newHash, req.userId);
+    // Rule, the organization's symbol rule and password history (server/securityPolicy.ts).
+    const set = await setUserPassword(sqlite, req.userId, String(newPassword));
+    if (!set.ok) return res.status(400).json({ error: set.error, code: set.code });
     logAudit({
       userId: req.userId,
       module: "account",
@@ -6120,8 +6135,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       if (!u) return res.status(404).json({ error: "User not found" });
       uid = u.id;
     }
-    const hash = await bcrypt.hash(String(newPassword), 10);
-    sqlite.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(hash, uid);
+    const set = await setUserPassword(sqlite, Number(uid), String(newPassword));
+    if (!set.ok) return res.status(400).json({ error: set.error, code: set.code });
     // A new password ends every sign-in and every remembered computer, so the next login is clean.
     endSessions(sqlite, Number(uid), { reason: "password_reset" });
     forgetDevices(sqlite, Number(uid));
@@ -6641,7 +6656,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         if (password) {
           const bcrypt = await import('bcryptjs');
           const hash = await bcrypt.default.hash(password, 10);
-          updates.push('password_hash = ?'); params.push(hash);
+          updates.push('password_hash = ?'); params.push(hash); // security-settings-ok: dev-only route, 404 in production
         }
         if (stripeCustomerId) { updates.push('stripe_customer_id = ?'); params.push(stripeCustomerId); }
         if (stripeSubscriptionId) { updates.push('stripe_subscription_id = ?'); params.push(stripeSubscriptionId); }
@@ -6701,8 +6716,21 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (storage.getUserByEmail(email)) return res.status(409).json({ error: "Email already registered" });
     const pwProblem = passwordProblem(password);
     if (pwProblem) return res.status(400).json({ error: pwProblem, code: "PASSWORD_RULE" });
+    // System security settings: a person joining a lab whose owner requires a symbol gets that rule now.
+    {
+      const sq = (db as any).$client;
+      const pend = (req.body?.inviteToken
+        ? sq.prepare("SELECT owner_user_id, lab_id FROM user_seats WHERE invite_token = ? AND status = 'pending'").get(req.body.inviteToken)
+        : null) || sq.prepare("SELECT owner_user_id, lab_id FROM user_seats WHERE seat_email = ? AND status = 'pending'").get(email.toLowerCase());
+      if (pend) {
+        const joinPolicy = pend.lab_id ? policyForLab(sq, Number(pend.lab_id)) : getOwnerSettings(sq, Number(pend.owner_user_id));
+        const symProblem = passwordProblemFor(joinPolicy, password);
+        if (symProblem) return res.status(400).json({ error: symProblem, code: "PASSWORD_RULE" });
+      }
+    }
     const passwordHash = await bcrypt.hash(password, 10);
     const user = storage.createUser(email.toLowerCase(), passwordHash, name);
+    recordNewPassword((db as any).$client, user.id);
 
     // Resolve seat-invite FIRST so token-claim takes precedence over any
     // body.plan / body.hospital_name / body.seat_count / body.bed_count the
@@ -7046,10 +7074,35 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     }
     const user = storage.getUserByEmail(email);
     if (!user) { recordLoginFailure(rlKey); return res.status(401).json({ error: "Invalid email or password" }); }
+    // System security settings (server/securityPolicy.ts): lockout, inactivity and password expiry.
+    const loginSql = (db as any).$client;
+    const policy = effectivePolicy(loginSql, user.id);
+    if (isLocked(loginSql, user.id, policy)) {
+      return res.status(423).json({ error: "This account is locked after too many wrong passwords. Use Forgot password to set a new one, or ask your lab owner to unlock it.", code: "ACCOUNT_LOCKED" });
+    }
     const valid = await bcrypt.compare(password, user.passwordHash);
-    if (!valid) { recordLoginFailure(rlKey); return res.status(401).json({ error: "Invalid email or password" }); }
+    if (!valid) {
+      recordLoginFailure(rlKey);
+      if (recordPasswordFailure(loginSql, user.id, policy)) {
+        logAudit({ userId: user.id, module: "account", action: "update", entityType: "account.locked", entityLabel: `Locked after ${policy.lockoutAttempts} wrong passwords in a row`, ipAddress: req.ip });
+      }
+      return res.status(401).json({ error: "Invalid email or password" });
+    }
     // Verified credentials: clear the failure counter for this IP+email.
     clearLoginRate(rlKey);
+    clearPasswordFailures(loginSql, user.id);
+    if (isInactive(loginSql, user.id, policy)) {
+      logAudit({ userId: user.id, module: "account", action: "update", entityType: "account.inactive_refused", entityLabel: `Sign-in refused: no sign-in for over ${policy.inactiveDays} days`, ipAddress: req.ip });
+      return res.status(403).json({ error: `This account was turned off after ${policy.inactiveDays} days without a sign-in. Ask your lab owner to turn it back on.`, code: "ACCOUNT_INACTIVE" });
+    }
+    if (passwordExpired(loginSql, user.id, policy)) {
+      return res.json({
+        password_expired: true,
+        expired_token: issuePurposeToken(user.id, "password_expired"),
+        expiry_days: policy.passwordExpiryDays,
+        require_symbol: policy.requireSymbol,
+      });
+    }
 
     // Account audit trail: log every successful password authentication.
     // Captures even the "session conflict" path below, which still
@@ -7069,6 +7122,29 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const gate = twoFactorLoginGate((db as any).$client, user, req);
     if (gate.respond) return res.json(gate.respond);
     res.json(buildSignIn(req, user, gate.mfaMethod));
+  });
+
+  // System security settings: a password older than the owner's expiry is changed here before
+  // sign-in finishes. Opened only by the 10-minute "password_expired" step token login returned;
+  // after the change, sign-in carries on exactly as login does (two-factor step, then a session).
+  app.post("/api/auth/password-expired", async (req: any, res) => {
+    const t = verifyPurposeToken(String(req.body?.token || ""), "password_expired");
+    if (!t) return res.status(401).json({ error: "Your sign-in step expired. Sign in again.", code: "STEP_EXPIRED" });
+    const sqlite = (db as any).$client;
+    const user = storage.getUserById(t.userId);
+    if (!user) return res.status(401).json({ error: "User not found" });
+    const pw = String(req.body?.newPassword || "");
+    const current = (sqlite.prepare("SELECT password_hash FROM users WHERE id = ?").get(user.id) as any)?.password_hash || "";
+    if (pw && (await bcrypt.compare(pw, current))) return res.status(400).json({ error: "Choose a new password, not your current one.", code: "PASSWORD_REUSED" });
+    const set = await setUserPassword(sqlite, user.id, pw);
+    if (!set.ok) return res.status(400).json({ error: set.error, code: set.code });
+    logAudit({ userId: user.id, module: "account", action: "update", entityType: "password.expired_change", entityLabel: "Password changed at sign-in after it expired", ipAddress: req.ip });
+    endSessions(sqlite, user.id, { reason: "password_change" });
+    forgetDevices(sqlite, user.id);
+    const fresh = storage.getUserById(user.id);
+    const gate = twoFactorLoginGate(sqlite, fresh, req);
+    if (gate.respond) return res.json(gate.respond);
+    res.json(buildSignIn(req, fresh, gate.mfaMethod));
   });
 
   // The sign-in response once the password (and the two-factor step, when it applies) checked
@@ -19306,8 +19382,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (!row) return res.status(400).json({ error: "Invalid or expired reset link" });
     if (new Date(row.expires_at) < new Date()) return res.status(400).json({ error: "Reset link has expired. Please request a new one." });
 
-    const passwordHash = await bcrypt.hash(password, 10);
-    db.$client.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(passwordHash, row.user_id);
+    // Rule, symbol rule and history (server/securityPolicy.ts); a reset also clears a lockout.
+    const set = await setUserPassword((db as any).$client, row.user_id, String(password));
+    if (!set.ok) return res.status(400).json({ error: set.error, code: set.code });
     db.$client.prepare("UPDATE reset_tokens SET used_at = ? WHERE token = ?").run(new Date().toISOString(), token);
 
     logAudit({
@@ -19328,6 +19405,11 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // two-factor on (or whose lab requires it) signs in through the code step instead.
     if (isEnrolled(getMfa((db as any).$client, user.id)) || mfaRequirement((db as any).$client, user.id).required) {
       return res.json({ ok: true, sign_in_required: true });
+    }
+    // An account turned off for inactivity keeps its new password but is not signed in until an owner turns it back on.
+    const resetPolicy = effectivePolicy((db as any).$client, user.id);
+    if (isInactive((db as any).$client, user.id, resetPolicy)) {
+      return res.json({ ok: true, sign_in_required: true, inactive: true, message: `Your password is set, but this account was turned off after ${resetPolicy.inactiveDays} days without a sign-in. Ask your lab owner to turn it back on.` });
     }
     const { token: newToken, sessionToken: resetSessionToken } = issueSession((db as any).$client, user.id, req);
     // #84 (2026-10-08): include the seat flags login returns, so a Staff login

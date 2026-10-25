@@ -27,6 +27,7 @@
 // server/ calls jwt.verify.
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
+import { effectivePolicy, stampSignIn } from "./securityPolicy";
 
 export const SESSION_TOKEN_TTL = "30d";
 export const LEGACY_TOKEN_CUTOFF_MS = Date.UTC(2026, 9, 17, 0, 0, 0);
@@ -36,7 +37,7 @@ const TOUCH_INTERVAL_MS = 60_000;
 export type TokenKind = "session" | "legacy" | "service" | "demo";
 export type TokenCheck =
   | { ok: true; userId: number; sid: string | null; kind: TokenKind; isDemo: boolean }
-  | { ok: false; code: "invalid" | "session_ended" | "not_a_session" };
+  | { ok: false; code: "invalid" | "session_ended" | "not_a_session"; reason?: "idle"; idleMinutes?: number };
 
 function secret(): string {
   return process.env.JWT_SECRET!;
@@ -55,9 +56,20 @@ export function checkAuthToken(sqlite: any, raw: string): TokenCheck {
   if (p.isDemo === true) return { ok: true, userId, sid: null, kind: "demo", isDemo: true };
   if (typeof p.sid === "string" && p.sid) {
     const row = sqlite
-      .prepare("SELECT is_active FROM user_sessions WHERE session_token = ? AND user_id = ?")
-      .get(p.sid, userId) as { is_active: number } | undefined;
-    if (row && Number(row.is_active) === 1) return { ok: true, userId, sid: p.sid, kind: "session", isDemo: false };
+      .prepare("SELECT is_active, last_active FROM user_sessions WHERE session_token = ? AND user_id = ?")
+      .get(p.sid, userId) as { is_active: number; last_active: string | null } | undefined;
+    if (row && Number(row.is_active) === 1) {
+      // System security settings (server/securityPolicy.ts): a session idle longer than the owner's
+      // limit ends here. last_active is stamped at most once a minute (touchSession), so the limit
+      // can fire up to a minute early, never late. The browser's own idle timer usually acts first.
+      const idle = effectivePolicy(sqlite, userId).idleMinutes;
+      const last = Date.parse(row.last_active || "");
+      if (idle && Number.isFinite(last) && Date.now() - last > idle * 60_000) {
+        endSessions(sqlite, userId, { reason: "idle", onlySid: p.sid });
+        return { ok: false, code: "session_ended", reason: "idle", idleMinutes: idle };
+      }
+      return { ok: true, userId, sid: p.sid, kind: "session", isDemo: false };
+    }
     return { ok: false, code: "session_ended" };
   }
   if (p.svc === true || p.ci_sandbox === true) return { ok: true, userId, sid: null, kind: "service", isDemo: false };
@@ -91,6 +103,7 @@ export function issueSession(sqlite: any, userId: number, req: any, opts: { mfaM
       "INSERT INTO user_sessions (user_id, session_token, device_info, created_at, last_active, is_active, ip_address, mfa_method) VALUES (?, ?, ?, ?, ?, 1, ?, ?)"
     )
     .run(userId, sessionToken, req?.headers?.["user-agent"] || "Unknown", now, now, clientIp(req), opts.mfaMethod ?? null);
+  stampSignIn(sqlite, userId);
   const token = jwt.sign({ userId, sid: sessionToken }, secret(), { expiresIn: SESSION_TOKEN_TTL });
   return { token, sessionToken };
 }

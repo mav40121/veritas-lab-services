@@ -8494,6 +8494,50 @@ try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_veritaceu_profiles_lab ON veri
   addCol("users", "mfa_system_required_at", "ALTER TABLE users ADD COLUMN mfa_system_required_at TEXT");
 }
 
+// System security settings (Michael Q27 = 1, 2026-10-25; Lifepoint TRB questionnaire Q53, Q55-Q57, Q59,
+// Q65 and IPS III.1(k); server/securityPolicy.ts). One row per system owner; it covers every lab they own
+// and every lab in an organization they are billing owner of, the same reach as the two-factor system
+// switch. Every setting is off (NULL or 0) until the owner turns it on. password_history keeps the hashes
+// of past passwords so reuse can be refused; the users columns carry the per-person state the rules read.
+// CREATE + ALTER blocks together per the NEW DB TABLE RULE.
+{
+  const addCol = (table: string, col: string, ddl: string) => {
+    const cols = (sqlite.prepare(`PRAGMA table_info(${table})`).all() as any[]).map((c: any) => c.name);
+    if (!cols.includes(col)) { try { sqlite.exec(ddl); } catch {} }
+  };
+  try {
+    sqlite.exec(`CREATE TABLE IF NOT EXISTS system_security_settings (
+      owner_user_id INTEGER PRIMARY KEY,
+      idle_minutes INTEGER,
+      password_expiry_days INTEGER,
+      password_history INTEGER,
+      lockout_attempts INTEGER,
+      inactive_days INTEGER,
+      require_symbol INTEGER NOT NULL DEFAULT 0,
+      updated_at TEXT,
+      updated_by_user_id INTEGER
+    )`);
+  } catch {}
+  for (const [c, d] of [["idle_minutes", "INTEGER"], ["password_expiry_days", "INTEGER"], ["password_history", "INTEGER"], ["lockout_attempts", "INTEGER"], ["inactive_days", "INTEGER"], ["require_symbol", "INTEGER NOT NULL DEFAULT 0"], ["updated_at", "TEXT"], ["updated_by_user_id", "INTEGER"]]) {
+    addCol("system_security_settings", c, `ALTER TABLE system_security_settings ADD COLUMN ${c} ${d}`);
+  }
+  try {
+    sqlite.exec(`CREATE TABLE IF NOT EXISTS password_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      password_hash TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    )`);
+  } catch {}
+  addCol("password_history", "created_at", "ALTER TABLE password_history ADD COLUMN created_at TEXT");
+  try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_password_history_user ON password_history(user_id, id)`); } catch {}
+  addCol("users", "password_changed_at", "ALTER TABLE users ADD COLUMN password_changed_at TEXT");
+  addCol("users", "failed_login_count", "ALTER TABLE users ADD COLUMN failed_login_count INTEGER NOT NULL DEFAULT 0");
+  addCol("users", "locked_at", "ALTER TABLE users ADD COLUMN locked_at TEXT");
+  addCol("users", "last_sign_in_at", "ALTER TABLE users ADD COLUMN last_sign_in_at TEXT");
+  addCol("users", "reenabled_at", "ALTER TABLE users ADD COLUMN reenabled_at TEXT");
+}
+
 // Single sign-on (Michael 2026-10-15, Q39 = 1; server/sso.ts, server/ssoRoutes.ts). OpenID Connect,
 // Microsoft Entra first. sso_configs: one per customer identity provider, routed by email domain,
 // optional or required; a client secret (when the provider uses one) is sealed like the two-factor

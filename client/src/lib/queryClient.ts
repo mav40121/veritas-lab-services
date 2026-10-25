@@ -68,9 +68,12 @@ export const getQueryFn: <T>(options: {
       // must NOT redirect a prospect to the login page (that sent newsletter
       // recipients holding old trial tokens from a public article to /login,
       // 2026-08-24). Render the public page logged out instead.
+      // A session the server ended for inactivity (system security settings) says so on the sign-in page.
+      let idle: number | null = null;
+      try { const b = await res.clone().json(); if (b?.code === "SESSION_IDLE") idle = Number(String(b.error || "").match(/after (\d+) minutes/)?.[1]) || 0; } catch {}
       clearAuth();
       if (typeof window !== "undefined" && !isPublicMarketingPath(window.location.pathname)) {
-        window.location.href = "/login";
+        window.location.href = idle != null ? `/login?reason=idle${idle ? `&minutes=${idle}` : ""}` : "/login";
       }
       return null;
     }

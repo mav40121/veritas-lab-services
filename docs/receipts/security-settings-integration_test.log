@@ -1,0 +1,71 @@
+[db] Using database at: C:/Users/veril/projects/vls-2fa1/.tmp-security-settings.db
+[seed] VeritaStaff demo data seeded for Riverside Regional
+[user_seats lab_id retro-populate] failed: no such table: lab_members
+[seed] VeritaComp default VITROS 5600 quiz seeded
+[migration] Phase 3.3: rebuilt veritapolicy_master_status with UNIQUE(lab_id, policy_id)
+[migration] Phase 3.3: rebuilt veritapolicy_settings with UNIQUE(lab_id)
+[migration] Phase 3.3b: rebuilt veritapolicy_requirement_status with UNIQUE(lab_id, requirement_id)
+[migration] Phase 3.10 (findings) skipped (table not yet created on fresh DB): no such table: findings
+[migration] Phase 3.11 (inventory_items) skipped (table not yet created on fresh DB): no such table: inventory_items
+[migration] Inventory barcode backfill skipped (table or column not yet ready): no such table: inventory_items
+[migration] veritacheck_verifications: backfilled lab_id on 0 row(s)
+[migration] productivity_months rebuilt for lab-scoping (0 rows preserved)
+[migration] Wave F PR F2 staff_employees.title_code backfilled on 3 row(s)
+[routes] Route registration checkpoint: studies+auth routes OK, registering PDF and remaining routes...
+[routes] All routes registered successfully (176 routes)
+[register] Resend not configured; admin notification skipped for user 1
+[register] Resend not configured; admin notification skipped for user 2
+[register] Resend not configured; admin notification skipped for user 3
+[register] Resend not configured; admin notification skipped for user 4
+[admin/provision-demo-lab] created lab_id=1 (IT Security Lab) owner=it-sec-owner-1792937947615@example.com plan=hospital parent=none
+[admin/provision-demo-lab] created lab_id=2 (IT Other Lab) owner=it-sec-other-owner-1792937947836@example.com plan=hospital parent=none
+[admin/create-lab-invite] lab_id=1 (IT Security Lab) email=it-sec-member-1792937947750@example.com token=[redacted] status=active
+PASS  0. test labs provisioned  :: [1,2]
+PASS  1a. a member who owns no lab cannot manage settings
+PASS  1b. a member's save is refused  :: status=403
+PASS  1c. the owner can manage; everything starts off
+PASS  1d. saving needs the current password
+PASS  1e. an out-of-range value is refused
+PASS  1f. the owner saves all six
+PASS  1g. the change is in the audit trail  :: Security settings for 1 lab: sign out after idle (minutes): off -> 15; password expiry (days): off -> 180; password history (generations): off -> 4; lock after wrong passwords: off -> 3; turn off unused accounts (days): off -> 90; require a symbol: off -> on
+PASS  1h. the member gets the owner's settings  :: {"idleMinutes":15,"passwordExpiryDays":180,"passwordHistory":4,"lockoutAttempts":3,"inactiveDays":90,"requireSymbol":true}
+PASS  1i. someone outside the system gets none  :: {"idleMinutes":null,"passwordExpiryDays":null,"passwordHistory":null,"lockoutAttempts":null,"inactiveDays":null,"requireSymbol":false}
+PASS  2a. member: a password without a symbol is refused  :: {"error":"Password must include a symbol (for example ! # $ or %).","code":"PASSWORD_RULE"}
+PASS  2b. outsider: the same password is accepted  :: {"ok":true,"signedOutOthers":0}
+PASS  2c. member: a password with a symbol is accepted
+PASS  2d. member: going back to the previous password is refused (history)  :: {"error":"Choose a password you haven't used recently. Your organization blocks your last 4 passwords.","code":"PASSWORD_REUSED"}
+PASS  2e. the change is stamped
+PASS  3a. after 3 wrong passwords the right one is refused: locked  :: status=423
+PASS  3b. outsider: 3 wrong passwords do not lock  :: status=200
+PASS  3c. the owner sees the member as locked  :: {"labId":1,"people":[{"userId":2,"name":"IT member","locked":true,"inactive":false}]}
+PASS  3d. the lock is in the audit trail
+PASS  3e. the owner unlocks the member
+PASS  3f. the member signs in after the unlock  :: status=200
+PASS  3g. Forgot password sets a new password and clears the lock  :: status=200 {"ok":true,"token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjIsInNpZCI6ImUyNjdkYjBlLTgxZDItNDhlMS1hNjc5LTFiMjU
+PASS  3h. the owner cannot touch someone outside the lab
+PASS  3i. a staff member cannot use the owner's button  :: status=403
+PASS  4a. an expired password gets the change step, not a session  :: ["password_expired","expired_token","expiry_days","require_symbol"]
+PASS  4b. the step token opens no other route
+PASS  4c. the current password is refused as the new one
+PASS  4d. a new password finishes sign-in with a session  :: status=200 {"token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjIsInNpZCI6IjgwMTI2ODc5LTc1NDEtNDFkYy05NzMzLTA5OTc0MGJkYTQ5Y
+PASS  4e. that session works
+PASS  4f. outsider: an old password still signs straight in
+PASS  5a. no sign-in for 100 days: sign-in refused  :: status=403
+PASS  5b. the owner sees the member as turned off
+PASS  5c. the owner turns the member back on
+PASS  5d. the member signs in again  :: status=200
+PASS  5e. a Veritas support account is never turned off
+PASS  6a. a fresh session works
+PASS  6b. idle 20 minutes against a 15-minute limit: refused with SESSION_IDLE  :: {"error":"You were signed out after 15 minutes without activity. Please sign in again.","code":"SESSION_IDLE"}
+PASS  6c. the session row is ended as idle  :: {"is_active":0,"ended_reason":"idle"}
+PASS  6d. outsider: the same idle time is fine
+[admin/create-lab-invite] lab_id=2 (IT Other Lab) email=it-sec-member-1792937947750@example.com token=[redacted] status=active
+PASS  7a. a person in two systems gets the strictest of each  :: {"idleMinutes":15,"passwordExpiryDays":180,"passwordHistory":4,"lockoutAttempts":3,"inactiveDays":90,"requireSymbol":true,"ownerIds":[1,3]}
+PASS  7b. the owner turns everything off; only the other system's rules remain  :: {"idleMinutes":60,"passwordExpiryDays":null,"passwordHistory":null,"lockoutAttempts":10,"inactiveDays":null,"requireSymbol":false,"ownerIds":[1,3]}
+PASS  8a. joining a symbol-requiring lab: no symbol, refused  :: {"error":"Password must include a symbol (for example ! # $ or %).","code":"PASSWORD_RULE"}
+[register] Resend not configured; admin notification skipped for user 5
+PASS  8b. with a symbol, accepted  :: status=200
+PASS  8c. the first password is recorded for history and expiry
+PASS  9. no password write bypasses the security settings
+
+ALL PASS
