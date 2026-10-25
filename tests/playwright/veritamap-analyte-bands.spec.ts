@@ -18,7 +18,7 @@
 //
 // Env: PW_BASE (default production www), PW_TOKEN (JWT), PW_MAP_BANDS=1 to run.
 
-import { test, expect, Page } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import { injectAuth } from "./_auth";
 
 const BASE = process.env.PW_BASE || "https://www.veritaslabservices.com";

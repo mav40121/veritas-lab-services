@@ -3,9 +3,9 @@
 # never time out waiting on Ubuntu mirror downloads.
 
 # Base image from AWS's public mirror of Docker Official Images (same image as
-# docker.io/library/node:20-slim). 2026-10-09: two Railway builds of #1571 failed
+# docker.io/library/node:22-slim; Node 20 left support April 2026). 2026-10-09: two Railway builds of #1571 failed
 # with "429 Too Many Requests" pulling node:20-slim from Docker Hub.
-FROM public.ecr.aws/docker/library/node:20-slim AS base
+FROM public.ecr.aws/docker/library/node:22-slim AS base
 
 # Install Chromium dependencies (required by Puppeteer)
 # This layer is cached and only re-runs if the Dockerfile changes.

@@ -1,4 +1,4 @@
-import { Page } from "@playwright/test";
+import { type Page } from "@playwright/test";
 
 // Browser QA (2026-06-13) found that injecting only `veritas_token` is not
 // enough to exercise authenticated UI: the client's AuthContext reads the

@@ -41,6 +41,7 @@ import {
   policyNarrative,
   type CensoringPolicy,
 } from "./censoring";
+import { setPdfContent } from "./pdfContent";
 
 // Build a "N censored (policy: X)" note for the appendix, or "" when
 // no censored points were seen. Shared by every renderer branch.
@@ -1720,7 +1721,7 @@ export function registerVeritaCheckVerificationRoutes(
       const puppeteer = await import("puppeteer");
       const browser = await puppeteer.default.launch({ args: ["--no-sandbox", "--disable-setuid-sandbox"] });
       const page = await browser.newPage();
-      await page.setContent(html, { waitUntil: "networkidle0" });
+      await setPdfContent(page, html);
       const pdf = await page.pdf({ format: "Letter", printBackground: true, margin: { top: "0.5in", bottom: "0.5in", left: "0.5in", right: "0.5in" } });
       await browser.close();
       const filename = `VeritaCheck_Verification_${v.instrument_name.replace(/[^a-zA-Z0-9]/g, "_")}_${new Date().toISOString().split("T")[0]}.pdf`;
@@ -1921,7 +1922,7 @@ export function registerVeritaCheckVerificationRoutes(
         const puppeteer = await import("puppeteer");
         const browser = await puppeteer.default.launch({ args: ["--no-sandbox", "--disable-setuid-sandbox"] });
         const page = await browser.newPage();
-        await page.setContent(html, { waitUntil: "networkidle0" });
+        await setPdfContent(page, html);
         const pdf = await page.pdf({ format: "Letter", printBackground: true, margin: { top: "0.5in", bottom: "0.5in", left: "0.5in", right: "0.5in" } });
         await browser.close();
         const safeName = instRow.instrument_name.replace(/[^a-zA-Z0-9]/g, "_");

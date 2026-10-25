@@ -36,7 +36,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
 
       - name: Install dependencies
@@ -50,6 +50,11 @@ jobs:
 
       - name: Ensure Puppeteer Chrome is present
         run: npx puppeteer browsers install chrome
+
+      # server/pdfContent.ts: every PDF waits for load + web fonts + images (Puppeteer 25 dropped networkidle0 for
+      # setContent); a broken image must not hold a PDF and a hung resource stops at the timeout.
+      - name: PDF content wait
+        run: npx tsx scripts/verify-pdf-content-wait.ts
 
       - name: Signature-on-page-1 guard
         run: npx tsx scripts/verify-methodcomp-signature-page1.ts

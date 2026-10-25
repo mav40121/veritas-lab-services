@@ -15,7 +15,7 @@
 //   Screenshots land in qa-screens/sancarlos/. Re-run is safe (read-only; no
 //   transfer is submitted).
 
-import { test, expect, APIRequestContext } from "@playwright/test";
+import { test, expect, type APIRequestContext } from "@playwright/test";
 import { injectAuth } from "./_auth";
 import * as fs from "fs";
 import * as path from "path";

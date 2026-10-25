@@ -12,7 +12,7 @@
 //     npx playwright test veritastock-member-locations
 // Without PW_TOKEN the spec skips cleanly (CI compile-only gate still typechecks it).
 
-import { test, expect, APIRequestContext } from "@playwright/test";
+import { test, expect, type APIRequestContext } from "@playwright/test";
 import { injectAuth } from "./_auth";
 
 const BASE = process.env.PW_BASE || "https://www.veritastock.com";

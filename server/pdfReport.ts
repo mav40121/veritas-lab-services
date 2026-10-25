@@ -22,6 +22,7 @@ import {
 } from "./licenseStamp";
 import { hasCanonicalTea, cfrSectionForTestName } from "./backfillAbsoluteFloor";
 import { evaluateManualDiff } from "./rumke";
+import { setPdfContent } from "./pdfContent";
 
 // HTML-escape user-provided strings before they land in the rendered
 // PDF body. Used for customLabel and any other field that originates
@@ -4363,7 +4364,7 @@ export async function generateCumsumPDF(tracker: any, entries: any[], currentSpe
   const page = await browser.newPage();
   try {
     const stamped = applyLicenseToPuppeteer(html, FOOTER_TEMPLATE, licenseCtx);
-    await page.setContent(stamped.html, { waitUntil: "networkidle0" });
+    await setPdfContent(page, stamped.html);
     const pdfBuffer = await page.pdf({
       format: "Letter",
       printBackground: true,
@@ -4522,7 +4523,7 @@ export async function generateIqcpPDF(
   const page = await browser.newPage();
   try {
     const stamped = applyLicenseToPuppeteer(html, footer, licenseCtx);
-    await page.setContent(stamped.html, { waitUntil: "networkidle0" });
+    await setPdfContent(page, stamped.html);
     const pdfBuffer = await page.pdf({
       format: "Letter",
       printBackground: true,
@@ -4639,7 +4640,7 @@ export async function generateLetterOfDelegationPDF(
   const page = await browser.newPage();
   try {
     const stamped = applyLicenseToPuppeteer(html, footer, licenseCtx);
-    await page.setContent(stamped.html, { waitUntil: "networkidle0" });
+    await setPdfContent(page, stamped.html);
     const pdfBuffer = await page.pdf({
       format: "Letter",
       printBackground: true,
@@ -4709,7 +4710,7 @@ export async function generatePDFBuffer(study: Study, results: any, cliaNumber?:
   const page = await browser.newPage();
   try {
     const stamped = applyLicenseToPuppeteer(html, FOOTER_TEMPLATE, licenseCtx);
-    await page.setContent(stamped.html, { waitUntil: "networkidle0" });
+    await setPdfContent(page, stamped.html);
     const pdfBuffer = await page.pdf({
       format: "Letter",
       printBackground: true,
@@ -5075,7 +5076,7 @@ export async function generateVeritaScanPDF(data: VeritaScanPDFData, type: "exec
   const page = await browser.newPage();
   try {
     const stamped = applyLicenseToPuppeteer(html, VERITASCAN_FOOTER_TEMPLATE, licenseCtx);
-    await page.setContent(stamped.html, { waitUntil: "networkidle0" });
+    await setPdfContent(page, stamped.html);
     const pdfBuffer = await page.pdf({
       format: "Letter",
       printBackground: true,
@@ -5872,7 +5873,7 @@ export async function generateCompetencyPDF(input: CompetencyPDFInput, licenseCt
   const page = await browser.newPage();
   try {
     const stamped = applyLicenseToPuppeteer(html, COMPETENCY_FOOTER, licenseCtx);
-    await page.setContent(stamped.html, { waitUntil: "networkidle0" });
+    await setPdfContent(page, stamped.html);
     const pdfBuffer = await page.pdf({
       format: "Letter",
       printBackground: true,
@@ -6088,7 +6089,7 @@ export async function generateEmployeeCompetencyRecordPDF(input: EmployeeCompete
   const page = await browser.newPage();
   try {
     const stamped = applyLicenseToPuppeteer(html, COMPETENCY_FOOTER, licenseCtx);
-    await page.setContent(stamped.html, { waitUntil: "networkidle0" });
+    await setPdfContent(page, stamped.html);
     const pdfBuffer = await page.pdf({
       format: "Letter",
       printBackground: true,
@@ -6675,7 +6676,7 @@ export async function generateVeritaPTPDF(data: VeritaPTPDFData, licenseCtx?: Pa
   const page = await browser.newPage();
   try {
     const stamped = applyLicenseToPuppeteer(html, VERITAPT_FOOTER_TEMPLATE, licenseCtx);
-    await page.setContent(stamped.html, { waitUntil: "networkidle0" });
+    await setPdfContent(page, stamped.html);
     const pdfBuffer = await page.pdf({
       format: "Letter",
       printBackground: true,
@@ -7140,7 +7141,7 @@ export async function generateVeritaPolicyPDF(input: VeritaPolicyPDFInput, licen
   const page = await browser.newPage();
   try {
     const stamped = applyLicenseToPuppeteer(html, VERITAPOLICY_FOOTER_TEMPLATE, licenseCtx);
-    await page.setContent(stamped.html, { waitUntil: "networkidle0" });
+    await setPdfContent(page, stamped.html);
     const pdfBuffer = await page.pdf({
       format: "Letter",
       printBackground: true,
@@ -7353,7 +7354,7 @@ export async function generateCms2567PDF(input: Cms2567Input, licenseCtx?: Parti
   const page = await browser.newPage();
   try {
     const stamped = applyLicenseToPuppeteer(html, VERITARESPONSE_FOOTER_TEMPLATE, licenseCtx);
-    await page.setContent(stamped.html, { waitUntil: "networkidle0" });
+    await setPdfContent(page, stamped.html);
     const pdfBuffer = await page.pdf({
       format: "Letter",
       printBackground: true,
@@ -7540,7 +7541,7 @@ export async function generateCapResponsePDF(input: Cms2567Input, licenseCtx?: P
   const page = await browser.newPage();
   try {
     const stamped = applyLicenseToPuppeteer(html, VERITARESPONSE_FOOTER_TEMPLATE, licenseCtx);
-    await page.setContent(stamped.html, { waitUntil: "networkidle0" });
+    await setPdfContent(page, stamped.html);
     const pdfBuffer = await page.pdf({
       format: "Letter",
       printBackground: true,
@@ -7732,7 +7733,7 @@ export async function generateTjcEscPDF(input: Cms2567Input, licenseCtx?: Partia
   const page = await browser.newPage();
   try {
     const stamped = applyLicenseToPuppeteer(html, VERITARESPONSE_FOOTER_TEMPLATE, licenseCtx);
-    await page.setContent(stamped.html, { waitUntil: "networkidle0" });
+    await setPdfContent(page, stamped.html);
     const pdfBuffer = await page.pdf({
       format: "Letter",
       printBackground: true,
@@ -7918,7 +7919,7 @@ export async function generateColaResponsePDF(input: Cms2567Input, licenseCtx?: 
   const page = await browser.newPage();
   try {
     const stamped = applyLicenseToPuppeteer(html, VERITARESPONSE_FOOTER_TEMPLATE, licenseCtx);
-    await page.setContent(stamped.html, { waitUntil: "networkidle0" });
+    await setPdfContent(page, stamped.html);
     const pdfBuffer = await page.pdf({
       format: "Letter",
       printBackground: true,
@@ -8113,7 +8114,7 @@ export async function generateAabbNerPDF(input: Cms2567Input, licenseCtx?: Parti
   const page = await browser.newPage();
   try {
     const stamped = applyLicenseToPuppeteer(html, VERITARESPONSE_FOOTER_TEMPLATE, licenseCtx);
-    await page.setContent(stamped.html, { waitUntil: "networkidle0" });
+    await setPdfContent(page, stamped.html);
     const pdfBuffer = await page.pdf({
       format: "Letter",
       printBackground: true,
@@ -8290,7 +8291,7 @@ export async function generateInternalNcePDF(input: Cms2567Input, licenseCtx?: P
   const page = await browser.newPage();
   try {
     const stamped = applyLicenseToPuppeteer(html, VERITARESPONSE_FOOTER_TEMPLATE, licenseCtx);
-    await page.setContent(stamped.html, { waitUntil: "networkidle0" });
+    await setPdfContent(page, stamped.html);
     const pdfBuffer = await page.pdf({
       format: "Letter",
       printBackground: true,
@@ -8399,7 +8400,7 @@ export async function generateCeuTranscriptPDF(input: CeuTranscriptInput, licens
   const page = await browser.newPage();
   try {
     const stamped = applyLicenseToPuppeteer(html, CEU_TRANSCRIPT_FOOTER, licenseCtx);
-    await page.setContent(stamped.html, { waitUntil: "networkidle0" });
+    await setPdfContent(page, stamped.html);
     const pdfBuffer = await page.pdf({
       format: "Letter",
       printBackground: true,

@@ -11,7 +11,7 @@
 //     npx playwright test veritastock-item-lots
 // Without PW_TOKEN the spec skips cleanly (CI compile-only gate still typechecks it).
 
-import { test, expect, APIRequestContext } from "@playwright/test";
+import { test, expect, type APIRequestContext } from "@playwright/test";
 
 const BASE = process.env.PW_BASE || "https://www.veritastock.com";
 const TOKEN = process.env.PW_TOKEN || "";

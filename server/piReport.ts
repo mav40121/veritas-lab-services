@@ -8,6 +8,7 @@
 
 import { getBrowser } from "./pdfReport";
 import { stampPdfAuthor } from "./pdfMeta";
+import { setPdfContent } from "./pdfContent";
 
 const TEAL = "#01696F";
 const DARK = "#28251D";
@@ -190,7 +191,7 @@ export async function generatePiReportPDF(m: PiMetric, entries: PiEntry[], ctx: 
   const browser = await getBrowser();
   const page = await browser.newPage();
   try {
-    await page.setContent(html, { waitUntil: "networkidle0" });
+    await setPdfContent(page, html);
     const pdfBuffer = await page.pdf({
       format: "Letter",
       printBackground: true,
