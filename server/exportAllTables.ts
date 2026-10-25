@@ -58,6 +58,7 @@ export const EXPORT_TABLES: Record<string, ExportTable> = {
   // VeritaCheck
   studies: labOrOwner("VeritaCheck"),
   study_signoff_groups: lab("VeritaCheck"),
+  veritacheck_outside_records: lab("VeritaCheck"), // studies performed outside VeritaCheck, recorded on Coverage (Q16)
   veritacheck_verifications: labOrOwner("VeritaCheck"),
   veritacheck_verification_analytes: child("VeritaCheck", "verification_id", "veritacheck_verifications"),
   veritacheck_verification_instruments: child("VeritaCheck", "verification_id", "veritacheck_verifications"),

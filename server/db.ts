@@ -1639,6 +1639,39 @@ sqlite.exec(`CREATE TABLE IF NOT EXISTS competency_group_dismissals (
   if (!slCols.includes("competency_annual_month")) { try { sqlite.exec("ALTER TABLE staff_labs ADD COLUMN competency_annual_month INTEGER"); } catch {} }
 }
 
+// VeritaCheck outside records (2026-10-24, Michael Q16 = 1; Lifepoint Georgetown REQ-103): a calibration verification /
+// linearity or correlation / method comparison the lab performed OUTSIDE VeritaCheck (before it joined, or on paper),
+// recorded by date with where the records are kept and who reviewed them. Coverage credits it until 6 months after
+// performed_on, exactly like a signed passing study (server/veritacheckCoverage.ts). Keyed by instrument + analyte, not
+// by the VeritaMap test row id, because a menu save re-creates those rows. Voided, never deleted.
+sqlite.exec(`CREATE TABLE IF NOT EXISTS veritacheck_outside_records (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  lab_id INTEGER NOT NULL,
+  kind TEXT NOT NULL,
+  instrument_id INTEGER,
+  analyte TEXT NOT NULL,
+  performed_on TEXT NOT NULL,
+  records_location TEXT NOT NULL,
+  reviewed_by TEXT NOT NULL,
+  notes TEXT,
+  created_by_user_id INTEGER,
+  created_at TEXT NOT NULL,
+  voided_at TEXT,
+  voided_by_user_id INTEGER,
+  void_reason TEXT
+)`);
+sqlite.exec("CREATE INDEX IF NOT EXISTS idx_vc_outside_records_lab ON veritacheck_outside_records(lab_id)");
+{
+  const vorCols = (sqlite.prepare("PRAGMA table_info(veritacheck_outside_records)").all() as any[]).map((c: any) => c.name);
+  const vorGuard = (name: string, decl: string) => { if (!vorCols.includes(name)) { try { sqlite.exec(`ALTER TABLE veritacheck_outside_records ADD COLUMN ${decl}`); } catch {} } };
+  vorGuard("instrument_id", "instrument_id INTEGER");
+  vorGuard("notes", "notes TEXT");
+  vorGuard("created_by_user_id", "created_by_user_id INTEGER");
+  vorGuard("voided_at", "voided_at TEXT");
+  vorGuard("voided_by_user_id", "voided_by_user_id INTEGER");
+  vorGuard("void_reason", "void_reason TEXT");
+}
+
 // VeritaComp Customer-Blockers Wave (2026-06-05): completion sign-off and
 // review-period columns on competency_assessments. Customer report from
 // San Carlos: no way to mark an assessment as "fully signed off and done"

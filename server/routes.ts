@@ -33,7 +33,7 @@ import { evaluateQcRun, rulesForRun } from "./qcWestgard";
 import { resolveBasis, computeBasis, basisConfig, sampleStats, type QcBasis } from "./qcBasis";
 import { buildWasteReport, generateWasteReportPDF, generateWasteReportExcel, type WasteEventRow, type WasteReportContext } from "./wasteReport";
 import { entireLabFlag, sanitizeSpecialties, expandEntireLabRoles, cms209Gaps } from "./cms209Roles";
-import { computeCoverageForLab, setLinearityExemption, alignStudyToAnalyte, resolvePresetMapAnalyte, presetCorroboratesName, studyNeedsAttribution, analyteMatch, stampMapDatesFromStudies } from "./veritacheckCoverage";
+import { computeCoverageForLab, setLinearityExemption, alignStudyToAnalyte, resolvePresetMapAnalyte, presetCorroboratesName, studyNeedsAttribution, analyteMatch, stampMapDatesFromStudies, recordOutsideStudies, voidOutsideRecord } from "./veritacheckCoverage";
 import { buildCoverageReportRows, generateCoverageReportExcel } from "./coverageReport";
 import { CATEGORY_TO_MAP_FIELD, analyteFromTaskName, MAP_SIGNOFF_FIELDS } from "./veritatrackMapSync";
 import { evaluateManualDiff } from "./rumke";
@@ -15520,6 +15520,31 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     res.json({ studyId, coverageAnalyte: (analyte || "").trim() });
   });
 
+  // POST /api/labs/:labId/veritacheck/coverage/outside-records
+  //
+  // Records studies the lab performed OUTSIDE VeritaCheck (Q16, 2026-10-24; Lifepoint Georgetown REQ-103: "is there a
+  // way to put we have completed cal vers and correlations without entering past data?"). Body: { kind: "cal_ver" |
+  // "method_comparison", performedOn, recordsLocation, reviewedBy, notes?, instrumentTestIds (cal_ver) | analytes
+  // (method_comparison) }. Coverage credits each until 6 months after performedOn; the VeritaMap date moves later only.
+  // Same write gate as the rest of the Coverage page.
+  app.post("/api/labs/:labId/veritacheck/coverage/outside-records", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritamap"), (req: any, res) => {
+    const result = recordOutsideStudies((db as any).$client, req.scope.labId, req.userId ?? null, req.body || {});
+    if (!result.ok) return res.status(400).json({ error: result.error });
+    logAudit({ userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritacheck", action: "create", entityType: "outside_record", entityId: result.ids[0], entityLabel: `${result.created} study record(s) performed outside VeritaCheck`, before: null, after: { ...req.body, ids: result.ids, skipped: result.skipped }, ipAddress: req.ip });
+    res.json(result);
+  });
+
+  // POST /api/labs/:labId/veritacheck/coverage/outside-records/:id/void  { reason }
+  // Removes an outside record from Coverage (kept, marked void with the reason and who did it).
+  app.post("/api/labs/:labId/veritacheck/coverage/outside-records/:id/void", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritamap"), (req: any, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: "Record id required" });
+    const result = voidOutsideRecord((db as any).$client, req.scope.labId, req.userId ?? null, id, req.body?.reason);
+    if (!result.ok) return res.status(result.status).json({ error: result.error });
+    logAudit({ userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritacheck", action: "delete", entityType: "outside_record", entityId: id, entityLabel: `${result.record.analyte} (${result.record.kind}, ${result.record.performed_on}) voided`, before: result.record, after: null, ipAddress: req.ip });
+    res.json({ ok: true, id });
+  });
+
   // GET /api/labs/:labId/veritacheck/coverage/export
   //
   // Downloadable xlsx of the Coverage view: a summary sheet, the method
@@ -15588,7 +15613,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       mkHeader(mcs, ["Analyte", "Instruments", "Status", "Study", "Verdict", "Next due on"], [30, 46, 18, 12, 12, 16]);
       result.methodComparisons.forEach((m, i) => {
         const failed = /fail/i.test(m.verdict);
-        dataRow(mcs, [m.analyte, m.instruments.join("; "), mcStatusLabel(m), m.hasStudy ? `#${m.studyId}` : "Missing", (m.verdict || "").toUpperCase(), nextDueCell(m)], i, { 3: (m as any).overdue || (m as any).status === "failed" ? RED : (m.nextDueOn ? GREEN : AMBER), 6: (m as any).overdue ? RED : TEXT });
+        const mcStudy = m.outsideRecord ? `Outside record, performed ${m.outsideRecord.performedOn}` : m.studyId ? `#${m.studyId}` : "Missing";
+        dataRow(mcs, [m.analyte, m.instruments.join("; "), mcStatusLabel(m), mcStudy, m.outsideRecord ? "" : (m.verdict || "").toUpperCase(), nextDueCell(m)], i, { 3: (m as any).overdue || (m as any).status === "failed" ? RED : (m.nextDueOn ? GREEN : AMBER), 6: (m as any).overdue ? RED : TEXT });
       });
 
       // Cal Ver / Linearity
@@ -15598,8 +15624,17 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         const st = (r as any).status;
         const label = st === "exempt" ? "Not required" : st === "review" ? "Review" : st === "failed" ? "Failed" : st === "completed_unsigned" ? "Completed, unsigned" : r.linearityStatus === "covered" ? "Covered" : "Missing";
         const cellColor = st === "failed" ? RED : r.linearityStatus === "covered" ? GREEN : r.linearityStatus === "review" ? AMBER : r.linearityStatus === "missing" ? RED : GRAY;
-        dataRow(cov, [r.specialty, r.analyte, r.instrument, label, r.studyIds.map((x) => `#${x}`).join(", "), (r.verdict || "").toUpperCase(), nextDueCell(r), r.linearityExemptMultical ? "Yes" : "", r.linearityExemptNoncal ? "Yes" : ""], i, { 4: cellColor, 7: (r as any).overdue ? RED : TEXT });
+        const covStudy = r.outsideRecord ? `Outside record, performed ${r.outsideRecord.performedOn}` : r.studyIds.map((x) => `#${x}`).join(", ");
+        dataRow(cov, [r.specialty, r.analyte, r.instrument, label, covStudy, r.outsideRecord ? "" : (r.verdict || "").toUpperCase(), nextDueCell(r), r.linearityExemptMultical ? "Yes" : "", r.linearityExemptNoncal ? "Yes" : ""], i, { 4: cellColor, 7: (r as any).overdue ? RED : TEXT });
       });
+
+      // Studies performed outside VeritaCheck (Q16): what was recorded, where the records are kept, who reviewed them.
+      const outside = result.outsideRecords || [];
+      if (outside.length) {
+        const os = wb.addWorksheet("Outside Records");
+        mkHeader(os, ["Type", "Analyte", "Instrument", "Performed on", "Records kept at", "Reviewed and accepted by", "Notes", "Recorded by", "Recorded on"], [30, 26, 30, 14, 36, 26, 30, 20, 14]);
+        outside.forEach((o, i) => dataRow(os, [o.kind === "cal_ver" ? "Calibration Verification / Linearity" : "Correlation / Method Comparison", o.analyte, o.instrument || "All instruments running it", o.performedOn, o.recordsLocation, o.reviewedBy, o.notes, o.createdBy, String(o.createdAt || "").slice(0, 10)], i));
+      }
 
       const buf = await wb.xlsx.writeBuffer();
       const date = new Date().toISOString().split("T")[0];
