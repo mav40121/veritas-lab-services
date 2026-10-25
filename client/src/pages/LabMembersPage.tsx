@@ -3,7 +3,8 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/components/AuthContext";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { useMemberships } from "@/hooks/useMemberships";
-import { apiRequest, queryClient, getQueryFn } from "@/lib/queryClient";
+import { apiRequest, queryClient, getQueryFn, API_BASE } from "@/lib/queryClient";
+import { authHeaders } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { isStockHost } from "@/lib/host";
 import { Button } from "@/components/ui/button";
@@ -662,6 +663,8 @@ export default function LabMembersPage() {
 
       {canManage && activeLabId && <AccountStatusCard labId={activeLabId} />}
 
+      {canManage && activeLabId && <AccessReportCard labId={activeLabId} />}
+
       {isOwner && activeLabId && <ExportAllCard labId={activeLabId} />}
 
       {isOwner && (
@@ -955,6 +958,94 @@ function AccountStatusCard({ labId }: { labId: number }) {
           ))}
         </ul>
         <p className="text-xs text-muted-foreground">These rules come from your system's security settings (Account settings). Turning someone back on is recorded in the audit trail.</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+// Access report (server/recordViews.ts; Lifepoint IPS III.1(i)): who opened which records in this lab, newest
+// first, filterable by person and period, with an Excel download. Owner or admin only; this lab's rows only.
+interface AccessReportResponse {
+  days: number; from: string; total: number; shown: number;
+  rows: Array<{ viewedAt: string; userId: number; name: string; email: string; module: string; entityId: string | null; path: string; ipAddress: string | null; veritasSupport: boolean }>;
+  people: Array<{ id: number; name: string }>;
+}
+function AccessReportCard({ labId }: { labId: number }) {
+  const { toast } = useToast();
+  const [days, setDays] = useState(30);
+  const [person, setPerson] = useState<number | 0>(0);
+  const [busy, setBusy] = useState(false);
+  const qs = `days=${days}${person ? `&userId=${person}` : ""}`;
+  const key = `/api/labs/${labId}/access-report?${qs}`;
+  const { data } = useQuery<AccessReportResponse>({ queryKey: [key], queryFn: getQueryFn({ on401: "throw" }), enabled: !!labId, retry: false });
+  async function download() {
+    setBusy(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/labs/${labId}/access-report.xlsx?${qs}`, { headers: authHeaders() });
+      if (!res.ok) { const b = await res.json().catch(() => ({})); throw new Error(b?.error || `HTTP ${res.status}`); }
+      const blob = await res.blob();
+      const name = /filename="([^"]+)"/.exec(res.headers.get("Content-Disposition") || "")?.[1] || "Access_Report.xlsx";
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = name;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } catch (err: any) {
+      toast({ title: "Could not download the access report", description: String(err?.message || err), variant: "destructive" });
+    } finally { setBusy(false); }
+  }
+  if (!data) return null;
+  return (
+    <Card data-testid="access-report-card">
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2"><ShieldCheck size={16} /> Access report</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3 text-sm">
+        <p className="text-xs text-muted-foreground">
+          Who opened which records in this lab. The same person opening the same page within 10 minutes is listed once. Changes,
+          approvals and signatures are in the audit trail. Kept for two years.
+        </p>
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="space-y-1">
+            <Label htmlFor="access-days">Period</Label>
+            <select id="access-days" data-testid="access-days" className="rounded-md border border-input bg-background px-2 py-1.5 text-sm" value={days} onChange={(e) => setDays(Number(e.target.value))}>
+              <option value={7}>Last 7 days</option><option value={30}>Last 30 days</option><option value={90}>Last 90 days</option><option value={365}>Last year</option>
+            </select>
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="access-person">Person</Label>
+            <select id="access-person" data-testid="access-person" className="rounded-md border border-input bg-background px-2 py-1.5 text-sm" value={person} onChange={(e) => setPerson(Number(e.target.value))}>
+              <option value={0}>Everyone</option>
+              {data.people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </div>
+          <Button size="sm" variant="outline" disabled={busy} onClick={() => void download()} data-testid="access-download">
+            {busy ? <Loader2 size={14} className="mr-1 animate-spin" /> : <Download size={14} className="mr-1" />} Download (Excel)
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground" data-testid="access-count">
+          {data.total === 0 ? "No records opened in this period." : `${data.total} record ${data.total === 1 ? "view" : "views"}${data.shown < data.total ? `, newest ${data.shown} shown; the download has them all` : ""}.`}
+        </p>
+        {data.rows.length > 0 && (
+          <div className="overflow-x-auto max-h-80 overflow-y-auto">
+            <table className="w-full text-sm border border-border" data-testid="access-rows">
+              <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground sticky top-0">
+                <tr><th className="text-left p-2">When</th><th className="text-left p-2">Person</th><th className="text-left p-2">Module</th><th className="text-left p-2">Record</th><th className="text-left p-2">From</th></tr>
+              </thead>
+              <tbody>
+                {data.rows.map((r, i) => (
+                  <tr key={i} className="border-t border-border">
+                    <td className="p-2 whitespace-nowrap">{new Date(r.viewedAt).toLocaleString("en-US")}</td>
+                    <td className="p-2">{r.name}{r.veritasSupport ? <span className="ml-1 rounded-full bg-amber-100 px-1.5 text-[10px] font-semibold text-amber-900 dark:bg-amber-900/40 dark:text-amber-200">Veritas support</span> : null}</td>
+                    <td className="p-2">{r.module}</td>
+                    <td className="p-2 font-mono text-xs break-all" title={r.path}>{r.entityId ? `#${r.entityId}` : r.path.replace(/^\/api\/labs\/\d+\//, "")}</td>
+                    <td className="p-2 font-mono text-xs">{r.ipAddress || ""}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

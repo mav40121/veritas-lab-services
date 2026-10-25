@@ -43,5 +43,7 @@ export function exportAllMiddleware(req: any, _res: any, next: () => void) {
   if (!h) return next();
   const labId = secrets.get(String(h));
   if (!labId || !LOOPBACK.has(String(req.socket?.remoteAddress || ""))) return next();
+  // A verified job request: record-view logging (server/recordViews.ts) leaves the owner's own export out.
+  req.exportAllJob = true;
   return store.run({ labId }, () => next());
 }

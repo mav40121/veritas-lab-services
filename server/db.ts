@@ -8538,6 +8538,33 @@ try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_veritaceu_profiles_lab ON veri
   addCol("users", "reenabled_at", "ALTER TABLE users ADD COLUMN reenabled_at TEXT");
 }
 
+// Record-view logging (Lifepoint IPS III.1(i), committed for 2026-10-31; server/recordViews.ts): who opened which
+// records in a lab, once per person per address per 10 minutes, kept two years. CREATE + ALTER per the NEW DB TABLE RULE.
+{
+  const addCol = (table: string, col: string, ddl: string) => {
+    const cols = (sqlite.prepare(`PRAGMA table_info(${table})`).all() as any[]).map((c: any) => c.name);
+    if (!cols.includes(col)) { try { sqlite.exec(ddl); } catch {} }
+  };
+  try {
+    sqlite.exec(`CREATE TABLE IF NOT EXISTS record_views (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      lab_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      path TEXT NOT NULL,
+      module TEXT,
+      entity_id TEXT,
+      ip_address TEXT,
+      vls_support INTEGER NOT NULL DEFAULT 0,
+      viewed_at TEXT NOT NULL
+    )`);
+  } catch {}
+  for (const [c, d] of [["module", "TEXT"], ["entity_id", "TEXT"], ["ip_address", "TEXT"], ["vls_support", "INTEGER NOT NULL DEFAULT 0"]]) {
+    addCol("record_views", c, `ALTER TABLE record_views ADD COLUMN ${c} ${d}`);
+  }
+  try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_record_views_lab_time ON record_views(lab_id, viewed_at)`); } catch {}
+  try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_record_views_user ON record_views(user_id, viewed_at)`); } catch {}
+}
+
 // Single sign-on (Michael 2026-10-15, Q39 = 1; server/sso.ts, server/ssoRoutes.ts). OpenID Connect,
 // Microsoft Entra first. sso_configs: one per customer identity provider, routed by email domain,
 // optional or required; a client secret (when the provider uses one) is sealed like the two-factor
