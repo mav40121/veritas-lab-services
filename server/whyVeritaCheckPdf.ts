@@ -10,6 +10,7 @@
 
 import { getBrowser } from "./pdfReport";
 import { stampPdfAuthor } from "./pdfMeta";
+import { setPdfContent } from "./pdfContent";
 
 const TEAL = "#01696F";
 const TEAL_TINT = "#E6F2F2";
@@ -106,7 +107,7 @@ export async function generateWhyVeritaCheckPdf(): Promise<Buffer> {
   const browser = await getBrowser();
   const page = await browser.newPage();
   try {
-    await page.setContent(html, { waitUntil: "networkidle0" });
+    await setPdfContent(page, html);
     const pdfBuffer = await page.pdf({
       format: "Letter",
       printBackground: true,

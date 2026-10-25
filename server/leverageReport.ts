@@ -12,6 +12,7 @@
 
 import { getBrowser } from "./pdfReport";
 import { stampPdfAuthor } from "./pdfMeta";
+import { setPdfContent } from "./pdfContent";
 
 const TEAL = "#01696F";
 const DEEP = "#0A3A3D";
@@ -194,7 +195,7 @@ export async function generateLeverageReportPDF(d: LeverageReportData, ctx: Leve
   const browser = await getBrowser();
   const page = await browser.newPage();
   try {
-    await page.setContent(html, { waitUntil: "networkidle0" });
+    await setPdfContent(page, html);
     const pdfBuffer = await page.pdf({
       format: "Letter",
       printBackground: true,

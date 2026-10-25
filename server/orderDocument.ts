@@ -15,6 +15,7 @@
 import { getBrowser } from "./pdfReport";
 import { stampPdfAuthor } from "./pdfMeta";
 import { unitLabel } from "@shared/units";
+import { setPdfContent } from "./pdfContent";
 
 // On the dedicated VeritaStock deployment, suppress CLIA on the order documents:
 // VeritaStock is an inventory product, not a CLIA-regulated compliance tool, so
@@ -663,7 +664,7 @@ export async function generateReorderListPDF(items: ReorderItem[], ctx: ReorderL
   const browser = await getBrowser();
   const page = await browser.newPage();
   try {
-    await page.setContent(html, { waitUntil: "networkidle0" });
+    await setPdfContent(page, html);
     const pdfBuffer = await page.pdf({
       format: "Letter",
       printBackground: true,
@@ -871,7 +872,7 @@ export async function generateSnapOrderPDF(items: SnapOrderItem[], ctx: ReorderL
   const browser = await getBrowser();
   const page = await browser.newPage();
   try {
-    await page.setContent(html, { waitUntil: "networkidle0" });
+    await setPdfContent(page, html);
     const pdfBuffer = await page.pdf({
       format: "Letter",
       printBackground: true,

@@ -15,6 +15,7 @@
 
 import { getBrowser } from "./pdfReport";
 import { stampPdfAuthor } from "./pdfMeta";
+import { setPdfContent } from "./pdfContent";
 
 const STOCK_DEPLOYMENT =
   process.env.VITE_STOCK_DEPLOYMENT === "true" || process.env.STOCK_DEPLOYMENT === "true";
@@ -290,7 +291,7 @@ export async function generateWasteReportPDF(report: WasteReport, ctx: WasteRepo
   const browser = await getBrowser();
   const page = await browser.newPage();
   try {
-    await page.setContent(html, { waitUntil: "networkidle0" });
+    await setPdfContent(page, html);
     const pdfBuffer = await page.pdf({
       format: "Letter",
       printBackground: true,

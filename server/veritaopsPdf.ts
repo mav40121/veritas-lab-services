@@ -9,6 +9,7 @@
 // so a reader can verify the methodology against the source document.
 import { getBrowser } from "./pdfReport";
 import { stampPdfAuthor } from "./pdfMeta";
+import { setPdfContent } from "./pdfContent";
 
 export interface CprtStudyForPdf {
   id: number;
@@ -209,7 +210,7 @@ export async function generateCprtPdf(study: CprtStudyForPdf, ctx: CprtLabContex
   const browser = await getBrowser();
   const page = await browser.newPage();
   try {
-    await page.setContent(html, { waitUntil: "networkidle0" });
+    await setPdfContent(page, html);
     const pdfBuffer = await page.pdf({
       format: "Letter",
       printBackground: true,

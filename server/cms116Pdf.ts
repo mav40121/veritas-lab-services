@@ -13,6 +13,7 @@
 
 import { getBrowser } from "./pdfReport";
 import { stampPdfAuthor } from "./pdfMeta";
+import { setPdfContent } from "./pdfContent";
 
 export interface Cms116DraftForPdf {
   sections: {
@@ -476,7 +477,7 @@ export async function generateCms116Pdf(draft: Cms116DraftForPdf, ctx: Cms116Lab
   const browser = await getBrowser();
   const page = await browser.newPage();
   try {
-    await page.setContent(html, { waitUntil: "networkidle0" });
+    await setPdfContent(page, html);
     const pdfBuffer = await page.pdf({
       format: "Letter",
       printBackground: true,
