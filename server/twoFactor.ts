@@ -246,9 +246,12 @@ function newRecoveryCode(): string {
 export function replaceRecoveryCodes(sqlite: any, userId: number): string[] {
   const codes = Array.from({ length: RECOVERY_CODE_COUNT }, newRecoveryCode);
   const now = new Date().toISOString();
-  sqlite.prepare("DELETE FROM user_mfa_recovery_codes WHERE user_id = ?").run(userId);
   const ins = sqlite.prepare("INSERT INTO user_mfa_recovery_codes (user_id, code_hash, created_at) VALUES (?, ?, ?)");
-  for (const c of codes) ins.run(userId, sha(normRecovery(c)), now);
+  // BUG-094 sweep: old codes are removed only together with the new ones landing, never leaving the person with none.
+  sqlite.transaction(() => {
+    sqlite.prepare("DELETE FROM user_mfa_recovery_codes WHERE user_id = ?").run(userId);
+    for (const c of codes) ins.run(userId, sha(normRecovery(c)), now);
+  })();
   return codes;
 }
 export function useRecoveryCode(sqlite: any, userId: number, code: string): boolean {

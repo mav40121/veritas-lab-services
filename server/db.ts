@@ -8,6 +8,10 @@ import { existsSync as _dbExistsSync } from "fs";
 const DB_PATH = process.env.DB_PATH || (_dbExistsSync('/data') ? '/data/veritas.db' : 'veritas.db');
 console.log(`[db] Using database at: ${DB_PATH}`);
 const sqlite = new Database(DB_PATH);
+// BUG-094 (2026-10-23): wait up to 20 seconds for a lock instead of better-sqlite3's default 5. Litestream (continuous
+// backup, a second process on this file) holds the write lock while it checkpoints; a Lifepoint VeritaMap save hit
+// "database is locked" after the 5-second wait, during a lock of about 10 seconds.
+sqlite.pragma("busy_timeout = 20000");
 export const db = drizzle(sqlite, { schema });
 
 // Step 1: Create tables if they don't exist (safe on fresh or existing DB)

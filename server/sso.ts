@@ -114,6 +114,7 @@ export function newSignIn(): StartedSignIn {
 
 export function saveSignInState(sqlite: any, cfg: SsoConfig, s: StartedSignIn, redirectUri: string, emailHint: string | null): void {
   const now = Date.now();
+  // delete-reinsert-ok: expiry cleanup of other rows; the INSERT adds a new state
   sqlite.prepare("DELETE FROM sso_login_states WHERE expires_at < ?").run(new Date(now - STATE_TTL_MS).toISOString());
   sqlite.prepare(
     "INSERT INTO sso_login_states (state_hash, config_id, nonce, code_verifier, redirect_uri, email_hint, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
@@ -197,6 +198,7 @@ export function emailFromClaims(claims: Record<string, any>): string | null {
 export function newHandoff(sqlite: any, userId: number, configId: number): string {
   const code = b64url(crypto.randomBytes(32));
   const now = Date.now();
+  // delete-reinsert-ok: expiry cleanup of other rows; the INSERT adds a new handoff
   sqlite.prepare("DELETE FROM sso_handoffs WHERE expires_at < ?").run(new Date(now - HANDOFF_TTL_MS).toISOString());
   sqlite.prepare("INSERT INTO sso_handoffs (code_hash, user_id, config_id, created_at, expires_at) VALUES (?, ?, ?, ?, ?)")
     .run(sha(code), userId, configId, new Date(now).toISOString(), new Date(now + HANDOFF_TTL_MS).toISOString());

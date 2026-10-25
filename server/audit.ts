@@ -160,11 +160,13 @@ export function saveNightlySnapshot(userId: number): void {
     const jsonStr = JSON.stringify(data);
     const now = new Date().toISOString();
 
-    // Delete existing snapshot for today first, then insert fresh
-    sqlite.prepare("DELETE FROM nightly_snapshots WHERE user_id = ? AND snapshot_date = ?").run(userId, today);
-    sqlite.prepare(
-      "INSERT INTO nightly_snapshots (user_id, snapshot_date, modules_json, created_at) VALUES (?, ?, ?, ?)"
-    ).run(userId, today, jsonStr, now);
+    // Delete existing snapshot for today first, then insert fresh; one transaction (BUG-094 sweep)
+    sqlite.transaction(() => {
+      sqlite.prepare("DELETE FROM nightly_snapshots WHERE user_id = ? AND snapshot_date = ?").run(userId, today);
+      sqlite.prepare(
+        "INSERT INTO nightly_snapshots (user_id, snapshot_date, modules_json, created_at) VALUES (?, ?, ?, ?)"
+      ).run(userId, today, jsonStr, now);
+    })();
 
     // Purge snapshots older than 30 days
     sqlite.prepare(
