@@ -3753,6 +3753,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const insLot = sqlite.prepare(
       "INSERT INTO qc_control_lots (lab_id, analyte, level, lot_number, manufacturer, mfr_mean, mfr_sd, mfr_sd_interval, opened_date, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)"
     );
+    // delete-reinsert-ok: prepared here, run inside the BEGIN/COMMIT below
     const delResults = sqlite.prepare("DELETE FROM qc_results WHERE control_lot_id = ?");
     // Clear append-only notes for a lot's results before the replace-mode wipe,
     // else a reload orphans the note thread (2026-08-25).
@@ -5821,14 +5822,17 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // no lab_id, no labId param). NOT the multi-lab customer path
     // (/api/labs/:labId/members is). Admin-gated; a cross-lab DELETE here is a
     // known limitation flagged for a follow-up labId pass or retirement.
-    // Remove any existing seat records for this email under this owner
-    sqlite.prepare("DELETE FROM user_seats WHERE owner_user_id = ? AND seat_email = ?").run(Number(ownerUserId), seatEmail);
-    // Insert as active seat with full permissions
+    // Remove any existing seat records for this email under this owner, then insert as an active seat with full
+    // permissions; one transaction so a failed insert never leaves the person with no seat (BUG-094 sweep).
     const now = new Date().toISOString();
-    sqlite.prepare(`
-      INSERT INTO user_seats (owner_user_id, seat_email, seat_user_id, invited_at, accepted_at, status, permissions)
-      VALUES (?, ?, ?, ?, ?, 'active', '{}')
-    `).run(Number(ownerUserId), seatEmail, Number(seatUserId), now, now);
+    sqlite.transaction(() => {
+      // seat-scope-ok: the legacy lab-less admin tool described above
+      sqlite.prepare("DELETE FROM user_seats WHERE owner_user_id = ? AND seat_email = ?").run(Number(ownerUserId), seatEmail);
+      sqlite.prepare(`
+        INSERT INTO user_seats (owner_user_id, seat_email, seat_user_id, invited_at, accepted_at, status, permissions)
+        VALUES (?, ?, ?, ?, ?, 'active', '{}')
+      `).run(Number(ownerUserId), seatEmail, Number(seatUserId), now, now);
+    })();
     // Give the seat user the owner's actual plan (not hardcoded community)
     const ownerUser = sqlite.prepare("SELECT plan FROM users WHERE id = ?").get(Number(ownerUserId)) as any;
     const inheritedPlan = ownerUser?.plan || 'community';
@@ -14844,19 +14848,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       }
       const beforeTests = (db as any).$client.prepare("SELECT analyte, specialty, complexity, active FROM veritamap_instrument_tests WHERE instrument_id = ?").all(req.params.instId);
       const instrRow = (db as any).$client.prepare("SELECT instrument_name FROM veritamap_instruments WHERE id = ?").get(req.params.instId) as any;
+      replaceInstrumentTests(req.params.instId, req.params.id, tests); // BUG-094: all or nothing
       logAudit({ userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritamap", action: beforeTests.length === 0 ? "create" : "update", entityType: "instrument_tests", entityId: req.params.instId, entityLabel: instrRow?.instrument_name ?? `instrument_${req.params.instId}`, before: beforeTests, after: tests, ipAddress: req.ip });
-      const exSnapshot = captureInstrumentExemptions(req.params.instId, req.params.id);
-      (db as any).$client.prepare("DELETE FROM veritamap_instrument_tests WHERE instrument_id = ? AND map_id = ?").run(req.params.instId, req.params.id);
-      const stmt = (db as any).$client.prepare("INSERT OR IGNORE INTO veritamap_instrument_tests (instrument_id, map_id, analyte, specialty, complexity, active) VALUES (?, ?, ?, ?, ?, ?)");
-      const bulk = (db as any).$client.transaction((tests: any[]) => {
-        for (const t of tests) {
-          const active = typeof t.active === 'boolean' ? (t.active ? 1 : 0) : (t.active ?? 1);
-          stmt.run(req.params.instId, req.params.id, String(t.analyte || ''), String(t.specialty || ''), String(t.complexity || ''), active);
-        }
-      });
-      bulk(tests);
-      restoreInstrumentExemptions(req.params.instId, req.params.id, exSnapshot);
-      rebuildMapTests(req.params.id);
       res.json({ ok: true, count: tests.length });
     } catch (err: any) {
       console.error(`[VeritaMap] Error saving instrument tests:`, err);
@@ -15835,6 +15828,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         "SELECT analyte, specialty, complexity, active FROM veritamap_instrument_tests WHERE instrument_id = ?"
       ).all(req.params.instId);
       const instrRow = (db as any).$client.prepare("SELECT instrument_name FROM veritamap_instruments WHERE id = ?").get(req.params.instId) as any;
+      // Replace all tests for this instrument (preserving linearity exemptions), rebuild the map; all or nothing (BUG-094)
+      replaceInstrumentTests(req.params.instId, req.params.id, tests);
       logAudit({
         userId: req.userId,
         ownerUserId: req.ownerUserId ?? req.userId,
@@ -15847,22 +15842,6 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         after: tests,
         ipAddress: req.ip,
       });
-      // Replace all tests for this instrument (preserving linearity exemptions)
-      const exSnapshot = captureInstrumentExemptions(req.params.instId, req.params.id);
-      (db as any).$client.prepare("DELETE FROM veritamap_instrument_tests WHERE instrument_id = ? AND map_id = ?").run(req.params.instId, req.params.id);
-      const stmt = (db as any).$client.prepare(
-        "INSERT OR IGNORE INTO veritamap_instrument_tests (instrument_id, map_id, analyte, specialty, complexity, active) VALUES (?, ?, ?, ?, ?, ?)"
-      );
-      const bulk = (db as any).$client.transaction((tests: any[]) => {
-        for (const t of tests) {
-          const active = typeof t.active === 'boolean' ? (t.active ? 1 : 0) : (t.active ?? 1);
-          stmt.run(req.params.instId, req.params.id, String(t.analyte || ''), String(t.specialty || ''), String(t.complexity || ''), active);
-        }
-      });
-      bulk(tests);
-      restoreInstrumentExemptions(req.params.instId, req.params.id, exSnapshot);
-      // Rebuild the merged veritamap_tests from all instruments
-      rebuildMapTests(req.params.id);
       const savedCount = (db as any).$client.prepare("SELECT COUNT(*) as cnt FROM veritamap_instrument_tests WHERE instrument_id = ? AND map_id = ?").get(req.params.instId, req.params.id).cnt;
       console.log(`[VeritaMap] Saved ${savedCount} instrument tests, rebuilding map tests`);
       const mapTestCount = (db as any).$client.prepare("SELECT COUNT(*) as cnt FROM veritamap_tests WHERE map_id = ?").get(req.params.id).cnt;
@@ -15969,6 +15948,26 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     let n = 0;
     for (const e of snap) n += upd.run(e.mc ? 1 : 0, e.nc ? 1 : 0, e.wv ? 1 : 0, (e.ot || "").trim() || null, instId, mapId, e.k).changes;
     return n;
+  }
+
+  // BUG-094 (2026-10-24): replace an instrument's test menu in ONE transaction. Both save routes used to DELETE the menu
+  // in its own statement and re-insert it afterward, so a failure in between (the "database is locked" timeout Lifepoint
+  // hit 2026-10-23, or a bad value) committed the delete alone and left the instrument with no tests; the next map
+  // rebuild would then drop those analytes' lab-entered ranges, AMR and correlations. The delete, re-insert, exemption
+  // restore and map rebuild now commit together or not at all (rebuildMapTests' own transaction nests as a savepoint).
+  function replaceInstrumentTests(instId: string | number, mapId: string | number, tests: any[]) {
+    const client = (db as any).$client;
+    const ins = client.prepare("INSERT OR IGNORE INTO veritamap_instrument_tests (instrument_id, map_id, analyte, specialty, complexity, active) VALUES (?, ?, ?, ?, ?, ?)");
+    client.transaction(() => {
+      const exSnapshot = captureInstrumentExemptions(instId, mapId);
+      client.prepare("DELETE FROM veritamap_instrument_tests WHERE instrument_id = ? AND map_id = ?").run(instId, mapId);
+      for (const t of tests) {
+        const active = typeof t.active === 'boolean' ? (t.active ? 1 : 0) : (t.active ?? 1);
+        ins.run(instId, mapId, String(t.analyte || ''), String(t.specialty || ''), String(t.complexity || ''), active);
+      }
+      restoreInstrumentExemptions(instId, mapId, exSnapshot);
+      rebuildMapTests(mapId);
+    })();
   }
 
   // Helper: rebuild merged map tests from instrument tests
@@ -23851,6 +23850,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       (db as any).$client.prepare("DELETE FROM competency_assessment_items WHERE assessment_id = ?").run(a.id);
     }
     (db as any).$client.prepare("DELETE FROM competency_assessments WHERE program_id = ?").run(req.params.id);
+    // delete-reinsert-ok: program delete cascade (this line and the next); nothing is re-inserted
     (db as any).$client.prepare("DELETE FROM competency_method_groups WHERE program_id = ?").run(req.params.id);
     (db as any).$client.prepare("DELETE FROM competency_checklist_items WHERE program_id = ?").run(req.params.id);
     (db as any).$client.prepare("DELETE FROM competency_programs WHERE id = ?").run(req.params.id);
@@ -24285,7 +24285,6 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     }
     // Replace items if provided
     if (Array.isArray(items)) {
-      (db as any).$client.prepare("DELETE FROM competency_assessment_items WHERE assessment_id = ?").run(req.params.id);
       const stmt = (db as any).$client.prepare(
         `INSERT INTO competency_assessment_items (
           assessment_id, method_number, method_group_id, item_label, item_description,
@@ -24301,35 +24300,38 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           nt_item_label, nt_item_description, nt_date_met, nt_employee_initials, nt_supervisor_initials
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       );
-      for (const item of items) {
-        stmt.run(
-          req.params.id,
-          item.methodNumber ?? null, item.methodGroupId ?? null,
-          item.itemLabel ?? null, item.itemDescription ?? null,
-          item.evidence ?? null, item.dateMet ?? null,
-          item.employeeInitials ?? null, item.supervisorInitials ?? null,
-          item.passed ? 1 : 0, item.specimenInfo ?? null,
-          item.elementNumber ?? null, item.methodGroupName ?? null,
-          item.el1SpecimenId ?? null, item.el1ObserverInitials ?? null,
-          item.el1Na ? 1 : 0, item.el1NaJustification ?? null,
-          item.el2Evidence ?? null, item.el2Date ?? null,
-          item.el2Na ? 1 : 0, item.el2NaJustification ?? null,
-          item.el3QcDate ?? null,
-          item.el3Na ? 1 : 0, item.el3NaJustification ?? null,
-          item.el4DateObserved ?? null, item.el4ObserverInitials ?? null,
-          item.el4Na ? 1 : 0, item.el4NaJustification ?? null,
-          item.el5SampleType ?? null, item.el5SampleId ?? null,
-          item.el5Acceptable != null ? (item.el5Acceptable ? 1 : 0) : null,
-          item.el5Na ? 1 : 0, item.el5NaJustification ?? null,
-          item.el6QuizId ?? null, item.el6Score ?? null, item.el6DateTaken ?? null,
-          item.el6Na ? 1 : 0, item.el6NaJustification ?? null,
-          item.waivedInstrument ?? null, item.waivedTest ?? null,
-          item.waivedMethodNumber ?? null, item.waivedEvidence ?? null,
-          item.waivedDate ?? null, item.waivedInitials ?? null,
-          item.ntItemLabel ?? null, item.ntItemDescription ?? null,
-          item.ntDateMet ?? null, item.ntEmployeeInitials ?? null, item.ntSupervisorInitials ?? null
-        );
-      }
+      (db as any).$client.transaction(() => { // BUG-094 sweep: the delete and the re-insert commit together or not at all
+        (db as any).$client.prepare("DELETE FROM competency_assessment_items WHERE assessment_id = ?").run(req.params.id);
+        for (const item of items) {
+          stmt.run(
+            req.params.id,
+            item.methodNumber ?? null, item.methodGroupId ?? null,
+            item.itemLabel ?? null, item.itemDescription ?? null,
+            item.evidence ?? null, item.dateMet ?? null,
+            item.employeeInitials ?? null, item.supervisorInitials ?? null,
+            item.passed ? 1 : 0, item.specimenInfo ?? null,
+            item.elementNumber ?? null, item.methodGroupName ?? null,
+            item.el1SpecimenId ?? null, item.el1ObserverInitials ?? null,
+            item.el1Na ? 1 : 0, item.el1NaJustification ?? null,
+            item.el2Evidence ?? null, item.el2Date ?? null,
+            item.el2Na ? 1 : 0, item.el2NaJustification ?? null,
+            item.el3QcDate ?? null,
+            item.el3Na ? 1 : 0, item.el3NaJustification ?? null,
+            item.el4DateObserved ?? null, item.el4ObserverInitials ?? null,
+            item.el4Na ? 1 : 0, item.el4NaJustification ?? null,
+            item.el5SampleType ?? null, item.el5SampleId ?? null,
+            item.el5Acceptable != null ? (item.el5Acceptable ? 1 : 0) : null,
+            item.el5Na ? 1 : 0, item.el5NaJustification ?? null,
+            item.el6QuizId ?? null, item.el6Score ?? null, item.el6DateTaken ?? null,
+            item.el6Na ? 1 : 0, item.el6NaJustification ?? null,
+            item.waivedInstrument ?? null, item.waivedTest ?? null,
+            item.waivedMethodNumber ?? null, item.waivedEvidence ?? null,
+            item.waivedDate ?? null, item.waivedInitials ?? null,
+            item.ntItemLabel ?? null, item.ntItemDescription ?? null,
+            item.ntDateMet ?? null, item.ntEmployeeInitials ?? null, item.ntSupervisorInitials ?? null
+          );
+        }
+      })();
     }
     res.json({ ok: true });
   });
@@ -24643,7 +24645,6 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       sqlite.prepare(`UPDATE competency_assessments SET ${sets.join(", ")} WHERE id = ?`).run(...vals);
     }
     if (Array.isArray(items)) {
-      sqlite.prepare("DELETE FROM competency_assessment_items WHERE assessment_id = ?").run(req.params.id);
       const stmt = sqlite.prepare(
         `INSERT INTO competency_assessment_items (
           assessment_id, method_number, method_group_id, item_label, item_description,
@@ -24661,39 +24662,42 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           nt_item_label, nt_item_description, nt_date_met, nt_employee_initials, nt_supervisor_initials
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       );
-      for (const item of items) {
-        stmt.run(
-          req.params.id,
-          item.methodNumber ?? null, item.methodGroupId ?? null,
-          item.itemLabel ?? null, item.itemDescription ?? null,
-          item.evidence ?? null, item.dateMet ?? null,
-          item.employeeInitials ?? null, item.supervisorInitials ?? null,
-          item.passed ? 1 : 0, item.specimenInfo ?? null,
-          item.elementNumber ?? null, item.methodGroupName ?? null,
-          item.el1SpecimenId ?? null, item.el1ObserverInitials ?? null,
-          item.el1Na ? 1 : 0, item.el1NaJustification ?? null,
-          item.el2Evidence ?? null, item.el2Date ?? null,
-          item.el2Na ? 1 : 0, item.el2NaJustification ?? null,
-          item.el3QcDate ?? null,
-          item.el3Na ? 1 : 0, item.el3NaJustification ?? null,
-          item.el4DateObserved ?? null, item.el4ObserverInitials ?? null,
-          item.el4Na ? 1 : 0, item.el4NaJustification ?? null,
-          item.el5SampleType ?? null, item.el5SampleId ?? null,
-          item.el5Acceptable != null ? (item.el5Acceptable ? 1 : 0) : null,
-          item.el5Na ? 1 : 0, item.el5NaJustification ?? null,
-          item.el6QuizId ?? null, item.el6Score ?? null, item.el6DateTaken ?? null,
-          item.el6Na ? 1 : 0, item.el6NaJustification ?? null,
-          item.el7DateObserved ?? null, item.el7ObserverInitials ?? null,
-          item.el7Na ? 1 : 0, item.el7NaJustification ?? null,
-          item.el8FunctionAssessed ?? null, item.el8Date ?? null,
-          item.el8Na ? 1 : 0, item.el8NaJustification ?? null,
-          item.waivedInstrument ?? null, item.waivedTest ?? null,
-          item.waivedMethodNumber ?? null, item.waivedEvidence ?? null,
-          item.waivedDate ?? null, item.waivedInitials ?? null,
-          item.ntItemLabel ?? null, item.ntItemDescription ?? null,
-          item.ntDateMet ?? null, item.ntEmployeeInitials ?? null, item.ntSupervisorInitials ?? null
-        );
-      }
+      sqlite.transaction(() => { // BUG-094 sweep: the delete and the re-insert commit together or not at all
+        sqlite.prepare("DELETE FROM competency_assessment_items WHERE assessment_id = ?").run(req.params.id);
+        for (const item of items) {
+          stmt.run(
+            req.params.id,
+            item.methodNumber ?? null, item.methodGroupId ?? null,
+            item.itemLabel ?? null, item.itemDescription ?? null,
+            item.evidence ?? null, item.dateMet ?? null,
+            item.employeeInitials ?? null, item.supervisorInitials ?? null,
+            item.passed ? 1 : 0, item.specimenInfo ?? null,
+            item.elementNumber ?? null, item.methodGroupName ?? null,
+            item.el1SpecimenId ?? null, item.el1ObserverInitials ?? null,
+            item.el1Na ? 1 : 0, item.el1NaJustification ?? null,
+            item.el2Evidence ?? null, item.el2Date ?? null,
+            item.el2Na ? 1 : 0, item.el2NaJustification ?? null,
+            item.el3QcDate ?? null,
+            item.el3Na ? 1 : 0, item.el3NaJustification ?? null,
+            item.el4DateObserved ?? null, item.el4ObserverInitials ?? null,
+            item.el4Na ? 1 : 0, item.el4NaJustification ?? null,
+            item.el5SampleType ?? null, item.el5SampleId ?? null,
+            item.el5Acceptable != null ? (item.el5Acceptable ? 1 : 0) : null,
+            item.el5Na ? 1 : 0, item.el5NaJustification ?? null,
+            item.el6QuizId ?? null, item.el6Score ?? null, item.el6DateTaken ?? null,
+            item.el6Na ? 1 : 0, item.el6NaJustification ?? null,
+            item.el7DateObserved ?? null, item.el7ObserverInitials ?? null,
+            item.el7Na ? 1 : 0, item.el7NaJustification ?? null,
+            item.el8FunctionAssessed ?? null, item.el8Date ?? null,
+            item.el8Na ? 1 : 0, item.el8NaJustification ?? null,
+            item.waivedInstrument ?? null, item.waivedTest ?? null,
+            item.waivedMethodNumber ?? null, item.waivedEvidence ?? null,
+            item.waivedDate ?? null, item.waivedInitials ?? null,
+            item.ntItemLabel ?? null, item.ntItemDescription ?? null,
+            item.ntDateMet ?? null, item.ntEmployeeInitials ?? null, item.ntSupervisorInitials ?? null
+          );
+        }
+      })();
     }
     const after = sqlite.prepare("SELECT * FROM competency_assessments WHERE id = ?").get(req.params.id);
     const afterItems = sqlite.prepare("SELECT * FROM competency_assessment_items WHERE assessment_id = ?").all(req.params.id);
@@ -26478,11 +26482,13 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
     // Replace roles
     if (roles && Array.isArray(roles)) {
-      (db as any).$client.prepare("DELETE FROM staff_roles WHERE employee_id = ?").run(req.params.id);
       const roleStmt = (db as any).$client.prepare("INSERT INTO staff_roles (employee_id, lab_id, role, specialty_number, all_specialties) VALUES (?,?,?,?,?)");
-      for (const r of roles) {
-        roleStmt.run(req.params.id, lab.id, r.role, r.specialtyNumber || null, entireLabFlag(r));
-      }
+      (db as any).$client.transaction(() => { // BUG-094 sweep: the delete and the re-insert commit together or not at all
+        (db as any).$client.prepare("DELETE FROM staff_roles WHERE employee_id = ?").run(req.params.id);
+        for (const r of roles) {
+          roleStmt.run(req.params.id, lab.id, r.role, r.specialtyNumber || null, entireLabFlag(r));
+        }
+      })();
     }
 
     const updated = (db as any).$client.prepare("SELECT * FROM staff_employees WHERE id = ?").get(req.params.id);
@@ -26595,6 +26601,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const isMember = Number.isInteger(uid) && sqlite.prepare("SELECT 1 FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active' LIMIT 1").get(labId, uid);
     if (!isMember) return res.status(400).json({ error: "That person is not an active member of this lab.", code: "NOT_A_MEMBER" });
     if (req.body?.hidden === false) {
+      // delete-reinsert-ok: unhide branch of a hide/unhide toggle
       sqlite.prepare("DELETE FROM staff_roster_prompt_hidden WHERE lab_id = ? AND user_id = ?").run(labId, uid);
     } else {
       sqlite.prepare("INSERT OR IGNORE INTO staff_roster_prompt_hidden (lab_id, user_id, hidden_by_user_id, hidden_at) VALUES (?, ?, ?, ?)").run(labId, uid, req.userId, new Date().toISOString());
@@ -30451,6 +30458,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         const updateEmpStmt = sqlite.prepare(
           "UPDATE staff_employees SET last_name=?, first_name=?, middle_initial=?, title=?, hire_date=?, qualifications_text=?, highest_complexity=?, performs_testing=?, can_adjust_inventory=?, can_view_audit=?, updated_at=? WHERE id=? AND lab_id=?"
         );
+        // delete-reinsert-ok: prepared here, run inside the import transaction below
         const deleteRolesStmt = sqlite.prepare("DELETE FROM staff_roles WHERE employee_id = ?");
         const insertRoleStmt = sqlite.prepare("INSERT INTO staff_roles (employee_id, lab_id, tier2_lab_id, role, specialty_number) VALUES (?,?,?,?,?)");
         const insertScheduleStmt = sqlite.prepare(
@@ -31481,41 +31489,42 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   }
 
   function scheduleReminders(certId: number, userId: number, expirationDate: string) {
-    // Delete existing reminders for this certificate
-    (db as any).$client.prepare("DELETE FROM lab_certificate_reminders WHERE certificate_id = ?").run(certId);
-
-    if (!expirationDate) return;
-
-    const exp = new Date(expirationDate);
-    if (isNaN(exp.getTime())) return;
-
-    const reminders: { type: string; months?: number; days?: number }[] = [
-      { type: "9month", months: 9 },
-      { type: "6month", months: 6 },
-      { type: "3month", months: 3 },
-      { type: "30day", days: 30 },
-      { type: "expired" },
-    ];
-
-    const stmt = (db as any).$client.prepare(
+    // The new schedule (none without a valid expiration date), worked out before anything is written.
+    const rows: { type: string; date: string }[] = [];
+    const exp = new Date(expirationDate || "");
+    if (expirationDate && !isNaN(exp.getTime())) {
+      const reminders: { type: string; months?: number; days?: number }[] = [
+        { type: "9month", months: 9 },
+        { type: "6month", months: 6 },
+        { type: "3month", months: 3 },
+        { type: "30day", days: 30 },
+        { type: "expired" },
+      ];
+      for (const r of reminders) {
+        let scheduledDate: Date;
+        if (r.type === "expired") {
+          scheduledDate = new Date(exp);
+        } else if (r.months) {
+          scheduledDate = new Date(exp);
+          scheduledDate.setMonth(scheduledDate.getMonth() - r.months);
+        } else if (r.days) {
+          scheduledDate = new Date(exp);
+          scheduledDate.setDate(scheduledDate.getDate() - r.days);
+        } else {
+          continue;
+        }
+        rows.push({ type: r.type, date: scheduledDate.toISOString().split("T")[0] });
+      }
+    }
+    // Replace the certificate's reminders in one transaction, so a failed insert never leaves it with none (BUG-094 sweep).
+    const client = (db as any).$client;
+    const stmt = client.prepare(
       "INSERT INTO lab_certificate_reminders (certificate_id, user_id, reminder_type, scheduled_date, is_sent) VALUES (?, ?, ?, ?, 0)"
     );
-
-    for (const r of reminders) {
-      let scheduledDate: Date;
-      if (r.type === "expired") {
-        scheduledDate = new Date(exp);
-      } else if (r.months) {
-        scheduledDate = new Date(exp);
-        scheduledDate.setMonth(scheduledDate.getMonth() - r.months);
-      } else if (r.days) {
-        scheduledDate = new Date(exp);
-        scheduledDate.setDate(scheduledDate.getDate() - r.days);
-      } else {
-        continue;
-      }
-      stmt.run(certId, userId, r.type, scheduledDate.toISOString().split("T")[0]);
-    }
+    client.transaction(() => {
+      client.prepare("DELETE FROM lab_certificate_reminders WHERE certificate_id = ?").run(certId);
+      for (const r of rows) stmt.run(certId, userId, r.type, r.date);
+    })();
   }
 
   // GET /api/veritalab/certificates - list all certificates for user
@@ -33715,8 +33724,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
             certificates: safeQuery("SELECT id, cert_type, cert_name, expiration_date FROM lab_certificates WHERE user_id = ? AND is_active = 1", user.id),
           };
           const jsonStr = JSON.stringify(snap);
-          sqlite.prepare("DELETE FROM nightly_snapshots WHERE user_id = ? AND snapshot_date = ?").run(user.id, today);
-          sqlite.prepare("INSERT INTO nightly_snapshots (user_id, snapshot_date, modules_json, created_at) VALUES (?, ?, ?, ?)").run(user.id, today, jsonStr, now);
+          sqlite.transaction(() => { // BUG-094 sweep: replace today's snapshot all or nothing
+            sqlite.prepare("DELETE FROM nightly_snapshots WHERE user_id = ? AND snapshot_date = ?").run(user.id, today);
+            sqlite.prepare("INSERT INTO nightly_snapshots (user_id, snapshot_date, modules_json, created_at) VALUES (?, ?, ?, ?)").run(user.id, today, jsonStr, now);
+          })();
           saved++;
         } catch (uerr: any) {
           console.error(`[snapshot] User ${user.id} failed:`, uerr.message);

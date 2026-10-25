@@ -73,6 +73,7 @@ export function reconcileLots(sqlite: Sqlite, itemId: number, nowIso: string): v
         const take = Math.min(have, deficit);
         const remain = have - take;
         deficit -= take;
+        // delete-reinsert-ok: removes a lot drawn down to zero; the INSERT below is the other branch, not a replacement
         if (remain <= 0.0001) sqlite.prepare("DELETE FROM inventory_lots WHERE id = ?").run(l.id);
         else sqlite.prepare("UPDATE inventory_lots SET quantity = ?, updated_at = ? WHERE id = ?").run(remain, nowIso, l.id);
       }
