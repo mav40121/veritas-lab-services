@@ -1,0 +1,97 @@
+name: Security scan
+
+# Automated vulnerability scanning (Michael Q27 = 1, 2026-10-25; Lifepoint TRB questionnaire Q33/Q34/Q75).
+# Two jobs, on every pull request, every push to main and every Monday:
+#   dependency-audit  npm audit of the production dependencies. Fails on any CRITICAL advisory; reports the rest.
+#   web-scan          OWASP ZAP baseline (passive) scan of THIS change, built and booted locally on a throwaway
+#                     SQLite database with dummy secrets. It never touches production: VeritaAssure is one shared
+#                     platform, and our policy (Information Security Policy section 11) runs no scans against it.
+# Reports are kept as artifacts for 30 days. Report-only for now (not a required check).
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 9 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: security-scan-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-audit:
+    name: dependency-audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+      - name: Audit production dependencies
+        run: |
+          npm audit --omit=dev --json > npm-audit.json || true
+          node -e '
+            const a = require("./npm-audit.json");
+            const m = (a.metadata && a.metadata.vulnerabilities) || {};
+            console.log("production dependency advisories:", JSON.stringify(m));
+            const rows = Object.entries(a.vulnerabilities || {}).filter(([, v]) => ["critical", "high"].includes(v.severity));
+            for (const [name, v] of rows) console.log(`${v.severity.padEnd(8)} ${name} ${v.range}  fix: ${typeof v.fixAvailable === "object" ? v.fixAvailable.name + "@" + v.fixAvailable.version + (v.fixAvailable.isSemVerMajor ? " (major)" : "") : v.fixAvailable}`);
+            if ((m.critical || 0) > 0) { console.log("::error::critical advisories in production dependencies"); process.exit(1); }
+          '
+      - name: Keep the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-audit
+          path: npm-audit.json
+          retention-days: 30
+
+  web-scan:
+    name: web-scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Build app (client + server)
+        run: npm run build
+      - name: Boot the server on a throwaway database
+        env:
+          NODE_ENV: production
+          PORT: '5000'
+          DB_PATH: .tmp-security-scan.db
+          JWT_SECRET: test-jwt-secret
+          ADMIN_SECRET: test-admin-secret
+          STRIPE_SECRET_KEY: sk_test_dummy
+          STRIPE_WEBHOOK_SECRET: whsec_dummy
+          RESEND_API_KEY: re_dummy
+        run: |
+          rm -f .tmp-security-scan.db
+          nohup node dist/index.cjs > server.log 2>&1 &
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:5000/ >/dev/null 2>&1; then echo "server ready after ${i}s"; exit 0; fi
+            sleep 1
+          done
+          echo "::error::server never became ready on :5000"; tail -20 server.log; exit 1
+      - name: OWASP ZAP baseline scan (passive, local build only)
+        uses: zaproxy/action-baseline@v0.14.0
+        with:
+          target: 'http://localhost:5000'
+          allow_issue_writing: false
+          fail_action: false
+          artifact_name: zap-baseline-report
