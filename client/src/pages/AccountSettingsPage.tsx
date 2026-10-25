@@ -6,6 +6,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { authHeaders, getUser } from "@/lib/auth";
 import { passwordProblem, PASSWORD_RULE_TEXT } from "@shared/passwordRule";
 import { TwoFactorSetup, RecoveryCodesPanel } from "@/components/TwoFactorStep";
+import { SecuritySettingsCard } from "@/components/SecuritySettingsCard";
 import { trackEvent } from "@/lib/analytics";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -531,6 +532,7 @@ export default function AccountSettingsPage() {
       <ChangePasswordCard />
 
       <TwoFactorCard />
+      <SecuritySettingsCard />
 
       <SignedInDevicesCard />
 

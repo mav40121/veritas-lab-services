@@ -26,6 +26,8 @@ export default function ResetPasswordPage() {
   // Two-factor: a reset link proves the email, not the second step, so a person with
   // two-factor on signs in again through the code step.
   const [signInNext, setSignInNext] = useState(false);
+  // System security settings: an account turned off for inactivity keeps the new password but stays off.
+  const [inactiveNote, setInactiveNote] = useState<string | null>(null);
   const { toast } = useToast();
   const { login } = useAuth();
 
@@ -69,6 +71,7 @@ export default function ResetPasswordPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Reset failed");
+      if (data.inactive) setInactiveNote(data.message || null);
       if (data.sign_in_required || !data.token) { setSignInNext(true); setDone(true); return; }
       if (data.session_token) { try { localStorage.setItem("veritas_session_token", data.session_token); } catch {} }
       login(data.token, data.user);
@@ -87,7 +90,7 @@ export default function ResetPasswordPage() {
           <CardContent className="pt-8 pb-6">
             <div className="text-4xl mb-4">✓</div>
             <h2 className="font-semibold text-lg mb-2">Password updated</h2>
-            <p className="text-sm text-muted-foreground mb-4">{signInNext ? "Sign in with your new password. You'll be asked for your two-factor code." : "You're now logged in."}</p>
+            <p className="text-sm text-muted-foreground mb-4">{inactiveNote || (signInNext ? "Sign in with your new password. You'll be asked for your two-factor code." : "You're now logged in.")}</p>
             <Button asChild className="w-full bg-primary text-primary-foreground">
               {signInNext ? <Link href="/login">Sign in</Link> : <Link href={labRoute("/dashboard")}>Go to My Studies</Link>}
             </Button>

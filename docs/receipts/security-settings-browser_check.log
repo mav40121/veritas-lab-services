@@ -1,0 +1,17 @@
+PASS  scratch accounts and lab  :: {"labId":1}
+PASS  1a. the owner sees 'Security settings for your system' covering their lab  :: Security settings for your system These apply to everyone in your lab (Security Lab; 1 other person), including you. People who sign in with your organization's single sign-on follow your identity provider's password rul
+PASS  1b. saving asks for the current password first
+PASS  1c. after a reload the six settings are on  :: 15,180,4,3,90
+PASS  1d. dark: the card renders
+PASS  2a. the member is locked after 3 wrong passwords  :: status=423
+PASS  2b. the Members page lists the member as locked  :: Accounts that can't sign in Morgan Member · locked after wrong passwords Turn back on These rules come from your system's security settings (Account settings). Turning someone back on is recorded in t
+PASS  2c. after Turn back on the card clears
+PASS  3a. sign-in shows 'Your password has expired' with the 180-day reason  :: Your password has expired Your organization requires a new password every 180 days. Choose a new one to finish signing in. New password Confirm new password At least 8 characters, using 3 of these 4: 
+PASS  3b. reusing the current password is refused on screen
+PASS  3c. a new password finishes sign-in  :: http://localhost:5197/dashboard
+PASS  4a. at 14 minutes idle the one-minute warning appears  :: For security, you'll be signed out in 48 seconds without activity. Stay signed in
+PASS  4b. after 15 minutes the browser is signed out and the sign-in page says why  :: You were signed out after 15 minutes without activity. Sign in again to continue.
+PASS  4c. that session no longer works on the server  :: status=401
+PASS  5. a server-ended idle session lands on sign-in with the reason  :: You were signed out after 15 minutes without activity. Sign in again to continue.
+ALL PASS
+exit 0

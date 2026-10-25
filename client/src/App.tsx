@@ -14,6 +14,7 @@ import { PhiGuard } from "@/components/PhiGuard";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider, useAuth } from "@/components/AuthContext";
+import { IdleSignOut } from "@/components/IdleSignOut";
 import { LegacyWorkspaceRedirect } from "@/components/LegacyWorkspaceRedirect";
 import { NavBar } from "@/components/NavBar";
 import { SubscriptionBanner } from "@/components/SubscriptionBanner";
@@ -623,6 +624,7 @@ function AppContent() {
       <SiteFooter />
       <BackToTop />
       <Toaster />
+      <IdleSignOut />
       <PhiGuard />
       <SubscriptionModal />
       <StudyCreditsModal />

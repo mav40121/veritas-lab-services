@@ -660,6 +660,8 @@ export default function LabMembersPage() {
 
       {canManage && activeLabId && <TwoFactorLabCard labId={activeLabId} />}
 
+      {canManage && activeLabId && <AccountStatusCard labId={activeLabId} />}
+
       {isOwner && activeLabId && <ExportAllCard labId={activeLabId} />}
 
       {isOwner && (
@@ -913,6 +915,46 @@ function TwoFactorLabCard({ labId }: { labId: number }) {
         <p className="rounded-md border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
           Reset clears the person's app and recovery codes and signs them out everywhere; they set it up again at their next sign-in. Recorded in the audit trail. Veritas Lab Services resets a lab owner's.
         </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+// System security settings (server/securityPolicy.ts; Michael Q27 = 1, 2026-10-25): people locked out
+// after wrong passwords, or turned off after the owner's inactivity limit, with a button to turn them back
+// on. Shows nothing when nobody is affected.
+function AccountStatusCard({ labId }: { labId: number }) {
+  const { toast } = useToast();
+  const key = `/api/labs/${labId}/account-status`;
+  const { data } = useQuery<{ people: Array<{ userId: number; name: string; locked: boolean; inactive: boolean }> }>({
+    queryKey: [key], queryFn: getQueryFn({ on401: "throw" }), enabled: !!labId, retry: false,
+  });
+  const reenable = useMutation({
+    mutationFn: async (userId: number) => (await apiRequest("POST", `/api/labs/${labId}/members/${userId}/reenable`, {})).json(),
+    onSuccess: (r: any) => { toast({ title: `${r?.name || "Account"} can sign in again` }); queryClient.invalidateQueries({ queryKey: [key] }); },
+    onError: (err: any) => toast({ title: "Could not turn the account back on", description: cleanErr(err), variant: "destructive" }),
+  });
+  if (!data || !data.people.length) return null;
+  return (
+    <Card data-testid="account-status-card">
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2"><KeyRound size={16} /> Accounts that can't sign in</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3 text-sm">
+        <ul className="space-y-2">
+          {data.people.map((p) => (
+            <li key={p.userId} className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border px-3 py-2" data-testid={`account-status-${p.userId}`}>
+              <span>
+                <span className="font-medium">{p.name}</span>
+                <span className="text-xs text-muted-foreground"> · {[p.locked ? "locked after wrong passwords" : "", p.inactive ? "turned off after a long time without signing in" : ""].filter(Boolean).join(" and ")}</span>
+              </span>
+              <Button size="sm" variant="outline" disabled={reenable.isPending} onClick={() => reenable.mutate(p.userId)} data-testid={`reenable-${p.userId}`}>
+                Turn back on
+              </Button>
+            </li>
+          ))}
+        </ul>
+        <p className="text-xs text-muted-foreground">These rules come from your system's security settings (Account settings). Turning someone back on is recorded in the audit trail.</p>
       </CardContent>
     </Card>
   );
