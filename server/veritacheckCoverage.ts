@@ -43,7 +43,11 @@ export interface CoverageRow {
   status: CalVerStatus;      // granular current-cycle state (mirrors method comparison)
   nextDueOn: string | null;  // YYYY-MM-DD; last signed study + 6 months, else null
   overdue: boolean;          // a concrete next-due date is in the past
+  outsideRecord: OutsideRecordRef | null; // set when a study recorded outside VeritaCheck drives the current cycle
 }
+// A study the lab performed outside VeritaCheck, recorded on the Coverage page (Q16, 2026-10-24).
+export interface OutsideRecordRef { id: number; performedOn: string; recordsLocation: string; reviewedBy: string }
+export type OutsideRecord = { id: number; kind: "cal_ver" | "method_comparison"; instrument_id: number | null; analyte: string; performed_on: string; records_location: string; reviewed_by: string };
 // Recurrence-aware method comparison / correlation status (§493.1281: compare
 // twice a year). A signed study banks that cycle and the requirement rolls to
 // its next due date; it is never "done forever". Status is the current-cycle
@@ -59,6 +63,7 @@ export interface MethodComparisonRow {
   status: MethodComparisonStatus;
   nextDueOn: string | null; // YYYY-MM-DD; null = owed now (never signed a passing study)
   overdue: boolean;         // a concrete next-due date is in the past
+  outsideRecord: OutsideRecordRef | null; // set when a study recorded outside VeritaCheck drives the current cycle
 }
 export interface UnmappedStudy {
   id: number;
@@ -92,6 +97,11 @@ export interface CoverageResult {
   rows: CoverageRow[];
   methodComparisons: MethodComparisonRow[];
   unmappedStudies: UnmappedStudy[];
+  outsideRecords?: OutsideRecordListItem[]; // computeCoverageForLab only: the lab's active outside records
+}
+export interface OutsideRecordListItem {
+  id: number; kind: "cal_ver" | "method_comparison"; analyte: string; instrument: string;
+  performedOn: string; recordsLocation: string; reviewedBy: string; notes: string; createdAt: string; createdBy: string;
 }
 
 // cal_ver_correlation (2026-10-15) answers both requirements: it is in this set and in MC_STUDY_TYPES.
@@ -126,7 +136,19 @@ function studyMatchesInstrument(studyInstr: string, mapName: string, mapNick: st
   return common / mt.size >= 0.6;
 }
 
-type Study = { id: number; test_name: string; instrument: string; study_type: string; status: string; lifecycle_state: string; date?: string; finalized_at?: string | null; coverage_analyte?: string | null };
+type Study = { id: number; test_name: string; instrument: string; study_type: string; status: string; lifecycle_state: string; date?: string; finalized_at?: string | null; coverage_analyte?: string | null; outside?: OutsideRecordRef };
+
+// An outside record takes part in the same "most recent wins" comparison as a study: it reads as a signed, passing
+// study dated performed_on, so it banks the cycle and the requirement recurs 6 months later. Its id is never mixed
+// into studyIds (it is not a study); the row carries it as outsideRecord instead.
+const realStudies = (xs: Study[]): Study[] => xs.filter((s) => !s.outside);
+function outsideAsStudy(o: OutsideRecord): Study {
+  return {
+    id: 0, test_name: o.analyte, instrument: "", study_type: o.kind, status: "pass", lifecycle_state: "finalized",
+    date: o.performed_on, finalized_at: o.performed_on, coverage_analyte: o.analyte,
+    outside: { id: o.id, performedOn: o.performed_on, recordsLocation: o.records_location, reviewedBy: o.reviewed_by },
+  };
+}
 
 // Method comparison / correlation recurrence interval (CLIA §493.1281: at least
 // twice a year). Both study types satisfy the requirement.
@@ -169,7 +191,7 @@ function instLabel(i?: Instrument): string {
   return extra ? `${i.instrument_name} (${extra})` : i.instrument_name;
 }
 
-export function computeCoverageFrom(instruments: Instrument[], combos: Combo[], studies: Study[]): CoverageResult {
+export function computeCoverageFrom(instruments: Instrument[], combos: Combo[], studies: Study[], outside: OutsideRecord[] = []): CoverageResult {
   const instrById = new Map<number, Instrument>();
   for (const i of instruments) instrById.set(i.id, i);
 
@@ -194,8 +216,10 @@ export function computeCoverageFrom(instruments: Instrument[], combos: Combo[], 
     // Only cal-ver / linearity studies count toward the linearity requirement.
     const linCands = studies.filter((s) => LINEARITY_TYPES.has(s.study_type) && matchesAnalyte(s, c.analyte));
     const onInst = inst ? linCands.filter((s) => studyMatchesInstrument(s.instrument, instName, inst.nickname)) : [];
-    // Recurrence: the MOST RECENT on-instrument study drives the current cycle.
-    const onInstSorted = onInst.slice().sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+    // Studies recorded outside VeritaCheck are kept per instrument + analyte, so they match exactly (no name matching).
+    const outsideHere = outside.filter((o) => o.kind === "cal_ver" && o.instrument_id === c.instrument_id && o.analyte === c.analyte).map(outsideAsStudy);
+    // Recurrence: the MOST RECENT on-instrument study (or outside record) drives the current cycle.
+    const onInstSorted = onInst.concat(outsideHere).sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
     const latest = onInstSorted[0] || null;
 
     let linStatus: LinearityStatus;   // recurrence-aware bucket (covered = satisfied this cycle)
@@ -250,12 +274,13 @@ export function computeCoverageFrom(instruments: Instrument[], combos: Combo[], 
       linearityExemptOther: other,
       linearityRequired: !exempt,
       linearityStatus: linStatus,
-      studyIds: matched.slice(0, 8).map((s) => s.id),
-      verdict: Array.from(new Set(matched.map((s) => (s.status || "").toLowerCase()).filter(Boolean))).sort().join(", "),
-      signed: matched.length > 0 && matched.every((s) => s.lifecycle_state === "finalized"),
+      studyIds: realStudies(matched).slice(0, 8).map((s) => s.id),
+      verdict: Array.from(new Set(realStudies(matched).map((s) => (s.status || "").toLowerCase()).filter(Boolean))).sort().join(", "),
+      signed: realStudies(matched).length > 0 && realStudies(matched).every((s) => s.lifecycle_state === "finalized"),
       status: calStatus,
       nextDueOn,
       overdue,
+      outsideRecord: !exempt && latest?.outside ? latest.outside : null,
     });
   }
 
@@ -299,6 +324,7 @@ export function computeCoverageFrom(instruments: Instrument[], combos: Combo[], 
     // forever. Failed / unsigned / never-done all read as owed now.
     const cands = studies
       .filter((s) => MC_STUDY_TYPES.has(s.study_type) && [...g.analytes].some((a) => matchesAnalyte(s, a)))
+      .concat(outside.filter((o) => o.kind === "method_comparison" && g.analytes.has(o.analyte)).map(outsideAsStudy))
       .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
     const latest = cands[0] || null;
     let status: MethodComparisonStatus = "missing";
@@ -324,12 +350,13 @@ export function computeCoverageFrom(instruments: Instrument[], combos: Combo[], 
       analyte,
       instruments: Array.from(instIds).map((id) => instLabel(instrById.get(id))).sort(),
       hasStudy: !!latest,
-      studyId: latest ? latest.id : null,
+      studyId: latest && !latest.outside ? latest.id : null,
       verdict: latest ? (latest.status || "").toLowerCase() : "",
       signed,
       status,
       nextDueOn,
       overdue,
+      outsideRecord: latest?.outside ?? null,
     });
   }
   methodComparisons.sort((a, b) => a.analyte.localeCompare(b.analyte));
@@ -403,7 +430,138 @@ export function computeCoverageForLab(sqlite: any, labId: number): CoverageResul
     `SELECT id, test_name, instrument, study_type, status, lifecycle_state, date, finalized_at, coverage_analyte
      FROM studies WHERE lab_id = ? AND archived_at IS NULL`
   ).all(labId) as Study[];
-  return computeCoverageFrom(instruments, combos, studies);
+  const outside = listOutsideRecords(sqlite, labId);
+  const result = computeCoverageFrom(instruments, combos, studies, outside);
+  const instById = new Map<number, Instrument>(instruments.map((i) => [i.id, i]));
+  const people = new Map<number, string>();
+  const nameOf = (uid: number | null): string => {
+    if (!uid) return "";
+    if (!people.has(uid)) people.set(uid, String((sqlite.prepare("SELECT name FROM users WHERE id = ?").get(uid) as any)?.name || ""));
+    return people.get(uid) || "";
+  };
+  const full = sqlite.prepare(
+    `SELECT id, kind, instrument_id, analyte, performed_on, records_location, reviewed_by, notes, created_at, created_by_user_id
+     FROM veritacheck_outside_records WHERE lab_id = ? AND voided_at IS NULL ORDER BY performed_on DESC, id DESC`
+  ).all(labId) as any[];
+  result.outsideRecords = full.map((o) => ({
+    id: o.id, kind: o.kind, analyte: o.analyte, instrument: o.instrument_id ? instLabel(instById.get(o.instrument_id)) : "",
+    performedOn: o.performed_on, recordsLocation: o.records_location, reviewedBy: o.reviewed_by, notes: o.notes || "",
+    createdAt: o.created_at, createdBy: nameOf(o.created_by_user_id),
+  }));
+  return result;
+}
+
+// ── Studies performed outside VeritaCheck (Q16, 2026-10-24) ─────────────────────────────────────────────────────
+// The lab records, by date, a calibration verification / linearity (per instrument + analyte) or a correlation /
+// method comparison (per analyte) it performed outside VeritaCheck, with where the records are kept and who reviewed
+// them. Coverage credits each like a signed passing study until 6 months after the date. Records are voided with a
+// reason, never deleted.
+export function listOutsideRecords(sqlite: any, labId: number): OutsideRecord[] {
+  return sqlite.prepare(
+    `SELECT id, kind, instrument_id, analyte, performed_on, records_location, reviewed_by
+     FROM veritacheck_outside_records WHERE lab_id = ? AND voided_at IS NULL`
+  ).all(labId) as OutsideRecord[];
+}
+
+const OUTSIDE_KINDS = new Set(["cal_ver", "method_comparison"]);
+const OUTSIDE_MAP_FIELD: Record<string, string> = { cal_ver: "last_cal_ver", method_comparison: "last_method_comp" };
+function validIsoDate(s: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const d = new Date(`${s}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+}
+
+export type OutsideRecordInput = {
+  kind: string; performedOn: string; recordsLocation: string; reviewedBy: string; notes?: string;
+  instrumentTestIds?: number[]; // cal_ver: the Coverage rows (VeritaMap analyte x instrument)
+  analytes?: string[];          // method_comparison: the Coverage method-comparison rows
+};
+export function recordOutsideStudies(sqlite: any, labId: number, userId: number | null, input: OutsideRecordInput):
+  { ok: true; created: number; skipped: number; ids: number[] } | { ok: false; error: string } {
+  const kind = String(input?.kind || "");
+  if (!OUTSIDE_KINDS.has(kind)) return { ok: false, error: "Choose calibration verification / linearity or correlation / method comparison." };
+  const performedOn = String(input?.performedOn || "").trim();
+  if (!validIsoDate(performedOn)) return { ok: false, error: "Enter the date the study was performed." };
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10); // one day of slack for time zones
+  if (performedOn > tomorrow) return { ok: false, error: "The date performed cannot be in the future." };
+  if (performedOn < "2000-01-01") return { ok: false, error: "Check the date performed." };
+  const recordsLocation = String(input?.recordsLocation || "").trim();
+  const reviewedBy = String(input?.reviewedBy || "").trim();
+  const notes = String(input?.notes || "").trim();
+  if (!recordsLocation || recordsLocation.length > 300) return { ok: false, error: "Say where the study records are kept (up to 300 characters)." };
+  if (!reviewedBy || reviewedBy.length > 120) return { ok: false, error: "Enter who reviewed and accepted the study (up to 120 characters)." };
+  if (notes.length > 1000) return { ok: false, error: "Notes can be up to 1000 characters." };
+
+  // Resolve what is being recorded to (instrument_id, analyte) pairs on THIS lab's VeritaMap.
+  const items: { instrumentId: number | null; analyte: string }[] = [];
+  if (kind === "cal_ver") {
+    const ids = Array.from(new Set((Array.isArray(input?.instrumentTestIds) ? input.instrumentTestIds : []).map(Number)));
+    if (ids.length === 0 || ids.length > 1000 || ids.some((n) => !Number.isInteger(n) || n <= 0)) return { ok: false, error: "Pick the tests to record (1 to 1000)." };
+    const q = sqlite.prepare("SELECT it.instrument_id, it.analyte FROM veritamap_instrument_tests it JOIN veritamap_maps m ON m.id = it.map_id WHERE it.id = ? AND m.lab_id = ?");
+    for (const id of ids) {
+      const r = q.get(id, labId) as any;
+      if (!r) return { ok: false, error: "One of the tests is not on this lab's VeritaMap. Refresh the page and try again." };
+      items.push({ instrumentId: r.instrument_id, analyte: r.analyte });
+    }
+  } else {
+    const names = Array.from(new Set((Array.isArray(input?.analytes) ? input.analytes : []).map((a) => String(a || "").trim()).filter(Boolean)));
+    if (names.length === 0 || names.length > 1000) return { ok: false, error: "Pick the tests to record (1 to 1000)." };
+    const q = sqlite.prepare("SELECT 1 FROM veritamap_instrument_tests it JOIN veritamap_maps m ON m.id = it.map_id WHERE m.lab_id = ? AND it.analyte = ? LIMIT 1");
+    for (const a of names) {
+      if (!q.get(labId, a)) return { ok: false, error: `${a} is not on this lab's VeritaMap. Refresh the page and try again.` };
+      items.push({ instrumentId: null, analyte: a });
+    }
+  }
+
+  const now = new Date().toISOString();
+  const dup = sqlite.prepare(
+    "SELECT 1 FROM veritacheck_outside_records WHERE lab_id = ? AND kind = ? AND analyte = ? AND performed_on = ? AND voided_at IS NULL AND COALESCE(instrument_id, 0) = ? LIMIT 1"
+  );
+  const ins = sqlite.prepare(
+    `INSERT INTO veritacheck_outside_records (lab_id, kind, instrument_id, analyte, performed_on, records_location, reviewed_by, notes, created_by_user_id, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  );
+  const field = OUTSIDE_MAP_FIELD[kind]; // allowlisted above; never user input
+  const stamp = sqlite.prepare(
+    `UPDATE veritamap_tests SET ${field} = ?, updated_at = ? WHERE map_id IN (SELECT id FROM veritamap_maps WHERE lab_id = ?)
+       AND analyte = ? AND (${field} IS NULL OR ${field} = '' OR ${field} < ?)`
+  );
+  const ids: number[] = [];
+  let skipped = 0;
+  sqlite.transaction(() => {
+    for (const it of items) {
+      if (dup.get(labId, kind, it.analyte, performedOn, it.instrumentId ?? 0)) { skipped++; continue; }
+      ids.push(Number(ins.run(labId, kind, it.instrumentId, it.analyte, performedOn, recordsLocation, reviewedBy, notes || null, userId, now).lastInsertRowid));
+    }
+    // The VeritaMap grid date shows when it was last done; only ever moved later, never earlier.
+    for (const a of new Set(items.map((i) => i.analyte))) stamp.run(performedOn, now, labId, a, performedOn);
+  })();
+  return { ok: true, created: ids.length, skipped, ids };
+}
+
+export function voidOutsideRecord(sqlite: any, labId: number, userId: number | null, id: number, reason: string):
+  { ok: true; record: any } | { ok: false; status: number; error: string } {
+  const why = String(reason || "").trim();
+  if (!why || why.length > 300) return { ok: false, status: 400, error: "Give a reason for removing this record (up to 300 characters)." };
+  const rec = sqlite.prepare("SELECT * FROM veritacheck_outside_records WHERE id = ? AND lab_id = ? AND voided_at IS NULL").get(id, labId) as any;
+  if (!rec) return { ok: false, status: 404, error: "Record not found in this lab" };
+  const now = new Date().toISOString();
+  const field = OUTSIDE_MAP_FIELD[rec.kind];
+  sqlite.transaction(() => {
+    sqlite.prepare("UPDATE veritacheck_outside_records SET voided_at = ?, voided_by_user_id = ?, void_reason = ? WHERE id = ?").run(now, userId, why, id);
+    if (field) {
+      // If the VeritaMap date came from this record, fall back to the newest remaining record for the test (or blank);
+      // real studies then re-stamp their own dates (stampMapDatesFromStudies only ever moves a date later).
+      const next = sqlite.prepare(
+        "SELECT MAX(performed_on) AS d FROM veritacheck_outside_records WHERE lab_id = ? AND kind = ? AND analyte = ? AND voided_at IS NULL"
+      ).get(labId, rec.kind, rec.analyte) as any;
+      sqlite.prepare(
+        `UPDATE veritamap_tests SET ${field} = ?, updated_at = ? WHERE map_id IN (SELECT id FROM veritamap_maps WHERE lab_id = ?) AND analyte = ? AND ${field} = ?`
+      ).run(next?.d || null, now, labId, rec.analyte, rec.performed_on);
+    }
+  })();
+  stampMapDatesFromStudies(sqlite, labId);
+  return { ok: true, record: { ...rec, voided_at: now, void_reason: why } };
 }
 
 // The three VeritaMap grid date columns a VeritaCheck study can stamp. Allowlisted

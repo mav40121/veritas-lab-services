@@ -14,7 +14,8 @@ import { useLabRoute } from "@/hooks/useLabRoute";
 import { useSEO } from "@/hooks/useSEO";
 import { authHeaders } from "@/lib/auth";
 import { BulkAddToSignoffGroup } from "@/components/BulkAddToSignoffGroup";
-import { ChevronLeft, ListChecks, GitCompare, Download, ArrowUpDown, Unlink } from "lucide-react";
+import { OutsideRecordsDialog, VoidOutsideRecordDialog } from "@/components/OutsideRecordsDialog";
+import { ChevronLeft, ListChecks, GitCompare, Download, ArrowUpDown, Unlink, ClipboardCheck } from "lucide-react";
 
 type LinearityStatus = "covered" | "review" | "missing" | "exempt";
 type CalVerStatus = "missing" | "failed" | "completed_unsigned" | "review" | "exempt";
@@ -23,9 +24,14 @@ type CoverageRow = {
   linearityExemptMultical: boolean; linearityExemptNoncal: boolean; linearityExemptWaived: boolean; linearityExemptOther: string; linearityRequired: boolean;
   linearityStatus: LinearityStatus; studyIds: number[]; verdict: string; signed: boolean;
   status: CalVerStatus; nextDueOn: string | null; overdue: boolean;
+  outsideRecord?: OutsideRecordRef | null;
 };
+// A study the lab performed outside VeritaCheck and recorded here (Q16); it drives the row's current cycle.
+type OutsideRecordRef = { id: number; performedOn: string; recordsLocation: string; reviewedBy: string };
+type OutsideRecordItem = { id: number; kind: "cal_ver" | "method_comparison"; analyte: string; instrument: string; performedOn: string; recordsLocation: string; reviewedBy: string; notes: string; createdAt: string; createdBy: string };
+const outsideTitle = (o: OutsideRecordRef) => `Performed outside VeritaCheck on ${o.performedOn}. Records kept at: ${o.recordsLocation}. Reviewed and accepted by ${o.reviewedBy}.`;
 type MethodComparisonStatus = "missing" | "failed" | "completed_unsigned";
-type MethodComparisonRow = { analyte: string; instruments: string[]; hasStudy: boolean; studyId: number | null; verdict: string; signed: boolean; status: MethodComparisonStatus; nextDueOn: string | null; overdue: boolean };
+type MethodComparisonRow = { analyte: string; instruments: string[]; hasStudy: boolean; studyId: number | null; verdict: string; signed: boolean; status: MethodComparisonStatus; nextDueOn: string | null; overdue: boolean; outsideRecord?: OutsideRecordRef | null };
 // A requirement is satisfied for the current cycle only when a passing study is
 // signed AND its next due date (signed + 6 mo) is still in the future.
 function mcSatisfied(m: MethodComparisonRow): boolean { return m.status === "missing" && !!m.nextDueOn && !m.overdue; }
@@ -41,6 +47,7 @@ type Coverage = {
   rows: CoverageRow[];
   methodComparisons: MethodComparisonRow[];
   unmappedStudies: UnmappedStudy[];
+  outsideRecords?: OutsideRecordItem[];
 };
 
 function statusBadge(s: LinearityStatus) {
@@ -140,6 +147,8 @@ export default function VeritaCheckCoveragePage() {
   const [mcSort, setMcSort] = useState<McSortState>({ key: null, dir: "asc" }); // null = default order (missing first, then studies on file)
   const openStudy = (id?: number | null) => { if (id) navigate(labRoute(`/study/${id}/results`)); };
   const [exporting, setExporting] = useState(false);
+  const [outsideOpen, setOutsideOpen] = useState(false);
+  const [voidTarget, setVoidTarget] = useState<OutsideRecordItem | null>(null);
   const downloadReport = async () => {
     if (exporting || !coverageUrl) return;
     setExporting(true);
@@ -362,9 +371,16 @@ export default function VeritaCheckCoveragePage() {
       </div>
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <h1 className="font-serif text-2xl font-bold mb-1">Coverage</h1>
-        <Button variant="outline" size="sm" onClick={downloadReport} disabled={exporting} data-testid="button-coverage-export">
-          <Download size={14} className="mr-2" />{exporting ? "Preparing..." : "Download report"}
-        </Button>
+        <div className="flex items-center gap-2 flex-wrap">
+          {!isReadOnly && (
+            <Button variant="outline" size="sm" onClick={() => setOutsideOpen(true)} data-testid="button-record-outside">
+              <ClipboardCheck size={14} className="mr-2" />Record outside studies
+            </Button>
+          )}
+          <Button variant="outline" size="sm" onClick={downloadReport} disabled={exporting} data-testid="button-coverage-export">
+            <Download size={14} className="mr-2" />{exporting ? "Preparing..." : "Download report"}
+          </Button>
+        </div>
       </div>
       <p className="text-sm text-muted-foreground mb-6">
         What your VeritaMap requires versus the studies you have. {s.analytes} analytes across {s.instruments} instruments; {s.studies} studies on file.
@@ -437,7 +453,9 @@ export default function VeritaCheckCoveragePage() {
                     ? <Badge variant="destructive" className="text-[10px]">{m.studyId ? `#${m.studyId} ` : ""}Failed</Badge>
                     : m.status === "completed_unsigned"
                       ? <Badge variant="outline" className="text-[10px] border-amber-500/40 text-amber-600">{m.studyId ? `#${m.studyId} ` : ""}Completed, unsigned</Badge>
-                      : <Badge variant="outline" className={`text-[10px] ${owedNow ? "border-red-500/40 text-red-600" : "border-border text-muted-foreground"}`}>Missing</Badge>}</td>
+                      : m.outsideRecord && !owedNow
+                        ? <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-600" title={outsideTitle(m.outsideRecord)} data-testid={`cov-mc-outside-${m.analyte}`}>Outside record</Badge>
+                        : <Badge variant="outline" className={`text-[10px] ${owedNow ? "border-red-500/40 text-red-600" : "border-border text-muted-foreground"}`}>Missing</Badge>}</td>
                   <td className="py-2 px-3 text-xs uppercase text-muted-foreground">{m.verdict}</td>
                   <td className="py-2 px-3 text-xs whitespace-nowrap">{m.nextDueOn
                     ? <span className={m.overdue ? "text-red-600 font-medium" : "text-muted-foreground"}>{m.nextDueOn}{m.overdue ? " (overdue)" : ""}</span>
@@ -513,7 +531,9 @@ export default function VeritaCheckCoveragePage() {
                   <td className="py-2 px-3">{r.analyte}</td>
                   <td className="py-2 px-3 text-muted-foreground text-xs">{r.instrument}</td>
                   <td className="py-2 px-3">{linearityBadge(r)}</td>
-                  <td className="py-2 px-3 text-xs text-muted-foreground">{r.studyIds.length ? r.studyIds.map((i) => `#${i}`).join(", ") : ""}</td>
+                  <td className="py-2 px-3 text-xs text-muted-foreground">{r.outsideRecord
+                    ? <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-600" title={outsideTitle(r.outsideRecord)} data-testid={`cov-outside-${r.instrumentTestId}`}>Outside record</Badge>
+                    : r.studyIds.length ? r.studyIds.map((i) => `#${i}`).join(", ") : ""}</td>
                   <td className="py-2 px-3 text-xs whitespace-nowrap">{r.nextDueOn
                     ? <span className={r.overdue ? "text-red-600 font-medium" : "text-muted-foreground"}>{r.nextDueOn}{r.overdue ? " (overdue)" : ""}</span>
                     : <span className="text-muted-foreground">-</span>}</td>
@@ -577,6 +597,52 @@ export default function VeritaCheckCoveragePage() {
               </CardContent></Card>
             </details>
           )}
+        </>
+      )}
+
+      {/* Studies recorded as performed outside VeritaCheck (Q16): reviewable, removable with a reason */}
+      {(data.outsideRecords?.length ?? 0) > 0 && (
+        <details className="mt-8" data-testid="cov-outside-list">
+          <summary className="cursor-pointer font-semibold text-sm inline-flex items-center gap-2">
+            <ClipboardCheck size={16} className="text-primary" />Recorded outside VeritaCheck ({data.outsideRecords!.length})
+          </summary>
+          <p className="text-xs text-muted-foreground my-2">Studies your lab performed and documented outside VeritaCheck. Each counts as current for 6 months from the date performed.</p>
+          <Card><CardContent className="p-0">
+            <div className="overflow-auto max-h-[60vh]">
+              <table className="w-full text-sm">
+                <thead><tr className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-muted text-left text-xs text-muted-foreground border-b border-border">
+                  <th className="py-2 px-3 font-medium">Type</th><th className="py-2 px-3 font-medium">Analyte</th><th className="py-2 px-3 font-medium">Instrument</th>
+                  <th className="py-2 px-3 font-medium">Performed</th><th className="py-2 px-3 font-medium">Records kept at</th><th className="py-2 px-3 font-medium">Reviewed by</th>
+                  <th className="py-2 px-3 font-medium">Recorded by</th><th className="py-2 px-3"></th>
+                </tr></thead>
+                <tbody>{data.outsideRecords!.map((o) => (
+                  <tr key={o.id} className="border-b border-border/60" data-testid={`cov-outside-item-${o.id}`}>
+                    <td className="py-2 px-3 text-xs">{o.kind === "cal_ver" ? "Cal Ver / Linearity" : "Correlation"}</td>
+                    <td className="py-2 px-3">{o.analyte}</td>
+                    <td className="py-2 px-3 text-xs text-muted-foreground">{o.instrument || "All instruments running it"}</td>
+                    <td className="py-2 px-3 text-xs whitespace-nowrap">{o.performedOn}</td>
+                    <td className="py-2 px-3 text-xs">{o.recordsLocation}</td>
+                    <td className="py-2 px-3 text-xs">{o.reviewedBy}</td>
+                    <td className="py-2 px-3 text-xs text-muted-foreground">{o.createdBy}{o.createdAt ? `, ${o.createdAt.slice(0, 10)}` : ""}</td>
+                    <td className="py-2 px-3">{!isReadOnly && <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => setVoidTarget(o)} data-testid={`cov-outside-void-${o.id}`}>Remove</Button>}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
+          </CardContent></Card>
+        </details>
+      )}
+
+      {coverageUrl && (
+        <>
+          <OutsideRecordsDialog
+            open={outsideOpen}
+            onOpenChange={setOutsideOpen}
+            coverageUrl={coverageUrl}
+            calVerRows={data.rows.filter((r) => r.status !== "exempt" && r.linearityStatus !== "covered")}
+            mcRows={data.methodComparisons.filter((m) => !mcSatisfied(m))}
+          />
+          <VoidOutsideRecordDialog record={voidTarget} onClose={() => setVoidTarget(null)} coverageUrl={coverageUrl} />
         </>
       )}
 
