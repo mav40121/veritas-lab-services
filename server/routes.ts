@@ -35836,6 +35836,55 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     }
   });
 
+  // ── ADMIN: structure-only database copy, no records (2026-10-25) ────────
+  // Testing and SQL checks use this instead of /api/admin/backup-db, so customer data is never copied for testing
+  // (Lifepoint questionnaire: "customer data is not used for testing or development"). It rebuilds production's own
+  // tables, indexes, views and triggers in an in-memory database with no rows, so no record leaves the server. A
+  // fresh db.ts boot is not a substitute: its migrations leave about 49 columns out.
+  app.get("/api/admin/schema-db", (req, res) => {
+    const secret = (req.query.secret as string || req.headers["x-admin-secret"] as string);
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    try {
+      const sqlite = (db as any).$client;
+      const Database = require("better-sqlite3");
+      const order: Record<string, number> = { table: 0, index: 1, view: 2, trigger: 3 };
+      const objects = (sqlite.prepare("SELECT type, name, sql FROM sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%'").all() as Array<{ type: string; name: string; sql: string }>)
+        .sort((a, b) => (order[a.type] ?? 9) - (order[b.type] ?? 9));
+      const out = new Database(":memory:");
+      // Views and triggers can depend on each other, so retry what failed until a pass makes no progress. A virtual
+      // table makes its own shadow tables, so their CREATE fails as "already exists" and they are not missing.
+      let pending = objects;
+      for (let pass = 0; pending.length && pass < 5; pass++) {
+        const failed = pending.filter((o) => { try { out.exec(o.sql); return false; } catch { return true; } });
+        if (failed.length === pending.length) break;
+        pending = failed;
+      }
+      const made = new Set((out.prepare("SELECT name FROM sqlite_master").all() as Array<{ name: string }>).map((r) => r.name));
+      const missing = objects.filter((o) => !made.has(o.name)).map((o) => `${o.type} ${o.name}`);
+      const rebuilt = objects.length - missing.length;
+      out.pragma(`user_version = ${Number(sqlite.pragma("user_version", { simple: true })) || 0}`);
+      const file: Buffer = out.serialize();
+      out.close();
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+      logAudit({
+        userId: 0,
+        module: "account",
+        action: "create",
+        entityType: "admin.schema_db_download",
+        entityLabel: `structure only, no records: ${rebuilt} objects${missing.length ? `, ${missing.length} not rebuilt` : ""}`,
+        ipAddress: req.ip,
+      });
+      res.setHeader("Content-Type", "application/x-sqlite3");
+      res.setHeader("Content-Disposition", `attachment; filename="veritas-schema-${timestamp}.db"`);
+      res.setHeader("X-Schema-Objects", String(rebuilt));
+      res.setHeader("X-Schema-Missing", missing.join(", ").slice(0, 1000));
+      res.send(file);
+    } catch (err: any) {
+      console.error("[schema-db] Error:", err.message);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // ── ADMIN: re-seal sealed secrets after a key rotation (2026-10-21) ─────
   // Counts the authenticator keys, pending enrollments and SSO client secrets by which key opens them, and with
   // dryRun:false re-seals the ones only MFA_KEY_PREVIOUS opens. Dry run unless dryRun is exactly false. Returns
