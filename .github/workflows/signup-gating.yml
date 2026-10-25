@@ -70,6 +70,10 @@ jobs:
         # system and stay off outside it; owners unlock and turn accounts back on; every password write
         # goes through setUserPassword.
         run: npm run test:security-settings
+      - name: Run structure-only database copy integration test
+        # GET /api/admin/schema-db (Lifepoint questionnaire: customer data is not used for testing): secret-gated, every
+        # table, index, view and trigger rebuilt with the same columns, no rows, nothing from the source in the file, audited.
+        run: npm run test:schema-db
       - name: Run record-view logging integration test
         # Record-view logging and the access report (server/recordViews.ts; Lifepoint IPS III.1(i)): a signed-in
         # read is logged once per 10 minutes per address; failed and anonymous reads are not; nothing is ever

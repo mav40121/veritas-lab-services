@@ -13,8 +13,10 @@
 //
 // Usage: node scripts/audit-sql-columns.mjs <schemaDbPath>
 //   schemaDbPath: a SQLite file whose schema matches PRODUCTION. Use a real,
-//   accumulated schema: a /api/admin/backup-db snapshot, or a long-lived dev
-//   veritas.db that has been through the migrations over time.
+//   accumulated schema: an /api/admin/schema-db structure-only copy (no records;
+//   vls-ops prod_db_snapshot.sh), or a long-lived dev veritas.db that has been
+//   through the migrations over time. Never a production data download: customer
+//   data is not used for testing (2026-10-25).
 //
 //   Do NOT point this at a freshly-booted empty DB. Several ALTER migrations
 //   are guarded on data/column preconditions (e.g. the inventory_lots lab_id
