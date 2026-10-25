@@ -31,7 +31,7 @@ const child = spawn(process.execPath, [DIST], { env: { ...process.env, DB_PATH: 
 let log = ""; child.stdout.on("data", (d) => { log += d; }); child.stderr.on("data", (d) => { log += d; });
 let up = false;
 for (let i = 0; i < 90 && !up; i++) { await new Promise((r) => setTimeout(r, 1000)); try { up = (await fetch(`http://localhost:${PORT}/api/health`)).status === 200; } catch {} }
-if (!up) { console.error("server did not start; last log lines:\n" + log.split("\n").slice(-15).join("\n")); child.kill(); process.exit(2); }
+if (!up) { console.error("server did not start; last log lines:\n" + log.split("\n").slice(-15).join("\n")); child.kill(); await new Promise((r) => setTimeout(r, 500)); try { fs.rmSync(dir, { recursive: true, force: true }); } catch {} process.exit(2); }
 const B = `http://localhost:${PORT}`;
 const send = (method, url, body, headers = {}) => fetch(B + url, { method, headers: { "Content-Type": "application/json", ...headers }, body: JSON.stringify(body) });
 const all = (sql, ...a) => { const d = new Database(dbPath, { readonly: true }); const r = d.prepare(sql).all(...a); d.close(); return r; };
