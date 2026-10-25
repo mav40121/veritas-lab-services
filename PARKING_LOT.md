@@ -766,6 +766,18 @@ Open questions for the scope:
 
 ---
 
+### 106. Should every account user sign an NDA? Why or why not?
+
+**Effort:** N/A to XS. The decision is Michael's (with counsel); if the answer is a click-through, the build is under a day (an acceptance step at sign-up and first sign-in, stored with a timestamp, like the HIPAA acknowledgment).
+**Importance:** Medium. It protects what users see of the product (screens, workflows, regulatory crosswalks, reports), which matters more as health systems with many users come on and as security reviews ask for evidence, but no customer has required it.
+
+**What:** Michael asked whether every person with a VeritaAssure account should sign a non-disclosure agreement, and why or why not. Context from 2026-10-25: Lifepoint's security review is under way with no NDA signed, which limited what Veritas could share (architecture diagram, security policy). Today the published Terms of Service (effective April 23, 2026) only ask users to keep their sign-in credentials confidential; they have no clause protecting Veritas's confidential or proprietary information. Questions to settle when this is picked up: a mutual NDA with each customer organization versus a click-through for every user; what an individual NDA can realistically be enforced against (a lab tech at a customer site) compared with confidentiality terms in the customer agreement and the Terms of Service; whether a click-through adds sign-up friction for staff-portal users; and how this interacts with the Lifepoint agreement's confidentiality section and the IPS.
+
+**Source:** Michael 2026-10-25: "Parking lot this and return to it later: Should we have all account users sign an NDA? Why or why not?"
+**Status:** Open. Parked; return to it after the Lifepoint questionnaire is submitted.
+
+---
+
 ## CLOSED (audit trail)
 
 ### C96. Dead statement in db.ts: a roster "unique index" that can never be created (was #90)
