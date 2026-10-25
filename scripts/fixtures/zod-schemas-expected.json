@@ -1,0 +1,136 @@
+{
+ "login: valid": {
+  "success": true,
+  "data": "{\"email\":\"tech@example.org\",\"password\":\"<redacted>\"}"
+ },
+ "login: plus address": {
+  "success": true,
+  "data": "{\"email\":\"a+b@example.org\",\"password\":\"<redacted>\"}"
+ },
+ "login: apostrophe": {
+  "success": true,
+  "data": "{\"email\":\"o'brien@example.org\",\"password\":\"<redacted>\"}"
+ },
+ "login: upper case": {
+  "success": true,
+  "data": "{\"email\":\"TECH@EXAMPLE.ORG\",\"password\":\"<redacted>\"}"
+ },
+ "login: subdomain": {
+  "success": true,
+  "data": "{\"email\":\"x.y@mail.example.net\",\"password\":\"<redacted>\"}"
+ },
+ "login: hyphen domain": {
+  "success": true,
+  "data": "{\"email\":\"a@my-lab.example.com\",\"password\":\"<redacted>\"}"
+ },
+ "login: not an email": {
+  "success": false,
+  "fields": [
+   "email"
+  ],
+  "formErrors": 0
+ },
+ "login: double dot": {
+  "success": false,
+  "fields": [
+   "email"
+  ],
+  "formErrors": 0
+ },
+ "login: short password": {
+  "success": false,
+  "fields": [
+   "password"
+  ],
+  "formErrors": 0
+ },
+ "login: missing password": {
+  "success": false,
+  "fields": [
+   "password"
+  ],
+  "formErrors": 0
+ },
+ "login: extra field dropped": {
+  "success": true,
+  "data": "{\"email\":\"tech@example.org\",\"password\":\"<redacted>\"}"
+ },
+ "register: valid": {
+  "success": true,
+  "data": "{\"email\":\"new@example.org\",\"hipaa_acknowledged\":true,\"name\":\"New Person\",\"password\":\"<redacted>\"}"
+ },
+ "register: no acknowledgment": {
+  "success": true,
+  "data": "{\"email\":\"new@example.org\",\"name\":\"New Person\",\"password\":\"<redacted>\"}"
+ },
+ "register: empty name": {
+  "success": false,
+  "fields": [
+   "name"
+  ],
+  "formErrors": 0
+ },
+ "register: acknowledgment as text": {
+  "success": false,
+  "fields": [
+   "hipaa_acknowledged"
+  ],
+  "formErrors": 0
+ },
+ "contact: valid": {
+  "success": true,
+  "data": "{\"email\":\"a@example.org\",\"message\":\"Hello\",\"name\":\"A\"}"
+ },
+ "contact: missing message": {
+  "success": false,
+  "fields": [
+   "message"
+  ],
+  "formErrors": 0
+ },
+ "contact: any email text": {
+  "success": true,
+  "data": "{\"email\":\"anything\",\"message\":\"Hi\",\"name\":\"A\"}"
+ },
+ "contact: createdAt dropped": {
+  "success": true,
+  "data": "{\"email\":\"a@example.org\",\"message\":\"Hi\",\"name\":\"A\"}"
+ },
+ "study: required fields only": {
+  "success": true,
+  "data": "{\"analyst\":\"Tech One\",\"cliaAllowableError\":0.1,\"createdAt\":\"2026-10-25T00:00:00Z\",\"dataPoints\":\"[]\",\"date\":\"2026-10-25\",\"instrument\":\"Analyzer A\",\"instruments\":\"[\\\"Analyzer A\\\"]\",\"studyType\":\"cal_ver\",\"testName\":\"Glucose\"}"
+ },
+ "study: optional fields set": {
+  "success": true,
+  "data": "{\"analyst\":\"Tech One\",\"cliaAbsoluteFloor\":6,\"cliaAllowableError\":0.1,\"controlLot\":\"L1\",\"createdAt\":\"2026-10-25T00:00:00Z\",\"dataPoints\":\"[]\",\"date\":\"2026-10-25\",\"instrument\":\"Analyzer A\",\"instruments\":\"[\\\"Analyzer A\\\"]\",\"material\":\"Cal set\",\"status\":\"draft\",\"studyType\":\"cal_ver\",\"teaIsPercentage\":0,\"teaUnit\":\"mg/dL\",\"testName\":\"Glucose\",\"userId\":7,\"vendorSd\":1.2}"
+ },
+ "study: optional fields null": {
+  "success": true,
+  "data": "{\"analyst\":\"Tech One\",\"cliaAbsoluteFloor\":null,\"cliaAllowableError\":0.1,\"comment\":null,\"controlLot\":null,\"createdAt\":\"2026-10-25T00:00:00Z\",\"dataPoints\":\"[]\",\"date\":\"2026-10-25\",\"instrument\":\"Analyzer A\",\"instruments\":\"[\\\"Analyzer A\\\"]\",\"studyType\":\"cal_ver\",\"testName\":\"Glucose\",\"userId\":null}"
+ },
+ "study: TEa as text": {
+  "success": false,
+  "fields": [
+   "cliaAllowableError"
+  ],
+  "formErrors": 0
+ },
+ "study: missing instrument": {
+  "success": false,
+  "fields": [
+   "instrument"
+  ],
+  "formErrors": 0
+ },
+ "study: unknown field dropped": {
+  "success": true,
+  "data": "{\"analyst\":\"Tech One\",\"cliaAllowableError\":0.1,\"createdAt\":\"2026-10-25T00:00:00Z\",\"dataPoints\":\"[]\",\"date\":\"2026-10-25\",\"instrument\":\"Analyzer A\",\"instruments\":\"[\\\"Analyzer A\\\"]\",\"studyType\":\"cal_ver\",\"testName\":\"Glucose\"}"
+ },
+ "study: decimal user id": {
+  "success": false,
+  "fields": [
+   "userId"
+  ],
+  "formErrors": 0
+ }
+}
