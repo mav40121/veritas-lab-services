@@ -250,6 +250,7 @@ export const EXPORT_TABLES: Record<string, ExportTable> = {
   sso_handoffs: exclude(SIGN_IN),
   sso_login_states: exclude(SIGN_IN),
   password_history: exclude(SIGN_IN),
+  record_views: lab("Access log"),
   sso_configs: exclude(ORG),
   system_security_settings: exclude(ORG),
   organizations: exclude(ORG),

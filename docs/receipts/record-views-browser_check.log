@@ -1,0 +1,9 @@
+PASS  scratch accounts and lab
+PASS  1. the member's dashboard reads are logged with their modules  :: rows=10 modules=Other,VeritaComp,VeritaStaff,VeritaMap,VeritaCheck
+PASS  2a. the Access report lists the member's reads  :: Access report Who opened which records in this lab. The same person opening the same page within 10 minutes is listed once. Changes, approvals and signatures are in the audit trail. Kept for two years. Period Last 7 days Last 30 days Last 90 days Last year Per
+PASS  2b. filtering by person shows only that person  :: ["Riley Reader","Riley Reader","Riley Reader","Riley Reader","Riley Reader"]
+PASS  2c. the Excel download opens with About first, lab identity, and the member's rows  :: Access_Lab_Access_Report_2026-10-25.xlsx sheets=About,Access Log rows=10
+PASS  2d. the download is in the audit trail
+PASS  2e. dark: the card renders
+PASS  3. a staff member does not get the Access report card
+ALL PASS

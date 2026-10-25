@@ -1,0 +1,50 @@
+[db] Using database at: C:/Users/veril/projects/vls-2fa1/.tmp-record-views.db
+[seed] VeritaStaff demo data seeded for Riverside Regional
+[user_seats lab_id retro-populate] failed: no such table: lab_members
+[seed] VeritaComp default VITROS 5600 quiz seeded
+[migration] Phase 3.3: rebuilt veritapolicy_master_status with UNIQUE(lab_id, policy_id)
+[migration] Phase 3.3: rebuilt veritapolicy_settings with UNIQUE(lab_id)
+[migration] Phase 3.3b: rebuilt veritapolicy_requirement_status with UNIQUE(lab_id, requirement_id)
+[migration] Phase 3.10 (findings) skipped (table not yet created on fresh DB): no such table: findings
+[migration] Phase 3.11 (inventory_items) skipped (table not yet created on fresh DB): no such table: inventory_items
+[migration] Inventory barcode backfill skipped (table or column not yet ready): no such table: inventory_items
+[migration] veritacheck_verifications: backfilled lab_id on 0 row(s)
+[migration] productivity_months rebuilt for lab-scoping (0 rows preserved)
+[migration] Wave F PR F2 staff_employees.title_code backfilled on 3 row(s)
+[routes] Route registration checkpoint: studies+auth routes OK, registering PDF and remaining routes...
+[routes] All routes registered successfully (176 routes)
+[register] Resend not configured; admin notification skipped for user 1
+[register] Resend not configured; admin notification skipped for user 2
+[register] Resend not configured; admin notification skipped for user 3
+[admin/provision-demo-lab] created lab_id=1 (IT Views Lab) owner=it-views-owner-1792939518758@example.com plan=hospital parent=none
+[admin/provision-demo-lab] created lab_id=2 (IT Other Customer) owner=it-views-other-owner-1792939519000@example.com plan=hospital parent=none
+[admin/create-lab-invite] lab_id=1 (IT Views Lab) email=it-views-member-1792939518910@example.com token=[redacted] status=active
+PASS  0. labs provisioned  :: [1,2]
+PASS  1a. the member's read is logged once (repeat within 10 minutes is not)  :: status=200 rows=1
+PASS  1b. the row names the module, the address and the IP  :: {"id":1,"lab_id":1,"user_id":2,"path":"/api/labs/1/veritamap/maps","module":"VeritaMap","entity_id":null,"ip_address":"::ffff:127.0.0.1","vls_support":0,"viewed_at":"2026-10-25T14:45:19.355Z"}
+PASS  1c. a query string does not make a new address
+PASS  2a. an anonymous read is refused and not logged
+PASS  2b. a refused read of another customer's lab is not logged there  :: status=403
+PASS  3a. an older path is logged under the member's own active lab  :: status=200 [{"id":2,"lab_id":1,"user_id":2,"path":"/api/findings","module":"VeritaResponse","entity_id":null,"ip_address":"::ffff:127.0.0.1","vls_support":0,"viewed_at":"2026-10-25T14:45:19.786Z"}]
+PASS  3b. naming another customer's lab in the header writes nothing there  :: f2=200 rows=0
+PASS  3c. the person's own 'my labs' call is not logged as a record view
+PASS  4. a made-up export-job header still gets logged
+PASS  5a. the owner's report lists the member's reads  :: status=200 total=3
+PASS  5b. filtering by person shows only that person
+PASS  5c. a staff member cannot see the report  :: status=403
+PASS  5d. another customer's owner cannot see it  :: status=403
+PASS  5e. the other customer's report never shows this lab's people
+PASS  5f. the Excel download has the About sheet first and the Access Log  :: status=200 sheets=About,Access Log rows=4
+PASS  5g. the download is in the audit trail
+[admin/create-lab-invite] lab_id=1 (IT Views Lab) email=it-views-other-owner-1792939519000@example.com token=[redacted] status=active
+PASS  6. a Veritas support account's read is marked as Veritas support  :: [{"id":7,"lab_id":1,"user_id":3,"path":"/api/labs/1/veritamap/maps","module":"VeritaMap","entity_id":null,"ip_address":"::ffff:127.0.0.1","vls_support":1,"viewed_at":"2026-10-25T14:45:21.193Z"}]
+[labs/1/members PATCH] member_id=3 role: staff -> admin (by user_id=1)
+PASS  7a. a role change is audited with before and after  :: {"before_json":"{\"role\":\"staff\"}","after_json":"{\"role\":\"admin\"}"}
+[labs/1/members/3/permissions PATCH] seatId=1 email=it-views-member-1792939518910@example.com permissions: {"mode":"view_all"} -> {"veritamap":"view"} (by user_id=1)
+PASS  7b. a permission change is audited  :: status=200 {"ok":true,"membershipId":3,"seatId":1,"before":"{\"mode\":\"view_all\"}","after":{"veritamap":"view
+[labs/1/members DELETE] member_id=4 user_id=3 (by user_id=1)
+PASS  7c. removing a member is audited
+[labs/1/transfer-ownership] old_owner=1 -> new_owner=2 (primary_moved=false, seats_reparented=2)
+PASS  7d. an ownership transfer is audited  :: status=200
+
+ALL PASS

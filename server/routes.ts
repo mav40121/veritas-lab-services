@@ -66,6 +66,7 @@ import {
   isLocked, recordPasswordFailure, clearPasswordFailures, isInactive,
 } from "./securityPolicy";
 import { registerSecuritySettingsRoutes } from "./securitySettingsRoutes";
+import { recordViewMiddleware, accessReport, accessReportExcel } from "./recordViews";
 import { resealAll } from "./secretRotation";
 import { labWideCorrelation, correlationPeerInstruments, describeCorrelationInstrument, rowComplexity, mapComplianceGaps } from "./labWideCorrelation";
 import { seedProfileFor, seedTeaFor, seedCalVerPoints, seedMethodCompQuant, seedMethodCompCategorical, seedStudyDate } from "./seedStudyProfiles";
@@ -1424,6 +1425,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Download all records (server/exportAll.ts): the export job's own loopback requests carry a per-job secret;
   // this runs them inside the export context so the plan gates let them through. Must precede every route.
   app.use(exportAllMiddleware);
+  // Record-view logging (server/recordViews.ts; Lifepoint IPS III.1(i)): after a successful signed-in read of
+  // lab data, who opened it is recorded. Runs on the response's finish, so it never delays or fails a read.
+  app.use(recordViewMiddleware(() => (db as any).$client));
 
   // Public one-click demo login (VeritaStock deployment only).
   registerDemoLogin(app);
@@ -3519,6 +3523,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const after = JSON.stringify(permissions);
     sqlite.prepare("UPDATE user_seats SET permissions = ? WHERE id = ?").run(after, Number(seatId));
     console.log(`[admin/set-seat-permissions] seatId=${seatId} email=${seat.seat_email} owner=${seat.owner_user_id} permissions: ${before} -> ${after}`);
+    logAudit({ userId: 0, ownerUserId: seat.owner_user_id, module: "admin", action: "update", entityType: "seat.permissions", entityId: Number(seatId), entityLabel: `Veritas admin changed seat permissions for ${seat.seat_email}`, before: (() => { try { return JSON.parse(before || "{}"); } catch { return before; } })(), after: permissions, ipAddress: req.ip });
     res.json({ ok: true, seatId: Number(seatId), before, after: permissions });
   });
 
@@ -4338,6 +4343,39 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   registerSsoRoutes(app, { sqlite: (db as any).$client, storage, logAudit, buildSignIn, adminSecret: ADMIN_SECRET });
   // System security settings (server/securityPolicy.ts; Michael Q27 = 1, 2026-10-25).
   registerSecuritySettingsRoutes(app, { sqlite: (db as any).$client, storage, authMiddleware, labScopeMiddleware, logAudit });
+
+  // Access report (server/recordViews.ts; Lifepoint IPS III.1(i)): who opened which records in this lab.
+  // Owner or admin of this lab only; rows are this lab's alone. Viewing or downloading it is itself audited.
+  const accessReportAllowed = (req: any) => !req.scope?.viaVlsSupport && ["owner", "admin"].includes(String(req.scope?.role || ""));
+  const reportArgs = (req: any) => {
+    const days = Math.min(365, Math.max(1, Number(req.query?.days) || 30));
+    const userId = Number(req.query?.userId) || null;
+    return { days, userId };
+  };
+  app.get("/api/labs/:labId/access-report", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!accessReportAllowed(req)) return res.status(403).json({ error: "Only the lab owner or an admin can see the access report." });
+    const { days, userId } = reportArgs(req);
+    const sqlite = (db as any).$client;
+    const r = accessReport(sqlite, Number(req.scope.labId), { days, userId, limit: 500 });
+    const people = sqlite.prepare(
+      "SELECT DISTINCT v.user_id AS id, COALESCE(u.name, u.email) AS name FROM record_views v LEFT JOIN users u ON u.id = v.user_id WHERE v.lab_id = ? AND v.viewed_at >= ? ORDER BY name COLLATE NOCASE"
+    ).all(Number(req.scope.labId), r.from) as any[];
+    res.json({ days, from: r.from, total: r.total, shown: r.rows.length, rows: r.rows, people });
+  });
+  app.get("/api/labs/:labId/access-report.xlsx", authMiddleware, labScopeMiddleware, async (req: any, res) => {
+    if (!accessReportAllowed(req)) return res.status(403).json({ error: "Only the lab owner or an admin can download the access report." });
+    const { days, userId } = reportArgs(req);
+    const sqlite = (db as any).$client;
+    const labId = Number(req.scope.labId);
+    const lab = sqlite.prepare("SELECT lab_name, clia_number FROM labs WHERE id = ?").get(labId) as any;
+    const r = accessReport(sqlite, labId, { days, userId, limit: 20000 });
+    const buf = await accessReportExcel(r, { labName: lab?.lab_name || "", cliaNumber: lab?.clia_number || null, days });
+    logAudit({ userId: req.userId, ownerUserId: req.userId, module: "account", action: "create", entityType: "access_report.download", entityId: labId, entityLabel: `Downloaded the access report for ${lab?.lab_name || `lab ${labId}`} (last ${days} days, ${r.rows.length} rows)`, ipAddress: req.ip });
+    const safe = String(lab?.lab_name || "Lab").replace(/[^A-Za-z0-9]+/g, "_").slice(0, 40);
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename="${safe}_Access_Report_${new Date().toISOString().slice(0, 10)}.xlsx"`);
+    res.send(buf);
+  });
 
   // Content-Security-Policy violation reports (2026-10-16, Q47 = 1; server/securityHeaders.ts). Public:
   // browsers send these without credentials. Bounded: 64 KB bodies, counts only, at most 2,000 distinct
@@ -11418,6 +11456,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const now = new Date().toISOString();
     sqlite.prepare("UPDATE lab_members SET role = ?, updated_at = ? WHERE id = ?").run(newRole, now, memberId);
     console.log(`[labs/${req.scope.labId}/members PATCH] member_id=${memberId} role: ${member.role} -> ${newRole} (by user_id=${req.userId})`);
+    if (member.role !== newRole) {
+      const who = sqlite.prepare("SELECT COALESCE(name, email) AS n FROM users WHERE id = ?").get(member.user_id) as any;
+      logAudit({ userId: req.userId, ownerUserId: labOwner ?? req.userId, module: "account", action: "update", entityType: "lab_member.role", entityId: member.user_id, entityLabel: `${who?.n || `User ${member.user_id}`}: role ${member.role} -> ${newRole} in lab ${req.scope.labId}`, before: { role: member.role }, after: { role: newRole }, ipAddress: req.ip });
+    }
     res.json({ ok: true, membershipId: memberId, role: newRole });
   });
 
@@ -11540,6 +11582,11 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const after = JSON.stringify(permissions);
     sqlite.prepare("UPDATE user_seats SET permissions = ? WHERE id = ?").run(after, seat.id);
     console.log(`[labs/${req.scope.labId}/members/${memberId}/permissions PATCH] seatId=${seat.id} email=${member.email} permissions: ${before} -> ${after} (by user_id=${req.userId})`);
+    if (before !== after) {
+      let beforeObj: any = null;
+      try { beforeObj = JSON.parse(before || "{}"); } catch { beforeObj = before; }
+      logAudit({ userId: req.userId, ownerUserId: lab.owner_user_id, module: "account", action: "update", entityType: "lab_member.permissions", entityId: member.user_id, entityLabel: `${member.email}: module permissions changed in lab ${req.scope.labId}`, before: beforeObj, after: permissions, ipAddress: req.ip });
+    }
     res.json({ ok: true, membershipId: memberId, seatId: seat.id, before, after: permissions });
   });
 
@@ -11577,6 +11624,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       return res.status(500).json({ error: err.message || "Failed to remove member" });
     }
     console.log(`[labs/${req.scope.labId}/members DELETE] member_id=${memberId} user_id=${member.user_id} (by user_id=${req.userId})`);
+    {
+      const who = sqlite.prepare("SELECT COALESCE(name, email) AS n FROM users WHERE id = ?").get(member.user_id) as any;
+      logAudit({ userId: req.userId, ownerUserId: lab?.owner_user_id ?? req.userId, module: "account", action: "delete", entityType: "lab_member.removed", entityId: member.user_id, entityLabel: `${who?.n || `User ${member.user_id}`} (${member.role}) removed from lab ${req.scope.labId}`, before: { role: member.role }, ipAddress: req.ip });
+    }
     res.json({ ok: true });
   });
 
@@ -11662,6 +11713,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       return res.status(500).json({ error: err.message || "Failed to transfer ownership" });
     }
     console.log(`[labs/${req.scope.labId}/transfer-ownership] old_owner=${req.userId} -> new_owner=${newOwnerId} (primary_moved=${oldOwnerMember.is_primary_lab === 1}, seats_reparented=${seatsReparented})`);
+    logAudit({ userId: req.userId, ownerUserId: newOwnerId, module: "account", action: "update", entityType: "lab.owner_transfer", entityId: req.scope.labId, entityLabel: `Ownership of ${lab.lab_name} moved from user ${req.userId} to user ${newOwnerId}; the previous owner is now an admin`, before: { ownerUserId: req.userId }, after: { ownerUserId: newOwnerId }, ipAddress: req.ip });
     res.json({
       ok: true,
       labId: req.scope.labId,
@@ -31435,6 +31487,11 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     (db as any).$client.prepare(
       "UPDATE user_seats SET permissions = ? WHERE id = ?"
     ).run(permJson, seatId);
+    if (seat.permissions !== permJson) {
+      let beforeObj: any = null;
+      try { beforeObj = JSON.parse(seat.permissions || "{}"); } catch { beforeObj = seat.permissions; }
+      logAudit({ userId: req.userId, ownerUserId: req.userId, module: "account", action: "update", entityType: "seat.permissions", entityId: seatId, entityLabel: `${seat.seat_email}: seat permissions changed`, before: beforeObj, after: permissions || {}, ipAddress: req.ip });
+    }
 
     res.json({ ok: true, seatId, permissions });
   });
