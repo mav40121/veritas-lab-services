@@ -34885,6 +34885,112 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // (FK cascade gap left orphaned instruments/instrument_tests behind). Deletes
   // ONLY rows whose map_id is absent from veritamap_maps; nothing on a live map
   // is touched. Children-first order. { dryRun: true } previews counts.
+  // VeritaResponse legacy cleanup (parking lot #109, Michael 2026-10-26 option 1). Two kinds of findings predate
+  // that day's changes:
+  //   A. a finding escalated from a QC run that was voided before #100 shipped: it stayed open and kept reminding.
+  //      Same rule as the void route (#100): untouched -> closed with the void note, completion date and history;
+  //      worked -> flagged with qc_run_voided_note.
+  //   B. QC and alternative-assessment escalations saved as CMS inspection findings before the entry-type templates
+  //      (#1718): moved to qc_escalation / aaa_escalation under 'Other'. Their due dates and status are kept as they
+  //      are, so nothing turns overdue because of the move.
+  // DRY RUN BY DEFAULT: nothing is written unless the body says dryRun: false. Optional labId narrows it to one lab.
+  app.post("/api/admin/veritaresponse/legacy-cleanup", (req: any, res) => {
+    const { secret, labId } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    const apply = req.body?.dryRun === false;
+    const sqlite = (db as any).$client;
+    const labFilter = Number.isInteger(Number(labId)) && Number(labId) > 0 ? Number(labId) : null;
+    const labArgs = labFilter ? [labFilter] : [];
+    const labSql = labFilter ? "AND f.lab_id = ?" : "";
+    const labName = (id: number | null) => (id ? (sqlite.prepare("SELECT lab_name FROM labs WHERE id = ?").get(id) as any)?.lab_name ?? null : null);
+
+    // B first, so a finding that is both shows under its new type.
+    const reclassify: any[] = [];
+    const qcRows = sqlite.prepare(
+      `SELECT f.id, f.lab_id, f.finding_number, f.status, f.due_date, f.accreditor FROM findings f
+        WHERE COALESCE(f.source_type, 'inspection') = 'inspection' AND f.finding_number LIKE 'QC-%'
+          AND EXISTS (SELECT 1 FROM qc_corrective_actions ca WHERE ca.nce_reference = 'VeritaResponse#' || f.id)
+          ${labSql} ORDER BY f.lab_id, f.id`
+    ).all(...labArgs) as any[];
+    const aaRows = sqlite.prepare(
+      `SELECT f.id, f.lab_id, f.finding_number, f.status, f.due_date, f.accreditor FROM findings f
+        WHERE COALESCE(f.source_type, 'inspection') = 'inspection'
+          AND EXISTS (SELECT 1 FROM aa_records ar WHERE ar.response_finding_ref = 'VeritaResponse#' || f.id)
+          ${labSql} ORDER BY f.lab_id, f.id`
+    ).all(...labArgs) as any[];
+    const groups: Array<[any[], string]> = [[qcRows, "qc_escalation"], [aaRows, "aaa_escalation"]];
+    for (const [rows, to] of groups) {
+      for (const f of rows) reclassify.push({ lab_id: f.lab_id, lab_name: labName(f.lab_id), finding_id: f.id, finding_number: f.finding_number, status: f.status, due_date: f.due_date, from: `inspection / ${f.accreditor}`, to_type: to, to: `${to} / Other` });
+    }
+
+    const voidedRun: any[] = [];
+    const vRows = sqlite.prepare(
+      `SELECT f.*, r.id AS qc_result_id, r.voided_at AS run_voided_at, r.void_reason AS run_void_reason, r.voided_by_user_id AS run_voided_by
+         FROM qc_corrective_actions ca
+         JOIN findings f ON ca.nce_reference = 'VeritaResponse#' || f.id
+         JOIN qc_results r ON r.id = ca.qc_result_id
+        WHERE r.voided_at IS NOT NULL AND f.status NOT IN ('closed', 'accepted') AND ca.lab_id = f.lab_id
+          ${labSql} ORDER BY f.lab_id, f.id`
+    ).all(...labArgs) as any[];
+    const seen = new Set<number>();
+    for (const f of vRows) {
+      if (seen.has(f.id)) continue;
+      seen.add(f.id);
+      const blank = (v: any) => !String(v ?? "").trim();
+      const untouched = f.status === "open" && !f.signed_by &&
+        [f.containment, f.root_cause, f.root_cause_category, f.corrective_action, f.preventive_action, f.monitoring_plan].every(blank);
+      const action = untouched ? "close" : f.qc_run_voided_note ? "already_flagged" : "flag";
+      const who = (sqlite.prepare("SELECT name FROM users WHERE id = ?").get(f.run_voided_by) as any)?.name || (f.run_voided_by ? `User ${f.run_voided_by}` : "a lab user");
+      const day = String(f.run_voided_at || "").slice(0, 10);
+      const note = `The QC run behind this finding (result #${f.qc_result_id}) was voided on ${day} by ${who}. Reason: ${f.run_void_reason || "not recorded"}`;
+      voidedRun.push({ lab_id: f.lab_id, lab_name: labName(f.lab_id), finding_id: f.id, finding_number: f.finding_number, status: f.status, due_date: f.due_date, qc_result_id: f.qc_result_id, voided_on: day, reason: f.run_void_reason || null, action, note });
+    }
+
+    if (apply) {
+      const today = labToday();
+      sqlite.transaction(() => {
+        for (const r of reclassify) {
+          sqlite.prepare("UPDATE findings SET source_type = ?, accreditor = 'Other', updated_at = datetime('now') WHERE id = ?").run(r.to_type, r.finding_id);
+          sqlite.prepare("INSERT INTO finding_history (finding_id, event, by_user_id, payload) VALUES (?, 'reclassified', NULL, ?)")
+            .run(r.finding_id, JSON.stringify({ from: r.from, to: r.to, by: "VeritaAssure support legacy cleanup (#109)" }));
+        }
+        for (const v of voidedRun) {
+          if (v.action === "close") {
+            sqlite.prepare(
+              `UPDATE findings SET status = 'closed', completion_date = COALESCE(completion_date, ?),
+                      surveyor_notes = TRIM(COALESCE(surveyor_notes, '') || char(10) || char(10) || ?), updated_at = datetime('now') WHERE id = ?`
+            ).run(today, `Closed automatically: ${v.note}`, v.finding_id);
+          } else if (v.action === "flag") {
+            sqlite.prepare("UPDATE findings SET qc_run_voided_note = ?, updated_at = datetime('now') WHERE id = ?").run(v.note, v.finding_id);
+          } else continue;
+          sqlite.prepare("INSERT INTO finding_history (finding_id, event, by_user_id, payload) VALUES (?, ?, NULL, ?)")
+            .run(v.finding_id, v.action === "close" ? "closed_qc_run_voided" : "qc_run_voided", JSON.stringify({ qc_result_id: v.qc_result_id, reason: v.reason, by: "VeritaAssure support legacy cleanup (#109)" }));
+        }
+      })();
+      for (const v of voidedRun.filter((x) => x.action !== "already_flagged")) {
+        const owner = (sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(v.lab_id) as any)?.owner_user_id ?? 0;
+        logAudit({
+          userId: owner, ownerUserId: owner, module: "veritaqc", action: "update",
+          entityType: v.action === "close" ? "finding.closed_qc_run_voided" : "finding.qc_run_voided",
+          entityId: v.finding_id, entityLabel: `${v.finding_number || "#" + v.finding_id}: QC run #${v.qc_result_id} voided (support cleanup #109)`,
+          before: { status: v.status }, after: { status: v.action === "close" ? "closed" : v.status, reason: v.reason }, ipAddress: req.ip,
+        });
+      }
+      console.log(`[admin/veritaresponse/legacy-cleanup] applied: ${reclassify.length} reclassified, ${voidedRun.filter((x) => x.action === "close").length} closed, ${voidedRun.filter((x) => x.action === "flag").length} flagged`);
+    }
+    res.json({
+      dryRun: !apply,
+      counts: {
+        reclassify_qc: reclassify.filter((r) => r.to_type === "qc_escalation").length,
+        reclassify_aaa: reclassify.filter((r) => r.to_type === "aaa_escalation").length,
+        voided_close: voidedRun.filter((v) => v.action === "close").length,
+        voided_flag: voidedRun.filter((v) => v.action === "flag").length,
+        voided_already_flagged: voidedRun.filter((v) => v.action === "already_flagged").length,
+      },
+      reclassify, voidedRun,
+    });
+  });
+
   app.post("/api/admin/veritamap/purge-orphan-maps", (req, res) => {
     const { secret, dryRun } = req.body || {};
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
