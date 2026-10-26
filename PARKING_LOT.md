@@ -715,7 +715,7 @@ Open questions for the scope:
 **What (survey 2026-10-26):** the lab's accreditor is four 0/1 columns on `labs` (cap, tjc, cola, aabb), turned into a six-option choice in about 11 separate places (routes.ts, studyPdf.ts). The choice part: a `labs.accreditation_iso` column, one shared flags-to-choice helper replacing the copies, ISO in Account Settings, onboarding, admin provisioning lists, VeritaStaff, VeritaLab certificate types, and VeritaResponse findings (the `findings.accreditor` CHECK constraint means a table rebuild; ISO findings get a lab-entered due date). The citation part: ISO 15189:2022 clause numbers on 173 VeritaScan items, 58 VeritaPolicy master rows, 14 VeritaCheck study types and an ISO requirement list. ISO text is copyrighted: clause numbers and our own wording only, mapped from a purchased copy.
 
 **Source:** Michael, 2026-10-26: "lets load ISO standards as a selection option in accreditor".
-**Status:** Open. Scope sent to Michael 2026-10-26; build waits on his pick.
+**Status:** Michael picked option 1 on 2026-10-26 (the add-on choice now, citations later). Built in PR #1716: Account Settings box, VeritaResponse ISO findings with a lab-entered due date (findings table rebuilt to accept ISO), VeritaStaff option, VeritaLab certificate type, onboarding hint, admin update-lab. ISO citations stay open here until a purchased copy of ISO 15189:2022 is in hand.
 
 ---
 
