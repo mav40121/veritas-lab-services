@@ -642,7 +642,7 @@ Receipts: an integration test for the derivation (linked, unlinked fallback, una
 **What:** when a QC run that auto-created a finding is voided (e.g., run 957, voided 10/12 as "Entered incorrectly during training"), the finding stays open and its reminders continue. Options: close the finding automatically with the void reason as the closing note, or flag it "run voided, close?" for the supervisor. Michael picks which; either needs an audit-trail entry.
 
 **Source:** Mike Hiltunen, REQ-063, 2026-10-14. Called "parked" in chat that day but never written here.
-**Status:** Built to Claude's recommended option on draft PR #1711 (untouched finding closes with the void reason; a worked finding is flagged "QC run voided"; tests/integration/qc-void-finding.test.ts 11/11 PASS). Waiting on Michael's pick before merge.
+**Status:** Built to Claude's recommended option on draft PR #1711 (untouched finding closes with the void reason; a worked finding is flagged "QC run voided"; tests/integration/qc-void-finding.test.ts 11/11 PASS). Michael picked this option (2026-10-26, "1"); merging after the US backup switch.
 
 ---
 
