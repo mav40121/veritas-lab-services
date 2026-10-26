@@ -719,6 +719,18 @@ Open questions for the scope:
 
 ---
 
+### 109. QC runs voided before 2026-10-26 still have open findings (Hiltunen finding #10)
+
+**Effort:** XS (a one-time, dry-run-first admin pass using the same rule as C103)
+**Importance:** Medium. C103 settles a finding only when its run is voided from now on. Runs voided earlier keep their findings open and reminding: lab 19 (Gameday, Traverse City) finding #10 "QC-1-3s" is still open, due 2026-10-15, with no completion date (read-only check 2026-10-26 18:45Z), though Mike Hiltunen voided its run (957) on 2026-10-12.
+
+**What:** an admin route that finds every open VeritaQC-escalated finding whose run is already voided and applies the C103 rule (untouched: close with the void reason; worked: flag "QC run voided"), dry run first, listing lab and finding. Writes on client labs, so it runs only on Michael's go.
+
+**Source:** Claude, 2026-10-26, checking the client side after #100 shipped. Related: REQ-063 (Client told 2026-10-14).
+**Status:** Open. Question queued for Michael after the ISO pick.
+
+---
+
 ## CLOSED (audit trail)
 
 ### C103. Voiding a QC run leaves its auto-created finding open (was #100)
