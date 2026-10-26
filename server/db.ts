@@ -2055,6 +2055,9 @@ try { sqlite.exec("ALTER TABLE studies ADD COLUMN coverage_analyte TEXT"); } cat
 // 2026-10-15: Calibration Verification + Correlation (cal_ver_correlation) names the known-value material it used
 // on the report ("not patient specimens"). Free text, NULL = the report's default wording. Additive + idempotent.
 try { sqlite.exec("ALTER TABLE studies ADD COLUMN material TEXT"); } catch {}
+// 2026-10-26: correlation run details (reagent/calibrator lot and date run per analyzer, specimen type), JSON text.
+// Shown on the results page and in the report's Supporting Data; part of the study record. Additive + idempotent.
+try { sqlite.exec("ALTER TABLE studies ADD COLUMN run_details TEXT"); } catch {}
 
 // 2026-06-15: VeritaCheck Phase 2 (close the orphan-creation hole). Excluding a
 // data point now recomputes and persists the verdict in place, so a documented

@@ -35,6 +35,7 @@ import { trackEvent } from "@/lib/analytics";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
 import type { InsertStudy } from "@shared/schema";
 import { isCensored, parseCensoredInput, displayPointValue, type CensoredPoint } from "@shared/censoring";
+import { hasRunDetails, parseRunDetails, serializeRunDetails, type AnalyzerRunDetails } from "@shared/studyRunDetails";
 import fdaData from "@/lib/fdaInstrumentData.json";
 import { useLabRoute } from "@/hooks/useLabRoute";
 
@@ -419,6 +420,13 @@ export default function VeritaCheckPage() {
   const [analyst, setAnalyst] = useState("");
   // Calibration Verification + Correlation: the known-value material named on the report (blank = default wording).
   const [material, setMaterial] = useState("");
+  // Correlation run details (2026-10-26): optional, Correlation / Method Comparison and Calibration Verification + Correlation.
+  const [runSpecimenType, setRunSpecimenType] = useState("");
+  const [runUnits, setRunUnits] = useState("");
+  const [runComment, setRunComment] = useState("");
+  const [runByAnalyzer, setRunByAnalyzer] = useState<Record<string, AnalyzerRunDetails>>({});
+  const setAnalyzerRun = (name: string, key: keyof AnalyzerRunDetails, value: string) =>
+    setRunByAnalyzer((prev) => ({ ...prev, [name]: { ...(prev[name] || {}), [key]: value } }));
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
 
   const studyTypeMap: Record<string, any> = {
@@ -569,6 +577,13 @@ export default function VeritaCheckPage() {
     try {
       setTestName(editStudy.test_name ?? editStudy.testName ?? "");
       setMaterial(editStudy.material ?? "");
+      if (hasRunDetails(editStudy.study_type ?? editStudy.studyType)) {
+        const rd = parseRunDetails(editStudy.runDetails ?? editStudy.run_details);
+        setRunSpecimenType(rd?.specimenType ?? "");
+        setRunByAnalyzer(rd?.instruments ?? {});
+        setRunUnits(editStudy.resultUnits ?? editStudy.result_units ?? "");
+        setRunComment(editStudy.comment ?? "");
+      }
       setAnalyst(editStudy.analyst ?? "");
       if (editStudy.date) setDate(String(editStudy.date).slice(0, 10));
       if (editStudy.study_type ?? editStudy.studyType) {
@@ -1621,6 +1636,10 @@ export default function VeritaCheckPage() {
         study = { ...study, instrumentMeta: JSON.stringify(meta) };
       }
       if (study.studyType === "cal_ver_correlation") study = { ...study, material: material.trim() || null } as InsertStudy;
+      if (hasRunDetails(study.studyType)) {
+        const current = Object.fromEntries(instrumentNames.filter((n) => runByAnalyzer[n]).map((n) => [n, runByAnalyzer[n]]));
+        study = { ...study, runDetails: serializeRunDetails({ specimenType: runSpecimenType, instruments: current }), resultUnits: runUnits.trim() || null, comment: runComment.trim() || null } as InsertStudy;
+      }
       const headers: Record<string, string> = { "Content-Type": "application/json", ...authHeaders() };
       // PUT when editing an existing study (draft or completed) so we update
       // the row instead of creating a duplicate. POST when new.
@@ -2750,6 +2769,47 @@ return (
                     <div className="space-y-1.5"><Label>Test Name *</Label><Input placeholder="e.g. GC1 CREAT" value={testName} onChange={e => setTestName(e.target.value)} data-testid="input-test-name" /></div>
                     <div className="space-y-1.5"><Label>Analyst</Label><Input placeholder="Name or initials" value={analyst} onChange={e => setAnalyst(e.target.value)} /></div>
                     <div className="space-y-1.5"><Label>Study Date</Label><Input type="date" value={date} onChange={e => setDate(e.target.value)} /></div>
+                    {hasRunDetails(studyType) && (
+                      <details className="sm:col-span-2 rounded-md border bg-muted/30 p-3 text-xs" data-testid="run-details">
+                        <summary className="cursor-pointer font-medium select-none">Optional run details (lots, dates)</summary>
+                        <p className="text-muted-foreground mt-2 leading-relaxed">
+                          Record the reagent lot, calibrator lot and date run for each analyzer, plus the specimen type, units and a comment. They print in the report's Supporting Data. All fields optional.
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
+                          <div>
+                            <Label className="text-[11px]">Specimen type</Label>
+                            <Input placeholder="e.g. Serum, lithium heparin plasma" value={runSpecimenType} onChange={e => setRunSpecimenType(e.target.value)} className="h-7 text-xs mt-1" data-testid="run-specimen-type" />
+                          </div>
+                          <div>
+                            <Label className="text-[11px]">Result units</Label>
+                            <Input placeholder="e.g. mg/dL" value={runUnits} onChange={e => setRunUnits(e.target.value)} className="h-7 text-xs mt-1" data-testid="run-units" />
+                          </div>
+                        </div>
+                        <div className="mt-3 space-y-2">
+                          {instrumentNames.map((name, i) => (
+                            <div key={i} className="grid grid-cols-1 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.8fr)] gap-2 items-end border-t border-border/40 pt-2" data-testid={`run-analyzer-${i}`}>
+                              <div className="text-[11px] font-semibold pb-1.5 truncate" title={name}>{name || `Analyzer ${i + 1}`}</div>
+                              <div>
+                                <Label className="text-[11px]">Reagent lot</Label>
+                                <Input placeholder="e.g. 64489UD00 exp 06 Apr 2027" value={runByAnalyzer[name]?.reagentLot ?? ""} onChange={e => setAnalyzerRun(name, "reagentLot", e.target.value)} className="h-7 text-xs mt-1" data-testid={`run-reagent-lot-${i}`} />
+                              </div>
+                              <div>
+                                <Label className="text-[11px]">Calibrator lot</Label>
+                                <Input placeholder="e.g. C2210 exp 30 Jan 2027" value={runByAnalyzer[name]?.calibratorLot ?? ""} onChange={e => setAnalyzerRun(name, "calibratorLot", e.target.value)} className="h-7 text-xs mt-1" data-testid={`run-calibrator-lot-${i}`} />
+                              </div>
+                              <div>
+                                <Label className="text-[11px]">Date run</Label>
+                                <Input type="date" value={runByAnalyzer[name]?.dateRun ?? ""} onChange={e => setAnalyzerRun(name, "dateRun", e.target.value)} className="h-7 text-xs mt-1" data-testid={`run-date-${i}`} />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="mt-3">
+                          <Label className="text-[11px]">Comment</Label>
+                          <Textarea placeholder="e.g. Samples split and run within 2 hours on both analyzers" value={runComment} onChange={e => setRunComment(e.target.value)} className="text-xs mt-1 min-h-[42px]" data-testid="run-comment" />
+                        </div>
+                      </details>
+                    )}
                     {studyType === "cal_ver_correlation" && (
                       <div className="space-y-1.5 sm:col-span-2"><Label>Known-value material</Label><Input placeholder="e.g. Bio-Rad Liquichek Linearity, lot 12345" value={material} onChange={e => setMaterial(e.target.value)} data-testid="input-material" /><p className="text-xs text-muted-foreground">Printed on the report. Leave blank to print "calibration verification material with assigned values".</p></div>
                     )}

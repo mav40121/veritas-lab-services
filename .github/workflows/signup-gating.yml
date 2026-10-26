@@ -106,6 +106,12 @@ jobs:
       - name: Run QC void settles its finding integration test
         # Voiding a QC run closes its untouched VeritaResponse finding or flags a worked one (parking lot #100).
         run: npm run test:qc-void-finding
+      - name: Run correlation run details integration test
+        # Run details (lots, dates, specimen) save, edit, clear, normalize, lock with sign-off and carry into an amendment.
+        run: npm run test:correlation-run-details
+      - name: Correlation run details on the report
+        # Supporting Data prints them after the director's review, escaped; page 1 unchanged.
+        run: npx tsx scripts/verify-correlation-run-details.mts
       - name: Run stale lab-owner row integration test
         # A leftover lab_members 'owner' row on someone who is not labs.owner_user_id gave a second
         # owner (San Carlos lab 2, 2026-10-15). repair-lab-admins demotes it to admin and never touches

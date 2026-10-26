@@ -52,6 +52,7 @@ export function studyRowToClient(row: any): any {
     comment: row.comment,
     resultUnits: row.result_units,
     material: row.material,
+    runDetails: row.run_details,
     // 2026-06-09 (Michael L feedback): optional per-study AMR.
     // Blank values disable the coverage analysis; renderer
     // short-circuits via shouldRenderAmrCoverage.
