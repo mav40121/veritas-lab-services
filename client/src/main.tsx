@@ -1,5 +1,6 @@
 import { createRoot } from "react-dom/client";
 import * as Sentry from "@sentry/react";
+import { SENTRY_DATA_COLLECTION } from "@shared/sentryDataCollection";
 import App from "./App";
 import "./index.css";
 
@@ -11,7 +12,7 @@ if (import.meta.env.VITE_SENTRY_DSN) {
     dsn: import.meta.env.VITE_SENTRY_DSN,
     environment: import.meta.env.MODE || "production",
     tracesSampleRate: 0,
-    sendDefaultPii: false,
+    dataCollection: SENTRY_DATA_COLLECTION, // no personal information (shared/sentryDataCollection.ts)
   });
 }
 

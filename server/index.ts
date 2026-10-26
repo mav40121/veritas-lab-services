@@ -2,12 +2,13 @@
 // load time so it can capture early-startup errors. Guarded by env var so
 // the app boots without Sentry when SENTRY_DSN is unset (e.g. local dev).
 import * as Sentry from "@sentry/node";
+import { SENTRY_DATA_COLLECTION } from "@shared/sentryDataCollection";
 if (process.env.SENTRY_DSN) {
   Sentry.init({
     dsn: process.env.SENTRY_DSN,
     environment: process.env.NODE_ENV || "production",
     tracesSampleRate: 0,
-    sendDefaultPii: false,
+    dataCollection: SENTRY_DATA_COLLECTION, // no personal information (shared/sentryDataCollection.ts)
   });
 }
 
