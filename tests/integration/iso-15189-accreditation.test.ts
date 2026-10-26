@@ -8,6 +8,7 @@
 //   3. VeritaResponse refuses an ISO finding until the lab is flagged, then takes the lab-entered due date (no automatic
 //      clock), keeps it on a save without one, and replaces it on a save with a new one.
 //   4. The admin update-lab route sets the flag, and /api/labs/me reports it.
+//   5. The same due-date code: an internal non-conforming event keeps no deadline when saved (was Other + 30).
 //
 // Boots the REAL routes against a throwaway SQLite DB (made-up rows only). Run: npm run test:iso-15189
 
@@ -154,6 +155,14 @@ async function main() {
     const after = await call("POST", `/api/labs/${labId}/findings`, { accreditor: "ISO", description: "Nonconformity 3", status: "open" }, token, labId);
     check("4c. with the flag off, new ISO findings are refused again", after.status === 400, String(after.status));
 
+    // 5. Same due-date code path: an internal non-conforming event keeps no deadline when it is saved.
+    const nce = await call("POST", `/api/labs/${labId}/findings`, { source_type: "internal_nce", description: "Specimen mislabeled at receiving", event_date: "2026-10-20", status: "open" }, token, labId);
+    const nceId = Number(nce.body?.id);
+    const nceRow = sqlite.prepare("SELECT * FROM findings WHERE id = ?").get(nceId) as any;
+    const nceSave = await call("PUT", `/api/labs/${labId}/findings/${nceId}`, { ...nceRow, root_cause: "Two labels printed for one order" }, token, labId);
+    const nceAfter = sqlite.prepare("SELECT due_date, root_cause, accreditor FROM findings WHERE id = ?").get(nceId) as any;
+    check("5a. an NCE is created with no due date", nce.status === 201 && nceRow?.due_date === null, JSON.stringify({ s: nce.status, d: nceRow?.due_date }));
+    check("5b. saving the NCE keeps it without a due date (was Other + 30 days)", nceSave.status === 200 && nceAfter.due_date === null && nceAfter.root_cause === "Two labels printed for one order", JSON.stringify(nceAfter));
   } finally {
     server.close();
   }
