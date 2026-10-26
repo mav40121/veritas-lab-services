@@ -592,18 +592,6 @@ _(item #88 closed 2026-10-08; see C91 below)_
 
 ---
 
-### 92. VeritaLab auto-adds a CLIA certificate keyed on the person, not the lab
-
-**Effort:** XS (under a day)
-**Importance:** Medium. Latent: it can put one person's CLIA number into another lab's certificate list.
-
-**What:** GET /api/veritalab/certificates (server/routes.ts) auto-creates a "CLIA Certificate" when the signed-in user has users.clia_number and no active CLIA certificate WHERE user_id = that user, then files it under the ACTIVE lab. The check and the number both come from the person, not the lab: a member whose own CLIA certificate sits in another lab, or who has none, opens a different lab and gets their CLIA number inserted there. POST /api/clia/confirm has the same user-keyed dedupe. Fix: dedupe on the active lab (lab_id) and take the number from labs.clia_number. Found during the BUG-033 bug-class sweep; no wrong rows found on the 10/11 production copy.
-
-**Source:** BUG-033 sweep, 2026-10-11.
-**Status:** Open.
-
----
-
 ### 93. VeritaMap's SOP review column is separate from VeritaDC
 
 **Effort:** M (1-2 weeks)
@@ -622,19 +610,6 @@ Receipts: an integration test for the derivation (linked, unlinked fallback, una
 
 ---
 
-### 95. VeritaComp: one-click preset reasons when a competency element is marked N/A
-
-**Effort:** S (1-3 days)
-**Importance:** Medium. Redington's microbiology supervisor types the same justification on every Bactec FX record; a preset keeps the documented reason a surveyor reads and removes the typing.
-
-**What:** on the VeritaComp employee page (client/src/pages/VeritaCompEmployeePage.tsx) any of the six elements can be marked N/A, and the form then requires a typed "Justification for N/A". Add a short pick-list of common reasons next to the box, for example "No QC required after initial verification per the manufacturer's instructions", that fills the justification in one click and can still be edited. The reason stays required. Element 3 covers more than QC (review of intermediate results, QC, PT and preventive-maintenance records, 42 CFR 493.1451(b)(8)(iii) paraphrased), so the presets name the specific record that does not apply rather than the whole element.
-
-**Source:** Brandy Morgan, Redington-Fairview, 2026-10-12 (REQ-050): "Can you make it so QC is not something that is required for the Bactec FX (if you choose N/A it makes you type a reason)?"
-**Decision (Michael Q123 = 1, 2026-10-12):** keep the reason required; add one-click presets; build after the 10/14 St. Charles demo.
-**Status:** Open. Build after Wednesday 10/14.
-
----
-
 ### 96. FAQ promises data retention, exports and a deletion notice the product does not have
 
 **Effort:** XS (under a day for the copy fix; the features themselves would be M)
@@ -644,18 +619,6 @@ Receipts: an integration test for the derivation (linked, unlinked fallback, una
 
 **Source:** found 2026-10-09 during the Mike Hiltunen and Natalie Lamb replies; promised as "its own item" that day and never raised. Parked 2026-10-14 from the weekly review.
 **Status:** Open. Needs Michael's call: correct the copy, or build retention/export/notice to match it.
-
----
-
-### 97. The other 76 UTC calendar dates in server/routes.ts
-
-**Effort:** S (1-3 days, mostly sorting which ones matter)
-**Importance:** Medium. Evening activity in Arizona or Eastern labs gets tomorrow's date on file names, reminder previews and readiness counts.
-
-**What:** BUG-047 found routes.ts takes "today" as new Date().toISOString().slice(0, 10) (the UTC day) in 76 places. The 3 that date or compare competency records were fixed in #1623 with labLocalDate(); the rest (download file names, reminder previews, readiness and due-date math) were left as a separate cleanup. Sweep each use: switch the ones that show or store a lab calendar date to labLocalDate(), leave true UTC timestamps alone, and pin the result with a verify script that fails on a new UTC calendar date.
-
-**Source:** BUG-047 class sweep, 2026-10-13. Parked 2026-10-14 from the weekly review.
-**Status:** Open.
 
 ---
 
@@ -671,18 +634,6 @@ Receipts: an integration test for the derivation (linked, unlinked fallback, una
 
 ---
 
-### 99. VeritaQC finding reminder emails do not name the assay or control level
-
-**Effort:** XS (under a day)
-**Importance:** Medium. A supervisor gets a reminder for an open finding and cannot tell which test or level it is without logging in.
-
-**What:** the reminder email for an open QC finding (the auto-created corrective-action finding) gives the due date but not the assay or level that triggered it. Add the analyte, control level, lot and run date to the subject or first line, and check the email text has no em dashes.
-
-**Source:** Mike Hiltunen's voided QC run 957 (REQ-063), 2026-10-14. Called "parked" in chat that day but never written here.
-**Status:** Open.
-
----
-
 ### 100. Voiding a QC run leaves its auto-created finding open
 
 **Effort:** XS to S
@@ -691,7 +642,7 @@ Receipts: an integration test for the derivation (linked, unlinked fallback, una
 **What:** when a QC run that auto-created a finding is voided (e.g., run 957, voided 10/12 as "Entered incorrectly during training"), the finding stays open and its reminders continue. Options: close the finding automatically with the void reason as the closing note, or flag it "run voided, close?" for the supervisor. Michael picks which; either needs an audit-trail entry.
 
 **Source:** Mike Hiltunen, REQ-063, 2026-10-14. Called "parked" in chat that day but never written here.
-**Status:** Open.
+**Status:** Built to Claude's recommended option on draft PR #1711 (untouched finding closes with the void reason; a worked finding is flagged "QC run voided"; tests/integration/qc-void-finding.test.ts 11/11 PASS). Waiting on Michael's pick before merge.
 
 ---
 
@@ -718,16 +669,6 @@ Receipts: an integration test for the derivation (linked, unlinked fallback, una
 **Status:** Waiting on a MediaLab export file from Catherine.
 
 ---
-
-### 103. VeritaLab certificate Excel export leaves out the new link and CLIA type
-
-**Effort:** XS (under 1 day)
-**Importance:** Low. The on-screen cards and All Sites view show both; only the spreadsheet lags.
-
-**What:** the VeritaLab CLIA site registry (#1643, a54ea9da) added a certificate link and the CLIA certificate type (waiver, PPM, compliance, accreditation, registration) to each certificate. The Export Excel button on the Certificates tab still writes the older columns only. Add the two columns, and consider an All Sites sheet (one row per site with director, next fee, last menu change, contact and what needs attention) so a multi-site coordinator like Tracy Tuzzolino can hand leadership one file.
-
-**Source:** Claude, while building the registry 2026-10-14.
-**Status:** Open.
 
 ### 104. Calibration Verification + Correlation as one study
 
@@ -779,6 +720,36 @@ Open questions for the scope:
 ---
 
 ## CLOSED (audit trail)
+
+### C101. VeritaLab certificate Excel export leaves out the new link and CLIA type (was #103)
+
+**Effort:** was XS / **Importance:** Low.
+
+**Closure evidence:** commit 1a620a4e (PR #1709, live 4841bb3c). The VeritaLab certificate export adds "CLIA Certificate Type" and "Certificate Link" before Notes; Status stays column 8. tests/integration/veritalab-export-columns.test.ts 6/6 PASS. The optional All Sites sheet was not built.
+
+### C100. VeritaQC finding reminder emails do not name the assay or control level (was #99)
+
+**Effort:** was XS / **Importance:** Medium.
+
+**Closure evidence:** commit 139ce444 (PR #1709, live 4841bb3c). findingReminderCandidates()/findingReminderEmail() in server/audit.ts link a VeritaQC-escalated finding back to its run: the subject names the test and level, the body adds control level, lot, run date and instrument. tests/integration/finding-reminder-qc.test.ts 7/7 PASS.
+
+### C99. The other 76 UTC calendar dates in server/routes.ts (was #97)
+
+**Effort:** was S / **Importance:** Medium.
+
+**Closure evidence:** commits 0c12bf0d, fbb45aac, 75f299bc (PR #1710, rebase-merged 2026-10-26, main 753c545f). labToday()/addLabDays() in server/dateLocal.ts: stored record dates, overdue and compliance counts (incl. 15 SQL date('now') bound to the lab's today) and 40 file names/stamps use the lab's calendar day. scripts/verify-lab-local-today.ts in CI pins evening instants and a ratchet: UTC calendar dates in routes.ts 85 -> 23, may only go down. LAB_DISPLAY_TZ is still America/Phoenix until a per-lab zone exists.
+
+### C98. VeritaComp: one-click preset reasons when a competency element is marked N/A (was #95)
+
+**Effort:** was S / **Importance:** Medium.
+
+**Closure evidence:** commit 8892f35f (shipped before this review; the entry was stale). client/src/components/competency/NaReasonPresets.tsx gives one-click reasons for elements 3 and 4 on the VeritaComp employee page and the method sign-off; the reason stays required and editable (Michael Q123 = 1). Found already built on 2026-10-26.
+
+### C97. VeritaLab auto-adds a CLIA certificate keyed on the person, not the lab (was #92)
+
+**Effort:** was XS / **Importance:** Medium.
+
+**Closure evidence:** commit 3fe0fb2e (PR #1709, rebase-merged 2026-10-26, live 4841bb3c on both services 16:11 UTC). ensureLabCliaCertificate(): one CLIA certificate per lab, numbered from labs.clia_number, owned by the lab owner; a removed one is not recreated; both GET /api/veritalab/certificates and POST /api/clia/confirm use it. tests/integration/clia-cert-lab-keyed.test.ts 9/9 PASS; the same test on unfixed main failed 6 (lab B got lab A's CLIA number).
 
 ### C96. Dead statement in db.ts: a roster "unique index" that can never be created (was #90)
 
