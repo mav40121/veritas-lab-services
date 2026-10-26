@@ -719,6 +719,18 @@ Open questions for the scope:
 
 ---
 
+### 108. ISO 15189 as an accreditation choice (and, later, ISO citations)
+
+**Effort:** M for the choice (about 1.5 days); L for ISO citations across VeritaScan, VeritaPolicy and VeritaCheck (needs the purchased standard)
+**Importance:** Medium. Labs accredited to ISO 15189 (for example through CAP 15189) cannot say so anywhere in VeritaAssure today. ISO 15189 is a standard, not a CLIA pathway: those labs still hold a CLIA certificate through a CMS-approved accreditor or state survey, so ISO is an add-on to their existing choice, not a replacement.
+
+**What (survey 2026-10-26):** the lab's accreditor is four 0/1 columns on `labs` (cap, tjc, cola, aabb), turned into a six-option choice in about 11 separate places (routes.ts, studyPdf.ts). The choice part: a `labs.accreditation_iso` column, one shared flags-to-choice helper replacing the copies, ISO in Account Settings, onboarding, admin provisioning lists, VeritaStaff, VeritaLab certificate types, and VeritaResponse findings (the `findings.accreditor` CHECK constraint means a table rebuild; ISO findings get a lab-entered due date). The citation part: ISO 15189:2022 clause numbers on 173 VeritaScan items, 58 VeritaPolicy master rows, 14 VeritaCheck study types and an ISO requirement list. ISO text is copyrighted: clause numbers and our own wording only, mapped from a purchased copy.
+
+**Source:** Michael, 2026-10-26: "lets load ISO standards as a selection option in accreditor".
+**Status:** Open. Scope sent to Michael 2026-10-26; build waits on his pick.
+
+---
+
 ## CLOSED (audit trail)
 
 ### C102. Calibration Verification + Correlation as one study (was #104)
