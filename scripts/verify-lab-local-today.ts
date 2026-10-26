@@ -12,7 +12,7 @@
 import { readFileSync } from "node:fs";
 import { labLocalDate, addLabDays } from "../server/dateLocal";
 
-const BASELINE = 85; // after the stored-record-date PR (2026-10-26)
+const BASELINE = 63; // after part 2, overdue and compliance counts (2026-10-26)
 let fails = 0;
 const check = (name: string, ok: boolean, detail = "") => {
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}${detail ? "  :: " + detail : ""}`);

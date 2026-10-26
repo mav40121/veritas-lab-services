@@ -9103,7 +9103,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         if (groupIds.length === 0) return res.json({ items: [], products: [], total: 0, totalValue: 0 });
         // expiration_date is stored as a 'YYYY-MM-DD' string, so a lexical
         // comparison against today's date is a correct "in the past" test.
-        const today = new Date().toISOString().slice(0, 10);
+        const today = labToday();
         const ph = groupIds.map(() => "?").join(",");
         const rows = sqlite.prepare(`
           SELECT ii.id AS id, ii.item_name AS item_name, ii.catalog_number AS catalog_number,
@@ -16920,7 +16920,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     function correlationSummary(analyte: string): string {
       const list = correlationsByAnalyte[analyte] || [];
       if (list.length === 0) return "";
-      const today = new Date().toISOString().slice(0, 10);
+      const today = labToday();
       const parts = list.map((c) => {
         let status = "";
         if (c.pass_fail === "Fail") {
@@ -18211,7 +18211,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // required-date gate landed without forcing a destructive
     // backfill on the DB column.
     if (req.query.filter === "needs-review") {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = labToday();
       // Wave A1.2 (2026-06-06): also surface rows with NULL storage_provider.
       // Wave A1.3 (2026-06-06): also surface rows with NULL owner_user_id
       // (no attestation captured).
@@ -22208,7 +22208,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   }
   function equipmentStatus(nextDue: string | null): string {
     if (!nextDue) return "none";
-    const today = new Date().toISOString().slice(0, 10);
+    const today = labToday();
     const days = Math.round((Date.parse(nextDue + "T00:00:00Z") - Date.parse(today + "T00:00:00Z")) / 86400000);
     if (days < 0) return "overdue";
     if (days <= 30) return "due_soon";
@@ -28345,7 +28345,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
     const sqlite = (db as any).$client;
     const cfg = readCompetencyReminderConfig(sqlite, req.scope.labId);
-    const today = new Date().toISOString().slice(0, 10);
+    const today = labToday();
     const plans = planCompetencyReminders(sqlite, req.scope.labId, cfg, today);
     res.json({ today, enabled: cfg.enabled, emails: plans.map(({ html, ...p }) => ({ ...p, html })) });
   });
@@ -28382,7 +28382,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // Per-employee CLIA schedule status. Mirrors the dashboard-stats milestone
     // walk exactly (server/routes.ts, /competency/dashboard-stats) so the owed
     // view and the dashboard tile classify the same person the same way.
-    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const today = new Date(labToday() + "T00:00:00Z"); // lab calendar day at 00:00 (parking lot #97)
     const dayMs = 24 * 60 * 60 * 1000;
     // The milestone walk is shared with the competency reminder engine
     // (server/competencyReminders.ts) so the emails and this list agree.
@@ -29614,7 +29614,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       annual_due_at: string | null; last_annual_completed_at: string | null;
     }>;
 
-    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const today = new Date(labToday() + "T00:00:00Z"); // lab calendar day at 00:00 (parking lot #97)
     const dayMs = 24 * 60 * 60 * 1000;
     const plus30 = new Date(today.getTime() + 30 * dayMs);
     const plus90 = new Date(today.getTime() + 90 * dayMs);
@@ -29742,7 +29742,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       }
     }
 
-    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const today = new Date(labToday() + "T00:00:00Z"); // lab calendar day at 00:00 (parking lot #97)
     const dayMs = 24 * 60 * 60 * 1000;
     let awaiting = 0, overdue = 0;
     const sample: Array<{
@@ -29821,7 +29821,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     return ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "clinic", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(plan);
   }
   function computeLabReadiness(client: any, labId: number) {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = labToday();
     const daysTo = (d: string) => Math.round((Date.parse(d + "T00:00:00Z") - Date.parse(today + "T00:00:00Z")) / 86400000);
     const modules: any[] = [];
     const push = (key: string, label: string, overdue: number, dueSoon: number, total: number, unit: string) => {
@@ -29924,7 +29924,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     }
     const labId = req.scope.labId;
     const client = (db as any).$client;
-    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const today = new Date(labToday() + "T00:00:00Z"); // lab calendar day at 00:00 (parking lot #97)
     const dayMs = 24 * 60 * 60 * 1000;
     const plus30 = new Date(today.getTime() + 30 * dayMs);
     const plus90 = new Date(today.getTime() + 90 * dayMs);
@@ -30417,7 +30417,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       emp_id: number; first_name: string; last_name: string; middle_initial: string | null;
     }>;
 
-    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const today = new Date(labToday() + "T00:00:00Z"); // lab calendar day at 00:00 (parking lot #97)
     const dayMs = 24 * 60 * 60 * 1000;
 
     type Bucket = "expired" | "expiring30" | "expiring60" | "current";
@@ -30978,7 +30978,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       resolution_type: ev.resolution_type, resolution_reason: ev.resolution_reason,
       closed_by: ev.resolution_type === "not_a_change" ? ev.closed_by_user : ev.evaluator_name,
     }));
-    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const today = new Date(labToday() + "T00:00:00Z"); // lab calendar day at 00:00 (parking lot #97)
     const rows = buildCompetencyRegisterRows({ employees, testSystems, events, nys: staffLab?.includes_nys === 1 }, today);
     const labName = req.scope.lab?.lab_name || staffLab?.lab_name || "Laboratory";
     const cliaNumber = req.scope.lab?.clia_number || staffLab?.clia_number || "";
@@ -41120,12 +41120,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
                   SUM(CASE WHEN d.status = 'expired' THEN 1 ELSE 0 END) AS expired,
                   SUM(CASE WHEN d.status = 'approved'
                             AND d.next_review_date IS NOT NULL
-                            AND date(d.next_review_date) < date('now')
+                            AND date(d.next_review_date) < date(@today)
                            THEN 1 ELSE 0 END) AS overdue,
                   SUM(CASE WHEN d.status = 'approved'
                             AND d.next_review_date IS NOT NULL
-                            AND date(d.next_review_date) >= date('now')
-                            AND date(d.next_review_date) <= date('now', '+30 days')
+                            AND date(d.next_review_date) >= date(@today)
+                            AND date(d.next_review_date) <= date(@today, '+30 days')
                            THEN 1 ELSE 0 END) AS due_soon
              FROM policy_manuals m
              LEFT JOIN policy_documents d
@@ -41134,7 +41134,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
             GROUP BY m.id
             ORDER BY m.display_order ASC, m.name ASC`
         )
-        .all(labId);
+        .all(labId, { today: labToday() });
 
       // Add an "Unassigned" pseudo-row for docs without a manual.
       const unassigned = sqlite
@@ -41146,17 +41146,17 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
                   SUM(CASE WHEN d.status = 'expired' THEN 1 ELSE 0 END) AS expired,
                   SUM(CASE WHEN d.status = 'approved'
                             AND d.next_review_date IS NOT NULL
-                            AND date(d.next_review_date) < date('now')
+                            AND date(d.next_review_date) < date(@today)
                            THEN 1 ELSE 0 END) AS overdue,
                   SUM(CASE WHEN d.status = 'approved'
                             AND d.next_review_date IS NOT NULL
-                            AND date(d.next_review_date) >= date('now')
-                            AND date(d.next_review_date) <= date('now', '+30 days')
+                            AND date(d.next_review_date) >= date(@today)
+                            AND date(d.next_review_date) <= date(@today, '+30 days')
                            THEN 1 ELSE 0 END) AS due_soon
              FROM policy_documents d
             WHERE d.lab_id = ? AND d.manual_id IS NULL AND d.archived_at IS NULL`
         )
-        .get(labId) as any;
+        .get(labId, { today: labToday() }) as any;
 
       // Overdue list: every approved doc past next_review_date.
       const overdueList = sqlite
@@ -41168,10 +41168,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
             WHERE d.lab_id = ? AND d.archived_at IS NULL
               AND d.status = 'approved'
               AND d.next_review_date IS NOT NULL
-              AND date(d.next_review_date) < date('now')
+              AND date(d.next_review_date) < date(@today)
             ORDER BY d.next_review_date ASC`
         )
-        .all(labId);
+        .all(labId, { today: labToday() });
 
       // Due-soon list: approved doc with next_review_date in next 30 days.
       const dueSoonList = sqlite
@@ -41183,11 +41183,11 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
             WHERE d.lab_id = ? AND d.archived_at IS NULL
               AND d.status = 'approved'
               AND d.next_review_date IS NOT NULL
-              AND date(d.next_review_date) >= date('now')
-              AND date(d.next_review_date) <= date('now', '+30 days')
+              AND date(d.next_review_date) >= date(@today)
+              AND date(d.next_review_date) <= date(@today, '+30 days')
             ORDER BY d.next_review_date ASC`
         )
-        .all(labId);
+        .all(labId, { today: labToday() });
 
       // Per-user attestation rate: how many open attestations vs how many
       // they've completed (all-time), on THIS lab's current policies (the same
@@ -41325,19 +41325,19 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
                SUM(CASE WHEN d.status = 'expired' THEN 1 ELSE 0 END) AS expired,
                SUM(CASE WHEN d.status = 'approved'
                          AND d.next_review_date IS NOT NULL
-                         AND date(d.next_review_date) < date('now')
+                         AND date(d.next_review_date) < date(@today)
                         THEN 1 ELSE 0 END) AS overdue,
                SUM(CASE WHEN d.status = 'approved'
                          AND d.next_review_date IS NOT NULL
-                         AND date(d.next_review_date) >= date('now')
-                         AND date(d.next_review_date) <= date('now', '+30 days')
+                         AND date(d.next_review_date) >= date(@today)
+                         AND date(d.next_review_date) <= date(@today, '+30 days')
                         THEN 1 ELSE 0 END) AS due_soon
           FROM policy_manuals m
           LEFT JOIN policy_documents d ON d.manual_id = m.id AND d.archived_at IS NULL
          WHERE m.lab_id = ? AND m.archived_at IS NULL
          GROUP BY m.id
          ORDER BY m.display_order ASC, m.name ASC
-      `).all(labId) as any[];
+      `).all(labId, { today: labToday() }) as any[];
 
       const overdueList = sqlite.prepare(`
         SELECT d.id, d.title, d.next_review_date, m.name AS manual_name
@@ -41346,9 +41346,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
          WHERE d.lab_id = ? AND d.archived_at IS NULL
            AND d.status = 'approved'
            AND d.next_review_date IS NOT NULL
-           AND date(d.next_review_date) < date('now')
+           AND date(d.next_review_date) < date(@today)
          ORDER BY d.next_review_date ASC
-      `).all(labId) as any[];
+      `).all(labId, { today: labToday() }) as any[];
 
       const dueSoonList = sqlite.prepare(`
         SELECT d.id, d.title, d.next_review_date, m.name AS manual_name
@@ -41357,10 +41357,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
          WHERE d.lab_id = ? AND d.archived_at IS NULL
            AND d.status = 'approved'
            AND d.next_review_date IS NOT NULL
-           AND date(d.next_review_date) >= date('now')
-           AND date(d.next_review_date) <= date('now', '+30 days')
+           AND date(d.next_review_date) >= date(@today)
+           AND date(d.next_review_date) <= date(@today, '+30 days')
          ORDER BY d.next_review_date ASC
-      `).all(labId) as any[];
+      `).all(labId, { today: labToday() }) as any[];
 
       // Same rollup as the dashboard (BUG-034): this lab's current policies only.
       const perUserAttest = sqlite.prepare(`
@@ -42084,7 +42084,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const openMap = new Map<number, string>(opens.map((o) => [o.user_id, o.last_opened_at]));
       // UTC day for the overdue flag. due_date is a plain YYYY-MM-DD from the
       // assign dialog, so a lexical compare against today's YYYY-MM-DD is exact.
-      const todayStr = new Date().toISOString().slice(0, 10);
+      const todayStr = labToday();
       // Flag stale entries (assigned to an old version), attach last-opened,
       // and derive the roster status the tracker UI renders.
       const enriched = rows.map((r) => {
