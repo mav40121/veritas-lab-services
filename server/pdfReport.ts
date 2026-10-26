@@ -8331,6 +8331,8 @@ const filledVal = (v: any) => v !== undefined && v !== null && String(v).trim() 
 // Printable height of a Letter page with 14 mm and 16 mm margins is about 943 px; CI fonts lay out about 19 px taller
 // than local (reference_pdf_guard_ci_font_offset), so page 1 is treated as ending at 900 px.
 const TYPE_REPORT_PAGE1_LIMIT_PX = 900;
+// The whole report counts as one page only with headroom below the 943 px printable height.
+const TYPE_REPORT_FITS_ONE_PAGE_PX = 930;
 export function validateTypeReport(finding: any): { ok: boolean; missing: string[] } {
   const missing: string[] = [];
   const d = parseTypeDetails(finding?.type_details);
@@ -8514,6 +8516,33 @@ function buildTypeReportHTML(input: TypeReportInput, directorFirst = false): str
 
 export function typeReportHTMLForTest(input: TypeReportInput, directorFirst = false): string { return buildTypeReportHTML(input, directorFirst); }
 
+// Lays the report out in `page` at the printed width (in the same browser that prints it, so the server's fonts are
+// the ones measured) and picks the layout. The default layout keeps the review block at the foot of the report; it is
+// used only when the whole report fits on page 1. Otherwise the block moves right under the identification grid, so it
+// stays on page 1 and page 2 carries real content rather than a stray line (the "dead page" class, CLAUDE.md section 5).
+export async function layoutTypeReport(page: any, input: TypeReportInput, licenseCtx?: Partial<LicenseContext> | null) {
+  await page.setViewport({ width: 703, height: 943 });
+  await page.emulateMediaType("print");
+  const measure = () => page.evaluate(() => {
+    const el = document.querySelector(".director-block");
+    // The report ends at its footer note; the license terms page that follows is part of the same HTML, so the
+    // document height is not the report height.
+    const end = document.querySelector(".footer-note");
+    return { total: end ? end.getBoundingClientRect().bottom + window.scrollY : 0, director: el ? el.getBoundingClientRect().bottom + window.scrollY : 0 };
+  });
+  let stamped = applyLicenseToPuppeteer(buildTypeReportHTML(input), VERITARESPONSE_FOOTER_TEMPLATE, licenseCtx);
+  await setPdfContent(page, stamped.html);
+  let m = await measure();
+  let directorFirst = false;
+  if (m.total > TYPE_REPORT_FITS_ONE_PAGE_PX || m.director > TYPE_REPORT_PAGE1_LIMIT_PX) {
+    directorFirst = true;
+    stamped = applyLicenseToPuppeteer(buildTypeReportHTML(input, true), VERITARESPONSE_FOOTER_TEMPLATE, licenseCtx);
+    await setPdfContent(page, stamped.html);
+    m = await measure();
+  }
+  return { stamped, directorFirst, totalPx: m.total, directorBottomPx: m.director };
+}
+
 export async function generateTypeReportPDF(input: TypeReportInput, licenseCtx?: Partial<LicenseContext> | null): Promise<Buffer> {
   if (!TYPE_REPORT_KINDS.includes(input.finding?.source_type)) throw new Error("No report for this entry type");
   const validation = validateTypeReport(input.finding);
@@ -8521,19 +8550,7 @@ export async function generateTypeReportPDF(input: TypeReportInput, licenseCtx?:
   const browser = await getBrowser();
   const page = await browser.newPage();
   try {
-    // The medical director or designee block must sit on page 1. Lay the report out at the printed width; if long
-    // entries would push the block past page 1, render again with the block right under the identification grid.
-    await page.setViewport({ width: 703, height: 943 });
-    let stamped = applyLicenseToPuppeteer(buildTypeReportHTML(input), VERITARESPONSE_FOOTER_TEMPLATE, licenseCtx);
-    await setPdfContent(page, stamped.html);
-    const directorBottom = await page.evaluate(() => {
-      const el = document.querySelector(".director-block");
-      return el ? el.getBoundingClientRect().bottom + window.scrollY : 0;
-    });
-    if (directorBottom > TYPE_REPORT_PAGE1_LIMIT_PX) {
-      stamped = applyLicenseToPuppeteer(buildTypeReportHTML(input, true), VERITARESPONSE_FOOTER_TEMPLATE, licenseCtx);
-      await setPdfContent(page, stamped.html);
-    }
+    const { stamped } = await layoutTypeReport(page, input, licenseCtx);
     const pdfBuffer = await page.pdf({
       format: "Letter",
       printBackground: true,
