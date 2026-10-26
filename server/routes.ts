@@ -28,6 +28,8 @@ import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCo
 import { storePdfToken, claimPdfToken } from "./pdfTokens";
 import { labLocalDate, labToday, addLabDays } from "./dateLocal";
 import { parseRunDetails, serializeRunDetails } from "@shared/studyRunDetails";
+import { sanitizeTypeDetails, parseTypeDetails, FINDING_SOURCE_TYPES } from "@shared/findingTypes";
+import { PT_ROOT_CAUSE_CATEGORIES } from "@shared/ptFailure";
 import { studyRowToClient, resolveInstrumentDisplay } from "./studyPdf";
 import { scanPhi } from "./phiScan";
 import { evaluateQcRun, rulesForRun } from "./qcWestgard";
@@ -5430,7 +5432,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       (ctx?.instrument ? `, instrument ${ctx.instrument}` : "") +
       `. Value ${ctx?.result_value ?? "n/a"}.` +
       (viol?.detail ? ` ${viol.detail}` : "");
-    const due_date = dueDateForFinding("CMS", today, req.scope.labId);
+    // Entry-type templates (Michael 2026-10-26, D6): a QC escalation is its own type with a lab target (the "Other"
+    // clock, 30 days unless the lab or organization overrides), not a CMS 10-day citation with a CMS-2567 card.
+    const due_date = dueDateForFinding("Other", today, req.scope.labId);
     const ownerRow = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(req.scope.labId) as any;
     const userIdForRow = ownerRow?.owner_user_id ?? req.userId;
     let findingId: number;
@@ -5439,8 +5443,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         `INSERT INTO findings (
           user_id, lab_id, accreditor, finding_number, standard_ref,
           phase_or_severity, description, surveyor_notes,
-          anchor_date, due_date, status, immediate_action
-        ) VALUES (?, ?, 'CMS', ?, '42 CFR 493.1282', ?, ?, ?, ?, ?, 'open', ?)`
+          anchor_date, due_date, status, immediate_action, source_type
+        ) VALUES (?, ?, 'Other', ?, '42 CFR 493.1282', ?, ?, ?, ?, ?, 'open', ?, 'qc_escalation')`
       ).run(
         userIdForRow, req.scope.labId,
         `QC-${ruleCode}`,
@@ -22194,15 +22198,17 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       `.` +
       (rec.acceptance_criteria ? ` Acceptance criteria: ${rec.acceptance_criteria}.` : "") +
       (rec.last_result_summary ? ` Result: ${rec.last_result_summary}.` : "");
-    const due_date = dueDateForFinding("CMS", today, labId);
+    // Entry-type templates (Michael 2026-10-26, D6): an escalated alternative assessment is its own type with a
+    // lab target (the "Other" clock, 30 days unless the lab or organization overrides), not a CMS 10-day citation.
+    const due_date = dueDateForFinding("Other", today, labId);
     let findingId: number;
     try {
       const ins = sqlite.prepare(
         `INSERT INTO findings (
           user_id, lab_id, accreditor, finding_number, standard_ref,
           phase_or_severity, description, surveyor_notes,
-          anchor_date, due_date, status, immediate_action
-        ) VALUES (?, ?, 'CMS', ?, '42 CFR 493.1236(c)(1)', 'alternative-assessment-failure', ?, ?, ?, ?, 'open', ?)`
+          anchor_date, due_date, status, immediate_action, source_type
+        ) VALUES (?, ?, 'Other', ?, '42 CFR 493.1236(c)(1)', 'alternative-assessment-failure', ?, ?, ?, ?, 'open', ?, 'aaa_escalation')`
       ).run(
         userIdForRow, labId,
         `AAA-${rec.analyte}`,
@@ -22687,7 +22693,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // PT trigger). All three reuse the CAPA workflow; source_type steers the UI.
   // internal_nce carries no accreditor deadline and its sign-off is gated to the
   // designated medical director or a lab owner/admin.
-  const VALID_FINDING_SOURCE_TYPES = ['inspection','pt_failure','internal_nce','fda_deviation'];
+  // qc_escalation and aaa_escalation (2026-10-26, D6) are set by the VeritaQC and VeritaPT escalation routes.
+  const VALID_FINDING_SOURCE_TYPES: string[] = [...FINDING_SOURCE_TYPES];
   // FDA product deviation (21 CFR 606.171, St. Charles REQ-065, 2026-10-14). Reportable when all three
   // 606.171(b) criteria are met: (1) a deviation from cGMP/regulations/standards/specifications, or an
   // unexpected or unforeseeable event, that may affect the product's safety, purity or potency; (2) it
@@ -22875,10 +22882,11 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     ).run(
       dataUserId, accreditor, inspection_id ?? null, finding_number ?? null, standard_ref ?? null,
       phase_or_severity ?? null, description ?? null, surveyor_notes ?? null,
-      anchor_date ?? null, due_date, status ?? 'open',
+      // D1 (2026-10-26): never created closed or signed; the gated sign-off route closes and signs.
+      anchor_date ?? null, due_date, (status && status !== 'closed') ? status : 'open',
       immediate_action ?? null, containment ?? null, root_cause ?? null,
       corrective_action ?? null, preventive_action ?? null, monitoring_plan ?? null,
-      completion_date ?? null, signed_by ?? null, signed_at ?? null, external_submission_ref ?? null,
+      completion_date ?? null, null, null, external_submission_ref ?? null,
     );
     // write-path Shape A (batch 1, docs/shape-a-class-audit-2026-06-09.md): tag
     // the ACTIVE lab, not the owner's default lab. resolveActiveLabForRequest
@@ -22914,6 +22922,21 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (body.source_type && !VALID_FINDING_SOURCE_TYPES.includes(body.source_type)) {
       return res.status(400).json({ error: `source_type must be one of: ${VALID_FINDING_SOURCE_TYPES.join(', ')}` });
     }
+    // Entry-type templates (Michael 2026-10-26, mock D1-D7).
+    // The type is fixed once a finding exists (its template, clock and document depend on it).
+    if (body.source_type && body.source_type !== (existing.source_type ?? 'inspection')) {
+      return res.status(400).json({ error: "The entry type of a finding cannot be changed. Open a new finding of the right type." });
+    }
+    // D1: a finding closes only through the gated sign-off (POST .../signoff: the designated medical director, a
+    // delegated designee, or the account owner as a logged override). Choosing "Closed" on the page no longer does it.
+    if (body.status === 'closed' && existing.status !== 'closed') {
+      return res.status(409).json({ error: "Close a finding with Sign off (medical director or designee)." });
+    }
+    if (body.root_cause_category != null && body.root_cause_category !== "" && !PT_ROOT_CAUSE_CATEGORIES.some((c) => c.value === body.root_cause_category)) {
+      return res.status(400).json({ error: "root_cause_category must be one of the PT root cause categories" });
+    }
+    // D2, D6: only an inspection finding is filed under an accreditor; every other type keeps the one it was stored with.
+    if ((existing.source_type ?? 'inspection') !== 'inspection' && body.accreditor !== undefined) body.accreditor = existing.accreditor;
     // Only gate accreditor changes against the lab's allowed set. Existing
     // findings whose accreditor isn't currently allowed (lab dropped the
     // flag after the fact) stay readable and editable in OTHER fields;
@@ -22977,6 +23000,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         pt_score = ?,
         pt_result_summary = ?,
         root_cause_category = ?,
+        type_details = ?,
+        event_date = ?,
+        discovered_by = ?,
         updated_at = datetime('now')
       WHERE id = ?`
     ).run(
@@ -22997,8 +23023,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       body.preventive_action ?? existing.preventive_action ?? null,
       body.monitoring_plan ?? existing.monitoring_plan ?? null,
       body.completion_date ?? existing.completion_date ?? null,
-      body.signed_by ?? existing.signed_by ?? null,
-      body.signed_at ?? existing.signed_at ?? null,
+      // D1: the signature is written only by the gated sign-off route, never by a page save.
+      existing.signed_by ?? null,
+      existing.signed_at ?? null,
       body.external_submission_ref ?? existing.external_submission_ref ?? null,
       body.source_type ?? null,
       body.pt_program ?? existing.pt_program ?? null,
@@ -23007,6 +23034,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       body.pt_score ?? existing.pt_score ?? null,
       body.pt_result_summary ?? existing.pt_result_summary ?? null,
       body.root_cause_category ?? existing.root_cause_category ?? null,
+      body.type_details !== undefined ? JSON.stringify(sanitizeTypeDetails(existing.source_type, body.type_details)) : (existing.type_details ?? null),
+      body.event_date !== undefined ? (isoDueDate(body.event_date) ?? existing.event_date ?? null) : (existing.event_date ?? null),
+      body.discovered_by !== undefined ? (String(body.discovered_by ?? "").trim().slice(0, 200) || null) : (existing.discovered_by ?? null),
       req.params.id,
     );
     try {
@@ -23623,10 +23653,22 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // / CHECK column.
     const isFdaDeviation = source_type === 'fda_deviation';
     const isInternalNce = source_type === 'internal_nce' || isFdaDeviation;
-    const effectiveAccreditor = isInternalNce
+    // Entry-type templates (Michael 2026-10-26, D2): a PT failure is not filed under an accreditor. It is stored as
+    // 'Other' and its clock counts from the PT evaluation received date (anchor_date) to the lab target.
+    const isPtFailure = source_type === 'pt_failure';
+    if (source_type === 'qc_escalation' || source_type === 'aaa_escalation') {
+      return res.status(400).json({ error: "QC and alternative-assessment findings are opened by escalating from VeritaQC or VeritaPT." });
+    }
+    if (status === 'closed') {
+      return res.status(409).json({ error: "A new finding cannot start closed. Close it with Sign off (medical director or designee)." });
+    }
+    if (root_cause_category != null && root_cause_category !== "" && !PT_ROOT_CAUSE_CATEGORIES.some((c) => c.value === root_cause_category)) {
+      return res.status(400).json({ error: "root_cause_category must be one of the PT root cause categories" });
+    }
+    const effectiveAccreditor = isPtFailure ? 'Other' : isInternalNce
       ? (accreditor && VALID_ACCREDITORS.includes(accreditor) ? accreditor : 'Other')
       : accreditor;
-    if (!isInternalNce && (!accreditor || !VALID_ACCREDITORS.includes(accreditor))) {
+    if (!isInternalNce && !isPtFailure && (!accreditor || !VALID_ACCREDITORS.includes(accreditor))) {
       return res.status(400).json({ error: `accreditor must be one of: ${VALID_ACCREDITORS.join(', ')}` });
     }
     if (status && !VALID_FINDING_STATUSES.includes(status)) {
@@ -23641,13 +23683,13 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // for the lab-scoped variant. Skipped for an internal NCE, which is not
     // filed under an accrediting body.
     const allowed = getLabAllowedAccreditors(req.scope.labId);
-    if (!isInternalNce && !allowed.has(accreditor)) {
+    if (!isInternalNce && !isPtFailure && !allowed.has(accreditor)) {
       return res.status(400).json({
         error: `This lab is not flagged as ${accreditor}-accredited. Update the lab's accreditation settings or pick an allowed accreditor.`,
         allowed: Array.from(allowed),
       });
     }
-    const due_date = isInternalNce ? null : ((accreditor === 'ISO' ? isoDueDate(req.body?.due_date) : null) ?? dueDateForFinding(accreditor, anchor_date ?? null, req.scope.labId));
+    const due_date = isInternalNce ? null : ((effectiveAccreditor === 'ISO' ? isoDueDate(req.body?.due_date) : null) ?? dueDateForFinding(effectiveAccreditor, anchor_date ?? null, req.scope.labId));
     const ownerRow = (db as any).$client.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(req.scope.labId) as any;
     const userIdForRow = ownerRow?.owner_user_id ?? req.userId;
     const result = (db as any).$client.prepare(
@@ -23659,17 +23701,19 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         corrective_action, preventive_action, monitoring_plan,
         completion_date, signed_by, signed_at, external_submission_ref,
         source_type, pt_program, pt_event, pt_analyte, pt_score,
-        pt_result_summary, root_cause_category
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        pt_result_summary, root_cause_category, type_details
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       userIdForRow, req.scope.labId, effectiveAccreditor, inspection_id ?? null, finding_number ?? null, standard_ref ?? null,
       phase_or_severity ?? null, description ?? null, surveyor_notes ?? null,
       (isInternalNce ? (anchor_date ?? event_date ?? null) : (anchor_date ?? null)), due_date, status ?? 'open',
       immediate_action ?? null, containment ?? null, root_cause ?? null,
       corrective_action ?? null, preventive_action ?? null, monitoring_plan ?? null,
-      completion_date ?? null, signed_by ?? null, signed_at ?? null, external_submission_ref ?? null,
+      // D1: never signed at creation; the gated sign-off route writes the signature.
+      completion_date ?? null, null, null, external_submission_ref ?? null,
       source_type ?? 'inspection', pt_program ?? null, pt_event ?? null, pt_analyte ?? null, pt_score ?? null,
       pt_result_summary ?? null, root_cause_category ?? null,
+      req.body?.type_details !== undefined ? JSON.stringify(sanitizeTypeDetails(source_type ?? 'inspection', req.body.type_details)) : null,
     );
     // #36: stamp the internal-NCE-specific fields after insert (kept out of the
     // shared INSERT column list so the inspection/PT paths stay untouched).
