@@ -88,6 +88,9 @@ jobs:
         # VeritaCheck study notes (study_notes): members read, writers add, view-only and other customers cannot;
         # a signed study takes notes unchanged; author or owner/admin removes (tombstone); audited; deleted with the study.
         run: npm run test:study-notes
+      - name: Run lab-keyed CLIA certificate integration test
+        # VeritaLab CLIA certificate per lab, numbered from labs.clia_number (parking lot #92).
+        run: npm run test:clia-cert-lab-keyed
       - name: Run stale lab-owner row integration test
         # A leftover lab_members 'owner' row on someone who is not labs.owner_user_id gave a second
         # owner (San Carlos lab 2, 2026-10-15). repair-lab-admins demotes it to admin and never touches

@@ -1349,6 +1349,25 @@ function resolveLabForUser(userId: number): any | null {
  * inputs silently fall through to the legacy resolver so the request
  * still succeeds with the user's default lab.
  */
+// Parking lot #92 (2026-10-26): the VeritaLab CLIA certificate belongs to the LAB. Both auto-create paths used to
+// check "does this PERSON have a CLIA certificate" and insert the PERSON's CLIA number into whatever lab was active,
+// so a member could put their own lab's CLIA number into another lab's list. Now: one CLIA certificate per lab
+// (any existing row, active or removed, counts, so a certificate the lab deleted is not recreated), numbered from
+// labs.clia_number and owned by the lab's owner. The director comes from the person only when their CLIA is this lab's.
+function ensureLabCliaCertificate(labId: number | null | undefined, person?: { clia_number?: string | null; clia_director?: string | null } | null): void {
+  if (!labId) return;
+  const sqlite = (db as any).$client;
+  const lab = sqlite.prepare("SELECT clia_number, owner_user_id FROM labs WHERE id = ?").get(labId) as { clia_number: string | null; owner_user_id: number } | undefined;
+  const number = String(lab?.clia_number || "").trim();
+  if (!lab || !number) return;
+  if (sqlite.prepare("SELECT 1 FROM lab_certificates WHERE lab_id = ? AND cert_type = 'clia' LIMIT 1").get(labId)) return;
+  const director = person && String(person.clia_number || "").trim() === number ? (person.clia_director || null) : null;
+  const now = new Date().toISOString();
+  sqlite.prepare(
+    "INSERT INTO lab_certificates (user_id, lab_id, cert_type, cert_name, cert_number, issuing_body, lab_director, is_auto_populated, notes, created_at, updated_at) VALUES (?, ?, 'clia', 'CLIA Certificate', ?, 'Centers for Medicare and Medicaid Services (CMS)', ?, 1, 'Auto-populated from CLIA verification. Enter your expiration date to activate renewal reminders.', ?, ?)"
+  ).run(lab.owner_user_id, labId, number, director, now, now);
+}
+
 function resolveActiveLabForRequest(userId: number, req: any): any | null {
   let requested: number | null = null;
   const hdr = req?.headers?.["x-active-lab-id"];
@@ -31253,35 +31272,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     `).run(clia_number, facility_name || null, address || null, lab_director || null,
       specialty_count || null, certificate_type || null, tier || null, now, req.userId);
 
-    // Auto-create VeritaLab CLIA certificate if one does not already exist
-    const existingCert = (db as any).$client.prepare(
-      `SELECT id FROM lab_certificates WHERE user_id = ? AND cert_type = 'clia'`
-    ).get(req.userId);
-
-    if (!existingCert) {
-      const certResult = (db as any).$client.prepare(`
-        INSERT INTO lab_certificates
-        (user_id, cert_type, cert_name, cert_number, issuing_body, lab_director, is_auto_populated, notes, created_at, updated_at)
-        VALUES (?, 'clia', 'CLIA Certificate', ?, 'Centers for Medicare and Medicaid Services (CMS)', ?, 1, ?, ?, ?)
-      `).run(
-        req.userId,
-        clia_number,
-        lab_director || '',
-        'Auto-populated from CLIA verification. Enter your expiration date to activate renewal reminders.',
-        now,
-        now
-      );
-      // write-path Shape A (batch 3): tag the ACTIVE lab, not the owner's
-      // default lab. Reads key on user_id + the lab-scoped read uses
-      // req.scope.labId (active), so this repairs the lab-scoped view; no
-      // default-lab-resolver read exists for lab_certificates.
-      try {
-        const activeLab = resolveActiveLabForRequest(req.userId, req);
-        (db as any).$client.prepare(
-          "UPDATE lab_certificates SET lab_id = ? WHERE id = ?"
-        ).run(activeLab?.id ?? null, Number(certResult.lastInsertRowid));
-      } catch {}
-    }
+    // Auto-create the ACTIVE lab's VeritaLab CLIA certificate if it has none (parking lot #92).
+    try {
+      ensureLabCliaCertificate(resolveActiveLabForRequest(req.userId, req)?.id, { clia_number, clia_director: lab_director });
+    } catch {}
 
     res.json({ ok: true, tier });
   });
@@ -31779,26 +31773,11 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   app.get("/api/veritalab/certificates", authMiddleware, (req: any, res) => {
     if (!hasLabCertAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaLab\u2122 subscription required" });
 
-    // Auto-populate CLIA certificate if user has clia_number but no CLIA cert yet
-    const userRow = (db as any).$client.prepare("SELECT * FROM users WHERE id = ?").get(req.userId) as any;
-    if (userRow?.clia_number) {
-      const existingClia = (db as any).$client.prepare(
-        "SELECT id FROM lab_certificates WHERE user_id = ? AND cert_type = 'clia' AND is_active = 1"
-      ).get(req.userId);
-      if (!existingClia) {
-        const now = new Date().toISOString();
-        const cliaResult = (db as any).$client.prepare(
-          "INSERT INTO lab_certificates (user_id, cert_type, cert_name, cert_number, issuing_body, lab_director, is_auto_populated, notes, created_at, updated_at) VALUES (?, 'clia', 'CLIA Certificate', ?, 'Centers for Medicare and Medicaid Services (CMS)', ?, 1, 'Auto-populated from CLIA verification. Enter your expiration date to activate renewal reminders.', ?, ?)"
-        ).run(req.userId, userRow.clia_number, userRow.clia_director || null, now, now);
-        // write-path Shape A (batch 3): active lab, not the owner's default lab.
-        try {
-          const activeLab = resolveActiveLabForRequest(req.userId, req);
-          (db as any).$client.prepare(
-            "UPDATE lab_certificates SET lab_id = ? WHERE id = ?"
-          ).run(activeLab?.id ?? null, Number(cliaResult.lastInsertRowid));
-        } catch {}
-      }
-    }
+    // Auto-populate the ACTIVE lab's CLIA certificate from the lab's own CLIA number (parking lot #92).
+    try {
+      const userRow = (db as any).$client.prepare("SELECT clia_number, clia_director FROM users WHERE id = ?").get(req.userId) as any;
+      ensureLabCliaCertificate(resolveActiveLabForRequest(req.userId, req)?.id, userRow);
+    } catch {}
 
     // Scope to the ACTIVE lab (caller-based); WHERE user_id merged certificates
     // from every lab the owner belongs to. Fall back to user scope when no lab.
