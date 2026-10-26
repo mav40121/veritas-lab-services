@@ -4392,7 +4392,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     logAudit({ userId: req.userId, ownerUserId: req.userId, module: "account", action: "create", entityType: "access_report.download", entityId: labId, entityLabel: `Downloaded the access report for ${lab?.lab_name || `lab ${labId}`} (last ${days} days, ${r.rows.length} rows)`, ipAddress: req.ip });
     const safe = String(lab?.lab_name || "Lab").replace(/[^A-Za-z0-9]+/g, "_").slice(0, 40);
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    res.setHeader("Content-Disposition", `attachment; filename="${safe}_Access_Report_${new Date().toISOString().slice(0, 10)}.xlsx"`);
+    res.setHeader("Content-Disposition", `attachment; filename="${safe}_Access_Report_${labToday()}.xlsx"`);
     res.send(buf);
   });
 
@@ -8862,7 +8862,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const out = loadWasteReport(req);
       if ("error" in out) return res.status(out.status).json({ error: out.error });
       const pdfBuffer = await generateWasteReportPDF(out.report, out.ctx);
-      const datestamp = new Date().toISOString().slice(0, 10);
+      const datestamp = labToday();
       const safeLab = (out.ctx.labName || "Lab").replace(/[^A-Za-z0-9]+/g, "_").slice(0, 40);
       const token = storePdfToken(pdfBuffer, `VeritaStock_Wastage_${safeLab}_${datestamp}.pdf`);
       return res.json({ token, itemCount: out.report.by_item.length, totalLoss: out.report.summary.total_loss });
@@ -8877,7 +8877,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const out = loadWasteReport(req);
       if ("error" in out) return res.status(out.status).json({ error: out.error });
       const xlsxBuffer = await generateWasteReportExcel(out.report, out.ctx);
-      const datestamp = new Date().toISOString().slice(0, 10);
+      const datestamp = labToday();
       const safeLab = (out.ctx.labName || "Lab").replace(/[^A-Za-z0-9]+/g, "_").slice(0, 40);
       const token = storePdfToken(xlsxBuffer, `VeritaStock_Wastage_${safeLab}_${datestamp}.xlsx`);
       return res.json({ token, itemCount: out.report.by_item.length });
@@ -11995,7 +11995,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       ws.getRow(1).height = 22;
 
       ws.mergeCells("A2:I2");
-      const exportDate = new Date().toISOString().split("T")[0];
+      const exportDate = labToday();
       ws.getCell("A2").value = `CLIA: ${cliaNumber}    \u2022    Exported: ${exportDate}    \u2022    ${userStudies.length} stud${userStudies.length === 1 ? "y" : "ies"}`;
       ws.getCell("A2").font = { name: "Calibri", italic: true, size: 10, color: { argb: "FF7A7974" } };
       ws.getCell("A2").alignment = { vertical: "middle", horizontal: "left" };
@@ -14650,7 +14650,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         labName: labRow?.lab_name || "Laboratory",
         cliaNumber: labRow?.clia_number || "Not on file",
       });
-      const date = new Date().toISOString().split("T")[0];
+      const date = labToday();
       res.set({
         "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         "Content-Disposition": `attachment; filename="VeritaMap_Coverage_Report_${date}.xlsx"`,
@@ -15858,7 +15858,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       }
 
       const buf = await wb.xlsx.writeBuffer();
-      const date = new Date().toISOString().split("T")[0];
+      const date = labToday();
       const safe = labName.replace(/[^a-zA-Z0-9]+/g, "_").replace(/^_+|_+$/g, "");
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
       res.setHeader("Content-Disposition", `attachment; filename="VeritaCheck_Coverage_${safe}_${date}.xlsx"`);
@@ -17374,7 +17374,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       applyLicenseToExcelJS(wb, licenseCtxFromReq(req, "VeritaMap™"));
       const buffer = await wb.xlsx.writeBuffer();
       const safeName = (map.name || "Map").replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
-      const date = new Date().toISOString().split("T")[0];
+      const date = labToday();
       const filename = `VeritaMap_${safeName}_${date}.xlsx`;
 
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
@@ -18038,7 +18038,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const { generateVeritascanLibraryExcel } = await import("./veritascanDocumentLibraryExcel");
       const buf = await generateVeritascanLibraryExcel(rows, { labName, cliaNumber, preparedBy });
 
-      const filename = `VeritaScan_Library_${(labName || "Lab").replace(/[^a-z0-9]+/gi, "_")}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      const filename = `VeritaScan_Library_${(labName || "Lab").replace(/[^a-z0-9]+/gi, "_")}_${labToday()}.xlsx`;
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
       res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
       res.send(buf);
@@ -19083,7 +19083,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       applyLicenseToExcelJS(wb, licenseCtxFromReq(req, "VeritaScan™"));
       const buffer = await wb.xlsx.writeBuffer();
       const safeName = (scan.name || "Scan").replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
-      const date = new Date().toISOString().split("T")[0];
+      const date = labToday();
       const filename = `VeritaScan_${safeName}_${date}.xlsx`;
 
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
@@ -19212,7 +19212,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       if (scanLab) markLabReportingLocks(scanLab.id);
 
       const safeName = (scan.name || "Scan").replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
-      const date = new Date().toISOString().split("T")[0];
+      const date = labToday();
       const label = type === "executive" ? "Executive" : "Full";
       const filename = `VeritaScan_${label}_${safeName}_${date}.pdf`;
 
@@ -20310,7 +20310,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       applyLicenseToExcelJS(wb, licenseCtxFromReq(req, "VeritaCheck™"));
       const buffer = await wb.xlsx.writeBuffer();
       const safeName = tracker.instrument_name.replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
-      const filename = `CUMSUM_${safeName}_${new Date().toISOString().split("T")[0]}.xlsx`;
+      const filename = `CUMSUM_${safeName}_${labToday()}.xlsx`;
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
       res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
       res.send(Buffer.from(buffer));
@@ -21378,7 +21378,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       );
 
       const safeName = "Riverside_Regional";
-      const date = new Date().toISOString().split("T")[0];
+      const date = labToday();
       const label = type === "executive" ? "Executive" : "Full";
       const filename = `VeritaScan_${label}_${safeName}_${date}.pdf`;
       const token = storePdfToken(pdfBuffer, filename);
@@ -21605,7 +21605,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         specialties,
       }, licenseCtxFromReq(req));
 
-      const date = new Date().toISOString().split("T")[0];
+      const date = labToday();
       const filename = `CMS_209_22D0999999_${date}.pdf`;
       const demoCms209Token = storePdfToken(pdfBuffer, filename);
       res.json({ token: demoCms209Token });
@@ -23025,7 +23025,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         licenseCtxFromReq(req, "VeritaResponse™"),
       );
       const safeName = String(finding.finding_number || finding.id).replace(/[^A-Za-z0-9_-]+/g, "_");
-      const filename = `CMS-2567_Finding_${safeName}_${new Date().toISOString().slice(0, 10)}.pdf`;
+      const filename = `CMS-2567_Finding_${safeName}_${labToday()}.pdf`;
       // Audit-trail entry so the history shows when a render was produced.
       try {
         (db as any).$client.prepare(
@@ -23056,7 +23056,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const user = resolveFindingLabIdentity(finding, dataUserId);
       const pdfBuffer = await generateInternalNcePDF({ finding, user }, licenseCtxFromReq(req, "VeritaResponse™"));
       const safeName = String(finding.finding_number || finding.id).replace(/[^A-Za-z0-9_-]+/g, "_");
-      const filename = `Internal-NCE_${safeName}_${new Date().toISOString().slice(0, 10)}.pdf`;
+      const filename = `Internal-NCE_${safeName}_${labToday()}.pdf`;
       try {
         (db as any).$client.prepare(
           `INSERT INTO finding_history (finding_id, event, by_user_id, payload) VALUES (?, ?, ?, ?)`
@@ -23116,7 +23116,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         licenseCtxFromReq(req, "VeritaResponse™"),
       );
       const safeName = String(finding.finding_number || finding.id).replace(/[^A-Za-z0-9_-]+/g, "_");
-      const filename = `CAP_Response_Finding_${safeName}_${new Date().toISOString().slice(0, 10)}.pdf`;
+      const filename = `CAP_Response_Finding_${safeName}_${labToday()}.pdf`;
       try {
         (db as any).$client.prepare(
           `INSERT INTO finding_history (finding_id, event, by_user_id, payload) VALUES (?, ?, ?, ?)`
@@ -23174,7 +23174,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         licenseCtxFromReq(req, "VeritaResponse™"),
       );
       const safeName = String(finding.finding_number || finding.id).replace(/[^A-Za-z0-9_-]+/g, "_");
-      const filename = `TJC_ESC_Finding_${safeName}_${new Date().toISOString().slice(0, 10)}.pdf`;
+      const filename = `TJC_ESC_Finding_${safeName}_${labToday()}.pdf`;
       try {
         (db as any).$client.prepare(
           `INSERT INTO finding_history (finding_id, event, by_user_id, payload) VALUES (?, ?, ?, ?)`
@@ -23231,7 +23231,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         licenseCtxFromReq(req, "VeritaResponse™"),
       );
       const safeName = String(finding.finding_number || finding.id).replace(/[^A-Za-z0-9_-]+/g, "_");
-      const filename = `COLA_Response_Finding_${safeName}_${new Date().toISOString().slice(0, 10)}.pdf`;
+      const filename = `COLA_Response_Finding_${safeName}_${labToday()}.pdf`;
       try {
         (db as any).$client.prepare(
           `INSERT INTO finding_history (finding_id, event, by_user_id, payload) VALUES (?, ?, ?, ?)`
@@ -23290,7 +23290,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         licenseCtxFromReq(req, "VeritaResponse™"),
       );
       const safeName = String(finding.finding_number || finding.id).replace(/[^A-Za-z0-9_-]+/g, "_");
-      const filename = `AABB_NER_Finding_${safeName}_${new Date().toISOString().slice(0, 10)}.pdf`;
+      const filename = `AABB_NER_Finding_${safeName}_${labToday()}.pdf`;
       try {
         (db as any).$client.prepare(
           `INSERT INTO finding_history (finding_id, event, by_user_id, payload) VALUES (?, ?, ?, ?)`
@@ -25709,7 +25709,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       ).all(assessment.id);
       const pdfBuffer = await generateCompetencyPDF({ assessment, items, methodGroups, checklistItems, labName, quizResults, cliaNumber: cliaForComp, elementDocuments, primaryRegime: compLab?.primary_regime }, licenseCtxFromReq(req));
       const safeName = assessment.employee_name.replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
-      const date = new Date().toISOString().split("T")[0];
+      const date = labToday();
       const typeLabel = assessment.program_record_kind === "evaluation" ? "Evaluation" : assessment.program_type === "technical" ? "Technical" : assessment.program_type === "waived" ? "Waived" : "NonTechnical";
       const filename = `VeritaComp_${typeLabel}_${safeName}_${date}.pdf`;
       const veritacompToken = storePdfToken(pdfBuffer, filename);
@@ -25790,7 +25790,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         primaryRegime: compLab?.primary_regime,
       }, licenseCtxFromReq(req));
       const safeName = (program.name || "Program").replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
-      const date = new Date().toISOString().split("T")[0];
+      const date = labToday();
       const typeLabel = program.record_kind === "evaluation" ? "Evaluation" : program.type === "technical" ? "Technical" : program.type === "waived" ? "Waived" : "NonTechnical";
       const filename = `VeritaComp_BLANK_${typeLabel}_${safeName}_${date}.pdf`;
       const token = storePdfToken(pdfBuffer, filename);
@@ -26175,7 +26175,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     zip.file("Index.xlsx", Buffer.from(xlsxBuffer));
 
     const zipBuffer = await zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
-    const dateStr = new Date().toISOString().split("T")[0];
+    const dateStr = labToday();
     const safeLab = labName.replace(/[^a-zA-Z0-9_\- ]/g, "").trim().replace(/\s+/g, "_") || "Lab";
     const zipFilename = `${safeLab}_VeritaComp_Bundle_${dateStr}.zip`;
     const token = storePdfToken(zipBuffer, zipFilename);
@@ -26234,7 +26234,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     try {
       const pdfBuffer = await generateCompetencyPDF({ assessment, items, methodGroups, checklistItems, labName, quizResults, cliaNumber: cliaForComp }, licenseCtxFromReq(req));
       const safeName = assessment.employee_name.replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
-      const date = new Date().toISOString().split("T")[0];
+      const date = labToday();
       const typeLabel = assessment.program_record_kind === "evaluation" ? "Evaluation" : assessment.program_type === "technical" ? "Technical" : assessment.program_type === "waived" ? "Waived" : "NonTechnical";
       const filename = `VeritaComp_${typeLabel}_${safeName}_${date}.pdf`;
       const veritacompToken = storePdfToken(pdfBuffer, filename);
@@ -26314,7 +26314,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       }, licenseCtxFromReq(req));
 
       const safeName = assessment.employee_name.replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
-      const date = new Date().toISOString().split("T")[0];
+      const date = labToday();
       const typeLabel = assessment.program_record_kind === "evaluation" ? "Evaluation" : assessment.program_type === "technical" ? "Technical" : assessment.program_type === "waived" ? "Waived" : "NonTechnical";
       const filename = `VeritaStaff_${typeLabel}_${safeName}_${date}.pdf`;
 
@@ -26396,7 +26396,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     try {
       const pdfBuffer = await generateCumsumPDF(tracker, entries, currentSpecimens, cumsumClia, cumsumLabName, licenseCtxFromReq(req));
       const safeName = tracker.instrument_name.replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
-      const filename = `VeritaCheck_CUMSUM_${safeName}_${new Date().toISOString().split("T")[0]}.pdf`;
+      const filename = `VeritaCheck_CUMSUM_${safeName}_${labToday()}.pdf`;
       const cumsumToken = storePdfToken(pdfBuffer, filename);
       if (cumsumLab) markLabReportingLocks(cumsumLab.id);
       res.json({ token: cumsumToken });
@@ -27499,7 +27499,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       }, licenseCtxFromReq(req));
       if (!pdfBuffer || pdfBuffer.length === 0) return res.status(500).json({ error: "PDF generation failed" });
       const safeName = name.replace(/[^a-zA-Z0-9_\- ]/g, "").trim() || "Employee";
-      const filename = `CE_Transcript_${safeName}_${new Date().toISOString().slice(0, 10)}.pdf`;
+      const filename = `CE_Transcript_${safeName}_${labToday()}.pdf`;
       res.json({ token: storePdfToken(pdfBuffer, filename), filename });
     } catch (e: any) {
       console.error("[veritaceu/transcript] error:", e?.message);
@@ -29567,7 +29567,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         testSystems: view.testSystems,
       }, licenseCtxFromReq(req));
       const safeName = String(view.employee?.name || "Employee").replace(/[^a-zA-Z0-9_\- ]/g, "").trim() || "Employee";
-      const date = new Date().toISOString().split("T")[0];
+      const date = labToday();
       const filename = `VeritaComp_Record_${safeName}_${date}.pdf`;
       const token = storePdfToken(pdfBuffer, filename);
       if (compLab) markLabReportingLocks(compLab.id);
@@ -30986,7 +30986,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const buf = await generateCompetencyRegisterExcel(rows, { labName, cliaNumber }, new Date());
       const safe = String(labName).replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 60) || "Lab";
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-      res.setHeader("Content-Disposition", `attachment; filename="Competency_Register_${safe}_${new Date().toISOString().slice(0, 10)}.xlsx"`);
+      res.setHeader("Content-Disposition", `attachment; filename="Competency_Register_${safe}_${labToday()}.xlsx"`);
       res.send(buf);
     } catch (err: any) {
       console.error("[competency-register]", err?.message);
@@ -31015,7 +31015,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         specialties: CMS_SPECIALTIES,
         medicalDirectorName: labMd209?.medical_director_name || null,
       }, licenseCtxFromReq(req));
-      const date = new Date().toISOString().split("T")[0];
+      const date = labToday();
       const filename = `CMS_209_${lab.clia_number}_${date}.pdf`;
       const cms209Token = storePdfToken(pdfBuffer, filename);
       res.json({ token: cms209Token });
@@ -31049,7 +31049,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         specialties: CMS_SPECIALTIES,
         medicalDirectorName: labMd209?.medical_director_name || null,
       }, licenseCtxFromReq(req));
-      const date = new Date().toISOString().split("T")[0];
+      const date = labToday();
       const filename = `CMS_209_${lab.clia_number}_${date}.pdf`;
       const cms209Token = storePdfToken(pdfBuffer, filename);
       res.json({ token: cms209Token });
@@ -32586,7 +32586,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
       applyLicenseToExcelJS(wb, licenseCtxFromReq(req, "VeritaLab™"));
       const buffer = await wb.xlsx.writeBuffer();
-      const date = new Date().toISOString().split("T")[0];
+      const date = labToday();
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
       res.setHeader("Content-Disposition", `attachment; filename="VeritaLab_Certificates_${date}.xlsx"`);
       res.send(Buffer.from(buffer));
@@ -33139,7 +33139,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         events,
         correctiveActions: cas,
       }, licenseCtxFromReq(req));
-      const date = new Date().toISOString().split("T")[0];
+      const date = labToday();
       const filename = `VeritaPT_Report_${date}.pdf`;
       const ptPdfToken = storePdfToken(pdfBuffer, filename);
       if (ptLab) markLabReportingLocks(ptLab.id);
@@ -37488,7 +37488,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
       applyLicenseToExcelJS(wb, licenseCtxFromReq(req, "VeritaDC™"));
       const buffer = await wb.xlsx.writeBuffer();
-      const date = new Date().toISOString().split('T')[0];
+      const date = labToday();
       const filename = `VeritaPolicy_MasterList_${date}.xlsx`;
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
@@ -37723,7 +37723,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       safetyDefault: s.house_safety_default || null,
       houseNumber: n?.house_number || null,
       revision: n?.revision || null,
-      draftDate: new Date().toISOString().slice(0, 10),
+      draftDate: labToday(),
     };
   }
 
@@ -37770,7 +37770,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       // still names who pulled the original.
       const downloader = sqlite.prepare('SELECT name, email FROM users WHERE id = ?').get(req.userId) as any;
       const downloadedBy = downloader?.name || downloader?.email || `user #${req.userId}`;
-      const downloadedAt = new Date().toISOString().slice(0, 10);
+      const downloadedAt = labToday();
       // Opt-in "UNCONTROLLED COPY" diagonal watermark for hand-out / printed
       // copies. Off by default so the in-system copy stays the controlled master.
       const uncontrolled = req.query?.uncontrolled === 'true' || req.query?.uncontrolled === '1';
@@ -37919,7 +37919,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       // bundle still names provenance.
       const bundleDownloader = sqlite.prepare('SELECT name, email FROM users WHERE id = ?').get(req.userId) as any;
       const bundleDownloadedBy = bundleDownloader?.name || bundleDownloader?.email || `user #${req.userId}`;
-      const bundleDownloadedAt = new Date().toISOString().slice(0, 10);
+      const bundleDownloadedAt = labToday();
       // Opt-in "UNCONTROLLED COPY" diagonal watermark, off by default. Applies
       // to every generator-built starter in the zip; custom-uploaded facility
       // templates (served as-is below) pass through without the watermark.
@@ -37964,7 +37964,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
       // README inside the zip documenting what's in it.
       const safeLab = (lab.lab_name || 'Your Laboratory').replace(/[^A-Za-z0-9 _-]/g, '');
-      const today = new Date().toISOString().slice(0, 10);
+      const today = labToday();
       const readme = [
         `VeritaPolicy bundle for ${safeLab}`,
         `Generated: ${today}`,
@@ -38249,7 +38249,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
                     firstSheet: 0, activeTab: 0, visibility: 'visible' }];
       applyLicenseToExcelJS(wb, licenseCtxFromReq(req, "VeritaDC™"));
       const buffer = await wb.xlsx.writeBuffer();
-      const date = new Date().toISOString().split('T')[0];
+      const date = labToday();
       const filename = `VeritaPolicy_MasterList_${date}.xlsx`;
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
@@ -41587,7 +41587,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       staffSheet.getColumn(4).width = 20;
 
       const buf = await wb.xlsx.writeBuffer();
-      const filename = `VeritaPolicy_Compliance_${new Date().toISOString().split("T")[0]}.xlsx`;
+      const filename = `VeritaPolicy_Compliance_${labToday()}.xlsx`;
       res.set({
         "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         "Content-Disposition": `attachment; filename="${filename}"`,
@@ -42203,7 +42203,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           .replace(/[^a-z0-9]+/gi, "_")
           .replace(/^_+|_+$/g, "")
           .slice(0, 40) || "policy";
-      const date = new Date().toISOString().slice(0, 10);
+      const date = labToday();
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
       res.setHeader("Content-Disposition", `attachment; filename="VeritaPolicy_Signature_Report_${safe}_${date}.xlsx"`);
       res.send(buf);
