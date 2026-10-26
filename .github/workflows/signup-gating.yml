@@ -94,6 +94,9 @@ jobs:
       - name: Run VeritaLab export columns integration test
         # The certificate export carries the CLIA certificate type and link; Status stays column 8 (parking lot #103).
         run: npm run test:veritalab-export-columns
+      - name: Run QC finding reminder integration test
+        # A reminder for a finding escalated from VeritaQC names the test, level, lot, run date and instrument (parking lot #99).
+        run: npm run test:finding-reminder-qc
       - name: Run stale lab-owner row integration test
         # A leftover lab_members 'owner' row on someone who is not labs.owner_user_id gave a second
         # owner (San Carlos lab 2, 2026-10-15). repair-lab-admins demotes it to admin and never touches
