@@ -715,7 +715,7 @@ Open questions for the scope:
 **What (survey 2026-10-26):** the lab's accreditor is four 0/1 columns on `labs` (cap, tjc, cola, aabb), turned into a six-option choice in about 11 separate places (routes.ts, studyPdf.ts). The choice part: a `labs.accreditation_iso` column, one shared flags-to-choice helper replacing the copies, ISO in Account Settings, onboarding, admin provisioning lists, VeritaStaff, VeritaLab certificate types, and VeritaResponse findings (the `findings.accreditor` CHECK constraint means a table rebuild; ISO findings get a lab-entered due date). The citation part: ISO 15189:2022 clause numbers on 173 VeritaScan items, 58 VeritaPolicy master rows, 14 VeritaCheck study types and an ISO requirement list. ISO text is copyrighted: clause numbers and our own wording only, mapped from a purchased copy.
 
 **Source:** Michael, 2026-10-26: "lets load ISO standards as a selection option in accreditor".
-**Status:** Michael picked option 1 on 2026-10-26 (the add-on choice now, citations later). Built in PR #1716: Account Settings box, VeritaResponse ISO findings with a lab-entered due date (findings table rebuilt to accept ISO), VeritaStaff option, VeritaLab certificate type, onboarding hint, admin update-lab. ISO citations stay open here until a purchased copy of ISO 15189:2022 is in hand.
+**Status:** Michael picked option 1 on 2026-10-26 (the add-on choice now, citations later). Built in PR #1716: Account Settings box, VeritaResponse ISO findings with a lab-entered due date (findings table rebuilt to accept ISO), VeritaStaff option, VeritaLab certificate type, onboarding hint, admin update-lab. Live 2026-10-26 in 14bb8373 (production schema: labs.accreditation_iso present, findings CHECK accepts ISO, indexes intact). ISO citations stay open here until a purchased copy of ISO 15189:2022 is in hand.
 
 ---
 
@@ -727,7 +727,8 @@ Open questions for the scope:
 **What:** an admin route that finds every open VeritaQC-escalated finding whose run is already voided and applies the C103 rule (untouched: close with the void reason; worked: flag "QC run voided"), dry run first, listing lab and finding. Writes on client labs, so it runs only on Michael's go.
 
 **Source:** Claude, 2026-10-26, checking the client side after #100 shipped. Related: REQ-063 (Client told 2026-10-14).
-**Status:** Open. Question queued for Michael after the ISO pick.
+**Also (2026-10-26):** QC and alternative-assessment escalations made before the entry-type templates (#1718) are still stored as CMS inspection findings with the 10-day clock; the same admin pass can move them to qc_escalation / aaa_escalation with the 30-day lab target.
+**Status:** Open. Question queued for Michael.
 
 ---
 
@@ -752,6 +753,18 @@ Open questions for the scope:
 
 **Source:** Michael, 2026-10-26: "add a weekly option for frequency."
 **Status:** Open.
+
+---
+
+### 112. VeritaResponse reports for the new entry types (PT investigation, FDA deviation summary, QC look-back)
+
+**Effort:** M (three report builders in the existing house style, a Generate button on each type's page, tests)
+**Importance:** Medium. The entry-type templates (#1718, Michael's mock answers D1-D7, 2026-10-26) capture the PT checklist, the FDA reportability facts and the QC patient look-back, but those types have no printable record yet.
+
+**What:** D3 PT investigation report (with an alternative-assessment variant), D5 FDA deviation investigation summary (the facts for Form FDA 3486, not the form), D7 QC event and patient look-back report (lives in VeritaResponse; the VeritaQC monthly review links to it). Medical director or designee block on page 1; CFR quoted only.
+
+**Source:** Michael, 2026-10-26, entry-type mock D3, D5, D7 ("1 approve all"). Layout mock: Product Specs\VeritaResponse\VeritaResponse_Report_Layouts_MOCK_2026-10-26.pdf.
+**Status:** Layouts sent to Michael 2026-10-26; build waits on his approval (mock-PDF-first rule).
 
 ---
 
