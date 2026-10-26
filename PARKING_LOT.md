@@ -670,18 +670,6 @@ Receipts: an integration test for the derivation (linked, unlinked fallback, una
 
 ---
 
-### 104. Calibration Verification + Correlation as one study
-
-**Effort:** M (1-3 days)
-**Importance:** High. Every lab with two or more analyzers enters the same known-value results twice today: once as a multi-analyzer cal ver, again as a correlation.
-
-**What:** a new VeritaCheck study type, cal_ver_correlation. Known-value samples run once on every analyzer give two verdicts on one signed page: calibration verification (each analyzer against the assigned values, 42 CFR §493.1255(b)(3)) and correlation (each other analyzer against the primary, the first analyzer listed, 42 CFR §493.1281(a)). Two verdicts because two analyzers can each pass cal ver at +TEa and -TEa yet sit nearly 2 x TEa apart. The report names the material ("not patient specimens"); the director accepts it by signing. VeritaMap and VeritaCheck Coverage credit both the cal ver and the correlation dates for every analyzer in the study. One study credit on per-study plans.
-
-**Source:** Michael 2026-10-15: "Why do we not offer a combined cal ver and correlation report? If I take 5 samples with known values and run them on both analyzers I can examine both accuracy and precision." Q12 = 2 (credit the correlation for any analyzers, not just same make and model; the report names the material). Q13 = 1 (build as mocked, one study credit). A single run gives accuracy and agreement between analyzers, not precision (replicates needed).
-**Status:** In progress (branch calver-correlation-combined; mock approved 2026-10-15).
-
----
-
 ### 105. Tissue sub-module in VeritaStock: human tissue for implant, tracked from receipt to the patient
 
 **Effort:** M to L (2-4 weeks) for a tissue sub-module built on VeritaStock's receiving, lot and expiration, and recall pieces, plus the issue, implant and disposition record and a perpetual log; more if the tissue ID is barcode-scanned.
@@ -720,6 +708,12 @@ Open questions for the scope:
 ---
 
 ## CLOSED (audit trail)
+
+### C102. Calibration Verification + Correlation as one study (was #104)
+
+**Effort:** was M / **Importance:** High.
+
+**Closure evidence:** commits 34093a86 (server support; signing re-stamps the VeritaMap dates, BUG-060) and 7f4c9a96 (study setup and results pages), plus ffb1183a (the combined study needs two analyzers per level, BUG-061). Study type cal_ver_correlation is live in VeritaCheck. The entry still said "In progress" until the 2026-10-26 review.
 
 ### C101. VeritaLab certificate Excel export leaves out the new link and CLIA type (was #103)
 
