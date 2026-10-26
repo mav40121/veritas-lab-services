@@ -172,6 +172,10 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
                       </div>
                     ))}
                   </RadioGroup>
+                  {/* #108: ISO 15189 is an add-on to the primary accreditation, set in Account Settings. */}
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Also accredited to ISO 15189? Add it in Account Settings, under Accreditation &amp; Standards.
+                  </p>
                 </div>
 
                 <div>

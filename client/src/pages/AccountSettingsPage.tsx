@@ -45,6 +45,7 @@ interface AccountSettings {
   clia_lab_name: string;
   preferred_standards: AccreditationBody[]; // legacy, retained for back-compat
   accreditation_choice: AccreditationChoice;
+  accreditation_iso?: boolean; // ISO 15189 add-on (#108)
   preferred_pt_vendor: PtVendorPref;
   // Lab role context from server
   is_seat: boolean;
@@ -115,6 +116,7 @@ export default function AccountSettingsPage() {
   const [cliaNumber, setCliaNumber] = useState("");
   const [labName, setLabName] = useState("");
   const [accreditationChoice, setAccreditationChoice] = useState<AccreditationChoice>("CLIA");
+  const [accreditationIso, setAccreditationIso] = useState(false);
   const onStock = isStockHost();  // VeritaStock deployment: hide lab/compliance settings
   const [preferredPtVendor, setPreferredPtVendor] = useState<PtVendorPref>("none");
 
@@ -365,6 +367,7 @@ export default function AccountSettingsPage() {
       setCliaNumber(settings.clia_number || "");
       setLabName(settings.clia_lab_name || "");
       setAccreditationChoice(settings.accreditation_choice || "CLIA");
+      setAccreditationIso(!!settings.accreditation_iso);
       setPreferredPtVendor(settings.preferred_pt_vendor || "none");
     }
   }, [settings]);
@@ -390,6 +393,7 @@ export default function AccountSettingsPage() {
           clia_number: cliaNumber,
           clia_lab_name: labName,
           accreditation_choice: accreditationChoice,
+          accreditation_iso: accreditationIso,
           preferredPtVendor,
         }),
       });
@@ -402,6 +406,9 @@ export default function AccountSettingsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/account/settings"] });
       queryClient.invalidateQueries({ queryKey: ["/api/onboarding/status"] });
+      // The lab list carries the accreditation flags that filter accreditor pickers (VeritaResponse, VeritaStaff);
+      // without this a new accreditor appeared there only after a page reload.
+      queryClient.invalidateQueries({ queryKey: ["/api/labs/me"] });
       toast({ title: "Settings saved" });
     },
     onError: (err: Error) => toast({ title: err.message || "Failed to save settings", variant: "destructive" }),
@@ -588,6 +595,32 @@ export default function AccountSettingsPage() {
               );
             })}
           </div>
+          {/* ISO 15189 (#108): an add-on to the choice above, never a replacement. A lab accredited to ISO 15189 still
+              holds its CLIA certificate through the accreditor (or state survey) selected above. */}
+          <label
+            className={[
+              "flex items-start gap-3 rounded-lg border p-3 text-left transition-colors",
+              accreditationIso ? "border-primary bg-primary/5" : "border-border",
+              settings?.is_seat ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:border-primary/50",
+            ].join(" ")}
+          >
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4 shrink-0 accent-[#01696F]"
+              checked={accreditationIso}
+              disabled={isLoading || !!settings?.is_seat}
+              onChange={(e) => setAccreditationIso(e.target.checked)}
+              data-testid="accreditation-iso"
+            />
+            <div>
+              <div className="text-sm font-semibold">Also accredited to ISO 15189</div>
+              <div className="text-xs text-muted-foreground">
+                Medical laboratory quality and competence standard (for example through CAP 15189). This is in addition to
+                the accreditation selected above, which still covers your CLIA certificate. Adds ISO 15189 to VeritaResponse™
+                findings and VeritaStaff™. ISO clause references are not yet on reports.
+              </div>
+            </div>
+          </label>
           {!settings?.is_seat && (
             <Button
               onClick={() => saveMutation.mutate()}

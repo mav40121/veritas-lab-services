@@ -67,6 +67,8 @@ const CERT_TYPES = [
   { value: "clia", label: "CLIA Certificate", issuing_body: "Centers for Medicare and Medicaid Services (CMS)" },
   { value: "cap", label: "CAP Accreditation", issuing_body: "College of American Pathologists" },
   { value: "tjc", label: "TJC Accreditation", issuing_body: "The Joint Commission" },
+  // ISO 15189 (#108). The accrediting body varies (for example CAP 15189), so the lab names it.
+  { value: "iso15189", label: "ISO 15189 Accreditation", issuing_body: "" },
   { value: "state_license", label: "State Laboratory License", issuing_body: "" },
   { value: "lab_director_license", label: "Lab Director License", issuing_body: "" },
   // PR 5 (2026-06-07): vendor agreement type. Commercial agreements

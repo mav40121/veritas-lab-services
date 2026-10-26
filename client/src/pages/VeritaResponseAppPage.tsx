@@ -41,7 +41,7 @@ import {
 import { Link, useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 
-type Accreditor = "CAP" | "TJC" | "COLA" | "CMS" | "AABB" | "Other";
+type Accreditor = "CAP" | "TJC" | "COLA" | "CMS" | "AABB" | "ISO" | "Other";
 type FindingStatus = "open" | "drafting" | "submitted" | "accepted" | "rejected_resubmit" | "closed";
 
 const ACCREDITORS: { value: Accreditor; label: string; anchorLabel: string; offsetDays: number | null; deadlineNote: string }[] = [
@@ -50,6 +50,8 @@ const ACCREDITORS: { value: Accreditor; label: string; anchorLabel: string; offs
   { value: "CMS",   label: "CMS (CLIA-2567)", anchorLabel: "Receipt date",        offsetDays: 10, deadlineNote: "10 days from receipt. Public release at 14 days per CMS QSO-25-19-ALL." },
   { value: "AABB",  label: "AABB",           anchorLabel: "Event date",          offsetDays: 45, deadlineNote: "FDA notification within 45 days for reportable events; lab CAPA timing varies." },
   { value: "COLA",  label: "COLA",           anchorLabel: "Notice date",         offsetDays: 30, deadlineNote: "COLA is consultative; no hard deadline. Soft target of 30 days as a check-in." },
+  // ISO 15189 (#108): the accreditation body sets the response time in its report, so the lab enters the due date.
+  { value: "ISO",   label: "ISO 15189",      anchorLabel: "Assessment date",     offsetDays: null, deadlineNote: "Your ISO 15189 accreditation body sets the response time. Enter the due date from its assessment report." },
   { value: "Other", label: "Other",          anchorLabel: "Anchor date",         offsetDays: 30, deadlineNote: "Neutral default of 30 days." },
 ];
 
@@ -58,7 +60,8 @@ const ACCREDITORS: { value: Accreditor; label: string; anchorLabel: string; offs
 // window, not a lab CAPA deadline. Their clocks are SOFT TARGETS: amber "target"
 // styling, not red "overdue", and they are excluded from the "past their
 // deadline" overdue count/banner.
-const HARD_DEADLINE_ACCREDITORS = new Set<Accreditor>(["CMS", "CAP", "TJC"]);
+// ISO 15189 is hard too: its due date is the one the accreditation body set, entered by the lab (#108).
+const HARD_DEADLINE_ACCREDITORS = new Set<Accreditor>(["CMS", "CAP", "TJC", "ISO"]);
 const isHardDeadline = (acc: string) => HARD_DEADLINE_ACCREDITORS.has(acc as Accreditor);
 
 const STATUS_BADGES: Record<FindingStatus, { label: string; cls: string }> = {
@@ -112,6 +115,7 @@ export default function VeritaResponseAppPage() {
   const [newPhaseOrSeverity, setNewPhaseOrSeverity] = useState("");
   const [newInspectionId, setNewInspectionId] = useState("");
   const [newAnchorDate, setNewAnchorDate] = useState("");
+  const [newIsoDueDate, setNewIsoDueDate] = useState("");
   const [newDescription, setNewDescription] = useState("");
   // PT-failure investigation (source_type = 'pt_failure'). Reuses the same
   // finding record + CAPA workflow; these are the PT-specific head fields.
@@ -213,6 +217,7 @@ export default function VeritaResponseAppPage() {
           phase_or_severity: newPhaseOrSeverity.trim() || null,
           description: newDescription.trim() || null,
           anchor_date: noAccreditor ? null : (newAnchorDate || null),
+          ...(!noAccreditor && newAccreditor === "ISO" ? { due_date: newIsoDueDate || null } : {}),
           status: "open",
           source_type: newSourceType,
           event_date: isNce ? (newEventDate || null) : isFda ? (fdaInfoDate || null) : null,
@@ -243,6 +248,7 @@ export default function VeritaResponseAppPage() {
       setNewPhaseOrSeverity("");
       setNewInspectionId("");
       setNewAnchorDate("");
+      setNewIsoDueDate("");
       setNewDescription("");
       setNewSourceType("inspection");
       setNewPtProgram(""); setNewPtEvent(""); setNewPtAnalyte(""); setNewPtScore("");
@@ -678,6 +684,18 @@ export default function VeritaResponseAppPage() {
                       className="h-8 text-sm"
                     />
                   </div>
+                  {newAccreditor === "ISO" && (
+                    <div className="space-y-1">
+                      <Label className="text-xs">Due date (from your accreditation body)</Label>
+                      <Input
+                        type="date"
+                        value={newIsoDueDate}
+                        onChange={(e) => setNewIsoDueDate(e.target.value)}
+                        className="h-8 text-sm"
+                        data-testid="iso-due-date"
+                      />
+                    </div>
+                  )}
                   <div className="space-y-1 col-span-2">
                     <p className="text-xs text-muted-foreground">{deadlineNote}</p>
                     {previewDue && (
