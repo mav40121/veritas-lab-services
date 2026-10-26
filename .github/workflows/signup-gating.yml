@@ -110,6 +110,8 @@ jobs:
         # ISO 15189 add-on (#108): findings table rebuilt to accept ISO with rows, indexes and child rows intact;
         # settings round trip and audit; ISO findings gated by the lab flag and take the lab-entered due date.
         run: npm run test:iso-15189
+      - name: VeritaResponse copy truth (suite page, demo, intro card, finding page)
+        run: node scripts/verify-veritaresponse-copy-truth.mjs
       - name: Run correlation run details integration test
         # Run details (lots, dates, specimen) save, edit, clear, normalize, lock with sign-off and carry into an amendment.
         run: npm run test:correlation-run-details

@@ -44,5 +44,25 @@ ok("DemoLabPage: scopes the cross-link to a 42 CFR 493 standard",
 const blurb = (va.match(/Renders a CMS-2567-compatible[^"]*/) || [""])[0];
 ok("no em-dash in the VeritaResponse blurb", blurb.length > 0 && !blurb.includes("—"));
 
+// In-app intro card and finding page (Michael 2026-10-26, VeritaResponse review option 1): the card covered surveys
+// only, listed stale clocks, claimed a "federal CMS-2567" render and an evidence upload, and offered an extension
+// feature that does not exist; the finding page carried a dated TJC label, a "later phase" note for a gate that
+// exists, the wrong form name and owner/admin sign-off wording the server no longer allows.
+const app = fs.readFileSync(path.join(ROOT, "client/src/pages/VeritaResponseAppPage.tsx"), "utf8");
+const page = fs.readFileSync(path.join(ROOT, "client/src/pages/VeritaResponseFindingPage.tsx"), "utf8");
+const card = (app.match(/<ModuleHowToCard[\s\S]*?\/>/) || [""])[0];
+ok("card: no 'federal CMS-2567' and says CMS-2567-compatible", !/federal CMS-2567/i.test(card) && /CMS-2567-compatible/.test(card));
+ok("card: names all four entry types", ["inspection finding", "PT failure", "internal event (NCE)", "FDA product deviation"].every((t) => card.includes(t)));
+ok("card: clocks include COLA, AABB 45 and ISO 15189", /COLA \(30\)/.test(card) && /AABB \(45\)/.test(card) && /ISO 15189/.test(card));
+ok("card: no 'Attach evidence' (there is no upload)", !/Attach evidence/i.test(card));
+ok("card: VeritaCheck link scoped to a 42 CFR 493 standard", /when the finding cites a 42 CFR 493 standard/.test(card));
+ok("card: no em dash", card.length > 0 && !card.includes("—"));
+ok("overdue banner: no extension offer", !/request an extension/i.test(app));
+ok("form name is CMS-2567, never CLIA-2567", !/CLIA-2567/.test(app) && !/CLIA-2567/.test(page));
+ok("finding page: no dated TJC label", !/TJC May 2024 update\)/.test(page));
+ok("finding page: no 'lands in a later phase'", !/lands in a later phase/.test(page));
+ok("finding page: NCE sign-off names the medical director or designee", /Sign off \(medical director or designee\)/.test(page) && !/owner or admin\)/.test(page));
+ok("finding page: an internal event is titled as one", /`Internal Event \$\{/.test(page));
+
 console.log(fails === 0 ? "\n=== VERITARESPONSE COPY TRUTH: PASS ===" : `\n=== ${fails} FAIL ===`);
 process.exit(fails === 0 ? 0 : 1);
