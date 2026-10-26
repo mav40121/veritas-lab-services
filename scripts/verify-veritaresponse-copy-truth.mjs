@@ -61,8 +61,10 @@ ok("overdue banner: no extension offer", !/request an extension/i.test(app));
 ok("form name is CMS-2567, never CLIA-2567", !/CLIA-2567/.test(app) && !/CLIA-2567/.test(page));
 ok("finding page: no dated TJC label", !/TJC May 2024 update\)/.test(page));
 ok("finding page: no 'lands in a later phase'", !/lands in a later phase/.test(page));
-ok("finding page: NCE sign-off names the medical director or designee", /Sign off \(medical director or designee\)/.test(page) && !/owner or admin\)/.test(page));
-ok("finding page: an internal event is titled as one", /`Internal Event \$\{/.test(page));
+ok("finding page: sign-off names the medical director or designee", /Sign off and close \(medical director or designee\)/.test(page) && !/owner or admin\)/.test(page));
+// Entry-type templates (2026-10-26): titles come from shared/findingTypes.ts.
+const types = fs.readFileSync(path.join(ROOT, "shared/findingTypes.ts"), "utf8");
+ok("an internal event is titled as one", /title: "Internal Event"/.test(types) && /tpl\.title/.test(page));
 
 console.log(fails === 0 ? "\n=== VERITARESPONSE COPY TRUTH: PASS ===" : `\n=== ${fails} FAIL ===`);
 process.exit(fails === 0 ? 0 : 1);

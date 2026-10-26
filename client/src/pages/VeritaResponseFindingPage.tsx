@@ -14,6 +14,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { rootCauseLabel } from "@shared/ptFailure";
+import { findingTemplate, parseTypeDetails, ptScorePercent } from "@shared/findingTypes";
+import { FindingTypeDetails } from "@/components/FindingTypeDetails";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import {
   Dialog,
@@ -586,6 +588,10 @@ export default function VeritaResponseFindingPage() {
           pt_score: finding.pt_score ?? null,
           pt_result_summary: finding.pt_result_summary ?? null,
           root_cause_category: finding.root_cause_category ?? null,
+          // Entry-type templates (2026-10-26): the type's own answers and the NCE event columns.
+          type_details: parseTypeDetails(finding.type_details),
+          event_date: finding.event_date ?? null,
+          discovered_by: finding.discovered_by ?? null,
         }),
       });
       if (!res.ok) {
@@ -891,6 +897,9 @@ export default function VeritaResponseFindingPage() {
   const status = (finding.status || "open") as FindingStatus;
   const badge = STATUS_BADGES[status] ?? STATUS_BADGES.open;
   const accCfg = ACCREDITORS.find((a) => a.value === finding.accreditor);
+  // Entry-type template (2026-10-26): title, fields, prompts and notes for this finding's type.
+  const tpl = findingTemplate(finding.source_type);
+  const findingNo = finding.finding_number || `#${finding.id}`;
   const anchorLabel = accCfg?.anchorLabel ?? "Anchor date";
   const d = daysUntil(finding.due_date);
   // #11: only CMS/CAP/TJC carry a hard deadline. COLA (consultative) and AABB
@@ -926,16 +935,12 @@ export default function VeritaResponseFindingPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">
-            {finding.source_type === "pt_failure"
-              ? `${finding.accreditor} PT Failure ${finding.finding_number || `#${finding.id}`}`
-              : finding.source_type === "internal_nce"
-              ? `Internal Event ${finding.finding_number || `#${finding.id}`}`
-              : finding.source_type === "fda_deviation"
-              ? `FDA Product Deviation ${finding.finding_number || `#${finding.id}`}`
-              : `${finding.accreditor === "ISO" ? "ISO 15189" : finding.accreditor} Finding ${finding.finding_number || `#${finding.id}`}`}
+            {tpl.title
+              ? `${tpl.title} ${findingNo}`
+              : `${finding.accreditor === "ISO" ? "ISO 15189" : finding.accreditor} Finding ${findingNo}`}
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {finding.standard_ref || (finding.source_type === "pt_failure" ? "42 CFR 493.801(b) proficiency-testing investigation" : finding.source_type === "internal_nce" ? "Internal non-conforming event" : "No standard reference recorded")}
+            {finding.standard_ref || tpl.subtitle || "No standard reference recorded"}
           </p>
         </div>
         <Badge className={`${badge.cls} text-sm whitespace-nowrap font-medium px-3 py-1`}>
@@ -962,7 +967,23 @@ export default function VeritaResponseFindingPage() {
                 <div className="col-span-2 sm:col-span-4"><div className="text-xs text-muted-foreground">Root-cause category</div><div className="font-medium">{rootCauseLabel(finding.root_cause_category)}</div></div>
               )}
             </div>
-            <p className="text-xs text-muted-foreground mt-3">CLIA requires investigation and corrective action for unsuccessful PT. Complete the corrective-action workflow below and sign off.</p>
+            {(() => {
+              // Single-event status from the score, using the passing scores coded in shared/ptFailure.ts. The
+              // two-of-three pattern needs the analyte's other events, which this finding does not carry.
+              const pct = ptScorePercent(finding.pt_score);
+              if (pct == null) return null;
+              return (
+                <p className="text-sm mt-3" data-testid="pt-event-status">
+                  <span className="font-medium">This event: {pct} percent.</span>{" "}
+                  {pct < 80
+                    ? "Below the 80 percent passing score (100 percent for immunohematology), so the event is unsatisfactory."
+                    : pct < 100
+                    ? "At or above 80 percent; for immunohematology the passing score is 100 percent."
+                    : "100 percent."}
+                </p>
+              );
+            })()}
+            <p className="text-xs text-muted-foreground mt-3">Evaluate the result with the investigation checklist below, record the corrective action, and sign off to close (42 CFR 493.1236(a) and (d)).</p>
           </CardContent>
         </Card>
       )}
@@ -1363,7 +1384,9 @@ export default function VeritaResponseFindingPage() {
             </CardHeader>
             <CardContent className="p-4">
               <p className="text-sm text-muted-foreground">
-                {finding.source_type === "fda_deviation"
+                {["pt_failure", "qc_escalation", "aaa_escalation"].includes(finding.source_type)
+                  ? "No report is generated for this type yet. Everything recorded on this page stays with the finding and its history."
+                  : finding.source_type === "fda_deviation"
                   ? "An FDA product deviation is reported to the FDA on Form FDA 3486, not on an accreditor form. Record the date it was submitted and the confirmation (BPDR) number in the FDA product deviation section of this page."
                   : acc === "ISO"
                   ? "ISO 15189 does not prescribe a response form; your accreditation body uses its own, so VeritaAssure does not generate one yet. Document the root cause, corrective action and evidence in the fields above and carry them onto your accreditation body's form."
@@ -1442,6 +1465,8 @@ export default function VeritaResponseFindingPage() {
           <CardTitle className="text-base font-semibold">Identification</CardTitle>
         </CardHeader>
         <CardContent className="p-4 grid grid-cols-2 gap-3">
+          {/* Only an inspection finding is filed under an accreditor (entry-type templates, 2026-10-26). */}
+          {tpl.usesAccreditor && (
           <div className="space-y-1">
             <Label className="text-xs">Accreditor</Label>
             <Select value={finding.accreditor} onValueChange={(v) => setField("accreditor", v)}>
@@ -1460,23 +1485,46 @@ export default function VeritaResponseFindingPage() {
               </SelectContent>
             </Select>
           </div>
+          )}
           <div className="space-y-1">
             <Label className="text-xs">Status</Label>
             <Select value={status} onValueChange={(v) => setField("status", v)}>
-              <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-9 text-sm" data-testid="finding-status"><SelectValue /></SelectTrigger>
               <SelectContent>
-                {STATUS_OPTIONS.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
+                {/* D1: Closed is reached only through the sign-off below, so it is not offered here. */}
+                {STATUS_OPTIONS.filter((s) => s.value !== "closed" || status === "closed").map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
+          {tpl.usesAccreditor && (
           <div className="space-y-1">
             <Label className="text-xs">Finding #</Label>
             <Input value={finding.finding_number || ""} onChange={(e) => setField("finding_number", e.target.value)} className="h-9 text-sm" />
           </div>
+          )}
           <div className="space-y-1">
-            <Label className="text-xs">Standard / CFR reference</Label>
-            <Input value={finding.standard_ref || ""} onChange={(e) => setField("standard_ref", e.target.value)} className="h-9 text-sm" />
+            <Label className="text-xs">{tpl.usesAccreditor ? "Standard / CFR reference" : "Regulatory reference"}</Label>
+            <Input value={finding.standard_ref || ""} onChange={(e) => setField("standard_ref", e.target.value)} className="h-9 text-sm" placeholder={tpl.usesAccreditor ? undefined : (tpl.subtitle ?? undefined)} />
           </div>
+          {!tpl.usesAccreditor && tpl.anchorLabel && (
+            <>
+              <div className="space-y-1">
+                <Label className="text-xs">{tpl.anchorLabel}</Label>
+                <Input type="date" value={finding.anchor_date || ""} onChange={(e) => setField("anchor_date", e.target.value)} className="h-9 text-sm" data-testid="finding-anchor-date" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Target date</Label>
+                <div className="h-9 flex items-center text-sm" data-testid="finding-target-date">{finding.due_date || "Set when the date to the left is entered"}</div>
+                <p className="text-xs text-muted-foreground">
+                  {finding.accreditor === "Other"
+                    ? "The laboratory's target: 30 days from the date to the left unless the lab sets its own. Recomputes on save."
+                    : `Follows the ${finding.accreditor} clock it was opened under. Recomputes on save.`}
+                </p>
+              </div>
+            </>
+          )}
+          {tpl.usesAccreditor && (
+          <>
           <div className="space-y-1">
             <Label className="text-xs">Phase / Severity</Label>
             <Input value={finding.phase_or_severity || ""} onChange={(e) => setField("phase_or_severity", e.target.value)} className="h-9 text-sm" />
@@ -1505,58 +1553,63 @@ export default function VeritaResponseFindingPage() {
             <Label className="text-xs">External submission reference</Label>
             <Input value={finding.external_submission_ref || ""} onChange={(e) => setField("external_submission_ref", e.target.value)} className="h-9 text-sm" placeholder="e-LAB ticket / JC Connect ID / CMS-2567 page" />
           </div>
+          </>
+          )}
         </CardContent>
       </Card>
 
       {/* Deficiency narrative */}
       <Card>
         <CardHeader className="py-3 px-4 border-b">
-          <CardTitle className="text-base font-semibold">Deficiency description</CardTitle>
+          <CardTitle className="text-base font-semibold">{tpl.usesAccreditor ? "Deficiency description" : "Description"}</CardTitle>
         </CardHeader>
         <CardContent className="p-4 space-y-3">
           <div className="space-y-1">
-            <Label className="text-xs">Description (no PHI)</Label>
-            <Textarea value={finding.description || ""} onChange={(e) => setField("description", e.target.value)} className="text-sm min-h-[90px]" placeholder="What the surveyor cited, in their words where possible. No patient names or MRNs." />
+            <Label className="text-xs">{tpl.descriptionLabel}</Label>
+            <Textarea value={finding.description || ""} onChange={(e) => setField("description", e.target.value)} className="text-sm min-h-[90px]" placeholder={tpl.descriptionPlaceholder} />
           </div>
-          <div className="space-y-1">
-            <Label className="text-xs">Surveyor notes (optional, no PHI)</Label>
-            <Textarea value={finding.surveyor_notes || ""} onChange={(e) => setField("surveyor_notes", e.target.value)} className="text-sm min-h-[60px]" />
-          </div>
+          {(tpl.notesLabel || finding.surveyor_notes) && (
+            <div className="space-y-1">
+              <Label className="text-xs">{tpl.notesLabel || "Notes (no PHI)"}</Label>
+              <Textarea value={finding.surveyor_notes || ""} onChange={(e) => setField("surveyor_notes", e.target.value)} className="text-sm min-h-[60px]" />
+            </div>
+          )}
         </CardContent>
       </Card>
+
+      {/* Entry-type templates (2026-10-26): the type's own questions (PT checklist, NCE details, QC look-back, ...). */}
+      <FindingTypeDetails finding={finding} setField={setField} readOnly={isReadOnly} />
 
       {/* Plan of correction (the 5 POC elements live in these fields) */}
       <Card>
         <CardHeader className="py-3 px-4 border-b">
-          <CardTitle className="text-base font-semibold">Plan of correction</CardTitle>
-          <p className="text-xs text-muted-foreground mt-1">
-            The CMS Statement of Deficiencies (form CMS-2567) requires 5 elements: corrective action for affected patients or items, identification of others potentially affected, systems to prevent recurrence, ongoing monitoring, and a completion date. The CMS-2567 PDF stays locked until all five are filled in.
-          </p>
+          <CardTitle className="text-base font-semibold">{tpl.planTitle}</CardTitle>
+          <p className="text-xs text-muted-foreground mt-1">{tpl.planNote}</p>
         </CardHeader>
         <CardContent className="p-4 space-y-3">
           <div className="space-y-1">
-            <Label className="text-xs">Immediate action</Label>
-            <Textarea value={finding.immediate_action || ""} onChange={(e) => setField("immediate_action", e.target.value)} className="text-sm min-h-[60px]" placeholder="What was done the same day the citation was received." />
+            <Label className="text-xs">{tpl.plan.immediate_action.label}</Label>
+            <Textarea value={finding.immediate_action || ""} onChange={(e) => setField("immediate_action", e.target.value)} className="text-sm min-h-[60px]" placeholder={tpl.plan.immediate_action.placeholder} />
           </div>
           <div className="space-y-1">
-            <Label className="text-xs">Containment</Label>
-            <Textarea value={finding.containment || ""} onChange={(e) => setField("containment", e.target.value)} className="text-sm min-h-[60px]" placeholder="How affected results, lots, or processes were isolated or recalled." />
+            <Label className="text-xs">{tpl.plan.containment.label}</Label>
+            <Textarea value={finding.containment || ""} onChange={(e) => setField("containment", e.target.value)} className="text-sm min-h-[60px]" placeholder={tpl.plan.containment.placeholder} />
           </div>
           <div className="space-y-1">
-            <Label className="text-xs">Root cause</Label>
-            <Textarea value={finding.root_cause || ""} onChange={(e) => setField("root_cause", e.target.value)} className="text-sm min-h-[60px]" placeholder="Why the deficiency occurred. Address the system, not the person." />
+            <Label className="text-xs">{tpl.plan.root_cause.label}</Label>
+            <Textarea value={finding.root_cause || ""} onChange={(e) => setField("root_cause", e.target.value)} className="text-sm min-h-[60px]" placeholder={tpl.plan.root_cause.placeholder} />
           </div>
           <div className="space-y-1">
-            <Label className="text-xs">Corrective action (POC element 1)</Label>
-            <Textarea value={finding.corrective_action || ""} onChange={(e) => setField("corrective_action", e.target.value)} className="text-sm min-h-[60px]" placeholder="What changed: SOP revision, retraining, instrument adjustment, lot rejection." />
+            <Label className="text-xs">{tpl.plan.corrective_action.label}</Label>
+            <Textarea value={finding.corrective_action || ""} onChange={(e) => setField("corrective_action", e.target.value)} className="text-sm min-h-[60px]" placeholder={tpl.plan.corrective_action.placeholder} />
           </div>
           <div className="space-y-1">
-            <Label className="text-xs">Preventive / system-level action (POC elements 2 + 3)</Label>
-            <Textarea value={finding.preventive_action || ""} onChange={(e) => setField("preventive_action", e.target.value)} className="text-sm min-h-[60px]" placeholder="Identification of others potentially affected, and the systemic change so it does not recur." />
+            <Label className="text-xs">{tpl.plan.preventive_action.label}</Label>
+            <Textarea value={finding.preventive_action || ""} onChange={(e) => setField("preventive_action", e.target.value)} className="text-sm min-h-[60px]" placeholder={tpl.plan.preventive_action.placeholder} />
           </div>
           <div className="space-y-1">
-            <Label className="text-xs">Monitoring plan (POC element 4)</Label>
-            <Textarea value={finding.monitoring_plan || ""} onChange={(e) => setField("monitoring_plan", e.target.value)} className="text-sm min-h-[60px]" placeholder="How effectiveness will be verified at 30/60/90 days." />
+            <Label className="text-xs">{tpl.plan.monitoring_plan.label}</Label>
+            <Textarea value={finding.monitoring_plan || ""} onChange={(e) => setField("monitoring_plan", e.target.value)} className="text-sm min-h-[60px]" placeholder={tpl.plan.monitoring_plan.placeholder} />
           </div>
         </CardContent>
       </Card>
@@ -1568,38 +1621,39 @@ export default function VeritaResponseFindingPage() {
         </CardHeader>
         <CardContent className="p-4 grid grid-cols-2 gap-3">
           <div className="space-y-1">
-            <Label className="text-xs">Completion date (POC element 5)</Label>
+            <Label className="text-xs">{tpl.usesAccreditor ? "Completion date (POC element 5)" : "Completion date"}</Label>
             <Input type="date" value={finding.completion_date || ""} onChange={(e) => setField("completion_date", e.target.value)} className="h-9 text-sm" />
           </div>
+          {/* D1 (2026-10-26): the signature is written only by the gated sign-off, so it is shown, not typed. */}
           <div className="space-y-1">
-            <Label className="text-xs">Signed by (laboratory director or designee)</Label>
-            <Input value={finding.signed_by || ""} onChange={(e) => setField("signed_by", e.target.value)} className="h-9 text-sm" />
+            <Label className="text-xs">Signed by (medical director or designee)</Label>
+            <div className="h-9 flex items-center text-sm" data-testid="finding-signed-by">{finding.signed_by || "Not signed"}</div>
           </div>
           <div className="space-y-1">
             <Label className="text-xs">Signed at</Label>
-            <Input type="datetime-local" value={finding.signed_at ? finding.signed_at.slice(0, 16) : ""} onChange={(e) => setField("signed_at", e.target.value ? e.target.value + ":00" : null)} className="h-9 text-sm" />
+            <div className="h-9 flex items-center text-sm">{finding.signed_at ? String(finding.signed_at).slice(0, 16).replace("T", " ") : "Not signed"}</div>
           </div>
-          {finding.source_type === "internal_nce" && (
-            <div className="col-span-2 flex flex-wrap items-center gap-3 pt-1 border-t mt-1">
+          <div className="col-span-2 flex flex-wrap items-center gap-3 pt-1 border-t mt-1">
+            {!finding.signoff_role && status !== "closed" && (
               <Button
                 type="button"
                 size="sm"
                 className="bg-[#006064] hover:bg-[#004d50] text-white"
                 onClick={handleSignoff}
-                disabled={signingOff || !activeLabId}
-                data-testid="nce-signoff-btn"
+                disabled={signingOff || !activeLabId || isReadOnly}
+                data-testid="finding-signoff-btn"
               >
-                {signingOff ? "Signing..." : "Sign off (medical director or designee)"}
+                {signingOff ? "Signing..." : "Sign off and close (medical director or designee)"}
               </Button>
-              {finding.signoff_role && (
-                <span className="text-xs text-muted-foreground">
-                  Signed off by {finding.signoff_role === "medical_director" ? "the medical director" : finding.signoff_role === "designee" ? "the delegated designee" : "the account owner (override)"}
-                  {finding.signed_at ? ` on ${String(finding.signed_at).slice(0, 10)}` : ""}.
-                </span>
-              )}
-              <span className="text-[11px] text-muted-foreground w-full">Only the designated medical director, a designee delegated finding closure, or the account owner (as a logged override) can sign off an internal event.</span>
-            </div>
-          )}
+            )}
+            {finding.signoff_role && (
+              <span className="text-xs text-muted-foreground">
+                Signed off by {finding.signoff_role === "medical_director" ? "the medical director" : finding.signoff_role === "designee" ? "the delegated designee" : "the account owner (override)"}
+                {finding.signed_at ? ` on ${String(finding.signed_at).slice(0, 10)}` : ""}.
+              </span>
+            )}
+            <span className="text-[11px] text-muted-foreground w-full">A finding closes only through this sign-off: the designated medical director, a designee delegated finding closure, or the account owner (as a logged override).</span>
+          </div>
         </CardContent>
       </Card>
 
