@@ -15,7 +15,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import path from "path";
-import { loadCsp, cspHeaderName } from "./securityHeaders";
+import { loadCsp, cspHeaderName, imgTrialCsp } from "./securityHeaders";
 import { createServer } from "http";
 
 // Fail loud if required secrets are missing - catches Railway env var misconfigurations at deploy time
@@ -50,6 +50,8 @@ let cspValue: string | null | undefined;
 app.use((req, res, next) => {
   if (cspValue === undefined) cspValue = process.env.NODE_ENV === "production" ? loadCsp(path.resolve(__dirname, "public", "index.html")) : null;
   if (cspValue) res.setHeader(cspHeaderName(), cspValue);
+  // Report-only trial of a narrower img-src (securityHeaders.ts IMG_SRC_TRIAL); only beside the enforced policy.
+  if (cspValue && cspHeaderName() === "Content-Security-Policy") res.setHeader("Content-Security-Policy-Report-Only", imgTrialCsp());
   // HSTS: force HTTPS for one year, including subdomains. Cert is Let's Encrypt
   // and we are 100% HTTPS today, so this is safe to commit to.
   res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
