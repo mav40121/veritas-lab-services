@@ -7,6 +7,7 @@ import { StudyFinalizeDialog } from "@/components/StudyFinalizeDialog";
 import { StudyCensoringPolicyDialog } from "@/components/StudyCensoringPolicyDialog";
 import { StudyArchiveDialog } from "@/components/StudyArchiveDialog";
 import { StudyNotes } from "@/components/StudyNotes";
+import { hasRunDetails, runDetailRows } from "@shared/studyRunDetails";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -650,6 +651,8 @@ function UserSpecs({ study, instrumentNames }: { study: Study; instrumentNames: 
             ["Analyst", study.analyst],
             ["Date", study.date],
             ["Instruments / Methods", instrumentNames.join(", ")],
+            // Correlation run details (2026-10-26): specimen type, units, each analyzer's lots and date run, comment.
+            ...(hasRunDetails(study.studyType) ? runDetailRows(study as any, instrumentNames) : []),
           ].map(([label, value]) => (
             <div key={label} className="flex justify-between py-1.5 border-b border-border/40">
               <span className="text-muted-foreground">{label}</span>

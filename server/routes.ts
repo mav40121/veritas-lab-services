@@ -27,6 +27,7 @@ import { Resend } from "resend";
 import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCompetencyPDF, generateEmployeeCompetencyRecordPDF, generateCMS209PDF, generateVeritaPTPDF, generateCms2567PDF, validateCms2567POC, generateCapResponsePDF, validateCapResponse, generateTjcEscPDF, validateTjcEsc, generateColaResponsePDF, validateColaResponse, generateAabbNerPDF, validateAabbNer, generateInternalNcePDF, validateInternalNce, generateCeuTranscriptPDF } from "./pdfReport";
 import { storePdfToken, claimPdfToken } from "./pdfTokens";
 import { labLocalDate, labToday, addLabDays } from "./dateLocal";
+import { parseRunDetails, serializeRunDetails } from "@shared/studyRunDetails";
 import { studyRowToClient, resolveInstrumentDisplay } from "./studyPdf";
 import { scanPhi } from "./phiScan";
 import { evaluateQcRun, rulesForRun } from "./qcWestgard";
@@ -12316,6 +12317,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         resultUnits: req.body.resultUnits,
         // Calibration Verification + Correlation: the known-value material the report names.
         material: req.body.material,
+        runDetails: req.body.runDetails,
       } };
     } else {
       parsed = insertStudySchema.safeParse(req.body);
@@ -12533,6 +12535,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     );
     // The edit statement above names its columns; carry the Calibration Verification + Correlation material when sent.
     if (typeof req.body?.material === "string") (db as any).$client.prepare("UPDATE studies SET material = ? WHERE id = ?").run(req.body.material.trim() || null, studyId);
+    // The same for the run details, units and comment (correlation run details, 2026-10-26; precision sends units and comment too).
+    for (const [key, col] of [["runDetails", "run_details"], ["resultUnits", "result_units"], ["comment", "comment"]] as const) {
+      if (typeof req.body?.[key] !== "string" && req.body?.[key] !== null) continue;
+      const raw = typeof req.body[key] === "string" ? (req.body[key].trim() || null) : null;
+      (db as any).$client.prepare(`UPDATE studies SET ${col} = ? WHERE id = ?`).run(key === "runDetails" ? serializeRunDetails(parseRunDetails(raw)) : raw, studyId);
+    }
     autoAttributeCoverageAnalyte(studyId, payload.cliaPresetLabel);
     const updated = (db as any).$client.prepare("SELECT * FROM studies WHERE id = ?").get(studyId) as any;
     // Stamp the VeritaMap grid's date column from this study (advance-only); see
@@ -12713,6 +12721,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         resultUnits: req.body.resultUnits,
         // Calibration Verification + Correlation: the known-value material the report names.
         material: req.body.material,
+        runDetails: req.body.runDetails,
         // 2026-06-01: createdAt is required NOT NULL in the studies table.
         // The non-draft path picks it up via insertStudySchema, but the
         // manual draft picker omitted it, causing every Save Draft POST to
@@ -12854,6 +12863,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     );
     // The edit statement above names its columns; carry the Calibration Verification + Correlation material when sent.
     if (typeof req.body?.material === "string") (db as any).$client.prepare("UPDATE studies SET material = ? WHERE id = ?").run(req.body.material.trim() || null, studyId);
+    // The same for the run details, units and comment (correlation run details, 2026-10-26; precision sends units and comment too).
+    for (const [key, col] of [["runDetails", "run_details"], ["resultUnits", "result_units"], ["comment", "comment"]] as const) {
+      if (typeof req.body?.[key] !== "string" && req.body?.[key] !== null) continue;
+      const raw = typeof req.body[key] === "string" ? (req.body[key].trim() || null) : null;
+      (db as any).$client.prepare(`UPDATE studies SET ${col} = ? WHERE id = ?`).run(key === "runDetails" ? serializeRunDetails(parseRunDetails(raw)) : raw, studyId);
+    }
     autoAttributeCoverageAnalyte(studyId, payload.cliaPresetLabel);
     const updated = (db as any).$client.prepare("SELECT * FROM studies WHERE id = ?").get(studyId) as any;
     // Stamp the VeritaMap grid's date column from this study (advance-only); see
@@ -13171,7 +13186,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         data_points, instruments, status, instrument_meta,
         created_by_user_id, vendor_sd, vendor_sd_concentration, target_mean, target_cv,
         control_lot, reagent_lot, comment, result_units,
-        amr_low, amr_high, amr_units, material,
+        amr_low, amr_high, amr_units, material, run_details,
         lifecycle_state, amends_study_id, created_at
       )
       SELECT
@@ -13181,7 +13196,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         data_points, instruments, 'draft', instrument_meta,
         ?, vendor_sd, vendor_sd_concentration, target_mean, target_cv,
         control_lot, reagent_lot, comment, result_units,
-        amr_low, amr_high, amr_units, material,
+        amr_low, amr_high, amr_units, material, run_details,
         'draft', id, ?
       FROM studies WHERE id = ?
     `).run(req.userId, now, studyRow.id);

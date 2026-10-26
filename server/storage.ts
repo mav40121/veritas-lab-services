@@ -1,4 +1,5 @@
 import { db } from "./db";
+import { parseRunDetails, serializeRunDetails } from "@shared/studyRunDetails";
 import { users, studies, contactMessages } from "@shared/schema";
 import type { User, InsertStudy, Study, InsertContact } from "@shared/schema";
 import { eq, desc, sql } from "drizzle-orm";
@@ -196,6 +197,8 @@ class DatabaseStorage implements IStorage {
     })();
   }
   createStudy(study: InsertStudy): Study {
+    // Correlation run details are stored only in their normalized shape (shared/studyRunDetails.ts), whatever was sent.
+    if ((study as any).runDetails !== undefined) (study as any).runDetails = serializeRunDetails(parseRunDetails((study as any).runDetails));
     const guarded = enforceCanonicalTea(study);
     return db.insert(studies).values(guarded).returning().get();
   }

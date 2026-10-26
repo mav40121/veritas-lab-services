@@ -69,6 +69,9 @@ export const studies = sqliteTable("studies", {
   resultUnits: text("result_units"),
   // Calibration Verification + Correlation: the known-value material named on the report (NULL = default wording).
   material: text("material"),
+  // Correlation run details (2026-10-26): JSON {specimenType, instruments: {<analyzer>: {reagentLot, calibratorLot, dateRun}}}
+  // for Correlation / Method Comparison and Calibration Verification + Correlation. NULL = none entered. See shared/studyRunDetails.ts.
+  runDetails: text("run_details"),
   createdAt: text("created_at").notNull(),
 });
 
