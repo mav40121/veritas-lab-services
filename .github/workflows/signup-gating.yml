@@ -74,6 +74,10 @@ jobs:
         # GET /api/admin/schema-db (Lifepoint questionnaire: customer data is not used for testing): secret-gated, every
         # table, index, view and trigger rebuilt with the same columns, no rows, nothing from the source in the file, audited.
         run: npm run test:schema-db
+      - name: Sentry sends no personal information
+        # shared/sentryDataCollection.ts (Sentry 11 dataCollection): a request that throws with a cookie, headers, a JSON
+        # body, query values and a forwarded IP; the outgoing envelope must carry none of them.
+        run: npx tsx scripts/verify-sentry-data-collection.ts
       - name: Run record-view logging integration test
         # Record-view logging and the access report (server/recordViews.ts; Lifepoint IPS III.1(i)): a signed-in
         # read is logged once per 10 minutes per address; failed and anonymous reads are not; nothing is ever
