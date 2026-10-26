@@ -97,6 +97,9 @@ jobs:
       - name: Run QC finding reminder integration test
         # A reminder for a finding escalated from VeritaQC names the test, level, lot, run date and instrument (parking lot #99).
         run: npm run test:finding-reminder-qc
+      - name: Lab-local today and the UTC-date ratchet
+        # labLocalDate/addLabDays on evening instants; routes.ts UTC calendar dates may only go down (parking lot #97).
+        run: npx tsx scripts/verify-lab-local-today.ts
       - name: Run stale lab-owner row integration test
         # A leftover lab_members 'owner' row on someone who is not labs.owner_user_id gave a second
         # owner (San Carlos lab 2, 2026-10-15). repair-lab-admins demotes it to admin and never touches
