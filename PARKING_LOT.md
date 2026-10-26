@@ -731,6 +731,30 @@ Open questions for the scope:
 
 ---
 
+### 110. VeritaTrack: each lab adds its own task categories
+
+**Effort:** S (a per-lab category list with add, rename and retire; the task form and filters read it)
+**Importance:** Medium. Labs track recurring work our 13 fixed categories do not name, and today it all lands in "Other".
+
+**What:** the categories are a fixed list in the page code (client/src/pages/VeritaTrackAppPage.tsx CATEGORIES: Calibration Verification, Correlation, Precision Verification, Policy Review, QC Review, Water Contamination, Blood Bank Alarm Checks, Equipment Calibration, Competency, Quality Assessment, HIPAA, Bloodborne Pathogen, Other). veritatrack_tasks.category is free text, so existing tasks keep working. Add a per-lab category table: our defaults plus the lab's own, which an owner or admin can add, rename or retire (retired ones stay on old tasks and in exports).
+
+**Source:** Michael, 2026-10-26: "Be able to, by lab, add custom categories instead of just our defaults."
+**Status:** Open.
+
+---
+
+### 111. VeritaTrack: a Weekly frequency
+
+**Effort:** S (the schedule is counted in whole months today; weekly needs an interval in days)
+**Importance:** Medium. Weekly checks (alarm tests, eyewash, temperature and maintenance reviews) cannot be scheduled as weekly today.
+
+**What:** FREQUENCIES offers Monthly, Quarterly, Biannual, Annual and Biennial, and every due date is computed from veritatrack_tasks.frequency_months (24 uses across server/veritatrack.ts, server/veritatrackReminders.ts and the page). Add Weekly with a frequency_days interval (ALTER migration), make the due-date math and reminders use days when it is set, and check that reminder emails do not fire too often for a weekly task.
+
+**Source:** Michael, 2026-10-26: "add a weekly option for frequency."
+**Status:** Open.
+
+---
+
 ## CLOSED (audit trail)
 
 ### C103. Voiding a QC run leaves its auto-created finding open (was #100)
