@@ -5,7 +5,8 @@
 // with TWO labs, and proves a requirement edit on lab A does NOT leak into / overwrite
 // lab B (the stale UNIQUE(user_id, requirement_id) made them share one row).
 //
-// Run: DB_PATH=.tmp-reqscope.db JWT_SECRET=t ADMIN_SECRET=localadmin STRIPE_SECRET_KEY=sk_test_dummy \
+// Run: npm run test:requirement-status-labscope (reads ADMIN_SECRET from the environment like the other tests;
+// it used to hardcode "localadmin", so a run with the standard test secret failed at setup).
 
 import http from "node:http";
 import express from "express";
