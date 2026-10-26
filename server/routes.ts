@@ -22937,6 +22937,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const dueLabId = existing.lab_id ?? gateLabId ?? null;
     const recomputed = existing.source_type === 'fda_deviation'
       ? existing.due_date
+      : existing.source_type === 'internal_nce'
+        // An internal non-conforming event carries no accreditor deadline (null at creation). Before 2026-10-26 every
+        // save gave it the "Other" 30-day clock, because the finding page always sends accreditor and anchor_date.
+        ? null
       : nextAccreditor === 'ISO'
         // ISO 15189: the lab enters the due date its accreditation body sets; a save without one keeps the current date.
         ? (body.due_date !== undefined ? isoDueDate(body.due_date) : (existing.accreditor !== 'ISO' ? dueDateForFinding('ISO', nextAnchor, dueLabId) : existing.due_date))
