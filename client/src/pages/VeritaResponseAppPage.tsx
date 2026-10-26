@@ -47,7 +47,7 @@ type FindingStatus = "open" | "drafting" | "submitted" | "accepted" | "rejected_
 const ACCREDITORS: { value: Accreditor; label: string; anchorLabel: string; offsetDays: number | null; deadlineNote: string }[] = [
   { value: "CAP",   label: "CAP",            anchorLabel: "Inspection date",     offsetDays: 30, deadlineNote: "30 days from inspection date." },
   { value: "TJC",   label: "TJC",            anchorLabel: "Final report posted", offsetDays: 60, deadlineNote: "60 days from posted final report." },
-  { value: "CMS",   label: "CMS (CLIA-2567)", anchorLabel: "Receipt date",        offsetDays: 10, deadlineNote: "10 days from receipt. Public release at 14 days per CMS QSO-25-19-ALL." },
+  { value: "CMS",   label: "CMS (CMS-2567)",   anchorLabel: "Receipt date",        offsetDays: 10, deadlineNote: "10 days from receipt. Public release at 14 days per CMS QSO-25-19-ALL." },
   { value: "AABB",  label: "AABB",           anchorLabel: "Event date",          offsetDays: 45, deadlineNote: "FDA notification within 45 days for reportable events; lab CAPA timing varies." },
   { value: "COLA",  label: "COLA",           anchorLabel: "Notice date",         offsetDays: 30, deadlineNote: "COLA is consultative; no hard deadline. Soft target of 30 days as a check-in." },
   // ISO 15189 (#108): the accreditation body sets the response time in its report, so the lab enters the due date.
@@ -333,7 +333,7 @@ export default function VeritaResponseAppPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold">VeritaResponse&trade;</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Post-survey deficiency response tracker</p>
+          <p className="text-sm text-muted-foreground mt-0.5">Corrective actions from surveys, PT, internal events and FDA deviations, tracked to closure</p>
         </div>
         <div className="flex gap-2">
           <Button
@@ -360,13 +360,13 @@ export default function VeritaResponseAppPage() {
       <ModuleHowToCard
         moduleKey="veritaresponse"
         moduleName="VeritaResponse™"
-        whatItDoes="VeritaResponse turns post-survey deficiencies into one tracked finding per cited standard. Per-accreditor due-date clocks (CAP 30 days, TJC 60 days, CMS-2567 10 days, AABB event-driven). Renders the federal CMS-2567 Plan of Correction PDF with all 5 POC elements labeled."
+        whatItDoes="VeritaResponse™ carries every corrective action to closure: survey and inspection findings, proficiency testing failures, internal non-conforming events and FDA product deviations, plus the QC and alternative-assessment escalations sent from VeritaQC™ and VeritaPT™. Each finding runs on its own clock: CMS 10 days from receipt of the CMS-2567, CAP 30 days from the inspection, TJC 60 days from the posted final report, COLA (30) and AABB (45) as soft targets, the date your ISO 15189 body sets, and none for an internal event. It writes the response in the accreditor's format and follows the fix with 30, 60 and 90-day effectiveness checks."
         howToUse={[
-          "Open a new finding when you receive a citation; pick the accreditor and the cited standard.",
-          "Author the response covering the 5 POC elements: root cause, immediate action, corrective action, monitoring plan, completion date.",
-          "Attach evidence as you complete each element (training records, revised SOPs, completed QC).",
-          "Generate the CMS-2567 PDF or the accreditor-specific response document.",
-          "Submit before the per-accreditor deadline; the dashboard tracks every open finding through closure."
+          "Click New Finding and pick the type: inspection finding, PT failure, internal event (NCE) or FDA product deviation. QC and alternative-assessment escalations arrive here on their own.",
+          "For an inspection finding, pick the accreditor and enter the date its clock starts (receipt, inspection or final report); the due date follows. An FDA deviation gets its Form FDA 3486 report-by date from the three reportability questions.",
+          "Work the plan: immediate action and containment, root cause, corrective action, preventive action and the monitoring plan, with the completion date.",
+          "Check the linked evidence (VeritaScan™ documents, the VeritaQC™ corrective action, and your most recent VeritaCheck™ study when the finding cites a 42 CFR 493 standard), then generate the response document: a CMS-2567-compatible plan of correction, or the CAP, TJC, COLA, AABB or internal event report.",
+          "The medical director or designee signs off, and the 30, 60 and 90-day effectiveness checks confirm the fix held."
         ]}
       />
 
@@ -403,7 +403,7 @@ export default function VeritaResponseAppPage() {
           <AlertTriangle size={18} className="text-red-600 dark:text-red-400 mt-0.5 shrink-0" />
           <div className="text-sm text-red-800 dark:text-red-300">
             <span className="font-semibold">{overdueCount} finding{overdueCount !== 1 ? "s" : ""} past their deadline.</span>{" "}
-            Submit or request an extension. CMS-2567 findings past 10 days from receipt risk escalation under 42 CFR &sect;493.1832.
+            Submit each response as soon as it is complete. CMS-2567 findings past 10 days from receipt risk escalation under 42 CFR &sect;493.1832.
           </div>
         </div>
       )}

@@ -49,7 +49,7 @@ type FindingStatus = "open" | "drafting" | "submitted" | "accepted" | "rejected_
 const ACCREDITORS: { value: Accreditor; label: string; anchorLabel: string }[] = [
   { value: "CAP",   label: "CAP",            anchorLabel: "Inspection date" },
   { value: "TJC",   label: "TJC",            anchorLabel: "Final report posted" },
-  { value: "CMS",   label: "CMS (CLIA-2567)", anchorLabel: "Receipt date" },
+  { value: "CMS",   label: "CMS (CMS-2567)",   anchorLabel: "Receipt date" },
   { value: "AABB",  label: "AABB",           anchorLabel: "Event date" },
   { value: "COLA",  label: "COLA",           anchorLabel: "Notice date" },
   { value: "ISO",   label: "ISO 15189",      anchorLabel: "Assessment date" }, // #108: the lab enters the due date
@@ -622,7 +622,7 @@ export default function VeritaResponseFindingPage() {
         return;
       }
       setFinding(body);
-      toast({ title: "Signed off", description: body?.signoff_role === "medical_director" ? "Recorded as the medical director." : "Recorded as an owner/admin." });
+      toast({ title: "Signed off", description: body?.signoff_role === "medical_director" ? "Recorded as the medical director." : body?.signoff_role === "designee" ? "Recorded as the delegated designee." : "Recorded as the account owner (override)." });
     } catch (e: any) {
       toast({ variant: "destructive", title: "Could not sign off", description: e?.message || "Network error" });
     } finally {
@@ -928,10 +928,14 @@ export default function VeritaResponseFindingPage() {
           <h1 className="text-2xl font-bold">
             {finding.source_type === "pt_failure"
               ? `${finding.accreditor} PT Failure ${finding.finding_number || `#${finding.id}`}`
-              : `${finding.accreditor} Finding ${finding.finding_number || `#${finding.id}`}`}
+              : finding.source_type === "internal_nce"
+              ? `Internal Event ${finding.finding_number || `#${finding.id}`}`
+              : finding.source_type === "fda_deviation"
+              ? `FDA Product Deviation ${finding.finding_number || `#${finding.id}`}`
+              : `${finding.accreditor === "ISO" ? "ISO 15189" : finding.accreditor} Finding ${finding.finding_number || `#${finding.id}`}`}
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {finding.standard_ref || (finding.source_type === "pt_failure" ? "42 CFR 493.801(b) proficiency-testing investigation" : "No standard reference recorded")}
+            {finding.standard_ref || (finding.source_type === "pt_failure" ? "42 CFR 493.801(b) proficiency-testing investigation" : finding.source_type === "internal_nce" ? "Internal non-conforming event" : "No standard reference recorded")}
           </p>
         </div>
         <Badge className={`${badge.cls} text-sm whitespace-nowrap font-medium px-3 py-1`}>
@@ -1142,7 +1146,7 @@ export default function VeritaResponseFindingPage() {
         const tjc = clientValidateTjc(finding);
         const elements = [
           { key: "description", label: "Deficiency description" },
-          { key: "root_cause", label: "Root cause analysis (including patient-impact factors per TJC May 2024 update)" },
+          { key: "root_cause", label: "Root cause analysis (including patient-impact factors, per the current TJC standard)" },
           { key: "corrective_action", label: "Corrective action" },
         ];
         return (
@@ -1346,6 +1350,8 @@ export default function VeritaResponseFindingPage() {
           flag was later dropped (the dropdown still supports editing it). */}
       {(() => {
         const acc = finding.accreditor as Accreditor;
+        // An internal event has its own NCE report card above, so the accreditor note does not apply to it.
+        if (finding.source_type === "internal_nce") return null;
         const hasCard =
           acc === "CMS" ||
           (["CAP", "TJC", "COLA", "AABB"].includes(acc) && labAllowedAccreditors.has(acc));
@@ -1357,7 +1363,9 @@ export default function VeritaResponseFindingPage() {
             </CardHeader>
             <CardContent className="p-4">
               <p className="text-sm text-muted-foreground">
-                {acc === "ISO"
+                {finding.source_type === "fda_deviation"
+                  ? "An FDA product deviation is reported to the FDA on Form FDA 3486, not on an accreditor form. Record the date it was submitted and the confirmation (BPDR) number in the FDA product deviation section of this page."
+                  : acc === "ISO"
                   ? "ISO 15189 does not prescribe a response form; your accreditation body uses its own, so VeritaAssure does not generate one yet. Document the root cause, corrective action and evidence in the fields above and carry them onto your accreditation body's form."
                   : acc === "Other"
                   ? "This finding uses the \"Other\" accreditor, which has no standardized Plan of Correction form. Document the response in the fields above. A generated response PDF is available for CMS, CAP, TJC, COLA, and AABB findings."
@@ -1480,7 +1488,11 @@ export default function VeritaResponseFindingPage() {
           <div className="space-y-1">
             <Label className="text-xs">{anchorLabel}</Label>
             <Input type="date" value={finding.anchor_date || ""} onChange={(e) => setField("anchor_date", e.target.value)} className="h-9 text-sm" />
-            {finding.accreditor !== "ISO" && <p className="text-xs text-muted-foreground">Due date recomputes on save.</p>}
+            {/* Only an inspection or PT finding on a clocked accreditor recomputes; an internal event has no clock, an FDA
+                deviation's date comes from its reportability answers, and an ISO date is entered by the lab. */}
+            {finding.accreditor !== "ISO" && finding.source_type !== "internal_nce" && finding.source_type !== "fda_deviation" && (
+              <p className="text-xs text-muted-foreground">Due date recomputes on save.</p>
+            )}
           </div>
           {finding.accreditor === "ISO" && (
             <div className="space-y-1">
@@ -1518,7 +1530,7 @@ export default function VeritaResponseFindingPage() {
         <CardHeader className="py-3 px-4 border-b">
           <CardTitle className="text-base font-semibold">Plan of correction</CardTitle>
           <p className="text-xs text-muted-foreground mt-1">
-            The CMS Statement of Deficiencies (form CMS-2567) requires 5 elements: corrective action for affected patients or items, identification of others potentially affected, systems to prevent recurrence, ongoing monitoring, and a completion date. The 5-elements coach that blocks submission without all five lands in a later phase.
+            The CMS Statement of Deficiencies (form CMS-2567) requires 5 elements: corrective action for affected patients or items, identification of others potentially affected, systems to prevent recurrence, ongoing monitoring, and a completion date. The CMS-2567 PDF stays locked until all five are filled in.
           </p>
         </CardHeader>
         <CardContent className="p-4 space-y-3">
@@ -1577,15 +1589,15 @@ export default function VeritaResponseFindingPage() {
                 disabled={signingOff || !activeLabId}
                 data-testid="nce-signoff-btn"
               >
-                {signingOff ? "Signing..." : "Sign off (medical director / owner or admin)"}
+                {signingOff ? "Signing..." : "Sign off (medical director or designee)"}
               </Button>
               {finding.signoff_role && (
                 <span className="text-xs text-muted-foreground">
-                  Signed off by {finding.signoff_role === "medical_director" ? "the medical director" : "an owner/admin"}
+                  Signed off by {finding.signoff_role === "medical_director" ? "the medical director" : finding.signoff_role === "designee" ? "the delegated designee" : "the account owner (override)"}
                   {finding.signed_at ? ` on ${String(finding.signed_at).slice(0, 10)}` : ""}.
                 </span>
               )}
-              <span className="text-[11px] text-muted-foreground w-full">Only the designated medical director or a lab owner/admin can sign off an internal event.</span>
+              <span className="text-[11px] text-muted-foreground w-full">Only the designated medical director, a designee delegated finding closure, or the account owner (as a logged override) can sign off an internal event.</span>
             </div>
           )}
         </CardContent>
