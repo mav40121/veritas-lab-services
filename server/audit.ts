@@ -265,6 +265,73 @@ export interface ReminderRunSummary {
   details: Array<{ findingId: number; reminderType: string; status: 'sent' | 'skipped' | 'error'; reason?: string }>;
 }
 
+// Open findings with a due date, plus (2026-10-26, parking lot #99) the QC run behind a finding that VeritaQC
+// escalated: escalate-to-response stamps "VeritaResponse#<finding id>" on the corrective action, which links back
+// to the run and its control lot. Without it the reminder named only "QC-1-3s" and a supervisor could not tell
+// which test or level it was without signing in.
+export function findingReminderCandidates(sqlite: any): any[] {
+  return sqlite.prepare(`
+    SELECT f.id, f.user_id, f.accreditor, f.due_date, f.status,
+           f.finding_number, f.standard_ref,
+           u.email AS recipient_email, u.name AS recipient_name,
+           l.lab_name, l.clia_number,
+           qc.analyte AS qc_analyte, qc.level AS qc_level, qc.lot_number AS qc_lot,
+           qc.result_date AS qc_run_date, qc.instrument AS qc_instrument
+    FROM findings f
+    JOIN users u ON u.id = f.user_id
+    LEFT JOIN labs l ON l.id = f.lab_id
+    LEFT JOIN (
+      SELECT ca.nce_reference, cl.analyte, cl.level, cl.lot_number, r.result_date, r.instrument
+        FROM qc_corrective_actions ca
+        JOIN qc_results r ON r.id = ca.qc_result_id
+        JOIN qc_control_lots cl ON cl.id = r.control_lot_id
+       WHERE ca.id IN (SELECT MIN(id) FROM qc_corrective_actions WHERE nce_reference LIKE 'VeritaResponse#%' GROUP BY nce_reference)
+    ) qc ON qc.nce_reference = 'VeritaResponse#' || f.id
+    WHERE f.status NOT IN ('accepted', 'closed')
+      AND f.due_date IS NOT NULL
+      AND f.accreditor != 'COLA'
+  `).all() as any[];
+}
+
+// The reminder email for one finding (plain text). A finding escalated from VeritaQC names the test, control level,
+// lot and run date in the subject and the body.
+export function findingReminderEmail(c: any, days: number): { subject: string; text: string } {
+  const labLabel = c.lab_name || c.clia_number || "your lab";
+  const findingLabel = c.finding_number || `#${c.id}`;
+  const standardLabel = c.standard_ref || "(no standard cited)";
+  const dayWord = `${days} day${days === 1 ? "" : "s"}`;
+  const qcTest = c.qc_analyte ? [c.qc_analyte, c.qc_level].filter(Boolean).join(", ") : "";
+  const subject = qcTest
+    ? `VeritaResponse reminder: ${qcTest} QC finding ${findingLabel} due in ${dayWord}`
+    : `VeritaResponse reminder: finding ${findingLabel} due in ${dayWord}`;
+  const qcLines = qcTest
+    ? [
+        `QC test: ${c.qc_analyte}`,
+        ...(c.qc_level ? [`Control level: ${c.qc_level}`] : []),
+        ...(c.qc_lot ? [`Control lot: ${c.qc_lot}`] : []),
+        ...(c.qc_run_date ? [`QC run date: ${String(c.qc_run_date).slice(0, 10)}`] : []),
+        ...(c.qc_instrument ? [`Instrument: ${c.qc_instrument}`] : []),
+      ]
+    : [];
+  const text = [
+    `Hello,`,
+    ``,
+    `This is an automated reminder from VeritaResponse for ${labLabel}.`,
+    ``,
+    `Finding: ${findingLabel}`,
+    ...qcLines,
+    `Standard cited: ${standardLabel}`,
+    `Accreditor: ${c.accreditor}`,
+    `Due date: ${String(c.due_date).slice(0, 10)} (${dayWord} from today)`,
+    `Status: ${c.status}`,
+    ``,
+    `Sign in to VeritaAssure to update the response before the due date.`,
+    ``,
+    `Sent automatically by VeritaResponse from VeritaAssure. To stop these reminders, mark the finding as accepted or closed.`,
+  ].join("\n");
+  return { subject, text };
+}
+
 /**
  * Scan open VeritaResponse findings and dispatch any due reminders.
  * Skips COLA (consultative, no hard deadline) and already-resolved
@@ -290,18 +357,7 @@ export async function runFindingReminders(): Promise<ReminderRunSummary> {
 
   let candidates: any[] = [];
   try {
-    candidates = sqlite.prepare(`
-      SELECT f.id, f.user_id, f.accreditor, f.due_date, f.status,
-             f.finding_number, f.standard_ref,
-             u.email AS recipient_email, u.name AS recipient_name,
-             l.lab_name, l.clia_number
-      FROM findings f
-      JOIN users u ON u.id = f.user_id
-      LEFT JOIN labs l ON l.id = f.lab_id
-      WHERE f.status NOT IN ('accepted', 'closed')
-        AND f.due_date IS NOT NULL
-        AND f.accreditor != 'COLA'
-    `).all() as any[];
+    candidates = findingReminderCandidates(sqlite);
   } catch (err: any) {
     console.error("[finding-reminder] Query failed:", err.message);
     return summary;
@@ -335,25 +391,7 @@ export async function runFindingReminders(): Promise<ReminderRunSummary> {
       continue;
     }
 
-    const labLabel = c.lab_name || c.clia_number || "your lab";
-    const findingLabel = c.finding_number || `#${c.id}`;
-    const standardLabel = c.standard_ref || "(no standard cited)";
-    const subject = `VeritaResponse reminder: finding ${findingLabel} due in ${days} day${days === 1 ? '' : 's'}`;
-    const text = [
-      `Hello,`,
-      ``,
-      `This is an automated reminder from VeritaResponse for ${labLabel}.`,
-      ``,
-      `Finding: ${findingLabel}`,
-      `Standard cited: ${standardLabel}`,
-      `Accreditor: ${c.accreditor}`,
-      `Due date: ${String(c.due_date).slice(0, 10)} (${days} day${days === 1 ? '' : 's'} from today)`,
-      `Status: ${c.status}`,
-      ``,
-      `Sign in to VeritaAssure to update the response before the due date.`,
-      ``,
-      `Sent automatically by VeritaResponse from VeritaAssure. To stop these reminders, mark the finding as accepted or closed.`,
-    ].join("\n");
+    const { subject, text } = findingReminderEmail(c, days);
 
     try {
       await resend.emails.send({
