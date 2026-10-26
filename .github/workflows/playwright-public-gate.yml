@@ -36,7 +36,10 @@ jobs:
   playwright-public-gate:
     name: playwright-public-gate
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # 30, not 15 (2026-10-26): the specs take under a minute, but on a slow day the Ubuntu package mirror behind
+    # `playwright install --with-deps` took 14 minutes (4.5 minutes for one 5.6 MB font package) and the job was
+    # cancelled before a single test ran, twice on PR 1710. A cancelled gate blocks the deploy.
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
