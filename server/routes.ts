@@ -24,7 +24,7 @@ import { registerScheduleRoutes } from "./schedule";
 import { stripe, PRICES, SEAT_PRICES, WEBHOOK_SECRET, FRONTEND_URL, PLAN_LIMITS, SEAT_PRICING, getSeatPrice, getSeatPriceForTier, VC_UNLIMITED_FIRST_YEAR_COUPON, getViewOnlyAddOnConfig } from "./stripe";
 import crypto from "crypto";
 import { Resend } from "resend";
-import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCompetencyPDF, generateEmployeeCompetencyRecordPDF, generateCMS209PDF, generateVeritaPTPDF, generateCms2567PDF, validateCms2567POC, generateCapResponsePDF, validateCapResponse, generateTjcEscPDF, validateTjcEsc, generateColaResponsePDF, validateColaResponse, generateAabbNerPDF, validateAabbNer, generateInternalNcePDF, validateInternalNce, generateCeuTranscriptPDF } from "./pdfReport";
+import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCompetencyPDF, generateEmployeeCompetencyRecordPDF, generateCMS209PDF, generateVeritaPTPDF, generateCms2567PDF, validateCms2567POC, generateCapResponsePDF, validateCapResponse, generateTjcEscPDF, validateTjcEsc, generateColaResponsePDF, validateColaResponse, generateAabbNerPDF, validateAabbNer, generateInternalNcePDF, validateInternalNce, generateCeuTranscriptPDF, generateTypeReportPDF, validateTypeReport, TYPE_REPORT_KINDS } from "./pdfReport";
 import { storePdfToken, claimPdfToken } from "./pdfTokens";
 import { labLocalDate, labToday, addLabDays } from "./dateLocal";
 import { parseRunDetails, serializeRunDetails } from "@shared/studyRunDetails";
@@ -5427,7 +5427,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       `VeritaQC escalation. ${analyte}` +
       (ctx?.level ? ` ${ctx.level}` : "") +
       (ctx?.lot_number ? ` (control lot ${ctx.lot_number})` : "") +
-      ` fired Westgard rule ${ruleCode}` +
+      // A corrective action filed without a rule violation has no rule to name (it read "fired Westgard rule QC").
+      (viol ? ` fired Westgard rule ${ruleCode}` : ` was escalated from a VeritaQC corrective action`) +
       (ctx?.result_date ? ` on ${ctx.result_date}` : "") +
       (ctx?.instrument ? `, instrument ${ctx.instrument}` : "") +
       `. Value ${ctx?.result_value ?? "n/a"}.` +
@@ -23180,6 +23181,47 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       res.json({ token: storePdfToken(pdfBuffer, filename) });
     } catch (err: any) {
       console.error("[internal-nce-pdf] render failed:", err);
+      res.status(500).json({ error: err?.message || "PDF render failed" });
+    }
+  });
+
+  // Entry-type reports (Michael 2026-10-26, mock D3, D5, D7): the PT investigation report (and its alternative-
+  // assessment variant), the FDA deviation investigation summary and the QC event and patient look-back report.
+  // Same pattern as the NCE write-up: access-checked, validated, tokenized.
+  app.get("/api/findings/:id/type-report-pdf", authMiddleware, async (req: any, res) => {
+    const dataUserId = req.ownerUserId ?? req.user?.userId;
+    const finding = userCanAccessFinding(req.params.id, req) as any;
+    if (!finding) return res.status(404).json({ error: "Finding not found" });
+    if (!TYPE_REPORT_KINDS.includes(finding.source_type)) {
+      return res.status(400).json({ error: `There is no type report for this finding (${finding.source_type || "inspection"}).` });
+    }
+    const validation = validateTypeReport(finding);
+    if (!validation.ok) return res.status(400).json({ error: "The report is incomplete; cannot render", missing: validation.missing });
+    try {
+      const sqlite = (db as any).$client;
+      let qc: any = null;
+      if (finding.source_type === "qc_escalation") {
+        qc = sqlite.prepare(
+          `SELECT cl.analyte, cl.level, cl.lot_number, r.result_value, r.result_date, r.instrument, v.rule_code
+             FROM qc_corrective_actions ca
+             JOIN qc_results r ON r.id = ca.qc_result_id
+             JOIN qc_control_lots cl ON cl.id = r.control_lot_id
+             LEFT JOIN qc_rule_violations v ON v.id = ca.qc_rule_violation_id
+            WHERE ca.nce_reference = ? ORDER BY ca.id LIMIT 1`
+        ).get(`VeritaResponse#${finding.id}`) ?? null;
+      }
+      const user = resolveFindingLabIdentity(finding, dataUserId);
+      const pdfBuffer = await generateTypeReportPDF({ finding, user, qc }, licenseCtxFromReq(req, "VeritaResponse™"));
+      const prefix: Record<string, string> = { pt_failure: "PT-Investigation", aaa_escalation: "Alternative-Assessment", fda_deviation: "FDA-Deviation-Summary", qc_escalation: "QC-Event" };
+      const safeName = String(finding.finding_number || finding.id).replace(/[^A-Za-z0-9_-]+/g, "_");
+      const filename = `${prefix[finding.source_type]}_${safeName}_${labToday()}.pdf`;
+      try {
+        sqlite.prepare(`INSERT INTO finding_history (finding_id, event, by_user_id, payload) VALUES (?, ?, ?, ?)`)
+          .run(Number(req.params.id), 'type_report_rendered', req.user?.userId ?? null, JSON.stringify({ type: finding.source_type }));
+      } catch {}
+      res.json({ token: storePdfToken(pdfBuffer, filename), filename });
+    } catch (err: any) {
+      console.error("[type-report-pdf] render failed:", err);
       res.status(500).json({ error: err?.message || "PDF render failed" });
     }
   });

@@ -732,6 +732,29 @@ export default function VeritaResponseFindingPage() {
     }
   };
 
+  // Entry-type reports (Michael 2026-10-26, mock D3, D5, D7): PT investigation, alternative assessment, FDA
+  // deviation summary, QC event and patient look-back.
+  const handleGenerateTypeReport = async () => {
+    if (!id) return;
+    setRenderState("rendering");
+    setRenderError(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/findings/${id}/type-report-pdf`, { headers: authHeaders() });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setRenderError(body.missing && body.missing.length ? `Missing: ${body.missing.join("; ")}` : body.error || `Render failed (${res.status})`);
+        setRenderState("error");
+        return;
+      }
+      const data = await res.json();
+      if (data.token) downloadPdfToken(data.token, data.filename || `VeritaResponse_Finding_${id}.pdf`);
+      setRenderState("idle");
+    } catch (e: any) {
+      setRenderError(e?.message || "Network error");
+      setRenderState("error");
+    }
+  };
+
   const handleGenerateCap = async () => {
     if (!id) return;
     setRenderState("rendering");
@@ -1279,6 +1302,33 @@ export default function VeritaResponseFindingPage() {
         <FdaDeviationPanel finding={finding} labId={activeLabId ?? null} onSaved={(f) => setFinding((prev: any) => ({ ...prev, ...f }))} />
       )}
 
+      {/* Entry-type reports (2026-10-26, mock D3, D5, D7). */}
+      {["pt_failure", "aaa_escalation", "fda_deviation", "qc_escalation"].includes(finding.source_type) && (() => {
+        const rep: Record<string, { title: string; text: string; button: string }> = {
+          pt_failure: { title: "PT investigation report (PDF)", text: "The event, the investigation checklist, the corrective action and the evidence of correction, with the medical director or designee review on page 1. Needs: what happened, at least one checklist answer, and the corrective action.", button: "Generate PT investigation report" },
+          aaa_escalation: { title: "Alternative assessment report (PDF)", text: "The failed accuracy verification, how it was verified, the results and the corrective action, with the medical director or designee review on page 1. Needs: what happened, the results against the criteria, and the corrective action.", button: "Generate alternative assessment report" },
+          fda_deviation: { title: "FDA deviation investigation summary (PDF)", text: "The reportability answers, the facts Form FDA 3486 asks for, the disposition and the corrective action, with the medical director or designee review on page 1. It is not the form itself. Needs: what happened, the disposition, and the corrective action.", button: "Generate FDA deviation summary" },
+          qc_escalation: { title: "QC event report (PDF)", text: "The QC run, the rerun, the patient look-back (42 CFR 493.1282(b)(2)) and the corrective action, with the medical director or designee review on page 1. Needs: what happened, the patient look-back, and the corrective action.", button: "Generate QC event report" },
+        };
+        const r = rep[finding.source_type];
+        return (
+          <Card>
+            <CardHeader className="py-3 px-4 border-b">
+              <CardTitle className="text-base font-semibold">{r.title}</CardTitle>
+            </CardHeader>
+            <CardContent className="p-4 space-y-2">
+              <div className="text-xs text-muted-foreground">{r.text}</div>
+              {renderState === "error" && renderError && (
+                <div className="text-xs text-red-700 dark:text-red-400" data-testid="type-report-error">{renderError}</div>
+              )}
+              <Button size="sm" className="bg-[#006064] hover:bg-[#004d50] text-white" onClick={handleGenerateTypeReport} disabled={renderState === "rendering"} data-testid="type-report-btn">
+                {renderState === "rendering" ? "Generating..." : r.button}
+              </Button>
+            </CardContent>
+          </Card>
+        );
+      })()}
+
       {/* #36: internal NCE write-up PDF. Shown for internal-event findings; no
           accreditor gate. Floor: event description + corrective action. */}
       {finding.source_type === "internal_nce" && (
@@ -1372,7 +1422,7 @@ export default function VeritaResponseFindingPage() {
       {(() => {
         const acc = finding.accreditor as Accreditor;
         // An internal event has its own NCE report card above, so the accreditor note does not apply to it.
-        if (finding.source_type === "internal_nce") return null;
+        if (["internal_nce", "pt_failure", "aaa_escalation", "fda_deviation", "qc_escalation"].includes(finding.source_type)) return null;
         const hasCard =
           acc === "CMS" ||
           (["CAP", "TJC", "COLA", "AABB"].includes(acc) && labAllowedAccreditors.has(acc));
@@ -1384,11 +1434,7 @@ export default function VeritaResponseFindingPage() {
             </CardHeader>
             <CardContent className="p-4">
               <p className="text-sm text-muted-foreground">
-                {["pt_failure", "qc_escalation", "aaa_escalation"].includes(finding.source_type)
-                  ? "No report is generated for this type yet. Everything recorded on this page stays with the finding and its history."
-                  : finding.source_type === "fda_deviation"
-                  ? "An FDA product deviation is reported to the FDA on Form FDA 3486, not on an accreditor form. Record the date it was submitted and the confirmation (BPDR) number in the FDA product deviation section of this page."
-                  : acc === "ISO"
+                {acc === "ISO"
                   ? "ISO 15189 does not prescribe a response form; your accreditation body uses its own, so VeritaAssure does not generate one yet. Document the root cause, corrective action and evidence in the fields above and carry them onto your accreditation body's form."
                   : acc === "Other"
                   ? "This finding uses the \"Other\" accreditor, which has no standardized Plan of Correction form. Document the response in the fields above. A generated response PDF is available for CMS, CAP, TJC, COLA, and AABB findings."
