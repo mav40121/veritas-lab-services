@@ -12,7 +12,7 @@
 import { readFileSync } from "node:fs";
 import { labLocalDate, addLabDays } from "../server/dateLocal";
 
-const BASELINE = 63; // after part 2, overdue and compliance counts (2026-10-26)
+const BASELINE = 23; // after part 3, file names and date stamps (2026-10-26); the rest are date arithmetic or true UTC
 let fails = 0;
 const check = (name: string, ok: boolean, detail = "") => {
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}${detail ? "  :: " + detail : ""}`);
