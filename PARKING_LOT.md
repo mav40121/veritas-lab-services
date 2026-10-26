@@ -707,6 +707,18 @@ Open questions for the scope:
 
 ---
 
+### 107. Safety module: manufacturer SDS for every test added in VeritaMap (safety and map linked)
+
+**Effort:** M to L (part of the safety module build; the SDS library alone is about 1-2 weeks)
+**Importance:** High. OSHA's hazard communication standard (29 CFR 1910.1200) requires a current safety data sheet, readily accessible, for every hazardous chemical the lab uses; today labs keep these outside VeritaAssure and VeritaMap knows every test system the lab runs.
+
+**What:** when a test is added in VeritaMap, the safety module lists the products that test system uses (reagent, calibrator, controls, diluent, wash; SDS belong to products and catalog numbers, not to the test) and gets the manufacturer's SDS for each. There is no common manufacturer SDS feed, so the module pre-fills a link to the maker's SDS search by catalog number (Roche, Abbott, Siemens, Beckman, Bio-Rad publish them), the lab confirms it or uploads the PDF, and the module keeps the copy, its revision date and who checked it. VeritaStock catalog numbers can seed the product list. Removing a test flags its SDS for review rather than deleting them.
+
+**Source:** Michael, 2026-10-26: "On veritamap, when a test is added, I want to pull the manufacturer MSDS. I want that to go into the new safety module we are scoping." and "So safety and map are linked." Precedents: REQ-077 (Asante, Vori Arnold, chemical inventory with SDS links per test system and analyte, parked 2026-10-16) and VeritaMap's package-insert link (ifu_url) per test system and analyte. Design partner for the module: Dan Scungio.
+**Status:** Open. Goes into the safety module scope; not scheduled.
+
+---
+
 ## CLOSED (audit trail)
 
 ### C102. Calibration Verification + Correlation as one study (was #104)
