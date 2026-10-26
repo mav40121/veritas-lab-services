@@ -143,6 +143,8 @@ const ACCREDITORS = [
   { value: "TJC", label: "The Joint Commission (TJC)" },
   { value: "CAP", label: "College of American Pathologists (CAP)" },
   { value: "COLA", label: "COLA" },
+  // ISO 15189 (#108): offered only when the lab is flagged for it; competency timing follows the CLIA rules.
+  { value: "ISO", label: "ISO 15189" },
   { value: "CLIA_ONLY", label: "CLIA Only" },
   { value: "OTHER", label: "Other" },
 ];
@@ -250,7 +252,7 @@ export default function VeritaStaffAppPage() {
   const labFlagAllowed = allowedAccreditorsForMembership(activeMembership);
   const isStaffAccreditorAllowed = (value: string): boolean => {
     if (value === 'CLIA_ONLY' || value === 'OTHER') return true;
-    return labFlagAllowed.has(value); // CAP, TJC, COLA matched 1:1
+    return labFlagAllowed.has(value); // CAP, TJC, COLA, ISO matched 1:1
   };
 
   // Fetch lab

@@ -43,7 +43,7 @@ import {
 } from "lucide-react";
 import { useLabRoute } from "@/hooks/useLabRoute";
 
-type Accreditor = "CAP" | "TJC" | "COLA" | "CMS" | "AABB" | "Other";
+type Accreditor = "CAP" | "TJC" | "COLA" | "CMS" | "AABB" | "ISO" | "Other";
 type FindingStatus = "open" | "drafting" | "submitted" | "accepted" | "rejected_resubmit" | "closed";
 
 const ACCREDITORS: { value: Accreditor; label: string; anchorLabel: string }[] = [
@@ -52,6 +52,7 @@ const ACCREDITORS: { value: Accreditor; label: string; anchorLabel: string }[] =
   { value: "CMS",   label: "CMS (CLIA-2567)", anchorLabel: "Receipt date" },
   { value: "AABB",  label: "AABB",           anchorLabel: "Event date" },
   { value: "COLA",  label: "COLA",           anchorLabel: "Notice date" },
+  { value: "ISO",   label: "ISO 15189",      anchorLabel: "Assessment date" }, // #108: the lab enters the due date
   { value: "Other", label: "Other",          anchorLabel: "Anchor date" },
 ];
 
@@ -564,6 +565,8 @@ export default function VeritaResponseFindingPage() {
           description: finding.description ?? null,
           surveyor_notes: finding.surveyor_notes ?? null,
           anchor_date: finding.anchor_date ?? null,
+          // ISO 15189: the lab-entered due date (the server ignores due_date for every other accreditor).
+          ...(finding.accreditor === "ISO" ? { due_date: finding.due_date || null } : {}),
           status: finding.status,
           immediate_action: finding.immediate_action ?? null,
           containment: finding.containment ?? null,
@@ -893,7 +896,8 @@ export default function VeritaResponseFindingPage() {
   // #11: only CMS/CAP/TJC carry a hard deadline. COLA (consultative) and AABB
   // (FDA reportable-event window, not a lab CAPA deadline) get a soft "target"
   // treatment: amber, not red "overdue".
-  const hardDeadline = ["CMS", "CAP", "TJC"].includes(finding.accreditor);
+  // ISO 15189 counts as hard: its due date is the one the accreditation body set (#108).
+  const hardDeadline = ["CMS", "CAP", "TJC", "ISO"].includes(finding.accreditor);
   const isActive = status !== "closed" && status !== "accepted";
   const isOverdue = hardDeadline && d !== null && d < 0 && isActive;
   const isPastTarget = !hardDeadline && d !== null && d < 0 && isActive;
@@ -1353,7 +1357,9 @@ export default function VeritaResponseFindingPage() {
             </CardHeader>
             <CardContent className="p-4">
               <p className="text-sm text-muted-foreground">
-                {acc === "Other"
+                {acc === "ISO"
+                  ? "ISO 15189 does not prescribe a response form; your accreditation body uses its own, so VeritaAssure does not generate one yet. Document the root cause, corrective action and evidence in the fields above and carry them onto your accreditation body's form."
+                  : acc === "Other"
                   ? "This finding uses the \"Other\" accreditor, which has no standardized Plan of Correction form. Document the response in the fields above. A generated response PDF is available for CMS, CAP, TJC, COLA, and AABB findings."
                   : `This lab is not currently flagged for ${acc} accreditation, so the ${acc} response form is not available here. Enable ${acc} in the lab's accreditor settings to generate its response document, or document the response in the fields above.`}
               </p>
@@ -1474,8 +1480,15 @@ export default function VeritaResponseFindingPage() {
           <div className="space-y-1">
             <Label className="text-xs">{anchorLabel}</Label>
             <Input type="date" value={finding.anchor_date || ""} onChange={(e) => setField("anchor_date", e.target.value)} className="h-9 text-sm" />
-            <p className="text-xs text-muted-foreground">Due date recomputes on save.</p>
+            {finding.accreditor !== "ISO" && <p className="text-xs text-muted-foreground">Due date recomputes on save.</p>}
           </div>
+          {finding.accreditor === "ISO" && (
+            <div className="space-y-1">
+              <Label className="text-xs">Due date (from your accreditation body)</Label>
+              <Input type="date" value={finding.due_date || ""} onChange={(e) => setField("due_date", e.target.value)} className="h-9 text-sm" data-testid="finding-iso-due-date" />
+              <p className="text-xs text-muted-foreground">Your ISO 15189 accreditation body sets the response time in its assessment report.</p>
+            </div>
+          )}
           <div className="space-y-1">
             <Label className="text-xs">External submission reference</Label>
             <Input value={finding.external_submission_ref || ""} onChange={(e) => setField("external_submission_ref", e.target.value)} className="h-9 text-sm" placeholder="e-LAB ticket / JC Connect ID / CMS-2567 page" />

@@ -100,6 +100,7 @@ export const labs = sqliteTable("labs", {
   accreditationTjc: integer("accreditation_tjc").notNull().default(0),
   accreditationCola: integer("accreditation_cola").notNull().default(0),
   accreditationAabb: integer("accreditation_aabb").notNull().default(0),
+  accreditationIso: integer("accreditation_iso").notNull().default(0),
   cliaLocked: integer("clia_locked").notNull().default(0),
   labNameLocked: integer("lab_name_locked").notNull().default(0),
   ownerUserId: integer("owner_user_id").notNull(),

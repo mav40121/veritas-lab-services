@@ -2349,6 +2349,10 @@ try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_lab_members_token ON la
   // the accreditor default in dueDateForFinding (CAP 30, TJC 60, CMS 10, AABB
   // 45, COLA 30). Set per lab, or per organization (organizations.finding_due_days)
   // for a network like Lifepoint that runs every site on one clock. 2026-10-07.
+  // ISO 15189 accreditation (2026-10-26, Michael, parking lot #108): an ADD-ON to the lab's CLIA accreditation
+  // choice (a lab accredited to ISO 15189 still holds its CLIA certificate through CAP, TJC, COLA, AABB or CMS).
+  // It lets the lab file VeritaResponse findings under "ISO 15189" and name it in VeritaStaff; no ISO citations yet.
+  ensure("accreditation_iso",          "ALTER TABLE labs ADD COLUMN accreditation_iso INTEGER NOT NULL DEFAULT 0");
   ensure("finding_due_days",           "ALTER TABLE labs ADD COLUMN finding_due_days INTEGER");
   ensure("plan",                       "ALTER TABLE labs ADD COLUMN plan TEXT");
   ensure("subscription_status",        "ALTER TABLE labs ADD COLUMN subscription_status TEXT");
@@ -6754,7 +6758,7 @@ sqlite.exec(`
   CREATE TABLE IF NOT EXISTS findings (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
-    accreditor TEXT NOT NULL CHECK(accreditor IN ('CAP','TJC','COLA','CMS','AABB','Other')),
+    accreditor TEXT NOT NULL CHECK(accreditor IN ('CAP','TJC','COLA','CMS','AABB','ISO','Other')),
     inspection_id TEXT,
     finding_number TEXT,
     standard_ref TEXT,
@@ -6918,6 +6922,47 @@ sqlite.exec(`
     }
   } catch {
     // fresh DB: CREATE TABLE above handled it
+  }
+}
+// ISO 15189 findings (2026-10-26, parking lot #108). findings.accreditor carries a CHECK of the allowed bodies and
+// SQLite cannot alter a CHECK, so an existing table is rebuilt once: the new table is created from the live table's
+// OWN stored definition with 'ISO' added (so every column added by ALTER above carries over, in order), rows are
+// copied, the old table dropped and the new one renamed, and the indexes are recreated from their stored SQL.
+// Foreign keys are switched off for the copy (finding_reminder_log and finding_effectiveness_checks reference
+// findings(id); with enforcement on, DROP TABLE would refuse) and restored after, then checked. Runs only while the
+// stored CHECK lacks 'ISO'; a fresh DB gets 'ISO' from the CREATE above and skips it.
+{
+  const stored = (sqlite.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'findings'").get() as { sql: string } | undefined)?.sql || "";
+  const oldCheck = "'CMS','AABB','Other')";
+  if (stored.includes(oldCheck) && !stored.includes("'ISO'")) {
+    const indexSql = (sqlite.prepare("SELECT sql FROM sqlite_master WHERE type = 'index' AND tbl_name = 'findings' AND sql IS NOT NULL").all() as { sql: string }[]).map((r) => r.sql);
+    const createNew = stored
+      .replace(/^CREATE TABLE\s+"?findings"?/i, "CREATE TABLE findings_iso_rebuild")
+      .replace(oldCheck, "'CMS','AABB','ISO','Other')");
+    const fkWasOn = sqlite.pragma("foreign_keys", { simple: true }) === 1;
+    try {
+      if (fkWasOn) sqlite.pragma("foreign_keys = OFF");
+      const before = (sqlite.prepare("SELECT COUNT(*) AS n FROM findings").get() as { n: number }).n;
+      sqlite.transaction(() => {
+        sqlite.exec("DROP TABLE IF EXISTS findings_iso_rebuild");
+        sqlite.exec(createNew);
+        sqlite.exec("INSERT INTO findings_iso_rebuild SELECT * FROM findings");
+        sqlite.exec("DROP TABLE findings");
+        sqlite.exec("ALTER TABLE findings_iso_rebuild RENAME TO findings");
+        for (const sql of indexSql) sqlite.exec(sql);
+      })();
+      const after = (sqlite.prepare("SELECT COUNT(*) AS n FROM findings").get() as { n: number }).n;
+      console.log(`[db] findings rebuilt to accept ISO 15189: ${before} -> ${after} rows, ${indexSql.length} index(es) recreated`);
+    } catch (err: any) {
+      console.error("[db] findings ISO rebuild FAILED (table left as it was):", err.message);
+    } finally {
+      if (fkWasOn) sqlite.pragma("foreign_keys = ON");
+    }
+    try {
+      const orphans = sqlite.prepare("PRAGMA foreign_key_check").all() as any[];
+      const ours = orphans.filter((o) => o.parent === "findings");
+      if (ours.length) console.error(`[db] findings ISO rebuild: ${ours.length} child row(s) point at a missing finding`, ours.slice(0, 5));
+    } catch {}
   }
 }
 {

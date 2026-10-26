@@ -30,6 +30,8 @@ export interface Membership {
   accreditationTjc: boolean;
   accreditationCola: boolean;
   accreditationAabb: boolean;
+  // ISO 15189 add-on (#108): the lab may file findings under ISO 15189.
+  accreditationIso?: boolean;
   // CLIA certificate active-through date for this lab (latest active
   // cert by expiration_date). ISO YYYY-MM-DD when set, null when the
   // lab hasn't entered one. Informational only — never gates module
@@ -75,6 +77,7 @@ export function allowedAccreditorsForMembership(m: Membership | null | undefined
   if (m.accreditationTjc)  allowed.add('TJC');
   if (m.accreditationCola) allowed.add('COLA');
   if (m.accreditationAabb) allowed.add('AABB');
+  if (m.accreditationIso)  allowed.add('ISO');
   return allowed;
 }
 

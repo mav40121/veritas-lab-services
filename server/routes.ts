@@ -1554,6 +1554,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         l.accreditation_tjc,
         l.accreditation_cola,
         l.accreditation_aabb,
+        l.accreditation_iso,
         l.clia_locked as lab_clia_locked,
         l.lab_name_locked as lab_name_locked,
         l.created_at as lab_created_at,
@@ -2896,7 +2897,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // labs before first report. Refuses to update name or CLIA if the
   // corresponding lock is set (those freeze on first report, per CLAUDE.md §5).
   app.post("/api/admin/update-lab", (req, res) => {
-    const { secret, labId, labName, cliaNumber, accCap, accTjc, accCola, accAabb, isDemo, isRepository } = req.body || {};
+    const { secret, labId, labName, cliaNumber, accCap, accTjc, accCola, accAabb, accIso, isDemo, isRepository } = req.body || {};
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
     if (!labId) return res.status(400).json({ error: "labId required" });
 
@@ -2931,6 +2932,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (accTjc !== undefined)  { updates.push("accreditation_tjc = ?");  params.push(accTjc ? 1 : 0); }
     if (accCola !== undefined) { updates.push("accreditation_cola = ?"); params.push(accCola ? 1 : 0); }
     if (accAabb !== undefined) { updates.push("accreditation_aabb = ?"); params.push(accAabb ? 1 : 0); }
+    if (accIso !== undefined)  { updates.push("accreditation_iso = ?");  params.push(accIso ? 1 : 0); } // ISO 15189 add-on (#108)
     if (isDemo !== undefined)  { updates.push("is_demo = ?");            params.push(isDemo ? 1 : 0); }
     if (isRepository !== undefined) { updates.push("is_repository = ?"); params.push(isRepository ? 1 : 0); }
 
@@ -2948,7 +2950,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
 
     const updated = sqlite.prepare(
-      "SELECT id, lab_name, clia_number, clia_locked, lab_name_locked, accreditation_cap, accreditation_tjc, accreditation_cola, accreditation_aabb, owner_user_id FROM labs WHERE id = ?"
+      "SELECT id, lab_name, clia_number, clia_locked, lab_name_locked, accreditation_cap, accreditation_tjc, accreditation_cola, accreditation_aabb, accreditation_iso, owner_user_id FROM labs WHERE id = ?"
     ).get(Number(labId));
     console.log(`[admin/update-lab] Updated lab_id=${labId}: ${updates.slice(0, -1).join(", ")}`);
     res.json({ ok: true, lab: updated });
@@ -7439,6 +7441,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         l.accreditation_tjc,
         l.accreditation_cola,
         l.accreditation_aabb,
+        l.accreditation_iso,
         l.is_demo,
         l.is_repository,
         l.primary_regime,
@@ -7508,6 +7511,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       accreditationTjc: !!m.accreditation_tjc,
       accreditationCola: !!m.accreditation_cola,
       accreditationAabb: !!m.accreditation_aabb,
+      accreditationIso: !!m.accreditation_iso,
       // USON bake-off: labs flagged is_demo=1 carry representative sample
       // data (no real facility, no real measurements). Surfaced so the
       // NavBar can mount a persistent "sample data" banner and exports can
@@ -22673,7 +22677,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // the 5-elements POC validator land in Phase 2. See
   // docs/scoping-veritaresponse.md.
 
-  const VALID_ACCREDITORS = ['CAP','TJC','COLA','CMS','AABB','Other'];
+  // 'ISO' = ISO 15189 (2026-10-26, #108): allowed only for a lab flagged accreditation_iso; the lab enters the due
+  // date its accreditation body sets (no automatic clock unless the lab or organization has a finding_due_days override).
+  const VALID_ACCREDITORS = ['CAP','TJC','COLA','CMS','AABB','ISO','Other'];
+  const isoDueDate = (v: any): string | null => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null);
   const VALID_FINDING_STATUSES = ['open','drafting','submitted','accepted','rejected_resubmit','closed'];
   // A finding is an inspection deficiency (default), a PT-failure investigation,
   // or an internal non-conforming event (#36: a lab-found issue with no survey or
@@ -22709,13 +22716,14 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const allowed = new Set<string>(['CMS', 'Other']);
     if (!labId) return allowed;
     const row = (db as any).$client.prepare(
-      "SELECT accreditation_cap, accreditation_tjc, accreditation_cola, accreditation_aabb FROM labs WHERE id = ?"
+      "SELECT accreditation_cap, accreditation_tjc, accreditation_cola, accreditation_aabb, accreditation_iso FROM labs WHERE id = ?"
     ).get(Number(labId)) as any;
     if (!row) return allowed;
     if (row.accreditation_cap)  allowed.add('CAP');
     if (row.accreditation_tjc)  allowed.add('TJC');
     if (row.accreditation_cola) allowed.add('COLA');
     if (row.accreditation_aabb) allowed.add('AABB');
+    if (row.accreditation_iso)  allowed.add('ISO');
     return allowed;
   }
 
@@ -22854,7 +22862,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         allowed: Array.from(allowed),
       });
     }
-    const due_date = dueDateForFinding(accreditor, anchor_date ?? null, labIdForGate);
+    const due_date = (accreditor === 'ISO' ? isoDueDate(req.body?.due_date) : null) ?? dueDateForFinding(accreditor, anchor_date ?? null, labIdForGate);
     const result = (db as any).$client.prepare(
       `INSERT INTO findings (
         user_id, accreditor, inspection_id, finding_number, standard_ref,
@@ -22924,11 +22932,17 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const nextAccreditor = body.accreditor ?? existing.accreditor;
     const nextAnchor = body.anchor_date !== undefined ? body.anchor_date : existing.anchor_date;
     // An FDA product deviation's due date is its 606.171 report-by date; never recompute it from an accreditor.
+    // The finding's own lab carries any finding_due_days override (it was not passed here before 2026-10-26, so an
+    // edit recomputed a Lifepoint TJC finding on the 60-day default instead of the lab's 30-day clock).
+    const dueLabId = existing.lab_id ?? gateLabId ?? null;
     const recomputed = existing.source_type === 'fda_deviation'
       ? existing.due_date
-      : (body.accreditor !== undefined || body.anchor_date !== undefined)
-        ? dueDateForFinding(nextAccreditor, nextAnchor)
-        : existing.due_date;
+      : nextAccreditor === 'ISO'
+        // ISO 15189: the lab enters the due date its accreditation body sets; a save without one keeps the current date.
+        ? (body.due_date !== undefined ? isoDueDate(body.due_date) : (existing.accreditor !== 'ISO' ? dueDateForFinding('ISO', nextAnchor, dueLabId) : existing.due_date))
+        : (body.accreditor !== undefined || body.anchor_date !== undefined)
+          ? dueDateForFinding(nextAccreditor, nextAnchor, dueLabId)
+          : existing.due_date;
 
     (db as any).$client.prepare(
       `UPDATE findings SET
@@ -23629,7 +23643,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         allowed: Array.from(allowed),
       });
     }
-    const due_date = isInternalNce ? null : dueDateForFinding(accreditor, anchor_date ?? null, req.scope.labId);
+    const due_date = isInternalNce ? null : ((accreditor === 'ISO' ? isoDueDate(req.body?.due_date) : null) ?? dueDateForFinding(accreditor, anchor_date ?? null, req.scope.labId));
     const ownerRow = (db as any).$client.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(req.scope.labId) as any;
     const userIdForRow = ownerRow?.owner_user_id ?? req.userId;
     const result = (db as any).$client.prepare(
@@ -32567,7 +32581,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         }
 
         const typeLabels: Record<string, string> = {
-          clia: "CLIA", cap: "CAP", tjc: "TJC", state_license: "State License",
+          clia: "CLIA", cap: "CAP", tjc: "TJC", iso15189: "ISO 15189", state_license: "State License",
           lab_director_license: "Lab Director License", other: "Other",
         };
 
@@ -33600,6 +33614,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         clia_lab_name: lab?.lab_name || '',
         preferred_standards: preferredStandards,
         accreditation_choice: accreditationChoice,
+        // ISO 15189 is an add-on to the choice above, never a replacement for it (#108).
+        accreditation_iso: lab?.accreditation_iso === 1,
         preferred_pt_vendor: userRow?.preferred_pt_vendor || 'none',
         // Lab role context for UI
         is_seat: isSeat,
@@ -33669,7 +33685,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         return res.status(403).json({ error: `Lab settings are managed by the lab owner (${ownerDisplayName}).` });
       }
 
-      const { clia_number, clia_lab_name, preferred_standards, accreditation_choice, preferredPtVendor } = req.body;
+      const { clia_number, clia_lab_name, preferred_standards, accreditation_choice, preferredPtVendor, accreditation_iso } = req.body;
 
       // Resolve the lab to update: prefer the active lab from URL context,
       // fall back to legacy resolveLabForUser for backward compat. This
@@ -33768,6 +33784,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       if (accTjc !== lab.accreditation_tjc) fieldsToAudit.push(["accreditation_tjc", String(lab.accreditation_tjc), String(accTjc)]);
       if (accCola !== lab.accreditation_cola) fieldsToAudit.push(["accreditation_cola", String(lab.accreditation_cola), String(accCola)]);
       if (accAabb !== lab.accreditation_aabb) fieldsToAudit.push(["accreditation_aabb", String(lab.accreditation_aabb), String(accAabb)]);
+      // ISO 15189 add-on (#108): only a boolean changes it; an older client that does not send it leaves it alone.
+      const accIso = typeof accreditation_iso === "boolean" ? (accreditation_iso ? 1 : 0) : (lab.accreditation_iso ?? 0);
+      if (accIso !== (lab.accreditation_iso ?? 0)) fieldsToAudit.push(["accreditation_iso", String(lab.accreditation_iso ?? 0), String(accIso)]);
 
       for (const [field, oldVal, newVal] of fieldsToAudit) {
         writeLabAuditEntry(lab.id, req.userId, field, oldVal, newVal);
@@ -33777,10 +33796,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const now = new Date().toISOString();
       (db as any).$client.prepare(
         `UPDATE labs SET clia_number = ?, lab_name = ?, accreditation_cap = ?, accreditation_tjc = ?,
-         accreditation_cola = ?, accreditation_aabb = ?, updated_at = ? WHERE id = ?`
+         accreditation_cola = ?, accreditation_aabb = ?, accreditation_iso = ?, updated_at = ? WHERE id = ?`
       ).run(
         normalizedClia || null, clia_lab_name || null,
-        accCap, accTjc, accCola, accAabb, now, lab.id
+        accCap, accTjc, accCola, accAabb, accIso, now, lab.id
       );
 
       // Also keep user-level columns in sync for backward compatibility with
