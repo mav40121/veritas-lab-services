@@ -7638,6 +7638,34 @@ for (const alterSql of [
   try { sqlite.exec(alterSql); } catch {}
 }
 
+// Per-study notes (2026-10-26, Michael: "a notes section where users can input their own notes to refer back to
+// later"). Free-text working notes on a VeritaCheck study for the lab's own reference, same shape as
+// policy_document_notes. Not part of the study record: never printed on the report, and adding one does not amend
+// a signed study. Soft-deleted (deleted_at) so a removed note leaves a "note removed" tombstone.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS study_notes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    study_id INTEGER NOT NULL,
+    author_user_id INTEGER NOT NULL,
+    author_name TEXT NOT NULL,
+    body TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    deleted_at TEXT,
+    deleted_by_user_id INTEGER
+  )
+`);
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_study_notes_study ON study_notes(study_id)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_study_notes_lab ON study_notes(lab_id)`); } catch {}
+for (const alterSql of [
+  "ALTER TABLE study_notes ADD COLUMN author_name TEXT NOT NULL DEFAULT ''",
+  "ALTER TABLE study_notes ADD COLUMN created_at TEXT",
+  "ALTER TABLE study_notes ADD COLUMN deleted_at TEXT",
+  "ALTER TABLE study_notes ADD COLUMN deleted_by_user_id INTEGER",
+]) {
+  try { sqlite.exec(alterSql); } catch {}
+}
+
 // Per-manual (department) approver mapping (#39 MediaLab parity). Lets a lab
 // say "only the Microbiology lab director approves Microbiology policies": when
 // a document in a given manual reaches a workflow step requiring a role, and

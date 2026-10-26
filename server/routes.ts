@@ -12529,6 +12529,80 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     res.json(studyRowToClient(study));
   });
 
+  // ── Per-study notes (2026-10-26) ─────────────────────────────────────────
+  // The lab's own working notes on a study, same shape as the policy notes: any lab member who can open the
+  // study reads them; writers add them; the author or a lab owner or admin removes one (soft delete, the
+  // "note removed" tombstone stays). Notes are not part of the study record: they never print on the report,
+  // and a note can be added to a signed study without amending it. Each add and removal is in the audit trail.
+  const studyNoteRows = (studyId: number) => (db as any).$client.prepare(
+    `SELECT id, author_user_id, author_name, body, created_at, deleted_at FROM study_notes
+      WHERE study_id = ? ORDER BY created_at ASC, id ASC`
+  ).all(studyId) as any[];
+  const studyNoteToClient = (n: any, req: any) => ({
+    id: n.id,
+    author_user_id: n.author_user_id,
+    author_name: n.author_name || `User ${n.author_user_id}`,
+    body: n.deleted_at ? null : n.body,
+    created_at: n.created_at,
+    deleted_at: n.deleted_at,
+    can_delete: !n.deleted_at && (n.author_user_id === req.userId || req.scope?.role === "owner" || req.scope?.role === "admin"),
+  });
+  const studyInLab = (studyId: number, labId: number) => (db as any).$client.prepare(
+    "SELECT id, test_name, study_type, date FROM studies WHERE id = ? AND lab_id = ?"
+  ).get(studyId, labId) as { id: number; test_name: string; study_type: string; date: string } | undefined;
+
+  app.get("/api/labs/:labId/studies/:id/notes", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    const studyId = parseInt(req.params.id);
+    if (!studyInLab(studyId, req.scope.labId)) return res.status(404).json({ error: "Study not found" });
+    res.json({ notes: studyNoteRows(studyId).map((n) => studyNoteToClient(n, req)) });
+  });
+
+  app.post("/api/labs/:labId/studies/:id/notes", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacheck'), (req: any, res) => {
+    const studyId = parseInt(req.params.id);
+    const study = studyInLab(studyId, req.scope.labId);
+    if (!study) return res.status(404).json({ error: "Study not found" });
+    const body = typeof req.body?.body === "string" ? req.body.body.trim() : "";
+    if (!body) return res.status(400).json({ error: "Note text required" });
+    if (body.length > 5000) return res.status(400).json({ error: "Note too long (5000 character max)" });
+    const sqlite = (db as any).$client;
+    const author = sqlite.prepare("SELECT name FROM users WHERE id = ?").get(req.userId) as { name: string } | undefined;
+    const result = sqlite.prepare(
+      "INSERT INTO study_notes (lab_id, study_id, author_user_id, author_name, body) VALUES (?, ?, ?, ?, ?)"
+    ).run(req.scope.labId, studyId, req.userId, author?.name || `User ${req.userId}`, body);
+    const noteId = Number(result.lastInsertRowid);
+    logAudit({
+      userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId,
+      module: "veritacheck", action: "create", entityType: "study_note", entityId: noteId,
+      entityLabel: `Note on ${study.test_name} - ${study.study_type} (${study.date})`,
+      after: { study_id: studyId }, ipAddress: req.ip,
+    });
+    const row = sqlite.prepare("SELECT id, author_user_id, author_name, body, created_at, deleted_at FROM study_notes WHERE id = ?").get(noteId);
+    res.status(201).json({ note: studyNoteToClient(row, req) });
+  });
+
+  app.delete("/api/labs/:labId/studies/:id/notes/:noteId", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacheck'), (req: any, res) => {
+    const studyId = parseInt(req.params.id);
+    const noteId = parseInt(req.params.noteId);
+    const study = studyInLab(studyId, req.scope.labId);
+    if (!study) return res.status(404).json({ error: "Study not found" });
+    const sqlite = (db as any).$client;
+    const note = sqlite.prepare("SELECT id, study_id, author_user_id, deleted_at FROM study_notes WHERE id = ?").get(noteId) as
+      { id: number; study_id: number; author_user_id: number; deleted_at: string | null } | undefined;
+    if (!note || note.study_id !== studyId) return res.status(404).json({ error: "Note not found" });
+    if (note.deleted_at) return res.status(409).json({ error: "Already removed" });
+    if (note.author_user_id !== req.userId && req.scope?.role !== "owner" && req.scope?.role !== "admin") {
+      return res.status(403).json({ error: "Only the note's author or a lab owner or admin can remove a note" });
+    }
+    sqlite.prepare("UPDATE study_notes SET deleted_at = datetime('now'), deleted_by_user_id = ? WHERE id = ?").run(req.userId, noteId);
+    logAudit({
+      userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId,
+      module: "veritacheck", action: "delete", entityType: "study_note", entityId: noteId,
+      entityLabel: `Note on ${study.test_name} - ${study.study_type} (${study.date})`,
+      before: { study_id: studyId, author_user_id: note.author_user_id }, ipAddress: req.ip,
+    });
+    res.json({ ok: true, removed: noteId });
+  });
+
   // POST /api/labs/:labId/studies — create a study scoped to this lab.
   // Sets lab_id from the URL (validated by middleware) and user_id from the
   // authenticated user. created_by_user_id captures the actual analyst.

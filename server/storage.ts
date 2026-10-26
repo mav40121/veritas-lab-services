@@ -228,6 +228,8 @@ class DatabaseStorage implements IStorage {
     db.update(studies).set({ status }).where(eq(studies.id, id)).run();
   }
   deleteStudy(id: number): void {
+    // The study's own notes go with it (the study delete itself is recorded in the audit trail).
+    (db as any).$client.prepare("DELETE FROM study_notes WHERE study_id = ?").run(id);
     db.delete(studies).where(eq(studies.id, id)).run();
   }
   createContactMessage(msg: InsertContact): void {

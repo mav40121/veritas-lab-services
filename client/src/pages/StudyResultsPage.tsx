@@ -6,6 +6,7 @@ import { StudyAmrDialog } from "@/components/StudyAmrDialog";
 import { StudyFinalizeDialog } from "@/components/StudyFinalizeDialog";
 import { StudyCensoringPolicyDialog } from "@/components/StudyCensoringPolicyDialog";
 import { StudyArchiveDialog } from "@/components/StudyArchiveDialog";
+import { StudyNotes } from "@/components/StudyNotes";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -2858,6 +2859,7 @@ export default function StudyResults() {
             </Card>
           </div>
         ) : null}
+        {labId && isLoggedIn && <StudyNotes labId={labId} studyId={study.id} readOnly={isReadOnly} />}
       </div>
     );
   }
@@ -3142,6 +3144,7 @@ export default function StudyResults() {
 
       <EvalBox results={results} study={study} />
       <UserSpecs study={study} instrumentNames={instrumentNames} />
+      {labId && isLoggedIn && <StudyNotes labId={labId} studyId={study.id} readOnly={isReadOnly} />}
 
       <div className="mt-6 flex gap-3 justify-end">
         <Button asChild variant="outline">
