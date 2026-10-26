@@ -11,6 +11,24 @@
 // the current labs. TODO: thread a per-lab timezone when that field is added.
 export const LAB_DISPLAY_TZ = "America/Phoenix";
 
+// "Today" as the lab's calendar date (YYYY-MM-DD). Use this, never new Date().toISOString().slice(0, 10), for any
+// date a lab sees or that is stored on a lab record: the UTC day is already tomorrow on a US evening (parking lot
+// #97, 2026-10-26). One place to change when a per-lab time zone exists.
+export function labToday(): string {
+  return labLocalDate(new Date().toISOString());
+}
+
+// A lab calendar date (YYYY-MM-DD) moved by whole days and/or months. Pure calendar arithmetic, no clock, so the
+// result does not depend on the server's time zone. Month-end clamps like SQLite's date(..., '+N months') does not:
+// Jan 31 + 1 month = Feb 28/29 here.
+export function addLabDays(isoDay: string, days = 0, months = 0): string {
+  const [y, m, d] = isoDay.slice(0, 10).split("-").map(Number);
+  const target = new Date(Date.UTC(y, m - 1 + months, 1));
+  const lastDay = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
+  target.setUTCDate(Math.min(d, lastDay) + days);
+  return target.toISOString().slice(0, 10);
+}
+
 export function labLocalDate(instant?: string | null, withTime = false): string {
   if (!instant) return "";
   const d = new Date(instant);
