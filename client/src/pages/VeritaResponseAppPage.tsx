@@ -134,7 +134,9 @@ export default function VeritaResponseAppPage() {
   // FDA product deviation (21 CFR 606.171, St. Charles REQ-065): a lab event like an NCE (no accreditor),
   // plus the three 606.171(b) reportability questions and the date the information was acquired.
   const isFda = newSourceType === "fda_deviation";
-  const noAccreditor = isNce || isFda;
+  // Entry-type templates (2026-10-26, D2): a PT failure is not filed under an accreditor either; its clock counts
+  // from the PT evaluation received date.
+  const noAccreditor = isNce || isFda || isPt;
   const [fdaInfoDate, setFdaInfoDate] = useState("");
   const [fdaProductType, setFdaProductType] = useState("");
   const [fdaProductId, setFdaProductId] = useState("");
@@ -216,12 +218,12 @@ export default function VeritaResponseAppPage() {
           standard_ref: noAccreditor ? null : (newStandardRef.trim() || null),
           phase_or_severity: newPhaseOrSeverity.trim() || null,
           description: newDescription.trim() || null,
-          anchor_date: noAccreditor ? null : (newAnchorDate || null),
+          anchor_date: (isPt || !noAccreditor) ? (newAnchorDate || null) : null,
           ...(!noAccreditor && newAccreditor === "ISO" ? { due_date: newIsoDueDate || null } : {}),
           status: "open",
           source_type: newSourceType,
           event_date: isNce ? (newEventDate || null) : isFda ? (fdaInfoDate || null) : null,
-          discovered_by: noAccreditor ? (newDiscoveredBy.trim() || null) : null,
+          discovered_by: (isNce || isFda) ? (newDiscoveredBy.trim() || null) : null,
           ...(isFda ? {
             fda_info_date: fdaInfoDate || null, fda_product_type: fdaProductType || null, fda_product_id: fdaProductId.trim() || null,
             fda_event_kind: fdaKind || null, fda_affects_product: fdaAffects || null, fda_in_facility: fdaInFacility || null,
@@ -480,7 +482,8 @@ export default function VeritaResponseAppPage() {
                       onClick={() => navigate(labRoute(`/veritaresponse/${f.id}`))}
                     >
                       <td className="py-3 px-4 font-medium">
-                        {f.accreditor}
+                        {/* Only an inspection finding is filed under an accreditor; the other types show their badge alone. */}
+                        {f.accreditor === "Other" && (f as any).source_type && (f as any).source_type !== "inspection" ? "" : f.accreditor === "ISO" ? "ISO 15189" : f.accreditor}
                         {(f as any).source_type === "pt_failure" && (
                           <Badge className="ml-2 bg-purple-100 text-purple-800 dark:bg-purple-950/40 dark:text-purple-300 text-[10px] whitespace-nowrap">PT failure</Badge>
                         )}
@@ -489,6 +492,12 @@ export default function VeritaResponseAppPage() {
                         )}
                         {(f as any).source_type === "fda_deviation" && (
                           <Badge className="ml-2 bg-rose-100 text-rose-800 dark:bg-rose-950/40 dark:text-rose-300 text-[10px] whitespace-nowrap">FDA deviation</Badge>
+                        )}
+                        {(f as any).source_type === "qc_escalation" && (
+                          <Badge className="ml-2 bg-sky-100 text-sky-800 dark:bg-sky-950/40 dark:text-sky-300 text-[10px] whitespace-nowrap">QC event</Badge>
+                        )}
+                        {(f as any).source_type === "aaa_escalation" && (
+                          <Badge className="ml-2 bg-indigo-100 text-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300 text-[10px] whitespace-nowrap">Alternative assessment</Badge>
                         )}
                       </td>
                       <td className="py-3 pr-4 text-muted-foreground">{f.finding_number || "-"}</td>
@@ -552,7 +561,7 @@ export default function VeritaResponseAppPage() {
               <Button type="button" size="sm" variant={isFda ? "default" : "outline"} className={isFda ? "bg-[#006064] hover:bg-[#004d50] text-white" : ""} onClick={() => setNewSourceType("fda_deviation")} data-testid="source-fda-deviation">FDA product deviation</Button>
             </div>
             {isPt && (
-              <p className="text-xs text-muted-foreground">CLIA 42 CFR 493.801(b): unsuccessful proficiency testing must be investigated and corrected. This opens a finding with the PT context below plus the full corrective-action workflow.</p>
+              <p className="text-xs text-muted-foreground">42 CFR 493.1236(a) and (d): proficiency testing results are evaluated, and the evaluation documented. This opens a PT failure with its own investigation checklist. It is not filed under an accreditor; its clock runs from the date the evaluation was received.</p>
             )}
             {isPt && (
               <div className="grid grid-cols-2 gap-3">
@@ -571,6 +580,10 @@ export default function VeritaResponseAppPage() {
                 <div className="space-y-1">
                   <Label className="text-xs">Score</Label>
                   <Input value={newPtScore} onChange={(e) => setNewPtScore(e.target.value)} placeholder="e.g. 60% (3/5)" className="h-8 text-sm" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">PT evaluation received</Label>
+                  <Input type="date" value={newAnchorDate} onChange={(e) => setNewAnchorDate(e.target.value)} className="h-8 text-sm" data-testid="pt-eval-received" />
                 </div>
                 <div className="space-y-1 col-span-2">
                   <Label className="text-xs">Result summary</Label>

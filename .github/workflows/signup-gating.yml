@@ -110,6 +110,10 @@ jobs:
         # ISO 15189 add-on (#108): findings table rebuilt to accept ISO with rows, indexes and child rows intact;
         # settings round trip and audit; ISO findings gated by the lab flag and take the lab-entered due date.
         run: npm run test:iso-15189
+      - name: Run VeritaResponse entry-type templates integration test
+        # Per-type clocks and fields (PT, NCE, QC and alternative-assessment escalations), type_details sanitizing,
+        # closing only through the gated sign-off (Michael 2026-10-26, mock D1-D7).
+        run: npm run test:finding-type-templates
       - name: VeritaResponse copy truth (suite page, demo, intro card, finding page)
         run: node scripts/verify-veritaresponse-copy-truth.mjs
       - name: Run correlation run details integration test
