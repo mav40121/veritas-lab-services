@@ -6,6 +6,7 @@
 
 import { db } from "./db";
 import { vlsContext } from "./vlsSupport";
+import { findingTemplate } from "@shared/findingTypes";
 
 export type AuditModule =
   | "veritamap"
@@ -271,7 +272,7 @@ export interface ReminderRunSummary {
 // which test or level it was without signing in.
 export function findingReminderCandidates(sqlite: any): any[] {
   return sqlite.prepare(`
-    SELECT f.id, f.user_id, f.accreditor, f.due_date, f.status,
+    SELECT f.id, f.user_id, f.accreditor, f.source_type, f.due_date, f.status,
            f.finding_number, f.standard_ref, f.qc_run_voided_note,
            u.email AS recipient_email, u.name AS recipient_name,
            l.lab_name, l.clia_number,
@@ -321,14 +322,15 @@ export function findingReminderEmail(c: any, days: number): { subject: string; t
     `Finding: ${findingLabel}`,
     ...qcLines,
     `Standard cited: ${standardLabel}`,
-    `Accreditor: ${c.accreditor}`,
+    // Entry-type templates (2026-10-26): only an inspection finding has an accreditor; the others name their type.
+    (c.source_type && c.source_type !== "inspection") ? `Type: ${findingTemplate(c.source_type).label}` : `Accreditor: ${c.accreditor}`,
     `Due date: ${String(c.due_date).slice(0, 10)} (${dayWord} from today)`,
     `Status: ${c.status}`,
     ...(c.qc_run_voided_note ? [``, `Note: ${c.qc_run_voided_note}. If no action is needed, close the finding.`] : []),
     ``,
     `Sign in to VeritaAssure to update the response before the due date.`,
     ``,
-    `Sent automatically by VeritaResponse from VeritaAssure. To stop these reminders, mark the finding as accepted or closed.`,
+    `Sent automatically by VeritaResponse from VeritaAssure. Reminders stop when the finding is accepted, or closed with the medical director or designee sign-off.`,
   ].join("\n");
   return { subject, text };
 }
