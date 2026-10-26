@@ -114,6 +114,10 @@ jobs:
         # Per-type clocks and fields (PT, NCE, QC and alternative-assessment escalations), type_details sanitizing,
         # closing only through the gated sign-off (Michael 2026-10-26, mock D1-D7).
         run: npm run test:finding-type-templates
+      - name: Run VeritaResponse legacy cleanup integration test
+        # #109: dry run by default; voided-run findings close or flag (the #100 rule); old QC/AAA escalations move to
+        # their entry types with due dates kept; idempotent.
+        run: npm run test:veritaresponse-legacy-cleanup
       - name: VeritaResponse copy truth (suite page, demo, intro card, finding page)
         run: node scripts/verify-veritaresponse-copy-truth.mjs
       - name: Run correlation run details integration test
