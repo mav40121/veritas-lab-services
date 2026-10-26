@@ -634,18 +634,6 @@ Receipts: an integration test for the derivation (linked, unlinked fallback, una
 
 ---
 
-### 100. Voiding a QC run leaves its auto-created finding open
-
-**Effort:** XS to S
-**Importance:** Medium. The lab keeps getting reminders for a finding whose run was voided as entered in error.
-
-**What:** when a QC run that auto-created a finding is voided (e.g., run 957, voided 10/12 as "Entered incorrectly during training"), the finding stays open and its reminders continue. Options: close the finding automatically with the void reason as the closing note, or flag it "run voided, close?" for the supervisor. Michael picks which; either needs an audit-trail entry.
-
-**Source:** Mike Hiltunen, REQ-063, 2026-10-14. Called "parked" in chat that day but never written here.
-**Status:** Built to Claude's recommended option on draft PR #1711 (untouched finding closes with the void reason; a worked finding is flagged "QC run voided"; tests/integration/qc-void-finding.test.ts 11/11 PASS). Michael picked this option (2026-10-26, "1"); merging after the US backup switch.
-
----
-
 ### 101. "Staff Portal" wording is still on the Plans page and in 11 other screens
 
 **Effort:** XS to S (copy sweep plus a check of each screen)
@@ -732,6 +720,12 @@ Open questions for the scope:
 ---
 
 ## CLOSED (audit trail)
+
+### C103. Voiding a QC run leaves its auto-created finding open (was #100)
+
+**Effort:** was XS to S / **Importance:** Medium.
+
+**Closure evidence:** PR #1711 (approved by Michael 2026-10-26, option 1), commits 9e04df15 and 2a6e897a, live on www.veritaslabservices.com in a298a7c7 (health check 2026-10-26 18:33Z). An untouched finding closes with the void reason, a completion date, a history row and an audit row; a finding with work on it is flagged "QC run voided" (findings.qc_run_voided_note, present in the production schema 2026-10-26) with a banner and a reminder line. Receipts: tests/integration/qc-void-finding.test.ts (11 checks, in signup-gating CI) and tests/playwright/qc-void-finding.spec.ts (toast and banner, light and dark). Source: Mike Hiltunen, REQ-063.
 
 ### C102. Calibration Verification + Correlation as one study (was #104)
 
