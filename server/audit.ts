@@ -272,7 +272,7 @@ export interface ReminderRunSummary {
 export function findingReminderCandidates(sqlite: any): any[] {
   return sqlite.prepare(`
     SELECT f.id, f.user_id, f.accreditor, f.due_date, f.status,
-           f.finding_number, f.standard_ref,
+           f.finding_number, f.standard_ref, f.qc_run_voided_note,
            u.email AS recipient_email, u.name AS recipient_name,
            l.lab_name, l.clia_number,
            qc.analyte AS qc_analyte, qc.level AS qc_level, qc.lot_number AS qc_lot,
@@ -324,6 +324,7 @@ export function findingReminderEmail(c: any, days: number): { subject: string; t
     `Accreditor: ${c.accreditor}`,
     `Due date: ${String(c.due_date).slice(0, 10)} (${dayWord} from today)`,
     `Status: ${c.status}`,
+    ...(c.qc_run_voided_note ? [``, `Note: ${c.qc_run_voided_note}. If no action is needed, close the finding.`] : []),
     ``,
     `Sign in to VeritaAssure to update the response before the due date.`,
     ``,

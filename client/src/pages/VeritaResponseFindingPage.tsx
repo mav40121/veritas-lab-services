@@ -959,6 +959,17 @@ export default function VeritaResponseFindingPage() {
         </Card>
       )}
 
+      {/* Parking lot #100: the QC run behind this finding was voided after work on the finding had started. */}
+      {(finding as any).qc_run_voided_note && finding.status !== "closed" && (
+        <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-900/10 dark:border-amber-800 p-4" data-testid="finding-qc-run-voided">
+          <AlertTriangle size={18} className="mt-0.5 shrink-0 text-amber-600 dark:text-amber-400" />
+          <div className="text-sm">
+            <span className="font-semibold">QC run voided.</span>{" "}
+            {(finding as any).qc_run_voided_note}. If no further action is needed, document that and close the finding.
+          </div>
+        </div>
+      )}
+
       {/* Due-date alert */}
       {finding.due_date && (
         <div

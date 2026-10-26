@@ -555,7 +555,16 @@ export default function VeritaQCAppPage() {
         body: JSON.stringify({ reason: reason.trim() }),
       });
       if (!res.ok) throw new Error(`void ${res.status}`);
-      toast({ title: "Result voided" });
+      // Parking lot #100: say what happened to a VeritaResponse finding escalated from this run.
+      const body = await res.json().catch(() => ({}));
+      const closed = (body.findings || []).filter((f: any) => f.action === "closed").length;
+      const flagged = (body.findings || []).filter((f: any) => f.action === "flagged").length;
+      toast({
+        title: "Result voided",
+        description: closed || flagged
+          ? [closed ? `The finding from this run was closed with your reason as the note.` : "", flagged ? `The finding from this run already has work on it, so it is flagged "QC run voided" for review instead of closed.` : ""].filter(Boolean).join(" ")
+          : undefined,
+      });
       if (selectedLotId) await loadResults(selectedLotId);
     } catch (err) {
       toast({ title: "Void failed", description: String(err), variant: "destructive" });
