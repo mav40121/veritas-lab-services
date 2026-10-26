@@ -6,7 +6,6 @@
 // lab B (the stale UNIQUE(user_id, requirement_id) made them share one row).
 //
 // Run: DB_PATH=.tmp-reqscope.db JWT_SECRET=t ADMIN_SECRET=localadmin STRIPE_SECRET_KEY=sk_test_dummy \
-//   STRIPE_WEBHOOK_SECRET=whsec_dummy tsx tests/integration/requirement-status-labscope.test.ts
 
 import http from "node:http";
 import express from "express";
@@ -32,7 +31,7 @@ async function main() {
   check("old UNIQUE(user_id, requirement_id) gone", !/UNIQUE\s*\(\s*user_id\s*,\s*requirement_id\s*\)/i.test(tblSql));
 
   // 2. Seed one owner + two labs.
-  const prov = await (await fetch(base + "/api/admin/provision-owner-lab", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ secret: "localadmin", ownerEmail: "o@qa.test", ownerName: "O", labName: "Lab A", cliaNumber: "22D0000A01", plan: "enterprise" }) })).json();
+  const prov = await (await fetch(base + "/api/admin/provision-owner-lab", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ secret: process.env.ADMIN_SECRET, ownerEmail: "o@qa.test", ownerName: "O", labName: "Lab A", cliaNumber: "22D0000A01", plan: "enterprise" }) })).json();
   const ownerId = prov.owner_user_id, labA = prov.lab_id;
   const now = new Date().toISOString();
   const labB = Number(sqlite.prepare("INSERT INTO labs (clia_number, lab_name, owner_user_id, plan, subscription_status, created_at, updated_at) VALUES (?,?,?,?,'active',?,?)").run("22D0000B02", "Lab B", ownerId, "enterprise", now, now).lastInsertRowid);
