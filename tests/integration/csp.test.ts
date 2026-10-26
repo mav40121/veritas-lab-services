@@ -16,7 +16,7 @@ import crypto from "node:crypto";
 import { createRequire } from "node:module";
 import { registerRoutes } from "../../server/routes";
 import { db } from "../../server/db";
-import { inlineScriptHashes, buildCsp, cspHeaderName, summarizeCspReport, INJECTED_INLINE_SCRIPTS } from "../../server/securityHeaders";
+import { inlineScriptHashes, buildCsp, cspHeaderName, summarizeCspReport, INJECTED_INLINE_SCRIPTS, imgTrialCsp } from "../../server/securityHeaders";
 
 (globalThis as any).require ??= createRequire(import.meta.url);
 
@@ -63,6 +63,14 @@ async function main() {
   check("4a. legacy report: directive, origin only, path with ids collapsed and no query", a?.directive === "script-src-elem" && a?.blocked === "https://evil.example.com" && a?.page === "/labs/:id/veritacomp-app/:id", JSON.stringify(a));
   check("4b. Reporting API report parsed", b?.directive === "img-src" && b?.blocked === "inline" && b?.page === "/pricing", JSON.stringify(b));
   check("4c. junk bodies yield nothing", summarizeCspReport(null).length === 0 && summarizeCspReport("x").length === 0);
+
+  // 6) img-src trial (report-only): no bare https: wildcard, Google Analytics pixels allowed, reports to the counter;
+  //    the enforced policy is unchanged until the trial's reports are reviewed
+  const trial = imgTrialCsp();
+  check("6a. trial img-src has no bare https: wildcard", /^img-src /.test(trial) && !/ https:( |;|$)/.test(trial), trial);
+  check("6b. trial allows this site, data:, blob: and Google Analytics pixels", ["'self'", "data:", "blob:", "https://*.google-analytics.com", "https://*.googletagmanager.com"].every((s) => trial.includes(s)));
+  check("6c. trial reports to /api/csp-report and restricts nothing but images", trial.endsWith("report-uri /api/csp-report") && !/default-src|script-src|connect-src/.test(trial));
+  check("6d. enforced img-src unchanged during the trial", buildCsp([]).includes("img-src 'self' data: blob: https:"));
 
   // 5) endpoints
   const app = express();

@@ -59,6 +59,15 @@ export function buildCsp(scriptHashes: string[]): string {
   ].join("; ");
 }
 
+// Trial for the OWASP ZAP "CSP: Wildcard Directive" warning (2026-10-26): the enforced img-src allows images from any
+// https origin. This report-only policy names the only outside image origins the site itself uses (Google Analytics'
+// pixels), so /api/csp-report counts anything else a page loads (for example an image pasted into a customer's
+// document) before the enforced img-src is narrowed. Sent next to the enforced policy; it blocks nothing.
+export const IMG_SRC_TRIAL = "img-src 'self' data: blob: https://*.google-analytics.com https://*.googletagmanager.com";
+export function imgTrialCsp(): string {
+  return `${IMG_SRC_TRIAL}; report-uri /api/csp-report`;
+}
+
 // Enforced by default since 2026-10-16 (Q56: one would-be block in production Report-Only, Google Analytics' collect
 // call to www.google.com, now allowed). CSP_REPORT_ONLY=1 switches back to report-only without a code change.
 export function cspHeaderName(): string {
