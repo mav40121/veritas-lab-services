@@ -32473,10 +32473,13 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const headers = [
         "Certificate Name", "Type", "Number", "Issuing Body", "Issued Date",
         "Expiration Date", "Days Until Expiration", "Status", "Lab Director",
-        "Documents Count", "Notes",
+        "Documents Count", "CLIA Certificate Type", "Certificate Link", "Notes",
       ];
 
-      const colWidths = [28, 18, 20, 35, 16, 16, 22, 16, 22, 18, 30];
+      // Parking lot #103 (2026-10-26): the CLIA certificate type and the certificate link (CLIA site registry,
+      // #1643) were on screen but not in the export. Added before Notes so the Status column stays column 8.
+      const colWidths = [28, 18, 20, 35, 16, 16, 22, 16, 22, 18, 20, 40, 30];
+      const cliaTypeLabels: Record<string, string> = { waiver: "Waiver", ppm: "PPM", compliance: "Compliance", accreditation: "Accreditation", registration: "Registration" };
       ws.columns = headers.map((h, i) => ({ header: h, key: `col${i}`, width: colWidths[i] ?? 18 }));
 
       const today = new Date();
@@ -32506,7 +32509,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         return [
           c.cert_name, typeLabels[c.cert_type] || c.cert_type, c.cert_number || "",
           c.issuing_body || "", c.issued_date || "", c.expiration_date || "",
-          daysUntil, status, c.lab_director || "", docCount?.cnt || 0, c.notes || "",
+          daysUntil, status, c.lab_director || "", docCount?.cnt || 0,
+          c.clia_certificate_type ? (cliaTypeLabels[c.clia_certificate_type] || c.clia_certificate_type) : "",
+          c.link_url || "", c.notes || "",
         ];
       });
 

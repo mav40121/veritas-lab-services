@@ -91,6 +91,9 @@ jobs:
       - name: Run lab-keyed CLIA certificate integration test
         # VeritaLab CLIA certificate per lab, numbered from labs.clia_number (parking lot #92).
         run: npm run test:clia-cert-lab-keyed
+      - name: Run VeritaLab export columns integration test
+        # The certificate export carries the CLIA certificate type and link; Status stays column 8 (parking lot #103).
+        run: npm run test:veritalab-export-columns
       - name: Run stale lab-owner row integration test
         # A leftover lab_members 'owner' row on someone who is not labs.owner_user_id gave a second
         # owner (San Carlos lab 2, 2026-10-15). repair-lab-admins demotes it to admin and never touches
