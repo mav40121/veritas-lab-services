@@ -6909,6 +6909,9 @@ sqlite.exec(`
       if (!have.has("fda_report_due")) sqlite.exec("ALTER TABLE findings ADD COLUMN fda_report_due TEXT");
       if (!have.has("fda_submitted_date")) sqlite.exec("ALTER TABLE findings ADD COLUMN fda_submitted_date TEXT");
       if (!have.has("fda_confirmation_number")) sqlite.exec("ALTER TABLE findings ADD COLUMN fda_confirmation_number TEXT");
+      // Parking lot #100 (2026-10-26): set when the QC run behind a VeritaQC-escalated finding is voided after work on the
+      // finding had started, so the finding shows "run voided, review and close" instead of being closed automatically.
+      if (!have.has("qc_run_voided_note")) sqlite.exec("ALTER TABLE findings ADD COLUMN qc_run_voided_note TEXT");
     }
   } catch {
     // fresh DB: CREATE TABLE above handled it

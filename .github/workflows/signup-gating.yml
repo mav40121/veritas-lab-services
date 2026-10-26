@@ -103,6 +103,9 @@ jobs:
       - name: Run VeritaPolicy requirement status lab-scope integration test
         # One owner, two labs: a requirement edit on lab A never overwrites lab B (UNIQUE(lab_id, requirement_id)).
         run: npm run test:requirement-status-labscope
+      - name: Run QC void settles its finding integration test
+        # Voiding a QC run closes its untouched VeritaResponse finding or flags a worked one (parking lot #100).
+        run: npm run test:qc-void-finding
       - name: Run stale lab-owner row integration test
         # A leftover lab_members 'owner' row on someone who is not labs.owner_user_id gave a second
         # owner (San Carlos lab 2, 2026-10-15). repair-lab-admins demotes it to admin and never touches

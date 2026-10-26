@@ -4964,8 +4964,60 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (!row) return res.status(404).json({ error: "QC result not found in this lab" });
     if (row.voided_at) return res.status(409).json({ error: "This result is already voided" });
     sqlite.prepare("UPDATE qc_results SET voided_at = datetime('now'), voided_by_user_id = ?, void_reason = ? WHERE id = ?").run(req.userId, reason, id);
-    res.json({ ok: true, id });
+    const findings = settleFindingsForVoidedRun(sqlite, req, id, reason);
+    res.json({ ok: true, id, findings });
   });
+
+  // Parking lot #100 (2026-10-26): a finding VeritaQC escalated from a run that is later voided as entered in error
+  // kept its reminders going (Hiltunen run 957). Now, when the run is voided: a finding nobody has worked yet (still
+  // open, no containment, root cause, corrective or preventive action, monitoring plan or sign-off) is closed, with
+  // the void reason as the closing note; a finding someone has worked is flagged instead (qc_run_voided_note, shown
+  // on the finding and in its reminders) so a person decides. Both are in finding_history and the audit trail.
+  // The finding is reached through the corrective action stamped "VeritaResponse#<finding id>" on that run.
+  function settleFindingsForVoidedRun(sqlite: any, req: any, resultId: number, reason: string): Array<{ id: number; action: "closed" | "flagged" }> {
+    const out: Array<{ id: number; action: "closed" | "flagged" }> = [];
+    try {
+      const rows = sqlite.prepare(
+        `SELECT DISTINCT f.* FROM qc_corrective_actions ca
+           JOIN findings f ON ca.nce_reference = 'VeritaResponse#' || f.id
+          WHERE ca.qc_result_id = ? AND ca.lab_id = ? AND f.lab_id = ?`
+      ).all(resultId, req.scope.labId, req.scope.labId) as any[];
+      const who = (sqlite.prepare("SELECT name FROM users WHERE id = ?").get(req.userId) as any)?.name || `User ${req.userId}`;
+      const day = labToday();
+      for (const f of rows) {
+        if (f.status === "closed" || f.status === "accepted") continue;
+        const blank = (v: any) => !String(v ?? "").trim();
+        const untouched = f.status === "open" && !f.signed_by &&
+          [f.containment, f.root_cause, f.root_cause_category, f.corrective_action, f.preventive_action, f.monitoring_plan].every(blank);
+        const note = `The QC run behind this finding (result #${resultId}) was voided on ${day} by ${who}. Reason: ${reason}`;
+        if (untouched) {
+          sqlite.prepare(
+            `UPDATE findings SET status = 'closed', completion_date = COALESCE(completion_date, ?),
+                    surveyor_notes = TRIM(COALESCE(surveyor_notes, '') || char(10) || char(10) || ?), updated_at = datetime('now')
+              WHERE id = ?`
+          ).run(day, `Closed automatically: ${note}`, f.id);
+          out.push({ id: f.id, action: "closed" });
+        } else {
+          sqlite.prepare("UPDATE findings SET qc_run_voided_note = ?, updated_at = datetime('now') WHERE id = ?").run(note, f.id);
+          out.push({ id: f.id, action: "flagged" });
+        }
+        const action = out[out.length - 1].action;
+        try {
+          sqlite.prepare("INSERT INTO finding_history (finding_id, event, by_user_id, payload) VALUES (?, ?, ?, ?)")
+            .run(f.id, action === "closed" ? "closed_qc_run_voided" : "qc_run_voided", req.userId, JSON.stringify({ qc_result_id: resultId, reason }));
+        } catch {}
+        logAudit({
+          userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId,
+          module: "veritaqc", action: "update", entityType: action === "closed" ? "finding.closed_qc_run_voided" : "finding.qc_run_voided",
+          entityId: f.id, entityLabel: `${f.finding_number || "#" + f.id}: QC run #${resultId} voided`,
+          before: { status: f.status }, after: { status: action === "closed" ? "closed" : f.status, reason }, ipAddress: req.ip,
+        });
+      }
+    } catch (err: any) {
+      console.error("[qc/void] finding follow-up failed:", err?.message);
+    }
+    return out;
+  }
 
   // POST /api/labs/:labId/qc/results/:id/notes: append-only investigation note
   // on a saved QC point (2026-08-25, MedStar/Hiltunen). The original point, its
