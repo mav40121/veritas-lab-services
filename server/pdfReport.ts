@@ -13,6 +13,8 @@ import { labLocalDate } from "./dateLocal";
 import type { Study } from "@shared/schema";
 import { isQuizImage } from "@shared/quizImages";
 import { hasRunDetails, runDetailRows } from "@shared/studyRunDetails";
+import { PT_CHECKLIST, parseTypeDetails, ptScorePercent, PATIENT_IMPACT, FDA_DISPOSITIONS, QC_CAUSES } from "@shared/findingTypes";
+import { rootCauseLabel } from "@shared/ptFailure";
 import { assessmentTypeLabel, evaluationDueDate } from "@shared/competencyEvaluation";
 import { existsSync as _teaExistsSync, readFileSync as _teaReadFileSync } from "fs";
 import { resolve as _teaResolve } from "path";
@@ -8299,6 +8301,239 @@ export async function generateInternalNcePDF(input: Cms2567Input, licenseCtx?: P
   try {
     const stamped = applyLicenseToPuppeteer(html, VERITARESPONSE_FOOTER_TEMPLATE, licenseCtx);
     await setPdfContent(page, stamped.html);
+    const pdfBuffer = await page.pdf({
+      format: "Letter",
+      printBackground: true,
+      displayHeaderFooter: true,
+      headerTemplate: "<span></span>",
+      footerTemplate: stamped.footerTemplate,
+      margin: { top: "14mm", right: "15mm", bottom: "16mm", left: "15mm" },
+    });
+    return stampPdfAuthor(pdfBuffer);
+  } finally {
+    await page.close();
+  }
+}
+
+// ─── VeritaResponse entry-type reports (Michael 2026-10-26, mock D3, D5, D7) ─────────────────────────────────
+// PT investigation (and its alternative-assessment variant), FDA deviation investigation summary, and the QC event
+// and patient look-back report. Layouts approved from Product Specs\VeritaResponse\VeritaResponse_Report_Layouts_
+// MOCK_2026-10-26.pdf. House style of the internal NCE report; the medical director or designee block sits on
+// page 1; CFR is the only regulation quoted.
+export type TypeReportKind = "pt_failure" | "aaa_escalation" | "fda_deviation" | "qc_escalation";
+export const TYPE_REPORT_KINDS: TypeReportKind[] = ["pt_failure", "aaa_escalation", "fda_deviation", "qc_escalation"];
+export interface TypeReportInput extends Cms2567Input {
+  // QC escalations: the run behind the finding (analyte, level, lot, rule, value, date, instrument).
+  qc?: { analyte?: string | null; level?: string | null; lot_number?: string | null; rule_code?: string | null; result_value?: any; result_date?: string | null; instrument?: string | null } | null;
+}
+
+const filledVal = (v: any) => v !== undefined && v !== null && String(v).trim() !== "";
+// Printable height of a Letter page with 14 mm and 16 mm margins is about 943 px; CI fonts lay out about 19 px taller
+// than local (reference_pdf_guard_ci_font_offset), so page 1 is treated as ending at 900 px.
+const TYPE_REPORT_PAGE1_LIMIT_PX = 900;
+export function validateTypeReport(finding: any): { ok: boolean; missing: string[] } {
+  const missing: string[] = [];
+  const d = parseTypeDetails(finding?.type_details);
+  if (!filledVal(finding?.description)) missing.push("What happened");
+  if (!filledVal(finding?.corrective_action)) missing.push("Corrective action");
+  if (finding?.source_type === "pt_failure") {
+    const answered = Object.values(d.pt_checklist || {}).some((r: any) => filledVal(r?.answer));
+    if (!answered) missing.push("Investigation checklist (at least one answer)");
+  } else if (finding?.source_type === "qc_escalation") {
+    if (!filledVal(d.lookback_results) && !filledVal(d.patient_impact)) missing.push("Patient look-back (results evaluated or patient impact)");
+  } else if (finding?.source_type === "aaa_escalation") {
+    if (!filledVal(d.aaa_results)) missing.push("Results against the criteria");
+  } else if (finding?.source_type === "fda_deviation") {
+    if (!filledVal(d.fda_disposition)) missing.push("Disposition of the product");
+  }
+  return { ok: missing.length === 0, missing };
+}
+
+const TYPE_REPORT_CSS = `
+  @page { size: Letter; margin: 14mm 15mm 16mm 15mm; }
+  body { font-family: 'Calibri', 'Helvetica Neue', Arial, sans-serif; color: #28251D; font-size: 9pt; line-height: 1.4; margin: 0; }
+  .header { border-bottom: 2px solid #01696F; padding-bottom: 8px; margin-bottom: 10px; }
+  .header-top { display: flex; justify-content: space-between; align-items: baseline; }
+  .form-id { font-size: 7.5pt; color: #7A7974; letter-spacing: 0.05em; }
+  .title { font-size: 14pt; font-weight: 700; color: #01696F; margin-top: 4px; }
+  .subtitle { font-size: 9pt; color: #28251D; margin-top: 2px; }
+  .lab-row { display: flex; justify-content: space-between; font-size: 8.5pt; margin-top: 6px; color: #0A3A3D; font-weight: 600; }
+  .ident-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 4px 12px; margin-bottom: 8px; font-size: 8pt; }
+  .ident-grid .label { color: #7A7974; text-transform: uppercase; letter-spacing: 0.04em; font-size: 7pt; }
+  .ident-grid .value { color: #28251D; font-weight: 600; }
+  .section { margin-top: 8px; }
+  .section-head { background: #01696F; color: #FFFFFF; font-weight: 700; font-size: 9pt; padding: 4px 8px; letter-spacing: 0.03em; }
+  .section-sub { font-size: 7.5pt; font-weight: 500; opacity: 0.85; margin-top: 1px; }
+  .section-body { border: 1px solid #D4D1CA; border-top: none; padding: 6px 10px; font-size: 8.5pt; }
+  .resp-element { margin-top: 6px; padding-top: 5px; border-top: 1px dashed #D4D1CA; }
+  .resp-element:first-child { margin-top: 0; padding-top: 0; border-top: none; }
+  .resp-label { font-size: 7pt; color: #01696F; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 1px; }
+  .resp-content em { color: #7A7974; font-style: italic; }
+  table.chk { width: 100%; border-collapse: collapse; font-size: 8pt; }
+  table.chk th { background: #E6F2F2; color: #0A3A3D; text-align: left; padding: 3px 5px; font-size: 7.5pt; }
+  table.chk td { border-bottom: 1px solid #D0D0D0; padding: 3px 5px; vertical-align: top; }
+  table.chk tr:nth-child(even) td { background: #EBF3F8; }
+  .ans-yes { color: #437A22; font-weight: 700; } .ans-no { color: #A12C7B; font-weight: 700; } .ans-na, .ans-none { color: #7A7974; font-weight: 700; }
+  .status-bad { font-weight: 700; color: #A12C7B; }
+  .cite { font-size: 7.5pt; color: #0A3A3D; font-style: italic; margin-top: 4px; }
+  .director-block { margin-top: 10px; border: 1.5px solid #01696F; padding: 8px 12px; background: #F7F6F2; page-break-inside: avoid; }
+  .director-title { font-size: 8pt; font-weight: 700; color: #01696F; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 5px; }
+  .director-checkbox { display: inline-block; margin-right: 14px; font-size: 8.5pt; }
+  .director-checkbox .box { display: inline-block; width: 10px; height: 10px; border: 1.5px solid #28251D; margin-right: 4px; vertical-align: middle; }
+  .director-fields { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 10px; margin-top: 6px; font-size: 8pt; }
+  .director-field-label { color: #7A7974; font-size: 7pt; text-transform: uppercase; letter-spacing: 0.04em; }
+  .director-field-value { border-bottom: 1px solid #28251D; min-height: 14px; padding: 2px 0; font-weight: 600; }
+  .director-attestation { margin-top: 6px; font-size: 7.5pt; font-style: italic; }
+  .footer-note { margin-top: 8px; font-size: 7pt; color: #7A7974; border-top: 1px dashed #D4D1CA; padding-top: 5px; }
+`;
+
+function buildTypeReportHTML(input: TypeReportInput, directorFirst = false): string {
+  const { finding, user, qc } = input;
+  const kind = finding.source_type as TypeReportKind;
+  const d = parseTypeDetails(finding.type_details);
+  const txt = (val: any, fallback = "Not recorded") => (filledVal(val) ? escHtml(String(val)).replace(/\n/g, "<br>") : `<em>${fallback}</em>`);
+  const one = (val: any, fallback = "Not recorded") => (filledVal(val) ? escHtml(String(val)) : fallback);
+  const optLabel = (opts: readonly { value: string; label: string }[], val: any) => opts.find((o) => o.value === val)?.label || "";
+  const labName = escHtml(user?.lab_name || user?.name || "Laboratory");
+  const cliaRaw = user?.clia_number || (user as any)?.cliaNumber || "";
+  const clia = cliaRaw ? `CLIA: ${escHtml(cliaRaw)}` : "CLIA: Not on file, enter in account settings";
+  const dateGen = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+  const num = escHtml(finding.finding_number || `#${finding.id}`);
+  const head = (formId: string, title: string, sub: string, ref: string) => `
+  <div class="header">
+    <div class="header-top">
+      <div><div class="form-id">${formId}</div><div class="title">${title}</div><div class="subtitle">${sub}</div></div>
+      <div style="text-align:right;font-size:7.5pt;color:#7A7974;">Generated ${escHtml(dateGen)}<br>${ref}</div>
+    </div>
+    <div class="lab-row"><span>${labName}</span><span>${clia}</span></div>
+  </div>`;
+  const ident = (pairs: [string, string][]) => `<div class="ident-grid">${pairs.map(([l, val]) => `<div><div class="label">${l}</div><div class="value">${val}</div></div>`).join("")}</div>`;
+  const section = (title: string, sub: string, body: string) => `<div class="section"><div class="section-head">${title}${sub ? `<div class="section-sub">${sub}</div>` : ""}</div><div class="section-body">${body}</div></div>`;
+  const el = (label: string, html: string) => `<div class="resp-element"><div class="resp-label">${label}</div><div class="resp-content">${html}</div></div>`;
+  const ans = (a: string) => {
+    const label = a === "yes" ? "Yes" : a === "no" ? "No" : a === "na" ? "N/A" : "Not answered";
+    return `<span class="ans-${a === "yes" || a === "no" || a === "na" ? a : "none"}">${label}</span>`;
+  };
+  const yn = (x: any) => ans(x === 1 || x === "1" || x === true ? "yes" : x === 0 || x === "0" || x === false ? "no" : "");
+  const capa = (extra: [string, any][] = []) => section("Corrective and Preventive Action", "(Root cause and the actions taken)", [
+    ...(filledVal(finding.immediate_action) ? [el("Immediate action", txt(finding.immediate_action))] : []),
+    ...(filledVal(finding.containment) ? [el("Containment", txt(finding.containment))] : []),
+    el("Root cause", txt(finding.root_cause)),
+    el("Corrective action", txt(finding.corrective_action)),
+    ...(filledVal(finding.preventive_action) ? [el("Preventive action", txt(finding.preventive_action))] : []),
+    ...extra.filter(([, val]) => filledVal(val)).map(([l, val]) => el(l, txt(val))),
+    ...(filledVal(finding.monitoring_plan) ? [el("Monitoring", txt(finding.monitoring_plan))] : []),
+    ...(filledVal(finding.completion_date) ? [el("Completion date", txt(finding.completion_date))] : []),
+  ].join(""));
+  const signedBy = escHtml(finding.signed_by || "");
+  const signedAt = finding.signed_at ? escHtml(labLocalDate(finding.signed_at, true)) : "";
+  const director = (what: string) => `
+  <div class="director-block">
+    <div class="director-title">Medical Director or Designee Review</div>
+    <div><span class="director-checkbox"><span class="box"></span>Accepted</span><span class="director-checkbox"><span class="box"></span>Not accepted, returned for revision</span></div>
+    <div class="director-fields">
+      <div><div class="director-field-label">Print Name / Initials</div><div class="director-field-value">${signedBy || "&nbsp;"}</div></div>
+      <div><div class="director-field-label">Signature</div><div class="director-field-value">&nbsp;</div></div>
+      <div><div class="director-field-label">Date</div><div class="director-field-value">${signedAt || "&nbsp;"}</div></div>
+    </div>
+    <div class="director-attestation">${what} Final approval and clinical determination must be made by the laboratory director or designee.</div>
+  </div>`;
+  const doc = (title: string, body: string) => `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${title} - ${num}</title><style>${TYPE_REPORT_CSS}</style></head><body>${body}</body></html>`;
+
+  if (kind === "pt_failure") {
+    const pct = ptScorePercent(finding.pt_score);
+    const status = pct == null ? "See score" : pct < 80 ? `<span class="status-bad">Unsatisfactory</span>` : "At or above 80 percent";
+    const rows = PT_CHECKLIST.map((it) => {
+      const r = (d.pt_checklist || {})[it.value] || {};
+      return `<tr><td>${escHtml(it.label)}</td><td>${ans(r.answer || "")}</td><td>${filledVal(r.note) ? escHtml(r.note) : ""}</td></tr>`;
+    }).join("");
+    return doc("PT Investigation Report", `
+      ${head("PROFICIENCY TESTING INVESTIGATION", "PT Investigation Report", "Evaluation of an unsatisfactory proficiency testing result and the corrective action taken", `PT Failure ${num}`)}
+      ${ident([["Program", one(finding.pt_program)], ["Event", one(finding.pt_event)], ["Analyte", one(finding.pt_analyte)], ["Score", one(finding.pt_score)],
+               ["Evaluation received", one(finding.anchor_date)], ["Target date", one(finding.due_date)], ["Event status", status], ["Root cause category", escHtml(rootCauseLabel(finding.root_cause_category) || "Not selected")]])}
+      ${directorFirst ? director("This proficiency testing investigation is reviewed by the medical director or designee.") : ""}
+      ${section("What Happened", "", txt(finding.description))}
+      ${section("Investigation Checklist", "(42 CFR 493.1236(a): the laboratory must review and evaluate the results obtained on proficiency testing)",
+        `<table class="chk"><tr><th style="width:30%">Area</th><th style="width:11%">Answer</th><th>What was checked and found</th></tr>${rows}</table>`)}
+      ${capa([["Evidence of correction (kept for CMS)", d.evidence_of_correction]])}
+      ${directorFirst ? "" : director("This proficiency testing investigation is reviewed by the medical director or designee.")}
+      <div class="footer-note">Generated by VeritaResponse&trade; from VeritaAssure&trade;. All proficiency testing evaluation and verification activities must be documented (42 CFR 493.1236(d)).</div>`);
+  }
+  if (kind === "aaa_escalation") {
+    return doc("Alternative Assessment Investigation Report", `
+      ${head("ALTERNATIVE PERFORMANCE ASSESSMENT", "Alternative Assessment Investigation Report", "Accuracy verification that failed, the investigation and the corrective action", `Alternative Assessment ${num}`)}
+      ${ident([["Reference", one(finding.standard_ref)], ["Escalated", one(finding.anchor_date)], ["Target date", one(finding.due_date)], ["Next verification", one(d.aaa_next_date)],
+               ["Patient impact", escHtml(optLabel(PATIENT_IMPACT, d.patient_impact) || "Not recorded")], ["Status", one(finding.status)], ["", ""], ["", ""]])}
+      ${directorFirst ? director("This alternative assessment investigation is reviewed by the medical director or designee.") : ""}
+      ${section("What Happened", "", txt(finding.description))}
+      ${section("Accuracy Verification", "(42 CFR 493.1236(c): at least twice annually, the laboratory must verify the accuracy of tests without CMS-approved proficiency testing)",
+        el("How accuracy was verified", txt(d.aaa_method)) + el("Acceptance criteria", txt(d.aaa_criteria)) + el("Results against the criteria", txt(d.aaa_results)))}
+      ${capa()}
+      ${directorFirst ? "" : director("This alternative assessment investigation is reviewed by the medical director or designee.")}
+      <div class="footer-note">Generated by VeritaResponse&trade; from VeritaAssure&trade; from a VeritaPT&trade; alternative assessment. All proficiency testing evaluation and verification activities must be documented (42 CFR 493.1236(d)).</div>`);
+  }
+  if (kind === "fda_deviation") {
+    const all3 = finding.fda_affects_product === 1 && finding.fda_in_facility === 1 && finding.fda_distributed === 1;
+    const anyNo = finding.fda_affects_product === 0 || finding.fda_in_facility === 0 || finding.fda_distributed === 0;
+    const reportable = all3 ? `<span class="status-bad">Yes (all three criteria)</span>` : anyNo ? "No" : "Not determined";
+    const product = String(finding.fda_product_type || "").replace(/_/g, " ");
+    return doc("FDA Deviation Investigation Summary", `
+      ${head("BIOLOGICAL PRODUCT DEVIATION", "FDA Deviation Investigation Summary", "Investigation record and the facts for Form FDA 3486 (21 CFR 606.171)", `FDA Product Deviation ${num}`)}
+      ${ident([["Product", one(product)], ["Unit / product ID", one(finding.fda_product_id)], ["Event kind", one(String(finding.fda_event_kind || "").replace(/_/g, " "))], ["Information date", one(finding.fda_info_date)],
+               ["Reportable", reportable], ["Report by", one(finding.fda_report_due, all3 ? "Not recorded" : "Not reportable")], ["Submitted", one(finding.fda_submitted_date, "Not submitted")], ["Confirmation (BPDR)", one(finding.fda_confirmation_number)]])}
+      ${directorFirst ? director("This biological product deviation investigation is reviewed by the medical director or designee.") : ""}
+      ${section("Reportability (21 CFR 606.171(b))", "",
+        `<table class="chk"><tr><th>Criterion</th><th style="width:12%">Answer</th></tr>
+         <tr><td>A deviation or unexpected event that may affect the safety, purity or potency of the product</td><td>${yn(finding.fda_affects_product)}</td></tr>
+         <tr><td>Occurred in this facility or one under contract</td><td>${yn(finding.fda_in_facility)}</td></tr>
+         <tr><td>The product was distributed</td><td>${yn(finding.fda_distributed)}</td></tr></table>
+         <div class="cite">21 CFR 606.171(c): report not later than 45 calendar days from acquiring the information; 606.171(d): report on Form FDA-3486.</div>`)}
+      ${section("Event and Disposition", "", el("What happened", txt(finding.description)) + el("Disposition", escHtml(optLabel(FDA_DISPOSITIONS, d.fda_disposition) || "Not recorded") + (filledVal(d.fda_disposition_note) ? `<br>${txt(d.fda_disposition_note)}` : "")))}
+      ${capa()}
+      ${directorFirst ? "" : director("This biological product deviation investigation is reviewed by the medical director or designee.")}
+      <div class="footer-note">Generated by VeritaResponse&trade; from VeritaAssure&trade;. This summary is not Form FDA 3486. Deviations should be investigated whether or not they are reportable (21 CFR 606.171(f)).</div>`);
+  }
+  // qc_escalation
+  const analyteLevel = [qc?.analyte, qc?.level].filter(filledVal).join(", ");
+  const valueDate = [filledVal(qc?.result_value) ? String(qc?.result_value) : "", qc?.result_date ? String(qc.result_date).slice(0, 10) : ""].filter(Boolean).join(", ");
+  // The escalation names the finding "QC-<rule>", or "QC-QC" when the corrective action was not tied to a rule.
+  const fromNumber = String(finding.finding_number || "").replace(/^QC-/, "");
+  const rule = qc?.rule_code || (fromNumber && fromNumber !== "QC" ? fromNumber : "");
+  return doc("QC Event Report", `
+    ${head("QC EVENT AND PATIENT LOOK-BACK", "QC Event Report", "Control results outside the laboratory's criteria, the patient look-back and the corrective action", `QC Event ${num}`)}
+    ${ident([["Analyte / level", one(analyteLevel)], ["Control lot", one(qc?.lot_number)], ["Rule", one(rule)], ["Value / run date", one(valueDate)],
+             ["Instrument", one(qc?.instrument)], ["Escalated", one(finding.anchor_date)], ["Target date", one(finding.due_date)], ["Cause", escHtml(optLabel(QC_CAUSES, d.qc_cause) || "Not recorded")]])}
+    ${directorFirst ? director("This QC event and patient look-back are reviewed by the medical director or designee.") : ""}
+    ${section("QC Event and Rerun", "", el("QC event", txt(finding.description)) + el("Rerun and its outcome", txt(d.qc_rerun)))}
+    ${section("Patient Look-back", "(42 CFR 493.1282(b)(2): all patient test results obtained in the unacceptable test run and since the last acceptable test run must be evaluated)",
+      el("Runs reviewed", txt(d.lookback_runs)) + el("Patient results evaluated", txt(d.lookback_results)) + el("Patient impact", escHtml(optLabel(PATIENT_IMPACT, d.patient_impact) || "Not recorded")) + el("Corrected reports issued", txt(d.lookback_corrected, "None recorded")))}
+    ${capa()}
+    ${directorFirst ? "" : director("This QC event and patient look-back are reviewed by the medical director or designee.")}
+    <div class="footer-note">Generated by VeritaResponse&trade; from VeritaAssure&trade; from a VeritaQC&trade; corrective action.</div>`);
+}
+
+export function typeReportHTMLForTest(input: TypeReportInput, directorFirst = false): string { return buildTypeReportHTML(input, directorFirst); }
+
+export async function generateTypeReportPDF(input: TypeReportInput, licenseCtx?: Partial<LicenseContext> | null): Promise<Buffer> {
+  if (!TYPE_REPORT_KINDS.includes(input.finding?.source_type)) throw new Error("No report for this entry type");
+  const validation = validateTypeReport(input.finding);
+  if (!validation.ok) throw new Error(`Report cannot be rendered: missing ${validation.missing.join(", ")}`);
+  const browser = await getBrowser();
+  const page = await browser.newPage();
+  try {
+    // The medical director or designee block must sit on page 1. Lay the report out at the printed width; if long
+    // entries would push the block past page 1, render again with the block right under the identification grid.
+    await page.setViewport({ width: 703, height: 943 });
+    let stamped = applyLicenseToPuppeteer(buildTypeReportHTML(input), VERITARESPONSE_FOOTER_TEMPLATE, licenseCtx);
+    await setPdfContent(page, stamped.html);
+    const directorBottom = await page.evaluate(() => {
+      const el = document.querySelector(".director-block");
+      return el ? el.getBoundingClientRect().bottom + window.scrollY : 0;
+    });
+    if (directorBottom > TYPE_REPORT_PAGE1_LIMIT_PX) {
+      stamped = applyLicenseToPuppeteer(buildTypeReportHTML(input, true), VERITARESPONSE_FOOTER_TEMPLATE, licenseCtx);
+      await setPdfContent(page, stamped.html);
+    }
     const pdfBuffer = await page.pdf({
       format: "Letter",
       printBackground: true,

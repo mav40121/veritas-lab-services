@@ -4,7 +4,8 @@
 // pages: a PT failure opened from the New Finding dialog (no accreditor, PT evaluation received date) shows its own
 // title, single-event status, investigation checklist and PT prompts; a checklist answer survives a save and reload;
 // Closed is not offered in the status list and the sign-off button is there; a VeritaQC escalation opens as a
-// "QC Event" with the look-back questions and the 30-day target, not a CMS-2567 card.
+// "QC Event" with the look-back questions and the 30-day target, not a CMS-2567 card, and its QC event report
+// downloads once the look-back and corrective action are filled in.
 //
 // Seeds its own made-up account, lab and QC run through the API, so it runs ONLY against a local build on a throwaway
 // database (never production): PW_BASE must be a localhost address and PW_ADMIN_SECRET the local server's test admin
@@ -87,6 +88,21 @@ test("each VeritaResponse entry type opens on its own template", async ({ page, 
   await expect(page.getByText(/All patient test results obtained in the unacceptable test run/).first()).toBeVisible();
   await page.getByTestId("finding-type-details").scrollIntoViewIfNeeded();
   await page.screenshot({ path: "test-results/vr-type-qc.png" });
+
+  // The QC event report (mock D7): refused with what is missing, then generated once the look-back and corrective
+  // action are in.
+  await page.getByTestId("type-report-btn").click();
+  await expect(page.getByTestId("type-report-error")).toContainText("Patient look-back", { timeout: 15000 });
+  await page.getByTestId("detail-lookback_results").fill("38");
+  await page.getByPlaceholder("What changed: new control vial, recalibration, reagent lot, maintenance.").fill("Vial discarded; open-vial dating added to the rack.");
+  const [qcSaved] = await Promise.all([
+    page.waitForResponse((r) => /\/findings\/\d+$/.test(new URL(r.url()).pathname) && r.request().method() === "PUT"),
+    page.getByRole("button", { name: /^Save$/ }).click(),
+  ]);
+  expect(qcSaved.ok(), `save ${qcSaved.status()}`).toBeTruthy();
+  const [download] = await Promise.all([page.waitForEvent("download", { timeout: 60000 }), page.getByTestId("type-report-btn").click()]);
+  expect(download.suggestedFilename()).toMatch(/^QC-Event_QC-.*\.pdf$/);
+  await download.saveAs("test-results/vr-qc-event-report.pdf");
 
   await page.emulateMedia({ colorScheme: "dark" });
   await page.reload();

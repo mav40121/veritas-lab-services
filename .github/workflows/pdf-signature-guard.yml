@@ -59,6 +59,11 @@ jobs:
       - name: Signature-on-page-1 guard
         run: npx tsx scripts/verify-methodcomp-signature-page1.ts
 
+      # VeritaResponse entry-type reports (PT, alternative assessment, FDA deviation, QC event; 2026-10-26): review block
+      # on page 1 for typical and very long entries, the real PDF renders, content and escaping.
+      - name: VeritaResponse type reports guard
+        run: npx tsx scripts/verify-veritaresponse-type-reports.ts
+
       # Six analyzers on a Calibration Verification and on a Method Comparison (BUG-056/058 page 1 per analyzer).
       - name: Multi-analyzer signature-on-page-1 guard
         run: npx tsx scripts/verify-multi-analyzer-signature-page1.ts
