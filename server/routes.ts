@@ -2921,8 +2921,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (labName !== undefined && lab.lab_name_locked) {
       return res.status(409).json({ error: "lab_name is locked (first report has been generated); cannot update" });
     }
-    // A locked lab with NO CLIA may still get its first one (its reports printed "Not on file").
-    if (cliaNumber !== undefined && lab.clia_locked && lab.clia_number) {
+    // A locked lab with NO CLIA may still get its first one (its reports printed "Not on file"). The same holds for a
+    // placeholder that is not a CLIA at all (e.g. "PENDING-GEORGETOWN-LPNT", set before the real number was known): the
+    // lock protects a number reports printed, and a placeholder is not one (2026-10-27, lab 18). A real CLIA stays locked.
+    const storedIsRealClia = !!lab.clia_number && validateClia(String(lab.clia_number)).ok;
+    if (cliaNumber !== undefined && lab.clia_locked && storedIsRealClia) {
       return res.status(409).json({ error: "clia_number is locked (first report has been generated); cannot update" });
     }
 

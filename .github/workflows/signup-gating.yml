@@ -57,6 +57,10 @@ jobs:
         # must be refused; and no server file but sessionAuth.ts may call
         # jwt.verify. Same throwaway DB and test secrets pattern as above.
         run: npm run test:session-signout
+      - name: Run CLIA placeholder save integration test
+        # A placeholder CLIA never blocks a settings save; locked real CLIAs stay locked; support can replace a locked
+        # placeholder once (2026-10-21 lab 21, 2026-10-27 lab 18). Passed locally, not in CI before 2026-10-27.
+        run: npm run test:clia-placeholder-save
 
       - name: Run two-factor sign-in integration test
         # Two-factor sign-in Stage 2 (server/twoFactor.ts, server/twoFactorRoutes.ts): RFC 6238
