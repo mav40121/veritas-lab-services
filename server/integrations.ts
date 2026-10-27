@@ -38,6 +38,9 @@ export function autoCompleteVeritaScanItems(study: {
   testName: string;
   studyType: string;
   instruments?: string;
+  // BUG-074 (2026-10-27): the study's lab. Scans are matched by lab; the owner's account is the fallback only for
+  // legacy rows with no lab, so a multi-lab owner's study no longer completes items in another lab's scans.
+  labId?: number | null;
 }) {
   if (!study.userId) return; // Guest studies don't trigger auto-completion
 
@@ -48,9 +51,9 @@ export function autoCompleteVeritaScanItems(study: {
   const analyte = study.testName;
 
   // Find all scans for this user
-  const scans = (db as any).$client.prepare(
-    "SELECT id FROM veritascan_scans WHERE user_id = ?"
-  ).all(study.userId) as { id: number }[];
+  const scans = (study.labId
+    ? (db as any).$client.prepare("SELECT id FROM veritascan_scans WHERE lab_id = ?").all(study.labId)
+    : (db as any).$client.prepare("SELECT id FROM veritascan_scans WHERE user_id = ?").all(study.userId)) as { id: number }[];
 
   if (scans.length === 0) return;
 
@@ -69,7 +72,10 @@ export function autoCompleteVeritaScanItems(study: {
       completion_link = excluded.completion_link,
       completion_note = excluded.completion_note,
       updated_at = excluded.updated_at
-    WHERE status != 'Compliant' OR completion_source != 'veritacheck_auto'
+    -- BUG-074: never overwrite a lab's own answer (Needs Attention, N/A, a manual Compliant); only an unassessed item
+    -- or an earlier auto-completion is updated.
+    WHERE veritascan_items.status IS NULL OR veritascan_items.status IN ('', 'Not Assessed')
+       OR veritascan_items.completion_source IN ('veritacheck_auto', 'veritacomp_auto')
   `);
 
   // Import scan items data (embedded for server-side use)
