@@ -26,6 +26,7 @@ import {
   recallChecklist, readyForSignoff, readyToClose, decideOverdueReminder,
   daysBetweenYmd, noticeFilename,
 } from "./stockRecallLogic";
+import { labToday, labTimeZoneById, addLabDays } from "./dateLocal";
 
 // ── Mailer ────────────────────────────────────────────────────────────────
 export interface RecallMail {
@@ -55,7 +56,8 @@ async function getMailer(): Promise<Mailer | null> {
 }
 
 const sqliteOf = () => (db as any).$client;
-const todayUtc = () => new Date().toISOString().slice(0, 10);
+// The lab's calendar day (per-lab time zone, 2026-10-27): the request's lab clock, not the UTC day.
+const todayLab = () => labToday();
 const MAX_ATTACH_BYTES = 15 * 1024 * 1024;
 
 function typeLabel(t: string): string {
@@ -207,7 +209,7 @@ export function registerStockRecallRoutes(
     res.status(403).json({ error: "VeritaStock™ requires a suite subscription" });
     return true;
   };
-  const viewerToday = (req: any) => resolveOpenedDate(req.query?.today ?? req.body?.local_date, todayUtc());
+  const viewerToday = (req: any) => resolveOpenedDate(req.query?.today ?? req.body?.local_date, todayLab());
   const loadCase = (req: any) =>
     sqliteOf().prepare("SELECT * FROM stock_recalls WHERE id = ? AND lab_id = ?").get(Number(req.params.id), req.scope.labId) as any;
 
@@ -291,7 +293,7 @@ export function registerStockRecallRoutes(
       const ok = sqlite.prepare("SELECT 1 FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active'").get(req.scope.labId, assigned);
       if (!ok) return res.status(400).json({ error: "The assigned person must be an active member of this location" });
     }
-    const openedOn = resolveOpenedDate(b.local_date, todayUtc());
+    const openedOn = resolveOpenedDate(b.local_date, todayLab());
     let dueDate = nextBusinessDay(openedOn);
     if (b.due_date != null && b.due_date !== "") {
       if (!isYmd(b.due_date)) return res.status(400).json({ error: "due_date must be YYYY-MM-DD" });
@@ -651,15 +653,26 @@ export function registerStockRecallRoutes(
 
 // ── Nightly overdue reminders ───────────────────────────────────────────
 // Open cases past their due date email the assigned manager: the first day
-// overdue, then every 3 days. "Today" is the UTC date (the job runs at UTC
-// midnight); a case due today is not overdue until the next run.
+// overdue, then every 3 days. "Today" is each case's lab's calendar day (per-lab time zone, 2026-10-27): the job runs at
+// UTC midnight, when the UTC day is already tomorrow for every US lab, so a case due that day was called overdue the
+// evening it was due.
 export async function runRecallReminders(todayOverride?: string): Promise<{ checked: number; sent: number; skipped: number; errors: number }> {
   const summary = { checked: 0, sent: 0, skipped: 0, errors: 0 };
   const sqlite = sqliteOf();
-  const today = todayOverride && isYmd(todayOverride) ? todayOverride : todayUtc();
-  const rows = sqlite.prepare("SELECT * FROM stock_recalls WHERE status = 'open' AND due_date < ?").all(today) as any[];
+  const override = todayOverride && isYmd(todayOverride) ? todayOverride : null;
+  // No lab's day is later than the UTC day + 1 (Guam is UTC+10), so this bound finds every candidate; each row is then
+  // checked against its own lab's day below.
+  const bound = override ?? addLabDays(new Date().toISOString().slice(0, 10), 1);
+  const labDay = new Map<number, string>();
+  const dayFor = (labId: number) => {
+    if (!labDay.has(labId)) labDay.set(labId, labToday(labTimeZoneById(sqlite, labId)));
+    return labDay.get(labId)!;
+  };
+  const rows = (sqlite.prepare("SELECT * FROM stock_recalls WHERE status = 'open' AND due_date < ?").all(bound) as any[])
+    .filter((r) => r.due_date < (override ?? dayFor(r.lab_id)));
   const mailer = rows.length ? await getMailer() : null;
   for (const row of rows) {
+    const today = override ?? dayFor(row.lab_id);
     summary.checked++;
     const assigned = userLabel(sqlite, row.assigned_user_id);
     if (!assigned.email || !mailer) { summary.skipped++; continue; }

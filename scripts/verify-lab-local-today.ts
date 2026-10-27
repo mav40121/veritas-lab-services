@@ -45,5 +45,24 @@ for (const [label, re] of Object.entries(patterns)) {
 }
 check(`routes.ts UTC calendar dates do not grow (now ${total}, baseline ${BASELINE})`, total <= BASELINE);
 if (total < BASELINE) console.log(`NOTE  ${BASELINE - total} fewer than the baseline: lower BASELINE to ${total} in this PR.`);
+
+// 3. Ratchet on every other server file (2026-10-27): "today" taken straight from the UTC clock
+//    (new Date().toISOString() cut to the date) may only go DOWN. Use labToday() in request code (the lab clock) and
+//    labToday(labTimeZoneById(sqlite, labId)) in background jobs. Known uses that stay: dateLocal.ts (its own comment),
+//    audit.ts (nightly snapshot key), certificateReminders.ts (runs at 13:00 UTC, the same day as every US lab),
+//    stockRecalls.ts (the UTC day + 1 as a query bound, then each lab's own day). ptReminders.ts and
+//    equipmentReminders.ts drop out with PR #1726.
+import { readdirSync } from "node:fs";
+const OTHER_BASELINE = 6;
+const todayRe = /new Date\(\)\.toISOString\(\)\.(?:slice\(0,\s*10\)|split\(["']T["']\)\[0\])/g;
+const serverDir = new URL("../server/", import.meta.url);
+let other = 0;
+for (const f of readdirSync(serverDir).filter((n) => n.endsWith(".ts") && n !== "routes.ts")) {
+  const n = (readFileSync(new URL(f, serverDir), "utf8").match(todayRe) || []).length;
+  if (n) console.log(`      ${f}: ${n}`);
+  other += n;
+}
+check(`other server files: UTC "today" does not grow (now ${other}, baseline ${OTHER_BASELINE})`, other <= OTHER_BASELINE);
+if (other < OTHER_BASELINE) console.log(`NOTE  ${OTHER_BASELINE - other} fewer than the baseline: lower OTHER_BASELINE to ${other} in this PR.`);
 console.log(fails ? `\n${fails} FAILED` : "\nALL PASS");
 process.exit(fails ? 1 : 0);

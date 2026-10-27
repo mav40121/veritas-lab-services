@@ -22,6 +22,7 @@ import {
 } from "docx";
 import { CFR_TOPICS_IN_OUR_WORDS } from "./cfrTopicsInOurWords";
 import { buildUmassMilfordDocument, buildRedingtonFairviewDocument, buildSampsonRegionalDocument, type HouseFormatContext } from "./veritapolicyHouseFormats";
+import { labToday } from "./dateLocal";
 
 // Brand palette per CLAUDE.md §6.
 const TEAL = "01696F";
@@ -622,7 +623,7 @@ function buildDocument(tmpl: PolicyTemplate, lab: LabContext, crosswalk?: Accred
                     alignment: AlignmentType.CENTER,
                     children: [
                       new TextRun({
-                        text: `Downloaded by ${opts.downloadedBy} on ${opts.downloadedAt ?? new Date().toISOString().slice(0, 10)}`,
+                        text: `Downloaded by ${opts.downloadedBy} on ${opts.downloadedAt ?? labToday()}`,
                         color: TEXT_DARK,
                         size: 14,
                         font: "Calibri",

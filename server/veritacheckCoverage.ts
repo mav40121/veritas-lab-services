@@ -19,6 +19,7 @@
 // "Bonnie" is the Ortho VITROS 5600), then falls back to model-token overlap.
 
 import { aliasesForPresetLabel, presetKeyForLabel, analytesShareGroup, sameTestKeys } from "@shared/presetAnalytes";
+import { labToday } from "./dateLocal";
 
 export type LinearityStatus = "covered" | "review" | "missing" | "exempt";
 // Recurrence-aware cal-ver / linearity status, mirroring method comparison
@@ -163,7 +164,8 @@ function addMonthsIso(iso: string, months: number): string {
   dt.setUTCMonth(dt.getUTCMonth() + months);
   return dt.toISOString().slice(0, 10);
 }
-function todayIso(): string { return new Date().toISOString().slice(0, 10); }
+// The lab's calendar day (per-lab time zone, 2026-10-27): the request's lab clock, not the UTC day.
+function todayIso(): string { return labToday(); }
 // A study "failed" when its verdict is a fail; "completed"/"pass" are not failures.
 function isFailVerdict(status: string): boolean {
   const s = (status || "").toLowerCase();

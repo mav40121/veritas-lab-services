@@ -9,7 +9,7 @@
 import puppeteer from "puppeteer";
 import { itemsForPosition, positionLabel, complexityLabel, isDelegationPosition, type DelegationPosition, type DelegationComplexity } from "./directorDelegation";
 import { stampPdfAuthor } from "./pdfMeta";
-import { labLocalDate } from "./dateLocal";
+import { labLocalDate, labToday } from "./dateLocal";
 import type { Study } from "@shared/schema";
 import { isQuizImage } from "@shared/quizImages";
 import { hasRunDetails, runDetailRows } from "@shared/studyRunDetails";
@@ -5196,7 +5196,7 @@ function compItemVerdictCell(item: any): string {
 export function buildCompetencyHTML(input: CompetencyPDFInput): string {
   const { assessment, items, methodGroups, checklistItems, labName, quizResults } = input;
   const elementDocuments: CompetencyElementDocument[] = input.elementDocuments || [];
-  const dateStr = assessment.assessment_date || new Date().toISOString().split("T")[0];
+  const dateStr = assessment.assessment_date || labToday();
   const isTechnical = assessment.competency_type === "technical";
   const isWaived = assessment.competency_type === "waived";
   const isNonTech = assessment.competency_type === "nontechnical";
