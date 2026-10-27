@@ -104,7 +104,7 @@ const page = src("client/src/pages/VeritaCheckPage.tsx");
 check("8. client: the type is offered, needs two analyzers, computed with calculateCalVerCorrelation",
   page.includes('<SelectItem value="cal_ver_correlation">Calibration Verification + Correlation (CLSI EP06 + EP09)</SelectItem>')
   && page.includes('studyType === "cal_ver_correlation" && instrumentNames.length < 2') && page.includes("calculateCalVerCorrelation(toNumericDataPoints(dataPoints)")
-  && src("client/src/pages/StudyResultsPage.tsx").includes("calculateCalVerCorrelation(rawDataPoints as DataPoint[]"));
+  && src("client/src/lib/studyResults.ts").includes("calculateCalVerCorrelation(rawDataPoints as DataPoint[]")); // the results math moved here from StudyResultsPage (7cca5c2b, 2026-10-16)
 
 console.log(fails === 0 ? "ALL PASS" : `${fails} FAILED`);
 process.exit(fails === 0 ? 0 : 1);
