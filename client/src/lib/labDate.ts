@@ -40,3 +40,15 @@ export function todayInZone(tz?: string | null, at: Date = new Date()): string {
 export function labTodayIso(): string {
   return todayInZone(activeLabTimeZone);
 }
+
+// The active lab's calendar day for a stored moment. Server stamps come two ways: ISO with a Z (new Date().toISOString())
+// and SQLite datetime('now') ("YYYY-MM-DD HH:MM:SS", UTC with no zone, which a browser would read as its own local
+// time). Both are read as UTC here. A bare YYYY-MM-DD is already a day and is returned as is; unreadable input gives "".
+export function labDayOfStamp(stamp: string | null | undefined): string {
+  const s = String(stamp ?? "").trim();
+  if (!s) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const iso = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/.test(s) ? s.replace(" ", "T") + "Z" : s;
+  const at = new Date(iso);
+  return Number.isNaN(at.getTime()) ? "" : todayInZone(activeLabTimeZone, at);
+}

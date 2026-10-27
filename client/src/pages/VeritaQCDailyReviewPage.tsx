@@ -21,6 +21,7 @@ import {
   AlertTriangle, CheckCircle2, Lock, ClipboardList, ChevronRight, FileDown, RefreshCw,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { labDayOfStamp } from "@/lib/labDate";
 
 interface ViolationRow {
   id: number;
@@ -243,7 +244,8 @@ export default function VeritaQCDailyReviewPage() {
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [downloadingAllPdf, setDownloadingAllPdf] = useState(false);
   const [mdCosignRequired, setMdCosignRequired] = useState(false);
-  const [isMd, setIsMd] = useState(false);
+  // BUG-077: how this user may co-sign (server rule): medical director, delegated designee, owner override, or not.
+  const [cosignAs, setCosignAs] = useState<null | "medical_director" | "designee" | "owner_override">(null);
   const [cosigning, setCosigning] = useState(false);
   const [filing, setFiling] = useState(false);
   const [reviewNotes, setReviewNotes] = useState("");
@@ -310,7 +312,7 @@ export default function VeritaQCDailyReviewPage() {
         const data = await res.json();
         setPastReviews(data.reviews || []);
         setMdCosignRequired(!!data.mdCosignRequired);
-        setIsMd(!!data.isMedicalDirector);
+        setCosignAs(data.cosignAs ?? (data.isMedicalDirector ? "medical_director" : null));
       }
     } catch (err) {
       console.error("Failed to load past reviews:", err);
@@ -398,7 +400,8 @@ export default function VeritaQCDailyReviewPage() {
         toast({ title: err.error || "Co-signature failed", variant: "destructive" });
         return;
       }
-      toast({ title: "Co-signed as Medical Director" });
+      const done = await res.json().catch(() => ({}));
+      toast({ title: done.signed_as === "designee" ? "Co-signed as designee" : done.signed_as === "owner_override" ? "Co-signed (owner override)" : "Co-signed as Medical Director" });
       await loadPastReviews(reviewLotId);
     } catch (err: any) {
       toast({ title: err.message || "Co-signature failed", variant: "destructive" });
@@ -825,15 +828,19 @@ export default function VeritaQCDailyReviewPage() {
           {mdCosignRequired && (() => {
             const cur = pastReviews.find((r: any) => r.period_year === reviewYear && r.period_month === reviewMonth) as any;
             if (!cur || cur.attestation_acknowledged !== 1) {
-              return <div className="text-xs text-muted-foreground mt-2">After the reviewer files the attestation, the designated Medical Director co-signs.</div>;
+              return <div className="text-xs text-muted-foreground mt-2">After the reviewer files the attestation, the Medical Director or a delegated designee co-signs.</div>;
             }
             if (cur.md_signed_at) {
-              return <div className="text-xs text-emerald-700 mt-2">Medical Director co-signed by {cur.md_signed_name || "the director"} on {new Date(cur.md_signed_at).toLocaleDateString()}.</div>;
+              return <div className="text-xs text-emerald-700 mt-2">Medical Director co-signed by {cur.md_signed_name || "the director"} on {labDayOfStamp(cur.md_signed_at)}.</div>;
             }
             return (
               <div className="flex flex-wrap items-center gap-2 mt-2">
                 <span className="text-xs text-amber-700">Awaiting Medical Director co-signature.</span>
-                {isMd && <Button size="sm" variant="outline" onClick={handleCosign} disabled={cosigning}>{cosigning ? "Co-signing..." : "Co-sign as Medical Director"}</Button>}
+                {cosignAs && (
+                  <Button size="sm" variant="outline" onClick={handleCosign} disabled={cosigning} data-testid="qc-cosign-button">
+                    {cosigning ? "Co-signing..." : cosignAs === "designee" ? "Co-sign as designee" : cosignAs === "owner_override" ? "Co-sign (owner override)" : "Co-sign as Medical Director"}
+                  </Button>
+                )}
               </div>
             );
           })()}
@@ -856,7 +863,7 @@ export default function VeritaQCDailyReviewPage() {
                         <td className="py-1.5 pr-2">
                           {["","Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][p.period_month]} {p.period_year}
                         </td>
-                        <td className="py-1.5 pr-2 text-muted-foreground">{p.reviewed_at.slice(0, 10)}</td>
+                        <td className="py-1.5 pr-2 text-muted-foreground">{labDayOfStamp(p.reviewed_at)}</td>
                         <td className="py-1.5 pr-2 text-muted-foreground">{p.review_notes || "-"}</td>
                       </tr>
                     ))}
