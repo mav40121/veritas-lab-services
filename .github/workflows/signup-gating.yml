@@ -78,6 +78,9 @@ jobs:
         # Labs are set up by Veritas staff (Q195); a provisioned owner gets an active owner row and can open the lab;
         # the boot backfill covers only pre-2026-10-14 accounts (parking lot #83, updated 2026-10-27).
         run: npm run test:first-lab-owner-membership
+      - name: Run VeritaPolicy staff attestation integration test
+        # BUG-079: staff complete their own assigned attestation (record work); setup stays owner/admin/edit.
+        run: npm run test:policy-attest-staff
       - name: Run structure-only database copy integration test
         # GET /api/admin/schema-db (Lifepoint questionnaire: customer data is not used for testing): secret-gated, every
         # table, index, view and trigger rebuilt with the same columns, no rows, nothing from the source in the file, audited.
