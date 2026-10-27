@@ -130,6 +130,9 @@ jobs:
       - name: Run per-lab time zone integration test
         # Zone from labs.time_zone, else the CLIA state, else Eastern; lab-scoped stamps use the lab's day (2026-10-26).
         run: npm run test:lab-time-zone
+      - name: Run VeritaScan auto-complete lab scope integration test
+        # BUG-074: a study completes its own lab's scan items only and never overwrites the lab's own answer.
+        run: npm run test:veritascan-autocomplete-lab
       - name: Run reminder jobs on the lab's day integration test
         # PT, equipment, finding and policy-review reminders run at midnight UTC; each lab's due dates count from that
         # lab's own calendar day (Guam vs American Samoa labs), so nothing goes out a day early (2026-10-27).

@@ -12484,6 +12484,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       autoCompleteVeritaScanItems({
         id: study.id,
         userId: study.userId,
+        labId: ((db as any).$client.prepare("SELECT lab_id FROM studies WHERE id = ?").get(study.id) as any)?.lab_id ?? null,
         testName: study.testName,
         studyType: study.studyType,
         instruments: study.instruments,
@@ -12812,7 +12813,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (!_scAccess.unlimited) consumeStudyCredit((db as any).$client, ownerUserId, req.scope.labId);
     try {
       autoCompleteVeritaScanItems({
-        id: study.id, userId: ownerUserId, testName: study.testName,
+        id: study.id, userId: ownerUserId, labId: req.scope.labId, testName: study.testName,
         studyType: study.studyType, instruments: study.instruments,
       });
     } catch (err: any) {
@@ -24727,7 +24728,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // VeritaScan integration: auto-complete competency items
     // A new-hire evaluation is not a competency, so it never marks VeritaScan competency items compliant.
     if (status === "pass" && !isEvaluationProgram(program as any)) {
-      autoCompleteCompetencyScanItems(dataUserId, competencyType || "technical");
+      autoCompleteCompetencyScanItems(dataUserId, competencyType || "technical", (program as any)?.lab_id ?? null);
     }
 
     res.json({ id: assessmentId, program_id: programId, employee_id: employeeId, status: status || "pass", created_at: now });
@@ -25114,7 +25115,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (status === "pass" && !isEvaluationProgram(program)) {
       const ownerRow = (db as any).$client.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(labId) as any;
       const userIdForScan = ownerRow?.owner_user_id ?? req.userId;
-      autoCompleteCompetencyScanItems(userIdForScan, competencyType || "technical");
+      autoCompleteCompetencyScanItems(userIdForScan, competencyType || "technical", labId);
     }
     res.json({ id: assessmentId, program_id: programId, employee_id: employeeId, status: status || "pass", created_at: now });
   });
@@ -26586,10 +26587,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   });
 
   // VeritaScan integration for competency
-  function autoCompleteCompetencyScanItems(userId: number, competencyType: string) {
-    const scans = (db as any).$client.prepare(
-      "SELECT id FROM veritascan_scans WHERE user_id = ?"
-    ).all(userId) as { id: number }[];
+  // BUG-074 (2026-10-27): scans of the assessment's lab only (the owner's account is the fallback for legacy rows with
+  // no lab), and a lab's own answer on an item is never overwritten.
+  function autoCompleteCompetencyScanItems(userId: number, competencyType: string, labId?: number | null) {
+    const scans = (labId
+      ? (db as any).$client.prepare("SELECT id FROM veritascan_scans WHERE lab_id = ?").all(labId)
+      : (db as any).$client.prepare("SELECT id FROM veritascan_scans WHERE user_id = ?").all(userId)) as { id: number }[];
     if (scans.length === 0) return;
 
     const now = new Date().toISOString();
@@ -26615,7 +26618,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         completion_link = '/veritacomp-app',
         completion_note = excluded.completion_note,
         updated_at = excluded.updated_at
-      WHERE status != 'Compliant' OR completion_source != 'veritacomp_auto'
+      WHERE veritascan_items.status IS NULL OR veritascan_items.status IN ('', 'Not Assessed')
+         OR veritascan_items.completion_source IN ('veritacheck_auto', 'veritacomp_auto')
     `);
 
     const bulkUpdate = (db as any).$client.transaction(() => {
