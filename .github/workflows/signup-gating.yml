@@ -134,6 +134,9 @@ jobs:
         # PT, equipment, finding and policy-review reminders run at midnight UTC; each lab's due dates count from that
         # lab's own calendar day (Guam vs American Samoa labs), so nothing goes out a day early (2026-10-27).
         run: npm run test:reminders-lab-day
+      - name: Run VeritaCheck draft save integration test
+        # BUG-092: a draft that omits or sends arrays for the data saves as JSON text (was a 500).
+        run: npm run test:study-draft-save
       - name: Lab-local dates and zone rules
         run: npx tsx scripts/verify-lab-local-date.ts
       - name: No UTC today in client code
