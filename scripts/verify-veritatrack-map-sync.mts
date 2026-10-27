@@ -47,22 +47,33 @@ db.prepare("INSERT INTO veritamap_maps (id, lab_id, user_id) VALUES (?, ?, ?)").
 db.prepare("INSERT INTO veritamap_tests (map_id, analyte, last_cal_ver) VALUES (?, ?, ?)").run(79, "Vaginal Panel", null);
 
 {
-  const r = applyMapSignoffWriteback(db, 42, "Vaginal Panel", "last_cal_ver", "2026-07-29");
+  const r = applyMapSignoffWriteback(db, 2, 42, "Vaginal Panel", "last_cal_ver", "2026-07-29");
   const row = db.prepare("SELECT last_cal_ver FROM veritamap_tests WHERE map_id=79 AND analyte='Vaginal Panel'").get() as any;
   check("exact match updates map + updated=1", r.linked && r.updated === 1 && !r.warning && row.last_cal_ver === "2026-07-29", JSON.stringify({ r, row }));
 }
 {
-  const r = applyMapSignoffWriteback(db, 42, "Vaginal panel", "last_cal_ver", "2026-07-29"); // lowercase p -> mismatch
+  const r = applyMapSignoffWriteback(db, 2, 42, "Vaginal panel", "last_cal_ver", "2026-07-29"); // lowercase p -> mismatch
   check("name mismatch -> updated=0 + warning (was silent before)", r.linked && r.updated === 0 && !!r.warning, JSON.stringify(r));
 }
 {
-  const r = applyMapSignoffWriteback(db, 42, "Vaginal Panel", "bogus_field", "2026-07-29");
+  const r = applyMapSignoffWriteback(db, 2, 42, "Vaginal Panel", "bogus_field", "2026-07-29");
   check("non-allowlisted field -> warning, no write", r.updated === 0 && !!r.warning, JSON.stringify(r));
 }
 {
   db.prepare("INSERT INTO users (id, lab_id) VALUES (?, ?)").run(99, 555);
-  const r = applyMapSignoffWriteback(db, 99, "Vaginal Panel", "last_cal_ver", "2026-07-29");
+  const r = applyMapSignoffWriteback(db, 555, 99, "Vaginal Panel", "last_cal_ver", "2026-07-29");
   check("no map for lab -> warning", r.updated === 0 && !!r.warning, JSON.stringify(r));
+}
+{
+  // #1177 (2026-08-10): the writeback follows the sign-off's own lab, not the owner's other maps. User 42 also owns
+  // map 80 on lab 3 with the same analyte; a lab 2 sign-off must leave it alone.
+  db.prepare("INSERT INTO veritamap_maps (id, lab_id, user_id) VALUES (?, ?, ?)").run(80, 3, 42);
+  db.prepare("INSERT INTO veritamap_tests (map_id, analyte, last_cal_ver) VALUES (?, ?, ?)").run(80, "Vaginal Panel", null);
+  const r = applyMapSignoffWriteback(db, 2, 42, "Vaginal Panel", "last_cal_ver", "2026-08-01");
+  const other = db.prepare("SELECT last_cal_ver FROM veritamap_tests WHERE map_id=80").get() as any;
+  check("a lab 2 sign-off does not touch the owner's lab 3 map", r.updated === 1 && other.last_cal_ver === null, JSON.stringify({ r, other }));
+  const legacy = applyMapSignoffWriteback(db, null, 42, "Vaginal Panel", "last_cal_ver", "2026-08-02");
+  check("no lab on the sign-off falls back to the owner's maps", legacy.updated === 2, JSON.stringify(legacy));
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);
