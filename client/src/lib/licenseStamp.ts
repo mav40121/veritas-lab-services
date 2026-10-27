@@ -126,7 +126,7 @@ function appendAppendixPage(doc: jsPDF, ctx: LicenseContext): void {
   doc.setTextColor(...FOOTER_GREY);
   const stampLine =
     `Generated ${labStampLabel(new Date().toISOString())} · ` +
-    `Veritas Lab Services, LLC · Globe, Arizona`;
+    `Veritas Lab Services, LLC · Upton, Massachusetts`; // company address (119 Glen Avenue, Upton, MA); was Globe, Arizona
   if (y < h - margin - 12) {
     y = h - margin - 8;
   }

@@ -8,8 +8,10 @@
 export const AUTHOR_META = "Michael Veri / Veritas Lab Services, LLC";
 
 export const COPYRIGHT_BLOCK =
-  "© 2026 Veritas Lab Services, LLC. VeritaAssure® and " +
-  "VeritaDC™ are trademarks of Veritas Lab Services, LLC. " +
+  // Trademark notice: VLS Legal's approved wording (2026-10-27), no registration numbers.
+  "© 2026 Veritas Lab Services, LLC. VeritaAssure®, VeritaMap®, VeritaScan® and " +
+  "VeritaCheck® are registered trademarks of Veritas Lab Services, LLC. Other Verita " +
+  "product names are trademarks of Veritas Lab Services, LLC. " +
   "All rights reserved. The structure, organization, original written " +
   "content, and visual design of this document are the copyrighted " +
   "work of Veritas Lab Services, LLC. Public-domain U.S. federal " +
