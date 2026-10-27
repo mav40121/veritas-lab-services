@@ -72,5 +72,15 @@ check("nothing but Cytology cites §493.945", Object.entries(server).every(([k, 
   Object.entries(server).filter(([k, v]) => v === "§493.945" && k !== "Cytology").map(([k]) => k).join(",") || "only Cytology");
 check("CLAUDE.md no longer says Microbiology = §493.945", !/Microbiology = §493\.945/.test(fs.readFileSync(new URL("../CLAUDE.md", import.meta.url), "utf8")));
 
+// BUG-072 (2026-10-27): the VeritaCheck TEa presets carried their own citation, "42 CFR §493.935" for toxicology, a
+// section that does not exist (Toxicology is §493.937). Every Subpart I section the presets cite must be a real one.
+for (const f of ["client/src/pages/VeritaCheckPage.tsx", "shared/presetAnalytes.ts"]) {
+  const src = fs.readFileSync(new URL(`../${f}`, import.meta.url), "utf8");
+  const cited = [...new Set(src.match(/§493\.9\d\d/g) || [])];
+  const unknown = cited.filter((c) => !(c in SUBPART_I));
+  check(`${f} cites only real Subpart I sections`, unknown.length === 0, unknown.length ? `unknown: ${unknown.join(", ")}` : cited.join(" "));
+}
+check("toxicology presets cite §493.937", /Toxicology §493\.937/.test(fs.readFileSync(new URL("../client/src/pages/VeritaCheckPage.tsx", import.meta.url), "utf8")));
+
 console.log(failures ? `\n${failures} FAILED` : "\nALL PASS");
 process.exit(failures ? 1 : 0);

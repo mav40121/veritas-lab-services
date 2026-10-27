@@ -74,7 +74,7 @@ export const PRESET_ANALYTE_ALIASES: Record<string, string[]> = {
   t3_uptake: ["Triiodothyronine uptake", "T3 uptake"],
   tsh: ["Thyroid stimulating hormone"],
   vitamin_b12: ["Vitamin B12"],
-  // ── Toxicology §493.935 ──
+  // ── Toxicology §493.937 ──
   acetaminophen: ["Acetaminophen"],
   alcohol_blood: ["Ethanol", "Blood alcohol"],
   salicylate: ["Salicylate"],

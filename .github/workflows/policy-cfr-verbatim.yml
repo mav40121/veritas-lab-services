@@ -43,3 +43,6 @@ jobs:
       # paragraphs that exist in the eCFR (42 CFR 493.1235 has none; the six elements are 493.1451(b)(8) / 493.1413(b)(8)).
       - name: Every verification and competency CFR citation names a real paragraph
         run: node scripts/verify-cfr-paragraph-citations.mjs
+
+      - name: Specialty to Subpart I section map, and VeritaCheck preset citations (BUG-072)
+        run: node scripts/verify-cfr-specialty-map.mjs
