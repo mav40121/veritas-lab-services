@@ -5963,6 +5963,8 @@ try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_inv_transfers_owner ON invento
       if (!vtCols.includes(col)) { try { sqlite.exec(sql); vtCols.push(col); } catch {} }
     };
     ensureVt("cal_ver_na", "ALTER TABLE veritamap_tests ADD COLUMN cal_ver_na INTEGER NOT NULL DEFAULT 0");
+    // Parking lot #93 (Michael Q86 = 1): the test's SOP links to a VeritaDC policy (server/veritamapSopLink.ts).
+    ensureVt("sop_document_id", "ALTER TABLE veritamap_tests ADD COLUMN sop_document_id INTEGER");
     ensureVt("cal_ver_na_reason", "ALTER TABLE veritamap_tests ADD COLUMN cal_ver_na_reason TEXT");
     ensureVt("cal_ver_na_set_by", "ALTER TABLE veritamap_tests ADD COLUMN cal_ver_na_set_by INTEGER");
     ensureVt("cal_ver_na_set_at", "ALTER TABLE veritamap_tests ADD COLUMN cal_ver_na_set_at TEXT");

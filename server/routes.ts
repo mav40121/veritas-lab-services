@@ -73,6 +73,7 @@ import { registerSecuritySettingsRoutes } from "./securitySettingsRoutes";
 import { recordViewMiddleware, accessReport, accessReportExcel } from "./recordViews";
 import { resealAll } from "./secretRotation";
 import { labWideCorrelation, correlationPeerInstruments, describeCorrelationInstrument, rowComplexity, mapComplianceGaps } from "./labWideCorrelation";
+import { attachSopLinks, sopLinksByDocument, effectiveSop } from "./veritamapSopLink";
 import { seedProfileFor, seedTeaFor, seedCalVerPoints, seedMethodCompQuant, seedMethodCompCategorical, seedStudyDate } from "./seedStudyProfiles";
 import type { LicenseContext } from "@shared/licenseText";
 import { validateClia } from "@shared/validateClia";
@@ -14629,8 +14630,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       SELECT
         t.id AS test_id, t.map_id, t.analyte, t.specialty, t.complexity, t.active,
         t.instrument_source, t.last_cal_ver, t.last_method_comp, t.last_precision,
-        t.last_sop_review, t.updated_at, t.cal_ver_na, t.cal_ver_na_reason, t.method_comp_na, t.method_comp_na_reason
-      FROM veritamap_tests t
+        t.last_sop_review, t.updated_at, t.cal_ver_na, t.cal_ver_na_reason, t.method_comp_na, t.method_comp_na_reason,
+        t.sop_document_id, m.lab_id AS map_lab_id
+      FROM veritamap_tests t JOIN veritamap_maps m ON m.id = t.map_id
       WHERE t.map_id IN (${placeholders}) AND t.active = 1
       ORDER BY t.specialty, t.analyte, t.map_id
     `).all(...mapIds) as Array<any>;
@@ -14664,15 +14666,21 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     `).all(...mapIds) as any[])) {
       if (v.amr_low != null || v.amr_high != null) amrByKey.add(`${v.map_id}:${(v.analyte || "").toLowerCase()}`);
     }
+    // #93: SOP links per lab (a lab-wide list can span maps of one lab; the legacy route can span an owner's labs).
+    const sopByLab = new Map<number, Map<number, any>>();
+    for (const labIdOfMap of new Set(rows.map((r: any) => Number(r.map_lab_id)).filter(Boolean))) {
+      sopByLab.set(labIdOfMap, sopLinksByDocument((db as any).$client, labIdOfMap, rows.filter((r: any) => Number(r.map_lab_id) === labIdOfMap && r.sop_document_id).map((r: any) => Number(r.sop_document_id))));
+    }
     const analytes = rows.map((r: any) => {
       const key = `${r.map_id}:${(r.analyte || "").toLowerCase()}`;
       const instr = instrByKey[key] ?? { category: null, instrument_name: null };
+      const sopLink = r.sop_document_id ? sopByLab.get(Number(r.map_lab_id))?.get(Number(r.sop_document_id)) ?? null : null;
       return {
         test_id: r.test_id, map_id: r.map_id, map_name: mapNameById[r.map_id] ?? "",
         analyte: r.analyte, specialty: r.specialty, complexity: r.complexity,
         department: instr.category, instrument: instr.instrument_name || r.instrument_source || null,
         last_cal_ver: r.last_cal_ver, last_method_comp: r.last_method_comp,
-        last_precision: r.last_precision, last_sop_review: r.last_sop_review,
+        last_precision: r.last_precision, last_sop_review: sopLink ? sopLink.last_review : r.last_sop_review, sop_link: sopLink,
         cal_ver_na: r.cal_ver_na ? 1 : 0, cal_ver_na_reason: r.cal_ver_na_reason ?? null,
         method_comp_na: r.method_comp_na ? 1 : 0, method_comp_na_reason: r.method_comp_na_reason ?? null, // BUG-015
         has_ref_range: refByKey.has(key), has_critical: critByKey.has(key), has_amr: amrByKey.has(key),
@@ -14882,7 +14890,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         cal_ver_exempt: instruments.length > 0 && instruments.every((x: any) => x.cal_ver_exempt === 1),
       };
     });
-    res.json({ ...map, tests });
+    res.json({ ...map, tests: attachSopLinks((db as any).$client, Number(map.lab_id), tests) });
   });
 
   // ── MULTI-LAB Tier 2 — Phase 3.3b: lab-scoped VeritaMap entry endpoints ───
@@ -15009,7 +15017,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // write to this lab's VeritaMap (owner / active admin / org admin / edit
     // seat), so the map page can render a genuine view-only user read-only
     // instead of enabled inputs that 403 on every save.
-    res.json({ ...map, tests, editAccess: hasModuleEditAccess(req.scope.labId, req.userId, "veritamap") });
+    res.json({ ...map, tests: attachSopLinks((db as any).$client, req.scope.labId, tests), editAccess: hasModuleEditAccess(req.scope.labId, req.userId, "veritamap") });
   });
 
   // ── MULTI-LAB Tier 2 — VeritaMap sub-resources (URL-hygiene fix 2026-05-20) ─
@@ -15233,6 +15241,40 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   });
 
   // PUT single test (analyte) metadata
+  // Parking lot #93 (Michael Q85 = 1, Q86 = 1, 2026-10-11): link (or unlink) one or more of this map's tests to a
+  // VeritaDC policy; the map then reads that policy's review state (server/veritamapSopLink.ts). Body:
+  // { analytes: string[], documentId: number | null }. The policy must be in this lab and not archived.
+  app.put("/api/labs/:labId/veritamap/maps/:id/sop-link", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritamap'), requireMapInActiveLab, (req: any, res) => {
+    const sqlite = (db as any).$client;
+    const analytes = Array.isArray(req.body?.analytes) ? [...new Set((req.body.analytes as any[]).map((a) => String(a ?? "").trim()).filter(Boolean))] : [];
+    if (analytes.length === 0) return res.status(400).json({ error: "Choose at least one test to link." });
+    if (analytes.length > 500) return res.status(400).json({ error: "Too many tests in one request." });
+    const raw = req.body?.documentId;
+    const documentId = raw === null || raw === undefined || raw === "" ? null : Number(raw);
+    if (documentId !== null) {
+      if (!Number.isInteger(documentId) || documentId <= 0) return res.status(400).json({ error: "documentId must be a policy id or null" });
+      const doc = sqlite.prepare("SELECT id, title FROM policy_documents WHERE id = ? AND lab_id = ? AND archived_at IS NULL").get(documentId, req.scope.labId) as any;
+      if (!doc) return res.status(404).json({ error: "That policy is not in this lab's VeritaDC (or it is archived)." });
+    }
+    const ph = analytes.map(() => "?").join(",");
+    const found = sqlite.prepare(`SELECT analyte, sop_document_id FROM veritamap_tests WHERE map_id = ? AND analyte IN (${ph})`).all(req.params.id, ...analytes) as any[];
+    if (found.length !== analytes.length) {
+      const have = new Set(found.map((f) => f.analyte));
+      return res.status(404).json({ error: `Not on this map: ${analytes.filter((a) => !have.has(a)).slice(0, 5).join(", ")}` });
+    }
+    const now = new Date().toISOString();
+    sqlite.transaction(() => {
+      sqlite.prepare(`UPDATE veritamap_tests SET sop_document_id = ?, updated_at = ? WHERE map_id = ? AND analyte IN (${ph})`).run(documentId, now, req.params.id, ...analytes);
+    })();
+    for (const f of found) {
+      if ((f.sop_document_id ?? null) === documentId) continue;
+      logAudit({ userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritamap", action: "update", entityType: "test",
+        entityId: String(req.params.id), entityLabel: `${f.analyte} SOP link`, before: { sop_document_id: f.sop_document_id ?? null }, after: { sop_document_id: documentId } });
+    }
+    const rows = sqlite.prepare(`SELECT analyte, last_sop_review, sop_document_id FROM veritamap_tests WHERE map_id = ? AND analyte IN (${ph})`).all(req.params.id, ...analytes) as any[];
+    res.json({ ok: true, tests: attachSopLinks(sqlite, req.scope.labId, rows) });
+  });
+
   app.put("/api/labs/:labId/veritamap/maps/:id/tests/:analyte", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritamap'), requireMapInActiveLab, (req: any, res) => {
     // Partial update: the client autosaves ONE field at a time (e.g. just
     // last_sop_review; see VeritaMapMapPage.tsx handleFieldChange), so only SET
@@ -16902,8 +16944,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // instrument-test before it queries.
     rebuildMapTests(req.params.id);
 
-    // Fetch tests (same as map detail endpoint)
-    const rawTests = (db as any).$client.prepare("SELECT * FROM veritamap_tests WHERE map_id = ? AND active = 1 ORDER BY specialty, analyte").all(req.params.id);
+    // Fetch tests (same as map detail endpoint); #93 SOP links read from VeritaDC
+    const rawTests = attachSopLinks((db as any).$client, Number(map.lab_id), (db as any).$client.prepare("SELECT * FROM veritamap_tests WHERE map_id = ? AND active = 1 ORDER BY specialty, analyte").all(req.params.id) as any[]);
     // Analytes whose EVERY active instrument row carries a linearity / cal ver
     // exemption flag (parking lot #77): the export shows them as exempt, as the
     // map page does, instead of a missing calibration verification.
@@ -17206,7 +17248,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           : t.method_comp_na ? `N/A (${String(t.method_comp_na_reason || "not applicable")})` // BUG-015
           : correlReq === "No" ? "Not Required (one instrument)" : getComplianceStatus(t.last_method_comp, 6); // BUG-018
         const precStatus = isWaived ? "N/A (Waived)" : getComplianceStatus(t.last_precision, 6);
-        const sopStatus = getComplianceStatus(t.last_sop_review, 24);
+        // #93: a test linked to a VeritaDC policy takes the policy's state; otherwise the hand-entered date, 24 months.
+        const sopStatus = t.sop_link ? (t.sop_link.overdue ? `Overdue (linked policy: ${t.sop_link.reason})` : "Current (linked policy)") : getComplianceStatus(t.last_sop_review, 24);
 
         // AMR: low in the AMR Low column, high in the AMR High column (Lindsay Webber, Redington-Fairview, 2026-10-19:
         // "all AMR info is displaying in the AMR low column. It does not separate out into the AMR high column"). One
@@ -17290,7 +17333,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
             mcStatus,
             t.last_precision || "",
             precStatus,
-            t.last_sop_review || "",
+            effectiveSop(t).date || "",
             sopStatus,
             t.notes || "",
             correlationSummary(t.analyte),
