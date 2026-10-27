@@ -23632,6 +23632,25 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     res.json(row);
   });
 
+  // BUG-080 (2026-10-27): the finding's history (every finding_history event, newest first, with the name of who made
+  // it) and how this user may sign off, by the same rule as POST /signoff below: the designated medical director, a
+  // delegate holding finding closure for the lab's complexity, or the owner as a logged override; null = may not.
+  app.get("/api/labs/:labId/findings/:id/history", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    const sqlite = (db as any).$client;
+    const f = sqlite.prepare("SELECT id FROM findings WHERE id = ? AND lab_id = ?").get(Number(req.params.id), req.scope.labId) as any;
+    if (!f) return res.status(404).json({ error: "Finding not found" });
+    const events = (sqlite.prepare(
+      "SELECT h.id, h.event, h.at, h.payload, h.by_user_id, NULLIF(TRIM(u.name), '') AS by_name FROM finding_history h LEFT JOIN users u ON u.id = h.by_user_id WHERE h.finding_id = ? ORDER BY h.id DESC LIMIT 500"
+    ).all(f.id) as any[]).map((e) => {
+      let payload: any = null;
+      try { payload = e.payload ? JSON.parse(e.payload) : null; } catch { payload = null; }
+      return { id: e.id, event: e.event, at: e.at, by_name: e.by_name ?? null, by_system: e.by_user_id == null, payload };
+    });
+    const attest = mayAttestAsDirectorOrDesignee(req.scope.labId, req.userId, "finding_closure", labHighestComplexity(req.scope.labId));
+    const signoffAs = attest.ok ? attest.via : (isLabOwnerUser(req.scope.labId, req.userId) ? "owner_override" : null);
+    res.json({ events, signoffAs });
+  });
+
   // ── Wave C3 (2026-06-12): VeritaResponse effectiveness monitoring ──────────
   // 30/60/90-day checkpoints that verify a corrective action stayed effective
   // after the plan of correction closed. The checkpoints feed the VeritaTrack

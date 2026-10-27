@@ -52,3 +52,18 @@ export function labDayOfStamp(stamp: string | null | undefined): string {
   const at = new Date(iso);
   return Number.isNaN(at.getTime()) ? "" : todayInZone(activeLabTimeZone, at);
 }
+
+// The same moment as "YYYY-MM-DD HH:MM" on the active lab's clock (24-hour), for history and audit lines.
+export function labStampLabel(stamp: string | null | undefined): string {
+  const day = labDayOfStamp(stamp);
+  const s = String(stamp ?? "").trim();
+  if (!day || /^\d{4}-\d{2}-\d{2}$/.test(s)) return day;
+  const at = new Date(/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/.test(s) ? s.replace(" ", "T") + "Z" : s);
+  try {
+    const parts = new Intl.DateTimeFormat("en-GB", { timeZone: activeLabTimeZone || undefined, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(at);
+    const g = (t: string) => parts.find((p) => p.type === t)?.value || "";
+    return `${day} ${g("hour")}:${g("minute")}`;
+  } catch {
+    return day;
+  }
+}

@@ -236,6 +236,8 @@ jobs:
         run: npm run test:docx-list-restart
       - name: "BUG-077 QC co-sign button follows the server rule"
         run: npm run test:qc-cosign-visibility
+      - name: "BUG-080 finding sign-off button and history follow the server rule"
+        run: npm run test:finding-signoff-history
       - name: Run QC monthly review reviewer integration test
         # BUG-066: the QC monthly review PDF names the person who signed the review and its date, never the
         # person downloading; an unsigned month prints Pending signature with no date.
