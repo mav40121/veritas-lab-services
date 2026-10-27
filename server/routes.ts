@@ -30413,7 +30413,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           warning: validated.filter((v) => v.status === "warning").length,
           error: validated.filter((v) => v.status === "error").length,
         };
-        res.json({ rows: validated, summary });
+        // Michael Q12 = 1: what the import will do to each person's VeritaStaff schedule (read-only here).
+        const { applyImportedSchedules, summarizeScheduleResults } = await import("./competencyImportSchedule");
+        const schedules = summarizeScheduleResults(applyImportedSchedules((db as any).$client, importedByStaffEmployee(validated.filter((v) => v.status !== "error")), { dryRun: true, labId }));
+        res.json({ rows: validated, summary, schedules });
       } catch (err: any) {
         console.error("[competency/bulk-preview] error:", err);
         res.status(500).json({ error: err.message || "preview_failed" });
@@ -30451,9 +30454,17 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         const now = new Date().toISOString();
         const sqlite = (db as any).$client;
         const results: Array<{ rowNumber: number; assessmentId: number; createdCompEmployee?: boolean }> = [];
+        const { applyImportedSchedules, summarizeScheduleResults } = await import("./competencyImportSchedule");
+        let scheduleResults: ReturnType<typeof applyImportedSchedules> = [];
+        // One stub per person: the context is read once before the loop, so without this a person with several
+        // rows got a new competency_employees row for each one.
+        const stubByStaffEmployee = new Map<number, number>();
         const tx = sqlite.transaction(() => {
           for (const r of validated) {
             let empId = r.resolvedEmployeeId;
+            if (empId === null && r.resolvedStaffEmployeeId !== null && stubByStaffEmployee.has(r.resolvedStaffEmployeeId)) {
+              empId = stubByStaffEmployee.get(r.resolvedStaffEmployeeId)!;
+            }
             // Create competency_employees stub when only the staff_employees match exists.
             if (empId === null && r.willCreateCompEmployee && r.resolvedStaffEmployeeId !== null) {
               const ins = sqlite.prepare(
@@ -30461,6 +30472,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
                  VALUES (?, ?, ?, ?, '', 'active', ?)`
               ).run(ownerUserId, labId, r.resolvedStaffEmployeeId, r.parsed.employeeName, now);
               empId = Number(ins.lastInsertRowid);
+              stubByStaffEmployee.set(r.resolvedStaffEmployeeId, empId);
               results.push({ rowNumber: r.rowNumber, assessmentId: 0, createdCompEmployee: true });
             }
             if (empId === null || r.resolvedProgramId === null) {
@@ -30478,6 +30490,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
             );
             results.push({ rowNumber: r.rowNumber, assessmentId: Number(insA.lastInsertRowid) });
           }
+          // Michael Q12 = 1: people moved over with passed competencies count as cleared, with their schedule
+          // running from the latest one (server/competencyImportSchedule.ts). Same transaction as the rows.
+          scheduleResults = applyImportedSchedules(sqlite, importedByStaffEmployee(validated), { dryRun: false, labId });
         });
         tx();
 
@@ -30493,11 +30508,18 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           after: { count: results.filter(r => r.assessmentId > 0).length },
           ipAddress: req.ip,
         });
+        for (const s of scheduleResults) {
+          if (!s.after || !Object.keys(s.after).length) continue;
+          logAudit({ userId: req.userId, ownerUserId, module: "veritastaff", action: s.created ? "create" : "update",
+            entityType: "competency_schedule", entityId: s.staffEmployeeId, entityLabel: `${s.name} (from historical import)`,
+            before: s.before, after: s.after, ipAddress: req.ip });
+        }
 
         res.json({
           ok: true,
           imported: results.filter(r => r.assessmentId > 0).length,
           createdCompEmployees: results.filter(r => r.createdCompEmployee).length,
+          schedules: summarizeScheduleResults(scheduleResults),
         });
       } catch (err: any) {
         console.error("[competency/bulk-commit] error:", err);
@@ -30505,6 +30527,17 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       }
     }
   );
+
+  // The import's rows grouped by the VeritaStaff person they belong to (rows with no staff link have no schedule).
+  function importedByStaffEmployee(rows: Array<{ resolvedStaffEmployeeId: number | null; parsed: { assessmentType: string; assessmentDate: string; status: string; evaluatorName: string } }>) {
+    const by = new Map<number, Array<{ assessmentType: string; assessmentDate: string; status: string; evaluatorName: string }>>();
+    for (const r of rows) {
+      if (r.resolvedStaffEmployeeId == null) continue;
+      if (!by.has(r.resolvedStaffEmployeeId)) by.set(r.resolvedStaffEmployeeId, []);
+      by.get(r.resolvedStaffEmployeeId)!.push({ assessmentType: r.parsed.assessmentType, assessmentDate: r.parsed.assessmentDate, status: r.parsed.status, evaluatorName: r.parsed.evaluatorName });
+    }
+    return by;
+  }
 
   // Shared validation context builder. Pulled out of the two endpoints
   // so the preview and commit paths stay identical.
@@ -34570,6 +34603,51 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const secret = (req.headers["x-admin-secret"] || req.query.secret) as string | undefined;
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
     res.json(auditVeritamapConsistency((db as any).$client));
+  });
+
+  // GET /api/admin/competency/not-cleared-audit (Michael Q12 = 1, 2026-10-27). Read-only, writes nothing. Per lab,
+  // the active testing staff who read "Not cleared for patient testing" today (the same competencyView every screen
+  // uses), and how many passed, signed competencies VeritaComp already holds for each of them: the records a lab
+  // moving over may have loaded before the historical import filled schedules. Header x-admin-secret only.
+  app.get("/api/admin/competency/not-cleared-audit", (req, res) => {
+    if (req.headers["x-admin-secret"] !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    const sqlite = (db as any).$client;
+    const staff = sqlite.prepare(
+      `SELECT e.id, e.first_name, e.last_name, e.tier2_lab_id, e.hire_date, e.created_at, l.lab_name
+         FROM staff_employees e LEFT JOIN labs l ON l.id = e.tier2_lab_id
+        WHERE e.status = 'active' AND e.performs_testing = 1`
+    ).all() as any[];
+    const scheduleOf = sqlite.prepare("SELECT * FROM staff_competency_schedules WHERE employee_id = ?");
+    const passedOf = sqlite.prepare(
+      `SELECT a.assessment_type, a.assessment_date FROM competency_assessments a
+         JOIN competency_employees ce ON ce.id = a.employee_id
+        WHERE ce.staff_employee_id = ? AND a.status = 'pass' AND a.locked = 1 AND a.assessment_type <> 'orientation'
+        ORDER BY a.assessment_date DESC`
+    );
+    const labs = new Map<number, any>();
+    for (const e of staff) {
+      const labId = Number(e.tier2_lab_id) || 0;
+      if (!labs.has(labId)) labs.set(labId, { labId, labName: e.lab_name ?? null, testingStaff: 0, notCleared: 0, people: [] as any[] });
+      const lab = labs.get(labId);
+      lab.testingStaff++;
+      const schedule = scheduleOf.get(e.id) as any;
+      const { competencyStatus } = competencyView(e, schedule);
+      if (competencyStatus.cleared) continue;
+      const passed = passedOf.all(e.id) as any[];
+      lab.notCleared++;
+      lab.people.push({
+        staffEmployeeId: e.id, name: `${e.first_name ?? ""} ${e.last_name ?? ""}`.trim(), recordedAs: schedule?.recorded_as ?? null,
+        overdue: competencyStatus.bucket === "overdue", passedOnFile: passed.length,
+        latestPassed: passed[0] ? { type: passed[0].assessment_type, date: passed[0].assessment_date } : null,
+      });
+    }
+    const rows = Array.from(labs.values()).filter((l) => l.notCleared > 0).sort((a, b) => b.notCleared - a.notCleared);
+    res.json({
+      labsWithNotCleared: rows.length,
+      notCleared: rows.reduce((n, l) => n + l.notCleared, 0),
+      notClearedWithPassedOnFile: rows.reduce((n, l) => n + l.people.filter((p: any) => p.passedOnFile > 0).length, 0),
+      labs: rows,
+    });
   });
 
   // GET /api/admin/system-ownership-audit — Phase 0 of the System/Organization
