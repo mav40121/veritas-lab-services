@@ -297,12 +297,15 @@ function TileScreenWithPendingCounts({
   // site. Sign-offs open here; Record QC and inventory open the same VeritaQC and
   // VeritaStock screens the editors use (staff record there since #1540).
   const labHome = `/labs/${session.lab.id}`;
-  const tiles: Array<{ key: string; label: string; available: boolean; pending: number | null; go: () => void; hint?: string }> = [
+  // BUG-078 (2026-10-27): Count Inventory follows the VeritaStaff "Can adjust inventory" switch; the server refuses
+  // inventory changes from a Staff login with it off (server/inventoryPermission.ts).
+  const tiles: Array<{ key: string; label: string; available: boolean; pending: number | null; go: () => void; hint?: string; offHint?: string }> = [
     { key: "policies",   label: "Sign Policies",     available: true, pending: pending?.policies ?? null,     go: () => onPick("policies") },
     { key: "competency", label: "Sign Competencies", available: true, pending: pending?.competencies ?? null, go: () => onPick("competency") },
     { key: "quizzes",    label: "Take a Quiz",        available: true, pending: pending?.quizzes ?? null,      go: () => onPick("quizzes") },
     { key: "qc",         label: "Record QC",          available: true, pending: null, go: () => navigate(`${labHome}/veritaqc-app`), hint: "Opens VeritaQC." },
-    { key: "inventory",  label: "Count Inventory",    available: true, pending: null, go: () => navigate(`${labHome}/veritastock`), hint: "Opens VeritaStock." },
+    { key: "inventory",  label: "Count Inventory",    available: !!employee.can_adjust_inventory, pending: null, go: () => navigate(`${labHome}/veritastock`), hint: "Opens VeritaStock.",
+      offHint: 'Ask your lab director to turn on "Can adjust inventory" for you in VeritaStaff.' },
     { key: "audit",      label: "My Activity",        available: !!employee.can_view_audit, pending: null, go: () => onPick("audit") },
   ];
   const totalPending = (pending?.quizzes ?? 0) + (pending?.policies ?? 0) + (pending?.competencies ?? 0);
@@ -375,7 +378,7 @@ function TileScreenWithPendingCounts({
                 </div>
                 <div className="text-xs text-muted-foreground mt-1">
                   {!t.available
-                    ? "Not enabled for this staff member."
+                    ? (t.offHint || "Not enabled for this staff member.")
                     : hasPending
                       ? `${pendingCount} pending. Tap to start.`
                       : t.hint || "Tap to begin."}

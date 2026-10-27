@@ -12,6 +12,7 @@ import { isDelegationPosition, isDelegationComplexity, sanitizeResponsibilities,
 import { mayAttestAsDirectorOrDesignee, complexityForAnalyte, labHighestComplexity, isLabOwnerUser } from "./delegationGate";
 import { vlsContext, isVlsSupportUser, labAllowsVlsSupport, vlsSupportBlocked, recordVlsActivity } from "./vlsSupport";
 import { membersNotOnRoster, rosterLinkProblem } from "./rosterMembers";
+import { staffInventoryBlocked, inventoryNotAllowedBody } from "./inventoryPermission";
 import { deriveAttestationStatus } from "./policyAttestationStatus";
 import { DEFAULT_TEMPLATES, REMINDER_TYPES, REMINDER_MERGE_FIELDS, type ReminderType } from "./policyReminderTemplate";
 import { resolveStudyAccess, consumeStudyCredit, isUnlimitedPlan } from "./studyCredits";
@@ -9317,6 +9318,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const sqlite = (db as any).$client;
     const itemId = Number(req.params.itemId);
     if (!Number.isFinite(itemId)) return res.status(400).json({ error: "Invalid item id" });
+    // BUG-078: a Staff Portal login with "Can adjust inventory" off may view, not change.
+    if (staffInventoryBlocked(sqlite, req.userId, req.scope.labId)) return res.status(403).json(inventoryNotAllowedBody());
     const r = lotUseItem(sqlite, itemId, req.scope.labId);
     if (r.error === 404) return res.status(404).json({ error: "Item not found" });
     if (r.error === 403) return res.status(403).json({ error: "Item is not in this location" });
@@ -9344,6 +9347,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const sqlite = (db as any).$client;
     const id = Number(req.params.id);
     if (!Number.isFinite(id)) return res.status(400).json({ error: "Invalid id" });
+    // BUG-078: a Staff Portal login with "Can adjust inventory" off may view, not change.
+    if (staffInventoryBlocked(sqlite, req.userId, req.scope.labId)) return res.status(403).json(inventoryNotAllowedBody());
     const rec = sqlite.prepare("SELECT * FROM inventory_lot_use WHERE id = ? AND lab_id = ?").get(id, req.scope.labId) as any;
     if (!rec) return res.status(404).json({ error: "Lot use record not found in this location" });
     if (rec.out_of_use_date) return res.status(409).json({ error: "This lot is already out of use" });

@@ -25,6 +25,7 @@ import { forecastFromGoal, chainGap, staffingGridFte, DEFAULT_HOURS_PER_FTE_YEAR
 import { generateLeverageReportPDF, type LeverageReportData } from "./leverageReport";
 import { generatePiReportPDF } from "./piReport";
 import { exportAllPlanBypass } from "./exportAllContext";
+import { staffInventoryBlocked, inventoryNotAllowedBody } from "./inventoryPermission";
 
 // PR 4 helper: builds a lower-cased-name keyed map of VendorRecordForPdf
 // from the lab's stock_vendors directory. The PDF renderer uses this to
@@ -1417,6 +1418,10 @@ export function registerVeritaBenchRoutes(
           `).run(accountId, userId, barcode, notes, ip, ua);
           return { hit: false as const, scanEventId: Number(ins.lastInsertRowid) };
         }
+        // BUG-078: a Staff Portal login with "Can adjust inventory" off may look up, not change.
+        if (requestedAction !== "lookup_only" && staffInventoryBlocked(sqlite, userId, row.lab_id)) {
+          return { hit: true as const, blocked: true as const };
+        }
         const qtyBefore = Number(row.quantity_on_hand ?? 0);
         let delta = 0;
         if (requestedAction === "decrement") delta = -1;
@@ -1445,6 +1450,9 @@ export function registerVeritaBenchRoutes(
       const result = txn();
       if (!result.hit) {
         return res.status(404).json({ ok: false, action: "unknown_barcode", scan_event_id: result.scanEventId, barcode_value: barcode });
+      }
+      if ("blocked" in result) {
+        return res.status(403).json(inventoryNotAllowedBody());
       }
       const fresh = sqlite.prepare("SELECT * FROM inventory_items WHERE id = ?").get(result.itemId) as any;
       const decorated = decorateInventoryItem(fresh);
@@ -1493,6 +1501,10 @@ export function registerVeritaBenchRoutes(
       // correction so the client can stay simple and not have to know
       // the current qty before submitting.
       const quantityNew = Number(req.body?.quantity_new);
+      // BUG-078: a Staff Portal login with "Can adjust inventory" off may look up, not change.
+      if (requestedAction !== "lookup_only" && staffInventoryBlocked(sqlite, req.userId, labId)) {
+        return res.status(403).json(inventoryNotAllowedBody());
+      }
       const notes = typeof req.body?.notes === "string" ? req.body.notes : null;
       if (typeof rawBarcode !== "string" || rawBarcode.trim() === "") {
         return res.status(400).json({ error: "barcode_value is required and must be a non-empty string." });
@@ -1847,6 +1859,8 @@ export function registerVeritaBenchRoutes(
       if (resolveStatus === 403) return res.status(403).json({ error: "You don't have access to this item's lab" });
       return res.status(404).json({ error: "Item not found" });
     }
+    // BUG-078: a Staff Portal login with "Can adjust inventory" off may view, not change.
+    if (staffInventoryBlocked(sqlite, req.userId, existing.lab_id)) return res.status(403).json(inventoryNotAllowedBody());
 
     const packSize = Number.isFinite((existing as any).units_per_count_unit) && (existing as any).units_per_count_unit > 0
       ? (existing as any).units_per_count_unit
@@ -1935,6 +1949,8 @@ export function registerVeritaBenchRoutes(
       if (resolveStatus === 403) return res.status(403).json({ error: "You don't have access to this item's lab" });
       return res.status(404).json({ error: "Item not found" });
     }
+    // BUG-078: a Staff Portal login with "Can adjust inventory" off may view, not change.
+    if (staffInventoryBlocked(sqlite, req.userId, existing.lab_id)) return res.status(403).json(inventoryNotAllowedBody());
     const onOrder = (existing as any).on_order_qty || 0;
     if (onOrder <= 0) return res.status(400).json({ error: "Nothing on order to receive" });
     const { received_qty, note, document_url, document_label } = req.body || {};
@@ -2121,6 +2137,8 @@ export function registerVeritaBenchRoutes(
       if (resolveStatus === 403) return res.status(403).json({ error: "You don't have access to this item's lab" });
       return res.status(404).json({ error: "Item not found" });
     }
+    // BUG-078: a Staff Portal login with "Can adjust inventory" off may view, not change.
+    if (staffInventoryBlocked(sqlite, req.userId, existing.lab_id)) return res.status(403).json(inventoryNotAllowedBody());
     const reasonCode = String(req.body?.reason_code || "expired").toLowerCase();
     if (!WASTE_REASONS.has(reasonCode)) return res.status(400).json({ error: "reason_code must be one of expired, damaged, recalled, lost" });
     const onHand = (existing as any).quantity_on_hand || 0;
