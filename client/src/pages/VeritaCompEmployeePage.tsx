@@ -28,6 +28,7 @@ import { Input } from "@/components/ui/input";
 import { Loader2, ChevronLeft, FlaskConical, FileDown } from "lucide-react";
 import MethodSignOffPanel, { signoffSummary, type MethodSignState } from "@/components/MethodSignOffPanel";
 import { MILESTONE_LABEL } from "@shared/competencySignoff";
+import { ObserverInitialsField, type QualifiedObserver } from "@/components/ObserverInitialsField";
 
 const ELEMENT_NAMES: Record<number, string> = {
   1: "Direct Observation of Routine Patient Test Performance",
@@ -40,11 +41,13 @@ const ELEMENT_NAMES: Record<number, string> = {
   8: "Delegated Supervisory Functions (NYS)",
 };
 // Which raw fields each element captures (drives the entry inputs).
-const ELEMENT_FIELDS: Record<number, Array<{ key: string; label: string; type: "text" | "date" | "number" | "bool" }>> = {
-  1: [{ key: "specimenId", label: "Specimen ID observed", type: "text" }, { key: "observerInitials", label: "Observer (LD / TC / TS)", type: "text" }],
+// "observer" = the lab's LD/TC/TS people in VeritaStaff, picked from a list (BUG-075, Michael Q35 = 1); the server
+// refuses anyone else on a new or changed value. Element 7 (NYS) keeps typed entry.
+const ELEMENT_FIELDS: Record<number, Array<{ key: string; label: string; type: "text" | "date" | "number" | "bool" | "observer" }>> = {
+  1: [{ key: "specimenId", label: "Specimen ID observed", type: "text" }, { key: "observerInitials", label: "Observer (LD / TC / TS)", type: "observer" }],
   2: [{ key: "evidence", label: "Evidence", type: "text" }, { key: "date", label: "Date", type: "date" }],
   3: [{ key: "qcDate", label: "Date QC was run", type: "date" }],
-  4: [{ key: "dateObserved", label: "Date observed", type: "date" }, { key: "observerInitials", label: "Observer (LD / TC / TS)", type: "text" }],
+  4: [{ key: "dateObserved", label: "Date observed", type: "date" }, { key: "observerInitials", label: "Observer (LD / TC / TS)", type: "observer" }],
   5: [{ key: "sampleType", label: "Sample type", type: "text" }, { key: "sampleId", label: "Sample ID", type: "text" }, { key: "acceptable", label: "Acceptable", type: "bool" }],
   6: [{ key: "quizId", label: "Quiz ID", type: "text" }, { key: "score", label: "Score", type: "number" }, { key: "dateTaken", label: "Date taken", type: "date" }],
   7: [{ key: "dateObserved", label: "Date observed", type: "date" }, { key: "observerInitials", label: "Observer", type: "text" }],
@@ -107,6 +110,17 @@ export default function VeritaCompEmployeePage() {
       return r.json();
     },
     enabled: !!url,
+  });
+  // Element 1 / 4 observer pick list: the lab's LD/TC/TS people in VeritaStaff, people who have left listed last.
+  const observersUrl = activeLabId ? `/api/labs/${activeLabId}/staff/qualified-observers` : null;
+  const { data: observers, isLoading: observersLoading } = useQuery<QualifiedObserver[]>({
+    queryKey: [observersUrl ?? "no-observers"],
+    queryFn: async () => {
+      const r = await fetch(`${API_BASE}${observersUrl}`, { headers: authHeaders() });
+      if (!r.ok) return [];
+      return r.json();
+    },
+    enabled: !!observersUrl,
   });
 
   const testSystems = data?.testSystems || [];
@@ -345,7 +359,11 @@ export default function VeritaCompEmployeePage() {
                                   {fields.map((fld) => (
                                     <div key={fld.key} className="flex-1 min-w-[120px]">
                                       <label className="text-[10px] text-muted-foreground">{fld.label}</label>
-                                      {fld.type === "bool" ? (
+                                      {fld.type === "observer" ? (
+                                        <ObserverInitialsField value={f[fld.key] ?? ""} onChange={(v) => setField(el.num, fld.key, v)}
+                                          observers={observers || []} isLoading={observersLoading} disabled={readOnly}
+                                          triggerClassName="text-xs h-8" data-testid={`element-${el.num}-${fld.key}`} />
+                                      ) : fld.type === "bool" ? (
                                         <label className="flex items-center gap-1 text-xs h-8">
                                           <input type="checkbox" className="w-3.5 h-3.5" disabled={readOnly} checked={!!f[fld.key]} onChange={(e) => setField(el.num, fld.key, e.target.checked)} /> Yes
                                         </label>

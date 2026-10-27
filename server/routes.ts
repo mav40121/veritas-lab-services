@@ -213,6 +213,7 @@ function headerRowHeight(headers: string[], colWidths: number[]): number {
 
 import { logAudit } from "./audit";
 import { syncInitialToStaffSchedule, earliestSignedInitials } from "./competencyClearanceSync";
+import { loadQualifiedObservers, observerProblem, itemObserverEntries, storedObserverValues } from "./competencyObserver";
 import { summarizeCspReport, cspHeaderName } from "./securityHeaders";
 import { normalizeChecklistItems } from "@shared/competencyChecklist";
 import { assessmentTypeLabel, assessmentTypeProblem, isEvaluationProgram, normalizeRecordKind } from "@shared/competencyEvaluation";
@@ -24662,6 +24663,14 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
   // ── ASSESSMENTS ───────────────────────────────────────────────────────────
 
+  // BUG-075: the legacy (no active lab) routes check the observer against the program's lab, or the account's own lab
+  // for a program saved before programs carried one (these routes already refuse accounts with more than one lab).
+  function observerLabId(programLabId: any, ownerId: number): number {
+    if (programLabId != null) return Number(programLabId);
+    const r = (db as any).$client.prepare("SELECT id FROM labs WHERE owner_user_id = ? ORDER BY id LIMIT 1").get(ownerId) as any;
+    return Number(r?.id ?? 0);
+  }
+
   app.post("/api/competency/assessments", authMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     // Phase B3 lite (2026-06-06): deprecation log line. New assessments
@@ -24676,6 +24685,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (!program) return res.status(404).json({ error: "Program not found" });
     const typeProblem = assessmentTypeProblem(program as any, assessmentType || "initial");
     if (typeProblem) return res.status(400).json({ error: typeProblem });
+    // BUG-075: a new Element 1 / 4 observer must be one of the lab's LD/TC/TS people in VeritaStaff.
+    const obsProblem = observerProblem(loadQualifiedObservers((db as any).$client, observerLabId((program as any).lab_id, dataUserId)), itemObserverEntries(items));
+    if (obsProblem) return res.status(400).json({ error: obsProblem });
     const emp = userCanAccessLabRow('competency_employees', employeeId, req);
     if (!emp) return res.status(404).json({ error: "Employee not found" });
     const now = new Date().toISOString();
@@ -24782,7 +24794,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const assessment = (db as any).$client.prepare(
-      `SELECT a.id, a.locked, p.user_id FROM competency_assessments a
+      `SELECT a.id, a.locked, p.user_id, p.lab_id FROM competency_assessments a
        JOIN competency_programs p ON a.program_id = p.id
        WHERE a.id = ?`
     ).get(req.params.id) as any;
@@ -24793,6 +24805,13 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // behind the "Sign & Complete" workflow that closes out the cycle.
     if (assessment.locked === 1) {
       return res.status(409).json({ error: "Assessment is locked. Unlock first to edit.", locked: true });
+    }
+    // BUG-075: a new or changed Element 1 / 4 observer must be one of the lab's LD/TC/TS people in VeritaStaff;
+    // an observer already saved on this record is left alone.
+    if (Array.isArray(req.body?.items)) {
+      const keptRows = (db as any).$client.prepare("SELECT el1_observer_initials, el4_observer_initials FROM competency_assessment_items WHERE assessment_id = ?").all(req.params.id);
+      const obsProblem = observerProblem(loadQualifiedObservers((db as any).$client, observerLabId(assessment.lab_id, dataUserId)), itemObserverEntries(req.body.items), storedObserverValues(keptRows));
+      if (obsProblem) return res.status(400).json({ error: obsProblem });
     }
     const { status, evaluatorName, evaluatorTitle, evaluatorInitials, remediationPlan, employeeAcknowledged, supervisorAcknowledged, reviewPeriodStart, reviewPeriodEnd, folder, items } = req.body;
     const sets: string[] = [];
@@ -25032,6 +25051,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // New-hire evaluation (2026-10-16): 30, 60 and 90-day types only on an evaluation program, and only there.
     const typeProblem = assessmentTypeProblem(program, assessmentType || "initial");
     if (typeProblem) return res.status(400).json({ error: typeProblem });
+    // BUG-075: a new Element 1 / 4 observer must be one of the lab's LD/TC/TS people in VeritaStaff.
+    const obsProblem = observerProblem(loadQualifiedObservers((db as any).$client, labId), itemObserverEntries(items));
+    if (obsProblem) return res.status(400).json({ error: obsProblem });
     // Phase B1 of the employee-table unification (2026-06-06): the dialog
     // can pass either `employeeId` (the competency_employees.id, legacy path)
     // OR `staffEmployeeId` (the staff_employees.id, new path). If the staff
@@ -25181,6 +25203,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       return res.status(409).json({ error: "Assessment is locked. Unlock first to edit.", locked: true });
     }
     const beforeItems = sqlite.prepare("SELECT * FROM competency_assessment_items WHERE assessment_id = ?").all(req.params.id);
+    // BUG-075: a new or changed Element 1 / 4 observer must be one of the lab's LD/TC/TS people in VeritaStaff;
+    // an observer already saved on this record is left alone.
+    if (Array.isArray(req.body?.items)) {
+      const obsProblem = observerProblem(loadQualifiedObservers(sqlite, labId), itemObserverEntries(req.body.items), storedObserverValues(beforeItems as any[]));
+      if (obsProblem) return res.status(400).json({ error: obsProblem });
+    }
 
     const { status, evaluatorName, evaluatorTitle, evaluatorInitials, remediationPlan, employeeAcknowledged, supervisorAcknowledged, reviewPeriodStart, reviewPeriodEnd, folder, items } = req.body;
     const sets: string[] = [];
@@ -29416,6 +29444,23 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     }
 
     const elements: any[] = Array.isArray(req.body?.elements) ? req.body.elements : [];
+    // BUG-075: a new or changed Element 1 / 4 observer must be one of the lab's LD/TC/TS people in VeritaStaff. An
+    // observer already saved on this method's working (not yet signed) items is left alone.
+    {
+      const keptRows = sqlite.prepare(
+        `SELECT i.el1_observer_initials, i.el4_observer_initials FROM competency_assessment_items i
+         JOIN competency_assessments a ON i.assessment_id = a.id
+         JOIN competency_programs p ON a.program_id = p.id
+         JOIN competency_employees ce ON a.employee_id = ce.id
+         WHERE p.lab_id = ? AND p.is_implicit = 1 AND ce.staff_employee_id = ? AND (a.locked IS NULL OR a.locked = 0)
+           AND i.signoff_id IS NULL AND i.instrument_id IN (${method.memberIds.map(() => "?").join(",")})`
+      ).all(labId, empId, ...method.memberIds) as any[];
+      const entries = elements
+        .filter((el) => (Number(el?.num) === 1 || Number(el?.num) === 4) && !el?.na)
+        .map((el) => ({ element: Number(el.num), value: el.observerInitials }));
+      const obsProblem = observerProblem(loadQualifiedObservers(sqlite, labId), entries, storedObserverValues(keptRows));
+      if (obsProblem) return res.status(400).json({ error: obsProblem });
+    }
     // Mirror the form rule: an N/A element needs a justification.
     for (const el of elements) {
       if (el?.na && !String(el?.naJustification || "").trim()) {
@@ -30809,40 +30854,13 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   //
   // Initials are computed from first_name / middle_initial / last_name so
   // the lab does not have to maintain a parallel "official initials" field.
-  // The free-text fallback in the dialog satisfies paper-first labs whose
-  // observer signed the paper record and is being transcribed here.
+  // BUG-075 (2026-10-27): the free-text fallback is gone; every save path refuses an observer outside this
+  // list (server/competencyObserver.ts). The list now includes people who have left the lab (active: false),
+  // so a paper record signed by a former supervisor can still be entered.
   app.get("/api/labs/:labId/staff/qualified-observers", authMiddleware, labScopeMiddleware, (req: any, res) => {
     if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
     const labId = req.scope.labId;
-    const rows = (db as any).$client.prepare(
-      `SELECT e.id AS employee_id, e.first_name, e.last_name, e.middle_initial,
-              GROUP_CONCAT(DISTINCT r.role) AS role_csv
-       FROM staff_employees e
-       JOIN staff_roles r ON r.employee_id = e.id
-       WHERE e.tier2_lab_id = ?
-         AND e.status = 'active'
-         AND r.role IN ('LD', 'TC', 'TS')
-       GROUP BY e.id, e.first_name, e.last_name, e.middle_initial
-       ORDER BY e.last_name, e.first_name`
-    ).all(labId) as Array<{
-      employee_id: number; first_name: string; last_name: string; middle_initial: string | null; role_csv: string;
-    }>;
-
-    const observers = rows.map((r) => {
-      const firstInitial = (r.first_name || "").trim().charAt(0).toUpperCase();
-      const middleInitial = (r.middle_initial || "").trim().charAt(0).toUpperCase();
-      const lastInitial = (r.last_name || "").trim().charAt(0).toUpperCase();
-      const initials = [firstInitial, middleInitial, lastInitial].filter(Boolean).join("");
-      const name = [r.last_name, r.first_name].filter(Boolean).join(", ") + (r.middle_initial ? ` ${r.middle_initial}.` : "");
-      const roles = (r.role_csv || "").split(",").filter(Boolean);
-      return {
-        employeeId: r.employee_id,
-        name: name || `Employee #${r.employee_id}`,
-        initials,
-        roles,
-      };
-    });
-    res.json(observers);
+    res.json(loadQualifiedObservers((db as any).$client, labId));
   });
 
   // GET /api/labs/:labId/staff/position-descriptions

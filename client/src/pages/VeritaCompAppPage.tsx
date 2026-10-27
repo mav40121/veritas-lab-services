@@ -3593,8 +3593,9 @@ function NewAssessmentDialog({
   const [ptPickerMgId, setPtPickerMgId] = useState<number | null>(null);
 
   // Wave F PR F4: qualified observers (LD / TC / TS) for the Element 1 + 4
-  // observer-initials Select. Empty list is acceptable — paper-first labs
-  // with no staff roster fall through to the free-text Input branch.
+  // observer-initials Select. BUG-075 (2026-10-27): Elements 1 and 4 pick
+  // from this list only (the server refuses anyone else on a new or changed
+  // value); an empty list shows a prompt to add the observer in VeritaStaff.
   const { data: qualifiedObservers, isLoading: observersLoading } = useQuery<QualifiedObserver[]>({
     queryKey: [activeLabId ? `/api/labs/${activeLabId}/staff/qualified-observers` : "no-observers"],
     queryFn: async () => {
@@ -4685,6 +4686,7 @@ function NewAssessmentDialog({
                         <div className="w-56">
                           <label className="text-[10px] text-muted-foreground">Observer (LD / TC / TS)</label>
                           <ObserverInitialsField
+                            allowTyped
                             value={getTechDataForElement(7, mg.id).el7_observer_initials}
                             onChange={(v) => setTechField(7, mg.id, "el7_observer_initials", v)}
                             observers={qualifiedObservers || []}

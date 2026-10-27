@@ -44,6 +44,8 @@ const chem = insts.find((i) => /AU5800/.test(i.instrument_name)).id, heme = inst
 const pat = (await call("POST", `${L}/staff/employees`, { firstName: "Pat", lastName: "Alpha", title: "MLS", performsTesting: true }, T)).body.id;
 const kim = (await call("POST", `${L}/staff/employees`, { firstName: "Kim", lastName: "Bravo", title: "MLT", performsTesting: true }, T)).body.id;
 for (const id of [pat, kim]) await call("PUT", `${L}/staff/employees/${id}/instruments`, { instrumentIds: [chem] }, T);
+// BUG-075: the Element 1 / 4 observer must be an LD/TC/TS in VeritaStaff, so "MV" is the lab director.
+await call("POST", `${L}/staff/employees`, { firstName: "Morgan", lastName: "Vance", title: "Laboratory Director", roles: [{ role: "LD" }] }, T);
 const elements = [
   { num: 1, specimenId: "S-100", observerInitials: "MV", passed: true },
   { num: 2, evidence: "Reported K 6.2 critical", date: "2026-10-01", passed: true },

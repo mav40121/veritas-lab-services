@@ -84,10 +84,10 @@ async function main() {
   v = await view(mixed);
   check("3a. one passed method: 1 of 2, not complete", r3.s === 200 && tsOf(v, NOVA).waivedPassed === 1 && tsOf(v, NOVA).complete === false, `${r3.s} ${JSON.stringify({ p: tsOf(v, NOVA).waivedPassed, c: tsOf(v, NOVA).complete })}`);
   const sedEls = [
-    { num: 1, specimenId: "S-100", observerInitials: "JE", passed: true },
+    { num: 1, specimenId: "S-100", observerInitials: "CT", passed: true }, // BUG-075: observer is the TC, not the GS
     { num: 2, evidence: "LIS result review", date: today, passed: true },
     { num: 3, qcDate: today, passed: true },
-    { num: 4, dateObserved: today, observerInitials: "JE", passed: true },
+    { num: 4, dateObserved: today, observerInitials: "CT", passed: true },
     { num: 5, sampleType: "PT", sampleId: "PT-1", acceptable: true, passed: true },
     { num: 6, quizId: "Q-1", score: 100, dateTaken: today, passed: true },
   ];
