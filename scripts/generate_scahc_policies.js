@@ -222,7 +222,7 @@ async function main() {
     `match SCAHC's actual procedures, then route through your Policy and`,
     `Procedure Committee for approval.`,
     ``,
-    `Source: VeritaAssure (TM) | VeritaPolicy (TM)  https://www.veritaslabservices.com`,
+    `Source: VeritaAssure (R) | VeritaPolicy (TM)  https://www.veritaslabservices.com`,
   ].join("\r\n");
   bundle.file(`README_${TODAY}.txt`, readme);
 

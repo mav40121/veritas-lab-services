@@ -44,7 +44,7 @@ const completedItems: RoadmapItem[] = [
       "Every account is tied to a specific CLIA certificate. Lab tier and pricing are suggested based on certificate type. You can always select a different tier. No self-reporting or manual verification required.",
   },
   {
-    title: "VeritaAssure® Consulting Services",
+    title: "VeritaAssure™ Consulting Services",
     description:
       "Mock inspections, regulatory gap analysis, laboratory director services, and policy and procedure development. Available as a standalone engagement or alongside the software suite.",
   },

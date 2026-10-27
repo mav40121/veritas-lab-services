@@ -81,8 +81,8 @@ DISCLAIMER = ("Disclaimer: VeritaCheck is a statistical calculation tool. Result
     "licensed medical director or designee. Not medical advice. No PHI should be entered in any field. Final "
     "approval and clinical determination must be made by the laboratory director or designee. CLSI guidelines "
     "referenced are current as of the publication date; verify against your current CLSI subscriptions. "
-    "VeritaAssure is a trademark of Veritas Lab Services, LLC (USPTO Serial No. 99731002). VeritaCheck is a "
-    "trademark of Veritas Lab Services, LLC (USPTO Serial No. 99730975). Governing law: Massachusetts.")
+    "VeritaAssure and VeritaCheck are registered trademarks of Veritas Lab Services, LLC (U.S. Reg. Nos. "
+    "8521603 and 8521591). Governing law: Massachusetts.")
 
 
 def build(out_path: str):
@@ -91,7 +91,7 @@ def build(out_path: str):
                             leftMargin=0.4*inch, rightMargin=0.4*inch,
                             topMargin=0.4*inch, bottomMargin=0.35*inch)
     ss = getSampleStyleSheet()
-    tm = "™"  # trademark
+    reg = "®"  # VeritaAssure and VeritaCheck: registered marks (USPTO, issued 2026-10-27)
     h_brand = ParagraphStyle("brand", parent=ss["Normal"], fontName="Helvetica-Bold",
                              fontSize=15, textColor=TEAL, spaceAfter=1, leading=17)
     h_sub = ParagraphStyle("sub", parent=ss["Normal"], fontName="Helvetica", fontSize=7.5,
@@ -111,10 +111,10 @@ def build(out_path: str):
                           textColor=TEAL, spaceBefore=4, spaceAfter=6)
 
     story = []
-    story.append(Paragraph(f"VeritaAssure{tm}", h_brand))
+    story.append(Paragraph(f"VeritaAssure{reg}", h_brand))
     story.append(Paragraph("Veritas Lab Services, LLC  |  veritaslabservices.com", h_sub))
-    story.append(Paragraph(f"VeritaCheck{tm} Regulatory Standards Compliance Matrix", h_title))
-    story.append(Paragraph(f"Maps the core VeritaCheck{tm} verification study types to applicable CLSI, "
+    story.append(Paragraph(f"VeritaCheck{reg} Regulatory Standards Compliance Matrix", h_title))
+    story.append(Paragraph(f"Maps the core VeritaCheck{reg} verification study types to applicable CLSI, "
                            "CLIA, CAP, and TJC standards", h_tag))
 
     data = [[Paragraph(h, hd) for h in HEADERS]]
@@ -141,7 +141,7 @@ def build(out_path: str):
     story.append(tbl)
 
     stamp = datetime.now().strftime("%B %Y")
-    story.append(Paragraph(f"VeritaAssure{tm}  |  VeritaCheck{tm}  |  Confidential - For Internal Lab Use Only  |  "
+    story.append(Paragraph(f"VeritaAssure{reg}  |  VeritaCheck{reg}  |  Confidential - For Internal Lab Use Only  |  "
                            f"Generated {stamp}", foot))
     story.append(Paragraph(DISCLAIMER, disc))
     doc.build(story)
