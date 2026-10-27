@@ -7,6 +7,7 @@ import { resolveRowForMutation, resolveLegacyLabId } from "./labAccessGuard";
 import { blockNonOperatorSeat } from "./seatAccess";
 import { preserveMapLink, applyMapSignoffWriteback, deriveMapLink, analyteFromTaskName } from "./veritatrackMapSync";
 import { labLocalDate, labToday, addLabDays, labTimeZoneById, setRequestLabTz } from "./dateLocal";
+import { attachSopLinks } from "./veritamapSopLink";
 import { DEFAULT_TRACK_CATEGORIES, cleanCategoryName, isDefaultTrackCategory, categoryNameProblem } from "@shared/veritatrackCategories";
 import { labWideCorrelation } from "./labWideCorrelation";
 import { exportAllPlanBypass } from "./exportAllContext";
@@ -742,9 +743,15 @@ export function registerVeritaTrackRoutes(
         ).all(userId) as Array<{ id: number; name: string }>;
     if (maps.length === 0) return res.status(404).json({ error: "No VeritaMap\u2122 found. Build your test menu first." });
     const mapIdPlaceholders = maps.map(() => "?").join(",");
-    const allTests = sqlite.prepare(
-      `SELECT * FROM veritamap_tests WHERE map_id IN (${mapIdPlaceholders}) AND active = 1 ORDER BY analyte`
-    ).all(...maps.map(m => m.id)) as any[];
+    // #93: a test whose SOP links to a VeritaDC policy seeds the SOP review from that policy's last review.
+    const allTests = (labId != null
+      ? attachSopLinks(sqlite, labId, sqlite.prepare(
+          `SELECT * FROM veritamap_tests WHERE map_id IN (${mapIdPlaceholders}) AND active = 1 ORDER BY analyte`
+        ).all(...maps.map(m => m.id)) as any[])
+      : (sqlite.prepare(
+          `SELECT * FROM veritamap_tests WHERE map_id IN (${mapIdPlaceholders}) AND active = 1 ORDER BY analyte`
+        ).all(...maps.map(m => m.id)) as any[]).map((r) => ({ ...r, sop_link: null }))
+    ).map((r: any) => (r.sop_link ? { ...r, last_sop_review: r.sop_link.last_review } : r));
     // Dedupe across maps on lowercase analyte. Keep the most recent
     // last_cal_ver / last_method_comp / last_precision / last_sop_review
     // values across all the analyte's appearances so the seeded sign-off is

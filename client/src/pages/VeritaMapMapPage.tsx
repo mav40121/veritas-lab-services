@@ -100,6 +100,18 @@ interface CorrelationRecord {
   is_self_pair?: 0 | 1;
 }
 
+interface SopLink {
+  document_id: number;
+  title: string | null;
+  status: string | null;
+  last_review: string | null;
+  next_review: string | null;
+  overdue: boolean;
+  reason: string | null;
+}
+// The SOP date a sort or a count should use: the linked policy's last review, else the hand-entered date.
+const sopDate = (t: { sop_link?: SopLink | null; last_sop_review?: string | null }) => (t.sop_link ? t.sop_link.last_review : t.last_sop_review) ?? null;
+
 interface TestRecord {
   id: number;
   analyte: string;
@@ -111,6 +123,10 @@ interface TestRecord {
   last_method_comp?: string | null;
   last_precision?: string | null;
   last_sop_review?: string | null;
+  // Parking lot #93: the SOP linked to a VeritaDC policy (server/veritamapSopLink.ts). When set, the map reads the
+  // policy's review state instead of last_sop_review.
+  sop_document_id?: number | null;
+  sop_link?: SopLink | null;
   notes?: string;
   // True when EVERY active instrument row carrying this analyte has a
   // linearity / cal ver exemption flag (server-derived; parking lot #77).
@@ -764,7 +780,7 @@ function calcCompliance(tests: TestRecord[]): {
     const cvStatus = calVerExempt(t) ? ("ok" as DateStatus) : getDateStatus(t.last_cal_ver, 6);
     // BUG-018: a method comparison is due only where 2+ nonwaived instruments run the test (42 CFR 493.1281(a)).
     const mcStatus = methodCompRequired(t) ? getDateStatus(t.last_method_comp, 6) : ("ok" as DateStatus);
-    const sopStatus = getDateStatus(t.last_sop_review, 24);
+    const sopStatus = t.sop_link ? ((t.sop_link.overdue ? "overdue" : "ok") as DateStatus) : getDateStatus(t.last_sop_review, 24);
     if (cvStatus === "overdue" || cvStatus === "missing") calVerOverdue++;
     if (mcStatus === "missing") methodCompMissing++;
     if (sopStatus === "overdue" || sopStatus === "missing") sopOverdue++;
@@ -831,6 +847,8 @@ interface TestRowProps {
   onDeleteAnalyteBand?: (analyte: string, band: AnalyteValues) => Promise<void>;
   onSaveAmrValues?: (analyte: string, instrumentId: number, values: AmrSaveValues) => void;
   onEditCorrelation?: (test: TestRecord, corr: CorrelationRecord | null) => void;
+  // #93: opens the link-a-policy dialog for this test (lab-scoped, editable maps only).
+  onSopLink?: (test: TestRecord) => void;
   readOnly?: boolean;
   colCount: number;
   // Wave A4 provenance actions (lab-scoped routes only; undefined on the
@@ -1283,7 +1301,102 @@ function CorrelationEditModal({ open, onClose, sourceTest, existing, mapId, onSa
   );
 }
 
-function TestRow({ test, onChange, onChangeMany, onRowMount, analyteBands, amrValues, onSaveAnalyteValues, onDeleteAnalyteBand, onSaveAmrValues, onEditCorrelation, readOnly, colCount, onProvenance, canUnlock }: TestRowProps) {
+// ── #93 Link an SOP to a VeritaDC policy ─────────────────────────────────────
+interface VeritaDcDoc { id: number; title: string; status: string; next_review_date: string | null; manual_name: string | null }
+function SopLinkDialog({ test, tests, labId, mapApiBase, onClose, onSaved }: {
+  test: TestRecord; tests: TestRecord[]; labId: number; mapApiBase: string; onClose: () => void; onSaved: () => void;
+}) {
+  const { toast } = useToast();
+  const [search, setSearch] = useState("");
+  const [docId, setDocId] = useState<number | null>(test.sop_document_id ?? null);
+  const [picked, setPicked] = useState<Set<string>>(() => new Set([test.analyte]));
+  const [saving, setSaving] = useState(false);
+  const { data: docs = [], isLoading } = useQuery<VeritaDcDoc[]>({
+    queryKey: [`/api/labs/${labId}/veritapolicy/documents`, "sop-link"],
+    queryFn: async () => {
+      const r = await fetch(`${API_BASE}/api/labs/${labId}/veritapolicy/documents`, { headers: authHeaders() });
+      if (!r.ok) return [];
+      const j = await r.json();
+      return (j.documents || []) as VeritaDcDoc[];
+    },
+  });
+  const shown = docs.filter((d) => !search.trim() || d.title.toLowerCase().includes(search.trim().toLowerCase()) || (d.manual_name || "").toLowerCase().includes(search.trim().toLowerCase()));
+  const sameSpecialty = tests.filter((t) => t.specialty === test.specialty).map((t) => t.analyte);
+  const save = async (documentId: number | null) => {
+    setSaving(true);
+    try {
+      const r = await fetch(`${API_BASE}${mapApiBase}/sop-link`, {
+        method: "PUT", headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ analytes: [...picked], documentId }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || "Could not save the link");
+      toast({ title: documentId ? `Linked ${picked.size} test${picked.size === 1 ? "" : "s"}` : `Unlinked ${picked.size} test${picked.size === 1 ? "" : "s"}` });
+      onSaved();
+    } catch (e: any) {
+      toast({ title: "Not saved", description: e.message, variant: "destructive" });
+    } finally { setSaving(false); }
+  };
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="text-base">Link the SOP to a VeritaDC policy</DialogTitle>
+          <DialogDescription className="text-xs">
+            The map then reads the policy's review: Current while it is approved and inside its next review date, Overdue otherwise.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <Input placeholder="Search this lab's policies" value={search} onChange={(e) => setSearch(e.target.value)} className="h-8 text-sm" data-testid="sop-link-search" />
+          <div className="max-h-48 overflow-y-auto border border-border rounded-md divide-y divide-border">
+            {isLoading && <div className="p-3 text-xs text-muted-foreground">Loading policies...</div>}
+            {!isLoading && shown.length === 0 && <div className="p-3 text-xs text-muted-foreground">No policies in VeritaDC match. Upload the SOP in VeritaDC first.</div>}
+            {shown.map((d) => (
+              <label key={d.id} className={`flex items-start gap-2 p-2 cursor-pointer text-sm ${docId === d.id ? "bg-primary/5" : ""}`} data-testid={`sop-link-doc-${d.id}`}>
+                <input type="radio" name="sop-doc" checked={docId === d.id} onChange={() => setDocId(d.id)} className="mt-1" />
+                <span className="flex-1 min-w-0">
+                  <span className="block truncate">{d.title}</span>
+                  <span className="block text-[11px] text-muted-foreground">
+                    {d.status.replace(/_/g, " ")}{d.next_review_date ? ` · next review ${String(d.next_review_date).slice(0, 10)}` : ""}{d.manual_name ? ` · ${d.manual_name}` : ""}
+                  </span>
+                </span>
+              </label>
+            ))}
+          </div>
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs font-medium text-muted-foreground">Tests this policy covers ({picked.size})</span>
+              <button type="button" className="text-[11px] text-primary hover:underline" onClick={() => setPicked(new Set([...picked, ...sameSpecialty]))} data-testid="sop-link-specialty">
+                Add every {test.specialty} test
+              </button>
+            </div>
+            <div className="max-h-32 overflow-y-auto border border-border rounded-md p-2 grid grid-cols-2 gap-1">
+              {tests.map((t) => (
+                <label key={t.analyte} className="flex items-center gap-1.5 text-xs">
+                  <input type="checkbox" checked={picked.has(t.analyte)} onChange={(e) => {
+                    const next = new Set(picked); if (e.target.checked) next.add(t.analyte); else next.delete(t.analyte); setPicked(next);
+                  }} />
+                  <span className="truncate">{t.analyte}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+        <DialogFooter className="gap-2">
+          {test.sop_link && (
+            <Button variant="outline" size="sm" disabled={saving || picked.size === 0} onClick={() => save(null)} data-testid="sop-link-unlink">Unlink</Button>
+          )}
+          <Button variant="outline" size="sm" onClick={onClose}>Cancel</Button>
+          <Button size="sm" disabled={saving || !docId || picked.size === 0} onClick={() => save(docId)} data-testid="sop-link-save">
+            {saving ? "Saving..." : "Link policy"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function TestRow({ test, onChange, onChangeMany, onRowMount, analyteBands, amrValues, onSaveAnalyteValues, onDeleteAnalyteBand, onSaveAmrValues, onEditCorrelation, onSopLink, readOnly, colCount, onProvenance, canUnlock }: TestRowProps) {
   // #84 Phase 3: the Run links start a VeritaCheck study, which is setup.
   const checkReadOnly = useIsReadOnly("veritacheck");
   const [expanded, setExpanded] = React.useState(false);
@@ -1733,15 +1846,47 @@ function TestRow({ test, onChange, onChangeMany, onRowMount, analyteBands, amrVa
         />
       </td>
 
-      {/* SOP Review */}
-      <td className="px-3 py-2 whitespace-nowrap">
-        <DateCell
-          value={test.last_sop_review}
-          onChange={(v) => onChange(test.analyte, "last_sop_review", v)}
-          maxMonths={24}
-          warningDays={60}
-          locked={readOnly}
-        />
+      {/* SOP Review: a linked VeritaDC policy (#93), else the hand-entered date */}
+      <td className="px-3 py-2 whitespace-nowrap" data-testid={`sop-cell-${test.analyte}`}>
+        {test.sop_link ? (
+          <div className="min-w-[150px] max-w-[220px]" title={test.sop_link.reason || undefined}>
+            <div className="flex items-center gap-1.5">
+              <FileText size={11} className="text-primary shrink-0" />
+              <span className="text-xs font-medium truncate" data-testid="sop-link-title">{test.sop_link.title || "Policy not found"}</span>
+            </div>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span
+                data-testid="sop-link-chip"
+                className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${test.sop_link.overdue ? "bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300" : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300"}`}
+              >
+                {test.sop_link.overdue ? "Overdue" : "Current"}
+              </span>
+              <span className="text-[10px] text-muted-foreground">
+                {test.sop_link.last_review ? `Reviewed ${test.sop_link.last_review}` : "No approval yet"}
+              </span>
+            </div>
+            {!readOnly && onSopLink && (
+              <button type="button" className="text-[10px] text-primary hover:underline mt-0.5" onClick={() => onSopLink(test)} data-testid="sop-link-change">
+                Change link
+              </button>
+            )}
+          </div>
+        ) : (
+          <div>
+            <DateCell
+              value={test.last_sop_review}
+              onChange={(v) => onChange(test.analyte, "last_sop_review", v)}
+              maxMonths={24}
+              warningDays={60}
+              locked={readOnly}
+            />
+            {!readOnly && onSopLink && (
+              <button type="button" className="text-[10px] text-primary hover:underline mt-0.5 pl-0.5" onClick={() => onSopLink(test)} data-testid="sop-link-open">
+                Link policy
+              </button>
+            )}
+          </div>
+        )}
       </td>
 
       {/* Notes */}
@@ -2372,6 +2517,8 @@ export default function VeritaMapMapPage() {
   const mapDetailUrl = mapApiBase;
 
   // Fetch map detail
+  // #93: the test whose SOP link dialog is open.
+  const [sopLinkFor, setSopLinkFor] = useState<TestRecord | null>(null);
   const { data: mapDetail, isLoading } = useQuery<MapDetail>({
     queryKey: [mapDetailUrl],
     enabled: !!mapId,
@@ -2781,7 +2928,7 @@ export default function VeritaMapMapPage() {
         case "last_cal_ver":         return t.last_cal_ver ?? "9999-12-31";
         case "last_method_comp":     return t.last_method_comp ?? "9999-12-31";
         case "last_precision":       return t.last_precision ?? "9999-12-31";
-        case "last_sop_review":      return t.last_sop_review ?? "9999-12-31";
+        case "last_sop_review":      return sopDate(t) ?? "9999-12-31";
         case "notes":                return (t.notes ?? "").toLowerCase();
       }
     };
@@ -3285,6 +3432,7 @@ export default function VeritaMapMapPage() {
                     onProvenance={activeLabId ? handleProvenance : undefined}
                     canUnlock={canUnlockProvenance}
                     onEditCorrelation={openCorrModal}
+                    onSopLink={activeLabId && !readOnly ? setSopLinkFor : undefined}
                     readOnly={readOnly}
                     colCount={12}
                   />
@@ -3326,6 +3474,16 @@ export default function VeritaMapMapPage() {
         mapId={mapId ? parseInt(mapId, 10) : null}
         onSaved={() => { /* invalidation handled inside modal */ }}
       />
+      {sopLinkFor && activeLabId && (
+        <SopLinkDialog
+          test={sopLinkFor}
+          tests={(mapDetail?.tests ?? []) as TestRecord[]}
+          labId={activeLabId}
+          mapApiBase={mapApiBase}
+          onClose={() => setSopLinkFor(null)}
+          onSaved={() => { setSopLinkFor(null); qc.invalidateQueries({ queryKey: [mapDetailUrl] }); }}
+        />
+      )}
     </div>
   );
 }

@@ -196,6 +196,9 @@ jobs:
         # Download all records: every table classified, owner-only, works after cancellation and trial expiry,
         # only this lab's rows, no sign-in secrets, plan gates open only for the export job.
         run: npm run test:export-all
+      - name: Run VeritaMap SOP link integration test
+        # Parking lot #93: a test's SOP reads its linked VeritaDC policy's review state; unlinked keeps its date.
+        run: npm run test:veritamap-sop-link
       - name: Run VeritaStock recall tracker integration test
         # Intake on the lab's day, lot match across locations, notices, pull by lot, closeout gating, overdue reminders (2026-10-08). Passed locally, never wired into CI before 2026-10-27.
         run: npm run test:stock-recalls
