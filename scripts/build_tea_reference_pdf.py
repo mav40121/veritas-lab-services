@@ -21,7 +21,7 @@ from reportlab.platypus import (SimpleDocTemplate, Table, TableStyle, Paragraph,
 TEAL = colors.HexColor("#01696F"); DARK = colors.HexColor("#0A3A3D")
 TEXT = colors.HexColor("#28251D"); GRAY = colors.HexColor("#6B7280")
 ALT = colors.HexColor("#EBF3F8"); BORDER = colors.HexColor("#D0D0D0")
-TM = "™"
+REG = "®"  # VeritaAssure is a registered mark (USPTO, issued 2026-10-27)
 
 
 def main():
@@ -76,7 +76,7 @@ def main():
         story += [Paragraph(f"{sp}  ({len(groups[sp])})", sech), t]
 
     story += [Spacer(1, 10), HRFlowable(width="100%", thickness=0.75, color=BORDER, spaceAfter=6),
-              Paragraph(f"Source: 42 CFR Part 493, Subpart I. Provided by VeritaAssure{TM} | Veritas Lab Services. "
+              Paragraph(f"Source: 42 CFR Part 493, Subpart I. Provided by VeritaAssure{REG} | Veritas Lab Services. "
                         "Verify current requirements against the eCFR. Live lookup: veritaslabservices.com/resources/clia-tea-lookup.", small)]
     doc.build(story)
     print("wrote", out, "|", len(data), "analytes,", len(order), "specialties")

@@ -175,7 +175,7 @@ export default function ArticlePostAnalyticalPage() {
               </p>
               <div className="flex flex-wrap justify-center gap-3">
                 <Button asChild className="bg-primary hover:bg-primary/90">
-                  <Link href="/veritamap">Explore VeritaMap<span aria-hidden>™</span> <ChevronRight size={14} className="ml-1" /></Link>
+                  <Link href="/veritamap">Explore VeritaMap<span aria-hidden>®</span> <ChevronRight size={14} className="ml-1" /></Link>
                 </Button>
                 <Button asChild variant="outline">
                   <Link href="/readiness">Book a mock inspection</Link>

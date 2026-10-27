@@ -1,5 +1,5 @@
 /**
- * VeritaAssure(TM) PI Dashboard - Performance Improvement Metric Starter Library
+ * VeritaAssure(R) PI Dashboard - Performance Improvement Metric Starter Library
  *
  * 161 metrics across 11 departments, drawn from CAP Q-Probes/Q-Tracks,
  * AABB Standards, CLSI, CLIA, TJC NPSGs, ISO 15189, and other published sources.

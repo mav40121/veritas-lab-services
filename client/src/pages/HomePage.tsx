@@ -185,7 +185,7 @@ return (
               VeritaAssure® is a suite of eighteen purpose-built modules organized into two streams: twelve compliance modules covering performance verification, inspection readiness, competency, policy management, test menu mapping, personnel credentialing, certificate tracking, proficiency testing, regulatory calendar, post-survey deficiency response, daily QC sign-off, and equipment maintenance; and six operations modules covering billable-tests-per-hour benchmarking, monthly productivity tracking, by-hour staffing analysis, quality indicators, inventory, and cost-per-reportable-test studies.
             </p>
             <p className="text-muted-foreground max-w-3xl mx-auto leading-relaxed">
-              VeritaAssure® is the compliance framework behind everything Veritas Lab Services delivers. It combines hands-on consulting with an eighteen-module software suite to give your laboratory a complete picture of where it stands and what needs to change. Whether you need a structured mock survey, a workflow gap analysis, or ongoing compliance monitoring, VeritaAssure® brings the expertise and the tools together so your team isn't scrambling before the next inspection.
+              VeritaAssure™ is the compliance framework behind everything Veritas Lab Services delivers. It combines hands-on consulting with an eighteen-module software suite to give your laboratory a complete picture of where it stands and what needs to change. Whether you need a structured mock survey, a workflow gap analysis, or ongoing compliance monitoring, VeritaAssure™ brings the expertise and the tools together so your team isn't scrambling before the next inspection.
             </p>
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -208,7 +208,7 @@ return (
                 <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center mb-3 text-primary group-hover:bg-primary/20 transition-colors">
                   <Briefcase size={18} />
                 </div>
-                <h3 className="font-semibold text-sm mb-2">VeritaAssure® Consulting</h3>
+                <h3 className="font-semibold text-sm mb-2">VeritaAssure™ Consulting</h3>
                 <p className="text-xs text-muted-foreground leading-relaxed mb-3">
                   Structured mock surveys, regulatory gap analysis, productivity and workflow assessments, leadership coaching, and CLIA Laboratory Director services. On-site expertise aligned with CLIA, CAP, COLA, TJC, and FDA expectations.
                 </p>
@@ -222,7 +222,7 @@ return (
                 <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center mb-3 text-primary group-hover:bg-primary/20 transition-colors">
                   <Handshake size={18} />
                 </div>
-                <h3 className="font-semibold text-sm mb-2">VeritaAssure® Together</h3>
+                <h3 className="font-semibold text-sm mb-2">VeritaAssure™ Together</h3>
                 <p className="text-xs text-muted-foreground leading-relaxed mb-3">
                   For labs that want both: consulting engagements that use the same tools your team works in every day, so the findings don't disappear when the engagement ends.
                 </p>
