@@ -212,6 +212,7 @@ function headerRowHeight(headers: string[], colWidths: number[]): number {
 }
 
 import { logAudit } from "./audit";
+import { syncInitialToStaffSchedule, earliestSignedInitials } from "./competencyClearanceSync";
 import { summarizeCspReport, cspHeaderName } from "./securityHeaders";
 import { normalizeChecklistItems } from "@shared/competencyChecklist";
 import { assessmentTypeLabel, assessmentTypeProblem, isEvaluationProgram, normalizeRecordKind } from "@shared/competencyEvaluation";
@@ -24956,6 +24957,16 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       after: { locked: 1, completion_date: now, final_signed_by_user_id: req.userId, signed_on_paper_date: signedOnPaper, prior_approval_note: priorNote },
       ipAddress: req.ip,
     });
+    // Michael Q19 = 1: a passed initial signed here also clears the person in VeritaStaff when their record is empty.
+    try {
+      const a = (db as any).$client.prepare(
+        `SELECT a.assessment_type, a.status, ce.staff_employee_id FROM competency_assessments a JOIN competency_employees ce ON ce.id = a.employee_id WHERE a.id = ?`
+      ).get(req.params.id) as any;
+      if (a && a.assessment_type === "initial" && a.status === "pass" && a.staff_employee_id) {
+        const who = (db as any).$client.prepare("SELECT name FROM users WHERE id = ?").get(req.userId) as any;
+        syncInitialToStaffSchedule((db as any).$client, a.staff_employee_id, { date: signedOnPaper || todayDate, signedBy: who?.name || null, source: "VeritaComp record" }, { actorUserId: req.userId, ip: req.ip });
+      }
+    } catch (e: any) { console.error("[competency] clearance sync failed:", e?.message || e); }
     res.json({ ok: true, locked: true, completion_date: now, final_signed_by_user_id: req.userId, signed_on_paper_date: signedOnPaper, prior_approval_note: priorNote });
   });
 
@@ -25347,6 +25358,16 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       after: { locked: 1, completion_date: now, final_signed_by_user_id: req.userId, signed_on_paper_date: signedOnPaper, prior_approval_note: priorNote },
       ipAddress: req.ip,
     });
+    // Michael Q19 = 1: a passed initial signed here also clears the person in VeritaStaff when their record is empty.
+    try {
+      const a = sqlite.prepare(
+        `SELECT a.assessment_type, a.status, ce.staff_employee_id FROM competency_assessments a JOIN competency_employees ce ON ce.id = a.employee_id WHERE a.id = ?`
+      ).get(req.params.id) as any;
+      if (a && a.assessment_type === "initial" && a.status === "pass" && a.staff_employee_id) {
+        const who = sqlite.prepare("SELECT name FROM users WHERE id = ?").get(req.userId) as any;
+        syncInitialToStaffSchedule(sqlite, a.staff_employee_id, { date: signedOnPaper || todayDate, signedBy: who?.name || null, source: "VeritaComp record" }, { actorUserId: req.userId, ip: req.ip });
+      }
+    } catch (e: any) { console.error("[competency] clearance sync failed:", e?.message || e); }
     res.json({ ok: true, locked: true, completion_date: now, final_signed_by_user_id: req.userId, signed_on_paper_date: signedOnPaper, prior_approval_note: priorNote });
   });
 
@@ -29632,6 +29653,13 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       after: { signoff_id: signoffId, milestone, signed_date: signedDate, signer: signer.name, role: signer.role, determination, remediation_plan: remediationPlan, remediation_target_date: remediationTargetDate },
       ipAddress: req.ip,
     });
+    // Michael Q19 = 1: a passed initial clears the person in VeritaStaff when their record is still empty
+    // (server/competencyClearanceSync.ts). Never fails the sign-off.
+    if (milestone === "initial" && determination === "pass") {
+      try {
+        syncInitialToStaffSchedule(sqlite, empId, { date: signedDate, signedBy: signer.name, source: "VeritaComp sign-off" }, { actorUserId: req.userId, ip: req.ip });
+      } catch (e: any) { console.error("[competency] clearance sync failed:", e?.message || e); }
+    }
     res.json({ ok: true, signoffId, milestone, signedDate, determination });
   });
 
@@ -31049,6 +31077,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           "INSERT INTO staff_competency_schedules (employee_id, lab_id, six_month_due_at, first_annual_due_at, annual_due_at, nys_six_month_due_at) VALUES (?,?,?,?,?,?)"
         );
         const hasScheduleStmt = sqlite.prepare("SELECT id FROM staff_competency_schedules WHERE employee_id = ?");
+        // Michael Q19 = 1: the optional "Recorded as" column fills only an empty marking (a lab's own marking is kept).
+        const recordedAsStmt = sqlite.prepare("UPDATE staff_competency_schedules SET recorded_as = ? WHERE employee_id = ? AND recorded_as IS NULL");
 
         const results: { rowNumber: number; action: "insert" | "update"; employeeId: number }[] = [];
         const beforeAfterAudit: any[] = [];
@@ -31072,6 +31102,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
                 const sched = computeSchedule(p.hireDate, p.highestComplexity);
                 insertScheduleStmt.run(empId, lab.id, sched.six_month_due_at, sched.first_annual_due_at, sched.annual_due_at, sched.nys_six_month_due_at);
               }
+              if (p.recordedAs) recordedAsStmt.run(p.recordedAs, empId);
               results.push({ rowNumber: r.rowNumber, action: "insert", employeeId: empId });
               beforeAfterAudit.push({ rowNumber: r.rowNumber, action: "insert", employeeId: empId, parsed: p });
             } else if (r.willUpdate && p.employeeId) {
@@ -31096,6 +31127,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
                   insertScheduleStmt.run(p.employeeId, lab.id, sched.six_month_due_at, sched.first_annual_due_at, sched.annual_due_at, sched.nys_six_month_due_at);
                 }
               }
+              if (p.recordedAs) recordedAsStmt.run(p.recordedAs, p.employeeId);
               results.push({ rowNumber: r.rowNumber, action: "update", employeeId: p.employeeId });
               beforeAfterAudit.push({ rowNumber: r.rowNumber, action: "update", employeeId: p.employeeId, before, after: p });
             }
@@ -31225,6 +31257,36 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     }
     res.json(schedule);
   }
+
+  // POST /api/labs/:labId/staff/competency/recorded-as (Michael Q19 = 1, 2026-10-27): mark several people at once as
+  // Existing staff (already testing before the lab's records were kept here) or New hire. Only people with no marking
+  // yet change: a person the lab already marked keeps it (change that one on their own record). Body
+  // { employeeIds: number[], recordedAs: "existing" | "new_hire" }. Audit-logged per person.
+  app.post("/api/labs/:labId/staff/competency/recorded-as", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritastaff'), (req: any, res) => {
+    if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
+    const { employeeIds, recordedAs } = req.body || {};
+    if (recordedAs !== "existing" && recordedAs !== "new_hire") return res.status(400).json({ error: "Recorded as must be Existing staff or New hire." });
+    if (!Array.isArray(employeeIds) || employeeIds.length === 0 || employeeIds.length > 2000) return res.status(400).json({ error: "Choose at least one person." });
+    const sqlite = (db as any).$client;
+    const changed: number[] = [], kept: number[] = [], notFound: number[] = [];
+    const tx = sqlite.transaction(() => {
+      for (const raw of employeeIds) {
+        const id = Number(raw);
+        const emp = sqlite.prepare("SELECT * FROM staff_employees WHERE id = ? AND tier2_lab_id = ?").get(id, req.scope.labId) as any;
+        if (!emp) { notFound.push(id); continue; }
+        const sched = sqlite.prepare("SELECT id, recorded_as FROM staff_competency_schedules WHERE employee_id = ?").get(id) as any;
+        if (sched?.recorded_as) { kept.push(id); continue; }
+        if (sched) sqlite.prepare("UPDATE staff_competency_schedules SET recorded_as = ? WHERE employee_id = ?").run(recordedAs, id);
+        else sqlite.prepare("INSERT INTO staff_competency_schedules (employee_id, lab_id, recorded_as) VALUES (?, ?, ?)").run(id, emp.lab_id, recordedAs);
+        logAudit({ userId: req.userId, ownerUserId: req.scope?.lab?.owner_user_id ?? req.userId, module: "veritastaff", action: sched ? "update" : "create",
+          entityType: "competency_schedule", entityId: id, entityLabel: `${emp.first_name} ${emp.last_name} (marked ${recordedAs === "existing" ? "Existing staff" : "New hire"})`,
+          before: { recorded_as: null }, after: { recorded_as: recordedAs }, ipAddress: req.ip });
+        changed.push(id);
+      }
+    });
+    tx();
+    res.json({ ok: true, changed: changed.length, kept: kept.length, notFound: notFound.length, changedIds: changed });
+  });
 
   // Update competency schedule
   app.put("/api/staff/competency/:employeeId", authMiddleware, requireWriteAccess, requireModuleEdit('veritastaff'), (req: any, res) => {
@@ -34613,6 +34675,26 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // the active testing staff who read "Not cleared for patient testing" today (the same competencyView every screen
   // uses), and how many passed, signed competencies VeritaComp already holds for each of them: the records a lab
   // moving over may have loaded before the historical import filled schedules. Header x-admin-secret only.
+  // POST /api/admin/competency/sync-clearance (Michael Q19 = 1, 2026-10-27). Backfill for people whose passed initial was
+  // signed in VeritaComp before signing reached VeritaStaff: records their earliest passed initial on an EMPTY VeritaStaff
+  // record (server/competencyClearanceSync.ts rules). Body { secret, labIds?: number[], dryRun } (dry run unless
+  // dryRun === false). Returns every candidate with its outcome and name; only "cleared" rows change.
+  app.post("/api/admin/competency/sync-clearance", (req, res) => {
+    const { secret, labIds, dryRun } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    const sqlite = (db as any).$client;
+    const ids = Array.isArray(labIds) ? labIds.map(Number).filter((n: number) => Number.isFinite(n)) : null;
+    const apply = dryRun === false;
+    const results = earliestSignedInitials(sqlite, ids).map((c: any) => ({
+      ...syncInitialToStaffSchedule(sqlite, c.staffEmployeeId, { date: c.date, signedBy: c.signedBy, source: c.source }, { dryRun: !apply }),
+      source: c.source,
+      labId: (sqlite.prepare("SELECT tier2_lab_id FROM staff_employees WHERE id = ?").get(c.staffEmployeeId) as any)?.tier2_lab_id ?? null,
+    }));
+    const count = (o: string) => results.filter((r: any) => r.outcome === o).length;
+    res.json({ dryRun: !apply, wouldClearOrCleared: count("cleared"), alreadyCleared: count("already_cleared"), existingStaff: count("existing_staff"),
+      hasOtherDates: count("has_other_dates"), results: results.map((r: any) => ({ staffEmployeeId: r.staffEmployeeId, name: r.name, labId: r.labId, outcome: r.outcome, initialDate: r.initialDate, source: r.source })) });
+  });
+
   app.get("/api/admin/competency/not-cleared-audit", (req, res) => {
     if (req.headers["x-admin-secret"] !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
     const sqlite = (db as any).$client;
