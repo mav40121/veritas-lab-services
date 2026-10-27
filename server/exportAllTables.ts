@@ -185,6 +185,7 @@ export const EXPORT_TABLES: Record<string, ExportTable> = {
   veritatrack_audit: lab("VeritaTrack"),
   veritatrack_reminder_config: lab("VeritaTrack"),
   veritatrack_reminder_log: lab("VeritaTrack"),
+  veritatrack_categories: lab("VeritaTrack"), // #110: the lab's own task categories
 
   // VeritaResponse
   findings: labOrOwner("VeritaResponse"),
