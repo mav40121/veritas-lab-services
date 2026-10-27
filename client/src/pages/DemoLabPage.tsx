@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { labTodayIso } from "@/lib/labDate";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -81,7 +82,7 @@ export default function DemoLabPage() {
       const res = await fetch(`${API_BASE}/api/demo/staff/cms209`);
       if (!res.ok) throw new Error(await res.text());
       const { token } = await res.json();
-      downloadPdfToken(token, `CMS_209_22D0999999_${new Date().toISOString().split("T")[0]}.pdf`);
+      downloadPdfToken(token, `CMS_209_22D0999999_${labTodayIso()}.pdf`);
     } catch (err: any) {
       console.error("CMS 209 generation failed:", err.message);
     } finally {
@@ -297,7 +298,7 @@ export default function DemoLabPage() {
       });
       if (!res.ok) return;
       const { token } = await res.json();
-      const date = new Date().toISOString().split("T")[0];
+      const date = labTodayIso();
       downloadPdfToken(token, `VeritaScan_${type === "executive" ? "Executive" : "Full"}_Riverside_Regional_${date}.pdf`);
     } catch (err) {
       console.error("Scan PDF error:", err);

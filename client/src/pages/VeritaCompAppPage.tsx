@@ -1,4 +1,5 @@
 import { NaReasonPresets } from "@/components/competency/NaReasonPresets";
+import { labTodayIso } from "@/lib/labDate";
 import { useState, useEffect, useLayoutEffect, useMemo, useRef, type ReactNode, type ComponentProps } from "react";
 import DOMPurify from "dompurify";
 import { Link, useLocation, useParams } from "wouter";
@@ -2194,7 +2195,7 @@ function ProgramDetailView({ programId }: { programId: number }) {
                 const { token } = await r.json();
                 const typeLabel = program.record_kind === "evaluation" ? "Evaluation" : program.type === "technical" ? "Technical" : program.type === "waived" ? "Waived" : "NonTechnical";
                 const safeName = (program.name || "Program").replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
-                const date = new Date().toISOString().split("T")[0];
+                const date = labTodayIso();
                 downloadPdfToken(token, `VeritaComp_BLANK_${typeLabel}_${safeName}_${date}.pdf`);
               } catch (err: any) {
                 console.error("Print blank template failed:", err);
@@ -3559,10 +3560,10 @@ function NewAssessmentDialog({
   // until a person is picked. Editing keeps the record's own employee.
   const [employeeId, setEmployeeId] = useState<number | null>(editing?.employee_id ?? null);
   const [assessmentType, setAssessmentType] = useState(editing?.assessment_type || "initial");
-  const [assessmentDate, setAssessmentDate] = useState(editing?.assessment_date || new Date().toISOString().split("T")[0]);
+  const [assessmentDate, setAssessmentDate] = useState(editing?.assessment_date || labTodayIso());
   // Customer-blockers wave 2026-06-05: review period (item #5 from VeritaComp
   // deep-dive). Defaults: end = assessment date, start = end minus 365 days.
-  const [reviewPeriodEnd, setReviewPeriodEnd] = useState(editing?.review_period_end || new Date().toISOString().split("T")[0]);
+  const [reviewPeriodEnd, setReviewPeriodEnd] = useState(editing?.review_period_end || labTodayIso());
   const [reviewPeriodStart, setReviewPeriodStart] = useState(() => {
     if (editing?.review_period_start) return editing.review_period_start;
     const d = new Date();
@@ -5169,7 +5170,7 @@ function QuizCardWithAssignStatus({
   const total = assignments.length;
   const completed = assignments.filter(a => a.status === "completed").length;
   const pending = total - completed;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = labTodayIso();
   const overdue = assignments.filter(a => a.status === "assigned" && a.due_date && a.due_date < today).length;
 
   return (

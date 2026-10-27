@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
+import { labTodayIso } from "@/lib/labDate";
 import { useSEO } from "@/hooks/useSEO";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -862,7 +863,7 @@ function InventorySection() {
   }, []);
 
   const stats = useMemo(() => {
-    const today = new Date().toISOString().split("T")[0];
+    const today = labTodayIso();
     const now = new Date();
     let reorderNow = 0, expiringSoon = 0, standingOrdersDue = 0;
     for (const item of items) {

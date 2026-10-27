@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { labTodayIso } from "@/lib/labDate";
 import { Link, useParams } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/components/AuthContext";
@@ -1264,7 +1265,7 @@ export default function VeritaScanScanPage() {
       );
       if (!res.ok) throw new Error("PDF generation failed");
       const { token: pdfToken } = await res.json();
-      const date = new Date().toISOString().split("T")[0];
+      const date = labTodayIso();
       const safeName = (scanMeta?.name ?? "Scan").replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
       const filename = type === "executive"
         ? `VeritaScan_Executive_${safeName}_${date}.pdf`
@@ -1308,7 +1309,7 @@ export default function VeritaScanScanPage() {
       );
       if (!res.ok) throw new Error("Excel generation failed");
       const blob = await res.blob();
-      const date = new Date().toISOString().split("T")[0];
+      const date = labTodayIso();
       const safeName = (scanMeta?.name ?? "Scan").replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
       saveAs(blob, `VeritaScan_${safeName}_${date}.xlsx`);
     } catch (e) {

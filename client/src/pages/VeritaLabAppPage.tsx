@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { labTodayIso } from "@/lib/labDate";
 import { Link } from "wouter";
 import { useAuth } from "@/components/AuthContext";
 import { ModuleHowToCard } from "@/components/ModuleHowToCard";
@@ -382,7 +383,7 @@ export default function VeritaLabAppPage() {
       });
       if (res.ok) {
         const blob = await res.blob();
-        saveAs(blob, `VeritaLab_Certificates_${new Date().toISOString().split("T")[0]}.xlsx`);
+        saveAs(blob, `VeritaLab_Certificates_${labTodayIso()}.xlsx`);
       }
     } catch (err) {
       toast({ title: "Export failed", variant: "destructive" });

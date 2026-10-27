@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { labTodayIso } from "@/lib/labDate";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { useAuth } from "@/components/AuthContext";
 import { ModuleHowToCard } from "@/components/ModuleHowToCard";
@@ -157,7 +158,7 @@ export default function VeritaPTAppPage() {
   // writes to pt_events for downstream competency reporting.
   const [showEventModal, setShowEventModal] = useState(false);
   const [newEventEnrollmentId, setNewEventEnrollmentId] = useState<string>("");
-  const [newEventDate, setNewEventDate] = useState(new Date().toISOString().slice(0, 10));
+  const [newEventDate, setNewEventDate] = useState(labTodayIso());
   const [newEventAnalyte, setNewEventAnalyte] = useState("");
   const [newEventYourResult, setNewEventYourResult] = useState("");
   const [newEventPeerMean, setNewEventPeerMean] = useState("");
@@ -425,7 +426,7 @@ export default function VeritaPTAppPage() {
           CLIA failure (42 CFR 493.803), so it sits above the trend banner.
           Self-hides when nothing is due. */}
       {(() => {
-        const today = new Date().toISOString().slice(0, 10);
+        const today = labTodayIso();
         const daysTo = (d: string) => Math.round((Date.parse(d + "T00:00:00Z") - Date.parse(today + "T00:00:00Z")) / 86400000);
         const pending = ptEvents.filter(e => e.submission_due_date && (e.pass_fail === "pending" || !e.pass_fail));
         const overdue = pending.filter(e => daysTo(e.submission_due_date) < 0).sort((a, b) => a.submission_due_date.localeCompare(b.submission_due_date));

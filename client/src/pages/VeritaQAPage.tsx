@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { labTodayIso } from "@/lib/labDate";
 import { Link } from "wouter";
 import { useAuth } from "@/components/AuthContext";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
@@ -393,7 +394,7 @@ function PIPlanTab({ readOnly, departments }: { readOnly: boolean; departments: 
   const [savingPrio, setSavingPrio] = useState(false);
   const [deletePrio, setDeletePrio] = useState<PIPriority | null>(null);
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = labTodayIso();
   const [reviewOpen, setReviewOpen] = useState(false);
   const [reviewForm, setReviewForm] = useState({ reviewed_by: "", reviewer_title: "", review_date: today, changes_summary: "" });
   const [savingReview, setSavingReview] = useState(false);

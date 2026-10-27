@@ -17,6 +17,7 @@
 // items" section that Phase B fills in.
 
 import { useEffect, useMemo, useState } from "react";
+import { labTodayIso } from "@/lib/labDate";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -274,7 +275,7 @@ export default function VeritaScanDocumentLibraryPage() {
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement("a");
                 a.href = url;
-                const today = new Date().toISOString().slice(0, 10);
+                const today = labTodayIso();
                 a.download = `VeritaScan_Library_${today}.xlsx`;
                 document.body.appendChild(a);
                 a.click();

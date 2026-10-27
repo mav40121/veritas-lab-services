@@ -17,6 +17,7 @@
 //   3. Commit (locked = 1, completion_date = assessment_date).
 
 import { useEffect, useMemo, useState } from "react";
+import { labTodayIso } from "@/lib/labDate";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -71,7 +72,7 @@ export function CompetencyCohortSignoffDialog({ open, onOpenChange, labId }: Pro
 
   const [programId, setProgramId] = useState<number | "">("");
   const [assessmentType, setAssessmentType] = useState<string>("annual");
-  const [assessmentDate, setAssessmentDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const [assessmentDate, setAssessmentDate] = useState<string>(() => labTodayIso());
   const [status, setStatus] = useState<string>("pass");
   const [evaluatorName, setEvaluatorName] = useState<string>("");
   const [employeeIds, setEmployeeIds] = useState<Set<number>>(new Set());
@@ -97,7 +98,7 @@ export function CompetencyCohortSignoffDialog({ open, onOpenChange, labId }: Pro
   function reset() {
     setProgramId("");
     setAssessmentType("annual");
-    setAssessmentDate(new Date().toISOString().slice(0, 10));
+    setAssessmentDate(labTodayIso());
     setStatus("pass");
     setEvaluatorName("");
     setEmployeeIds(new Set());

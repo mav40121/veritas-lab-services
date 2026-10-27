@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { labTodayIso } from "@/lib/labDate";
 import { Link, useLocation, useParams } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/components/AuthContext";
@@ -154,7 +155,7 @@ const ACCREDITORS = [
 // year 0002 (Troy / Rachel 2026-09-18). min/max constrain the picker and
 // isPlausibleYmd blocks a bad value before save; the server rejects it too.
 const DATE_MIN = "1950-01-01";
-const dateMax = () => new Date().toISOString().split("T")[0];
+const dateMax = () => labTodayIso();
 function isPlausibleYmd(v: string | null | undefined): boolean {
   if (!v) return true; // empty is fine; not-entered is allowed
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
@@ -658,7 +659,7 @@ export default function VeritaStaffAppPage() {
       });
       if (!res.ok) throw new Error(await res.text());
       const { token } = await res.json();
-      downloadPdfToken(token, `CMS_209_${lab?.clia_number || "report"}_${new Date().toISOString().split("T")[0]}.pdf`);
+      downloadPdfToken(token, `CMS_209_${lab?.clia_number || "report"}_${labTodayIso()}.pdf`);
       toast({ title: "CMS 209 generated", description: "Your personnel report has been downloaded." });
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
@@ -686,7 +687,7 @@ export default function VeritaStaffAppPage() {
     }
     setGeneratingPacket(true);
     try {
-      const today = new Date().toISOString().split("T")[0];
+      const today = labTodayIso();
       const cliaTag = lab?.clia_number || "lab";
 
       // Step 1: CMS-209 personnel report.
@@ -1787,7 +1788,7 @@ function EmployeeDetailView({ employee, lab, onBack, onEdit, onCompetency }: {
   // opens the dialog instead of immediately calling DELETE so the lab
   // director can capture date + reason for the surveyor record.
   const [terminateOpen, setTerminateOpen] = useState(false);
-  const [terminatedAt, setTerminatedAt] = useState(() => new Date().toISOString().split("T")[0]);
+  const [terminatedAt, setTerminatedAt] = useState(() => labTodayIso());
   const [terminationReason, setTerminationReason] = useState("");
   const [terminating, setTerminating] = useState(false);
 

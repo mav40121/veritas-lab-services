@@ -115,6 +115,8 @@ jobs:
         run: npm run test:lab-time-zone
       - name: Lab-local dates and zone rules
         run: npx tsx scripts/verify-lab-local-date.ts
+      - name: No UTC today in client code
+        run: node scripts/verify-client-lab-today.mjs
       - name: Run VeritaResponse entry-type templates integration test
         # Per-type clocks and fields (PT, NCE, QC and alternative-assessment escalations), type_details sanitizing,
         # closing only through the gated sign-off (Michael 2026-10-26, mock D1-D7).

@@ -7462,6 +7462,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         l.accreditation_cola,
         l.accreditation_aabb,
         l.accreditation_iso,
+        l.time_zone,
         l.is_demo,
         l.is_repository,
         l.primary_regime,
@@ -7532,6 +7533,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       accreditationCola: !!m.accreditation_cola,
       accreditationAabb: !!m.accreditation_aabb,
       accreditationIso: !!m.accreditation_iso,
+      // Per-lab time zone (2026-10-26): the pages show this lab's calendar day.
+      timeZone: labTimeZoneOf(m),
       // USON bake-off: labs flagged is_demo=1 carry representative sample
       // data (no real facility, no real measurements). Surfaced so the
       // NavBar can mount a persistent "sample data" banner and exports can

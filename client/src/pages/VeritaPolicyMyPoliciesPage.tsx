@@ -7,6 +7,7 @@
 //            password re-auth and tamper-detection on download).
 
 import { useState, useMemo, useEffect } from "react";
+import { labTodayIso } from "@/lib/labDate";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/components/AuthContext";
@@ -1363,7 +1364,7 @@ export default function VeritaPolicyMyPoliciesPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      const date = new Date().toISOString().slice(0, 10);
+      const date = labTodayIso();
       a.download = `VeritaPolicy_Signature_Report_${doc.title.replace(/[^A-Za-z0-9_-]+/g, "_").slice(0, 40)}_${date}.xlsx`;
       document.body.appendChild(a);
       a.click();

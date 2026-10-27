@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { labTodayIso } from "@/lib/labDate";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/components/AuthContext";
@@ -112,7 +113,7 @@ export default function VeritaMapLabwidePage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `VeritaMap_Coverage_Report_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      a.download = `VeritaMap_Coverage_Report_${labTodayIso()}.xlsx`;
       document.body.appendChild(a);
       a.click();
       a.remove();

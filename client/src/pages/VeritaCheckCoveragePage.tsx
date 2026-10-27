@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { labTodayIso } from "@/lib/labDate";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { Link, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -157,7 +158,7 @@ export default function VeritaCheckCoveragePage() {
       if (!res.ok) { toast({ title: "Coverage export failed", variant: "destructive" }); return; }
       const cd = res.headers.get("Content-Disposition") || "";
       const m = /filename="([^"]+)"/.exec(cd);
-      const filename = m ? m[1] : `VeritaCheck_Coverage_${new Date().toISOString().split("T")[0]}.xlsx`;
+      const filename = m ? m[1] : `VeritaCheck_Coverage_${labTodayIso()}.xlsx`;
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
