@@ -82,9 +82,9 @@ export function getViewOnlyAddOnConfig(): { priceId: string | null; ratePerYear:
 // env vars are set, getStaffPortalConfig returns priceId: null and the
 // caller falls back to manual invoicing.
 export const STAFF_PORTAL_BANDS = {
-  small:  { maxStaff: 25,  ratePerYear: 149, unitAmountCents: 14900, label: "Staff Portal (up to 25 staff)" },
-  medium: { maxStaff: 100, ratePerYear: 399, unitAmountCents: 39900, label: "Staff Portal (up to 100 staff)" },
-  large:  { maxStaff: 250, ratePerYear: 799, unitAmountCents: 79900, label: "Staff Portal (up to 250 staff)" },
+  small:  { maxStaff: 25,  ratePerYear: 149, unitAmountCents: 14900, label: "Staff seats (up to 25 staff)" },
+  medium: { maxStaff: 100, ratePerYear: 399, unitAmountCents: 39900, label: "Staff seats (up to 100 staff)" },
+  large:  { maxStaff: 250, ratePerYear: 799, unitAmountCents: 79900, label: "Staff seats (up to 250 staff)" },
 } as const;
 export type StaffPortalBand = keyof typeof STAFF_PORTAL_BANDS;
 

@@ -386,7 +386,7 @@ return (
 
         {/* Seat note */}
         <p className="text-xs text-center text-muted-foreground">
-          Active seats include the account owner. Additional active seats above the tier-included count are priced at the tier's per-seat rate. Every lab includes one free medical director seat for its named director, which does not count against your active seats. Other reviewers, such as the technical consultant and technical supervisor, use active seats. Read-and-sign access for staff who only acknowledge policies, sign competency, or run inventory scans is handled by the Staff Portal add-on below, not per seat.
+          Active seats include the account owner. Additional active seats above the tier-included count are priced at the tier's per-seat rate. Every lab includes one free medical director seat for its named director, which does not count against your active seats. Other reviewers, such as the technical consultant and technical supervisor, use active seats. Read-and-sign access for staff who only acknowledge policies, sign competency, or run inventory scans is handled by the staff seats add-on below, not per seat.
         </p>
 
         {/* Founding Lab Program (charter offer) shown BELOW the plan tiles so a
@@ -445,7 +445,7 @@ return (
         <div className="border-2 border-primary/30 bg-gradient-to-br from-primary/5 to-transparent rounded-xl p-6 sm:p-8">
           <div className="text-center mb-6">
             <div className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-primary mb-2">
-              <Users size={14} /> Staff Portal Add-On
+              <Users size={14} /> Staff Seats Add-On
             </div>
             <h3 className="font-serif text-xl sm:text-2xl font-bold tracking-tight mb-2">
               You pay for who edits, plus a small flat band for who reads.
@@ -480,7 +480,7 @@ return (
           </div>
 
           <p className="text-xs text-center text-muted-foreground mt-5 max-w-2xl mx-auto">
-            Above 250 staff? You're already a System-tier customer, and Staff Portal is included in your custom quote.
+            Above 250 staff? You're already a System-tier customer, and staff seats are included in your custom quote.
             Compare to per-user document-control products charging $30 to $45 per staff per year.
           </p>
         </div>

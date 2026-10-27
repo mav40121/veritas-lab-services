@@ -230,7 +230,7 @@ const MODULE_ABOUT: Record<string, string> = {
   "VeritaMap": "Every map: instruments, the test menu with complexity, reference ranges and critical values by age and sex band, reportable ranges, correlations, and instrument requests.",
   "VeritaScan": "Every readiness scan and its answers, custom questions, the document library, and the links between documents and checklist items.",
   "VeritaComp": "Competency programs, assessments and every element entry, checklists, method groups, method sign-offs, quizzes and results, reminders, and letters of delegation.",
-  "VeritaStaff": "The testing personnel roster, roles and specialties, assigned test systems, documents, competency schedules, duty changes, position descriptions, Staff Portal signatures, and continuing-education profiles.",
+  "VeritaStaff": "The testing personnel roster, roles and specialties, assigned test systems, documents, competency schedules, duty changes, position descriptions, staff signatures, and continuing-education profiles.",
   "VeritaPolicy": "Manuals, documents and every version, approval workflows and steps, sign-offs, read attestations, quizzes, notes, links, surveyor links, review reminders, and the policy master list status.",
   "VeritaQC": "Control lots, every QC result, rule violations, corrective actions, notes, monthly reviews, rule settings, import mappings, and IQCP plans with their risk, QC plan and QA items.",
   "VeritaPT": "PT enrollments, events and results, corrective actions, reminders, and alternative assessment records.",

@@ -3272,7 +3272,7 @@ export default function VeritaStockInventoryPage() {
             <p className="text-sm text-muted-foreground py-8 text-center">Loading count history...</p>
           ) : countHistoryRows.length === 0 ? (
             <p className="text-sm text-muted-foreground py-8 text-center" data-testid="count-history-empty">
-              No counts recorded yet. Counts appear here as staff count inventory in the count kiosk or Staff Portal. History accrues from the day this feature went live; earlier counts were not recorded.
+              No counts recorded yet. Counts appear here as staff record inventory counts with their staff login. History accrues from the day this feature went live; earlier counts were not recorded.
             </p>
           ) : (
             <div className="overflow-x-auto border border-border rounded-md">
@@ -3298,7 +3298,7 @@ export default function VeritaStockInventoryPage() {
                       <td className="p-2 text-right font-mono">{r.previous_qty ?? ""}</td>
                       <td className="p-2 text-right font-mono">{r.delta == null ? "" : (r.delta > 0 ? `+${r.delta}` : r.delta)}</td>
                       <td className="p-2">{r.counted_by ?? ""}</td>
-                      <td className="p-2">{r.source === "kiosk" ? "Count kiosk" : r.source === "staff_portal" ? "Staff portal" : r.source}</td>
+                      <td className="p-2">{r.source === "kiosk" ? "Count kiosk" : r.source === "staff_portal" ? "Staff login" : r.source}</td>
                       <td className="p-2 text-right font-mono">{r.true_burn == null ? "" : `${r.true_burn} ${r.count_unit || ""}`}</td>
                     </tr>
                   ))}

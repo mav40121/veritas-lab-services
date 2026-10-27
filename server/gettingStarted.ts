@@ -157,7 +157,7 @@ export function computeGettingStarted(sqlite: Database.Database, labId: number, 
       }
       case "p6.staff_portal": {
         const seats = hasCol("user_seats", "lab_id") ? n("SELECT COUNT(*) AS n FROM user_seats WHERE lab_id = ? AND seat_type = 'staff_portal'", labId) : 0;
-        return { status: seats > 0 ? "done" : "todo", detail: seats > 0 ? `${seats} Staff Portal seat(s) issued.` : "No Staff Portal seats issued yet." };
+        return { status: seats > 0 ? "done" : "todo", detail: seats > 0 ? `${seats} staff seat(s) issued.` : "No staff seats issued yet." };
       }
       default:
         return { status: "todo", detail: "Not scored." };

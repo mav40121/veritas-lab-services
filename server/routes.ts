@@ -904,20 +904,20 @@ export function staffPortalAuthMiddleware(req: any, res: any, next: any) {
       ? res.status(401).json({ error: "Your session has ended. Please sign in again.", code: "SESSION_ENDED" })
       : res.status(401).json({ error: "Invalid or expired token" });
   }
-  if (check.isDemo) return res.status(401).json({ error: "Not a staff portal session" });
+  if (check.isDemo) return res.status(401).json({ error: "Not a staff login session" });
   touchSession(sqlite, check.sid);
   const payload = { userId: check.userId };
   const seat = sqlite.prepare(
     "SELECT lab_id, staff_employee_id FROM user_seats WHERE seat_user_id = ? AND seat_type = 'staff_portal' AND status = 'active' AND staff_employee_id IS NOT NULL LIMIT 1"
   ).get(payload.userId) as any;
   if (!seat || !seat.lab_id || !seat.staff_employee_id) {
-    return res.status(401).json({ error: "Not a staff portal session", code: "NOT_STAFF_PORTAL" });
+    return res.status(401).json({ error: "Not a staff login session", code: "NOT_STAFF_PORTAL" });
   }
   const claimed = (req.body && req.body.employee_id != null && req.body.employee_id !== "")
     ? req.body.employee_id
     : (req.query && req.query.employee_id != null && req.query.employee_id !== "" ? req.query.employee_id : null);
   if (claimed != null && Number(claimed) !== Number(seat.staff_employee_id)) {
-    return res.status(403).json({ error: "The Staff Portal only acts as the signed-in staff member.", code: "STAFF_PORTAL_NOT_SELF" });
+    return res.status(403).json({ error: "A staff login only acts as the signed-in staff member.", code: "STAFF_PORTAL_NOT_SELF" });
   }
   req.staffPortalLabId = seat.lab_id;
   req.staffPortalStaffEmployeeId = seat.staff_employee_id;
@@ -11181,7 +11181,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const resolvedEmpId: number | null = seat?.staff_employee_id ?? null;
 
     if (!resolvedLabId || !resolvedEmpId) {
-      return res.status(404).json({ error: "No Staff Portal access for this account" });
+      return res.status(404).json({ error: "No staff login for this account" });
     }
     const employee = sqlite.prepare(
       "SELECT id, first_name, last_name, middle_initial, title, title_code, can_adjust_inventory, can_view_audit FROM staff_employees WHERE id = ?"
@@ -11414,7 +11414,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       "SELECT id FROM user_seats WHERE staff_employee_id = ? AND seat_type = 'staff_portal' AND accepted_at IS NOT NULL AND status != 'deactivated' LIMIT 1"
     ).get(staffEmpId) as any;
     if (acceptedSeat) {
-      return res.status(409).json({ error: "This employee already has a Staff Portal account" });
+      return res.status(409).json({ error: "This employee already has a staff login" });
     }
 
     // Duplicate-invite guard.
@@ -11431,7 +11431,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       // to an account whose owner may not know. Return 409 with a
       // clear message; the director can advise the tech to use a
       // different email or contact support.
-      return res.status(409).json({ error: "This email is already a VeritaAssure account. Use a different email for Staff Portal, or contact support to merge." });
+      return res.status(409).json({ error: "This email is already a VeritaAssure account. Use a different email for the staff login, or contact support to merge." });
     }
 
     const now = new Date().toISOString();
@@ -11479,11 +11479,11 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           body: JSON.stringify({
             from: "VeritaAssure™ <info@veritaslabservices.com>",
             to: normalizedEmail,
-            subject: `Set up your Staff Portal access for ${labName}`,
+            subject: `Set up your VeritaAssure staff login for ${labName}`,
             html: `
               <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px">
-                <h2 style="color:#01696F">VeritaAssure™ Staff Portal</h2>
-                <p style="font-size:15px;color:#1B2B2B;line-height:1.6">${inviterName} at <strong>${labName}</strong> has set up Staff Portal access for ${techName}.</p>
+                <h2 style="color:#01696F">VeritaAssure™ staff login</h2>
+                <p style="font-size:15px;color:#1B2B2B;line-height:1.6">${inviterName} at <strong>${labName}</strong> has set up a VeritaAssure staff login for ${techName}.</p>
                 <p style="font-size:15px;color:#1B2B2B;line-height:1.6">Set a password to take competency quizzes, sign policies, and view your records, all from your phone.</p>
                 <a href="${FRONTEND_URL}/join?token=${inviteToken}" style="display:inline-block;background:#01696F;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;margin:16px 0">Set up access</a>
                 <p style="font-size:13px;color:#6B7280;margin-top:16px">This invitation expires in 30 days.</p>
@@ -41811,7 +41811,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       aboutBody("This workbook is a point-in-time snapshot of the lab's VeritaPolicy compliance dashboard as of the date the export was generated. Each tab mirrors a panel of the live web dashboard so the same numbers can be shared with surveyors, the medical director, or the Quality Committee without screenshots.");
       aboutBlank();
       aboutSection("How to use this workbook");
-      aboutBody("The Headline tab shows total document counts by status. The Per Manual tab breaks those numbers down by policy manual (Chemistry, Hematology, etc). Overdue Documents lists every approved policy past its next-review date. Due Soon lists approved policies with next-review dates in the next 30 days. Per User Attestations shows pending vs completed attestation counts per active lab member. Staff Portal Signatures lists bench staff who read-and-signed policies at the kiosk, with how many they signed and when they last signed.");
+      aboutBody("The Headline tab shows total document counts by status. The Per Manual tab breaks those numbers down by policy manual (Chemistry, Hematology, etc). Overdue Documents lists every approved policy past its next-review date. Due Soon lists approved policies with next-review dates in the next 30 days. Per User Attestations shows pending vs completed attestation counts per active lab member. Staff Signatures lists bench staff who read and signed policies with their staff login, with how many they signed and when they last signed.");
       aboutBlank();
       aboutSection("Disclaimer");
       aboutBody("This workbook is a snapshot, not an authoritative record. The live VeritaPolicy module is the audit-grade record. Status (Approved / In Review / Draft / Expired / Overdue / Due Soon) is calculated from the document's status field and the next_review_date entered by the lab. The lab director is responsible for keeping the underlying VeritaPolicy data current and for the disposition of any overdue policy.");
@@ -41934,7 +41934,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
          GROUP BY sps.staff_employee_id
          ORDER BY signed_count DESC, se.last_name ASC
       `).all(labId) as any[];
-      const staffSheet = wb.addWorksheet("Staff Portal Signatures");
+      const staffSheet = wb.addWorksheet("Staff Signatures");
       styleHeaderRow(staffSheet, ["Staff Member", "Title", "Policies Signed", "Last Signed"]);
       for (const s of perStaffAttest) {
         const nm = [s.last_name, s.first_name].filter(Boolean).join(", ");

@@ -82,7 +82,7 @@ export const SYSTEM_PHASES: PhaseBlock[] = [
     title: "Phase 6: Go-live and ongoing",
     steps: [
       { key: "p6.cycles", task: "Confirm your recurring cycles are scheduled: policy two-year review, competency cadence, and the PT calendar.", who: "Owner or admin", kind: "derived", route: "/veritapolicy-app" },
-      { key: "p6.staff_portal", task: "Invite the remaining staff to the Staff Portal for read-and-sign access.", who: "Owner or admin", kind: "derived", route: "/account/seats" },
+      { key: "p6.staff_portal", task: "Invite the remaining staff with staff seats for read-and-sign access.", who: "Owner or admin", kind: "derived", route: "/account/seats" },
     ],
   },
 ];

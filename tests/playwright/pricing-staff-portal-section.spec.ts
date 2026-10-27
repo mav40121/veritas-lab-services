@@ -13,7 +13,7 @@ const BASE = process.env.PW_BASE || "https://www.veritaslabservices.com";
 test.describe("Pricing page Staff Portal section", () => {
   test("renders the three bands with correct prices and ceilings", async ({ page }) => {
     await page.goto(`${BASE}/pricing`, { waitUntil: "domcontentloaded" });
-    await expect(page.getByText(/Staff Portal Add-On/i).first()).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText(/Staff (Portal|Seats) Add-On/i) /* new wording after #101; old until deployed */.first()).toBeVisible({ timeout: 10000 });
     await expect(page.getByText(/pay for who edits/i).first()).toBeVisible();
 
     // Small band
