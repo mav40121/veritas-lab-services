@@ -47,7 +47,8 @@ test("VeritaResponse intro card covers every entry type, and an internal event r
   await expect(page.getByRole("heading", { name: new RegExp(`^Internal Event #${nce.id}$`) })).toBeVisible({ timeout: 20000 });
   await expect(page.getByText("Internal non-conforming event").first()).toBeVisible();
   await expect(page.getByText("Due date recomputes on save.")).toHaveCount(0);
-  await expect(page.getByTestId("finding-signoff-btn")).toHaveText("Sign off and close (medical director or designee)");
+  // BUG-080 (2026-10-27): the button names how this user signs; the seeded user is the lab owner (logged override).
+  await expect(page.getByTestId("finding-signoff-btn")).toHaveText("Sign off and close (owner override)");
   await expect(page.getByText(/uses the "Other" accreditor/)).toHaveCount(0);
   await page.screenshot({ path: "test-results/veritaresponse-nce.png" });
 
