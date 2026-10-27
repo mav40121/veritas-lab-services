@@ -24789,6 +24789,19 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   });
 
   // Delete assessment
+  // BUG-070 (2026-10-27): a signed competency record must not be deletable. Both delete routes refuse an assessment that
+  // is locked (signed and complete) or that any per-method sign-off rests on; an owner or admin can unlock it first
+  // (logged), which is the correction path.
+  const competencyAssessmentDeleteBlock = (assessmentId: any): string | null => {
+    const sqlite = (db as any).$client;
+    const a = sqlite.prepare("SELECT locked FROM competency_assessments WHERE id = ?").get(assessmentId) as any;
+    if (a?.locked === 1) return "This assessment is signed and locked, so it cannot be deleted. An owner or admin can unlock it first; the unlock is logged.";
+    let n = 0;
+    try { n = Number((sqlite.prepare("SELECT COUNT(*) AS n FROM competency_method_signoffs WHERE assessment_id = ?").get(assessmentId) as any)?.n || 0); } catch {}
+    if (n > 0) return `${n} method sign-off${n === 1 ? " rests" : "s rest"} on this assessment, so it cannot be deleted.`;
+    return null;
+  };
+
   app.delete("/api/competency/assessments/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
@@ -24799,6 +24812,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     ).get(req.params.id);
     if (!assessment || assessment.user_id !== dataUserId) return res.status(404).json({ error: "Assessment not found" });
     if (accountLabCount(dataUserId) > 1) return res.status(409).json({ error: "This account manages multiple labs. Open the lab first so this change is scoped to the correct one, then retry.", multiLab: true });
+    const legacyBlock = competencyAssessmentDeleteBlock(req.params.id);
+    if (legacyBlock) return res.status(409).json({ error: legacyBlock, code: "ASSESSMENT_SIGNED" });
     const delAssessment = (db as any).$client.prepare("SELECT * FROM competency_assessments WHERE id = ?").get(req.params.id) as any;
     const delAssessItems = (db as any).$client.prepare("SELECT * FROM competency_assessment_items WHERE assessment_id = ?").all(req.params.id);
     logAudit({ userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritacomp", action: "delete", entityType: "assessment", entityId: req.params.id, entityLabel: delAssessment ? `${delAssessment.employee_name} - ${delAssessment.program_name}` : undefined, before: { assessment: delAssessment, items: delAssessItems }, ipAddress: req.ip });
@@ -25185,6 +25200,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
        WHERE a.id = ? AND p.lab_id = ?`
     ).get(req.params.id, labId) as any;
     if (!assessment) return res.status(404).json({ error: "Assessment not found" });
+    const scopedBlock = competencyAssessmentDeleteBlock(req.params.id);
+    if (scopedBlock) return res.status(409).json({ error: scopedBlock, code: "ASSESSMENT_SIGNED" });
     const delAssessItems = (db as any).$client.prepare("SELECT * FROM competency_assessment_items WHERE assessment_id = ?").all(req.params.id);
     logAudit({ userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritacomp", action: "delete", entityType: "assessment", entityId: req.params.id, entityLabel: assessment ? `${assessment.employee_name ?? ''} - ${assessment.program_name ?? ''}`.trim() : undefined, before: { assessment, items: delAssessItems }, ipAddress: req.ip });
     (db as any).$client.prepare("DELETE FROM competency_assessment_items WHERE assessment_id = ?").run(req.params.id);
