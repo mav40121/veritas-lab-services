@@ -719,30 +719,6 @@ Open questions for the scope:
 
 ---
 
-### 110. VeritaTrack: each lab adds its own task categories
-
-**Effort:** S (a per-lab category list with add, rename and retire; the task form and filters read it)
-**Importance:** Medium. Labs track recurring work our 13 fixed categories do not name, and today it all lands in "Other".
-
-**What:** the categories are a fixed list in the page code (client/src/pages/VeritaTrackAppPage.tsx CATEGORIES: Calibration Verification, Correlation, Precision Verification, Policy Review, QC Review, Water Contamination, Blood Bank Alarm Checks, Equipment Calibration, Competency, Quality Assessment, HIPAA, Bloodborne Pathogen, Other). veritatrack_tasks.category is free text, so existing tasks keep working. Add a per-lab category table: our defaults plus the lab's own, which an owner or admin can add, rename or retire (retired ones stay on old tasks and in exports).
-
-**Source:** Michael, 2026-10-26: "Be able to, by lab, add custom categories instead of just our defaults."
-**Status:** Open.
-
----
-
-### 111. VeritaTrack: a Weekly frequency
-
-**Effort:** S (the schedule is counted in whole months today; weekly needs an interval in days)
-**Importance:** Medium. Weekly checks (alarm tests, eyewash, temperature and maintenance reviews) cannot be scheduled as weekly today.
-
-**What:** FREQUENCIES offers Monthly, Quarterly, Biannual, Annual and Biennial, and every due date is computed from veritatrack_tasks.frequency_months (24 uses across server/veritatrack.ts, server/veritatrackReminders.ts and the page). Add Weekly with a frequency_days interval (ALTER migration), make the due-date math and reminders use days when it is set, and check that reminder emails do not fire too often for a weekly task.
-
-**Source:** Michael, 2026-10-26: "add a weekly option for frequency."
-**Status:** Open.
-
----
-
 ### 113. Georgetown (lab 18): production does not read a CLIA state from its CLIA number
 
 **Effort:** XS (look up what lab 18 stores; correct it only on Michael's go)
@@ -751,11 +727,23 @@ Open questions for the scope:
 **What:** the production time zone list (2026-10-27) shows lab 18 "Georgetown Community Hospital" with no CLIA state, so labs.clia_number on lab 18 is not in the CLIA form (two digits, D, seven digits). The account notes say her real CLIA is 18D0322357 (from her CLIA certificate, 2026-09-28; Clinic sale closed 2026-10-05). Check what lab 18 stores and what its reports print, then correct it on Michael's go. Its time zone is right either way: Georgetown, KY is Eastern.
 
 **Source:** production time zone list, 2026-10-27 (PR #1722 admin route).
-**Status:** Open.
+**Status:** Open. Read 2026-10-27 (admin report, read-only): labs.clia_number on lab 18 is "PENDING-GEORGETOWN-LPNT" with clia_locked = 1 (locked after its first report), and the owner's account CLIA is the same placeholder, so its reports print the placeholder; support could not correct it (update-lab returned 409 for any locked value). PR #1730 lets support replace a locked placeholder once (a real CLIA stays locked). Data fix ready, dry run by default: vls-ops/prod_fix_lab18_clia.sh (lab 18 -> 18D0322357, owner read from production). Waits on Michael's go. BUG-107.
 
 ---
 
 ## CLOSED (audit trail)
+
+### C107. VeritaTrack: a Weekly frequency (was #111)
+
+**Effort:** was S / **Importance:** Medium.
+
+**Closure evidence:** PR #1724 (Michael option 1, 2026-10-26), live in 47fc84af (live 2026-10-27 03:07 UTC). Weekly is a 7-day interval (veritatrack_tasks.frequency_days, ALTER migration); due soon inside 2 days; one reminder the day before instead of the 30/14/7/3/1 ladder. Due dates are calendar math on the lab's day, so a month end clamps (a monthly task signed Jan 31 is due Feb 28/29, was Mar 3). Dashboards, worklist, export and the reminder runner count from the lab's own day. Receipts: tests/integration/veritatrack-categories-weekly.test.ts (29/29, in CI), scripts/verify-veritatrack-reminders.mts (35/35, in CI), scripts/verify-veritatrack-frequency.mjs (11/11, in CI), Playwright tests/playwright/veritatrack-categories-weekly.spec.ts (1 passed, local build). Production (sandbox lab 35, nothing written): schema has frequency_days and veritatrack_categories; categories list 13 built-ins with owner edit; built-in name, long dash and unknown category refused; Categories dialog and the Weekly option shown; worklist today = 2026-10-26 (lab day) at UTC 10-27.
+
+### C106. VeritaTrack: each lab adds its own task categories (was #110)
+
+**Effort:** was S / **Importance:** Medium.
+
+**Closure evidence:** PR #1724 (Michael option 1, 2026-10-26), live in 47fc84af (live 2026-10-27 03:07 UTC). veritatrack_categories table (PRAGMA migration); GET/POST/PUT /api/labs/:labId/veritatrack/categories; owners and admins add, rename, retire or restore (a staff member with an edit seat cannot); the 13 built-ins stay for every lab; rename moves the lab's tasks with an audit row on each; retired stays on old tasks, not offered for new ones; task saves refuse unknown, retired or other-lab categories. Categories button and dialog on the VeritaTrack page; the task form lists the lab's categories. Receipts: same integration test and Playwright spec as C107 (screenshots in docs/receipts/veritatrack-*.png). Production (sandbox lab 35, nothing written): schema has frequency_days and veritatrack_categories; categories list 13 built-ins with owner edit; built-in name, long dash and unknown category refused; Categories dialog and the Weekly option shown; worklist today = 2026-10-26 (lab day) at UTC 10-27.
 
 ### C105. VeritaResponse reports for the new entry types (was #112)
 
