@@ -298,6 +298,31 @@ async function listAll(client: S3Client, prefix: string): Promise<Array<{ Key?: 
   return out;
 }
 
+// The newest object under a prefix (key and upload time), or null when there is none. Used by the continuous-backup
+// watchdog (server/continuousBackupWatchdog.ts, 2026-10-27) to confirm a change reached R2. Throws when R2 is not set up.
+export async function newestObjectUnder(prefix: string): Promise<{ key: string; lastModified: Date } | null> {
+  const client = getS3Client();
+  if (!client) throw new Error("backup storage (BACKUP_S3_*) is not configured");
+  let best: { key: string; lastModified: Date } | null = null;
+  for (const o of await listAll(client, prefix)) {
+    if (o.Key && o.LastModified && (!best || o.LastModified.getTime() > best.lastModified.getTime())) best = { key: o.Key, lastModified: o.LastModified };
+  }
+  return best;
+}
+
+// A system alert to info@ (same sender and recipient as the backup failure emails). Returns whether it was sent.
+export async function sendSystemAlert(subject: string, html: string): Promise<boolean> {
+  if (!process.env.RESEND_API_KEY) return false;
+  try {
+    const resend = new Resend(process.env.RESEND_API_KEY);
+    await resend.emails.send({ from: "VeritaAssure System <info@veritaslabservices.com>", to: FAILURE_NOTIFY_TO, subject, html });
+    return true;
+  } catch (err: any) {
+    console.error("[backup] System alert email failed:", err?.message || err);
+    return false;
+  }
+}
+
 // A consistent copy of the live database, gzipped to gzPath. Uses SQLite's online backup API, which is
 // safe while the app is writing; the old raw file read could catch a half-written page, which was
 // tolerable at 04:00 but not hourly during the working day. Returns the gzipped size.

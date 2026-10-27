@@ -36601,6 +36601,26 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       res.status(500).json({ error: err?.message || "restore test failed" });
     }
   });
+  // Watchdog history (2026-10-27, Michael Q17): the hourly shipping checks and daily restore tests, newest first.
+  // ?run=1 runs one shipping check now (writes a probe row, waits 30 s, lists R2) and records it like the hourly one.
+  app.get("/api/admin/continuous-backup/watchdog", async (req, res) => {
+    if (req.headers["x-admin-secret"] !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    try {
+      const sqlite = (db as any).$client;
+      let ran: any = null;
+      if (req.query.run === "1") {
+        const { runShippingCheck, defaultDeps } = await import("./continuousBackupWatchdog");
+        ran = await runShippingCheck(sqlite, await defaultDeps());
+      }
+      const limit = Math.min(500, Math.max(1, Number(req.query.limit) || 48));
+      const rows = sqlite.prepare("SELECT id, kind, verdict, checked_at, details_json FROM continuous_backup_checks ORDER BY id DESC LIMIT ?").all(limit) as any[];
+      const summary = sqlite.prepare("SELECT kind, verdict, COUNT(*) AS n, MAX(checked_at) AS last FROM continuous_backup_checks GROUP BY kind, verdict").all();
+      res.json({ ran, summary, checks: rows.map((r) => ({ ...r, details: (() => { try { return JSON.parse(r.details_json); } catch { return null; } })(), details_json: undefined })) });
+    } catch (err: any) {
+      console.error("[backup-watchdog] route error:", err?.message);
+      res.status(500).json({ error: err?.message || "watchdog failed" });
+    }
+  });
 
   // ── ADMIN: TLS certificate status (read-only) ───────────────────────────
   // On-demand view of the public TLS cert expiry for the monitored hosts, so the

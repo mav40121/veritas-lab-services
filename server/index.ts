@@ -531,6 +531,9 @@ app.use((req, res, next) => {
     const { db: cbDb } = await import("./db");
     const cb = startContinuousBackup((cbDb as any).$client);
     if (cb.enabled) {
+      // Watchdog (2026-10-27, Michael Q17): hourly proof that changes still reach R2, daily restore test, email on a gap.
+      const { startContinuousBackupWatchdog } = await import("./continuousBackupWatchdog");
+      startContinuousBackupWatchdog((cbDb as any).$client).catch((err: any) => console.error("[backup-watchdog] start failed:", err?.message || err));
       for (const sig of ["SIGTERM", "SIGINT"] as const) {
         process.once(sig, () => { stopContinuousBackup().finally(() => process.exit(0)); });
       }

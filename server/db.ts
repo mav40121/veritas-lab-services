@@ -8813,6 +8813,22 @@ try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_veritaceu_profiles_lab ON veri
   } catch {}
   addCol("continuous_backup_probe", "written_at", "ALTER TABLE continuous_backup_probe ADD COLUMN written_at TEXT");
   addCol("continuous_backup_probe", "note", "ALTER TABLE continuous_backup_probe ADD COLUMN note TEXT");
+  // Continuous-backup watchdog results (2026-10-27, Michael Q17, server/continuousBackupWatchdog.ts): the hourly
+  // shipping check and the daily restore test. No lab data.
+  try {
+    sqlite.exec(`CREATE TABLE IF NOT EXISTS continuous_backup_checks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      kind TEXT NOT NULL,
+      verdict TEXT NOT NULL,
+      checked_at TEXT NOT NULL,
+      details_json TEXT
+    )`);
+  } catch {}
+  addCol("continuous_backup_checks", "kind", "ALTER TABLE continuous_backup_checks ADD COLUMN kind TEXT");
+  addCol("continuous_backup_checks", "verdict", "ALTER TABLE continuous_backup_checks ADD COLUMN verdict TEXT");
+  addCol("continuous_backup_checks", "checked_at", "ALTER TABLE continuous_backup_checks ADD COLUMN checked_at TEXT");
+  addCol("continuous_backup_checks", "details_json", "ALTER TABLE continuous_backup_checks ADD COLUMN details_json TEXT");
+  try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_continuous_backup_checks_at ON continuous_backup_checks(kind, checked_at)"); } catch {}
 }
 
 // Weekly copy of all records (2026-10-16, server/exportAll.ts runWeeklyExports): opt-in per lab, owner only.
