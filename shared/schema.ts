@@ -101,6 +101,7 @@ export const labs = sqliteTable("labs", {
   accreditationCola: integer("accreditation_cola").notNull().default(0),
   accreditationAabb: integer("accreditation_aabb").notNull().default(0),
   accreditationIso: integer("accreditation_iso").notNull().default(0),
+  timeZone: text("time_zone"), // per-lab time zone; NULL = from the CLIA state (shared/labTimeZone.ts)
   cliaLocked: integer("clia_locked").notNull().default(0),
   labNameLocked: integer("lab_name_locked").notNull().default(0),
   ownerUserId: integer("owner_user_id").notNull(),

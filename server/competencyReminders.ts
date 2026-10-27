@@ -20,7 +20,7 @@
 // list can never disagree.
 
 import { db } from "./db";
-import { labToday } from "./dateLocal";
+import { labToday, labTimeZoneById } from "./dateLocal";
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -365,7 +365,8 @@ export interface CompetencyReminderRunResult {
 
 export async function runCompetencyReminders(opts: { labId?: number; dryRun?: boolean; todayIso?: string } = {}): Promise<CompetencyReminderRunResult> {
   const sqlite = (db as any).$client;
-  const todayIso = opts.todayIso && /^\d{4}-\d{2}-\d{2}$/.test(opts.todayIso) ? opts.todayIso : labToday();
+  // Per-lab time zone (2026-10-26): each lab's run uses that lab's calendar day (a test can pin one with todayIso).
+  const pinnedToday = opts.todayIso && /^\d{4}-\d{2}-\d{2}$/.test(opts.todayIso) ? opts.todayIso : null;
   const dryRun = !!opts.dryRun;
   const result: CompetencyReminderRunResult = { labs: 0, emailsSent: 0, skipped: 0, errors: 0, dryRun, plans: [] };
 
@@ -395,6 +396,7 @@ export async function runCompetencyReminders(opts: { labId?: number; dryRun?: bo
     "INSERT INTO competency_reminder_log (lab_id, kind, item_key, period_key, sent_on, recipient_emails, item_count, created_at) VALUES (?,?,?,?,?,?,?,?)"
   );
   for (const labId of labIds) {
+    const todayIso = pinnedToday ?? labToday(labTimeZoneById(sqlite, labId));
     const cfg = readCompetencyReminderConfig(sqlite, labId);
     if (!opts.labId && !cfg.enabled) continue;
     result.labs++;

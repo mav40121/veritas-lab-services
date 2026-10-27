@@ -2353,6 +2353,8 @@ try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_lab_members_token ON la
   // choice (a lab accredited to ISO 15189 still holds its CLIA certificate through CAP, TJC, COLA, AABB or CMS).
   // It lets the lab file VeritaResponse findings under "ISO 15189" and name it in VeritaStaff; no ISO citations yet.
   ensure("accreditation_iso",          "ALTER TABLE labs ADD COLUMN accreditation_iso INTEGER NOT NULL DEFAULT 0");
+  // Per-lab time zone (Michael 2026-10-26, option 1). NULL = derived from the CLIA state (shared/labTimeZone.ts).
+  ensure("time_zone",                  "ALTER TABLE labs ADD COLUMN time_zone TEXT");
   ensure("finding_due_days",           "ALTER TABLE labs ADD COLUMN finding_due_days INTEGER");
   ensure("plan",                       "ALTER TABLE labs ADD COLUMN plan TEXT");
   ensure("subscription_status",        "ALTER TABLE labs ADD COLUMN subscription_status TEXT");

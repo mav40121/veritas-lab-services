@@ -26,7 +26,8 @@ import crypto from "crypto";
 import { Resend } from "resend";
 import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCompetencyPDF, generateEmployeeCompetencyRecordPDF, generateCMS209PDF, generateVeritaPTPDF, generateCms2567PDF, validateCms2567POC, generateCapResponsePDF, validateCapResponse, generateTjcEscPDF, validateTjcEsc, generateColaResponsePDF, validateColaResponse, generateAabbNerPDF, validateAabbNer, generateInternalNcePDF, validateInternalNce, generateCeuTranscriptPDF, generateTypeReportPDF, validateTypeReport, TYPE_REPORT_KINDS } from "./pdfReport";
 import { storePdfToken, claimPdfToken } from "./pdfTokens";
-import { labLocalDate, labToday, addLabDays } from "./dateLocal";
+import { labLocalDate, labToday, addLabDays, labClockMiddleware, setRequestLabTz, labTimeZoneOf, labTimeZoneById } from "./dateLocal";
+import { labTimeZoneInfo, isValidLabTimeZone, TIME_ZONE_CHOICES } from "@shared/labTimeZone";
 import { parseRunDetails, serializeRunDetails } from "@shared/studyRunDetails";
 import { sanitizeTypeDetails, parseTypeDetails, FINDING_SOURCE_TYPES } from "@shared/findingTypes";
 import { PT_ROOT_CAUSE_CATEGORIES } from "@shared/ptFailure";
@@ -1371,7 +1372,14 @@ function ensureLabCliaCertificate(labId: number | null | undefined, person?: { c
   ).run(lab.owner_user_id, labId, number, director, now, now);
 }
 
+// Per-lab time zone: whichever lab a legacy (unscoped) route resolves also sets the request's lab clock.
 function resolveActiveLabForRequest(userId: number, req: any): any | null {
+  const lab = resolveActiveLabForRequestInner(userId, req);
+  if (lab && (lab.time_zone !== undefined || lab.clia_number !== undefined)) setRequestLabTz(labTimeZoneOf(lab));
+  else if (lab?.id) setRequestLabTz(labTimeZoneById((db as any).$client, lab.id));
+  return lab;
+}
+function resolveActiveLabForRequestInner(userId: number, req: any): any | null {
   let requested: number | null = null;
   const hdr = req?.headers?.["x-active-lab-id"];
   if (hdr) {
@@ -1444,6 +1452,9 @@ function writeLabAuditEntry(labId: number, changedByUserId: number, fieldName: s
 const BOOT_TIMESTAMP = new Date().toISOString();
 
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
+  // Per-lab time zone (Michael 2026-10-26): every request gets a lab clock; the lab-scope middleware and the active-lab
+  // resolver set the lab's zone on it, and labToday()/labLocalDate() read it (server/dateLocal.ts).
+  app.use(labClockMiddleware);
   // Download all records (server/exportAll.ts): the export job's own loopback requests carry a per-job secret;
   // this runs them inside the export context so the plan gates let them through. Must precede every route.
   app.use(exportAllMiddleware);
@@ -2899,7 +2910,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // labs before first report. Refuses to update name or CLIA if the
   // corresponding lock is set (those freeze on first report, per CLAUDE.md §5).
   app.post("/api/admin/update-lab", (req, res) => {
-    const { secret, labId, labName, cliaNumber, accCap, accTjc, accCola, accAabb, accIso, isDemo, isRepository } = req.body || {};
+    const { secret, labId, labName, cliaNumber, accCap, accTjc, accCola, accAabb, accIso, timeZone, isDemo, isRepository } = req.body || {};
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
     if (!labId) return res.status(400).json({ error: "labId required" });
 
@@ -2935,6 +2946,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (accCola !== undefined) { updates.push("accreditation_cola = ?"); params.push(accCola ? 1 : 0); }
     if (accAabb !== undefined) { updates.push("accreditation_aabb = ?"); params.push(accAabb ? 1 : 0); }
     if (accIso !== undefined)  { updates.push("accreditation_iso = ?");  params.push(accIso ? 1 : 0); } // ISO 15189 add-on (#108)
+    if (timeZone !== undefined) { // per-lab time zone; null or "auto" = from the CLIA state
+      if (timeZone !== null && timeZone !== "auto" && !isValidLabTimeZone(timeZone)) return res.status(400).json({ error: "timeZone must be a listed time zone, auto, or null" });
+      updates.push("time_zone = ?"); params.push(isValidLabTimeZone(timeZone) ? timeZone : null);
+    }
     if (isDemo !== undefined)  { updates.push("is_demo = ?");            params.push(isDemo ? 1 : 0); }
     if (isRepository !== undefined) { updates.push("is_repository = ?"); params.push(isRepository ? 1 : 0); }
 
@@ -2952,7 +2967,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
 
     const updated = sqlite.prepare(
-      "SELECT id, lab_name, clia_number, clia_locked, lab_name_locked, accreditation_cap, accreditation_tjc, accreditation_cola, accreditation_aabb, accreditation_iso, owner_user_id FROM labs WHERE id = ?"
+      "SELECT id, lab_name, clia_number, clia_locked, lab_name_locked, accreditation_cap, accreditation_tjc, accreditation_cola, accreditation_aabb, accreditation_iso, time_zone, owner_user_id FROM labs WHERE id = ?"
     ).get(Number(labId));
     console.log(`[admin/update-lab] Updated lab_id=${labId}: ${updates.slice(0, -1).join(", ")}`);
     res.json({ ok: true, lab: updated });
@@ -7786,6 +7801,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         is_demo: labFields.is_demo,
       },
     };
+
+    // Per-lab time zone: this request's dates are the lab's calendar days.
+    setRequestLabTz(labTimeZoneById(sqlite, labId));
 
     // Refresh last_active_at + auto-update users.default_lab_id so the
     // bare-/dashboard redirect (Phase 2b) resumes here next time. The
@@ -33706,6 +33724,19 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         accreditation_choice: accreditationChoice,
         // ISO 15189 is an add-on to the choice above, never a replacement for it (#108).
         accreditation_iso: lab?.accreditation_iso === 1,
+        // Per-lab time zone (2026-10-26): the zone in effect, where it came from, and whether the lab should confirm it.
+        ...(() => {
+          const tzi = labTimeZoneInfo(lab);
+          return {
+            time_zone: tzi.timeZone,
+            time_zone_set: lab?.time_zone ?? null,
+            time_zone_source: tzi.source,
+            time_zone_state: tzi.state,
+            time_zone_needs_confirm: tzi.needsConfirm,
+            time_zone_choices: TIME_ZONE_CHOICES.map((c) => ({ ...c, suggested: tzi.choices.includes(c.value) })),
+            lab_today: labToday(tzi.timeZone),
+          };
+        })(),
         preferred_pt_vendor: userRow?.preferred_pt_vendor || 'none',
         // Lab role context for UI
         is_seat: isSeat,
@@ -33775,7 +33806,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         return res.status(403).json({ error: `Lab settings are managed by the lab owner (${ownerDisplayName}).` });
       }
 
-      const { clia_number, clia_lab_name, preferred_standards, accreditation_choice, preferredPtVendor, accreditation_iso } = req.body;
+      const { clia_number, clia_lab_name, preferred_standards, accreditation_choice, preferredPtVendor, accreditation_iso, time_zone } = req.body;
 
       // Resolve the lab to update: prefer the active lab from URL context,
       // fall back to legacy resolveLabForUser for backward compat. This
@@ -33877,6 +33908,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       // ISO 15189 add-on (#108): only a boolean changes it; an older client that does not send it leaves it alone.
       const accIso = typeof accreditation_iso === "boolean" ? (accreditation_iso ? 1 : 0) : (lab.accreditation_iso ?? 0);
       if (accIso !== (lab.accreditation_iso ?? 0)) fieldsToAudit.push(["accreditation_iso", String(lab.accreditation_iso ?? 0), String(accIso)]);
+      // Per-lab time zone (2026-10-26): a listed zone sets it; "auto" or "" goes back to the CLIA state; absent keeps it.
+      if (time_zone !== undefined && time_zone !== null && time_zone !== "" && time_zone !== "auto" && !isValidLabTimeZone(time_zone)) {
+        return res.status(400).json({ error: "time_zone must be one of the listed time zones, or auto." });
+      }
+      const nextTz: string | null = time_zone === undefined ? (lab.time_zone ?? null) : (isValidLabTimeZone(time_zone) ? time_zone : null);
+      if ((nextTz ?? null) !== (lab.time_zone ?? null)) fieldsToAudit.push(["time_zone", lab.time_zone ?? "auto", nextTz ?? "auto"]);
 
       for (const [field, oldVal, newVal] of fieldsToAudit) {
         writeLabAuditEntry(lab.id, req.userId, field, oldVal, newVal);
@@ -33886,10 +33923,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const now = new Date().toISOString();
       (db as any).$client.prepare(
         `UPDATE labs SET clia_number = ?, lab_name = ?, accreditation_cap = ?, accreditation_tjc = ?,
-         accreditation_cola = ?, accreditation_aabb = ?, accreditation_iso = ?, updated_at = ? WHERE id = ?`
+         accreditation_cola = ?, accreditation_aabb = ?, accreditation_iso = ?, time_zone = ?, updated_at = ? WHERE id = ?`
       ).run(
         normalizedClia || null, clia_lab_name || null,
-        accCap, accTjc, accCola, accAabb, accIso, now, lab.id
+        accCap, accTjc, accCola, accAabb, accIso, nextTz, now, lab.id
       );
 
       // Also keep user-level columns in sync for backward compatibility with
