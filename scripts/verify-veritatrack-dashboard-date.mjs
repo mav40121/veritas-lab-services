@@ -28,12 +28,12 @@ const ok = (label, cond) => { console.log(`${cond ? "PASS" : "FAIL"}: ${label}`)
 console.log("--- source receipts ---");
 // #6 date-only helper + usages
 ok("#6 daysUntilDateOnly helper defined (UTC-midnight date-only diff)",
-  /function daysUntilDateOnly\(dateStr: string\): number \{[\s\S]*?Date\.parse\(dateStr \+ "T00:00:00Z"\)[\s\S]*?Date\.parse\(todayStr \+ "T00:00:00Z"\)/.test(srv));
+  /function daysUntilDateOnly\(dateStr: string, todayStr: string = labToday\(\)\): number \{[\s\S]*?Date\.parse\(dateStr \+ "T00:00:00Z"\)[\s\S]*?Date\.parse\(todayStr \+ "T00:00:00Z"\)/.test(srv));
 ok("#6 taskStatus uses the date-only helper (no live-timestamp diff)",
   /function taskStatus[\s\S]*?const daysUntil = daysUntilDateOnly\(nextDueDate\);/.test(srv) &&
   !/function taskStatus[\s\S]*?Math\.floor\(\(due\.getTime\(\) - now\.getTime\(\)\)/.test(srv));
 ok("#6 both server dashboards use daysUntilDateOnly for the overdue boundary",
-  (srv.match(/const daysUntil = daysUntilDateOnly\(nextDueDate\);/g) || []).length >= 2);
+  (srv.match(/const daysUntil = daysUntilDateOnly\(nextDueDate, todayStr\);/g) || []).length >= 2); // the lab's day (#111, 2026-10-26)
 ok("#6 client daysLabel uses a date-only diff (Due today on the due date)",
   /function daysLabel[\s\S]*?Date\.parse\(next_due \+ "T00:00:00Z"\)[\s\S]*?Date\.parse\(todayStr \+ "T00:00:00Z"\)/.test(cli));
 

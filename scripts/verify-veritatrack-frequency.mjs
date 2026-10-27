@@ -6,11 +6,14 @@
 // months column agrees with the label. The old `Number(frequency_months || 1)`
 // defaulted every create to 1 month, so a Quarterly task rendered as Monthly
 // until re-saved. Mirrors frequencyToMonths + the fixed derivation.
+// #111 (Michael 2026-10-26): Weekly stores 0 months (its 7 days live in frequency_days), even when a stale
+// frequency_months comes along with it.
 //
 // Run: node scripts/verify-veritatrack-frequency.mjs
 
 function frequencyToMonths(freq) {
   switch (freq) {
+    case "Weekly":    return 0;
     case "Monthly":   return 1;
     case "Quarterly": return 3;
     case "Biannual":  return 6;
@@ -20,10 +23,10 @@ function frequencyToMonths(freq) {
   }
 }
 
-// The fixed line: const freqMonths = Number(frequency_months) || frequencyToMonths(frequency || "Monthly");
+// The line: const freqMonths = frequency === "Weekly" ? 0 : (Number(frequency_months) || frequencyToMonths(frequency || "Monthly"));
 function deriveFreqMonths(body) {
   const { frequency, frequency_months } = body;
-  return Number(frequency_months) || frequencyToMonths(frequency || "Monthly");
+  return frequency === "Weekly" ? 0 : (Number(frequency_months) || frequencyToMonths(frequency || "Monthly"));
 }
 
 let pass = 0, fail = 0;
@@ -35,6 +38,8 @@ eq("Monthly string only -> 1", deriveFreqMonths({ frequency: "Monthly" }), 1);
 eq("Biannual string only -> 6", deriveFreqMonths({ frequency: "Biannual" }), 6);
 eq("Annual string only -> 12", deriveFreqMonths({ frequency: "Annual" }), 12);
 eq("Biennial string only -> 24", deriveFreqMonths({ frequency: "Biennial" }), 24);
+eq("Weekly string only -> 0 months (#111)", deriveFreqMonths({ frequency: "Weekly" }), 0);
+eq("Weekly with a stale frequency_months 1 -> still 0", deriveFreqMonths({ frequency: "Weekly", frequency_months: 1 }), 0);
 
 // Explicit frequency_months (numeric or string) is honored when provided.
 eq("explicit frequency_months number wins", deriveFreqMonths({ frequency: "Monthly", frequency_months: 6 }), 6);
