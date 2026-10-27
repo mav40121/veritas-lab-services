@@ -70,6 +70,10 @@ jobs:
         # system and stay off outside it; owners unlock and turn accounts back on; every password write
         # goes through setUserPassword.
         run: npm run test:security-settings
+      - name: Run first-lab owner membership integration test
+        # Labs are set up by Veritas staff (Q195); a provisioned owner gets an active owner row and can open the lab;
+        # the boot backfill covers only pre-2026-10-14 accounts (parking lot #83, updated 2026-10-27).
+        run: npm run test:first-lab-owner-membership
       - name: Run structure-only database copy integration test
         # GET /api/admin/schema-db (Lifepoint questionnaire: customer data is not used for testing): secret-gated, every
         # table, index, view and trigger rebuilt with the same columns, no rows, nothing from the source in the file, audited.
