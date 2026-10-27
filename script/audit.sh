@@ -61,9 +61,9 @@ for FILE in $FILES; do
       WARNINGS+=("[$REL] $COUNT em dash(es) -- use comma, colon, or hyphen")
     fi
 
-    # ® on product names
-    if echo "$CONTENT" | grep -qP "(VeritaCheck|VeritaMap|VeritaScan|VeritaComp|VeritaStaff|VeritaLab|VeritaAssure|VeritaPT)\u00AE"; then
-      ERRORS+=("[$REL] ® on product name -- must be ™")
+    # ® only on the four USPTO-registered marks (issued 2026-10-27); script/audit.py is the full check.
+    if echo "$CONTENT" | grep -qP "(VeritaComp|VeritaStaff|VeritaLab|VeritaPT)\u00AE"; then
+      ERRORS+=("[$REL] ® on an unregistered product name -- must be ™")
     fi
 
     # EP Evaluator

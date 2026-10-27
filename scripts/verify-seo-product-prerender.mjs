@@ -25,6 +25,7 @@ function check(name, cond, detail = "") {
 const staticSrc = readFileSync(new URL("../server/static.ts", import.meta.url), "utf8").replace(/\r\n/g, "\n");
 const indexHtml = readFileSync(new URL("../client/index.html", import.meta.url), "utf8").replace(/\r\n/g, "\n");
 
+const REGISTERED = new Set(["VeritaAssure", "VeritaMap", "VeritaScan", "VeritaCheck"]);
 const PRODUCTS = [
   { route: "/veritacheck",  fn: "renderVeritaCheckContent",  id: "#veritacheck",  mark: "VeritaCheck" },
   { route: "/veritascan",   fn: "renderVeritaScanContent",   id: "#veritascan",   mark: "VeritaScan" },
@@ -181,8 +182,9 @@ console.log("\nCase 4: copy guardrails on EVERY product block and featureList");
     // The trademark check only applies to blocks naming a product. /services and
     // /team sell a person, so their "mark" is a topic label, not a product name.
     if (!CONSULTING.includes(p)) {
-      check(`${p.route}: ${p.mark} carries the trademark mark`,
-        new RegExp(`${p.mark}&#8482;`).test(block));
+      // USPTO registrations issued 2026-10-27: these four carry the registered mark, every other name TM.
+      const ent = REGISTERED.has(p.mark) ? "&#174;" : "&#8482;";
+      check(`${p.route}: ${p.mark} carries its mark (${ent})`, new RegExp(`${p.mark}${ent}`).test(block));
     }
   }
   // Cross-product marks appearing inside another product's copy.

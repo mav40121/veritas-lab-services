@@ -93,7 +93,7 @@ Test that per-module seat permissions take effect on the four pages from #7:
 
 - [ ] Navigate to https://www.veritaslabservices.com (logged out).
 - [ ] Page renders; meta description shows "Performance verification" not "Method validation" (parking-lot, closed via PR #71).
-- [ ] Navigate to `/veritacheck` (logged out). Title is "VeritaCheck™ | CLIA Performance Verification Software for Clinical Labs."
+- [ ] Navigate to `/veritacheck` (logged out). Title is "VeritaCheck® | CLIA Performance Verification Software for Clinical Labs."
 - [ ] Navigate to `/resources/laboratory-inventory-management`. Footer mentions VeritaStock™ as included (not "planned for a future release"; parking-lot #8, closed via PR #75).
 - [ ] Spot-check `/roadmap`: VeritaStock is in the "Live" section, not "Coming Soon."
 

@@ -250,7 +250,7 @@ Codified in `STANDING_REQUIREMENTS.md` under "CREDENTIAL HANDLING":
 
 These are the rules most often violated by fresh agents. The full list is in `STANDING_REQUIREMENTS.md`.
 
-**Identity / byline:** Michael Veri, MLS(ASCP) - VeritaAssure(TM). Do not add "TJC Surveyor" (he served 2021 to 2025 but is not currently a surveyor). Do not add "MT(ASCP)" (he is MLS, not MT).
+**Identity / byline:** Michael Veri, MLS(ASCP) - VeritaAssure(R). Do not add "TJC Surveyor" (he served 2021 to 2025 but is not currently a surveyor). Do not add "MT(ASCP)" (he is MLS, not MT).
 
 **Banned terms in product / marketing copy:**
 - The legacy evaluation-tool product name (use "other evaluation tools" if needed; fine to discuss internally with Michael)
@@ -261,7 +261,7 @@ These are the rules most often violated by fresh agents. The full list is in `ST
 
 **Punctuation:** No em dashes in public-facing artifacts. Internal-only files (this skill, STANDING_REQUIREMENTS.md, PARKING_LOT.md, SESSION_HANDOFF, code comments, agent-to-user chat, scratch notes) allow em dashes.
 
-**Product symbol:** Always (TM), never (R). Every Verita-prefixed name carries it on first use in any document.
+**Product symbol (USPTO registrations issued 2026-10-27):** VeritaAssure, VeritaMap, VeritaScan and VeritaCheck take (R) when they name the software; every other Verita name keeps (TM) until its own registration issues; VeritaAssure naming the consulting service keeps (TM). Never put (R) on an unregistered mark. Every Verita-prefixed name carries its symbol on first use in any document. script/audit.py enforces this.
 
 **URLs in printed assets:**
 - Canonical demo: `www.veritaslabservices.com/demo`

@@ -100,7 +100,7 @@ Plain-text questions in chat without numbering, without the ★, or without `[my
 - Do NOT add a 'Detailed results continued on page X' label. Page footer (Page X of Y) and the 'Continued from page 1' section heading already convey this. The orphan label caused a dead-page bug on 2026-04-28.
 - "Medical director or designee" everywhere — never just "medical director" or "laboratory director" alone
 - CLIA number on every report header — show "CLIA: Not on file — enter in account settings" if missing
-- Footer every page: "VeritaAssure™ | [Module]™ | Confidential — For Internal Lab Use Only | Page X of Y"
+- Footer every page: "VeritaAssure® | [Module]™ or ® (registered marks only) | Confidential — For Internal Lab Use Only | Page X of Y" (USPTO registrations issued 2026-10-27: VeritaAssure, VeritaMap, VeritaScan, VeritaCheck take ®; every other mark keeps ™; VeritaAssure keeps ™ where it names the consulting service, which the registration does not cover)
 - Author metadata: "Perplexity Computer"
 
 ## Regulatory Language (PDF narratives — VeritaCheck)
@@ -118,7 +118,7 @@ Plain-text questions in chat without numbering, without the ★, or without `[my
 - "Calibration Verification / Linearity" — never "Cal Ver" or "Linearity" alone
 - "Correlation / Method Comparison" — never "Method Comparison" alone
 - ADLM goal cited alongside CLIA TEa in narratives
-- CUMSUM is a STUDY TYPE within VeritaCheck™ — NOT a standalone module. Never list it as its own feature, row, or module. It belongs under VeritaCheck™ in all contexts (pricing tables, feature lists, marketing copy, comparison charts).
+- CUMSUM is a STUDY TYPE within VeritaCheck® — NOT a standalone module. Never list it as its own feature, row, or module. It belongs under VeritaCheck® in all contexts (pricing tables, feature lists, marketing copy, comparison charts).
 
 ## VeritaMap Rules
 - Critical values: "Critical Low (Mayo Clinic Laboratories)" and "Critical High (Mayo Clinic Laboratories)"

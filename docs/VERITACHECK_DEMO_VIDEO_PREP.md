@@ -115,7 +115,7 @@ No em dashes. Suggested:
 - Beat 6: "surveyor-ready PDF, signature on page one"
 
 End card text (static, 3 to 4 seconds):
-- Line 1: "VeritaCheck(TM)"
+- Line 1: "VeritaCheck(R)"
 - Line 2: "method verification without the spreadsheet"
 - Line 3: "www.veritaslabservices.com/demo"
 
