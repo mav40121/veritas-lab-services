@@ -23,7 +23,7 @@ import { createRequire } from "node:module";
 import Database from "better-sqlite3";
 import {
   continuousBackupPlan, continuousBackupReplicaPath, litestreamConfig, startContinuousBackup, stopContinuousBackup,
-  continuousBackupStatus, continuousRestoreSelfTest, RESET_HINT, _clearResetClockForTests,
+  continuousBackupStatus, continuousRestoreSelfTest, RESET_HINT, _clearResetClockForTests, GENERATION_FLOOR,
 } from "../../server/continuousBackup";
 
 (globalThis as any).require ??= createRequire(import.meta.url);
@@ -63,6 +63,9 @@ async function main() {
   const main = continuousBackupReplicaPath({ RAILWAY_SERVICE_NAME: "radiant-quietude" });
   const stock = continuousBackupReplicaPath({ RAILWAY_SERVICE_NAME: "VeritaStock" });
   check("2. the main app and VeritaStock replicate to different folders", main === "litestream/veritas.db" && stock === "veritastock/litestream/veritas.db", `${main} | ${stock}`);
+  const g3 = continuousBackupReplicaPath({ RAILWAY_SERVICE_NAME: "radiant-quietude" }, 3);
+  const s3 = continuousBackupReplicaPath({ RAILWAY_SERVICE_NAME: "VeritaStock" }, 3);
+  check("2b. BUG-111: a later generation is a new folder under each service's own scope; generation 1 is the original folder", g3 === "litestream/g3/veritas.db" && s3 === "veritastock/litestream/g3/veritas.db" && GENERATION_FLOOR === 2, `${g3} | ${s3}`);
 
   // 3) config
   const cfg = litestreamConfig("/data/veritas.db", main);
@@ -84,47 +87,69 @@ async function main() {
     const fdir = fs.mkdtempSync(path.join(os.tmpdir(), "cb-fake-"));
     const fake = path.join(fdir, "litestream");
     const FAKE_ERR = `level=ERROR msg="monitor error" error="open ltx file /x/ltx/0/0000000000000001-0000000000000001.ltx: no such file or directory" hint="LTX file is missing."`;
+    const FAKE_AUTO = `level=WARN msg="auto-recovery enabled, resetting local state" system=store db=veritas.db replica=file`;
+    // reset-log gets one line per `litestream reset`. The first comes at start (a new database starts on generation 2
+    // with a reset); until the second, replicate prints either the missing-LTX error twice or the auto-recover line.
     fs.writeFileSync(fake, [
       "#!/bin/sh",
       'D="$(dirname "$0")"',
       'case "$1" in',
       '  version) echo "v0.0.0-standin";;',
-      '  reset) echo "$@" > "$D/reset-args"; echo "reset ok";;',
+      '  reset) echo "$@" >> "$D/reset-log"; echo "reset ok";;',
       '  status) echo "[]";;',
       '  replicate)',
-      '    if [ ! -f "$D/reset-args" ]; then',
+      '    if [ "$(cat "$D/reset-log" 2>/dev/null | wc -l)" -lt 2 ]; then',
+      `      if [ "$STANDIN_MODE" = "auto" ]; then echo '${FAKE_AUTO}' 1>&2; else`,
       `      echo '${FAKE_ERR}' 1>&2`,
       "      sleep 1",
       `      echo '${FAKE_ERR}' 1>&2`,
+      "      fi",
       "    fi",
       "    exec sleep 300;;",
       "esac",
       "",
     ].join("\n"), { mode: 0o755 });
-    const fdb = new Database(path.join(fdir, "veritas.db"));
-    fdb.exec("CREATE TABLE t (id INTEGER PRIMARY KEY)");
-    _clearResetClockForTests();
-    try {
-      const st = startContinuousBackup(fdb, { ...process.env, CONTINUOUS_BACKUP: "1", LITESTREAM_BIN: fake, LITESTREAM_FILE_REPLICA: path.join(fdir, "replica") });
-      const firstPid = st.pid;
-      let done = false;
-      for (let i = 0; i < 60 && !done; i++) {
-        await new Promise((r) => setTimeout(r, 250));
-        const s2 = continuousBackupStatus();
-        done = s2.resets === 1 && s2.running && s2.pid !== firstPid;
-      }
-      const s3 = continuousBackupStatus();
-      const args = fs.existsSync(path.join(fdir, "reset-args")) ? fs.readFileSync(path.join(fdir, "reset-args"), "utf8").trim() : "";
-      check("5a. on a repeated 'LTX file is missing' the supervisor resets Litestream's state once and starts it again", done && s3.lastReset?.ok === true && /LTX file is missing/.test(s3.lastReset?.trigger || ""),
-        JSON.stringify({ resets: s3.resets, running: s3.running, lastReset: s3.lastReset }));
-      check("5b. the reset names the config and the database path", args.startsWith("reset -config ") && args.endsWith(path.join(fdir, "veritas.db")), args);
-      await new Promise((r) => setTimeout(r, 1500));
-      check("5c. it does not loop: one reset, still running", continuousBackupStatus().resets === 1 && continuousBackupStatus().running);
-    } finally {
-      await stopContinuousBackup();
-      fdb.close();
-      fs.rmSync(fdir, { recursive: true, force: true });
+    const runStandIn = async (mode: "error" | "auto") => {
+      for (const f of ["reset-log", "veritas.db", "veritas.db.litestream-generation"]) fs.rmSync(path.join(fdir, f), { force: true });
+      const fdb = new Database(path.join(fdir, "veritas.db"));
+      fdb.exec("CREATE TABLE t (id INTEGER PRIMARY KEY)");
       _clearResetClockForTests();
+      process.env.STANDIN_MODE = mode;
+      const resetsBefore = continuousBackupStatus().resets;
+      try {
+        const st = startContinuousBackup(fdb, { ...process.env, CONTINUOUS_BACKUP: "1", LITESTREAM_BIN: fake, LITESTREAM_FILE_REPLICA: path.join(fdir, "replica") });
+        const startGen = st.generation;
+        const firstPid = st.pid;
+        let done = false;
+        for (let i = 0; i < 60 && !done; i++) {
+          await new Promise((r) => setTimeout(r, 250));
+          const s2 = continuousBackupStatus();
+          done = s2.resets === resetsBefore + 1 && s2.running && s2.pid !== firstPid;
+        }
+        await new Promise((r) => setTimeout(r, 1500));
+        const s3 = continuousBackupStatus();
+        const log = fs.existsSync(path.join(fdir, "reset-log")) ? fs.readFileSync(path.join(fdir, "reset-log"), "utf8").trim().split("\n") : [];
+        const genFile = fs.readFileSync(path.join(fdir, "veritas.db.litestream-generation"), "utf8").trim();
+        return { done, startGen, s3, log, genFile, resetsAdded: s3.resets - resetsBefore };
+      } finally {
+        await stopContinuousBackup();
+        fdb.close();
+        delete process.env.STANDIN_MODE;
+        _clearResetClockForTests();
+      }
+    };
+    try {
+      const a = await runStandIn("error");
+      check("5a. a new database starts on replica generation 2, with a reset first", a.startGen === 2 && a.log.length >= 1, JSON.stringify({ startGen: a.startGen, resets: a.log.length }));
+      check("5b. on a repeated 'LTX file is missing' the supervisor resets once, moves to generation 3 (a new, empty folder) and starts again",
+        a.done && a.resetsAdded === 1 && a.s3.generation === 3 && a.s3.replicaPath?.endsWith("litestream/g3/veritas.db") && a.genFile === "3" && /LTX file is missing/.test(a.s3.lastReset?.trigger || ""),
+        JSON.stringify({ resets: a.resetsAdded, generation: a.s3.generation, path: a.s3.replicaPath, genFile: a.genFile, lastReset: a.s3.lastReset }));
+      check("5c. the reset names the config and the database path; no loop (still running, one reset)", a.log.every((l) => l.startsWith("reset -config ") && l.endsWith(path.join(fdir, "veritas.db"))) && a.s3.running && a.resetsAdded === 1, a.log.join(" || "));
+      const b = await runStandIn("auto");
+      check("5d. when Litestream's own auto-recover resets its state, the supervisor also moves to a new generation", b.done && b.resetsAdded === 1 && b.s3.generation === 3 && /auto-recovery enabled/.test(b.s3.lastReset?.trigger || ""),
+        JSON.stringify({ resets: b.resetsAdded, generation: b.s3.generation, trigger: b.s3.lastReset?.trigger }));
+    } finally {
+      fs.rmSync(fdir, { recursive: true, force: true });
     }
   }
 
@@ -147,7 +172,7 @@ async function main() {
     const env = { ...process.env, CONTINUOUS_BACKUP: "1", RAILWAY_SERVICE_NAME: tag };
     try {
       const st = startContinuousBackup(sqlite, env);
-      check("4a. it starts, switches the database to WAL and replicates under a throwaway folder", st.enabled && String(sqlite.pragma("journal_mode", { simple: true })) === "wal" && st.replicaPath === `${tag}/litestream/veritas.db`, `${st.reason} ${st.replicaPath} v${st.version}`);
+      check("4a. it starts, switches the database to WAL and replicates under a throwaway folder", st.enabled && String(sqlite.pragma("journal_mode", { simple: true })) === "wal" && st.replicaPath === `${tag}/litestream/g2/veritas.db` && st.generation === 2, `${st.reason} ${st.replicaPath} v${st.version}`);
       await new Promise((r) => setTimeout(r, 8000)); // first snapshot
       for (let i = 0; i < 200; i++) ins.run(`later ${i}`);
       const t = await continuousRestoreSelfTest(sqlite, 5000);
@@ -161,16 +186,17 @@ async function main() {
       await stopContinuousBackup();
       check("4e. shutdown stops it", !continuousBackupStatus().running);
 
-      // 4g. BUG-111: the production state of 2026-10-27 03:07 UTC. Restart with the replica unreadable (here: gone) and
-      // the first local LTX file missing; a later change must reach the replica again (auto-recover or the supervisor
-      // reset), within two minutes.
+      // 4g. BUG-111: the production state of 2026-10-27 03:07 UTC. Restart with the first local LTX file missing and the
+      // replica KEPT (it holds transaction ids above the ones a reset starts again from, as R2 did); a later change must
+      // be in a restored copy within two minutes. Auto-recover alone left production restoring the stale copy; the move
+      // to a new generation is what makes this pass.
       if (fileReplica) {
         const ltx0 = path.join(dir, ".veritas.db-litestream", "ltx", "0");
         const files = fs.existsSync(ltx0) ? fs.readdirSync(ltx0).filter((f) => f.endsWith(".ltx")).sort() : [];
-        fs.rmSync(path.join(fileReplica, tag), { recursive: true, force: true });
         if (files[0]) fs.rmSync(path.join(ltx0, files[0]));
         _clearResetClockForTests();
         const before = continuousBackupStatus().resets;
+        const genBefore = continuousBackupStatus().generation;
         startContinuousBackup(sqlite, env);
         let ok = false;
         let last: any = null;
@@ -181,9 +207,9 @@ async function main() {
           ok = last.verdict === "PASS";
         }
         const s4 = continuousBackupStatus();
-        const how = s4.resets > before ? "supervisor reset" : s4.log.some((l) => /auto.?recover|reset/i.test(l)) ? "Litestream auto-recover" : "no reset needed";
-        check("4g. BUG-111: after a restart with the replica gone and the first local LTX file missing, changes reach the replica again", ok,
-          JSON.stringify({ removedLtx: files[0] || null, how, verdict: last?.verdict, notes: last?.notes, log: s4.log.slice(-6) }));
+        const how = s4.generation > genBefore ? `moved to generation ${s4.generation} after ${s4.resets > before ? "a reset" : "no reset"}` : "stayed on the same generation";
+        check("4g. BUG-111: after a restart with the replica kept and the first local LTX file missing, a later change is in a restored copy", ok,
+          JSON.stringify({ removedLtx: files[0] || null, how, path: s4.replicaPath, verdict: last?.verdict, notes: last?.notes, log: s4.log.slice(-6) }));
         await stopContinuousBackup();
       }
     } catch (e: any) {
