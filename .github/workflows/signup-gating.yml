@@ -97,6 +97,9 @@ jobs:
       - name: Run QC finding reminder integration test
         # A reminder for a finding escalated from VeritaQC names the test, level, lot, run date and instrument (parking lot #99).
         run: npm run test:finding-reminder-qc
+      - name: VeritaTrack sign-off to VeritaMap writeback
+        # Writes the completion date onto the sign-off's own lab's map (#1177), warns on a name mismatch.
+        run: npx tsx scripts/verify-veritatrack-map-sync.mts
       - name: Lab-local today and the UTC-date ratchet
         # labLocalDate/addLabDays on evening instants; routes.ts UTC calendar dates may only go down (parking lot #97).
         run: npx tsx scripts/verify-lab-local-today.ts

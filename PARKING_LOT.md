@@ -743,6 +743,18 @@ Open questions for the scope:
 
 ---
 
+### 113. Georgetown (lab 18): production does not read a CLIA state from its CLIA number
+
+**Effort:** XS (look up what lab 18 stores; correct it only on Michael's go)
+**Importance:** Medium. Every report header prints the lab's CLIA number; if lab 18 stores a placeholder, its reports print the wrong one.
+
+**What:** the production time zone list (2026-10-27) shows lab 18 "Georgetown Community Hospital" with no CLIA state, so labs.clia_number on lab 18 is not in the CLIA form (two digits, D, seven digits). The account notes say her real CLIA is 18D0322357 (from her CLIA certificate, 2026-09-28; Clinic sale closed 2026-10-05). Check what lab 18 stores and what its reports print, then correct it on Michael's go. Its time zone is right either way: Georgetown, KY is Eastern.
+
+**Source:** production time zone list, 2026-10-27 (PR #1722 admin route).
+**Status:** Open.
+
+---
+
 ## CLOSED (audit trail)
 
 ### C105. VeritaResponse reports for the new entry types (was #112)
