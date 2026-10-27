@@ -121,6 +121,9 @@ jobs:
         # ISO 15189 add-on (#108): findings table rebuilt to accept ISO with rows, indexes and child rows intact;
         # settings round trip and audit; ISO findings gated by the lab flag and take the lab-entered due date.
         run: npm run test:iso-15189
+      - name: Run account settings partial save integration test
+        # A save that leaves out the CLIA, lab name or PT vendor keeps them; blanks still clear (2026-10-27).
+        run: npm run test:settings-partial-save
       - name: Run per-lab time zone integration test
         # Zone from labs.time_zone, else the CLIA state, else Eastern; lab-scoped stamps use the lab's day (2026-10-26).
         run: npm run test:lab-time-zone

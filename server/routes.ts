@@ -33859,7 +33859,11 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       // checked when someone actually enters one. (Michael 2026-10-21, UNC Health Nash.)
       let normalizedClia: string | null | undefined = clia_number;
       const cliaUnchanged = typeof clia_number === "string" && clia_number.trim() === String(lab.clia_number ?? "").trim();
-      if (cliaUnchanged) {
+      // A save that leaves a field out keeps it (2026-10-27): a PUT without clia_number used to write NULL over the
+      // lab's CLIA, and one without clia_lab_name blanked the lab name. A blank string still clears on purpose.
+      if (clia_number === undefined) {
+        normalizedClia = lab.clia_number ?? null;
+      } else if (cliaUnchanged) {
         normalizedClia = lab.clia_number ?? null;
       } else if (typeof clia_number === "string" && clia_number.trim().length > 0) {
         const v = validateClia(clia_number);
@@ -33878,6 +33882,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       if (lab.lab_name_locked && clia_lab_name !== undefined && (clia_lab_name || null) !== (lab.lab_name || null)) {
         return res.status(403).json({ error: "Lab name is locked once reports have been generated. Contact support to change." });
       }
+      const nextLabName: string | null = clia_lab_name === undefined ? (lab.lab_name ?? null) : (clia_lab_name || null);
 
       // Phase 1 (2026-05-01): single accreditation_choice radio replaces the
       // up-to-2 array. Six options: TJC, CAP, AABB, COLA, CAP+AABB, CLIA.
@@ -33923,7 +33928,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       // Audit log: track each changed field
       const fieldsToAudit: [string, any, any][] = [];
       if ((normalizedClia || null) !== (lab.clia_number || null)) fieldsToAudit.push(["clia_number", lab.clia_number, normalizedClia || null]);
-      if ((clia_lab_name || null) !== (lab.lab_name || null)) fieldsToAudit.push(["lab_name", lab.lab_name, clia_lab_name || null]);
+      if ((nextLabName || null) !== (lab.lab_name || null)) fieldsToAudit.push(["lab_name", lab.lab_name, nextLabName]);
       if (accCap !== lab.accreditation_cap) fieldsToAudit.push(["accreditation_cap", String(lab.accreditation_cap), String(accCap)]);
       if (accTjc !== lab.accreditation_tjc) fieldsToAudit.push(["accreditation_tjc", String(lab.accreditation_tjc), String(accTjc)]);
       if (accCola !== lab.accreditation_cola) fieldsToAudit.push(["accreditation_cola", String(lab.accreditation_cola), String(accCola)]);
@@ -33948,7 +33953,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         `UPDATE labs SET clia_number = ?, lab_name = ?, accreditation_cap = ?, accreditation_tjc = ?,
          accreditation_cola = ?, accreditation_aabb = ?, accreditation_iso = ?, time_zone = ?, updated_at = ? WHERE id = ?`
       ).run(
-        normalizedClia || null, clia_lab_name || null,
+        normalizedClia || null, nextLabName,
         accCap, accTjc, accCola, accAabb, accIso, nextTz, now, lab.id
       );
 
@@ -33960,7 +33965,11 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
       // Validate preferred PT vendor
       const VALID_PT_VENDORS = ["cap", "api", "wslh", "none"];
-      const ptVendor = VALID_PT_VENDORS.includes(preferredPtVendor) ? preferredPtVendor : "none";
+      // Left out = keep the account's current vendor (2026-10-27); it used to fall to "none".
+      const currentPtVendor = (db as any).$client.prepare("SELECT preferred_pt_vendor FROM users WHERE id = ?").get(req.userId) as any;
+      const ptVendor = preferredPtVendor === undefined
+        ? (VALID_PT_VENDORS.includes(currentPtVendor?.preferred_pt_vendor) ? currentPtVendor.preferred_pt_vendor : "none")
+        : (VALID_PT_VENDORS.includes(preferredPtVendor) ? preferredPtVendor : "none");
       // Cross-lab identity-bleed fix (2026-07-31): mirror this lab's CLIA
       // identity onto the caller's OWN users row only when the caller OWNS the
       // lab being edited. A consultant/member editing a client lab still
@@ -33973,7 +33982,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       if (lab.owner_user_id === req.userId) {
         (db as any).$client.prepare(
           "UPDATE users SET clia_number = ?, clia_lab_name = ?, preferred_standards = ?, preferred_pt_vendor = ? WHERE id = ?"
-        ).run(normalizedClia || null, clia_lab_name || null, standardsJson, ptVendor, req.userId);
+        ).run(normalizedClia || null, nextLabName, standardsJson, ptVendor, req.userId);
       }
 
       res.json({ success: true });
