@@ -42722,7 +42722,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     authMiddleware,
     labScopeMiddleware,
     requireWriteAccess,
-    requireModuleEdit("veritapolicy"),
+    // BUG-079 (2026-10-27): signing one's OWN assigned policy is operational (record) work, which any active member,
+    // staff included, may do (access model, PR #1435); it is what staff seats are for. requireModuleEdit here refused
+    // view-only staff the page offered Attest to. The route still requires the assignment to be the caller's, a typed
+    // signature and password re-authentication (21 CFR Part 11).
     async (req: any, res) => {
       const id = Number(req.params.id);
       if (!Number.isFinite(id)) return res.status(400).json({ error: "Bad id" });
