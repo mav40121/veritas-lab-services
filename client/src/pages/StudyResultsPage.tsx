@@ -77,7 +77,7 @@ import {
   Line,
   ResponsiveContainer,
 } from "recharts";
-import { FileDown, FileSpreadsheet, ArrowLeft, CheckCircle2, XCircle, Loader2, BookOpen, Archive, ArchiveRestore, GitBranch, Pencil } from "lucide-react";
+import { FileDown, FileSpreadsheet, ArrowLeft, CheckCircle2, XCircle, Loader2, BookOpen, Archive, ArchiveRestore, GitBranch, Pencil, AlertTriangle } from "lucide-react";
 import React, { useState, useCallback, useEffect } from "react";
 import { API_BASE } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -159,7 +159,12 @@ function StudyHeader({ study, results }: { study: Study; results: StudyResults }
         </div>
       </div>
       <div className="flex items-center gap-3">
-        {results.overallPass ? (
+        {(results as any).notEvaluable ? (
+          // BUG-085: the listed analyzers have no values in the data, so there is no verdict to show.
+          <Badge className="bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30 border px-3 py-1 text-sm font-semibold" data-testid="badge-not-evaluable">
+            <AlertTriangle size={14} className="mr-1.5" />NOT EVALUABLE
+          </Badge>
+        ) : results.overallPass ? (
           <Badge className="bg-green-500/10 text-green-400 border-green-500/30 border px-3 py-1 text-sm font-semibold">
             <CheckCircle2 size={14} className="mr-1.5" />PASS
           </Badge>
@@ -179,7 +184,8 @@ function StudyHeader({ study, results }: { study: Study; results: StudyResults }
         </Button>
         <Button
           onClick={handlePDF}
-          disabled={pdfLoading}
+          disabled={pdfLoading || !!(results as any).notEvaluable}
+          title={(results as any).notEvaluable ? "Correct the analyzer list first: this study cannot be evaluated" : undefined}
           className="bg-primary hover:bg-primary/90 text-primary-foreground"
           data-testid="button-download-pdf"
         >
@@ -192,6 +198,8 @@ function StudyHeader({ study, results }: { study: Study; results: StudyResults }
 }
 
 function generateNarrative(results: StudyResults, study: Study): string {
+  // BUG-085: a study that cannot be evaluated gets no narrative (it would read as a FAIL); the summary says why.
+  if ((results as any).notEvaluable) return "";
   const cliaPct = (study.cliaAllowableError * 100).toFixed(1);
   const adlmPct = (study.cliaAllowableError * 50).toFixed(1);
   let narrative = "";
@@ -605,7 +613,7 @@ function EvalBox({ results, study }: { results: StudyResults; study: Study }) {
           </div>
         )}
 
-        <div className={`mt-4 p-3 rounded-lg border ${results.overallPass ? "bg-green-500/5 border-green-500/20" : "bg-red-500/5 border-red-500/20"}`}>
+        {!(results as any).notEvaluable && <div className={`mt-4 p-3 rounded-lg border ${results.overallPass ? "bg-green-500/5 border-green-500/20" : "bg-red-500/5 border-red-500/20"}`}>
           <div className="flex items-center gap-2">
             {results.overallPass
               ? <CheckCircle2 size={16} className="text-green-400" />
@@ -614,7 +622,7 @@ function EvalBox({ results, study }: { results: StudyResults; study: Study }) {
               Overall: {results.overallPass ? "PASS" : "FAIL"}{(results as any).passCount != null ? `, ${(results as any).passCount}/${(results as any).totalCount} ${isPrecision(results) ? "levels within allowable CV" : "results within TEa"}` : ""}
             </span>
           </div>
-        </div>
+        </div>}
       </CardContent>
     </Card>
   );
@@ -3119,7 +3127,13 @@ export default function StudyResults() {
           )}
         </div>
       )}
-      {isMethodComp(results) && <MethodCompReport study={study} results={results} />}
+      {isMethodComp(results) && ((results as any).notEvaluable ? (
+        <div className="mt-6 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 text-sm" data-testid="panel-not-evaluable">
+          <div className="font-semibold text-amber-700 dark:text-amber-400 mb-1">This study cannot be evaluated</div>
+          <p className="text-muted-foreground">{(results as any).summary}</p>
+          <p className="text-muted-foreground mt-2">Listed analyzers: {(results as any).notEvaluable.listed.join(", ")}. Analyzers in the data: {(results as any).notEvaluable.inData.join(", ")}.</p>
+        </div>
+      ) : <MethodCompReport study={study} results={results} />)}
       {isQualitative(results) && <QualitativeReport study={study} results={results} />}
       {isSemiQuant(results) && <SemiQuantReport study={study} results={results} />}
       {isPrecision(results) && <PrecisionReport study={study} results={results} />}
