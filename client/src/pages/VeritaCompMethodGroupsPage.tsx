@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ChevronLeft, Loader2 } from "lucide-react";
 import { groupProblem, suggestGroupName } from "@shared/competencyGrouping";
+import { labLocaleDate } from "@/lib/labDate";
 
 interface Inst { id: number; name: string; category: string | null; complexity: string; manual: boolean; people: number; groupId: number | null; }
 interface Group { id: number; name: string; members: Inst[]; people: number; createdAt: string; createdBy: string | null; }
@@ -116,7 +117,7 @@ export default function VeritaCompMethodGroupsPage() {
               <div key={g.id} className="rounded-md border p-2.5 flex items-center justify-between gap-3 flex-wrap" data-testid="lab-group">
                 <div>
                   <div className="text-sm font-medium flex items-center gap-2">{g.name} <Badge className="text-[10px] bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300">GROUP</Badge></div>
-                  <div className="text-[11px] text-muted-foreground">{g.members.map((m) => m.name).join(", ")} &middot; {g.members[0]?.category || "Other"} &middot; {cx(g.members[0]?.complexity || "")} &middot; {g.people} {g.people === 1 ? "person" : "people"}{g.createdBy ? ` · grouped ${new Date(g.createdAt).toLocaleDateString()} by ${g.createdBy}` : ""}</div>
+                  <div className="text-[11px] text-muted-foreground">{g.members.map((m) => m.name).join(", ")} &middot; {g.members[0]?.category || "Other"} &middot; {cx(g.members[0]?.complexity || "")} &middot; {g.people} {g.people === 1 ? "person" : "people"}{g.createdBy ? ` · grouped ${labLocaleDate(g.createdAt)} by ${g.createdBy}` : ""}</div>
                 </div>
                 {!readOnly && (
                   <div className="flex items-center gap-2">

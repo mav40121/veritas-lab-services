@@ -7,7 +7,7 @@
 //            password re-auth and tamper-detection on download).
 
 import { useState, useMemo, useEffect } from "react";
-import { labTodayIso } from "@/lib/labDate";
+import { labTodayIso, labLocaleDate } from "@/lib/labDate";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/components/AuthContext";
@@ -250,7 +250,7 @@ function fmtDate(s: string | null): string {
     if (m) {
       return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).toLocaleDateString();
     }
-    return new Date(s).toLocaleDateString();
+    return labLocaleDate(s);
   } catch {
     return s;
   }

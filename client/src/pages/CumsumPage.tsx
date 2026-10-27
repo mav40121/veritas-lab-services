@@ -17,6 +17,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Link } from "wouter";
 import { geometricMean } from "@/lib/calculations";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
+import { labLocaleDate } from "@/lib/labDate";
 
 const API_BASE = ""; // same-origin: works on the lab site and the separate VeritaStock deployment
 
@@ -513,7 +514,7 @@ export default function CumsumPage() {
                 <CardContent className="flex items-center justify-between py-4 px-5">
                   <div>
                     <div className="font-semibold text-base">{t.instrument_name}</div>
-                    <div className="text-sm text-muted-foreground">{t.analyte} | Last updated: {t.lastEntryDate ? new Date(t.lastEntryDate).toLocaleDateString() : "Never"}</div>
+                    <div className="text-sm text-muted-foreground">{t.analyte} | Last updated: {t.lastEntryDate ? labLocaleDate(t.lastEntryDate) : "Never"}</div>
                   </div>
                   <div className="text-right flex items-center gap-3">
                     <div>

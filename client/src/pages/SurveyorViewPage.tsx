@@ -12,6 +12,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader2, FileText, ShieldCheck, XCircle, Eye } from "lucide-react";
+import { labLocaleDate } from "@/lib/labDate";
 
 interface SurveyorDoc {
   id: number;
@@ -45,7 +46,7 @@ interface Signoff {
 function fmtDate(s: string | null): string {
   if (!s) return "-";
   try {
-    return new Date(s).toLocaleDateString();
+    return labLocaleDate(s);
   } catch {
     return s;
   }

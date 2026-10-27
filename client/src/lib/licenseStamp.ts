@@ -15,6 +15,7 @@ import {
   normalizeLicenseContext,
   type LicenseContext,
 } from "@shared/licenseText";
+import { labStampLabel } from "@/lib/labDate";
 
 const FOOTER_FONT_SIZE = 7;
 const FOOTER_GREY: [number, number, number] = [85, 85, 85];
@@ -124,7 +125,7 @@ function appendAppendixPage(doc: jsPDF, ctx: LicenseContext): void {
   doc.setFontSize(8);
   doc.setTextColor(...FOOTER_GREY);
   const stampLine =
-    `Generated ${new Date().toISOString().slice(0, 16).replace("T", " ")} · ` +
+    `Generated ${labStampLabel(new Date().toISOString())} · ` +
     `Veritas Lab Services, LLC · Globe, Arizona`;
   if (y < h - margin - 12) {
     y = h - margin - 8;

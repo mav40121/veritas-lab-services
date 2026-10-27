@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Loader2, UserPlus, ShieldCheck, ShieldOff, Trash2, Crown, ArrowRightLeft, Clock, Link as LinkIcon, RotateCw, X, KeyRound, Copy, Check, MapPin, Stethoscope, Pencil, Download } from "lucide-react";
+import { labLocaleDate } from "@/lib/labDate";
 
 interface LabMember {
   membership_id: number;
@@ -118,7 +119,7 @@ function medicalDirectorBadge(pending?: boolean) {
 
 function fmtDate(s: string | null): string {
   if (!s) return "—";
-  try { return new Date(s).toLocaleDateString(); } catch { return s; }
+  try { return labLocaleDate(s); } catch { return s; }
 }
 
 export default function LabMembersPage() {

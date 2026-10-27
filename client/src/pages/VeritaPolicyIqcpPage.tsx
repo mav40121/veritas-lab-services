@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { labLocaleDate } from "@/lib/labDate";
 import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
 } from "@/components/ui/select";
@@ -157,7 +158,7 @@ function PlanList({ plans, loading, onNew, onOpen, onDeleted, jsonMut, labId }: 
               <CardContent className="p-4 flex items-center justify-between gap-3">
                 <button className="text-left flex-1" onClick={() => p.status !== "not_indicated" && onOpen(p.id)}>
                   <div className="font-medium text-foreground">{p.title || p.instrument_name}</div>
-                  <div className="text-xs text-muted-foreground">{p.instrument_name}{p.approved_by_name ? ` · Approved by ${p.approved_by_name}` : ""}{p.next_review ? ` · Next review ${new Date(p.next_review).toLocaleDateString()}` : ""}</div>
+                  <div className="text-xs text-muted-foreground">{p.instrument_name}{p.approved_by_name ? ` · Approved by ${p.approved_by_name}` : ""}{p.next_review ? ` · Next review ${labLocaleDate(p.next_review)}` : ""}</div>
                 </button>
                 <StatusPill status={p.status} />
                 <Button variant="ghost" size="sm" hidden={isReadOnly} onClick={() => del(p.id)} className="text-muted-foreground hover:text-destructive"><Trash2 size={15} /></Button>

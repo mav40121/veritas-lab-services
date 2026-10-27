@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { labTodayIso } from "@/lib/labDate";
+import { labTodayIso, labLocaleDate } from "@/lib/labDate";
 import { Link } from "wouter";
 import { useAuth } from "@/components/AuthContext";
 import { ModuleHowToCard } from "@/components/ModuleHowToCard";
@@ -557,7 +557,7 @@ export default function VeritaLabAppPage() {
                           <div><span className="font-medium text-foreground">Issued by:</span> {cert.issuing_body}</div>
                         )}
                         {cert.expiration_date && (
-                          <div><span className="font-medium text-foreground">Expires:</span> {new Date(cert.expiration_date).toLocaleDateString()}</div>
+                          <div><span className="font-medium text-foreground">Expires:</span> {labLocaleDate(cert.expiration_date)}</div>
                         )}
                         {cert.lab_director && (
                           <div><span className="font-medium text-foreground">Director:</span> {cert.lab_director}</div>
@@ -783,7 +783,7 @@ export default function VeritaLabAppPage() {
                     <div className="min-w-0">
                       <div className="text-sm font-medium truncate">{doc.original_filename}</div>
                       <div className="text-xs text-muted-foreground">
-                        {formatFileSize(doc.file_size)} - {new Date(doc.uploaded_at).toLocaleDateString()}
+                        {formatFileSize(doc.file_size)} - {labLocaleDate(doc.uploaded_at)}
                       </div>
                     </div>
                     <div className="flex items-center gap-1 shrink-0">

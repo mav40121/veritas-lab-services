@@ -38,6 +38,7 @@ import { authHeaders } from "@/lib/auth";
 import { API_BASE } from "@/lib/queryClient";
 import { Plus, Edit2, Trash2, CheckCircle2, Lock, ListChecks } from "lucide-react";
 import fdaData from "@/lib/fdaInstrumentData.json";
+import { labLocaleDate } from "@/lib/labDate";
 
 const INSTRUMENT_DATA = fdaData as unknown as Record<string, { tests: Record<string, { complexity: string; specialty: string }> }>;
 
@@ -390,7 +391,7 @@ export function VerificationAnalytesPanel({ verificationId, instrumentName, onAn
               </div>
               {a.finalized_at && (
                 <div className="text-xs text-muted-foreground">
-                  Signed: <strong>{a.finalized_signature}</strong> on {new Date(a.finalized_at).toLocaleDateString()}
+                  Signed: <strong>{a.finalized_signature}</strong> on {labLocaleDate(a.finalized_at)}
                 </div>
               )}
             </div>

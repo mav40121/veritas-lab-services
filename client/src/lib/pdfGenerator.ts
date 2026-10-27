@@ -1,5 +1,5 @@
 import jsPDF from "jspdf";
-import { labTodayIso } from "@/lib/labDate";
+import { labTodayIso, labLocaleDate } from "@/lib/labDate";
 import type { Study } from "@shared/schema";
 import type { StudyResults, CalVerResults, MethodCompResults, QualitativeResults, SemiQuantResults } from "./calculations";
 import { applyLicenseToPdf } from "./licenseStamp";
@@ -290,7 +290,7 @@ function pdfPageFooter(doc: jsPDF, pw: number, margin: number) {
     doc.setFontSize(5.5); setRgb(doc, [160,160,160] as [number,number,number]);
     doc.text("VeritaCheck\u2122 is a statistical tool for qualified laboratory professionals. Results require interpretation by a licensed medical director or designee and do not constitute medical advice.", margin, pageH-16, { maxWidth: cw });
     doc.setFontSize(6.5); setRgb(doc, MUTED);
-    doc.text(`VeritaCheck\u2122 by Veritas Lab Services · veritaslabservices.com · Generated ${new Date().toLocaleDateString()}`, margin, pageH-8);
+    doc.text(`VeritaCheck\u2122 by Veritas Lab Services · veritaslabservices.com · Generated ${labLocaleDate(labTodayIso())}`, margin, pageH-8);
     doc.text(`Page ${p}`, pw-margin, pageH-8, { align: "right" });
   }
   doc.setPage(savedPage);
