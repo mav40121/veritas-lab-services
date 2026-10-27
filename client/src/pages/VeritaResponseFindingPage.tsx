@@ -44,6 +44,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { useLabRoute } from "@/hooks/useLabRoute";
+import { labDayOfStamp, labStampLabel } from "@/lib/labDate";
 
 type Accreditor = "CAP" | "TJC" | "COLA" | "CMS" | "AABB" | "ISO" | "Other";
 type FindingStatus = "open" | "drafting" | "submitted" | "accepted" | "rejected_resubmit" | "closed";
@@ -476,6 +477,35 @@ function FdaDeviationPanel({ finding, labId, onSaved }: { finding: any; labId: n
   );
 }
 
+// BUG-080: one plain line per finding_history event (server/routes.ts writes them).
+const REPORT_NAMES: Record<string, string> = { cms_2567: "CMS-2567", internal_nce: "internal NCE report", type_report: "investigation report", cap: "CAP report", tjc: "TJC report", cola: "COLA report", aabb: "AABB report" };
+function findingHistoryText(h: { event: string; payload: any }): string {
+  const p = h.payload || {};
+  switch (h.event) {
+    case "created": return "Created";
+    case "updated": {
+      const keys = Array.isArray(p.changed) ? (p.changed as string[]).filter((k) => k !== "accreditor") : [];
+      return keys.length ? `Edited: ${keys.map((k) => k.replace(/_/g, " ")).join(", ")}` : "Edited";
+    }
+    case "signed_off": {
+      const as = p.signoff_role === "medical_director" ? "as medical director" : p.signoff_role === "designee" ? "as designee" : "by owner override";
+      return `Signed off and closed ${as}${p.signed_by ? ` (${p.signed_by})` : ""}`;
+    }
+    case "effectiveness_started": return "Effectiveness checks scheduled";
+    case "effectiveness_verified": return "Effectiveness check: effective";
+    case "effectiveness_failed": return "Effectiveness check: not effective, finding reopened";
+    case "fda_fields_updated": return "FDA report details updated";
+    case "qc_run_voided": return "Linked QC run voided";
+    case "closed_qc_run_voided": return "Linked QC run voided; finding closed";
+    case "reclassified": return "Reclassified";
+    default: {
+      const m = /^(.*)_rendered$/.exec(h.event);
+      if (m) return `Downloaded the ${REPORT_NAMES[m[1]] || m[1].replace(/_/g, " ")}`;
+      return h.event.replace(/_/g, " ");
+    }
+  }
+}
+
 export default function VeritaResponseFindingPage() {
   // #84 Phase 3: editing, saving and deleting a finding is VeritaResponse setup.
   const isReadOnly = useIsReadOnly("veritaresponse");
@@ -515,6 +545,21 @@ export default function VeritaResponseFindingPage() {
 
   const hasPlanAccess = !!user?.plan && ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "clinic", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(user.plan);
 
+  // BUG-080 (2026-10-27): the finding's history and how this user may sign off (server rule), from
+  // GET /findings/:id/history. Kept apart from the finding so a save or sign-off reply never drops it.
+  const [history, setHistory] = useState<any[]>([]);
+  const [signoffAs, setSignoffAs] = useState<null | "medical_director" | "designee" | "owner_override">(null);
+  const fetchHistory = async () => {
+    if (!id) return;
+    try {
+      const res = await fetch(`${findingUrl}/history`, { headers: authHeaders() });
+      if (!res.ok) return;
+      const data = await res.json();
+      setHistory(Array.isArray(data.events) ? data.events : []);
+      setSignoffAs(data.signoffAs ?? null);
+    } catch { /* history is secondary; the finding still shows */ }
+  };
+
   const fetchFinding = async () => {
     if (!id) return;
     setLoading(true);
@@ -540,7 +585,7 @@ export default function VeritaResponseFindingPage() {
 
   useEffect(() => {
     // Audit #7: re-fetch when the active lab changes, not only on id/plan.
-    if (hasPlanAccess) fetchFinding();
+    if (hasPlanAccess) { fetchFinding(); fetchHistory(); }
     else setLoading(false);
   }, [hasPlanAccess, id, activeLabId]);
 
@@ -603,6 +648,7 @@ export default function VeritaResponseFindingPage() {
       const updated = await res.json();
       setFinding(updated);
       setSaveState("saved");
+      fetchHistory();
     } catch (e: any) {
       setSaveError(e?.message || "Network error");
       setSaveState("error");
@@ -628,6 +674,7 @@ export default function VeritaResponseFindingPage() {
         return;
       }
       setFinding(body);
+      fetchHistory();
       toast({ title: "Signed off", description: body?.signoff_role === "medical_director" ? "Recorded as the medical director." : body?.signoff_role === "designee" ? "Recorded as the delegated designee." : "Recorded as the account owner (override)." });
     } catch (e: any) {
       toast({ variant: "destructive", title: "Could not sign off", description: e?.message || "Network error" });
@@ -1677,29 +1724,53 @@ export default function VeritaResponseFindingPage() {
           </div>
           <div className="space-y-1">
             <Label className="text-xs">Signed at</Label>
-            <div className="h-9 flex items-center text-sm">{finding.signed_at ? String(finding.signed_at).slice(0, 16).replace("T", " ") : "Not signed"}</div>
+            <div className="h-9 flex items-center text-sm">{finding.signed_at ? labStampLabel(finding.signed_at) : "Not signed"}</div>
           </div>
           <div className="col-span-2 flex flex-wrap items-center gap-3 pt-1 border-t mt-1">
-            {!finding.signoff_role && status !== "closed" && (
+            {/* BUG-080: offered only to someone the server accepts, labeled by how they sign. Not tied to VeritaResponse
+                edit: the POST needs an active member, so a medical director on a view seat can still sign. */}
+            {!finding.signoff_role && status !== "closed" && signoffAs && (
               <Button
                 type="button"
                 size="sm"
                 className="bg-[#006064] hover:bg-[#004d50] text-white"
                 onClick={handleSignoff}
-                disabled={signingOff || !activeLabId || isReadOnly}
+                disabled={signingOff || !activeLabId}
                 data-testid="finding-signoff-btn"
               >
-                {signingOff ? "Signing..." : "Sign off and close (medical director or designee)"}
+                {signingOff ? "Signing..." : signoffAs === "medical_director" ? "Sign off and close as medical director" : signoffAs === "designee" ? "Sign off and close as designee" : "Sign off and close (owner override)"}
               </Button>
             )}
             {finding.signoff_role && (
               <span className="text-xs text-muted-foreground">
                 Signed off by {finding.signoff_role === "medical_director" ? "the medical director" : finding.signoff_role === "designee" ? "the delegated designee" : "the account owner (override)"}
-                {finding.signed_at ? ` on ${String(finding.signed_at).slice(0, 10)}` : ""}.
+                {finding.signed_at ? ` on ${labDayOfStamp(finding.signed_at)}` : ""}.
               </span>
             )}
             <span className="text-[11px] text-muted-foreground w-full">A finding closes only through this sign-off: the designated medical director, a designee delegated finding closure, or the account owner (as a logged override).</span>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* BUG-080 (2026-10-27): the finding's history, newest first. */}
+      <Card data-testid="finding-history">
+        <CardHeader className="py-3 px-4 border-b">
+          <CardTitle className="text-base font-semibold">History</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {history.length === 0 ? (
+            <div className="p-4 text-xs text-muted-foreground">No history recorded yet.</div>
+          ) : (
+            <ul className="divide-y divide-border max-h-80 overflow-y-auto">
+              {history.map((h) => (
+                <li key={h.id} className="px-4 py-2 text-sm flex flex-wrap gap-x-3 gap-y-0.5" data-testid="finding-history-row">
+                  <span className="text-xs text-muted-foreground tabular-nums w-32 shrink-0">{labStampLabel(h.at)}</span>
+                  <span className="flex-1 min-w-[12rem]">{findingHistoryText(h)}</span>
+                  <span className="text-xs text-muted-foreground">{h.by_system ? "System" : h.by_name || "Lab user"}</span>
+                </li>
+              ))}
+            </ul>
+          )}
         </CardContent>
       </Card>
 
@@ -1730,7 +1801,7 @@ export default function VeritaResponseFindingPage() {
         <div className="text-xs text-muted-foreground">
           {saveState === "saved" && <span className="text-emerald-700 dark:text-emerald-400 font-medium">Saved.</span>}
           {saveState === "error" && <span className="text-red-700 dark:text-red-400 font-medium">{saveError || "Save failed."}</span>}
-          {saveState === "idle" && finding.updated_at && <>Last saved {String(finding.updated_at).slice(0, 16).replace("T", " ")}.</>}
+          {saveState === "idle" && finding.updated_at && <>Last saved {labStampLabel(finding.updated_at)}.</>}
         </div>
         <Button
           className="bg-[#006064] hover:bg-[#004d50] text-white"
