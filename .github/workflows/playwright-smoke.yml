@@ -74,7 +74,11 @@ jobs:
       # cannot pass no longer hides behind "skipped". PW_TOKEN is a one-year
       # JWT for the sandbox owner (scripts/ci-sandbox/mint_token.mjs); when the
       # secret is absent (forks, local dry runs) the step says so and passes.
+      # Main pushes and manual runs only (2026-10-27): these specs drive PRODUCTION's sandbox lab, so a pull request run
+      # never tests the PR's code, and runs from several PRs and main at once edited the same sandbox map and failed
+      # each other (veritamap-cal-ver-exempt / -na at 01:44 UTC). Pull requests keep the compile gate above.
       - name: Sandbox receipts (blocking)
+        if: github.event_name != 'pull_request'
         timeout-minutes: 10
         env:
           CI: 'true'
@@ -110,6 +114,7 @@ jobs:
       # green. --retries=0 (no value in re-running known failures for a report)
       # and more workers keep the actual run well under the bound.
       - name: Run Playwright specs (reporting only)
+        if: github.event_name != 'pull_request' # drives production too; see the sandbox step
         continue-on-error: true
         timeout-minutes: 12
         env:
