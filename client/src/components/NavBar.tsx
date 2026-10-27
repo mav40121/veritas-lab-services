@@ -5,7 +5,7 @@ import { useAuth } from "@/components/AuthContext";
 import { useIsStaffLogin } from "@/hooks/useStaffLogin";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Sun, Moon, Menu, X, ChevronDown, FlaskConical, TestTube, User, LogOut, LayoutDashboard, Play, ListChecks, ShieldCheck } from "lucide-react";
+import { Sun, Moon, Menu, X, ChevronDown, FlaskConical, TestTube, User, LogOut, LayoutDashboard, Play, ListChecks, ShieldCheck, Gauge } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { LabSwitcher, LabSwitcherMobile } from "@/components/LabSwitcher";
@@ -36,8 +36,10 @@ const mobileTopLinks: { href: string; label: string }[] = [
 // /veritabench/pi). CUMSUM is intentionally absent: it is a VeritaCheck study
 // type, not a standalone module, and must never appear as its own nav row.
 type NavLink = { href: string; label: string; header?: boolean };
+// Inspection Readiness is the dashboard across the modules (certificates, competency, maintenance, PT, QC corrective
+// actions; multi-lab roll-up), not a module, so it sits at the top of the menu beside All Modules Overview.
+const readinessLink: NavLink = { href: "/readiness", label: "Inspection Readiness" };
 const complianceModules: NavLink[] = [
-  { href: "/readiness", label: "Inspection Readiness" },
   { href: "/veritacheck", label: "VeritaCheck\u2122" },
   { href: "/veritamap", label: "VeritaMap\u2122" },
   { href: "/veritascan", label: "VeritaScan\u2122" },
@@ -55,18 +57,27 @@ const operationsModules: NavLink[] = [
   { href: "/calculator", label: "VeritaBench\u2122" },
   { href: "/veritabench", label: "VeritaPace\u2122" },
   { href: "/veritabench/staffing", label: "VeritaShift\u2122" },
-  { href: "/veritabench/scheduler", label: "Shift Scheduler" },
+  // VeritaShift's scheduler page ("Scheduler - VeritaShift"); this menu entry is its way in.
+  { href: "/veritabench/scheduler", label: "VeritaShift\u2122 Scheduler" },
   { href: "/veritabench/pi", label: "VeritaQA\u2122" },
   { href: "/veritastock", label: "VeritaStock\u2122" },
   { href: "/veritaops-app", label: "VeritaOps\u2122" },
 ];
 const allModules: NavLink[] = [...complianceModules, ...operationsModules];
+// Client request 2026-10-27 (Michael Q9 = 1, Q10 = 1): the menus read A to Z by name ("VeritaShift Scheduler" sorts
+// right under VeritaShift). The desktop menu fills down the left column, then the right. The All Modules page
+// (/veritaassure) keeps its own tile order.
+const plainLabel = (l: string) => l.replace(/\u2122/g, "").trim();
+const alphabetical = (links: NavLink[]): NavLink[] =>
+  [...links].sort((a, b) => plainLabel(a.label).localeCompare(plainLabel(b.label), "en", { sensitivity: "base" }));
+const desktopModules: NavLink[] = alphabetical(allModules);
+const desktopRows = Math.ceil(desktopModules.length / 2);
 // Routes that light the single VeritaAssure nav entry as active. Covers both
 // overview pages, every module route, and the legacy -app aliases wrapLegacy
 // redirects from, so the entry highlights everywhere it used to under the old
 // two-entry (VeritaAssure + Operations) split.
 const veritaassureActiveRoutes: string[] = [
-  "/veritaassure", "/operations",
+  "/veritaassure", "/operations", readinessLink.href,
   ...allModules.map(m => m.href),
   "/veritatrack-app", "/veritascan-app", "/veritamap-app", "/veritacomp-app",
   "/veritapt/app", "/veritastaff-app", "/veritalab-app", "/veritapolicy-app",
@@ -74,10 +85,11 @@ const veritaassureActiveRoutes: string[] = [
 ];
 const mobileVeritaassureLinks: NavLink[] = [
   { href: "/veritaassure", label: "All Modules Overview" },
+  readinessLink,
   { href: "", label: "Compliance", header: true },
-  ...complianceModules,
+  ...alphabetical(complianceModules),
   { href: "", label: "Operations", header: true },
-  ...operationsModules,
+  ...alphabetical(operationsModules),
 ];
 const mobileResourcesLinks: { href: string; label: string }[] = [
   { href: "/learn", label: "Video Library" },
@@ -249,15 +261,19 @@ export function NavBar() {
                   All Modules Overview
                 </Link>
               </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                {/* Logged-in users need the in-app readiness dashboard (the multi-lab roll-up lives there), scoped to
+                    the active lab, not the marketing page. */}
+                <Link href={isLoggedIn ? labRoute(readinessLink.href) : readinessLink.href} className="flex items-center gap-2 py-2 font-medium" data-testid="nav-readiness">
+                  <Gauge size={15} className="text-primary shrink-0" />
+                  {readinessLink.label}
+                </Link>
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <div className="grid grid-cols-2 gap-0.5 p-1">
-                {allModules.map(m => (
-                  <DropdownMenuItem asChild key={m.href}>
-                    {/* Logged-in users need the in-app readiness dashboard (the
-                        multi-lab roll-up lives there), not the marketing page.
-                        Scope just this entry to the active lab; other modules keep
-                        their marketing routes to avoid mismatched app paths. */}
-                    <Link href={isLoggedIn && m.href === "/readiness" ? labRoute(m.href) : m.href} className="text-sm py-1.5">{m.label}</Link>
+              <div className="grid grid-cols-2 grid-flow-col gap-0.5 p-1" style={{ gridTemplateRows: `repeat(${desktopRows}, auto)` }} data-testid="nav-modules-grid">
+                {desktopModules.map(m => (
+                  <DropdownMenuItem asChild key={m.href}>
+                    <Link href={m.href} className="text-sm py-1.5">{m.label}</Link>
                   </DropdownMenuItem>
                 ))}
               </div>
