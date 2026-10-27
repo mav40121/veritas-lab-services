@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { labTodayIso } from "@/lib/labDate";
 import { Link } from "wouter";
 import { useAuth } from "@/components/AuthContext";
 import { ModuleHowToCard } from "@/components/ModuleHowToCard";
@@ -733,7 +734,7 @@ function ItemFormDialog({ open, onClose, onSave, editItem, inventory, consumptio
                   // placed date is captured at order time, the received date at receipt.
                   const next: Partial<InventoryItem> = { ...form, on_order_qty: qty };
                   if (qty > 0 && !form.on_order_placed_date) {
-                    const today = new Date().toISOString().slice(0, 10);
+                    const today = labTodayIso();
                     next.on_order_placed_date = today;
                     if (!form.on_order_expected_date) {
                       const lt = Number(form.lead_time_days) || 0;
@@ -1141,7 +1142,7 @@ export default function VeritaStockInventoryPage() {
       const { token, totalCount } = await res.json();
       // Anchor download via the token endpoint: no popup to block and no
       // about:blank tab for the Acrobat extension to orphan (parking lot #63).
-      downloadPdfToken(token, `VeritaStock_Order_${new Date().toISOString().slice(0, 10)}.pdf`);
+      downloadPdfToken(token, `VeritaStock_Order_${labTodayIso()}.pdf`);
       toast({
         title: totalCount === 0 ? "PDF generated (no items due)" : `Order PDF generated for ${totalCount} item${totalCount === 1 ? "" : "s"}`,
         description: "Review and sign the PDF before sending to vendors.",
@@ -1170,7 +1171,7 @@ export default function VeritaStockInventoryPage() {
       // default if the header is missing for any reason.
       const cd = res.headers.get("Content-Disposition") || "";
       const m = cd.match(/filename="?([^";]+)"?/i);
-      const datestamp = new Date().toISOString().slice(0, 10);
+      const datestamp = labTodayIso();
       const filename = m?.[1] || `VeritaStock_Reorder_${datestamp}.xlsx`;
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -1213,7 +1214,7 @@ export default function VeritaStockInventoryPage() {
         return;
       }
       const { token } = await res.json();
-      downloadPdfToken(token, `VeritaStock_Count_History_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      downloadPdfToken(token, `VeritaStock_Count_History_${labTodayIso()}.xlsx`);
     } catch {
       toast({ title: "Could not generate workbook", description: "Network error", variant: "destructive" });
     }
@@ -1274,7 +1275,7 @@ export default function VeritaStockInventoryPage() {
         return;
       }
       const { token } = await res.json();
-      downloadPdfToken(token, `VeritaStock_Waste_${new Date().toISOString().slice(0, 10)}.${kind}`);
+      downloadPdfToken(token, `VeritaStock_Waste_${labTodayIso()}.${kind}`);
     } catch {
       toast({ title: "Export failed", description: "Network error", variant: "destructive" });
     } finally {
@@ -1440,7 +1441,7 @@ export default function VeritaStockInventoryPage() {
       const blob = await res.blob();
       const cd = res.headers.get("Content-Disposition") || "";
       const m = cd.match(/filename="?([^";]+)"?/i);
-      const datestamp = new Date().toISOString().slice(0, 10);
+      const datestamp = labTodayIso();
       const filename = m?.[1] || `SageIntacct_Purchasing_${datestamp}.csv`;
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -1513,7 +1514,7 @@ export default function VeritaStockInventoryPage() {
         return;
       }
       const { token, totalCount } = await res.json();
-      downloadPdfToken(token, `VeritaStock_Labels_${new Date().toISOString().slice(0, 10)}.pdf`);
+      downloadPdfToken(token, `VeritaStock_Labels_${labTodayIso()}.pdf`);
       toast({
         title: `Label sheet generated for ${totalCount} item${totalCount === 1 ? "" : "s"}`,
         description: "Print on Avery 5160 label stock (30 labels per sheet).",
@@ -1550,7 +1551,7 @@ export default function VeritaStockInventoryPage() {
       const blob = await res.blob();
       const cd = res.headers.get("Content-Disposition") || "";
       const m = cd.match(/filename="?([^";]+)"?/i);
-      const datestamp = new Date().toISOString().slice(0, 10);
+      const datestamp = labTodayIso();
       const filename = m?.[1] || `VeritaStock_Count_${datestamp}.xlsx`;
       const objectUrl = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -1650,7 +1651,7 @@ export default function VeritaStockInventoryPage() {
   // active step. A lot is "expired" when its expiration date has passed and it
   // still has stock on hand. handleWriteOffExpiredLot writes off the ENTIRE
   // remaining quantity in one click (reason = expired) via the same endpoint.
-  const stockTodayStr = new Date().toISOString().slice(0, 10);
+  const stockTodayStr = labTodayIso();
   const isLotExpired = (it: InventoryItem) =>
     !!it.expiration_date && it.expiration_date < stockTodayStr && (it.quantity_on_hand || 0) > 0;
   const STORAGE_TEMP_LABEL: Record<string, string> = {
@@ -1689,7 +1690,7 @@ export default function VeritaStockInventoryPage() {
 
   // Computed stats
   const stats = useMemo(() => {
-    const today = new Date().toISOString().split("T")[0];
+    const today = labTodayIso();
     const now = new Date();
     let reorderNow = 0, expiringSoon = 0, standingOrdersDue = 0, stockoutRisk = 0, valueOnHand = 0, expiringValue = 0, dailyUsageValue = 0;
     for (const item of items) {
@@ -1748,7 +1749,7 @@ export default function VeritaStockInventoryPage() {
   // Filtered and sorted items
   const filteredItems = useMemo(() => {
     let result = [...items];
-    const today = new Date().toISOString().split("T")[0];
+    const today = labTodayIso();
     const now = new Date();
 
     if (filterDept !== "All") result = result.filter((i) => i.department === filterDept);
@@ -1881,7 +1882,7 @@ export default function VeritaStockInventoryPage() {
       { key: "notes", header: "Notes" },
     ];
     const csv = toCsv(filteredItems as unknown as Record<string, unknown>[], cols as unknown as CsvColumn<Record<string, unknown>>[]);
-    const today = new Date().toISOString().split("T")[0];
+    const today = labTodayIso();
     downloadCsv(csv, `VeritaStock_Inventory_${today}.csv`);
   }, [filteredItems, toast]);
 

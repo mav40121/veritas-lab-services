@@ -1,4 +1,5 @@
 import jsPDF from "jspdf";
+import { labTodayIso } from "@/lib/labDate";
 import type { Study } from "@shared/schema";
 import type { StudyResults, CalVerResults, MethodCompResults, QualitativeResults, SemiQuantResults } from "./calculations";
 import { applyLicenseToPdf } from "./licenseStamp";
@@ -888,7 +889,7 @@ export async function generatePDF(study: Study, results: StudyResults) {
     licensee: u?.cliaLabName || u?.name || u?.email || "Demo Preview",
     email: u?.email || "anonymous",
     plan: u?.plan,
-    issueDate: new Date().toISOString().slice(0, 10),
+    issueDate: labTodayIso(),
   });
   doc.save(filename);
 }

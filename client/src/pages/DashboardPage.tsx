@@ -1,4 +1,5 @@
 import { Link } from "wouter";
+import { labTodayIso } from "@/lib/labDate";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -101,7 +102,7 @@ export default function Dashboard() {
       }
       const cd = res.headers.get("Content-Disposition") || "";
       const m = /filename="([^"]+)"/.exec(cd);
-      const filename = m ? m[1] : `VeritaCheck_Studies_${new Date().toISOString().split("T")[0]}.xlsx`;
+      const filename = m ? m[1] : `VeritaCheck_Studies_${labTodayIso()}.xlsx`;
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");

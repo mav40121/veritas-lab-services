@@ -1,4 +1,5 @@
 import { Link, useLocation } from "wouter";
+import { setActiveLabTimeZone } from "@/lib/labDate";
 import { useTheme } from "@/components/ThemeProvider";
 import { useAuth } from "@/components/AuthContext";
 import { useIsStaffLogin } from "@/hooks/useStaffLogin";
@@ -117,6 +118,14 @@ export function NavBar() {
   const labRoute = useLabRoute();
   const { data: memberships } = useMemberships();
   const activeLabId = useActiveLabId();
+  // Per-lab time zone (2026-10-26): keep the pages' "today" on the lab being worked in (else the home lab).
+  // Only once the lab list has loaded: before that, the zone cached from the last visit stands (clearing it here let a
+  // lazy-loaded form take the computer's day as its default).
+  useEffect(() => {
+    if (!memberships) return;
+    const m = memberships.find((x) => x.labId === activeLabId) ?? memberships.find((x) => x.isAccountHomeLab) ?? memberships[0];
+    setActiveLabTimeZone(m?.timeZone ?? null);
+  }, [memberships, activeLabId]);
   // BUG-041: remember the lab the user is IN (any /labs/:id page), not only
   // the one last picked in the switcher. The VeritaAssure menu links to
   // un-prefixed module paths, and LegacyWorkspaceRedirect resolves those to

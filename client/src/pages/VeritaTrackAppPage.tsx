@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { labTodayIso } from "@/lib/labDate";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { API_BASE } from "@/lib/queryClient";
@@ -164,7 +165,7 @@ function daysLabel(next_due?: string | null): string {
   if (!next_due) return "";
   // Date-only diff (both at UTC midnight) so a task reads "Due today" on its
   // actual due date rather than "1d overdue" in a US (negative-offset) timezone.
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = labTodayIso();
   const diff = Math.round((Date.parse(next_due + "T00:00:00Z") - Date.parse(todayStr + "T00:00:00Z")) / 86400000);
   if (diff < 0)  return `${-diff}d overdue`;
   if (diff === 0) return "Due today";
@@ -192,7 +193,7 @@ function SignoffDialog({ task, onDone, tasksKey, dashKey }: {
   const qc = useQueryClient();
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+  const [date, setDate] = useState(labTodayIso());
   const [initials, setInitials] = useState("");
   const [performer, setPerformer] = useState("");
   const [notes, setNotes] = useState("");

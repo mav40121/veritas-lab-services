@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { labTodayIso } from "@/lib/labDate";
 import { Link } from "wouter";
 import { useAuth } from "@/components/AuthContext";
 import { useIsReadOnly, useCanRecord } from "@/components/SubscriptionBanner";
@@ -65,7 +66,7 @@ const EVENT_TYPES: { value: string; label: string }[] = [
 ];
 const TYPE_LABEL: Record<string, string> = Object.fromEntries(EVENT_TYPES.map(t => [t.value, t.label]));
 
-function todayIso() { return new Date().toISOString().slice(0, 10); }
+function todayIso() { return labTodayIso(); }
 
 function statusBadge(s: string) {
   if (s === "overdue") return <Badge variant="outline" className="bg-red-500/10 text-red-700 border-red-500/20">Overdue</Badge>;

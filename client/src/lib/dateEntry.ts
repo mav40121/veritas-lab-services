@@ -5,6 +5,7 @@
 // read MM/DD/YYYY. Kept free of React so scripts/verify-date-entry-parse.ts can
 // exercise every branch.
 import { format, isValid, parse } from "date-fns";
+import { labTodayIso } from "@/lib/labDate";
 
 export const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -52,10 +53,9 @@ export function parseLooseDate(text: string): string | null {
   return null;
 }
 
-/** Local calendar date as ISO (not UTC), so "Today" is the lab's today. */
+/** Today as ISO in the active lab's time zone (per-lab time zone, 2026-10-26), so "Today" is the lab's today. */
 export function todayLocalISO(): string {
-  const n = new Date();
-  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
+  return labTodayIso();
 }
 
 /** ISO -> local Date at midnight (for the calendar), or undefined. */

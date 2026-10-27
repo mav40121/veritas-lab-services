@@ -20,6 +20,7 @@
 // - No NavBar, no chrome, no links out. Kiosk surface.
 
 import { Fragment, useEffect, useRef, useState } from "react";
+import { labTodayIso } from "@/lib/labDate";
 import { useLocation } from "wouter";
 import DOMPurify from "dompurify";
 import { QuizQuestionImage } from "@/components/QuizQuestionImage";
@@ -1650,7 +1651,7 @@ function StaffPortalQuizzesView({
   // ── List screen ────────────────────────────────────────────────────
   const pending = (quizzes || []).filter(q => q.status === "assigned");
   const completed = (quizzes || []).filter(q => q.status === "completed");
-  const today = new Date().toISOString().slice(0, 10);
+  const today = labTodayIso();
 
   return (
     <div className="min-h-screen bg-background p-6">

@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { labTodayIso } from "@/lib/labDate";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 import { applyLicenseToExcelJS } from "@/lib/licenseStamp";
@@ -756,13 +757,13 @@ export default function AdminReportPage() {
       licensee: u?.cliaLabName || u?.name || u?.email || "Admin Console",
       email: u?.email || "anonymous",
       plan: u?.plan,
-      issueDate: new Date().toISOString().slice(0, 10),
+      issueDate: labTodayIso(),
     });
     const buf = await wb.xlsx.writeBuffer();
     const blob = new Blob([buf], {
       type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     });
-    const today = new Date().toISOString().slice(0, 10);
+    const today = labTodayIso();
     saveAs(blob, `veritaassure-customer-report-${today}.xlsx`);
   }
 

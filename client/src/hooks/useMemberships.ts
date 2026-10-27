@@ -32,6 +32,8 @@ export interface Membership {
   accreditationAabb: boolean;
   // ISO 15189 add-on (#108): the lab may file findings under ISO 15189.
   accreditationIso?: boolean;
+  // Per-lab time zone (2026-10-26): IANA zone the lab's calendar day is computed in (shared/labTimeZone.ts).
+  timeZone?: string;
   // CLIA certificate active-through date for this lab (latest active
   // cert by expiration_date). ISO YYYY-MM-DD when set, null when the
   // lab hasn't entered one. Informational only — never gates module

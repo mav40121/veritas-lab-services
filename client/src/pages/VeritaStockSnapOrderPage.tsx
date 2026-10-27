@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { labTodayIso } from "@/lib/labDate";
 import { Link } from "wouter";
 import { useAuth } from "@/components/AuthContext";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
@@ -208,7 +209,7 @@ export default function VeritaStockSnapOrderPage() {
       }
       const { token, totalCount } = await res.json();
       // Anchor download via the token endpoint (no popup / about:blank tab; parking lot #63).
-      downloadPdfToken(token, `VeritaStock_Snap_Order_${new Date().toISOString().slice(0, 10)}.pdf`);
+      downloadPdfToken(token, `VeritaStock_Snap_Order_${labTodayIso()}.pdf`);
       toast({
         title: `Snap order PDF generated for ${totalCount} item${totalCount === 1 ? "" : "s"}`,
         description: "Review and sign the PDF before sending to vendors.",

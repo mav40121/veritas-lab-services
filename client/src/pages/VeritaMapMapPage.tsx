@@ -1,4 +1,5 @@
 import { normalizeSpecimen, SPECIMEN_SUGGESTIONS, SPECIMEN_MAX_LENGTH, specimenLabel } from "@shared/veritamapSpecimen";
+import { labTodayIso } from "@/lib/labDate";
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Link, useRoute, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -642,7 +643,7 @@ async function exportExcel(mapId: number, mapName: string, activeLabId?: number 
   );
   if (!res.ok) throw new Error("Excel generation failed");
   const blob = await res.blob();
-  const date = new Date().toISOString().split("T")[0];
+  const date = labTodayIso();
   const safeName = mapName.replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
   saveAs(blob, `VeritaMap_${safeName}_${date}.xlsx`);
 }

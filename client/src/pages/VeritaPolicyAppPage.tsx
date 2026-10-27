@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
+import { labTodayIso } from "@/lib/labDate";
 import { useAuth } from "@/components/AuthContext";
 import { ModuleHowToCard } from "@/components/ModuleHowToCard";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
@@ -373,7 +374,7 @@ export default function VeritaPolicyAppPage() {
       const dlUrl = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = dlUrl;
-      const date = new Date().toISOString().slice(0, 10);
+      const date = labTodayIso();
       a.download = `VeritaPolicy_Bundle_${date}${uncontrolledCopy ? "_UNCONTROLLED" : ""}.zip`;
       document.body.appendChild(a); a.click(); a.remove();
       URL.revokeObjectURL(dlUrl);
@@ -397,7 +398,7 @@ export default function VeritaPolicyAppPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      const date = new Date().toISOString().split("T")[0];
+      const date = labTodayIso();
       a.download = `VeritaPolicy_MasterList_${date}.xlsx`;
       a.click();
       URL.revokeObjectURL(url);

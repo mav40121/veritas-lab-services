@@ -1,4 +1,5 @@
 import { useSEO } from "@/hooks/useSEO";
+import { labTodayIso } from "@/lib/labDate";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 // .xlsx parsing uses ExcelJS via dynamic import (CLAUDE.md §6: ExcelJS only).
@@ -427,7 +428,7 @@ export default function VeritaCheckPage() {
   const [runByAnalyzer, setRunByAnalyzer] = useState<Record<string, AnalyzerRunDetails>>({});
   const setAnalyzerRun = (name: string, key: keyof AnalyzerRunDetails, value: string) =>
     setRunByAnalyzer((prev) => ({ ...prev, [name]: { ...(prev[name] || {}), [key]: value } }));
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+  const [date, setDate] = useState(labTodayIso());
 
   const studyTypeMap: Record<string, any> = {
     "method_comparison": "method_comparison",
@@ -2768,7 +2769,7 @@ return (
                   <div className="grid sm:grid-cols-2 gap-4">
                     <div className="space-y-1.5"><Label>Test Name *</Label><Input placeholder="e.g. GC1 CREAT" value={testName} onChange={e => setTestName(e.target.value)} data-testid="input-test-name" /></div>
                     <div className="space-y-1.5"><Label>Analyst</Label><Input placeholder="Name or initials" value={analyst} onChange={e => setAnalyst(e.target.value)} /></div>
-                    <div className="space-y-1.5"><Label>Study Date</Label><Input type="date" value={date} onChange={e => setDate(e.target.value)} /></div>
+                    <div className="space-y-1.5"><Label>Study Date</Label><Input type="date" value={date} onChange={e => setDate(e.target.value)} data-testid="study-date" /></div>
                     {hasRunDetails(studyType) && (
                       <details className="sm:col-span-2 rounded-md border bg-muted/30 p-3 text-xs" data-testid="run-details">
                         <summary className="cursor-pointer font-medium select-none">Optional run details (lots, dates)</summary>

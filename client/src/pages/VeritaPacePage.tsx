@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { labTodayIso } from "@/lib/labDate";
 import { Link } from "wouter";
 import { useAuth } from "@/components/AuthContext";
 import { ModuleHowToCard } from "@/components/ModuleHowToCard";
@@ -318,7 +319,7 @@ export default function VeritaPacePage() {
       const res = await fetch(`${API_BASE}/api/productivity/export${labQ}`, { headers: authHeaders() });
       if (res.ok) {
         const blob = await res.blob();
-        saveAs(blob, `VeritaPace-Productivity_${new Date().toISOString().split("T")[0]}.xlsx`);
+        saveAs(blob, `VeritaPace-Productivity_${labTodayIso()}.xlsx`);
       } else {
         const e = await res.json().catch(() => ({}));
         toast({ title: "Export failed", description: e.error, variant: "destructive" });

@@ -7,6 +7,7 @@
 // reminders + auto-expire.
 
 import { useState } from "react";
+import { labTodayIso } from "@/lib/labDate";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
@@ -267,7 +268,7 @@ export default function VeritaPolicyCompliancePage() {
               const url = URL.createObjectURL(blob);
               const a = document.createElement("a");
               a.href = url;
-              a.download = `VeritaPolicy_Compliance_${new Date().toISOString().split("T")[0]}.xlsx`;
+              a.download = `VeritaPolicy_Compliance_${labTodayIso()}.xlsx`;
               a.click();
               URL.revokeObjectURL(url);
             }}

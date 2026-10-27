@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { labTodayIso } from "@/lib/labDate";
 import { Link } from "wouter";
 import { useAuth } from "@/components/AuthContext";
 import { useIsReadOnly, useCanRecord } from "@/components/SubscriptionBanner";
@@ -162,7 +163,7 @@ function severityColor(severity: string): string {
 }
 
 function todayIsoDate(): string {
-  return new Date().toISOString().slice(0, 10);
+  return labTodayIso();
 }
 
 // Inline Levey-Jennings chart for the selected control lot. Plots each logged

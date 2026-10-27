@@ -3,6 +3,7 @@
 // kept and who reviewed them, applied to every test picked. Coverage credits each like a signed passing study until
 // 6 months after the date performed (server/veritacheckCoverage.ts recordOutsideStudies).
 import { useMemo, useState } from "react";
+import { labTodayIso } from "@/lib/labDate";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -62,7 +63,7 @@ export function OutsideRecordsDialog({ open, onOpenChange, coverageUrl, calVerRo
   });
   const switchKind = (k: OutsideKind) => { setKind(k); setPicked(new Set()); setFilter(""); };
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = labTodayIso();
   const ready = !!performedOn && performedOn <= today && recordsLocation.trim() && reviewedBy.trim() && picked.size > 0;
 
   const save = useMutation({
