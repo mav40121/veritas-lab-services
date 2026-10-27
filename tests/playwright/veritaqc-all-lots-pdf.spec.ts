@@ -27,7 +27,7 @@ test.describe("VeritaQC all-lots combined PDF", () => {
   test("Monthly Review card exposes Download all lots", async ({ page }) => {
     test.skip(!TOKEN, "PW_TOKEN not set — skipping authenticated UI exercise");
     await injectAuth(page, BASE, TOKEN);
-    await page.goto(`${BASE}/labs/${LAB_ID}/veritaqc-daily-review`);
+    await page.goto(`${BASE}/labs/${LAB_ID}/veritaqc-app/review`);
     await expect(page.getByRole("button", { name: /download all lots/i }).first()).toBeVisible({ timeout: 15000 });
   });
 });

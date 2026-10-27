@@ -5141,7 +5141,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (!controlLotId) return res.status(400).json({ error: "control_lot_id required" });
     const sqlite = (db as any).$client;
     const lot = sqlite.prepare(
-      "SELECT id FROM qc_control_lots WHERE id = ? AND lab_id = ?"
+      "SELECT id, analyte FROM qc_control_lots WHERE id = ? AND lab_id = ?"
     ).get(controlLotId, req.scope.labId) as any;
     if (!lot) return res.status(404).json({ error: "Control lot not found in this lab" });
     const rows = sqlite.prepare(
@@ -5149,7 +5149,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     ).all(req.scope.labId, controlLotId) as any[];
     const cosignRequired = !!(sqlite.prepare("SELECT qc_md_cosign_required FROM labs WHERE id = ?").get(req.scope.labId) as any)?.qc_md_cosign_required;
     const md = sqlite.prepare("SELECT lm.user_id FROM lab_members lm JOIN users u ON u.id = lm.user_id JOIN labs l ON l.id = lm.lab_id WHERE lm.lab_id = ? AND lm.status = 'active' AND l.medical_director_email IS NOT NULL AND lower(u.email) = lower(l.medical_director_email) LIMIT 1").get(req.scope.labId) as any;
-    res.json({ reviews: rows, mdCosignRequired: cosignRequired, isMedicalDirector: !!md && md.user_id === req.userId });
+    // BUG-077 (2026-10-27): who may co-sign, by the same rule the md-cosign POST applies (the medical director, a
+    // delegate holding the QC co-sign responsibility for this test's complexity, or the owner as a logged override),
+    // so the button shows to everyone the server accepts and to no one else.
+    const attest = mayAttestAsDirectorOrDesignee(req.scope.labId, req.userId, "qc_period_cosign", complexityForAnalyte(req.scope.labId, lot.analyte));
+    const cosignAs = attest.ok ? attest.via : (isLabOwnerUser(req.scope.labId, req.userId) ? "owner_override" : null);
+    res.json({ reviews: rows, mdCosignRequired: cosignRequired, isMedicalDirector: !!md && md.user_id === req.userId, cosignAs });
   });
 
   app.post("/api/labs/:labId/qc/period-reviews", authMiddleware, labScopeMiddleware, requireModuleEdit("veritaqc"), (req: any, res) => {
