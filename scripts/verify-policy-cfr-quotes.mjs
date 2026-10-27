@@ -48,6 +48,18 @@ for (const f of readdirSync(DATA).filter((x) => x.endsWith(".json")).sort()) {
   }
 }
 
+// BUG-087 (2026-10-27): the quote can be verbatim while its LABEL is wrong (493.1289, analytic systems, was labeled
+// "Postanalytic" in policies 034 and 095). A label that names a testing phase must match the phase its quote names.
+const phaseOf = (t) => (/\bpostanalytic/i.test(t) ? "postanalytic" : /\bpreanalytic/i.test(t) ? "preanalytic" : /\banalytic/i.test(t) ? "analytic" : null);
+let labelFails = 0;
+for (const f of readdirSync(DATA).filter((x) => x.endsWith(".json")).sort()) {
+  for (const b of JSON.parse(readFileSync(join(DATA, f), "utf8")).cfr_text_blocks || []) {
+    const lp = phaseOf(String(b.label || "")), qp = phaseOf(String(b.verbatim || ""));
+    if (lp && qp && lp !== qp) { labelFails++; fails++; failures.push(`${f} | ${b.citation} | label says ${lp}, the regulation says ${qp}`); }
+  }
+}
+console.log(`${labelFails === 0 ? "PASS" : "FAIL"}  every phase named in a CFR block label matches its quote (${labelFails} mismatch${labelFails === 1 ? "" : "es"})`);
+
 // The check must bite: change one word of a passing quote and it has to fail.
 let bites = false;
 outer: for (const f of readdirSync(DATA).filter((x) => x.endsWith(".json")).sort()) {
