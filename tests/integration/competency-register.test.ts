@@ -4,7 +4,7 @@
 // Boots the REAL routes on a scratch DB, records competency data through the real save route, downloads
 // GET /api/labs/:labId/staff/competency-register.xlsx and reads the workbook back with ExcelJS:
 //   1. 200, xlsx content type, attachment filename with the lab name
-//   2. sheets in order About, Testing Personnel, Duty-Change Reevaluations; About opens first
+//   2. sheets in order About, Testing Personnel, By Method (BUG-069), Duty-Change Reevaluations; About opens first
 //   3. lab identity in three layers: About row 2, every sheet's header and footer
 //   4. a new hire's row: hire, recorded as, training date/by/link, initial, cleared, 6-month due, 1st annual due
 //   5. an existing staff member's row: cleared as existing staff, annual due, status
@@ -65,7 +65,7 @@ async function main() {
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(Buffer.from(await r.arrayBuffer()) as any);
   const names = wb.worksheets.map((w) => w.name);
-  check("2. sheets: About, Testing Personnel, Duty-Change Reevaluations; About active", names.join("|") === "About|Testing Personnel|Duty-Change Reevaluations" && ((wb.views?.[0] as any)?.activeTab ?? 0) === 0, names.join("|"));
+  check("2. sheets: About, Testing Personnel, By Method, Duty-Change Reevaluations; About active", names.join("|") === "About|Testing Personnel|By Method|Duty-Change Reevaluations" && ((wb.views?.[0] as any)?.activeTab ?? 0) === 0, names.join("|"));
   const about = wb.getWorksheet("About")!, tp = wb.getWorksheet("Testing Personnel")!, dc = wb.getWorksheet("Duty-Change Reevaluations")!;
   const idText = String(about.getCell("A2").value);
   const hf = [about, tp, dc].map((w) => `${w.headerFooter?.oddHeader} / ${w.headerFooter?.oddFooter}`);

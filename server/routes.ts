@@ -218,8 +218,9 @@ import { normalizeChecklistItems } from "@shared/competencyChecklist";
 import { assessmentTypeLabel, assessmentTypeProblem, isEvaluationProgram, normalizeRecordKind } from "@shared/competencyEvaluation";
 import { normalizeSpecimen, normalizeReportableField, specimenLabel } from "@shared/veritamapSpecimen";
 import { buildCompetencyRegisterRows, generateCompetencyRegisterExcel } from "./competencyRegisterExcel";
+import { methodClock, loadInstrumentGroups, loadLabMethodClocks, type InstrumentGroup } from "./competencyMethodClock";
 import {
-  deriveCompetencyStatus, competencyView,
+  deriveCompetencyStatus, competencyView, labMethodClocks,
   readCompetencyReminderConfig, writeCompetencyReminderConfig, planCompetencyReminders, runCompetencyReminders,
 } from "./competencyReminders";
 import { deleteMapCascade, mapDeleteBlockers } from "./veritamapDelete";
@@ -26900,10 +26901,11 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       "SELECT * FROM staff_employees WHERE lab_id = ? AND status = 'active' ORDER BY last_name, first_name"
     ).all(lab.id) as any[];
 
+    const clocks = labMethodClocks((db as any).$client, lab.tier2_lab_id); // BUG-069: per-method due status
     const result = employees.map((emp: any) => {
       const roles = (db as any).$client.prepare("SELECT * FROM staff_roles WHERE employee_id = ?").all(emp.id);
       const schedule = (db as any).$client.prepare("SELECT * FROM staff_competency_schedules WHERE employee_id = ?").get(emp.id);
-      return { ...emp, roles, ...competencyView(emp, schedule) };
+      return { ...emp, roles, ...competencyView(emp, schedule, clocks.get(emp.id)) };
     });
     res.json(result);
   });
@@ -26956,7 +26958,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
     const roles = (db as any).$client.prepare("SELECT * FROM staff_roles WHERE employee_id = ?").all(emp.id);
     const schedule = (db as any).$client.prepare("SELECT * FROM staff_competency_schedules WHERE employee_id = ?").get(emp.id);
-    res.json({ ...emp, roles, ...competencyView(emp, schedule) });
+    res.json({ ...emp, roles, ...competencyView(emp, schedule, labMethodClocks((db as any).$client, emp?.tier2_lab_id).get(emp?.id)) });
   });
 
   // Create employee
@@ -27014,7 +27016,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const emp = (db as any).$client.prepare("SELECT * FROM staff_employees WHERE id = ?").get(empId);
     const empRoles = (db as any).$client.prepare("SELECT * FROM staff_roles WHERE employee_id = ?").all(empId);
     const schedule = (db as any).$client.prepare("SELECT * FROM staff_competency_schedules WHERE employee_id = ?").get(empId);
-    res.json({ ...emp, roles: empRoles, ...competencyView(emp, schedule) });
+    res.json({ ...emp, roles: empRoles, ...competencyView(emp, schedule, labMethodClocks((db as any).$client, emp?.tier2_lab_id).get(emp?.id)) });
   });
 
   // Update employee
@@ -27066,7 +27068,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const updated = (db as any).$client.prepare("SELECT * FROM staff_employees WHERE id = ?").get(req.params.id);
     const updRoles = (db as any).$client.prepare("SELECT * FROM staff_roles WHERE employee_id = ?").all(req.params.id);
     const schedule = (db as any).$client.prepare("SELECT * FROM staff_competency_schedules WHERE employee_id = ?").get(req.params.id);
-    res.json({ ...updated, roles: updRoles, ...competencyView(updated, schedule) });
+    res.json({ ...updated, roles: updRoles, ...competencyView(updated, schedule, labMethodClocks((db as any).$client, updated?.tier2_lab_id).get(updated?.id)) });
   });
 
   // Delete employee (hard delete)
@@ -27121,6 +27123,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const employees = (db as any).$client.prepare(
       "SELECT * FROM staff_employees WHERE tier2_lab_id = ? AND status = 'active' ORDER BY last_name, first_name"
     ).all(req.scope.labId) as any[];
+    const clocks = labMethodClocks((db as any).$client, req.scope.labId); // BUG-069: per-method due status
     const result = employees.map((emp: any) => {
       const roles = (db as any).$client.prepare(
         "SELECT * FROM staff_roles WHERE employee_id = ?"
@@ -27134,7 +27137,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const schedule = (db as any).$client.prepare(
         "SELECT * FROM staff_competency_schedules WHERE employee_id = ?"
       ).get(emp.id);
-      return { ...emp, roles, ...competencyView(emp, schedule) };
+      return { ...emp, roles, ...competencyView(emp, schedule, clocks.get(emp.id)) };
     });
     res.json(result);
   });
@@ -27227,7 +27230,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (!emp) return res.status(404).json({ error: "Employee not found" });
     const roles = (db as any).$client.prepare("SELECT * FROM staff_roles WHERE employee_id = ?").all(emp.id);
     const schedule = (db as any).$client.prepare("SELECT * FROM staff_competency_schedules WHERE employee_id = ?").get(emp.id);
-    res.json({ ...emp, roles, ...competencyView(emp, schedule) });
+    res.json({ ...emp, roles, ...competencyView(emp, schedule, labMethodClocks((db as any).$client, emp?.tier2_lab_id).get(emp?.id)) });
   });
 
   // (The old hire-anchored ensureCompetencyScheduleMilestones back-fill was removed
@@ -27294,7 +27297,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const emp = (db as any).$client.prepare("SELECT * FROM staff_employees WHERE id = ?").get(empId);
     const empRoles = (db as any).$client.prepare("SELECT * FROM staff_roles WHERE employee_id = ?").all(empId);
     const schedule = (db as any).$client.prepare("SELECT * FROM staff_competency_schedules WHERE employee_id = ?").get(empId);
-    res.json({ ...emp, roles: empRoles, ...competencyView(emp, schedule) });
+    res.json({ ...emp, roles: empRoles, ...competencyView(emp, schedule, labMethodClocks((db as any).$client, emp?.tier2_lab_id).get(emp?.id)) });
   });
 
   // Update employee in the active lab
@@ -27362,7 +27365,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const updated = (db as any).$client.prepare("SELECT * FROM staff_employees WHERE id = ?").get(req.params.id);
     const updRoles = (db as any).$client.prepare("SELECT * FROM staff_roles WHERE employee_id = ?").all(req.params.id);
     const schedule = (db as any).$client.prepare("SELECT * FROM staff_competency_schedules WHERE employee_id = ?").get(req.params.id);
-    res.json({ ...updated, roles: updRoles, ...competencyView(updated, schedule) });
+    res.json({ ...updated, roles: updRoles, ...competencyView(updated, schedule, labMethodClocks((db as any).$client, updated?.tier2_lab_id).get(updated?.id)) });
   });
 
   // Delete employee in the active lab (hard delete)
@@ -28698,7 +28701,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const dayMs = 24 * 60 * 60 * 1000;
     // The milestone walk is shared with the competency reminder engine
     // (server/competencyReminders.ts) so the emails and this list agree.
-    const deriveStatus = (e: any) => deriveCompetencyStatus(e, today);
+    const methodClocks = labMethodClocks(client, labId); // BUG-069: per-method due status
+    const deriveStatus = (e: any) => deriveCompetencyStatus(e, today, methodClocks.get(e.id));
 
     // Every method group across the lab's competency programs, for coverage.
     const methodGroups = client.prepare(
@@ -28988,29 +28992,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
   // Lab-chosen method groups (2026-10-14, Michael Q166/Q168 = 1): instrument id -> its group. The lead analyzer (lowest
   // id) holds a group's working entries and its lead sign-off row, so every screen treats the group as one method.
-  type InstrumentGroup = { groupId: number; name: string; memberIds: number[]; leadId: number; members: Array<{ id: number; name: string; category: string | null }> };
-  const loadInstrumentGroups = (sqlite: any, labId: number): Map<number, InstrumentGroup> => {
-    const rows = sqlite.prepare(
-      `SELECT g.id AS group_id, g.name, gm.instrument_id, i.instrument_name, i.category FROM competency_instrument_groups g
-       JOIN competency_instrument_group_members gm ON gm.group_id = g.id AND gm.lab_id = g.lab_id
-       JOIN veritamap_instruments i ON i.id = gm.instrument_id
-       WHERE g.lab_id = ? ORDER BY gm.instrument_id`
-    ).all(labId) as any[];
-    const byGroup = new Map<number, InstrumentGroup>();
-    for (const r of rows) {
-      const g: InstrumentGroup = byGroup.get(r.group_id) || { groupId: r.group_id, name: r.name, memberIds: [], members: [], leadId: r.instrument_id };
-      g.memberIds.push(r.instrument_id);
-      g.members.push({ id: r.instrument_id, name: r.instrument_name, category: r.category || null });
-      byGroup.set(r.group_id, g);
-    }
-    const out = new Map<number, InstrumentGroup>();
-    for (const g of Array.from(byGroup.values())) {
-      if (g.memberIds.length < 2) continue;
-      g.leadId = Math.min(...g.memberIds);
-      for (const id of g.memberIds) out.set(id, g);
-    }
-    return out;
-  };
+  // loadInstrumentGroups and the InstrumentGroup type live in server/competencyMethodClock.ts (BUG-069), shared with
+  // the lab-wide method clocks the register, reminders, roster status and dashboard read.
   // The method an analyzer belongs to: its group's lead and members, or the analyzer alone.
   const methodOf = (groups: Map<number, InstrumentGroup>, instrumentId: number) => {
     const g = groups.get(instrumentId);
@@ -29152,37 +29135,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           waivedMethods: waivedSummary(legacyItems),
         });
       }
-      const last = signoffs[0] || null;
-      // BUG-051: a Fail or Remediation Required sign-off records the assessment but not competence. While it is the
-      // latest, the same competency is due again (reassessment after remediation) and the clock stays on the last PASS
-      // sign-off; with no pass at all (a failed initial) there is no due date and the method is not current.
-      const lastPass = signoffs.find((s: any) => s.determination === "pass") || null;
-      const needsRemediation = !!last && last.determination !== "pass";
-      const initial = signoffs.find((s: any) => s.milestone === "initial" && s.determination === "pass") || null;
-      const nextMilestone = needsRemediation
-        ? ((last.milestone as MethodMilestone | null) || nextMilestoneAfter(lastPass?.milestone || null, complexity))
-        : nextMilestoneAfter(last?.milestone || null, complexity);
-      let nextDue: { targetDate: string | null; latest: string | null; naturalTargetDate?: string | null; annualMonth?: number | null } | null = null;
-      if (lastPass && lastPass.milestone && lastPass.signedDate) {
-        const r = nextCompetencyDue({
-          recordedMilestone: lastPass.milestone, recordedDate: lastPass.signedDate, initialDate: initial?.signedDate || null,
-          hireDate: schedCtx?.hire_date || null, highestComplexity: complexity,
-          accreditor: schedCtx?.accreditation_body || null, regime: schedCtx?.includes_nys === 1 ? "NYS-CLEP" : null,
-        });
-        nextDue = { targetDate: r.targetDate, latest: r.latest };
-        // Lab annual month (Michael Q157 = 1): a repeat annual moves earlier into the lab's month; the late ceiling
-        // moves with it by the same number of days. Initial, 6-month and first annual are never moved.
-        const month = Number(schedCtx?.competency_annual_month) || null;
-        if (month && nextMilestone === "annual" && r.targetDate) {
-          const aligned = alignAnnualToMonth(r.targetDate, month);
-          if (aligned && aligned !== r.targetDate) {
-            const shiftDays = Math.round((Date.parse(`${r.targetDate}T00:00:00Z`) - Date.parse(`${aligned}T00:00:00Z`)) / 86400000);
-            const latest = r.latest ? new Date(Date.parse(`${r.latest}T00:00:00Z`) - shiftDays * 86400000).toISOString().slice(0, 10) : null;
-            nextDue = { targetDate: aligned, latest, naturalTargetDate: r.targetDate, annualMonth: month };
-          }
-        }
-      }
-      const overdue = !!(nextDue?.latest && today > nextDue.latest);
+      // The clock (next milestone, due date, overdue, remediation) is the shared one in server/competencyMethodClock.ts
+      // (BUG-069), so the register, reminders, roster status and dashboard read the same answer as this view.
+      const { last, lastPass, nextMilestone, nextDue, overdue, needsRemediation } = methodClock(signoffs, complexity, {
+        hireDate: schedCtx?.hire_date || null, accreditor: schedCtx?.accreditation_body || null,
+        nys: schedCtx?.includes_nys === 1, annualMonth: Number(schedCtx?.competency_annual_month) || null,
+      }, today);
       return {
         signoffs, lastSignoff: last, nextMilestone, nextDue, overdue, needsRemediation,
         signedCurrent: !!lastPass && !needsRemediation && !overdue,
@@ -29953,6 +29911,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // the user sees "3 overdue" on the tile but "Showing 0" on the filtered
     // list. Hotfix to PR E2 (2026-06-05).
     const overdueIds: number[] = [];
+    const methodClocks = labMethodClocks((db as any).$client, labId); // BUG-069: per-method due status
 
     for (const e of rows) {
       let bucket: Bucket = "compliant";
@@ -29961,7 +29920,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
       // The shared milestone walk (server/competencyReminders.ts), so this tile, the
       // owed list, the reminders, the compliance score and the roster badge agree.
-      const st = deriveCompetencyStatus(e, today);
+      const st = deriveCompetencyStatus(e, today, methodClocks.get(e.id));
       bucket = st.bucket; reason = st.reason; nextDue = parse(st.nextDue);
 
       counts[bucket] += 1;
@@ -30181,13 +30140,14 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // Mirrors the next-due classification used by /compliance/score.
     try {
       const emps = client.prepare(
-        "SELECT s.initial_completed_at, s.six_month_due_at, s.six_month_completed_at, s.first_annual_due_at, s.first_annual_completed_at, s.annual_due_at, s.last_annual_completed_at, s.recorded_as, e.hire_date, e.created_at FROM staff_employees e LEFT JOIN staff_competency_schedules s ON s.employee_id = e.id WHERE e.tier2_lab_id = ? AND e.status = 'active' AND e.performs_testing = 1"
+        "SELECT e.id, s.initial_completed_at, s.six_month_due_at, s.six_month_completed_at, s.first_annual_due_at, s.first_annual_completed_at, s.annual_due_at, s.last_annual_completed_at, s.recorded_as, e.hire_date, e.created_at FROM staff_employees e LEFT JOIN staff_competency_schedules s ON s.employee_id = e.id WHERE e.tier2_lab_id = ? AND e.status = 'active' AND e.performs_testing = 1"
       ).all(labId) as any[];
+      const methodClocks = labMethodClocks(client, labId); // BUG-069: per-method due status
       let od = 0, ds = 0;
       const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
       for (const e of emps) {
         // Shared walk (server/competencyReminders.ts).
-        const st = deriveCompetencyStatus(e, todayStart);
+        const st = deriveCompetencyStatus(e, todayStart, methodClocks.get(e.id));
         if (st.bucket === "overdue") od++; else if (st.bucket === "dueSoon30") ds++;
       }
       push("competency", "Competency assessments", od, ds, emps.length, "testing staff");
@@ -30270,9 +30230,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
        WHERE e.tier2_lab_id = ? AND e.status = 'active' AND e.performs_testing = 1`
     ).all(labId) as Array<any>;
     let compCurrent = 0, compTotal = empRows.length;
+    const methodClocks = labMethodClocks(client, labId); // BUG-069: per-method due status
     for (const e of empRows) {
       // Shared walk; current = nothing due inside 30 days (compliant or due in 31-90).
-      const st = deriveCompetencyStatus(e, today);
+      const st = deriveCompetencyStatus(e, today, methodClocks.get(e.id));
       if (st.bucket === "compliant" || st.bucket === "dueSoon90") compCurrent += 1;
     }
     const signalA = compTotal === 0 ? 100 : Math.round((compCurrent / compTotal) * 100);
@@ -31365,7 +31326,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       closed_by: ev.resolution_type === "not_a_change" ? ev.closed_by_user : ev.evaluator_name,
     }));
     const today = new Date(labToday() + "T00:00:00Z"); // lab calendar day at 00:00 (parking lot #97)
-    const rows = buildCompetencyRegisterRows({ employees, testSystems, events, nys: staffLab?.includes_nys === 1 }, today);
+    const methods = labMethodClocks(client, labId); // BUG-069: per-method clocks for status and the By Method sheet
+    const rows = buildCompetencyRegisterRows({ employees, testSystems, events, nys: staffLab?.includes_nys === 1, methods }, today);
     const labName = req.scope.lab?.lab_name || staffLab?.lab_name || "Laboratory";
     const cliaNumber = req.scope.lab?.clia_number || staffLab?.clia_number || "";
     try {
@@ -34704,6 +34666,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         WHERE e.status = 'active' AND e.performs_testing = 1`
     ).all() as any[];
     const scheduleOf = sqlite.prepare("SELECT * FROM staff_competency_schedules WHERE employee_id = ?");
+    const clocksByLab = new Map<number, Map<number, any[]>>();
     const passedOf = sqlite.prepare(
       `SELECT a.assessment_type, a.assessment_date FROM competency_assessments a
          JOIN competency_employees ce ON ce.id = a.employee_id
@@ -34717,7 +34680,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const lab = labs.get(labId);
       lab.testingStaff++;
       const schedule = scheduleOf.get(e.id) as any;
-      const { competencyStatus } = competencyView(e, schedule);
+      if (!clocksByLab.has(labId)) clocksByLab.set(labId, labMethodClocks(sqlite, labId)); // BUG-069
+      const { competencyStatus } = competencyView(e, schedule, clocksByLab.get(labId)!.get(e.id));
       if (competencyStatus.cleared) continue;
       const passed = passedOf.all(e.id) as any[];
       lab.notCleared++;

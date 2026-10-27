@@ -249,6 +249,10 @@ jobs:
         # BUG-065: the VeritaComp Survey Bundle includes a competency record PDF for each person signed by method;
         # revoked sign-offs excluded; window honored; 404 only when nothing is signed.
         run: npm run test:survey-bundle-method-signoffs
+      - name: Run competency method due-status integration test
+        # BUG-069: the register, reminders, roster status and dashboard read each method's own clock; a person is due
+        # when any assigned method is due; people with no method sign-offs keep the VeritaStaff record.
+        run: npm run test:competency-method-due
       - name: Run document formats integration test
         # VeritaPolicy/VeritaDC: XLSX, XLS, PNG, JPG and TXT besides DOCX/PDF/HTML; format from the file's bytes;
         # escaped previews; upload -> render -> download per format; unsupported files refused with a clear 400.

@@ -21,6 +21,8 @@
 
 import { db } from "./db";
 import { labToday, labTimeZoneById } from "./dateLocal";
+import { loadLabMethodClocks, type PersonMethodClock } from "./competencyMethodClock";
+import { MILESTONE_LABEL } from "@shared/competencySignoff";
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -60,7 +62,70 @@ export function patientTestingClearance(e: any): { cleared: boolean; label: stri
 // forward a year when the last annual was completed inside the current cycle).
 // Every server reader (reminders, owed list, dashboard tile, compliance score,
 // attention summary, staff roster badge) calls this one function.
-export function deriveCompetencyStatus(e: any, today: Date): { bucket: CompetencyBucket; reason: string; nextDue: string | null; scheduled: boolean } {
+//
+// BUG-069 (Michael Q34 = 1, 2026-10-27): pass the person's method clocks (loadLabMethodClocks) and a person with any
+// signed method is due when ANY of their methods is due, from each method's own clock. Without them, or when no method
+// has a sign-off yet, the walk reads the VeritaStaff record exactly as before.
+export type CompetencyStatus = { bucket: CompetencyBucket; reason: string; nextDue: string | null; scheduled: boolean };
+export function deriveCompetencyStatus(e: any, today: Date, methods?: PersonMethodClock[] | null): CompetencyStatus {
+  const base = deriveRecordStatus(e, today);
+  if (!methods || !methods.some((m) => m.signed)) return base;
+  return mergeMethodStatus(e, today, methods, base);
+}
+
+// Callers pass "today" two ways: the server's local midnight, or the lab's calendar day at 00:00 UTC. Read the
+// calendar day back from either, so a lab in Eastern time is not a day early on a UTC-midnight Date.
+export const isoDayOf = (d: Date): string => {
+  const utcMidnight = d.getUTCHours() === 0 && d.getUTCMinutes() === 0 && d.getUTCSeconds() === 0;
+  const y = utcMidnight ? d.getUTCFullYear() : d.getFullYear();
+  const m = (utcMidnight ? d.getUTCMonth() : d.getMonth()) + 1;
+  const day = utcMidnight ? d.getUTCDate() : d.getDate();
+  return `${y}-${String(m).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+};
+const daysFrom = (fromIso: string, toIso: string): number =>
+  Math.round((Date.parse(`${toIso}T00:00:00Z`) - Date.parse(`${fromIso}T00:00:00Z`)) / DAY);
+
+// A person's status from their methods. Each signed method contributes its next competency, from its own clock:
+//   - remediation open (latest sign-off is Fail or Remediation Required): due by the remediation target date, or now;
+//   - otherwise the next milestone's target date; overdue only past that method's late ceiling (TJC/NYS tolerance),
+//     so a method inside its grace window reads "due soon", as the VeritaComp method view shows it.
+// Methods with no sign-off yet have no deadline (the initial comes before patient testing, not by a date). The
+// VeritaStaff record still counts for them when it holds history of its own (Existing staff, or a 6-month or annual
+// entered there), which covers people moved over from another system.
+function mergeMethodStatus(e: any, today: Date, methods: PersonMethodClock[], base: CompetencyStatus): CompetencyStatus {
+  const todayIso = isoDayOf(today);
+  type Cand = { date: string; overdue: boolean; reason: string };
+  const cands: Cand[] = [];
+  for (const m of methods) {
+    if (!m.signed) continue;
+    const c = m.clock;
+    if (c.needsRemediation) {
+      const t = (c.last?.remediationTargetDate as string | null) || null;
+      cands.push({ date: t || todayIso, overdue: !!t && t < todayIso, reason: `Reassessment after remediation due (${m.name})` });
+    } else if (c.nextDue?.targetDate) {
+      cands.push({ date: c.nextDue.targetDate, overdue: c.overdue, reason: `${MILESTONE_LABEL[c.nextMilestone]} competency due (${m.name})` });
+    }
+  }
+  const unsigned = methods.some((m) => !m.signed);
+  const recordHistory = isExistingStaffRecord(e) || !!(e.six_month_completed_at || e.first_annual_completed_at || e.last_annual_completed_at);
+  if (unsigned && recordHistory && base.nextDue) {
+    cands.push({ date: base.nextDue, overdue: base.bucket === "overdue", reason: base.reason });
+  }
+  if (!cands.length) return base;
+  const over = cands.filter((c) => c.overdue).sort((a, b) => a.date.localeCompare(b.date));
+  const pick = over[0] || cands.slice().sort((a, b) => a.date.localeCompare(b.date))[0];
+  const more = over.length > 1 ? ` (+${over.length - 1} more overdue)` : "";
+  const days = daysFrom(todayIso, pick.date);
+  let bucket: CompetencyBucket;
+  if (over.length) bucket = "overdue";
+  else if (days <= 30) bucket = "dueSoon30";
+  else if (days <= 90) bucket = "dueSoon90";
+  else bucket = "compliant";
+  return { bucket, reason: pick.reason + more, nextDue: pick.date, scheduled: true };
+}
+
+// The walk over the person-level VeritaStaff record alone (the behaviour before per-method sign-off).
+function deriveRecordStatus(e: any, today: Date): CompetencyStatus {
   const parseDate = (s: string | null): Date | null => {
     if (!s) return null;
     const d = new Date(s);
@@ -107,12 +172,19 @@ export function deriveCompetencyStatus(e: any, today: Date): { bucket: Competenc
 // server's own reading of it (the same walk as every other reader) and whether the
 // person is cleared for patient testing. The staff pages show this instead of
 // re-deriving status in the browser.
-export function competencyView(emp: any, schedule: any): { competencySchedule: any; competencyStatus: any } {
+// Every person's method clocks in a lab (labs.id = staff_employees.tier2_lab_id), on the lab's own date (BUG-069).
+export function labMethodClocks(sqlite: any, labId: number | null | undefined): Map<number, PersonMethodClock[]> {
+  if (!labId) return new Map();
+  return loadLabMethodClocks(sqlite, Number(labId), labToday(labTimeZoneById(sqlite, labId)));
+}
+
+// methods: the person's method clocks (labMethodClocks(...).get(emp.id)); BUG-069.
+export function competencyView(emp: any, schedule: any, methods?: PersonMethodClock[] | null): { competencySchedule: any; competencyStatus: any } {
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const row = { ...(schedule || {}), hire_date: emp?.hire_date ?? null, created_at: emp?.created_at ?? null };
   return {
     competencySchedule: schedule || null,
-    competencyStatus: { ...deriveCompetencyStatus(row, today), ...patientTestingClearance(row) },
+    competencyStatus: { ...deriveCompetencyStatus(row, today, methods), ...patientTestingClearance(row) },
   };
 }
 
@@ -138,9 +210,10 @@ export function computeCompetencyDue(sqlite: any, labId: number, todayIso: strin
      WHERE e.tier2_lab_id = ? AND e.status = 'active' AND e.performs_testing = 1
      ORDER BY e.last_name, e.first_name`
   ).all(labId) as any[];
+  const clocks = loadLabMethodClocks(sqlite, labId, todayIso); // BUG-069: each method's own clock
   const out: CompetencyDueItem[] = [];
   for (const e of rows) {
-    const st = deriveCompetencyStatus(e, today);
+    const st = deriveCompetencyStatus(e, today, clocks.get(e.id));
     if (!st.nextDue) continue;
     const daysUntil = Math.round((Date.parse(st.nextDue + "T00:00:00Z") - Date.parse(todayIso + "T00:00:00Z")) / DAY);
     out.push({
