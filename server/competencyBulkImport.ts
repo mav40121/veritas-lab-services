@@ -87,6 +87,7 @@ const INSTRUCTIONS: Array<{ text: string; bold?: boolean; size?: number; color?:
   { text: "What happens on import", bold: true, size: 12 },
   { text: "Each row creates one locked competency assessment with completion_date = assessment_date." },
   { text: "Imported assessments have no per-element data (Elements 1 through 6 render as 'No data recorded' on the surveyor PDF). This is the expected shape for historical paper-record migration." },
+  { text: "Staff moved over from another system: a person with a passed initial, 6-month, annual, reassessment or duty-change competency in the file counts as cleared for patient testing in VeritaStaff, and their competency schedule runs from the most recent one. A person marked New hire in VeritaStaff, or whose competency dates are already entered there, keeps what the lab entered. The preview shows this for each person before anything is saved." },
   { text: "Employees not found in the roster are flagged in the preview as Unmatched. Add them in VeritaStaff first, then re-upload." },
   { text: "Programs not found are flagged as errors. Create them in VeritaComp first." },
 ];

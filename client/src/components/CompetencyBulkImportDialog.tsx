@@ -9,6 +9,11 @@
 // completion_date = assessment_date. Per-element items are NOT
 // populated; the surveyor PDF renders "No data recorded" cleanly for
 // historical paper-record migrations.
+//
+// Michael Q12 = 1 (2026-10-27): the import also fills each person's VeritaStaff
+// competency schedule from what it loads, so staff moved over from another system
+// with passed competencies count as cleared for patient testing instead of reading as
+// new hires. The preview shows what will happen to each person before anything is saved.
 
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -28,11 +33,21 @@ type ValidatedRow = {
   issues: RowIssue[];
   willCreateCompEmployee: boolean;
 };
+type ScheduleSummary = {
+  cleared: number;
+  leftNewHire: number;
+  alreadyCleared: number;
+  noPassedCompetency: number;
+  people: Array<{ staffEmployeeId: number; name: string; outcome: string }>;
+};
 type PreviewResponse = {
   rows: ValidatedRow[];
   summary: { total: number; ok: number; warning: number; error: number };
+  schedules?: ScheduleSummary;
   fatal?: string;
 };
+
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 interface Props {
   open: boolean;
@@ -118,7 +133,7 @@ export function CompetencyBulkImportDialog({ open, onOpenChange, labId }: Props)
       } else {
         toast({
           title: "Bulk import complete",
-          description: `${json.imported} assessment(s) imported${json.createdCompEmployees > 0 ? `; ${json.createdCompEmployees} new competency_employees stub(s) created` : ""}.`,
+          description: `${json.imported} assessment(s) imported${json.createdCompEmployees > 0 ? `; ${json.createdCompEmployees} new competency_employees stub(s) created` : ""}${json.schedules?.cleared > 0 ? `. ${plural(json.schedules.cleared, "person now counts", "people now count")} as cleared for patient testing from these records` : ""}.`,
         });
         await queryClient.invalidateQueries({ predicate: (q) => typeof q.queryKey[0] === "string" && (q.queryKey[0] as string).includes("/competency/") });
         reset();
@@ -228,6 +243,23 @@ export function CompetencyBulkImportDialog({ open, onOpenChange, labId }: Props)
                       })}
                     </tbody>
                   </table>
+                </div>
+              )}
+              {preview.schedules && preview.schedules.people.length > 0 && (
+                <div className="mt-3 rounded-md border border-border bg-muted/30 px-3 py-2 text-xs space-y-1" data-testid="bulk-import-clearance">
+                  <div className="font-medium">Patient-testing clearance in VeritaStaff</div>
+                  {preview.schedules.cleared > 0 && (
+                    <div>{plural(preview.schedules.cleared, "person", "people")} will count as cleared for patient testing from these records. Their competency schedule runs from the most recent one.</div>
+                  )}
+                  {preview.schedules.alreadyCleared > 0 && (
+                    <div>{plural(preview.schedules.alreadyCleared, "person already has", "people already have")} competency dates in VeritaStaff. Those dates are kept.</div>
+                  )}
+                  {preview.schedules.leftNewHire > 0 && (
+                    <div>{plural(preview.schedules.leftNewHire, "person is", "people are")} marked New hire in VeritaStaff and will be left as is.</div>
+                  )}
+                  {preview.schedules.noPassedCompetency > 0 && (
+                    <div className="text-amber-700 dark:text-amber-400">{plural(preview.schedules.noPassedCompetency, "person has", "people have")} no passed competency in this file (orientation only, or not passed), so they stay not cleared until an initial competency is recorded.</div>
+                  )}
                 </div>
               )}
             </div>
