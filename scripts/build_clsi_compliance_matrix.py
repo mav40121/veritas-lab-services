@@ -81,8 +81,9 @@ DISCLAIMER = ("Disclaimer: VeritaCheck is a statistical calculation tool. Result
     "licensed medical director or designee. Not medical advice. No PHI should be entered in any field. Final "
     "approval and clinical determination must be made by the laboratory director or designee. CLSI guidelines "
     "referenced are current as of the publication date; verify against your current CLSI subscriptions. "
-    "VeritaAssure and VeritaCheck are registered trademarks of Veritas Lab Services, LLC (U.S. Reg. Nos. "
-    "8521603 and 8521591). Governing law: Massachusetts.")
+    "VeritaAssure\u00ae, VeritaMap\u00ae, VeritaScan\u00ae and VeritaCheck\u00ae are registered trademarks of "
+    "Veritas Lab Services, LLC. Other Verita product names are trademarks of Veritas Lab Services, LLC. "
+    "Governing law: Massachusetts.")  # notice wording: VLS Legal 2026-10-27, no registration numbers
 
 
 def build(out_path: str):
