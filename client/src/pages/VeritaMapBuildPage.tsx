@@ -341,10 +341,12 @@ function AddCustomTestDialog({
 }) {
   const [testName, setTestName] = useState("");
   const [specialty, setSpecialty] = useState("General Chemistry");
-  const [complexity, setComplexity] = useState<Complexity>("MODERATE");
+  // BUG-071 (2026-10-27): complexity is lab-stated only and never defaulted (CLAUDE.md VeritaMap rules; the 7/16
+  // CLINITEK incident). The dialog used to start on MODERATE, so saving without choosing recorded MODERATE.
+  const [complexity, setComplexity] = useState<Complexity | "">("");
 
   function handleSubmit() {
-    if (!testName.trim()) return;
+    if (!testName.trim() || !complexity) return;
     onAdd({
       analyte: testName.trim(),
       specialty,
@@ -354,7 +356,7 @@ function AddCustomTestDialog({
     });
     setTestName("");
     setSpecialty("General Chemistry");
-    setComplexity("MODERATE");
+    setComplexity("");
     onOpenChange(false);
   }
 
@@ -396,11 +398,11 @@ function AddCustomTestDialog({
           </div>
           <div>
             <label className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1 block">
-              Complexity
+              Complexity *
             </label>
             <Select value={complexity} onValueChange={(v) => setComplexity(v as Complexity)}>
-              <SelectTrigger className="h-9 text-sm">
-                <SelectValue />
+              <SelectTrigger className="h-9 text-sm" data-testid="custom-test-complexity">
+                <SelectValue placeholder="Select the complexity on your CLIA certificate" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="WAIVED" className="text-sm">WAIVED</SelectItem>
@@ -417,8 +419,9 @@ function AddCustomTestDialog({
           <Button
             size="sm"
             className="bg-primary hover:bg-primary/90 text-primary-foreground"
-            disabled={!testName.trim()}
+            disabled={!testName.trim() || !complexity}
             onClick={handleSubmit}
+            data-testid="custom-test-add"
           >
             <Plus size={14} className="mr-1" /> Add Test
           </Button>
