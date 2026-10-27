@@ -8376,6 +8376,7 @@ const TYPE_REPORT_CSS = `
   table.chk td { border-bottom: 1px solid #D0D0D0; padding: 3px 5px; vertical-align: top; }
   table.chk tr:nth-child(even) td { background: #EBF3F8; }
   .ans-yes { color: #437A22; font-weight: 700; } .ans-no { color: #A12C7B; font-weight: 700; } .ans-na, .ans-none { color: #7A7974; font-weight: 700; }
+  .ans-yes, .ans-no, .ans-na, .ans-none { white-space: nowrap; } /* "Not answered" stays on one line (2026-10-27) */
   .status-bad { font-weight: 700; color: #A12C7B; }
   .cite { font-size: 7.5pt; color: #0A3A3D; font-style: italic; margin-top: 4px; }
   .director-block { margin-top: 10px; border: 1.5px solid #01696F; padding: 8px 12px; background: #F7F6F2; page-break-inside: avoid; }
