@@ -144,6 +144,8 @@ jobs:
         run: npx tsx scripts/verify-lab-local-date.ts
       - name: No UTC today in client code
         run: node scripts/verify-client-lab-today.mjs
+      - name: "Stored stamps shown as the lab's day (labDayOfStamp)"
+        run: npx tsx scripts/verify-lab-day-of-stamp.ts
       - name: Run VeritaTrack categories and Weekly integration test
         # #110 per-lab categories (owner/admin add, rename, retire; built-ins stay) and #111 Weekly (7-day interval,
         # 2-day due-soon window, day-before reminder), Michael 2026-10-26.
@@ -232,6 +234,8 @@ jobs:
         run: npm run test:competency-signed-delete
       - name: "BUG-088 policy .docx lists do not restart in Word's PDF export"
         run: npm run test:docx-list-restart
+      - name: "BUG-077 QC co-sign button follows the server rule"
+        run: npm run test:qc-cosign-visibility
       - name: Run QC monthly review reviewer integration test
         # BUG-066: the QC monthly review PDF names the person who signed the review and its date, never the
         # person downloading; an unsigned month prints Pending signature with no date.
