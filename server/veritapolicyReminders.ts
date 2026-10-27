@@ -28,6 +28,7 @@
 import { Resend } from "resend";
 import { DEFAULT_TEMPLATES, renderReminderEmail } from "./policyReminderTemplate";
 import { db } from "./db";
+import { labToday, labTimeZoneById } from "./dateLocal";
 import { writeAuditLog } from "./veritapolicyApproval";
 
 const FRONTEND_URL = process.env.FRONTEND_URL || "https://www.veritaslabservices.com";
@@ -58,16 +59,21 @@ export async function runPolicyReviewReminders(): Promise<{
     )
     .all() as any[];
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  // Per-lab time zone (2026-10-27): this job runs at midnight UTC, when the UTC day is already tomorrow for every US
+  // lab, so a review due that day was called overdue the evening before. Count from each lab's own calendar day.
+  const labDay = new Map<number | null, string>();
+  const todayFor = (labId: number | null) => {
+    if (!labDay.has(labId)) labDay.set(labId, labToday(labTimeZoneById(sqlite, labId)));
+    return labDay.get(labId)!;
+  };
 
   const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
   for (const r of rows) {
     stats.scanned += 1;
-    const due = new Date(r.next_review_date);
-    due.setHours(0, 0, 0, 0);
-    const daysUntil = Math.round((due.getTime() - today.getTime()) / 86400000);
+    const dueDay = String(r.next_review_date).slice(0, 10);
+    const daysUntil = Math.round((Date.parse(dueDay + "T00:00:00Z") - Date.parse(todayFor(r.lab_id ?? null) + "T00:00:00Z")) / 86400000);
+    if (!Number.isFinite(daysUntil)) continue;
 
     let reminderType: "30_day_warning" | "overdue" | "final" | null = null;
     if (daysUntil >= -1 && daysUntil <= 30 && daysUntil > 0) reminderType = "30_day_warning";
