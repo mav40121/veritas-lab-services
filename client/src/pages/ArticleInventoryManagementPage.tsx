@@ -296,13 +296,13 @@ export default function ArticleInventoryManagementPage() {
             </div>
             <div className="flex items-center gap-2 text-sm">
               <ChevronRight size={14} className="text-primary" />
-              <Link href="/veritaassure" className="text-primary hover:underline">VeritaAssure™ - Laboratory Compliance Platform</Link>
+              <Link href="/veritaassure" className="text-primary hover:underline">VeritaAssure® - Laboratory Compliance Platform</Link>
             </div>
           </div>
         </div>
 
         <p className="text-xs text-muted-foreground mt-10 pt-6 border-t border-border">
-          Veritas Lab Services, LLC offers VeritaAssure™, a clinical laboratory compliance and quality management platform that includes VeritaStock™ for laboratory inventory management.
+          Veritas Lab Services, LLC offers VeritaAssure®, a clinical laboratory compliance and quality management platform that includes VeritaStock™ for laboratory inventory management.
         </p>
 
       </div>

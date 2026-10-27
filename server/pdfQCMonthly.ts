@@ -93,7 +93,7 @@ const CSS = `
 const FOOTER_TEMPLATE = `
 <div style="width:100%;padding:0 14mm;box-sizing:border-box;font-family:Helvetica,Arial,sans-serif">
   <div style="border-top:1px solid #d2d7dc;padding-top:3px;display:flex;justify-content:space-between;font-size:7px;color:#646e78">
-    <span>VeritaAssure&trade; | VeritaQC&trade; | Confidential - For Internal Lab Use Only</span>
+    <span>VeritaAssure&reg; | VeritaQC&trade; | Confidential - For Internal Lab Use Only</span>
     <span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>
   </div>
 </div>`;

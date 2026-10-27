@@ -809,8 +809,8 @@ function LabSetupDialog({ open, onOpenChange, lab, isStaffAccreditorAllowed }: {
         const suggested = data.flatMap((s: any) => (s.specialties || []).map((sp: any) => Number(sp.number)))
           .filter((n: number) => Number.isInteger(n) && n >= 1 && n <= 17);
         if (suggested.length > 0) setLabSpecialties((prev) => Array.from(new Set([...prev, ...suggested])).sort((a, b) => a - b));
-        if (data.length > 0) toast({ title: "VeritaMap™ departments found", description: `${data.length} department(s) can be mapped to CMS specialties.` });
-        else toast({ title: "No VeritaMap™ departments", description: "No maps found. You can still set up specialties manually." });
+        if (data.length > 0) toast({ title: "VeritaMap® departments found", description: `${data.length} department(s) can be mapped to CMS specialties.` });
+        else toast({ title: "No VeritaMap® departments", description: "No maps found. You can still set up specialties manually." });
       }
     } catch {}
   }
@@ -949,11 +949,11 @@ function LabSetupDialog({ open, onOpenChange, lab, isStaffAccreditorAllowed }: {
             </div>
           </div>
           <Button variant="outline" size="sm" onClick={loadSuggestions} className="w-full">
-            Import departments from VeritaMap{"™"}
+            Import departments from VeritaMap{"®"}
           </Button>
           {suggestions.length > 0 && (
             <div className="bg-muted/50 rounded-lg p-3 text-sm">
-              <p className="font-medium mb-2">Suggested CMS Specialties from VeritaMap™:</p>
+              <p className="font-medium mb-2">Suggested CMS Specialties from VeritaMap®:</p>
               {suggestions.map((s: any) => (
                 <div key={s.department} className="flex gap-2 text-xs mb-1">
                   <span className="font-medium">{s.department}:</span>

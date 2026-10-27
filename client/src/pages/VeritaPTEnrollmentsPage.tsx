@@ -137,7 +137,7 @@ export default function VeritaPTEnrollmentsPage() {
       <div>
         <h1 className="text-2xl font-bold">PT Program Enrollments</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          The proficiency testing programs this lab is enrolled in. VeritaPT&trade; matches them to your VeritaMap&trade; test menu for coverage.
+          The proficiency testing programs this lab is enrolled in. VeritaPT&trade; matches them to your VeritaMap&reg; test menu for coverage.
         </p>
       </div>
 

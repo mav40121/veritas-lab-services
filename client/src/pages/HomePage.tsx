@@ -13,7 +13,7 @@ const services = [
   { icon: BarChart3, title: "Productivity Analysis", desc: "Expert on-site assessment of workflows, staffing, and resources using industry benchmarks. Actionable reports with data-driven recommendations." },
   { icon: BookOpen, title: "Educational Webinars", desc: "Facility webinars on blood administration, QC/QA, delegation of authority, and lab survey preparation, tailored to your team's needs." },
   { icon: Award, title: "Interim Lab Director", desc: "Experienced interim Lab Administrative Directors who ensure uninterrupted operations and regulatory compliance during leadership transitions." },
-  { icon: FlaskConical, title: "VeritaCheck™ - Lab Study Platform", desc: "The performance-verification module of your compliance platform: automated Calibration Verification / Linearity, Correlation / Method Comparison, and precision studies with surveyor-ready, CFR-cited PDF reports.", link: "/register", linkLabel: "Try VeritaCheck™ Free" },
+  { icon: FlaskConical, title: "VeritaCheck® - Lab Study Platform", desc: "The performance-verification module of your compliance platform: automated Calibration Verification / Linearity, Correlation / Method Comparison, and precision studies with surveyor-ready, CFR-cited PDF reports.", link: "/register", linkLabel: "Try VeritaCheck® Free" },
 ];
 
 const stats = [
@@ -24,7 +24,7 @@ const stats = [
 ];
 
 export default function HomePage() {
-    useSEO({ title: "VeritaAssure™ Lab Compliance Software | Veritas Lab Services", description: "VeritaAssure™ is the all-in-one compliance platform for clinical laboratories. Performance verification, inspection readiness, PT, competency tracking." });
+    useSEO({ title: "VeritaAssure® Lab Compliance Software | Veritas Lab Services", description: "VeritaAssure® is the all-in-one compliance platform for clinical laboratories. Performance verification, inspection readiness, PT, competency tracking." });
 return (
     <div>
       {/* Hero */}
@@ -46,16 +46,16 @@ return (
                 You spent years mastering the science. Nobody taught you the compliance.
               </h1>
               <p className="text-lg text-muted-foreground mb-8 leading-relaxed max-w-2xl">
-                VeritaAssure™ gives every lab professional the tools, the structure, and the confidence to walk into any survey ready.
+                VeritaAssure® gives every lab professional the tools, the structure, and the confidence to walk into any survey ready.
               </p>
               {/* One clear primary (the no-login demo) + one commit CTA (the free
                   trial). Same on mobile and desktop so the hierarchy never swaps. */}
               <div className="flex flex-col sm:flex-row gap-3">
                 <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
-                  <Link href="/demo">Explore VeritaAssure™ <ChevronRight size={16} className="ml-1" /></Link>
+                  <Link href="/demo">Explore VeritaAssure® <ChevronRight size={16} className="ml-1" /></Link>
                 </Button>
                 <Button asChild variant="outline" size="lg">
-                  <Link href="/register">Try VeritaCheck™ Free</Link>
+                  <Link href="/register">Try VeritaCheck® Free</Link>
                 </Button>
               </div>
               <p className="text-sm text-muted-foreground mt-3">Fully interactive demo. No login required.</p>
@@ -67,7 +67,7 @@ return (
               <div className="w-80 rounded-xl bg-gradient-to-br from-[#0e8a82] to-[#0a5e58] shadow-2xl p-7 text-white">
                 <div className="flex items-center gap-2 mb-1">
                   <ShieldCheck size={20} className="text-white/90" />
-                  <span className="font-serif text-xl font-bold">VeritaAssure™</span>
+                  <span className="font-serif text-xl font-bold">VeritaAssure®</span>
                 </div>
                 <p className="text-sm text-white/70 mb-5">Survey-ready compliance, in one view.</p>
                 <ul className="space-y-2.5">
@@ -97,10 +97,10 @@ return (
         <div className="max-w-[700px] mx-auto px-4 sm:px-6 py-10">
           <blockquote className="border-l-4 border-[#01696F] bg-[#F0FAFA] rounded-lg px-6 py-5">
             <p className="italic leading-relaxed mb-2" style={{ color: '#1B4B4E' }}>
-              "I became a laboratory director without ever being taught how. That experience is why I built VeritaAssure™."
+              "I became a laboratory director without ever being taught how. That experience is why I built VeritaAssure®."
             </p>
             <footer className="text-sm" style={{ color: '#1B4B4E' }}>
-              Michael Veri, MS, MBA, MLS(ASCP), CPHQ | Founder, VeritaAssure™
+              Michael Veri, MS, MBA, MLS(ASCP), CPHQ | Founder, VeritaAssure®
             </footer>
           </blockquote>
         </div>
@@ -111,9 +111,9 @@ return (
         <div className="px-4 py-3 overflow-x-auto">
           <div className="flex gap-2 whitespace-nowrap">
             {[
-              { name: "VeritaCheck™", href: "/veritacheck" },
-              { name: "VeritaMap™", href: "/veritamap" },
-              { name: "VeritaScan™", href: "/veritascan" },
+              { name: "VeritaCheck®", href: "/veritacheck" },
+              { name: "VeritaMap®", href: "/veritamap" },
+              { name: "VeritaScan®", href: "/veritascan" },
               { name: "VeritaComp™", href: "/veritacomp" },
               { name: "VeritaDC™", href: "/veritadc" },
               { name: "VeritaStaff™", href: "/veritastaff" },
@@ -155,7 +155,7 @@ return (
             <div>
               <h2 className="font-serif text-xl font-bold mb-2 text-foreground">We never store PHI. By design.</h2>
               <p className="text-sm text-muted-foreground leading-relaxed mb-3">
-                VeritaAssure™ never asks for, transmits, or stores protected health information. No patient names, no specimen-to-patient links, no patient results. Every module works with statistical and compliance data only, never patient data, so there is nothing for a breach, or an inspector, to expose.
+                VeritaAssure® never asks for, transmits, or stores protected health information. No patient names, no specimen-to-patient links, no patient results. Every module works with statistical and compliance data only, never patient data, so there is nothing for a breach, or an inspector, to expose.
               </p>
               <div className="flex flex-wrap gap-x-5 gap-y-1.5 text-xs font-medium text-foreground">
                 <span className="inline-flex items-center gap-1.5"><CheckCircle2 size={13} className="text-primary shrink-0" /> No patient identifiers</span>
@@ -171,7 +171,7 @@ return (
       <section className="border-b border-border">
         <div className="max-w-[650px] mx-auto px-4 sm:px-6 py-10 text-center">
           <p className="text-sm text-[#7A7974] leading-relaxed">
-            Most labs manage compliance with a folder of spreadsheets, a binder of outdated SOPs, and the hope that nothing has slipped through the cracks. VeritaAssure™ replaces all of that with purpose-built tools designed around what surveyors actually look for.
+            Most labs manage compliance with a folder of spreadsheets, a binder of outdated SOPs, and the hope that nothing has slipped through the cracks. VeritaAssure® replaces all of that with purpose-built tools designed around what surveyors actually look for.
           </p>
         </div>
       </section>
@@ -180,12 +180,12 @@ return (
       <section className="section-padding border-b border-border">
         <div className="container-default">
           <div className="text-center mb-10">
-            <h2 className="font-serif text-3xl font-bold mb-4">Meet VeritaAssure™</h2>
+            <h2 className="font-serif text-3xl font-bold mb-4">Meet VeritaAssure®</h2>
             <p className="text-lg text-foreground leading-relaxed max-w-[750px] mx-auto mb-6">
-              VeritaAssure™ is a suite of eighteen purpose-built modules organized into two streams: twelve compliance modules covering performance verification, inspection readiness, competency, policy management, test menu mapping, personnel credentialing, certificate tracking, proficiency testing, regulatory calendar, post-survey deficiency response, daily QC sign-off, and equipment maintenance; and six operations modules covering billable-tests-per-hour benchmarking, monthly productivity tracking, by-hour staffing analysis, quality indicators, inventory, and cost-per-reportable-test studies.
+              VeritaAssure® is a suite of eighteen purpose-built modules organized into two streams: twelve compliance modules covering performance verification, inspection readiness, competency, policy management, test menu mapping, personnel credentialing, certificate tracking, proficiency testing, regulatory calendar, post-survey deficiency response, daily QC sign-off, and equipment maintenance; and six operations modules covering billable-tests-per-hour benchmarking, monthly productivity tracking, by-hour staffing analysis, quality indicators, inventory, and cost-per-reportable-test studies.
             </p>
             <p className="text-muted-foreground max-w-3xl mx-auto leading-relaxed">
-              VeritaAssure™ is the compliance framework behind everything Veritas Lab Services delivers. It combines hands-on consulting with an eighteen-module software suite to give your laboratory a complete picture of where it stands and what needs to change. Whether you need a structured mock survey, a workflow gap analysis, or ongoing compliance monitoring, VeritaAssure™ brings the expertise and the tools together so your team isn't scrambling before the next inspection.
+              VeritaAssure® is the compliance framework behind everything Veritas Lab Services delivers. It combines hands-on consulting with an eighteen-module software suite to give your laboratory a complete picture of where it stands and what needs to change. Whether you need a structured mock survey, a workflow gap analysis, or ongoing compliance monitoring, VeritaAssure® brings the expertise and the tools together so your team isn't scrambling before the next inspection.
             </p>
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -194,9 +194,9 @@ return (
                 <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center mb-3 text-primary group-hover:bg-primary/20 transition-colors">
                   <Wrench size={18} />
                 </div>
-                <h3 className="font-semibold text-sm mb-2">VeritaAssure™ Tools</h3>
+                <h3 className="font-semibold text-sm mb-2">VeritaAssure® Tools</h3>
                 <p className="text-xs text-muted-foreground leading-relaxed mb-3">
-                  The eighteen VeritaAssure™ modules span two streams. Compliance (twelve): VeritaCheck™, VeritaMap™, VeritaScan™, VeritaComp™, VeritaDC™, VeritaStaff™, VeritaLab™, VeritaPT™, VeritaTrack™, VeritaResponse™, VeritaQC™, and VeritaMaintain™. Operations (six): VeritaBench™, VeritaPace™, VeritaShift™, VeritaQA™, VeritaStock™, and VeritaOps™. Built for lab directors who want data-driven compliance without waiting on a consultant.
+                  The eighteen VeritaAssure® modules span two streams. Compliance (twelve): VeritaCheck®, VeritaMap®, VeritaScan®, VeritaComp™, VeritaDC™, VeritaStaff™, VeritaLab™, VeritaPT™, VeritaTrack™, VeritaResponse™, VeritaQC™, and VeritaMaintain™. Operations (six): VeritaBench™, VeritaPace™, VeritaShift™, VeritaQA™, VeritaStock™, and VeritaOps™. Built for lab directors who want data-driven compliance without waiting on a consultant.
                 </p>
                 <Button asChild size="sm" variant="outline" className="text-xs h-7 border-primary/30 text-primary hover:bg-primary/10">
                   <Link href="/veritacheck">Explore the Tools →</Link>
@@ -208,7 +208,7 @@ return (
                 <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center mb-3 text-primary group-hover:bg-primary/20 transition-colors">
                   <Briefcase size={18} />
                 </div>
-                <h3 className="font-semibold text-sm mb-2">VeritaAssure™ Consulting</h3>
+                <h3 className="font-semibold text-sm mb-2">VeritaAssure® Consulting</h3>
                 <p className="text-xs text-muted-foreground leading-relaxed mb-3">
                   Structured mock surveys, regulatory gap analysis, productivity and workflow assessments, leadership coaching, and CLIA Laboratory Director services. On-site expertise aligned with CLIA, CAP, COLA, TJC, and FDA expectations.
                 </p>
@@ -222,7 +222,7 @@ return (
                 <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center mb-3 text-primary group-hover:bg-primary/20 transition-colors">
                   <Handshake size={18} />
                 </div>
-                <h3 className="font-semibold text-sm mb-2">VeritaAssure™ Together</h3>
+                <h3 className="font-semibold text-sm mb-2">VeritaAssure® Together</h3>
                 <p className="text-xs text-muted-foreground leading-relaxed mb-3">
                   For labs that want both: consulting engagements that use the same tools your team works in every day, so the findings don't disappear when the engagement ends.
                 </p>
@@ -309,7 +309,7 @@ return (
         <div className="container-default text-center">
           <div className="inline-flex items-center gap-2 bg-primary/10 text-primary rounded-full px-4 py-1.5 text-sm font-semibold mb-4">
             <FlaskConical size={14} />
-            New Tool - VeritaCheck™
+            New Tool - VeritaCheck®
           </div>
           <h2 className="font-serif text-3xl font-bold mb-3">The studies your lab has always run, finally done right.</h2>
           <p className="text-muted-foreground max-w-2xl mx-auto mb-6 leading-relaxed">
@@ -317,7 +317,7 @@ return (
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
-              <Link href="/register">Try VeritaCheck™ Free <ChevronRight size={16} className="ml-1" /></Link>
+              <Link href="/register">Try VeritaCheck® Free <ChevronRight size={16} className="ml-1" /></Link>
             </Button>
             <Button asChild variant="outline" size="lg">
               <Link href="/pricing">See Pricing</Link>
@@ -332,7 +332,7 @@ return (
           <div className="text-center mb-10">
             <h2 className="font-serif text-3xl font-bold mb-3">See a real signed report</h2>
             <p className="text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-              Every VeritaCheck™ study produces a CLIA-compliant PDF with the laboratory director or designee signature block on page 1, the regulatory determination, and the 42 CFR citation. Download a real one, generated by the same engine your lab would use.
+              Every VeritaCheck® study produces a CLIA-compliant PDF with the laboratory director or designee signature block on page 1, the regulatory determination, and the 42 CFR citation. Download a real one, generated by the same engine your lab would use.
             </p>
           </div>
           <div className="max-w-4xl mx-auto">
@@ -347,7 +347,7 @@ return (
           <div className="text-center mb-10">
             <h2 className="font-serif text-3xl font-bold mb-4">Built to Teach. Built to Lead.</h2>
             <p className="text-muted-foreground max-w-3xl mx-auto leading-relaxed">
-              Most lab directors learn compliance the hard way. VeritaAssure™ changes that. Every module is built around the regulatory requirements it satisfies, so using the software teaches you why each requirement exists, not just how to document it. New directors build institutional knowledge. Supervisors develop inspection readiness. Health systems create a shared compliance foundation across every lab they run.
+              Most lab directors learn compliance the hard way. VeritaAssure® changes that. Every module is built around the regulatory requirements it satisfies, so using the software teaches you why each requirement exists, not just how to document it. New directors build institutional knowledge. Supervisors develop inspection readiness. Health systems create a shared compliance foundation across every lab they run.
             </p>
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -387,7 +387,7 @@ return (
           </div>
           <div className="text-center mt-8">
             <Button asChild variant="outline" className="h-auto max-w-full whitespace-normal text-center leading-snug py-2">
-              <Link href="/resources/how-veritaassure-trains-lab-leaders">Read: How VeritaAssure™ Trains the Next Generation of Lab Leaders <ChevronRight size={14} className="ml-1 shrink-0" /></Link>
+              <Link href="/resources/how-veritaassure-trains-lab-leaders">Read: How VeritaAssure® Trains the Next Generation of Lab Leaders <ChevronRight size={14} className="ml-1 shrink-0" /></Link>
             </Button>
           </div>
         </div>
@@ -411,9 +411,9 @@ return (
                 </p>
                 <div className="space-y-2 mb-6">
                   {[
-                    { icon: MapPin, text: "VeritaMap™ surfaces 2 compliance gaps across 5 analytes" },
-                    { icon: FlaskConical, text: "VeritaCheck™ runs the EP studies and generates signed PDF reports" },
-                    { icon: Shield, text: "VeritaScan™ scores inspection readiness across CLIA, TJC & CAP" },
+                    { icon: MapPin, text: "VeritaMap® surfaces 2 compliance gaps across 5 analytes" },
+                    { icon: FlaskConical, text: "VeritaCheck® runs the EP studies and generates signed PDF reports" },
+                    { icon: Shield, text: "VeritaScan® scores inspection readiness across CLIA, TJC & CAP" },
                   ].map(({ icon: Icon, text }) => (
                     <div key={text} className="flex items-center gap-2.5 text-sm">
                       <Icon size={14} className="text-primary shrink-0" />

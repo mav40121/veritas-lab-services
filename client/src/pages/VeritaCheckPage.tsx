@@ -245,13 +245,13 @@ const featureTooltips: Record<string, string> = {
   "CLIA pass/fail evaluation": "Each study is automatically evaluated against CLIA allowable total error (TEa) and returns a clear Pass or Fail result.",
   // Starter
   "Unlimited studies": "Run as many EP studies as your lab needs - no per-study charges.",
-  "All VeritaCheck™ study types": "Access to all available study types: calibration verification, method comparison, accuracy & precision, lot-to-lot verification, and more.",
+  "All VeritaCheck® study types": "Access to all available study types: calibration verification, method comparison, accuracy & precision, lot-to-lot verification, and more.",
   "Full PDF reports": "Every study generates a signed, audit-ready PDF report suitable for surveyor review.",
   "Study history dashboard": "View, search, and re-download all past studies from your personal dashboard.",
   // Professional
   "Everything in Starter": "Includes all features from the Starter plan.",
-  "VeritaMap™ regulatory mapping": "Build your complete test menu map. The intelligence engine identifies every correlation study and calibration verification your instruments require under 42 CFR Part 493.",
-  "VeritaScan™ self-inspection audit": "173-item inspection readiness tracker across 10 compliance domains. Studies completed in VeritaCheck™ automatically check off corresponding items.",
+  "VeritaMap® regulatory mapping": "Build your complete test menu map. The intelligence engine identifies every correlation study and calibration verification your instruments require under 42 CFR Part 493.",
+  "VeritaScan® self-inspection audit": "173-item inspection readiness tracker across 10 compliance domains. Studies completed in VeritaCheck® automatically check off corresponding items.",
   "Priority support": "Dedicated email support with same-day responses during business hours.",
   // Lab
   "Everything in Professional": "Includes all features from the Professional plan.",
@@ -266,10 +266,10 @@ const featureTooltips: Record<string, string> = {
 
 const plans = [
   { priceType: "perStudy",        name: "Per Study",              price: "$25",    unit: "one-time",  description: "Pay as you go. No subscription required.",                                                                               features: ["Single study run", "Full PDF report", "All study types included", "CLIA pass/fail evaluation"],                                                                                  cta: "Buy a Study",    highlight: false, badge: null },
-  { priceType: "veritacheck_only", name: "VeritaCheck™ Unlimited", price: "$299",   unit: "per year",  description: "Single user. Performance verification suite only. No CLIA number required.",                                                    features: ["Unlimited studies", "All VeritaCheck study types", "Full PDF reports", "Study history dashboard"],                                                                                                    cta: "Subscribe",      highlight: false, badge: null },
-  { priceType: "clinic",          name: "Clinic",                 price: "$499",   unit: "per year",  description: "Certificate of Waiver labs and small clinics.",                                                                           features: ["2 seats included", "Full VeritaAssure™ suite, all modules", "VeritaMap™ regulatory mapping", "VeritaScan™ self-inspection audit", "VeritaComp™ competency management", "CLIA number on all reports", "Complimentary 1-hour onboarding session via Zoom or Teams with a VeritaAssure™ specialist"],                                                                                                 cta: "Subscribe",      highlight: false, badge: null },
-  { priceType: "community",       name: "Community",              price: "$999",   unit: "per year",  description: "Community hospitals and independent labs.",                                                                              features: ["5 seats included", "Full VeritaAssure™ suite, all modules", "VeritaStaff™ personnel management", "CLIA number on all reports", "Complimentary 1-hour onboarding session via Zoom or Teams with a VeritaAssure™ specialist"],                                                                   cta: "Subscribe",      highlight: true,  badge: "Most Popular" },
-  { priceType: "hospital",        name: "Hospital",               price: "$1,999", unit: "per year",  description: "Regional and acute care hospital labs.",                                                                                 features: ["15 seats included", "Everything in Community", "Priority support", "Complimentary 2-hour onboarding session via Zoom or Teams with a VeritaAssure™ specialist"],                                                                                                                             cta: "Subscribe",      highlight: false, badge: null },
+  { priceType: "veritacheck_only", name: "VeritaCheck® Unlimited", price: "$299",   unit: "per year",  description: "Single user. Performance verification suite only. No CLIA number required.",                                                    features: ["Unlimited studies", "All VeritaCheck study types", "Full PDF reports", "Study history dashboard"],                                                                                                    cta: "Subscribe",      highlight: false, badge: null },
+  { priceType: "clinic",          name: "Clinic",                 price: "$499",   unit: "per year",  description: "Certificate of Waiver labs and small clinics.",                                                                           features: ["2 seats included", "Full VeritaAssure® suite, all modules", "VeritaMap® regulatory mapping", "VeritaScan® self-inspection audit", "VeritaComp™ competency management", "CLIA number on all reports", "Complimentary 1-hour onboarding session via Zoom or Teams with a VeritaAssure® specialist"],                                                                                                 cta: "Subscribe",      highlight: false, badge: null },
+  { priceType: "community",       name: "Community",              price: "$999",   unit: "per year",  description: "Community hospitals and independent labs.",                                                                              features: ["5 seats included", "Full VeritaAssure® suite, all modules", "VeritaStaff™ personnel management", "CLIA number on all reports", "Complimentary 1-hour onboarding session via Zoom or Teams with a VeritaAssure® specialist"],                                                                   cta: "Subscribe",      highlight: true,  badge: "Most Popular" },
+  { priceType: "hospital",        name: "Hospital",               price: "$1,999", unit: "per year",  description: "Regional and acute care hospital labs.",                                                                                 features: ["15 seats included", "Everything in Community", "Priority support", "Complimentary 2-hour onboarding session via Zoom or Teams with a VeritaAssure® specialist"],                                                                                                                             cta: "Subscribe",      highlight: false, badge: null },
   { priceType: "enterprise",      name: "Enterprise",             price: "$2,999", unit: "per year",  description: "Large hospitals, health systems, and reference labs.",                                                                   features: ["25 seats included", "Everything in Hospital", "Priority support", "Consulting access", "Custom onboarding included"],                                                                                                          cta: "Subscribe",      highlight: false, badge: null },
 ];
 
@@ -2585,7 +2585,7 @@ export default function VeritaCheckPage() {
     saveMutation.mutate(study);
   };
 
-    useSEO({ title: "VeritaCheck™ Performance Verification | CLIA Calibration Verification and Method Comparison", description: "Run CLIA Calibration Verification / Linearity, Correlation / Method Comparison, and CLSI EP15 precision studies, and generate surveyor-ready, CFR-cited PDF reports, inside the VeritaAssure compliance platform. Built by a former Joint Commission surveyor." });
+    useSEO({ title: "VeritaCheck® Performance Verification | CLIA Calibration Verification and Method Comparison", description: "Run CLIA Calibration Verification / Linearity, Correlation / Method Comparison, and CLSI EP15 precision studies, and generate surveyor-ready, CFR-cited PDF reports, inside the VeritaAssure compliance platform. Built by a former Joint Commission surveyor." });
 return (
     <div>
       {activeLabId ? (
@@ -2624,7 +2624,7 @@ return (
                     <Badge className="bg-primary/10 text-primary border-0">New Product</Badge>
                     <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 border">Now Live</Badge>
                   </div>
-                  <h1 className="font-serif text-5xl font-bold mb-3 leading-tight">VeritaCheck{"™"}</h1>
+                  <h1 className="font-serif text-5xl font-bold mb-3 leading-tight">VeritaCheck{"®"}</h1>
                   <p className="text-xl text-muted-foreground font-medium mb-5">
                     CLIA Performance Verification and EP Study Platform
                   </p>
@@ -2634,10 +2634,10 @@ return (
                     </p>
                   </div>
                   <p className="text-muted-foreground leading-relaxed mb-4">
-                    VeritaCheck{"\u2122"} automates calibration verification, method comparison, accuracy and precision, lot-to-lot verification, and PT/coag new lot validation. Every study generates a signed, audit-ready PDF report with scatter plots, statistical analysis, and pass/fail evaluation, mapped to 42 CFR Part 493, TJC standards, and CAP checklists.
+                    VeritaCheck{"\u00AE"} automates calibration verification, method comparison, accuracy and precision, lot-to-lot verification, and PT/coag new lot validation. Every study generates a signed, audit-ready PDF report with scatter plots, statistical analysis, and pass/fail evaluation, mapped to 42 CFR Part 493, TJC standards, and CAP checklists.
                   </p>
                   <p className="text-muted-foreground leading-relaxed mb-6">
-                    Built by a former TJC laboratory surveyor with 200+ inspections. VeritaCheck{"\u2122"} produces exactly what your surveyors want to see, because it was designed by someone who reviewed these reports for years.
+                    Built by a former TJC laboratory surveyor with 200+ inspections. VeritaCheck{"\u00AE"} produces exactly what your surveyors want to see, because it was designed by someone who reviewed these reports for years.
                   </p>
 
                   {/* Pricing */}
@@ -2648,17 +2648,17 @@ return (
                     </div>
                     <div className="bg-card border border-border rounded-lg px-4 py-2.5 text-center">
                       <div className="text-2xl font-bold text-primary">$299/yr</div>
-                      <div className="text-xs text-muted-foreground">VeritaCheck&#8482; Unlimited (single user)</div>
+                      <div className="text-xs text-muted-foreground">VeritaCheck&#174; Unlimited (single user)</div>
                     </div>
                     <div className="bg-card border border-border rounded-lg px-4 py-2.5 text-center">
                       <div className="text-2xl font-bold text-primary">From $999/yr</div>
-                      <div className="text-xs text-muted-foreground">Full VeritaAssure&#8482; Suite</div>
+                      <div className="text-xs text-muted-foreground">Full VeritaAssure&#174; Suite</div>
                     </div>
                   </div>
 
                   <div className="flex flex-col sm:flex-row gap-3">
                     <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
-                      <Link href="/register">Launch VeritaCheck{"\u2122"} <ChevronRight size={15} className="ml-1" /></Link>
+                      <Link href="/register">Launch VeritaCheck{"\u00AE"} <ChevronRight size={15} className="ml-1" /></Link>
                     </Button>
                     <Button asChild variant="outline" size="lg">
                       <Link href="/demo/compliance">See the live demo</Link>
@@ -2676,7 +2676,7 @@ return (
                     <div className="w-64 h-80 bg-gradient-to-br from-[#0e8a82] to-[#0a5e58] rounded-lg shadow-2xl flex flex-col items-center justify-center p-8 text-white">
                       <FlaskConical size={40} className="text-white/80 mb-4" />
                       <div className="font-serif text-3xl font-bold text-center leading-tight mb-3">
-                        VeritaCheck{"™"}
+                        VeritaCheck{"®"}
                       </div>
                       <div className="text-xs text-white/70 text-center space-y-1 mb-4">
                         <div>Calibration Verification / Linearity</div>
@@ -2720,7 +2720,7 @@ return (
             <div className="container-default py-14">
               <div className="flex items-center gap-2 mb-4">
                 <FlaskConical size={20} className="text-primary" />
-                <Badge className="bg-primary/10 text-primary border-0">VeritaCheck{"\u2122"}</Badge>
+                <Badge className="bg-primary/10 text-primary border-0">VeritaCheck{"\u00AE"}</Badge>
               </div>
               <h1 className="font-serif text-4xl font-bold mb-3">The studies your lab has always run, finally done right.</h1>
               <p className="text-muted-foreground text-lg max-w-2xl leading-relaxed">
@@ -2934,12 +2934,12 @@ return (
                                 </SelectContent>
                               </Select>
                               {idx === 0 && hasAmbiguousDuplicates && (
-                                <p className="text-xs text-amber-700 dark:text-amber-400 ml-1">Some instruments share the same model in one map. Add nicknames in VeritaMap{"\u2122"} to tell them apart.</p>
+                                <p className="text-xs text-amber-700 dark:text-amber-400 ml-1">Some instruments share the same model in one map. Add nicknames in VeritaMap{"\u00AE"} to tell them apart.</p>
                               )}
                               {linkedInstruments[idx] && (
                                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground ml-1">
                                   <CheckCircle2 size={11} className="text-emerald-600 shrink-0" />
-                                  <span>Linked to VeritaMap{"\u2122"}</span>
+                                  <span>Linked to VeritaMap{"\u00AE"}</span>
                                   {linkedInstruments[idx]!.serial_number && <span className="font-mono">S/N {linkedInstruments[idx]!.serial_number}</span>}
                                 </div>
                               )}
@@ -2985,12 +2985,12 @@ return (
                               </SelectContent>
                             </Select>
                             {idx === 0 && hasAmbiguousDuplicates && (
-                              <p className="text-xs text-amber-700 dark:text-amber-400 ml-1">Some instruments share the same model in one map. Add nicknames in VeritaMap{"\u2122"} to tell them apart.</p>
+                              <p className="text-xs text-amber-700 dark:text-amber-400 ml-1">Some instruments share the same model in one map. Add nicknames in VeritaMap{"\u00AE"} to tell them apart.</p>
                             )}
                             {linkedInstruments[idx] && (
                               <div className="flex items-center gap-1.5 text-xs text-muted-foreground ml-1">
                                 <CheckCircle2 size={11} className="text-emerald-600 shrink-0" />
-                                <span>Linked to VeritaMap{"\u2122"}</span>
+                                <span>Linked to VeritaMap{"\u00AE"}</span>
                                 {linkedInstruments[idx]!.serial_number && <span className="font-mono">S/N {linkedInstruments[idx]!.serial_number}</span>}
                               </div>
                             )}

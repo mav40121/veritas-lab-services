@@ -699,7 +699,7 @@ function EmployeeRosterSection() {
       <div>
         <div className="flex items-center gap-2 mb-2 mt-1">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Instruments</h3>
-          <span className="text-xs text-muted-foreground">{"·"} {instruments.length} on your VeritaMap&trade;</span>
+          <span className="text-xs text-muted-foreground">{"·"} {instruments.length} on your VeritaMap&reg;</span>
           <div className="flex-1 border-t border-border/60 ml-2" />
           {toggle}
         </div>
@@ -1253,7 +1253,7 @@ function ProgramListView() {
                       {p.map_id && (
                         <span className="flex items-center gap-1 text-primary">
                           <FlaskConical size={12} />
-                          Linked to VeritaMap™
+                          Linked to VeritaMap®
                         </span>
                       )}
                     </div>
@@ -1955,7 +1955,7 @@ function NewProgramWizard({ onClose, onCreated }: { onClose: () => void; onCreat
             </div>
             {(type === "technical" || type === "waived") && maps && maps.length > 0 && (
               <div>
-                <label className="text-sm font-medium mb-1 block">Link to VeritaMap{"™"} (optional)</label>
+                <label className="text-sm font-medium mb-1 block">Link to VeritaMap{"®"} (optional)</label>
                 <Select value={mapId ? String(mapId) : "none"} onValueChange={v => setMapId(v === "none" ? null : parseInt(v))}>
                   <SelectTrigger><SelectValue placeholder="Select a map..." /></SelectTrigger>
                   <SelectContent>
@@ -1980,7 +1980,7 @@ function NewProgramWizard({ onClose, onCreated }: { onClose: () => void; onCreat
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
               Define method groups. Each group represents instruments/analytes that share the same operator workflow.
-              {mapId ? " Groups have been auto-suggested from your VeritaMap™." : " Add groups manually."}
+              {mapId ? " Groups have been auto-suggested from your VeritaMap®." : " Add groups manually."}
             </p>
             {methodGroups.map((g, i) => (
               <div key={i} className="border border-border rounded-lg p-3">
@@ -2081,7 +2081,7 @@ function NewProgramWizard({ onClose, onCreated }: { onClose: () => void; onCreat
                 <div><strong>Type:</strong> {typeLabel(type)} Competency</div>
                 {type === "technical" && <div><strong>Method Groups:</strong> {methodGroups.length}</div>}
                 {type === "nontechnical" && <div><strong>Checklist Items:</strong> {checklistItems.length}</div>}
-                {mapId && <div><strong>Linked VeritaMap™:</strong> ID {mapId}</div>}
+                {mapId && <div><strong>Linked VeritaMap®:</strong> ID {mapId}</div>}
               </div>
             </div>
             <div className="flex justify-between pt-2">
@@ -2430,7 +2430,7 @@ function OverviewTab({ program }: { program: Program & { employees: Employee[]; 
           )}
           {program.map_id && (
             <div>
-              <span className="text-xs text-muted-foreground block">Linked VeritaMap™</span>
+              <span className="text-xs text-muted-foreground block">Linked VeritaMap®</span>
               <Link href={`/veritamap-app/${program.map_id}`} className="text-primary hover:underline">Map #{program.map_id}</Link>
             </div>
           )}
@@ -5889,7 +5889,7 @@ function QuizPreviewDialog({
       <div class="sub">${header}</div>
       ${blanks}
       <ol class="qs">${items}</ol>
-      <div class="footer">VeritaAssure&trade; | VeritaComp&trade; | Confidential, For Internal Lab Use Only</div>
+      <div class="footer">VeritaAssure&reg; | VeritaComp&trade; | Confidential, For Internal Lab Use Only</div>
       <script>window.onload = function(){ window.print(); };<\/script>
       </body></html>`;
     w.document.open();

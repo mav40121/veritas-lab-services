@@ -51,8 +51,8 @@ function CheckRow({ id, text, meta, checks, toggle }: {
 
 export default function GettingStartedGuidePage() {
   useSEO({
-    title: "Getting Started with VeritaAssure™: Setup and Per-Module Checklists",
-    description: "A step-by-step guide to set up a laboratory on VeritaAssure™: the system onboarding path plus a getting-started checklist for all eighteen modules. Printable, with progress you can check off.",
+    title: "Getting Started with VeritaAssure®: Setup and Per-Module Checklists",
+    description: "A step-by-step guide to set up a laboratory on VeritaAssure®: the system onboarding path plus a getting-started checklist for all eighteen modules. Printable, with progress you can check off.",
   });
   const { checks, toggle } = useChecks();
   const [openModule, setOpenModule] = useState<string | null>(null);
@@ -71,7 +71,7 @@ export default function GettingStartedGuidePage() {
           </div>
           <Badge variant="outline" className="mb-4 text-primary border-primary/30 bg-primary/5">Getting Started</Badge>
           <h1 className="font-serif text-3xl sm:text-4xl font-bold tracking-tight mb-4 leading-tight">
-            Getting Started with VeritaAssure&trade;
+            Getting Started with VeritaAssure&reg;
           </h1>
           <p className="text-muted-foreground text-lg leading-relaxed mb-6">
             A clear path to get a laboratory set up and running: first the system onboarding path, then a short getting-started checklist for each of the eighteen modules. Check items off as you go, or print the whole guide.

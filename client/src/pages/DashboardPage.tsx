@@ -195,7 +195,7 @@ export default function Dashboard() {
 
       {!isStaff && <ModuleHowToCard
         moduleKey="veritacheck"
-        moduleName="VeritaCheck™"
+        moduleName="VeritaCheck®"
         whatItDoes="VeritaCheck runs the analytical performance verification studies CLIA requires before a new method goes into patient testing: Calibration Verification / Linearity, Precision, Correlation / Method Comparison, Reagent Lot Verification (EP26), QC Lot Verification (C24-Ed4), and Coagulation New Lot. Each study calculates the statistics, generates the CFR-cited narrative, and produces a director-signed PDF on page 1."
         howToUse={[
           "Click New Study and pick the study type that matches your need (Calibration Verification / Linearity, Precision, Correlation / Method Comparison, Reagent Lot Verification, QC Lot Verification, Coagulation New Lot).",

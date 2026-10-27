@@ -92,7 +92,7 @@ const HEADERS = [
 export async function buildStaffImportWorkbook(opts: { labName?: string }): Promise<Buffer> {
   const { default: ExcelJS } = await import("exceljs");
   const wb = new ExcelJS.Workbook();
-  wb.creator = "VeritaAssure\u2122";
+  wb.creator = "VeritaAssure\u00AE";
   wb.created = new Date();
 
   // ── Instructions sheet ──

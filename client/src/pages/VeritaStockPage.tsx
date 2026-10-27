@@ -1914,7 +1914,7 @@ export default function VeritaStockInventoryPage() {
   // surfaces (Incoming accept, Enterprise/All-Locations) so the page reads as one
   // site. Presentational only; see client/src/lib/host.ts.
   const singleSiteDemo = isSingleSiteDemo();
-  useSEO({ title: onStock ? "VeritaStock\u2122 | Multi-Location Inventory Management" : "VeritaStock\u2122 | Laboratory Inventory & Reagent Management", description: onStock ? "Multi-location supply inventory: burn-rate par levels, lead-time-aware reorder alerts, expiration tracking, valuation by location, and one-click vendor orders." : "Track reagent and supply inventory with burn-rate-aware par levels, lead-time-aware reorder alerts, and expiration tracking. Included with VeritaAssure\u2122 Suite plans." });
+  useSEO({ title: onStock ? "VeritaStock\u2122 | Multi-Location Inventory Management" : "VeritaStock\u2122 | Laboratory Inventory & Reagent Management", description: onStock ? "Multi-location supply inventory: burn-rate par levels, lead-time-aware reorder alerts, expiration tracking, valuation by location, and one-click vendor orders." : "Track reagent and supply inventory with burn-rate-aware par levels, lead-time-aware reorder alerts, and expiration tracking. Included with VeritaAssure\u00AE Suite plans." });
 
   if (!isLoggedIn) {
     return (
@@ -1965,7 +1965,7 @@ export default function VeritaStockInventoryPage() {
                 <div className="flex flex-wrap gap-3 mb-8">
                   <div className="bg-card border border-border rounded-lg px-4 py-2.5 text-center">
                     <div className="text-2xl font-bold text-primary">From $999/yr</div>
-                    <div className="text-xs text-muted-foreground">{onStock ? "Standalone inventory platform" : "Included with VeritaAssure\u2122 Suite"}</div>
+                    <div className="text-xs text-muted-foreground">{onStock ? "Standalone inventory platform" : "Included with VeritaAssure\u00AE Suite"}</div>
                   </div>
                   <div className="bg-card border border-border rounded-lg px-4 py-2.5 text-center">
                     <div className="text-2xl font-bold text-primary">All Plans</div>
@@ -1999,7 +1999,7 @@ export default function VeritaStockInventoryPage() {
                       <div>Multi-Department</div>
                     </div>
                     <div className="w-12 h-0.5 bg-white/40 mb-4" />
-                    <div className="text-xs text-white/60 text-center">{onStock ? "Multi-Location Inventory" : "VeritaAssure\u2122 Suite Module"}</div>
+                    <div className="text-xs text-white/60 text-center">{onStock ? "Multi-Location Inventory" : "VeritaAssure\u00AE Suite Module"}</div>
                   </div>
                   <div className="absolute -bottom-2 -right-2 w-64 h-80 bg-black/20 rounded-lg -z-10" />
                 </div>

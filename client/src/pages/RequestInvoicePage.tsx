@@ -11,7 +11,7 @@ import { CheckCircle2, FileText, ShieldCheck, CreditCard } from "lucide-react";
 import { trackEvent } from "@/lib/analytics";
 
 const TIER_OPTIONS = [
-  { value: "veritacheck", label: "VeritaCheck\u2122 Unlimited ($299/yr)" },
+  { value: "veritacheck", label: "VeritaCheck\u00AE Unlimited ($299/yr)" },
   { value: "clinic", label: "Clinic - $999/yr" },
   { value: "community", label: "Community - $2,125/yr" },
   { value: "hospital", label: "Hospital - $4,995/yr" },
@@ -20,8 +20,8 @@ const TIER_OPTIONS = [
 
 export default function RequestInvoicePage() {
   useSEO({
-    title: "Request an Invoice | VeritaAssure\u2122",
-    description: "Request an invoice for VeritaAssure\u2122. For AP departments that need to process an invoice before payment.",
+    title: "Request an Invoice | VeritaAssure\u00AE",
+    description: "Request an invoice for VeritaAssure\u00AE. For AP departments that need to process an invoice before payment.",
   });
 
   const search = useSearch();

@@ -169,7 +169,7 @@ export default function StaffPortalPage() {
       <div className="min-h-screen bg-background flex items-center justify-center p-6" data-testid="staff-portal-not-staff">
         <div className="w-full max-w-sm border border-border rounded-xl bg-card p-6 shadow-sm text-center">
           <div className="font-serif text-xl font-bold mb-2 text-primary">
-            VeritaAssure&trade; My sign-offs
+            VeritaAssure&reg; My sign-offs
           </div>
           <p className="text-sm text-muted-foreground mb-4">
             This page is for staff logins.{who ? ` You are signed in as ${who}, which is not a staff login.` : ""} If you are a staff member, sign out and sign in with the account from your invitation email.

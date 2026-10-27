@@ -8,7 +8,7 @@
 export const AUTHOR_META = "Michael Veri / Veritas Lab Services, LLC";
 
 export const COPYRIGHT_BLOCK =
-  "© 2026 Veritas Lab Services, LLC. VeritaAssure™ and " +
+  "© 2026 Veritas Lab Services, LLC. VeritaAssure® and " +
   "VeritaDC™ are trademarks of Veritas Lab Services, LLC. " +
   "All rights reserved. The structure, organization, original written " +
   "content, and visual design of this document are the copyrighted " +
@@ -53,9 +53,9 @@ export interface LicenseContext {
   issueDate: string;
   plan?: string;
   /**
-   * Product name shown in the row-1 license band, e.g. "VeritaMap\u2122",
-   * "VeritaCheck\u2122", "VeritaScan\u2122", "VeritaPolicy\u2122".
-   * Defaults to "VeritaAssure\u2122" when not supplied. The Copyright /
+   * Product name shown in the row-1 license band, e.g. "VeritaMap\u00AE",
+   * "VeritaCheck\u00AE", "VeritaScan\u00AE", "VeritaPolicy\u2122".
+   * Defaults to "VeritaAssure\u00AE" when not supplied. The Copyright /
    * License terms blocks below remain product-neutral on purpose.
    */
   productName?: string;
@@ -76,7 +76,7 @@ export function normalizeLicenseContext(
     email: (ctx?.email || "anonymous").trim(),
     issueDate: (ctx?.issueDate || new Date().toISOString().slice(0, 10)).trim(),
     plan: ctx?.plan ? String(ctx.plan).trim() : undefined,
-    productName: (ctx?.productName && String(ctx.productName).trim()) || "VeritaAssure\u2122",
+    productName: (ctx?.productName && String(ctx.productName).trim()) || "VeritaAssure\u00AE",
     isDemo: ctx?.isDemo === true,
   };
 }

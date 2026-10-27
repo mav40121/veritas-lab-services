@@ -229,7 +229,7 @@ export function SiteRegistryTab({ labId, isReadOnly }: { labId: number | null; i
   return (
     <div className="space-y-4" data-testid="site-registry">
       <p className="text-sm text-muted-foreground">
-        This site's contacts, lab director history, CLIA fees and test menu changes. Each site is its own lab in VeritaAssure{"™"}; the All sites tab rolls them up.
+        This site's contacts, lab director history, CLIA fees and test menu changes. Each site is its own lab in VeritaAssure{"®"}; the All sites tab rolls them up.
       </p>
       {SECTIONS.map((section) => {
         const rows = data[section.listKey] || [];

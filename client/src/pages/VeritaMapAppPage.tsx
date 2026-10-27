@@ -190,9 +190,9 @@ export default function VeritaMapAppPage() {
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-primary/10 mb-4">
             <Lock className="h-7 w-7 text-primary" />
           </div>
-          <h1 className="text-2xl font-bold mb-2">Sign in to access VeritaMap™</h1>
+          <h1 className="text-2xl font-bold mb-2">Sign in to access VeritaMap®</h1>
           <p className="text-muted-foreground text-sm mb-6">
-            VeritaMap™ requires an account. Sign in to continue.
+            VeritaMap® requires an account. Sign in to continue.
           </p>
           <Button asChild>
             <Link href="/login">Sign In</Link>
@@ -210,7 +210,7 @@ export default function VeritaMapAppPage() {
           phase-B progress receipt, parking lot #79). */}
       <ModuleHowToCard
         moduleKey="veritamap"
-        moduleName="VeritaMap™"
+        moduleName="VeritaMap®"
         whatItDoes="VeritaMap is where you build your facility's test menu. Pick the instruments your lab runs, toggle the tests you actually perform on each, and the menu becomes the source of truth that feeds VeritaCheck (study setup), VeritaComp (competency programs), VeritaPT (PT coverage), and VeritaTrack (regulatory calendar). The menu also captures CLIA complexity, specialty, FDA classification, and fields for the critical values, reference intervals, and AMR your lab will verify and enter per 42 CFR 493.1253."
         howToUse={[
           "Add the instruments your lab runs from the database of 269 FDA-cleared analyzers.",
@@ -224,7 +224,7 @@ export default function VeritaMapAppPage() {
       <div className="flex items-start justify-between gap-4 mb-8">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <h1 className="text-2xl font-bold tracking-tight">VeritaMap™</h1>
+            <h1 className="text-2xl font-bold tracking-tight">VeritaMap®</h1>
             <Badge
               variant="outline"
               className="text-xs bg-primary/5 text-primary border-primary/20"
@@ -349,7 +349,7 @@ export default function VeritaMapAppPage() {
           />
           <h3 className="font-semibold mb-1">No maps yet</h3>
           <p className="text-sm text-muted-foreground mb-5 max-w-xs mx-auto">
-            Create your first VeritaMap™ to start tracking regulatory compliance
+            Create your first VeritaMap® to start tracking regulatory compliance
             for your test menu.
           </p>
           <Button

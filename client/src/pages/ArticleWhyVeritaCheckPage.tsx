@@ -29,8 +29,8 @@ export default function ArticleWhyVeritaCheckPage() {
   const { toast } = useToast();
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   useSEO({
-    title: "Why VeritaCheck™ vs. Legacy Verification Software | VeritaAssure",
-    description: "How VeritaCheck™ compares to legacy verification software on cost, time-to-first-study, integration breadth, and compliance defensibility. Authored for lab directors evaluating a tool change.",
+    title: "Why VeritaCheck® vs. Legacy Verification Software | VeritaAssure",
+    description: "How VeritaCheck® compares to legacy verification software on cost, time-to-first-study, integration breadth, and compliance defensibility. Authored for lab directors evaluating a tool change.",
   });
 
   async function handleDownloadPdf() {
@@ -60,9 +60,9 @@ export default function ArticleWhyVeritaCheckPage() {
             <span>/</span>
             <span>Why VeritaCheck</span>
           </div>
-          <Badge variant="outline" className="mb-4 text-primary border-primary/30 bg-primary/5">VeritaCheck™ Positioning</Badge>
+          <Badge variant="outline" className="mb-4 text-primary border-primary/30 bg-primary/5">VeritaCheck® Positioning</Badge>
           <h1 className="font-serif text-3xl sm:text-4xl font-bold tracking-tight mb-4 leading-tight">
-            Why VeritaCheck™ vs. Legacy Verification Software
+            Why VeritaCheck® vs. Legacy Verification Software
           </h1>
           <p className="text-base text-muted-foreground leading-relaxed mb-6">
             A side-by-side comparison authored for lab directors evaluating a tool change. Four dimensions: cost, time-to-first-study, integration breadth, and compliance defensibility.
@@ -82,7 +82,7 @@ export default function ArticleWhyVeritaCheckPage() {
               Most clinical laboratories that run method verification studies today use a legacy desktop verification tool that has been the de facto standard for the better part of two decades. The tool works. It is also priced for an era before browser-based clinical software, structured to assume a single Windows workstation, and integrated only with itself.
             </p>
             <p>
-              VeritaCheck™ is a browser-based alternative that produces the same verification studies under the same CLSI EP standards, at a cost that is closer to a consumer SaaS subscription than a per-seat enterprise license, integrated into a broader VeritaAssure™ platform that handles policy, mapping, competency, lab certificates, and cost-per-reportable-test in one login. This page lays out the four dimensions a lab director should compare before switching.
+              VeritaCheck® is a browser-based alternative that produces the same verification studies under the same CLSI EP standards, at a cost that is closer to a consumer SaaS subscription than a per-seat enterprise license, integrated into a broader VeritaAssure® platform that handles policy, mapping, competency, lab certificates, and cost-per-reportable-test in one login. This page lays out the four dimensions a lab director should compare before switching.
             </p>
           </div>
 
@@ -90,7 +90,7 @@ export default function ArticleWhyVeritaCheckPage() {
           <div className="grid sm:grid-cols-2 gap-4 mb-12">
             <Panel icon={<DollarSign size={20} />} title="Cost">
               <p>
-                VeritaCheck™ Unlimited is $299 in Year 1, $499 per year after, for the lab. Per-study pricing for occasional users is $25 per study, one-time. Every paid plan includes one free medical director seat for the lab's named director, which does not count against your active seats. Other reviewers, such as the technical consultant and technical supervisor, use active seats.
+                VeritaCheck® Unlimited is $299 in Year 1, $499 per year after, for the lab. Per-study pricing for occasional users is $25 per study, one-time. Every paid plan includes one free medical director seat for the lab's named director, which does not count against your active seats. Other reviewers, such as the technical consultant and technical supervisor, use active seats.
               </p>
               <p>
                 Legacy verification software is typically licensed per seat at $800 to $3,000 per analyst per year, with the medical director sometimes counted as a billable seat. A community-hospital laboratory with three testing technologists and one reviewer pays the legacy tool between $2,400 and $9,000 per year before any tech time is spent on a study.
@@ -102,7 +102,7 @@ export default function ArticleWhyVeritaCheckPage() {
 
             <Panel icon={<Timer size={20} />} title="Time to first study">
               <p>
-                VeritaCheck™ opens in a browser. There is no install, no driver, no IT ticket. A technologist with a fresh login can complete a method comparison study end-to-end (data entry, calculation, PDF download) in under 20 minutes. The first study is the slowest; the second is faster, and by the third the form is muscle memory.
+                VeritaCheck® opens in a browser. There is no install, no driver, no IT ticket. A technologist with a fresh login can complete a method comparison study end-to-end (data entry, calculation, PDF download) in under 20 minutes. The first study is the slowest; the second is faster, and by the third the form is muscle memory.
               </p>
               <p>
                 Legacy verification software requires installation on a Windows workstation, training on the spreadsheet-style data entry, and IT involvement when the workstation changes or the lab director needs the tool on a second device. A technologist new to the tool typically spends a half-day to a full day before producing a first defensible report.
@@ -114,10 +114,10 @@ export default function ArticleWhyVeritaCheckPage() {
 
             <Panel icon={<Layers size={20} />} title="Integration breadth">
               <p>
-                VeritaCheck™ runs fourteen study types under one tool: Precision Verification (EP15-A3), Method Comparison / Multi-Instrument Correlation (EP09), Calibration Verification (EP06), Linearity (EP06), Reagent Lot Verification (EP26), QC Lot Verification (C24-Ed4), PT/INR Geometric Mean Calculator (H47), Multi-Analyte Lot Comparison, Coag (EP26), Reference Range Verification (EP28), Sensitivity Verification (EP17-A2), Carryover Verification (EP10-A3), Accuracy / Bias (EP15-A3), Reportable Range / AMR Verification (CLIA 493.1255), and Manual Differential (CLSI H20). One login, one billing line, one signature workflow.
+                VeritaCheck® runs fourteen study types under one tool: Precision Verification (EP15-A3), Method Comparison / Multi-Instrument Correlation (EP09), Calibration Verification (EP06), Linearity (EP06), Reagent Lot Verification (EP26), QC Lot Verification (C24-Ed4), PT/INR Geometric Mean Calculator (H47), Multi-Analyte Lot Comparison, Coag (EP26), Reference Range Verification (EP28), Sensitivity Verification (EP17-A2), Carryover Verification (EP10-A3), Accuracy / Bias (EP15-A3), Reportable Range / AMR Verification (CLIA 493.1255), and Manual Differential (CLSI H20). One login, one billing line, one signature workflow.
               </p>
               <p>
-                Around VeritaCheck™ in the same VeritaAssure™ platform: VeritaDC™ for the lab's document control, VeritaMap™ for the test menu and critical value reference, VeritaComp™ for staff competency, VeritaLab™ for certificate tracking and CMS-116 application support, VeritaOps™ for cost-per-reportable-test studies, VeritaStock™ for inventory. A director who logs in to VeritaAssure™ sees all of them.
+                Around VeritaCheck® in the same VeritaAssure® platform: VeritaDC™ for the lab's document control, VeritaMap® for the test menu and critical value reference, VeritaComp™ for staff competency, VeritaLab™ for certificate tracking and CMS-116 application support, VeritaOps™ for cost-per-reportable-test studies, VeritaStock™ for inventory. A director who logs in to VeritaAssure® sees all of them.
               </p>
               <p>
                 Legacy verification software covers method comparison and precision well. The other study types are typically scattered across separate vendors, separate spreadsheets, or are not addressed at all. Lab director time is the cost the customer rarely tallies but always pays.
@@ -126,7 +126,7 @@ export default function ArticleWhyVeritaCheckPage() {
 
             <Panel icon={<ShieldCheck size={20} />} title="Compliance defensibility">
               <p>
-                Every VeritaCheck™ PDF has the laboratory director or designee signature block on page 1, alongside the study results, the narrative, and the 42 CFR §493 citation. The signature is not on a back page where it can be lost. The CFR citation is specialty-correct (Chemistry §493.931, Hematology §493.941, etc.) and CMS-style internal goals are cited alongside CLIA Total Allowable Error when ADLM recommendations apply.
+                Every VeritaCheck® PDF has the laboratory director or designee signature block on page 1, alongside the study results, the narrative, and the 42 CFR §493 citation. The signature is not on a back page where it can be lost. The CFR citation is specialty-correct (Chemistry §493.931, Hematology §493.941, etc.) and CMS-style internal goals are cited alongside CLIA Total Allowable Error when ADLM recommendations apply.
               </p>
               <p>
                 Every change to a study is captured in the lab's audit log with timestamp and user identity. The lab name and CLIA number are stamped on every page header, so the document survives copy-paste, photocopy, and PDF combination without losing the identifying context.
@@ -143,18 +143,18 @@ export default function ArticleWhyVeritaCheckPage() {
               <h2 className="font-serif text-xl font-semibold mb-3">When to switch</h2>
               <div className="prose-styles space-y-3 text-[15px] leading-relaxed">
                 <p>
-                  The strongest case for switching is at a natural inflection point: a license renewal coming due, an analyzer being added or replaced, a new lab director taking over, or a survey approaching. The verification studies that need to be done at any of those moments are the studies VeritaCheck™ was designed to streamline.
+                  The strongest case for switching is at a natural inflection point: a license renewal coming due, an analyzer being added or replaced, a new lab director taking over, or a survey approaching. The verification studies that need to be done at any of those moments are the studies VeritaCheck® was designed to streamline.
                 </p>
                 <p>
                   The weakest case for switching is mid-project. If the lab is in the middle of a multi-analyte verification campaign on the legacy tool, finish it on the legacy tool and re-evaluate at the next natural break.
                 </p>
                 <p>
-                  VeritaCheck™ is included in every VeritaAssure™ paid plan from Clinic ($999 per year) upward; standalone VeritaCheck™ Unlimited is $299 in Year 1, $499 per year after. The Per-Study tier at $25 one-time exists specifically for labs that want to test the tool against a single planned study before committing.
+                  VeritaCheck® is included in every VeritaAssure® paid plan from Clinic ($999 per year) upward; standalone VeritaCheck® Unlimited is $299 in Year 1, $499 per year after. The Per-Study tier at $25 one-time exists specifically for labs that want to test the tool against a single planned study before committing.
                 </p>
               </div>
               <div className="mt-5 flex flex-wrap gap-3">
                 <Button asChild className="bg-primary hover:bg-primary/90">
-                  <Link href="/demo/compliance">Open the VeritaCheck™ demo</Link>
+                  <Link href="/demo/compliance">Open the VeritaCheck® demo</Link>
                 </Button>
                 <Button asChild variant="outline">
                   <Link href="/pricing">View pricing</Link>
@@ -168,7 +168,7 @@ export default function ArticleWhyVeritaCheckPage() {
 
           {/* Disclaimer */}
           <div className="text-xs text-muted-foreground leading-relaxed">
-            VeritaAssure™ is a statistical calculation tool. All results require interpretation by the laboratory director or designee. The figures cited for legacy verification software are typical operator-reported ranges, not a quote from a specific vendor. Lab tier pricing is current as of the most recent Stripe schedule. The Clinical Laboratory Improvement Amendments of 1988 (42 CFR Part 493) and the CLSI EP standards cited above are the regulatory and procedural authorities a laboratory should reference for verification of performance specifications. Final approval and clinical determination must be made by the laboratory director or designee.
+            VeritaAssure® is a statistical calculation tool. All results require interpretation by the laboratory director or designee. The figures cited for legacy verification software are typical operator-reported ranges, not a quote from a specific vendor. Lab tier pricing is current as of the most recent Stripe schedule. The Clinical Laboratory Improvement Amendments of 1988 (42 CFR Part 493) and the CLSI EP standards cited above are the regulatory and procedural authorities a laboratory should reference for verification of performance specifications. Final approval and clinical determination must be made by the laboratory director or designee.
           </div>
         </div>
       </section>

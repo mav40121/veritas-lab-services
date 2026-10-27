@@ -293,7 +293,7 @@ function PolicyEvidenceLinks({ labId, policyId }: { labId: number | null; policy
   return (
     <div className="rounded border bg-muted/30 p-2 text-xs space-y-1">
       <div className="font-medium flex items-center gap-1">
-        <Link2 size={14} /> Evidence in VeritaScan&#8482; ({rows.length})
+        <Link2 size={14} /> Evidence in VeritaScan&#174; ({rows.length})
       </div>
       <ul className="space-y-1">
         {rows.map((r: any) => (

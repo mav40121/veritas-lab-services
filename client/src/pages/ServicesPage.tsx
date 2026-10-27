@@ -450,7 +450,7 @@ export default function ServicesPage() {
             Tools we use in engagements
           </h2>
           <p className="text-sm text-muted-foreground max-w-2xl leading-relaxed mb-6">
-            Veritas Lab Services also publishes the VeritaAssure™ software
+            Veritas Lab Services also publishes the VeritaAssure® software
             suite, the same tools we use during consulting engagements. Labs
             that hire us for a mock survey or a productivity analysis often
             license the suite afterward to maintain the work in-house.
@@ -464,11 +464,11 @@ export default function ServicesPage() {
                       <FlaskConical size={16} />
                     </div>
                     <Badge className="text-xs bg-primary text-primary-foreground">
-                      VeritaAssure™ Suite
+                      VeritaAssure® Suite
                     </Badge>
                   </div>
                   <h3 className="font-serif text-xl font-bold mb-2">
-                    VeritaCheck™ and the VeritaAssure™ Suite
+                    VeritaCheck® and the VeritaAssure® Suite
                   </h3>
                   <p className="text-sm text-muted-foreground leading-relaxed mb-4">
                     Performance verification with the regulatory determination
@@ -507,7 +507,7 @@ export default function ServicesPage() {
                     </div>
                     <div>
                       <div className="text-xs text-muted-foreground">
-                        VeritaCheck™ Unlimited
+                        VeritaCheck® Unlimited
                       </div>
                       <div className="font-bold text-xl text-primary">
                         $299

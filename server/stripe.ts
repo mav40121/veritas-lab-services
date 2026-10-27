@@ -158,7 +158,7 @@ export const PLAN_LIMITS = {
   community:        { label: "Community",                     studyCredits: 99999, maxAnalysts: 5,     price: "$2,125/yr" },
   hospital:         { label: "Hospital",                      studyCredits: 99999, maxAnalysts: 15,    price: "$4,995/yr" },
   large_hospital:   { label: "System",                        studyCredits: 99999, maxAnalysts: 99999, price: "Custom" },
-  veritacheck_only: { label: "VeritaCheck\u2122 Unlimited",   studyCredits: 99999, maxAnalysts: 1,     price: "$299 first year, $499/yr after" },
+  veritacheck_only: { label: "VeritaCheck\u00AE Unlimited",   studyCredits: 99999, maxAnalysts: 1,     price: "$299 first year, $499/yr after" },
 } as const;
 
 // Legacy band-based seat pricing array. Preserved for back-compat with the

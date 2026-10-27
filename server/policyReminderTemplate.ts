@@ -33,7 +33,7 @@ const DEFAULT_BODY = `<p>Hi {{owner_name}},</p>
   Open VeritaDC: <a href="{{review_link}}">{{review_link}}</a><br>
   Click <strong>Recertify</strong> to confirm the policy is still current, or <strong>Submit</strong> a revised version through the approval workflow.
 </p>
-<p>VeritaAssure&trade; / VeritaDC&trade;</p>`;
+<p>VeritaAssure&reg; / VeritaDC&trade;</p>`;
 
 export const DEFAULT_TEMPLATES: Record<ReminderType, ReminderTemplate> = {
   "30_day_warning": { subject: "Policy review due in {{days_until}} days: {{policy_title}}", body_html: DEFAULT_BODY },

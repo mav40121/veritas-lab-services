@@ -219,9 +219,9 @@ export default function VeritaScanAppPage() {
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-primary/10 mb-4">
             <Lock className="h-7 w-7 text-primary" />
           </div>
-          <h1 className="text-2xl font-bold mb-2">Sign in to access VeritaScan™</h1>
+          <h1 className="text-2xl font-bold mb-2">Sign in to access VeritaScan®</h1>
           <p className="text-muted-foreground text-sm mb-6">
-            VeritaScan™ requires an account. Sign in to continue.
+            VeritaScan® requires an account. Sign in to continue.
           </p>
           <Button asChild>
             <Link href="/login">Sign In</Link>
@@ -229,7 +229,7 @@ export default function VeritaScanAppPage() {
         </div>
       <ModuleHowToCard
         moduleKey="veritascan"
-        moduleName="VeritaScan™"
+        moduleName="VeritaScan®"
         whatItDoes={`VeritaScan walks ${SCAN_ITEMS.length} inspection-readiness items across 10 domains aligned to TJC and CAP standards. Item-by-item status (compliant, needs attention, not applicable), evidence attachment, executive summary, full PDF export for internal-use distribution.`}
         howToUse={[
           "Pick a new scan and walk through items domain by domain.",
@@ -252,9 +252,9 @@ export default function VeritaScanAppPage() {
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-amber-100 dark:bg-amber-950/30 mb-4">
             <ClipboardList className="h-7 w-7 text-amber-600" />
           </div>
-          <h1 className="text-2xl font-bold mb-2">VeritaScan™ Access Required</h1>
+          <h1 className="text-2xl font-bold mb-2">VeritaScan® Access Required</h1>
           <p className="text-muted-foreground text-sm mb-6">
-            Your current plan doesn't include VeritaScan™. Upgrade to access the
+            Your current plan doesn't include VeritaScan®. Upgrade to access the
             {SCAN_ITEMS.length}-item inspection readiness self-assessment.
           </p>
           <Button asChild>
@@ -272,7 +272,7 @@ export default function VeritaScanAppPage() {
       <div className="flex items-start justify-between gap-4 mb-8">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <h1 className="text-2xl font-bold tracking-tight">VeritaScan™</h1>
+            <h1 className="text-2xl font-bold tracking-tight">VeritaScan®</h1>
             <Badge
               variant="outline"
               className="text-xs bg-primary/5 text-primary border-primary/20"

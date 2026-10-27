@@ -96,7 +96,7 @@ export default function ArticleEP26Page() {
             CLSI EP26, 2nd Edition (<em>User Evaluation of Acceptability of a Reagent Lot Change</em>, 2022) is the consensus guideline that describes how to evaluate whether a new reagent lot differs meaningfully from the current one. It replaced the 2013 first edition, which carried the older title <em>User Evaluation of Between-Reagent Lot Variation</em>. Its core design is to test patient samples on both the current lot and the new lot and to judge the difference against a clinically meaningful limit. The guideline deliberately balances reliably detecting a change that matters against the resource cost of a task laboratories perform constantly.
           </p>
           <Callout type="info">
-            <strong>How the protocol is structured:</strong> EP26 works in two stages. First you decide the medically acceptable difference and the acceptable risk for each analyte, then you evaluate the new lot against that criterion. Many laboratories anchor the acceptable difference to total allowable error (TEa), a published, defensible yardstick. This guide describes that TEa-anchored approach, which is what VeritaCheck™ implements.
+            <strong>How the protocol is structured:</strong> EP26 works in two stages. First you decide the medically acceptable difference and the acceptable risk for each analyte, then you evaluate the new lot against that criterion. Many laboratories anchor the acceptable difference to total allowable error (TEa), a published, defensible yardstick. This guide describes that TEa-anchored approach, which is what VeritaCheck® implements.
           </Callout>
 
           <h2 className="font-serif text-2xl font-bold mt-10 mb-3">When you must verify a new reagent lot</h2>
@@ -150,9 +150,9 @@ export default function ArticleEP26Page() {
             <div className="flex items-start gap-3">
               <FlaskConical size={20} className="text-primary shrink-0 mt-0.5" />
               <div>
-                <div className="font-semibold text-sm mb-1">How VeritaCheck™ automates EP26</div>
+                <div className="font-semibold text-sm mb-1">How VeritaCheck® automates EP26</div>
                 <p className="text-sm text-muted-foreground mb-3">
-                  VeritaCheck™ runs Reagent Lot Verification as a study type. Enter the paired patient results, and it computes the per-specimen differences, applies the TEa-anchored criterion, and generates a signed, CLIA-compliant PDF with the regulatory citation. No spreadsheets, no manual math. Your first study is free.
+                  VeritaCheck® runs Reagent Lot Verification as a study type. Enter the paired patient results, and it computes the per-specimen differences, applies the TEa-anchored criterion, and generates a signed, CLIA-compliant PDF with the regulatory citation. No spreadsheets, no manual math. Your first study is free.
                 </p>
                 <Button asChild size="sm" className="bg-primary text-primary-foreground">
                   <Link href="/veritacheck">Run a Free Study <ChevronRight size={13} className="ml-1" /></Link>
@@ -183,7 +183,7 @@ export default function ArticleEP26Page() {
             <FlaskConical size={28} className="mx-auto mb-3 opacity-80" />
             <h3 className="font-serif text-xl font-bold mb-2">Verify your next reagent lot in minutes</h3>
             <p className="text-primary-foreground/80 text-sm max-w-md mx-auto mb-5">
-              VeritaCheck™ runs Reagent Lot Verification alongside calibration verification, method comparison, and EP15 precision, with automated CLIA TEa lookup and a signed PDF report.
+              VeritaCheck® runs Reagent Lot Verification alongside calibration verification, method comparison, and EP15 precision, with automated CLIA TEa lookup and a signed PDF report.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Button asChild size="lg" className="bg-white text-primary hover:bg-white/90 font-semibold">
@@ -214,7 +214,7 @@ export default function ArticleEP26Page() {
               <div className="font-semibold text-sm">Michael Veri</div>
               <div className="text-xs text-muted-foreground mb-1">Owner, Veritas Lab Services, LLC · Former Joint Commission Laboratory Surveyor · CPHQ</div>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                Michael Veri is a US Army veteran with 22 years of military leadership, former Joint Commission Laboratory Surveyor with 200+ facility inspections, and CPHQ-certified healthcare quality professional. He founded Veritas Lab Services to provide expert consulting and accessible compliance tools to clinical laboratories nationwide, and is the developer of VeritaCheck™, VeritaScan™, and VeritaMap™.
+                Michael Veri is a US Army veteran with 22 years of military leadership, former Joint Commission Laboratory Surveyor with 200+ facility inspections, and CPHQ-certified healthcare quality professional. He founded Veritas Lab Services to provide expert consulting and accessible compliance tools to clinical laboratories nationwide, and is the developer of VeritaCheck®, VeritaScan®, and VeritaMap®.
               </p>
             </div>
           </div>

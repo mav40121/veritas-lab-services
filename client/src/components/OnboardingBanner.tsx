@@ -39,7 +39,7 @@ export function OnboardingBanner() {
     <div className="bg-primary text-primary-foreground px-4 py-3">
       <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
         <p className="text-sm font-medium">
-          Welcome to VeritaAssure&#8482;. Complete your lab setup to get the most out of the platform.
+          Welcome to VeritaAssure&#174;. Complete your lab setup to get the most out of the platform.
         </p>
         <div className="flex items-center gap-2 shrink-0">
           <Button asChild size="sm" variant="secondary" className="bg-white text-primary hover:bg-white/90 font-medium">

@@ -277,7 +277,7 @@ export default function ArticleCostPerReportablePage() {
               The four-layer model survives the budget meeting because it answers the right question with a number that maps to that specific question. Reagent cost alone, gross annual laboratory spend alone, or a single all-in figure across the menu does not.
             </p>
             <p>
-              VeritaOps™, inside the VeritaAssure™ platform, runs CPRT studies in the four-layer GP11-A structure with side-by-side comparison and a one-page PDF that finance can read without translation. The honest-comparison rule is displayed alongside every side-by-side in the comparison view, so a layer-mismatch reads at a glance whenever two studies are placed next to each other. Most laboratory teams will spend more time gathering the inputs than running the calculations, which is the right ratio.
+              VeritaOps™, inside the VeritaAssure® platform, runs CPRT studies in the four-layer GP11-A structure with side-by-side comparison and a one-page PDF that finance can read without translation. The honest-comparison rule is displayed alongside every side-by-side in the comparison view, so a layer-mismatch reads at a glance whenever two studies are placed next to each other. Most laboratory teams will spend more time gathering the inputs than running the calculations, which is the right ratio.
             </p>
             <p>
               If you want to walk through the four-layer framework against a worked example before deciding whether to build it for your own menu, the operations module demonstration is here:
@@ -324,7 +324,7 @@ export default function ArticleCostPerReportablePage() {
             <CardContent className="p-6 sm:p-8 text-center">
               <h3 className="font-serif text-xl font-semibold mb-2">Build your first CPRT study in VeritaOps™</h3>
               <p className="text-sm text-muted-foreground max-w-xl mx-auto mb-4">
-                Four layers, side-by-side comparison, one-page PDF for finance. Included in every VeritaAssure™ plan.
+                Four layers, side-by-side comparison, one-page PDF for finance. Included in every VeritaAssure® plan.
               </p>
               <div className="flex flex-wrap justify-center gap-3">
                 <Button asChild className="bg-primary hover:bg-primary/90">

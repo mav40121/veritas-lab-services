@@ -222,7 +222,7 @@ function headerHTML(ctx: ReorderLabContext, totalItems: number, totalVendors: nu
   return `
   <div class="report-header">
     <div>
-      <div class="logo">${STOCK_DEPLOYMENT ? "VeritaStock&trade;" : "VeritaAssure&trade;"}</div>
+      <div class="logo">${STOCK_DEPLOYMENT ? "VeritaStock&trade;" : "VeritaAssure&reg;"}</div>
       <div class="logo-sub">${STOCK_DEPLOYMENT ? "Multi-Location Inventory - veritastock.com" : "by Veritas Lab Services - veritaslabservices.com"}</div>
       ${labLine}
       ${cliaLine}
@@ -420,7 +420,7 @@ const FOOTER_TEMPLATE = `
   <div style="border-top:1px solid #d2d7dc;padding-top:3px">
     <div style="font-size:6px;color:#a0a0a0;line-height:1.4">VeritaStock&trade; reorder documents are generated from current inventory levels and burn-rate metrics. Final order quantities and vendor placement are the responsibility of the ${STOCK_DEPLOYMENT ? "materials manager or designee" : "laboratory director or designee"}.</div>
     <div style="display:flex;justify-content:space-between;font-size:7px;color:#646e78;margin-top:2px">
-      <span>${STOCK_DEPLOYMENT ? "VeritaStock&trade; | Confidential - For Internal Use Only" : "VeritaAssure&trade; | VeritaStock&trade; | Confidential - For Internal Lab Use Only"}</span>
+      <span>${STOCK_DEPLOYMENT ? "VeritaStock&trade; | Confidential - For Internal Use Only" : "VeritaAssure&reg; | VeritaStock&trade; | Confidential - For Internal Lab Use Only"}</span>
       <span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>
     </div>
   </div>
@@ -759,7 +759,7 @@ function snapHeaderHTML(ctx: ReorderLabContext, totalItems: number, totalVendors
   return `
   <div class="report-header">
     <div>
-      <div class="logo">${STOCK_DEPLOYMENT ? "VeritaStock&trade;" : "VeritaAssure&trade;"}</div>
+      <div class="logo">${STOCK_DEPLOYMENT ? "VeritaStock&trade;" : "VeritaAssure&reg;"}</div>
       <div class="logo-sub">${STOCK_DEPLOYMENT ? "Multi-Location Inventory - veritastock.com" : "by Veritas Lab Services - veritaslabservices.com"}</div>
       ${labLine}
       ${cliaLine}

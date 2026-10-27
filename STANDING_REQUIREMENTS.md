@@ -25,7 +25,7 @@
 
 ## Copy Rules
 - NO em dashes (—) in public-facing artifacts. Use commas, colons, or plain hyphens (-) instead. Public-facing means anything a customer, prospect, accreditor, or non-employee sees: website copy, leave-behinds, brochures, generated PDFs (VeritaCheck, VeritaComp, VeritaScan, VeritaMap, VeritaLab, certificates, CMS 209), demo assets, marketing emails, social cards, externally shown slide decks, the master citation index xlsx, and book content. Internal-only files where em-dashes are acceptable: STANDING_REQUIREMENTS.md, SESSION_HANDOFF files, skill files, code comments, agent-to-user chat, scratch notes. When in doubt, treat as public-facing.
-- All product names use ™ not ®: VeritaAssure™, VeritaCheck™, VeritaMap™, VeritaScan™, VeritaComp™, VeritaStaff™, VeritaLab™
+- Trademark symbols (2026-10-27, USPTO registrations issued): VeritaAssure®, VeritaCheck®, VeritaMap®, VeritaScan®; every other mark stays ™ (VeritaComp™, VeritaStaff™, VeritaLab™
 - NO reference to EP Evaluator by name — use "other evaluation tools" if needed
 - NO CAMLAB references — use "TJC standard"
 - NO dated accreditor manual references in public-facing copy. Never name a TJC manual by year, month/year, or edition (e.g. "January 2024 Comprehensive Accreditation Manual", "2024 Accreditation Manual", "2024 edition"). Use "the current TJC standard" or "TJC standard for laboratory accreditation". Same rationale as the CAMLAB rule: version-specific accreditor references date the product, raise copyright/licensing optics, and rot the moment a new edition drops. Audit script enforces this (see script/audit.py). The same prohibition applies to CAP, AABB, and COLA manual editions if those references ever appear.
@@ -201,7 +201,7 @@ Applies to every customer-facing Excel deliverable (VeritaPolicy, VeritaScan, Ve
 - No clinical verdict language — software states regulatory result, director decides action
 - No PHI ever in any field
 - Stripe keys from environment variables only — never hardcode
-- USPTO filed: VeritaCheck 99730975, VeritaMap 99730987, VeritaScan 99730993, VeritaAssure 99731002
+- USPTO REGISTERED 2026-10-27: VeritaCheck SN 99730975, VeritaMap SN 99730987, VeritaScan SN 99730993, VeritaAssure SN 99731002 (use ®)
 - VeritaComp trademark NOT yet filed (pending revenue)
 
 ## Credentials

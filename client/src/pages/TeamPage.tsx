@@ -18,7 +18,7 @@ const credentials = [
   { icon: Star, text: "200+ healthcare facility inspections" },
   { icon: BookOpen, text: "Author, Lab Management 101 (forthcoming)" },
   { icon: BookOpen, text: "30-episode free webinar series on lab management" },
-  { icon: Star, text: "Founder, VeritaAssure™ compliance software suite" },
+  { icon: Star, text: "Founder, VeritaAssure® compliance software suite" },
 ];
 
 // David McCormick (added 2026-10-14 at Michael's request). His bio is his own blurb ("David McCormick_VLS_blurb.docx",
@@ -84,13 +84,13 @@ return (
 
             <div className="sm:col-span-2 space-y-5">
               <p className="text-foreground leading-relaxed">
-                I became a laboratory director without ever being taught how. That experience, the gap between clinical training and compliance responsibility, is why I built VeritaAssure™.
+                I became a laboratory director without ever being taught how. That experience, the gap between clinical training and compliance responsibility, is why I built VeritaAssure®.
               </p>
               <p className="text-muted-foreground leading-relaxed">
                 Michael is a distinguished US Army veteran with 22 years of service and over a decade of director-level leadership in the civilian healthcare sector. Leveraging four years as a Joint Commission (TJC) Surveyor, he has conducted regulatory and compliance inspections at more than 200 healthcare facilities across the country.
               </p>
               <p className="text-muted-foreground leading-relaxed">
-                In 2026, Michael founded VeritaAssure™, a clinical laboratory compliance software suite built directly from his inspection experience. The eighteen-module suite is live at veritaslabservices.com, giving laboratory directors the documentation infrastructure that most labs have never had.
+                In 2026, Michael founded VeritaAssure®, a clinical laboratory compliance software suite built directly from his inspection experience. The eighteen-module suite is live at veritaslabservices.com, giving laboratory directors the documentation infrastructure that most labs have never had.
               </p>
               <Highlights title="Credentials & Experience" items={credentials} />
             </div>
@@ -120,7 +120,7 @@ return (
                 I co-founded Medical Lab Management magazine in 2012 after 5 years’ writing and editing for a trade magazine covering clinical pharmacy operations. The impetus to launch MLM was sparked by several eye-opening conversations held at what was then called the “ThinkLab” tradeshow (later, KnowledgeLab) hosted by the Clinical Laboratory Management Association (CLMA). I had the great fortune of meeting several luminaries at that show who helped me understand the knowledge gaps that existed in the practice of clinical and anatomic laboratorians. Additional encounters at AABB’s Annual Meeting, ASM Microbe, the AACC (now ADLM) Annual Meeting & Clinical Lab Expo, and the AMP Annual Meeting & Expo, among others, further fostered the need for a strictly peer-to-peer model of coverage focusing on improving the standing of laboratorians of all ranks in the healthcare continuum and amplifying their success stories.
               </p>
               <p className="text-muted-foreground leading-relaxed">
-                After meeting Michael Veri at one such show in 2015, he quickly became a trusted author and advisor for our publication, as well as a friend. When he approached me in early 2026 to potentially join his exciting new software platform endeavor (and to edit his excellent forthcoming book on laboratory management, Lab Management 101) I was both excited and honored. The breadth, power, and clarity of the VeritaAssure™ platform is nothing short of astonishing. I hope to use my many years of covering and editing articles in MLM to help spread this word. Please feel free to contact me with any questions.
+                After meeting Michael Veri at one such show in 2015, he quickly became a trusted author and advisor for our publication, as well as a friend. When he approached me in early 2026 to potentially join his exciting new software platform endeavor (and to edit his excellent forthcoming book on laboratory management, Lab Management 101) I was both excited and honored. The breadth, power, and clarity of the VeritaAssure® platform is nothing short of astonishing. I hope to use my many years of covering and editing articles in MLM to help spread this word. Please feel free to contact me with any questions.
               </p>
               <Highlights title="Background" items={davidHighlights} />
             </div>

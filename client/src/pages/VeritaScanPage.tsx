@@ -54,7 +54,7 @@ const FEATURES = [
 export default function VeritaScanPage() {
     const labRoute = useLabRoute();
     const { isLoggedIn } = useAuth();
-    useSEO({ title: "VeritaScan™ | Laboratory Inspection Readiness Checklist Software", description: `${TOTAL_ITEMS}-item TJC-standard inspection checklist for clinical laboratories. Track your readiness, identify gaps, and walk into every survey prepared.` });
+    useSEO({ title: "VeritaScan® | Laboratory Inspection Readiness Checklist Software", description: `${TOTAL_ITEMS}-item TJC-standard inspection checklist for clinical laboratories. Track your readiness, identify gaps, and walk into every survey prepared.` });
 return (
     <div>
       {/* Hero */}
@@ -67,7 +67,7 @@ return (
                 <Badge className="bg-primary/10 text-primary border-0">New Product</Badge>
                 <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 border">Now Live</Badge>
               </div>
-              <h1 className="font-serif text-5xl font-bold mb-3 leading-tight">VeritaScan™</h1>
+              <h1 className="font-serif text-5xl font-bold mb-3 leading-tight">VeritaScan®</h1>
               <p className="text-xl text-muted-foreground font-medium mb-5">
                 Self-Inspection & Compliance Audit Tool
               </p>
@@ -92,7 +92,7 @@ return (
 
               <div className="flex flex-col sm:flex-row gap-3">
                 <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
-                  <Link href={labRoute("/veritascan-app")}>Launch VeritaScan™ <ChevronRight size={15} className="ml-1" /></Link>
+                  <Link href={labRoute("/veritascan-app")}>Launch VeritaScan® <ChevronRight size={15} className="ml-1" /></Link>
                 </Button>
                 <Button asChild variant="outline" size="lg">
                   <Link href="/login">Sign In / Create Account</Link>
@@ -106,7 +106,7 @@ return (
                 <div className="w-64 h-80 bg-gradient-to-br from-[#0e8a82] to-[#0a5e58] rounded-lg shadow-2xl flex flex-col items-center justify-center p-8 text-white">
                   <Shield size={40} className="text-white/80 mb-4" />
                   <div className="font-serif text-3xl font-bold text-center leading-tight mb-3">
-                    VeritaScan™
+                    VeritaScan®
                   </div>
                   <div className="text-sm text-white/70 text-center mb-4">Self-Inspection &<br />Compliance Audit Tool</div>
                   <div className="w-12 h-0.5 bg-white/40 mb-4" />
@@ -125,12 +125,12 @@ return (
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
           <div className="grid lg:grid-cols-3 gap-10">
             <div className="lg:col-span-2 space-y-5">
-              <h2 className="font-serif text-3xl font-bold">What is VeritaScan™?</h2>
+              <h2 className="font-serif text-3xl font-bold">What is VeritaScan®?</h2>
               <p className="text-muted-foreground leading-relaxed">
                 Every non-waived laboratory in the United States operates under the same fundamental anxiety: the survey is coming. Whether it arrives from The Joint Commission, the College of American Pathologists, or CMS directly, the inspector will walk through your laboratory domain by domain, standard by standard, and they will find what you haven't looked for.
               </p>
               <p className="text-muted-foreground leading-relaxed">
-                VeritaScan™ gives laboratory directors, quality managers, and compliance consultants the same structured lens a surveyor uses, before the surveyor arrives. Each of the {TOTAL_ITEMS} compliance questions is mapped to the specific TJC Standard and Element of Performance, the corresponding CAP checklist requirement number, and the applicable 42 CFR Part 493 regulation. This makes VeritaScan™ more than a checklist. It is a roadmap for understanding why each item is required and exactly where to look when you need to verify it.
+                VeritaScan® gives laboratory directors, quality managers, and compliance consultants the same structured lens a surveyor uses, before the surveyor arrives. Each of the {TOTAL_ITEMS} compliance questions is mapped to the specific TJC Standard and Element of Performance, the corresponding CAP checklist requirement number, and the applicable 42 CFR Part 493 regulation. This makes VeritaScan® more than a checklist. It is a roadmap for understanding why each item is required and exactly where to look when you need to verify it.
               </p>
               <p className="text-muted-foreground leading-relaxed">
                 The compliance dashboard updates in real time as you complete your assessment. IMMEDIATE ACTION findings are flagged separately so the highest-priority gaps are never buried in a list of lower-risk items. The result is a document you can take to your medical director or designee, your CNO, or your accreditation body as evidence of proactive self-assessment.
@@ -152,7 +152,7 @@ return (
               <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 mt-2">
                 <div className="text-xs font-semibold text-amber-700 dark:text-amber-400 mb-1">⚠️ Disclaimer</div>
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  VeritaScan™ is an internal self-inspection aid. It does not substitute for official accreditation review, regulatory inspection, or legal counsel. TJC standards are copyright © The Joint Commission. CAP checklist content is copyright © College of American Pathologists.
+                  VeritaScan® is an internal self-inspection aid. It does not substitute for official accreditation review, regulatory inspection, or legal counsel. TJC standards are copyright © The Joint Commission. CAP checklist content is copyright © College of American Pathologists.
                 </p>
               </div>
             </div>
@@ -237,12 +237,12 @@ return (
                 <Badge className="bg-emerald-500 text-white border-0">Now Live</Badge>
               </div>
               <CardContent className="p-6">
-                <div className="font-bold text-lg mb-1">VeritaScan™</div>
+                <div className="font-bold text-lg mb-1">VeritaScan®</div>
                 <div className="flex items-baseline gap-1 mb-3">
                   <span className="text-4xl font-bold">Included</span>
                 </div>
                 <p className="text-sm text-muted-foreground mb-5">
-                  Included in all VeritaAssure&#8482; plans (starting at $999/yr). Full web access to all {TOTAL_ITEMS} checklist items across {SCAN_DOMAINS.length} domains, with Excel export included.
+                  Included in all VeritaAssure&#174; plans (starting at $999/yr). Full web access to all {TOTAL_ITEMS} checklist items across {SCAN_DOMAINS.length} domains, with Excel export included.
                 </p>
                 <ul className="space-y-2 mb-6">
                   {[
@@ -252,7 +252,7 @@ return (
                     "PDF reports (executive summary + full detail)",
                     "Excel export included: download your full scan at any time",
                     "Always current standards",
-                    "Integrates with VeritaCheck™",
+                    "Integrates with VeritaCheck®",
                   ].map(f => (
                     <li key={f} className="flex items-center gap-2 text-sm">
                       <CheckCircle2 size={13} className="text-primary shrink-0" />{f}
@@ -260,7 +260,7 @@ return (
                   ))}
                 </ul>
                 <Link href={labRoute("/veritascan-app")} className="block w-full bg-primary hover:bg-primary/90 rounded-lg py-2.5 text-sm font-semibold text-primary-foreground text-center transition-colors">
-                  Launch VeritaScan™ →
+                  Launch VeritaScan® →
                 </Link>
               </CardContent>
             </Card>
@@ -272,11 +272,11 @@ return (
               <FlaskConical size={20} className="text-primary mt-0.5 shrink-0" />
               <div>
                 <div className="font-semibold text-sm mb-1">
-                  VeritaAssure&#8482; Suite: <span className="text-primary">Starting at $999/year</span>
+                  VeritaAssure&#174; Suite: <span className="text-primary">Starting at $999/year</span>
                   <Badge className="ml-2 bg-primary/10 text-primary border-0 text-xs">Best Value</Badge>
                 </div>
                 <p className="text-sm text-muted-foreground mb-2">
-                  VeritaCheck™ + VeritaScan™ + VeritaMap™: the complete clinical laboratory regulatory compliance platform. One subscription, full access.
+                  VeritaCheck® + VeritaScan® + VeritaMap®: the complete clinical laboratory regulatory compliance platform. One subscription, full access.
                 </p>
                 <Link href="/pricing" className="inline-flex items-center gap-1 text-sm text-primary hover:underline font-medium">
                   View all plans <ChevronRight size={13} />
@@ -287,7 +287,7 @@ return (
 
           <p className="text-xs text-muted-foreground mt-5">
             Questions?{" "}
-            <a href="mailto:info@veritaslabservices.com?subject=VeritaScan™ Purchase Inquiry" className="text-primary hover:underline">
+            <a href="mailto:info@veritaslabservices.com?subject=VeritaScan® Purchase Inquiry" className="text-primary hover:underline">
               Contact us
             </a>{" "}
             - we're happy to help.
@@ -305,8 +305,8 @@ return (
             {[
               { title: "Laboratory Directors", desc: "You own the CLIA certificate and the regulatory exposure. Know what the surveyor will find before they arrive." },
               { title: "Quality Managers", desc: "Run a structured mock survey on your own schedule. Document findings, assign owners, and track corrective actions to closure." },
-              { title: "Lab Compliance Consultants", desc: "Use VeritaScan™ as your structured assessment framework with clients. Consistent, defensible, citation-mapped." },
-              { title: "New Lab Administrators", desc: "You inherited a lab with an unknown compliance posture. VeritaScan™ tells you where you stand within hours." },
+              { title: "Lab Compliance Consultants", desc: "Use VeritaScan® as your structured assessment framework with clients. Consistent, defensible, citation-mapped." },
+              { title: "New Lab Administrators", desc: "You inherited a lab with an unknown compliance posture. VeritaScan® tells you where you stand within hours." },
               { title: "Survey-Prep Teams", desc: "In the 90-day survey window? Work through each domain systematically and document your readiness." },
               { title: "Multi-Site Lab Systems", desc: "Apply the same structured assessment across all facilities for consistent compliance monitoring." },
             ].map((item, i) => (
@@ -324,11 +324,11 @@ return (
         <div className="max-w-xl mx-auto px-4 sm:px-6 text-center">
           <h2 className="font-serif text-2xl font-bold mb-3">Ready to assess your lab?</h2>
           <p className="text-muted-foreground mb-6">
-            VeritaScan™ is live. Sign in and run your first self-inspection today.
+            VeritaScan® is live. Sign in and run your first self-inspection today.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
-              <Link href={labRoute("/veritascan-app")}>Launch VeritaScan™ <ChevronRight size={15} className="ml-1" /></Link>
+              <Link href={labRoute("/veritascan-app")}>Launch VeritaScan® <ChevronRight size={15} className="ml-1" /></Link>
             </Button>
             <Button asChild variant="outline" size="lg">
               <Link href="/login">Sign In / Create Account</Link>
@@ -337,7 +337,7 @@ return (
           <div className="mt-6">
             <Link href="/veritacheck" className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline font-medium">
               <FlaskConical size={14} />
-              Also try VeritaCheck™ - EP studies
+              Also try VeritaCheck® - EP studies
               <ChevronRight size={13} />
             </Link>
           </div>

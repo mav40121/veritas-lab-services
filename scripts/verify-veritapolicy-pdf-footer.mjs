@@ -26,13 +26,13 @@ const ok = (label, cond) => { console.log(`${cond ? "PASS" : "FAIL"}: ${label}`)
 
 ok("footer template exists (VERITAPOLICY_FOOTER_TEMPLATE)", /const VERITAPOLICY_FOOTER_TEMPLATE = `/.test(pdf));
 ok("footer carries the VeritaPolicy brand line (Sec 5)",
-  /VeritaAssure&trade; \| VeritaPolicy&trade; \| Confidential - For Internal Lab Use Only/.test(pdf));
+  /VeritaAssure&reg; \| VeritaPolicy&trade; \| Confidential - For Internal Lab Use Only/.test(pdf));
 ok("footer carries Page X of Y (pageNumber + totalPages spans)",
   /const VERITAPOLICY_FOOTER_TEMPLATE = `[\s\S]{0,1200}Page <span class="pageNumber"><\/span> of <span class="totalPages"><\/span>/.test(pdf));
 ok("generateVeritaPolicyPDF passes the template (not the empty string)",
   /const stamped = applyLicenseToPuppeteer\(html, VERITAPOLICY_FOOTER_TEMPLATE, licenseCtx\)/.test(pdf));
 ok("the redundant in-body .footer-line brand divs are removed",
-  !/class="footer-line">VeritaAssure&#8482; \| VeritaPolicy/.test(pdf));
+  !/class="footer-line">VeritaAssure&#174; \| VeritaPolicy/.test(pdf));
 ok("no em-dash in the new footer (hyphen per Sec 3)",
   !/VERITAPOLICY_FOOTER_TEMPLATE[\s\S]{0,600}—/.test(pdf));
 

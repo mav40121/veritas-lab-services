@@ -31,8 +31,8 @@ ok("#8 AppPage no longer claims auto-import 'automatically'",
   !/tasks auto-create here at their CLIA cadence/.test(app));
 ok("#8 AppPage states the one-click manual import", /One-click import of your VeritaMap test menu/.test(app));
 ok("#8 DemoLabPage class-copy reworded (no 'auto-creates its cal-ver cadence')",
-  !/adding a new instrument auto-creates its cal-ver cadence/.test(demo) && !/Auto-imports schedules from VeritaMap&#8482;\./.test(demo));
-ok("#8 VeritaAssurePage class-copy reworded", !/Auto-imports schedules from VeritaMap™\./.test(suite) && /One-click import of your VeritaMap™ test menu/.test(suite));
+  !/adding a new instrument auto-creates its cal-ver cadence/.test(demo) && !/Auto-imports schedules from VeritaMap&#174;\./.test(demo));
+ok("#8 VeritaAssurePage class-copy reworded", !/Auto-imports schedules from VeritaMap®\./.test(suite) && /One-click import of your VeritaMap® test menu/.test(suite));
 ok("#8 the inject_howto_cards.py generator matches (no auto-create)",
   !/creates its cal-ver cadence automatically/.test(script) && !/tasks auto-create here at their CLIA cadence/.test(script));
 

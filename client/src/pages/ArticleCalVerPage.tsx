@@ -182,9 +182,9 @@ return (
             <div className="flex items-start gap-3">
               <FlaskConical size={20} className="text-primary shrink-0 mt-0.5" />
               <div>
-                <div className="font-semibold text-sm mb-1">VeritaCheck™ automates all of this</div>
+                <div className="font-semibold text-sm mb-1">VeritaCheck® automates all of this</div>
                 <p className="text-sm text-muted-foreground mb-3">
-                  Enter your data and VeritaCheck™ handles every calculation: % error, Pearson r, slope, intercept, PASS/FAIL against CLIA TEa. It generates a signed, CLIA-compliant PDF report. No Excel, no manual math, no formatting. Your first study is free.
+                  Enter your data and VeritaCheck® handles every calculation: % error, Pearson r, slope, intercept, PASS/FAIL against CLIA TEa. It generates a signed, CLIA-compliant PDF report. No Excel, no manual math, no formatting. Your first study is free.
                 </p>
                 <Button asChild size="sm" className="bg-primary text-primary-foreground">
                   <Link href="/veritacheck">Run a Free Study <ChevronRight size={13} className="ml-1" /></Link>
@@ -267,7 +267,7 @@ return (
             <FlaskConical size={28} className="mx-auto mb-3 opacity-80" />
             <h3 className="font-serif text-xl font-bold mb-2">Ready to run your next study?</h3>
             <p className="text-primary-foreground/80 text-sm max-w-md mx-auto mb-5">
-              VeritaCheck™ handles calibration verification, method comparison, and EP15 precision verification, with automated CLIA TEa lookup, all statistics calculated, and a signed PDF report generated in minutes.
+              VeritaCheck® handles calibration verification, method comparison, and EP15 precision verification, with automated CLIA TEa lookup, all statistics calculated, and a signed PDF report generated in minutes.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Button asChild size="lg" className="bg-white text-primary hover:bg-white/90 font-semibold">
@@ -300,7 +300,7 @@ return (
               <div className="font-semibold text-sm">Michael Veri</div>
               <div className="text-xs text-muted-foreground mb-1">Owner, Veritas Lab Services, LLC · Former Joint Commission Laboratory Surveyor · CPHQ</div>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                Michael Veri is a US Army veteran with 22 years of military leadership, former Joint Commission Laboratory Surveyor with 200+ facility inspections, and CPHQ-certified healthcare quality professional. He founded Veritas Lab Services to provide expert consulting and accessible compliance tools to clinical laboratories nationwide, and is the developer of VeritaCheck™, VeritaScan™, and VeritaMap™.
+                Michael Veri is a US Army veteran with 22 years of military leadership, former Joint Commission Laboratory Surveyor with 200+ facility inspections, and CPHQ-certified healthcare quality professional. He founded Veritas Lab Services to provide expert consulting and accessible compliance tools to clinical laboratories nationwide, and is the developer of VeritaCheck®, VeritaScan®, and VeritaMap®.
               </p>
             </div>
           </div>

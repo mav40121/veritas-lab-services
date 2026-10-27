@@ -87,7 +87,7 @@ export function OutsideRecordsDialog({ open, onOpenChange, coverageUrl, calVerRo
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" data-testid="outside-records-dialog">
         <DialogHeader>
-          <DialogTitle>Record studies done outside VeritaCheck™</DialogTitle>
+          <DialogTitle>Record studies done outside VeritaCheck®</DialogTitle>
           <DialogDescription>
             For calibration verifications and correlations your lab already performed and documented outside VeritaCheck. Coverage counts each one as current for 6 months from the date performed. The study records stay where you keep them; note the location so a surveyor can find them.
           </DialogDescription>

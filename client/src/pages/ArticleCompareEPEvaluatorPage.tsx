@@ -65,7 +65,7 @@ export default function ArticleCompareEPEvaluatorPage() {
         </Card>
 
         <div className="prose prose-slate dark:prose-invert max-w-none space-y-6 text-[15px] leading-relaxed">
-          <p>EP Evaluator, by Data Innovations, is the long-established statistical engine many laboratories use for performance verification. <Link href="/veritacheck" className="text-primary hover:underline">VeritaCheck&#8482;</Link> is the verification module inside VeritaAssure&#8482;. Both run the CLSI studies a CLIA laboratory needs. They differ in what happens around the statistics: whether a study is tied to the whole test menu, whether the output cites the regulation a surveyor will quote, and how the tool is priced. Here is a fair side-by-side.</p>
+          <p>EP Evaluator, by Data Innovations, is the long-established statistical engine many laboratories use for performance verification. <Link href="/veritacheck" className="text-primary hover:underline">VeritaCheck&#174;</Link> is the verification module inside VeritaAssure&#174;. Both run the CLSI studies a CLIA laboratory needs. They differ in what happens around the statistics: whether a study is tied to the whole test menu, whether the output cites the regulation a surveyor will quote, and how the tool is priced. Here is a fair side-by-side.</p>
 
           <h2 className="font-serif text-2xl font-bold mt-10 mb-3">What they share</h2>
           <p>Both perform the core CLSI verification studies, calibration verification and linearity, precision, method comparison, and the rest, and both evaluate results against total allowable error and CLIA proficiency testing limits. If all you need is to run a single study and read the statistics, either tool does that.</p>
@@ -76,7 +76,7 @@ export default function ArticleCompareEPEvaluatorPage() {
           <h2 className="font-serif text-2xl font-bold mt-10 mb-3">Where VeritaCheck is different</h2>
           <p>VeritaCheck is built around the survey, not only the statistics.</p>
           <ul>
-            <li><strong>Whole-menu coverage.</strong> EP Evaluator's unit of work is one experiment: one analyte, one study, kept in project folders. It does not provide a whole-menu coverage view. VeritaCheck sits on the <Link href="/veritamap" className="text-primary hover:underline">VeritaMap&#8482; whole-lab menu</Link> (every analyte on every instrument, with CLIA complexity from a curated dataset of 260-plus analyzers) and reports, per analyte and instrument, what is covered, what needs review, what is missing, and what is exempt, with proficiency testing enrollment gaps alongside.</li>
+            <li><strong>Whole-menu coverage.</strong> EP Evaluator's unit of work is one experiment: one analyte, one study, kept in project folders. It does not provide a whole-menu coverage view. VeritaCheck sits on the <Link href="/veritamap" className="text-primary hover:underline">VeritaMap&#174; whole-lab menu</Link> (every analyte on every instrument, with CLIA complexity from a curated dataset of 260-plus analyzers) and reports, per analyte and instrument, what is covered, what needs review, what is missing, and what is exempt, with proficiency testing enrollment gaps alongside.</li>
             <li><strong>The report a surveyor reads.</strong> Each VeritaCheck study produces a report that states the regulatory determination, cites the exact 42 CFR section inline (493.927, 931, 933, 937, 941, 959), shows the ADLM goal next to the CLIA TEa, and carries a laboratory director or designee signature block on the page with the results. EP Evaluator maps results to TEa and CLIA PT limits; it does not auto-map to CLIA complexity or cite 42 CFR in the output.</li>
             <li><strong>Pricing you can see.</strong> VeritaCheck is included in every VeritaAssure tier at <Link href="/pricing" className="text-primary hover:underline">published annual prices</Link>, with no per-user or per-study upcharge. EP Evaluator is a per-user license plus annual maintenance, with no published pricing.</li>
           </ul>
@@ -87,7 +87,7 @@ export default function ArticleCompareEPEvaluatorPage() {
               <thead>
                 <tr className="border-b-2 border-primary/30">
                   <th className="text-left py-2 pr-3 font-semibold text-muted-foreground"></th>
-                  <th className="text-left py-2 px-3 font-semibold text-primary">VeritaCheck&#8482;</th>
+                  <th className="text-left py-2 px-3 font-semibold text-primary">VeritaCheck&#174;</th>
                   <th className="text-left py-2 px-3 font-semibold">EP Evaluator</th>
                 </tr>
               </thead>
@@ -122,13 +122,13 @@ export default function ArticleCompareEPEvaluatorPage() {
 
           <div className="rounded-xl bg-primary text-primary-foreground p-7 mt-10 text-center">
             <FlaskConical size={28} className="mx-auto mb-3 opacity-80" />
-            <h3 className="font-serif text-xl font-bold mb-2">See VeritaCheck&#8482; on your own studies</h3>
+            <h3 className="font-serif text-xl font-bold mb-2">See VeritaCheck&#174; on your own studies</h3>
             <p className="text-primary-foreground/80 text-sm max-w-md mx-auto mb-5">
               Run a study, read the CFR-cited report, and see the whole-lab coverage map, at published pricing with a free trial.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Button asChild size="lg" className="bg-white text-primary hover:bg-white/90 font-semibold">
-                <Link href="/veritacheck">Explore VeritaCheck&#8482; <ChevronRight size={15} className="ml-1" /></Link>
+                <Link href="/veritacheck">Explore VeritaCheck&#174; <ChevronRight size={15} className="ml-1" /></Link>
               </Button>
               <Button asChild size="lg" variant="outline" className="border-white/40 text-white hover:bg-white/10">
                 <Link href="/pricing">See Pricing <ExternalLink size={13} className="ml-1" /></Link>

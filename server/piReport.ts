@@ -183,7 +183,7 @@ export function buildPiReportHTML(m: PiMetric, entries: PiEntry[], ctx: PiReport
 
 const FOOTER_TEMPLATE =
   `<div style="width:100%;font-family:Arial,sans-serif;font-size:7.5pt;color:#7A7974;padding:0 16mm;">` +
-  `VeritaAssure&#8482; | VeritaBench&#8482; | Confidential - For Internal Lab Use Only | Page <span class="pageNumber"></span> of <span class="totalPages"></span>` +
+  `VeritaAssure&#174; | VeritaBench&#8482; | Confidential - For Internal Lab Use Only | Page <span class="pageNumber"></span> of <span class="totalPages"></span>` +
   `</div>`;
 
 export async function generatePiReportPDF(m: PiMetric, entries: PiEntry[], ctx: PiReportCtx): Promise<Buffer> {

@@ -741,7 +741,7 @@ export function registerVeritaTrackRoutes(
       : sqlite.prepare(
           "SELECT id, name FROM veritamap_maps WHERE user_id = ? ORDER BY updated_at DESC"
         ).all(userId) as Array<{ id: number; name: string }>;
-    if (maps.length === 0) return res.status(404).json({ error: "No VeritaMap\u2122 found. Build your test menu first." });
+    if (maps.length === 0) return res.status(404).json({ error: "No VeritaMap\u00AE found. Build your test menu first." });
     const mapIdPlaceholders = maps.map(() => "?").join(",");
     // #93: a test whose SOP links to a VeritaDC policy seeds the SOP review from that policy's last review.
     const allTests = (labId != null
@@ -816,7 +816,7 @@ export function registerVeritaTrackRoutes(
           if (newTask) {
             sqlite.prepare(
               "INSERT INTO veritatrack_signoffs (task_id,user_id,completed_date,notes) VALUES (?,?,?,?)"
-            ).run(newTask.id, userId, test[fd.field], "Imported from VeritaMap\u2122");
+            ).run(newTask.id, userId, test[fd.field], "Imported from VeritaMap\u00AE");
           }
         }
         created++;

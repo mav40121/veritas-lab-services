@@ -179,7 +179,7 @@ export default function ArticleQCTestingIntoCompliancePage() {
               The record that protects the laboratory is not the clean chart. It is the documented investigation behind every flagged run: the
               assignable cause, the corrective action, and the confirmation that the system was back in control before patient testing resumed.
               That is precisely what a corrective-action workflow is built to hold. In{" "}
-              <Link href="/veritaassure" className="text-primary font-medium hover:underline">VeritaAssure™</Link>, a failed control can be escalated
+              <Link href="/veritaassure" className="text-primary font-medium hover:underline">VeritaAssure®</Link>, a failed control can be escalated
               into a tracked VeritaResponse™ finding, so the investigation and its corrective action live in one record against a due-date clock
               rather than in a technologist's memory.
             </p>
@@ -211,7 +211,7 @@ export default function ArticleQCTestingIntoCompliancePage() {
               standard for statistical quality control in the medical laboratory, whose current edition is explicit that control limits should come
               from the laboratory's own observed mean and standard deviation rather than from a package insert. It is the same imprecision a method
               verification measures when a test is first brought online, which is what{" "}
-              <Link href="/veritacheck" className="text-primary font-medium hover:underline">VeritaCheck™</Link> calculates from a precision study.
+              <Link href="/veritacheck" className="text-primary font-medium hover:underline">VeritaCheck®</Link> calculates from a precision study.
               Your own standard deviation is tighter than the insert range, the limits move in, and the real shifts finally have something to cross.
               A chart with no exceptions over a long stretch should prompt the question an experienced reviewer asks first: are these limits actually
               capable of detecting an error, or were they set wide enough to guarantee a clean wall.
@@ -243,7 +243,7 @@ export default function ArticleQCTestingIntoCompliancePage() {
               longer protects the patient and the laboratory needs a multirule design, the Westgard rules, with more controls and tighter review.
               Same allowable error, same instrument, a completely different quality control requirement, driven entirely by how the method actually
               performs. Those three inputs, the allowable error, the bias, and the imprecision, are the same figures a verification study produces,
-              the ones VeritaCheck™ derives from precision and comparison studies, which is what lets a laboratory set its quality control to the
+              the ones VeritaCheck® derives from precision and comparison studies, which is what lets a laboratory set its quality control to the
               method rather than to the package insert.
             </p>
             <p>The relationship is direct enough to put in a table:</p>
@@ -327,7 +327,7 @@ export default function ArticleQCTestingIntoCompliancePage() {
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Button asChild size="lg" className="bg-white text-primary hover:bg-white/90 font-semibold">
-                <Link href="/veritaassure">Explore VeritaAssure™ <ChevronRight size={15} className="ml-1" /></Link>
+                <Link href="/veritaassure">Explore VeritaAssure® <ChevronRight size={15} className="ml-1" /></Link>
               </Button>
               <Button asChild size="lg" variant="outline" className="border-white/40 text-white hover:bg-white/10">
                 <Link href="/resources">More resources <ExternalLink size={13} className="ml-1" /></Link>
@@ -356,7 +356,7 @@ export default function ArticleQCTestingIntoCompliancePage() {
               <p className="text-xs text-muted-foreground leading-relaxed">
                 Michael Veri is a former Joint Commission Laboratory Surveyor with 200+ facility inspections and a CPHQ-certified healthcare quality
                 professional. He founded Veritas Lab Services to provide expert consulting and accessible compliance tools to clinical laboratories
-                nationwide, and is the developer of VeritaCheck™, VeritaScan™, and VeritaMap™.
+                nationwide, and is the developer of VeritaCheck®, VeritaScan®, and VeritaMap®.
               </p>
             </div>
           </div>

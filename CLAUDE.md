@@ -140,10 +140,10 @@ Plain-text questions in chat without numbering, without the ★, or without `[my
 ## 3. Copy Rules
 
 - NO em dashes (—) in public-facing artifacts. Use commas, colons, or plain hyphens. Public-facing means anything a customer, prospect, accreditor, or non-employee sees: website copy, leave-behinds, brochures, generated PDFs (VeritaCheck, VeritaComp, VeritaScan, VeritaMap, VeritaLab, certificates, CMS 209), demo assets, marketing emails, social cards, externally shown decks, the master citation index xlsx, and book content. Em-dashes are tolerated only in internal files like this one, STANDING_REQUIREMENTS.md, code comments, and scratch notes. When in doubt, treat as public-facing.
-- All product names use ™ not ®. The VeritaAssure™ suite is eighteen modules organized into two streams:
-  - **Compliance (12):** VeritaCheck™, VeritaMap™, VeritaScan™, VeritaComp™, VeritaPolicy™, VeritaStaff™, VeritaLab™, VeritaPT™, VeritaTrack™, VeritaResponse™, VeritaQC™, VeritaMaintain™ (the rebranded Equipment Maintenance module; route /equipment-app).
+- Trademark symbols (2026-10-27): the USPTO registered VeritaAssure (SN 99731002), VeritaMap (SN 99730987), VeritaScan (SN 99730993) and VeritaCheck (SN 99730975), issue date October 27, 2026. Those four use ®; every other product name uses ™ until its own registration issues, and ® on an unregistered mark is an error. script/audit.py enforces both directions (REGISTERED_MARKS; receipt scripts/verify-registered-marks-audit.py). The VeritaAssure® suite is eighteen modules organized into two streams:
+  - **Compliance (12):** VeritaCheck®, VeritaMap®, VeritaScan®, VeritaComp™, VeritaPolicy™, VeritaStaff™, VeritaLab™, VeritaPT™, VeritaTrack™, VeritaResponse™, VeritaQC™, VeritaMaintain™ (the rebranded Equipment Maintenance module; route /equipment-app).
   - **Operations (6):** VeritaBench™, VeritaPace™, VeritaShift™, VeritaQA™, VeritaStock™, VeritaOps™.
-  - The suite mark itself is VeritaAssure™. Any public-facing copy that gives a module count must say "eighteen" (12 compliance + 6 operations).
+  - The suite mark itself is VeritaAssure®. Any public-facing copy that gives a module count must say "eighteen" (12 compliance + 6 operations).
 - EP Evaluator MAY be named in public-facing copy (rule relaxed 2026-09-27 by Michael; historically this was banned). Reasoning: in our field everyone knows the name, and naming the incumbent makes the menu-to-studies comparison land. Keep comparisons factual and non-disparaging.
 - NO CAMLAB references — use "TJC standard".
 - NO dated accreditor manual references in public-facing copy. Never name a TJC, CAP, AABB, or COLA manual by year, month/year, or edition. Use "the current TJC standard" or "TJC standard for laboratory accreditation". The audit script enforces this.
@@ -181,7 +181,7 @@ A clean grep is a required step in the QC checklist, not optional. Visual inspec
 - Do NOT add a "Detailed results continued on page X" label. The page footer (Page X of Y) and the "Continued from page 1" section heading already convey this. The orphan label caused a dead-page bug on 2026-04-28.
 - "Medical director or designee" everywhere — never just "medical director" or "laboratory director" alone.
 - CLIA number on every report header. Show "CLIA: Not on file — enter in account settings" if missing.
-- Footer every page: `VeritaAssure™ | [Module]™ | Confidential — For Internal Lab Use Only | Page X of Y`.
+- Footer every page: `VeritaAssure® | [Module]™ or ® (registered marks only) | Confidential — For Internal Lab Use Only | Page X of Y`.
 - Author metadata: `Perplexity Computer`.
 
 ### Regulatory language (VeritaCheck narratives)
@@ -201,7 +201,7 @@ A clean grep is a required step in the QC checklist, not optional. Visual inspec
 - "Calibration Verification / Linearity" — never "Cal Ver" or "Linearity" alone.
 - "Correlation / Method Comparison" — never "Method Comparison" alone.
 - ADLM goal cited alongside CLIA TEa in narratives.
-- CUMSUM is a study type within VeritaCheck™, never a standalone module. Never list it as its own feature, row, or module.
+- CUMSUM is a study type within VeritaCheck®, never a standalone module. Never list it as its own feature, row, or module.
 
 ### VeritaMap rules
 
@@ -356,7 +356,7 @@ Stripe price IDs land in `server/stripe.ts` once the SKUs are created in the Str
 - No clinical verdict language; the software states the regulatory result, the director decides action.
 - No PHI in any field, ever.
 - Stripe keys from environment variables only; never hardcoded.
-- USPTO filed: VeritaCheck 99730975, VeritaMap 99730987, VeritaScan 99730993, VeritaAssure 99731002.
+- USPTO REGISTERED 2026-10-27: VeritaCheck SN 99730975, VeritaMap SN 99730987, VeritaScan SN 99730993, VeritaAssure SN 99731002 (use ®).
 - VeritaComp trademark NOT yet filed (pending revenue).
 
 ---

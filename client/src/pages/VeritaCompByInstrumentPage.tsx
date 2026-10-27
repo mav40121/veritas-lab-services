@@ -39,13 +39,13 @@ export default function VeritaCompByInstrumentPage() {
       <div>
         <h1 className="text-2xl font-bold">Competency by instrument</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Each instrument on your VeritaMap&trade;, with the people assigned to it in VeritaStaff&trade; and how many are signed off on it.
+          Each instrument on your VeritaMap&reg;, with the people assigned to it in VeritaStaff&trade; and how many are signed off on it.
         </p>
       </div>
       {isLoading && <div className="text-sm text-muted-foreground py-8 text-center">Loading...</div>}
       {error && <div className="text-sm text-red-600">Could not load instruments.</div>}
       {data && rows.length === 0 && (
-        <Card><CardContent className="p-6 text-sm text-muted-foreground">No instruments on your VeritaMap&trade; yet.</CardContent></Card>
+        <Card><CardContent className="p-6 text-sm text-muted-foreground">No instruments on your VeritaMap&reg; yet.</CardContent></Card>
       )}
       {depts.map((dept) => (
         <div key={dept} className="space-y-1.5">

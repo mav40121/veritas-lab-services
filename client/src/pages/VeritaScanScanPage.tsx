@@ -344,8 +344,8 @@ function EvidencePicker({
         </DialogHeader>
         <div className="space-y-3">
           <p className="text-xs text-muted-foreground">
-            Attach a document from your VeritaScan&#8482; evidence library. Links point to your file in
-            SharePoint, Drive, or OneDrive; VeritaAssure&#8482; stores the pointer, never the file.
+            Attach a document from your VeritaScan&#174; evidence library. Links point to your file in
+            SharePoint, Drive, or OneDrive; VeritaAssure&#174; stores the pointer, never the file.
           </p>
           <div className="relative">
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
@@ -554,7 +554,7 @@ function ItemRow({
                   </span>
                 </TooltipTrigger>
                 <TooltipContent side="right" className="max-w-xs">
-                  <p className="text-xs font-medium">Auto-completed by VeritaCheck&#8482;</p>
+                  <p className="text-xs font-medium">Auto-completed by VeritaCheck&#174;</p>
                   {state.completionNote && <p className="text-xs text-muted-foreground mt-0.5">{state.completionNote}</p>}
                   {state.completionLink && (
                     <Link href={state.completionLink} className="text-xs text-primary mt-1 block hover:underline">

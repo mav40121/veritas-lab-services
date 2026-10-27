@@ -63,7 +63,7 @@ export function StudyCreditsModal() {
           {message || "Your account includes two free studies to start, and both are now used."}
         </p>
         <p className="text-sm text-muted-foreground mb-6">
-          Upgrade to VeritaCheck&#8482; Unlimited for unlimited studies and instrument verifications, every one with a
+          Upgrade to VeritaCheck&#174; Unlimited for unlimited studies and instrument verifications, every one with a
           full signed PDF report and saved to your study history. $299 for the first year, then $499 per year.
         </p>
         <div className="flex flex-col gap-2">
@@ -72,7 +72,7 @@ export function StudyCreditsModal() {
             disabled={loading}
             className="w-full px-4 py-2.5 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors font-medium disabled:opacity-60"
           >
-            {loading ? "Starting checkout..." : "Upgrade to VeritaCheck™ Unlimited"}
+            {loading ? "Starting checkout..." : "Upgrade to VeritaCheck® Unlimited"}
           </button>
           <div className="flex gap-2">
             <a

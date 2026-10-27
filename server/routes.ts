@@ -105,7 +105,7 @@ function licenseCtxFromReq(req: any, productName?: string): LicenseContext {
   // Prefer authenticated user identity. Falls back to a hashed IP for
   // anonymous/demo paths so the licensee field still distinguishes recipients
   // without ever logging a raw IP. `productName` is the trademarked product
-  // shown in the row-1 license band; defaults to "VeritaAssure\u2122" via
+  // shown in the row-1 license band; defaults to "VeritaAssure\u00AE" via
   // normalizeLicenseContext when omitted.
   const u = req?.user || null;
   // Inline-token export routes (e.g. GET /api/my-studies/export, the cumsum and
@@ -1523,14 +1523,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     community: "Community",
     hospital: "Hospital",
     large_hospital: "System",
-    veritacheck_only: "VeritaCheck\u2122 Unlimited",
+    veritacheck_only: "VeritaCheck\u00AE Unlimited",
     annual: "Annual (Legacy)",
     starter: "Starter (Legacy)",
     professional: "Professional (Legacy)",
     lab: "Lab",
     complete: "Complete (Legacy)",
-    veritamap: "VeritaMap\u2122 Add-on",
-    veritascan: "VeritaScan\u2122 Add-on",
+    veritamap: "VeritaMap\u00AE Add-on",
+    veritascan: "VeritaScan\u00AE Add-on",
     veritacomp: "VeritaComp\u2122 Add-on",
   };
 
@@ -4367,7 +4367,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   setTwoFactorEmailSender(resend ? async (to, code, purpose) => {
     const what = purpose === "setup" ? "turn on two-factor sign-in" : "finish signing in";
     const r: any = await resend.emails.send({
-      from: "VeritaAssure™ <info@veritaslabservices.com>",
+      from: "VeritaAssure® <info@veritaslabservices.com>",
       to: [to],
       subject: `Your VeritaAssure sign-in code: ${code}`,
       html: `<div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#28251D">
@@ -5532,7 +5532,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // per-level preview before the user commits.
   app.get("/api/labs/:labId/qc/import-candidates", authMiddleware, labScopeMiddleware, (req: any, res) => {
     if (!hasQcImportAccess(req.user, req.scope?.lab)) {
-      return res.status(403).json({ error: "VeritaCheck™ + VeritaQC™ subscription required" });
+      return res.status(403).json({ error: "VeritaCheck® + VeritaQC™ subscription required" });
     }
     const analyte = String(req.query.analyte || "").trim();
     if (!analyte) return res.status(400).json({ error: "analyte required" });
@@ -5657,7 +5657,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // data_points JSON so the audit trail survives all later edits.
   app.post("/api/labs/:labId/qc/import-preview", authMiddleware, labScopeMiddleware, (req: any, res) => {
     if (!hasQcImportAccess(req.user, req.scope?.lab)) {
-      return res.status(403).json({ error: "VeritaCheck™ + VeritaQC™ subscription required" });
+      return res.status(403).json({ error: "VeritaCheck® + VeritaQC™ subscription required" });
     }
     const {
       analyte, instrument, start_date, end_date, control_lot_id,
@@ -5771,7 +5771,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // (qc_level -> study_level_name) overrides for this lab + analyte.
   app.get("/api/labs/:labId/qc/import-mappings/:analyte", authMiddleware, labScopeMiddleware, (req: any, res) => {
     if (!hasQcImportAccess(req.user, req.scope?.lab)) {
-      return res.status(403).json({ error: "VeritaCheck™ + VeritaQC™ subscription required" });
+      return res.status(403).json({ error: "VeritaCheck® + VeritaQC™ subscription required" });
     }
     const analyte = String(req.params.analyte || "").trim();
     if (!analyte) return res.status(400).json({ error: "analyte required" });
@@ -5788,7 +5788,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // array does nothing (no destructive clear).
   app.put("/api/labs/:labId/qc/import-mappings/:analyte", authMiddleware, labScopeMiddleware, requireModuleEdit("veritacheck"), (req: any, res) => {
     if (!hasQcImportAccess(req.user, req.scope?.lab)) {
-      return res.status(403).json({ error: "VeritaCheck™ + VeritaQC™ subscription required" });
+      return res.status(403).json({ error: "VeritaCheck® + VeritaQC™ subscription required" });
     }
     const analyte = String(req.params.analyte || "").trim();
     if (!analyte) return res.status(400).json({ error: "analyte required" });
@@ -5868,7 +5868,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     labScopeMiddleware,
     (req: any, res) => {
       if (!hasQcImportAccess(req.user, req.scope?.lab)) {
-        return res.status(403).json({ error: "VeritaCheck™ + VeritaQC™ subscription required" });
+        return res.status(403).json({ error: "VeritaCheck® + VeritaQC™ subscription required" });
       }
       const analyte = String(req.query.analyte || "").trim();
       if (!analyte) return res.status(400).json({ error: "analyte required" });
@@ -6405,17 +6405,17 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     for (const owner of owners) {
       try {
         await resend.emails.send({
-          from: "VeritaAssure\u2122 <info@veritaslabservices.com>",
+          from: "VeritaAssure\u00AE <info@veritaslabservices.com>",
           to: owner.email,
           subject: "Three new modules are now available for your team",
           html: `
 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1a1a1a;">
   <div style="background: #01696F; padding: 24px 32px; border-radius: 8px 8px 0 0;">
-    <h1 style="color: white; margin: 0; font-size: 22px;">New modules available on VeritaAssure\u2122</h1>
+    <h1 style="color: white; margin: 0; font-size: 22px;">New modules available on VeritaAssure\u00AE</h1>
   </div>
   <div style="padding: 32px; background: #f9f9f9; border-radius: 0 0 8px 8px;">
     <p style="margin: 0 0 16px;">Hi ${owner.name || "there"},</p>
-    <p style="margin: 0 0 16px;">Three new modules are now included in your VeritaAssure\u2122 subscription:</p>
+    <p style="margin: 0 0 16px;">Three new modules are now included in your VeritaAssure\u00AE subscription:</p>
     <ul style="margin: 0 0 24px; padding-left: 20px; line-height: 1.8;">
       <li><strong>VeritaPolicy\u2122</strong>: Policy and procedure management with version control and staff acknowledgment tracking</li>
       <li><strong>VeritaLab\u2122</strong>: Certificate and accreditation document storage for your laboratory</li>
@@ -6605,15 +6605,15 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           const tierLabels: Record<string, string> = {
             clinic: "Clinic ($999/yr)", community: "Community ($2,125/yr)",
             hospital: "Hospital ($4,995/yr)", enterprise: "System (custom quote)",
-            veritacheck: "VeritaCheck\u2122 Unlimited ($299/yr)"
+            veritacheck: "VeritaCheck\u00AE Unlimited ($299/yr)"
           };
           const promoLine = promo_applied
             ? `<p style="margin: 0 0 12px;"><strong>Promo code:</strong> ${promo_code} (${discount_pct}% off${trial_days ? `, ${trial_days}-day trial` : ""})</p>`
             : "";
           await resend.emails.send({
-            from: "VeritaAssure\u2122 <info@veritaslabservices.com>",
+            from: "VeritaAssure\u00AE <info@veritaslabservices.com>",
             to: normalizedEmail,
-            subject: "Your VeritaAssure\u2122 invoice request - next steps",
+            subject: "Your VeritaAssure\u00AE invoice request - next steps",
             html: `
 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #1a1a1a;">
   <div style="background: #01696F; padding: 24px 32px; border-radius: 8px 8px 0 0;">
@@ -6621,7 +6621,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   </div>
   <div style="padding: 32px; background: #f9f9f9; border-radius: 0 0 8px 8px;">
     <p style="margin: 0 0 16px;">Hi ${billing_contact_name},</p>
-    <p style="margin: 0 0 16px;">Thank you for requesting an invoice for VeritaAssure\u2122. Here is a summary of what you submitted:</p>
+    <p style="margin: 0 0 16px;">Thank you for requesting an invoice for VeritaAssure\u00AE. Here is a summary of what you submitted:</p>
     <div style="background: white; border: 1px solid #e0e0e0; border-radius: 6px; padding: 16px; margin: 0 0 16px;">
       <p style="margin: 0 0 8px;"><strong>Lab:</strong> ${lab_name}</p>
       <p style="margin: 0 0 8px;"><strong>Plan:</strong> ${tierLabels[tier] || tier}</p>
@@ -6631,7 +6631,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     <p style="margin: 0 0 16px;"><strong>What happens next:</strong></p>
     <ul style="margin: 0 0 16px; padding-left: 20px; line-height: 1.8;">
       <li>We will send your invoice within 1 business day via Stripe.</li>
-      <li>Your VeritaAssure\u2122 account will activate once the invoice is paid.</li>
+      <li>Your VeritaAssure\u00AE account will activate once the invoice is paid.</li>
     </ul>
     <p style="margin: 0 0 16px;">In the meantime, set your password so you are ready to log in:</p>
     <a href="${resetUrl}" style="display: inline-block; background: #01696F; color: white; padding: 12px 28px; border-radius: 6px; text-decoration: none; font-weight: bold;">Set Your Password</a>
@@ -6647,7 +6647,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         // Email 2: Internal notification
         try {
           await resend.emails.send({
-            from: "VeritaAssure\u2122 <info@veritaslabservices.com>",
+            from: "VeritaAssure\u00AE <info@veritaslabservices.com>",
             to: [BUSINESS_NOTICE_TO],
             subject: `New invoice request: ${lab_name} - ${tier} x ${seatCount}`,
             html: `
@@ -7059,19 +7059,19 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // Send welcome email via Resend
     if (resend) {
       resend.emails.send({
-        from: "VeritaAssure\u2122 <info@veritaslabservices.com>",
+        from: "VeritaAssure\u00AE <info@veritaslabservices.com>",
         to: [email],
-        subject: "Welcome to VeritaAssure\u2122 - Your lab compliance platform is ready",
+        subject: "Welcome to VeritaAssure\u00AE - Your lab compliance platform is ready",
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background: #ffffff;">
             <div style="background: #01696F; padding: 24px 28px; border-radius: 8px 8px 0 0;">
-              <h1 style="color: #ffffff; font-size: 22px; margin: 0;">Welcome to VeritaAssure&#8482;</h1>
+              <h1 style="color: #ffffff; font-size: 22px; margin: 0;">Welcome to VeritaAssure&#174;</h1>
               <p style="color: rgba(255,255,255,0.85); font-size: 13px; margin: 6px 0 0;">Veritas Lab Services, LLC</p>
             </div>
             <div style="background: #f9fafb; padding: 28px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px;">
               <p style="font-size: 15px; color: #1B2B2B; margin: 0 0 16px;">Hi ${name},</p>
               <p style="font-size: 14px; color: #374151; line-height: 1.6; margin: 0 0 16px;">
-                Your VeritaAssure&#8482; account is active. The platform includes VeritaCheck&#8482; for EP performance verification studies, VeritaMap&#8482; for test menu regulatory mapping, VeritaScan&#8482; for inspection readiness, VeritaComp&#8482; for competency management, VeritaStaff&#8482; for personnel tracking, and VeritaLab&#8482; for certificate monitoring.
+                Your VeritaAssure&#174; account is active. The platform includes VeritaCheck&#174; for EP performance verification studies, VeritaMap&#174; for test menu regulatory mapping, VeritaScan&#174; for inspection readiness, VeritaComp&#8482; for competency management, VeritaStaff&#8482; for personnel tracking, and VeritaLab&#8482; for certificate monitoring.
               </p>
               <p style="font-size: 14px; color: #374151; line-height: 1.6; margin: 0 0 20px;">
                 Start with the Getting Started guide to configure your lab in under an hour.
@@ -7080,13 +7080,13 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
               <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;" />
               <p style="font-size: 13px; color: #6B7280; font-weight: 600; margin: 0 0 8px;">Free Downloads</p>
               <p style="font-size: 13px; color: #374151; line-height: 1.6; margin: 0 0 10px;">
-                Before running your first compliance study, download the <strong>VeritaCheck&#8482; Software Validation Template</strong> to validate the tool for use in your lab. Documenting that you have verified the tool suitability for your workflow supports your quality-system and procedure-manual obligations (42 CFR 493.1251, plus your accreditor quality-management standards).
+                Before running your first compliance study, download the <strong>VeritaCheck&#174; Software Validation Template</strong> to validate the tool for use in your lab. Documenting that you have verified the tool suitability for your workflow supports your quality-system and procedure-manual obligations (42 CFR 493.1251, plus your accreditor quality-management standards).
               </p>
               <a href="https://www.veritaslabservices.com/api/downloads/software-validation-template" style="display: inline-block; background: #ffffff; color: #01696F; text-decoration: none; font-size: 13px; font-weight: 600; padding: 10px 20px; border-radius: 6px; border: 1px solid #01696F; margin-right: 8px; margin-bottom: 8px;">Download Validation Template</a>
               <a href="https://www.veritaslabservices.com/api/downloads/clsi-compliance-matrix" style="display: inline-block; background: #ffffff; color: #01696F; text-decoration: none; font-size: 13px; font-weight: 600; padding: 10px 20px; border-radius: 6px; border: 1px solid #01696F; margin-bottom: 8px;">Download CLSI Compliance Matrix</a>
               <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;" />
               <p style="font-size: 11px; color: #9CA3AF; line-height: 1.5; margin: 0;">
-                VeritaAssure&#8482; is a statistical calculation tool. Results require interpretation by a licensed medical director or designee. Not medical advice. No PHI should be entered in any field.
+                VeritaAssure&#174; is a statistical calculation tool. Results require interpretation by a licensed medical director or designee. Not medical advice. No PHI should be entered in any field.
                 Final approval and clinical determination must be made by the laboratory director or designee.
                 Veritas Lab Services, LLC, Massachusetts. info@veritaslabservices.com
               </p>
@@ -7117,7 +7117,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         ? escape(selectedPlan)
         : `${escape(selectedPlan)} (selected) -> ${escape(responsePlan)} (effective, inherited from owner)`;
       resend.emails.send({
-        from: "VeritaAssure\u2122 <info@veritaslabservices.com>",
+        from: "VeritaAssure\u00AE <info@veritaslabservices.com>",
         // Business inbox, not Michael's personal Gmail (Michael 2026-10-20: "Lets have those go to info@").
         to: [SIGNUP_ALERT_TO],
         subject: `[VeritaAssure] New signup: ${safe(name)} (${flowTag} / ${safe(responsePlan)})`,
@@ -11136,17 +11136,17 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            from: "VeritaAssure™ <info@veritaslabservices.com>",
+            from: "VeritaAssure® <info@veritaslabservices.com>",
             to: normalizedEmail,
-            subject: `You've been invited to join ${labName} on VeritaAssure™`,
+            subject: `You've been invited to join ${labName} on VeritaAssure®`,
             html: `
               <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px">
-                <h2 style="color:#01696F">VeritaAssure™</h2>
-                <p style="font-size:15px;color:#1B2B2B;line-height:1.6">${inviterName} has invited you to join <strong>${labName}</strong> on VeritaAssure™ as a team member${role === "admin" ? " with admin rights" : ""}.</p>
+                <h2 style="color:#01696F">VeritaAssure®</h2>
+                <p style="font-size:15px;color:#1B2B2B;line-height:1.6">${inviterName} has invited you to join <strong>${labName}</strong> on VeritaAssure® as a team member${role === "admin" ? " with admin rights" : ""}.</p>
                 <a href="${FRONTEND_URL}/join?token=${inviteToken}" style="display:inline-block;background:#01696F;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;margin:16px 0">Accept Invitation</a>
                 <p style="font-size:13px;color:#6B7280;margin-top:16px">This invitation will expire in 30 days.</p>
                 <hr style="border:none;border-top:1px solid #eee;margin:24px 0"/>
-                <p style="color:#999;font-size:12px">VeritaAssure™ | Veritas Lab Services, LLC<br/>veritaslabservices.com</p>
+                <p style="color:#999;font-size:12px">VeritaAssure® | Veritas Lab Services, LLC<br/>veritaslabservices.com</p>
               </div>
             `,
           }),
@@ -11483,18 +11483,18 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            from: "VeritaAssure™ <info@veritaslabservices.com>",
+            from: "VeritaAssure® <info@veritaslabservices.com>",
             to: normalizedEmail,
             subject: `Set up your VeritaAssure staff login for ${labName}`,
             html: `
               <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px">
-                <h2 style="color:#01696F">VeritaAssure™ staff login</h2>
+                <h2 style="color:#01696F">VeritaAssure® staff login</h2>
                 <p style="font-size:15px;color:#1B2B2B;line-height:1.6">${inviterName} at <strong>${labName}</strong> has set up a VeritaAssure staff login for ${techName}.</p>
                 <p style="font-size:15px;color:#1B2B2B;line-height:1.6">Set a password to take competency quizzes, sign policies, and view your records, all from your phone.</p>
                 <a href="${FRONTEND_URL}/join?token=${inviteToken}" style="display:inline-block;background:#01696F;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;margin:16px 0">Set up access</a>
                 <p style="font-size:13px;color:#6B7280;margin-top:16px">This invitation expires in 30 days.</p>
                 <hr style="border:none;border-top:1px solid #eee;margin:24px 0"/>
-                <p style="color:#999;font-size:12px">VeritaAssure™ | Veritas Lab Services, LLC<br/>veritaslabservices.com</p>
+                <p style="color:#999;font-size:12px">VeritaAssure® | Veritas Lab Services, LLC<br/>veritaslabservices.com</p>
               </div>
             `,
           }),
@@ -12081,7 +12081,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
       // Title block (rows 1-3)
       ws.mergeCells("A1:I1");
-      ws.getCell("A1").value = `VeritaCheck\u2122 Studies Summary: ${labName}`;
+      ws.getCell("A1").value = `VeritaCheck\u00AE Studies Summary: ${labName}`;
       ws.getCell("A1").font = { name: "Calibri", bold: true, size: 14, color: { argb: "FF01696F" } };
       ws.getCell("A1").alignment = { vertical: "middle", horizontal: "left" };
       ws.getRow(1).height = 22;
@@ -12207,7 +12207,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       // Footer row
       const footerRowNum = 5 + Math.max(userStudies.length, 1) + 1;
       ws.mergeCells(`A${footerRowNum}:I${footerRowNum}`);
-      ws.getCell(`A${footerRowNum}`).value = "VeritaAssure\u2122 | VeritaCheck\u2122 | Confidential, For Internal Lab Use Only";
+      ws.getCell(`A${footerRowNum}`).value = "VeritaAssure\u00AE | VeritaCheck\u00AE | Confidential, For Internal Lab Use Only";
       ws.getCell(`A${footerRowNum}`).font = { name: "Calibri", italic: true, size: 8, color: { argb: "FF7A7974" } };
       ws.getCell(`A${footerRowNum}`).alignment = { vertical: "middle", horizontal: "center" };
 
@@ -12232,7 +12232,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const safeLabName = String(labName).replace(/[^a-zA-Z0-9_\- ]/g, "").trim().replace(/\s+/g, "_").slice(0, 60) || "Laboratory";
       const filename = `VeritaCheck_Studies_${safeLabName}_${exportDate}.xlsx`;
 
-      applyLicenseToExcelJS(wb, licenseCtxFromReq(req, "VeritaCheck™"));
+      applyLicenseToExcelJS(wb, licenseCtxFromReq(req, "VeritaCheck®"));
       const buffer = await wb.xlsx.writeBuffer();
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
       res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
@@ -13642,7 +13642,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            from: "VeritaAssure™ <info@veritaslabservices.com>",
+            from: "VeritaAssure® <info@veritaslabservices.com>",
             to: "info@veritaslabservices.com",
             reply_to: cleanEmail,
             subject: `New live demo request: ${cleanName}${org ? " (" + org + ")" : ""}`,
@@ -13742,7 +13742,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            from: "VeritaAssure™ <info@veritaslabservices.com>",
+            from: "VeritaAssure® <info@veritaslabservices.com>",
             to: "info@veritaslabservices.com",
             reply_to: String(contactEmail).toLowerCase().trim(),
             subject: `New Founding Lab application: ${String(labName).trim()}`,
@@ -14098,7 +14098,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         const userRow = sqlite.prepare("SELECT email, name, clia_lab_name FROM users WHERE id = ?").get(userId) as any;
         const labLabel = labRow?.lab_name || userRow?.clia_lab_name || "Unknown lab";
         await resend.emails.send({
-          from: "VeritaAssure™ <info@veritaslabservices.com>",
+          from: "VeritaAssure® <info@veritaslabservices.com>",
           to: [BUSINESS_NOTICE_TO],
           subject: `New VeritaMap instrument request: ${cleanName}`,
           html: `
@@ -15394,7 +15394,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // like it did before bands existed. Ordered so the response is stable and the
   // All-ages band sorts first within an analyte.
   app.get("/api/labs/:labId/veritamap/maps/:id/analyte-values", authMiddleware, labScopeMiddleware, requireMapInActiveLab, (req: any, res) => {
-    if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap™ subscription required" });
+    if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap® subscription required" });
     const values = (db as any).$client.prepare(
       "SELECT * FROM veritamap_analyte_values WHERE map_id = ? ORDER BY analyte, specimen_type, age_min_days, age_max_days DESC, sex"
     ).all(Number(req.params.id));
@@ -15423,7 +15423,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   }
 
   app.put("/api/labs/:labId/veritamap/maps/:id/analyte-values/:analyte", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritamap'), requireMapInActiveLab, (req: any, res) => {
-    if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap™ subscription required" });
+    if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap® subscription required" });
     const mapId = Number(req.params.id);
     const analyte = safeDecodeParam(req.params.analyte);
     // Band comes from the body and defaults to All-ages, so a client that knows
@@ -15468,7 +15468,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // from the map: the menu lives in veritamap_tests / instrument_tests, and this
   // table only holds the lab-entered values.
   app.delete("/api/labs/:labId/veritamap/maps/:id/analyte-values/:analyte/band", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritamap'), requireMapInActiveLab, (req: any, res) => {
-    if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap™ subscription required" });
+    if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap® subscription required" });
     const mapId = Number(req.params.id);
     const analyte = safeDecodeParam(req.params.analyte);
     const parsed = parseBand(req.body);
@@ -15505,7 +15505,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // review date and who recorded it; the values themselves live in
   // critical_low/critical_high (entered via the normal PUT).
   app.post("/api/labs/:labId/veritamap/maps/:id/analyte-values/:analyte/mec-review", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritamap'), requireMapInActiveLab, (req: any, res) => {
-    if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap™ subscription required" });
+    if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap® subscription required" });
     const mapId = Number(req.params.id);
     const analyte = safeDecodeParam(req.params.analyte);
     const { reviewed_at, recorded_by } = req.body || {};
@@ -15538,7 +15538,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // POST attest-ref: director-or-designee attestation on the lab-entered
   // reference range per 42 CFR 493.1253. Locks the ref fields.
   app.post("/api/labs/:labId/veritamap/maps/:id/analyte-values/:analyte/attest-ref", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritamap'), requireMapInActiveLab, (req: any, res) => {
-    if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap™ subscription required" });
+    if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap® subscription required" });
     const mapId = Number(req.params.id);
     const analyte = safeDecodeParam(req.params.analyte);
     const { attested_by, attested_title } = req.body || {};
@@ -15573,7 +15573,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // change requiring re-verification). Audited; attestation fields cleared so
   // a stale attestation can never cover new values.
   app.post("/api/labs/:labId/veritamap/maps/:id/analyte-values/:analyte/unlock-ref", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritamap'), requireMapInActiveLab, (req: any, res) => {
-    if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap™ subscription required" });
+    if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap® subscription required" });
     const role = req.scope?.role;
     if (role !== "owner" && role !== "admin") {
       return res.status(403).json({ error: "Only the lab owner or an admin can unlock an attested reference range" });
@@ -15602,7 +15602,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
   // GET amr-values
   app.get("/api/labs/:labId/veritamap/maps/:id/amr-values", authMiddleware, labScopeMiddleware, requireMapInActiveLab, (req: any, res) => {
-    if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap™ subscription required" });
+    if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap® subscription required" });
     const values = (db as any).$client.prepare(
       "SELECT * FROM veritamap_amr_values WHERE map_id = ? ORDER BY analyte, instrument_id, specimen_type"
     ).all(Number(req.params.id));
@@ -15683,7 +15683,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   }
 
   app.put("/api/labs/:labId/veritamap/maps/:id/amr-values/:instId/:analyte", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritamap'), requireMapInActiveLab, (req: any, res) => {
-    if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap™ subscription required" });
+    if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap® subscription required" });
     const mapId = Number(req.params.id);
     const instrumentId = Number(req.params.instId);
     const analyte = safeDecodeParam(req.params.analyte);
@@ -15702,7 +15702,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // POST attest-amr / unlock-amr: same 493.1253 attestation flow as the
   // reference range, scoped per instrument because AMR is per instrument.
   app.post("/api/labs/:labId/veritamap/maps/:id/amr-values/:instId/:analyte/attest", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritamap'), requireMapInActiveLab, (req: any, res) => {
-    if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap™ subscription required" });
+    if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap® subscription required" });
     const mapId = Number(req.params.id);
     const instrumentId = Number(req.params.instId);
     const analyte = safeDecodeParam(req.params.analyte);
@@ -15733,7 +15733,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   });
 
   app.post("/api/labs/:labId/veritamap/maps/:id/amr-values/:instId/:analyte/unlock", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritamap'), requireMapInActiveLab, (req: any, res) => {
-    if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap™ subscription required" });
+    if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap® subscription required" });
     const role = req.scope?.role;
     if (role !== "owner" && role !== "admin") {
       return res.status(403).json({ error: "Only the lab owner or an admin can unlock an attested AMR" });
@@ -16945,7 +16945,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const map = userCanAccessMap(req.params.id, req);
     if (!map) return res.status(404).json({ error: "Map not found" });
-    if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap\u2122 subscription required" });
+    if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap\u00AE subscription required" });
 
     // Reconcile orphans on every export. This is the safety net: even if the
     // boot-time migration didn't run (e.g. just-deployed instance, or this
@@ -17524,7 +17524,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
                     firstSheet: 0, activeTab: 0, visibility: "visible" }];
 
       // Write to buffer
-      applyLicenseToExcelJS(wb, licenseCtxFromReq(req, "VeritaMap™"));
+      applyLicenseToExcelJS(wb, licenseCtxFromReq(req, "VeritaMap®"));
       const buffer = await wb.xlsx.writeBuffer();
       const safeName = (map.name || "Map").replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
       const date = labToday();
@@ -17544,7 +17544,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // ── VERITAMAP ANALYTE VALUES ─────────────────────────────────────────────
   // GET all analyte values for a map
   app.get("/api/veritamap/maps/:id/analyte-values", authMiddleware, (req: any, res) => {
-    if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap\u2122 subscription required" });
+    if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap\u00AE subscription required" });
     const mapId = Number(req.params.id);
     const values = (db as any).$client.prepare(
       "SELECT * FROM veritamap_analyte_values WHERE map_id = ? ORDER BY analyte"
@@ -17559,7 +17559,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const lockErr = refLockConflict(Number(req.params.id), safeDecodeParam(req.params.analyte), req.body);
       if (lockErr) return res.status(409).json({ error: lockErr });
     }
-    if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap\u2122 subscription required" });
+    if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap\u00AE subscription required" });
     const mapId = Number(req.params.id);
     const analyte = safeDecodeParam(req.params.analyte);
     const dataUserId = req.ownerUserId ?? req.user.userId;
@@ -17597,7 +17597,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
   // GET all AMR values for a map
   app.get("/api/veritamap/maps/:id/amr-values", authMiddleware, (req: any, res) => {
-    if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap\u2122 subscription required" });
+    if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap\u00AE subscription required" });
     const mapId = Number(req.params.id);
     const values = (db as any).$client.prepare(
       "SELECT * FROM veritamap_amr_values WHERE map_id = ? ORDER BY analyte, instrument_id, specimen_type"
@@ -17607,7 +17607,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
   // PUT (upsert) AMR values for a specific instrument + analyte
   app.put("/api/veritamap/maps/:id/amr-values/:instId/:analyte", authMiddleware, requireWriteAccess, requireModuleEdit('veritamap'), (req: any, res) => {
-    if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap\u2122 subscription required" });
+    if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap\u00AE subscription required" });
     const mapId = Number(req.params.id);
     const instrumentId = Number(req.params.instId);
     const analyte = safeDecodeParam(req.params.analyte);
@@ -17643,7 +17643,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // cross-lab rows. resolveLegacyLabId threads the LabSwitcher's active lab
   // so the displayed list matches the NavBar.
   app.get("/api/veritascan/scans", authMiddleware, (req: any, res) => {
-    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan\u2122 subscription required" });
+    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan\u00AE subscription required" });
     const labId = resolveLegacyLabId(req);
     if (!labId) return res.json([]);
     const scans = (db as any).$client.prepare(
@@ -17690,7 +17690,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
   // Create new scan
   app.post("/api/veritascan/scans", authMiddleware, requireWriteAccess, requireModuleEdit('veritascan'), (req: any, res) => {
-    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan\u2122 subscription required" });
+    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan\u00AE subscription required" });
     const { name } = req.body;
     if (!name?.trim()) return res.status(400).json({ error: "Scan name required" });
     const now = new Date().toISOString();
@@ -17716,7 +17716,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
   // Delete scan
   app.delete("/api/veritascan/scans/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritascan'), (req: any, res) => {
-    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan\u2122 subscription required" });
+    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan\u00AE subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const scan = userCanAccessScan(req.params.id, req);
     if (!scan) return res.status(404).json({ error: "Scan not found" });
@@ -17740,7 +17740,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // ownership check via req.ownerUserId resolves correctly in single-lab.
 
   app.get("/api/labs/:labId/veritascan/scans", authMiddleware, labScopeMiddleware, (req: any, res) => {
-    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan\u2122 subscription required" });
+    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan\u00AE subscription required" });
     const scans = (db as any).$client.prepare(
       "SELECT id, name, created_at, updated_at, is_teaching FROM veritascan_scans WHERE lab_id = ? ORDER BY updated_at DESC"
     ).all(req.scope.labId);
@@ -17773,7 +17773,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   });
 
   app.post("/api/labs/:labId/veritascan/scans", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritascan'), (req: any, res) => {
-    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan\u2122 subscription required" });
+    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan\u00AE subscription required" });
     const { name } = req.body;
     if (!name?.trim()) return res.status(400).json({ error: "Scan name required" });
     const now = new Date().toISOString();
@@ -17786,7 +17786,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   });
 
   app.delete("/api/labs/:labId/veritascan/scans/:id", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritascan'), (req: any, res) => {
-    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan\u2122 subscription required" });
+    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan\u00AE subscription required" });
     const scan = (db as any).$client.prepare("SELECT id FROM veritascan_scans WHERE id = ? AND lab_id = ?").get(req.params.id, req.scope.labId);
     if (!scan) return res.status(404).json({ error: "Scan not found" });
     const delScan = (db as any).$client.prepare("SELECT * FROM veritascan_scans WHERE id = ?").get(req.params.id) as any;
@@ -17806,7 +17806,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // lab the owner is also a member of. veritascan_scans.lab_id exists
   // with backfill per db.ts:1963.
   app.get("/api/labs/:labId/veritascan/scans/:id", authMiddleware, labScopeMiddleware, (req: any, res) => {
-    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan\u2122 subscription required" });
+    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan\u00AE subscription required" });
     const scan = (db as any).$client.prepare(
       "SELECT * FROM veritascan_scans WHERE id = ? AND lab_id = ?"
     ).get(req.params.id, req.scope.labId);
@@ -17816,7 +17816,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
   // Lab-scoped scan items list.
   app.get("/api/labs/:labId/veritascan/scans/:id/items", authMiddleware, labScopeMiddleware, (req: any, res) => {
-    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan\u2122 subscription required" });
+    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan\u00AE subscription required" });
     const scan = (db as any).$client.prepare(
       "SELECT id FROM veritascan_scans WHERE id = ? AND lab_id = ?"
     ).get(req.params.id, req.scope.labId);
@@ -17829,7 +17829,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
   // Lab-scoped per-item upsert.
   app.put("/api/labs/:labId/veritascan/scans/:id/items/:itemId", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritascan'), (req: any, res) => {
-    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan\u2122 subscription required" });
+    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan\u00AE subscription required" });
     const scan = (db as any).$client.prepare(
       "SELECT id FROM veritascan_scans WHERE id = ? AND lab_id = ?"
     ).get(req.params.id, req.scope.labId);
@@ -17861,7 +17861,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // are assessed in their OWN section and scored separately; they never enter
   // the standardized readiness denominator (that math is over SCAN_ITEMS only).
   app.get("/api/labs/:labId/veritascan/scans/:id/custom-items", authMiddleware, labScopeMiddleware, (req: any, res) => {
-    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan™ subscription required" });
+    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan® subscription required" });
     const sqlite = (db as any).$client;
     const scan = sqlite.prepare("SELECT id FROM veritascan_scans WHERE id = ? AND lab_id = ?").get(req.params.id, req.scope.labId);
     if (!scan) return res.status(404).json({ error: "Scan not found" });
@@ -17877,7 +17877,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   });
 
   app.put("/api/labs/:labId/veritascan/scans/:id/custom-items/:customItemId", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritascan'), (req: any, res) => {
-    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan™ subscription required" });
+    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan® subscription required" });
     const sqlite = (db as any).$client;
     const scan = sqlite.prepare("SELECT id FROM veritascan_scans WHERE id = ? AND lab_id = ?").get(req.params.id, req.scope.labId);
     if (!scan) return res.status(404).json({ error: "Scan not found" });
@@ -17905,7 +17905,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
   // Lab-scoped bulk item upsert (matches the auto-save PUT pattern).
   app.put("/api/labs/:labId/veritascan/scans/:id/items", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritascan'), (req: any, res) => {
-    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan\u2122 subscription required" });
+    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan\u00AE subscription required" });
     const scan = (db as any).$client.prepare(
       "SELECT id FROM veritascan_scans WHERE id = ? AND lab_id = ?"
     ).get(req.params.id, req.scope.labId);
@@ -17953,7 +17953,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // teaching scan behaves like any other scan except the page offers a
   // read-only Teaching View. Write-gated like every other scan mutation.
   app.put("/api/labs/:labId/veritascan/scans/:id/teaching", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritascan'), (req: any, res) => {
-    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan™ subscription required" });
+    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan® subscription required" });
     const scan = (db as any).$client.prepare(
       "SELECT id FROM veritascan_scans WHERE id = ? AND lab_id = ?"
     ).get(req.params.id, req.scope.labId);
@@ -17975,7 +17975,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // Evidence Library document CRUD. Retire is a soft status flip (never a
   // hard delete) so historical scans that referenced the item stay intact.
   app.get("/api/labs/:labId/veritascan/custom-items", authMiddleware, labScopeMiddleware, (req: any, res) => {
-    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan™ subscription required" });
+    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan® subscription required" });
     const sqlite = (db as any).$client;
     const includeRetired = req.query.include_retired === "1";
     const rows = sqlite.prepare(
@@ -17988,7 +17988,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   });
 
   app.post("/api/labs/:labId/veritascan/custom-items", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritascan"), (req: any, res) => {
-    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan™ subscription required" });
+    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan® subscription required" });
     const v = validateCustomItem(req.body || {});
     if (!v.ok) return res.status(400).json({ error: v.error });
     const sqlite = (db as any).$client;
@@ -18002,7 +18002,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   });
 
   app.patch("/api/labs/:labId/veritascan/custom-items/:id", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritascan"), (req: any, res) => {
-    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan™ subscription required" });
+    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan® subscription required" });
     const sqlite = (db as any).$client;
     const existing = sqlite.prepare(
       "SELECT * FROM veritascan_custom_items WHERE id = ? AND lab_id = ?"
@@ -18054,7 +18054,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // Legacy GET scan-by-id (added for the existing page useQuery that was
   // previously hitting 404). userCanAccessScan checks user_id OR lab_members.
   app.get("/api/veritascan/scans/:id", authMiddleware, (req: any, res) => {
-    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan\u2122 subscription required" });
+    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan\u00AE subscription required" });
     const scan = userCanAccessScan(req.params.id, req);
     if (!scan) return res.status(404).json({ error: "Scan not found" });
     res.json(scan);
@@ -18062,7 +18062,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
   // Get all items for a scan
   app.get("/api/veritascan/scans/:id/items", authMiddleware, (req: any, res) => {
-    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan\u2122 subscription required" });
+    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan\u00AE subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const scan = userCanAccessScan(req.params.id, req);
     if (!scan) return res.status(404).json({ error: "Scan not found" });
@@ -18074,7 +18074,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
   // Upsert item status/notes/owner/due_date
   app.put("/api/veritascan/scans/:id/items/:itemId", authMiddleware, requireWriteAccess, requireModuleEdit('veritascan'), (req: any, res) => {
-    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan\u2122 subscription required" });
+    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan\u00AE subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const scan = userCanAccessScan(req.params.id, req);
     if (!scan) return res.status(404).json({ error: "Scan not found" });
@@ -18099,7 +18099,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
   // Bulk update items (for efficient auto-save)
   app.put("/api/veritascan/scans/:id/items", authMiddleware, requireWriteAccess, requireModuleEdit('veritascan'), (req: any, res) => {
-    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan\u2122 subscription required" });
+    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan\u00AE subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const scan = userCanAccessScan(req.params.id, req);
     if (!scan) return res.status(404).json({ error: "Scan not found" });
@@ -18168,7 +18168,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // no em-dashes in workbook content.
   app.get("/api/labs/:labId/veritascan/documents/export.xlsx", authMiddleware, labScopeMiddleware, async (req: any, res) => {
     if (!hasEvidenceLibraryAccess(req.scope?.lab, req.user)) {
-      return res.status(403).json({ error: "VeritaScan™ subscription required" });
+      return res.status(403).json({ error: "VeritaScan® subscription required" });
     }
     try {
       const sqlite = (db as any).$client;
@@ -18337,7 +18337,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // Query params: ?type=policy, ?status=active, ?q=critical, ?include_archived=1
   app.get("/api/labs/:labId/veritascan/documents", authMiddleware, labScopeMiddleware, (req: any, res) => {
     if (!hasEvidenceLibraryAccess(req.scope?.lab, req.user)) {
-      return res.status(403).json({ error: "VeritaScan™ subscription required" });
+      return res.status(403).json({ error: "VeritaScan® subscription required" });
     }
     const sqlite = (db as any).$client;
     const filters: string[] = ["lab_id = ?"];
@@ -18388,7 +18388,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // auto-fill from lab_document_type_defaults.
   app.post("/api/labs/:labId/veritascan/documents", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritascan"), (req: any, res) => {
     if (!hasEvidenceLibraryAccess(req.scope?.lab, req.user)) {
-      return res.status(403).json({ error: "VeritaScan™ subscription required" });
+      return res.status(403).json({ error: "VeritaScan® subscription required" });
     }
     const { title, description, document_type, display_label, external_url, storage_provider, version, effective_date, review_due_date, owner_user_id } = req.body || {};
     if (!title || typeof title !== "string" || !title.trim()) return res.status(400).json({ error: "title required" });
@@ -18477,7 +18477,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // GET /api/labs/:labId/veritascan/documents/:docId — detail
   app.get("/api/labs/:labId/veritascan/documents/:docId", authMiddleware, labScopeMiddleware, (req: any, res) => {
     if (!hasEvidenceLibraryAccess(req.scope?.lab, req.user)) {
-      return res.status(403).json({ error: "VeritaScan™ subscription required" });
+      return res.status(403).json({ error: "VeritaScan® subscription required" });
     }
     const row = (db as any).$client.prepare(
       "SELECT * FROM lab_documents WHERE id = ? AND lab_id = ?"
@@ -18489,7 +18489,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // PATCH /api/labs/:labId/veritascan/documents/:docId — edit metadata
   app.patch("/api/labs/:labId/veritascan/documents/:docId", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritascan"), (req: any, res) => {
     if (!hasEvidenceLibraryAccess(req.scope?.lab, req.user)) {
-      return res.status(403).json({ error: "VeritaScan™ subscription required" });
+      return res.status(403).json({ error: "VeritaScan® subscription required" });
     }
     const sqlite = (db as any).$client;
     const existing = sqlite.prepare(
@@ -18572,7 +18572,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // DELETE /api/labs/:labId/veritascan/documents/:docId — soft delete only
   app.delete("/api/labs/:labId/veritascan/documents/:docId", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritascan"), (req: any, res) => {
     if (!hasEvidenceLibraryAccess(req.scope?.lab, req.user)) {
-      return res.status(403).json({ error: "VeritaScan™ subscription required" });
+      return res.status(403).json({ error: "VeritaScan® subscription required" });
     }
     const sqlite = (db as any).$client;
     const existing = sqlite.prepare(
@@ -18595,7 +18595,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // GET /api/labs/:labId/veritascan/document-type-defaults — list defaults
   app.get("/api/labs/:labId/veritascan/document-type-defaults", authMiddleware, labScopeMiddleware, (req: any, res) => {
     if (!hasEvidenceLibraryAccess(req.scope?.lab, req.user)) {
-      return res.status(403).json({ error: "VeritaScan™ subscription required" });
+      return res.status(403).json({ error: "VeritaScan® subscription required" });
     }
     const rows = (db as any).$client.prepare(
       "SELECT document_type, default_review_days FROM lab_document_type_defaults WHERE lab_id = ?"
@@ -18607,7 +18607,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // Body: { default_review_days: number | null }
   app.put("/api/labs/:labId/veritascan/document-type-defaults/:type", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritascan"), (req: any, res) => {
     if (!hasEvidenceLibraryAccess(req.scope?.lab, req.user)) {
-      return res.status(403).json({ error: "VeritaScan™ subscription required" });
+      return res.status(403).json({ error: "VeritaScan® subscription required" });
     }
     if (!VALID_DOCUMENT_TYPES.includes(req.params.type)) {
       return res.status(400).json({ error: `type must be one of: ${VALID_DOCUMENT_TYPES.join(", ")}` });
@@ -18639,7 +18639,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // Body: { checklist_item_id: number, notes?: string }
   app.post("/api/labs/:labId/veritascan/documents/:docId/links", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritascan"), (req: any, res) => {
     if (!hasEvidenceLibraryAccess(req.scope?.lab, req.user)) {
-      return res.status(403).json({ error: "VeritaScan™ subscription required" });
+      return res.status(403).json({ error: "VeritaScan® subscription required" });
     }
     const sqlite = (db as any).$client;
     const doc = sqlite.prepare(
@@ -18678,7 +18678,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // DELETE /api/labs/:labId/veritascan/documents/:docId/links/:linkId
   app.delete("/api/labs/:labId/veritascan/documents/:docId/links/:linkId", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritascan"), (req: any, res) => {
     if (!hasEvidenceLibraryAccess(req.scope?.lab, req.user)) {
-      return res.status(403).json({ error: "VeritaScan™ subscription required" });
+      return res.status(403).json({ error: "VeritaScan® subscription required" });
     }
     const sqlite = (db as any).$client;
     const link = sqlite.prepare(
@@ -18703,7 +18703,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // from the static SCAN_ITEMS list.
   app.get("/api/labs/:labId/veritascan/documents/:docId/links", authMiddleware, labScopeMiddleware, (req: any, res) => {
     if (!hasEvidenceLibraryAccess(req.scope?.lab, req.user)) {
-      return res.status(403).json({ error: "VeritaScan™ subscription required" });
+      return res.status(403).json({ error: "VeritaScan® subscription required" });
     }
     const sqlite = (db as any).$client;
     const doc = sqlite.prepare(
@@ -18729,7 +18729,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // POST /api/labs/:labId/veritascan/documents/:docId/cross-links
   app.post("/api/labs/:labId/veritascan/documents/:docId/cross-links", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritascan"), (req: any, res) => {
     if (!hasEvidenceLibraryAccess(req.scope?.lab, req.user)) {
-      return res.status(403).json({ error: "VeritaScan™ subscription required" });
+      return res.status(403).json({ error: "VeritaScan® subscription required" });
     }
     const sqlite = (db as any).$client;
     const docId = Number(req.params.docId);
@@ -18779,7 +18779,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // DELETE /api/labs/:labId/veritascan/documents/:docId/cross-links/:linkId
   app.delete("/api/labs/:labId/veritascan/documents/:docId/cross-links/:linkId", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritascan"), (req: any, res) => {
     if (!hasEvidenceLibraryAccess(req.scope?.lab, req.user)) {
-      return res.status(403).json({ error: "VeritaScan™ subscription required" });
+      return res.status(403).json({ error: "VeritaScan® subscription required" });
     }
     const sqlite = (db as any).$client;
     const existing = sqlite.prepare(
@@ -18800,7 +18800,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // GET /api/labs/:labId/veritascan/documents/:docId/cross-links
   app.get("/api/labs/:labId/veritascan/documents/:docId/cross-links", authMiddleware, labScopeMiddleware, (req: any, res) => {
     if (!hasEvidenceLibraryAccess(req.scope?.lab, req.user)) {
-      return res.status(403).json({ error: "VeritaScan™ subscription required" });
+      return res.status(403).json({ error: "VeritaScan® subscription required" });
     }
     const sqlite = (db as any).$client;
     const rows = sqlite.prepare(
@@ -18816,7 +18816,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // documents are attached to this policy / program / study / citation?"
   app.get("/api/labs/:labId/veritascan/cross-links/by-target/:module/:entityId", authMiddleware, labScopeMiddleware, (req: any, res) => {
     if (!hasEvidenceLibraryAccess(req.scope?.lab, req.user)) {
-      return res.status(403).json({ error: "VeritaScan™ subscription required" });
+      return res.status(403).json({ error: "VeritaScan® subscription required" });
     }
     const mod = String(req.params.module);
     if (!(VALID_XLINK_MODULES as readonly string[]).includes(mod)) {
@@ -18842,7 +18842,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // overdue-review status without a second round trip per link.
   app.get("/api/labs/:labId/veritascan/coverage", authMiddleware, labScopeMiddleware, (req: any, res) => {
     if (!hasEvidenceLibraryAccess(req.scope?.lab, req.user)) {
-      return res.status(403).json({ error: "VeritaScan™ subscription required" });
+      return res.status(403).json({ error: "VeritaScan® subscription required" });
     }
     const includeArchived = req.query.include_archived === "1";
     const rows = (db as any).$client.prepare(
@@ -18863,7 +18863,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // Phase C consumes this for the Inspection Proof view.
   app.get("/api/labs/:labId/veritascan/checklist/items/:itemId/documents", authMiddleware, labScopeMiddleware, (req: any, res) => {
     if (!hasEvidenceLibraryAccess(req.scope?.lab, req.user)) {
-      return res.status(403).json({ error: "VeritaScan™ subscription required" });
+      return res.status(403).json({ error: "VeritaScan® subscription required" });
     }
     const itemId = Number(req.params.itemId);
     if (!Number.isInteger(itemId) || itemId <= 0) {
@@ -18894,7 +18894,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // /labs/B/.../scan/{scanIdA} gets a 404 instead of a Lab A export
   // stamped with Lab A's identity.
   const veritascanExcelHandler = async (req: any, res: any) => {
-    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan\u2122 subscription required" });
+    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan\u00AE subscription required" });
     const scanId = req.params.scanId;
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const scan = userCanAccessScan(scanId, req);
@@ -19233,7 +19233,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       wb.views = [{ x: 0, y: 0, width: 10000, height: 20000,
                     firstSheet: 0, activeTab: 0, visibility: "visible" }];
 
-      applyLicenseToExcelJS(wb, licenseCtxFromReq(req, "VeritaScan™"));
+      applyLicenseToExcelJS(wb, licenseCtxFromReq(req, "VeritaScan®"));
       const buffer = await wb.xlsx.writeBuffer();
       const safeName = (scan.name || "Scan").replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
       const date = labToday();
@@ -19252,7 +19252,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
   // ── VERITASCAN PDF EXPORT ─────────────────────────────────────────────────
   const veritascanPdfHandler = async (req: any, res: any) => {
-    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan\u2122 subscription required" });
+    if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan\u00AE subscription required" });
     const { scanId, type } = req.params;
     if (type !== "executive" && type !== "full") return res.status(400).json({ error: "type must be 'executive' or 'full'" });
 
@@ -19647,12 +19647,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
     if (resend) {
       await resend.emails.send({
-        from: "VeritaCheck\u2122 <info@veritaslabservices.com>",
+        from: "VeritaCheck\u00AE <info@veritaslabservices.com>",
         to: user.email,
-        subject: "Reset your VeritaCheck\u2122 password",
+        subject: "Reset your VeritaCheck\u00AE password",
         html: `
           <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px">
-            <h2 style="color:#0e8a82">VeritaCheck\u2122 Password Reset</h2>
+            <h2 style="color:#0e8a82">VeritaCheck\u00AE Password Reset</h2>
             <p>Hi ${user.name},</p>
             <p>We received a request to reset your password. Click the button below to set a new password. This link expires in 4 hours.</p>
             <a href="${resetUrl}" style="display:inline-block;background:#0e8a82;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;margin:16px 0">Reset Password</a>
@@ -20460,7 +20460,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       wb.views = [{ x: 0, y: 0, width: 10000, height: 20000,
                     firstSheet: 0, activeTab: 0, visibility: "visible" }];
 
-      applyLicenseToExcelJS(wb, licenseCtxFromReq(req, "VeritaCheck™"));
+      applyLicenseToExcelJS(wb, licenseCtxFromReq(req, "VeritaCheck®"));
       const buffer = await wb.xlsx.writeBuffer();
       const safeName = tracker.instrument_name.replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
       const filename = `CUMSUM_${safeName}_${labToday()}.xlsx`;
@@ -21426,7 +21426,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       wb.views = [{ x: 0, y: 0, width: 10000, height: 20000,
                     firstSheet: 0, activeTab: 0, visibility: "visible" }];
 
-      applyLicenseToExcelJS(wb, licenseCtxFromReq(req, "VeritaMap™"));
+      applyLicenseToExcelJS(wb, licenseCtxFromReq(req, "VeritaMap®"));
       const buffer = await wb.xlsx.writeBuffer();
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
       res.setHeader("Content-Disposition", `attachment; filename="VeritaMap_Demo_Riverside_Regional.xlsx"`);
@@ -23570,8 +23570,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     }
     if (normalized.kind !== 'cfr493') {
       const reasons: Record<string, string> = {
-        cap:   "CAP item IDs are not automatically linked yet. Open VeritaCheck™ to find your most recent study for the same analyte.",
-        tjc:   "TJC RFI numbers are not automatically linked yet. Open VeritaCheck™ to find your most recent study for the cited area.",
+        cap:   "CAP item IDs are not automatically linked yet. Open VeritaCheck® to find your most recent study for the same analyte.",
+        tjc:   "TJC RFI numbers are not automatically linked yet. Open VeritaCheck® to find your most recent study for the cited area.",
         other: "This standard reference is not in a format VeritaCheck links to today.",
       };
       return res.json({ match: null, normalizedKey: normalized.raw, reason: reasons[normalized.kind] });
@@ -29758,7 +29758,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const dismissed = new Set((sqlite.prepare("SELECT member_key FROM competency_group_dismissals WHERE lab_id = ?").all(labId) as any[]).map((r) => r.member_key));
     const suggestions = suggestGroups(instruments, new Set(groupsByInst.keys()), dismissed).map((set) => ({
       key: groupKey(set.map((m) => m.id)), members: set,
-      reason: "Same make and model family on your VeritaMap™",
+      reason: "Same make and model family on your VeritaMap®",
     }));
     res.json({ instruments: instruments.map((i: any) => ({ ...i, groupId: groupsByInst.get(i.id)?.groupId ?? null })), groups, suggestions });
   });
@@ -29769,7 +29769,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const ids: number[] = Array.from(new Set((Array.isArray(req.body?.instrumentIds) ? req.body.instrumentIds : []).map((x: any) => Number(x)).filter(Number.isFinite)));
     const instruments = labMethodInstruments(sqlite, labId);
     const members = ids.map((id) => instruments.find((i: any) => i.id === id));
-    if (members.some((m) => !m)) return res.status(404).json({ error: "Every analyzer in a group must be on this lab's VeritaMap™." });
+    if (members.some((m) => !m)) return res.status(404).json({ error: "Every analyzer in a group must be on this lab's VeritaMap®." });
     const grouped = loadInstrumentGroups(sqlite, labId);
     const taken = (members as any[]).find((m) => grouped.has(m.id));
     if (taken) return res.status(409).json({ error: `${taken.name} is already in the "${grouped.get(taken.id)!.name}" group. Split that group first.` });
@@ -31758,18 +31758,18 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          from: "VeritaAssure\u2122 <info@veritaslabservices.com>",
+          from: "VeritaAssure\u00AE <info@veritaslabservices.com>",
           to: email.toLowerCase(),
-          subject: `You've been invited to join ${labName} on VeritaAssure\u2122`,
+          subject: `You've been invited to join ${labName} on VeritaAssure\u00AE`,
           html: `
             <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px">
-              <h2 style="color:#01696F">VeritaAssure\u2122</h2>
-              <p style="font-size:15px;color:#1B2B2B;line-height:1.6">${inviterName} has invited you to join <strong>${labName}</strong> on VeritaAssure\u2122 as a team member.</p>
+              <h2 style="color:#01696F">VeritaAssure\u00AE</h2>
+              <p style="font-size:15px;color:#1B2B2B;line-height:1.6">${inviterName} has invited you to join <strong>${labName}</strong> on VeritaAssure\u00AE as a team member.</p>
               <p style="font-size:14px;color:#374151;line-height:1.6">Click the link below to create your account and get started:</p>
               <a href="${FRONTEND_URL}/join?token=${inviteToken}" style="display:inline-block;background:#01696F;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;margin:16px 0">Accept Invitation</a>
               <p style="font-size:13px;color:#6B7280;margin-top:16px">This invitation will expire in 30 days.</p>
               <hr style="border:none;border-top:1px solid #eee;margin:24px 0"/>
-              <p style="color:#999;font-size:12px">VeritaAssure\u2122 | Veritas Lab Services, LLC<br/>veritaslabservices.com</p>
+              <p style="color:#999;font-size:12px">VeritaAssure\u00AE | Veritas Lab Services, LLC<br/>veritaslabservices.com</p>
             </div>
           `,
         }),
@@ -37897,7 +37897,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       aboutBody('Citations shown for each policy are the most-relevant standards by frequency in the crosswalk, capped at five per accrediting body. They are not an exhaustive list of every standard that touches a given policy, and they are not a determination that naming the cited standards in a written policy will satisfy any inspector. The laboratory remains responsible for the content, approval, version control, signed review, staff training, and operational implementation of every policy it adopts; naming a policy in the Notes column is not evidence the policy exists, is current, or is being followed.');
       aboutBody('What governs in conflict: the accrediting body\u2019s own published manual (TJC standards, CAP All Common / Laboratory General / specialty checklists, AABB Standards for Blood Banks and Transfusion Services, COLA Accreditation Manual), the federal regulation (42 CFR 493 and the relevant 21 CFR / 29 CFR / 10 CFR / 45 CFR sections), the laboratory\u2019s own signed and dated SOP / policy manual, and the inspector\u2019s findings always govern over this workbook. If there is any disagreement between this workbook and those source documents, those source documents are correct.');
       aboutBody('The laboratory director (or designee) is responsible for confirming the policy list matches the laboratory\u2019s actual service mix and state requirements, for the currency of every policy named in the Notes column, and for any operational, personnel, or accreditation decision taken on the basis of this workbook.');
-      aboutBody('VeritaAssure\u2122 / Veritas Lab Services does not: certify accreditation readiness; act as a Business Associate or HIPAA-covered entity for the contents of this workbook; file, renew, or correspond with TJC, CAP, AABB, COLA, CMS, OSHA, NRC, FDA, or any state agency on the laboratory\u2019s behalf; perform mock inspections or gap analyses unless separately engaged; warrant that adopting every policy in this workbook will result in a passing inspection; or provide legal, regulatory, or clinical advice. This workbook is an informational and operational planning aid only.');
+      aboutBody('VeritaAssure\u00AE / Veritas Lab Services does not: certify accreditation readiness; act as a Business Associate or HIPAA-covered entity for the contents of this workbook; file, renew, or correspond with TJC, CAP, AABB, COLA, CMS, OSHA, NRC, FDA, or any state agency on the laboratory\u2019s behalf; perform mock inspections or gap analyses unless separately engaged; warrant that adopting every policy in this workbook will result in a passing inspection; or provide legal, regulatory, or clinical advice. This workbook is an informational and operational planning aid only.');
       aboutBlank();
 
       aboutSection('Lab identity');
@@ -38679,7 +38679,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       aboutBody('Citations shown for each policy are the most-relevant standards by frequency in the crosswalk, capped at five per accrediting body. They are not an exhaustive list of every standard that touches a given policy, and they are not a determination that naming the cited standards in a written policy will satisfy any inspector. The laboratory remains responsible for the content, approval, version control, signed review, staff training, and operational implementation of every policy it adopts; naming a policy in the Notes column is not evidence the policy exists, is current, or is being followed.');
       aboutBody('What governs in conflict: the accrediting body’s own published manual (TJC standards, CAP All Common / Laboratory General / specialty checklists, AABB Standards for Blood Banks and Transfusion Services, COLA Accreditation Manual), the federal regulation (42 CFR 493 and the relevant 21 CFR / 29 CFR / 10 CFR / 45 CFR sections), the laboratory’s own signed and dated SOP / policy manual, and the inspector’s findings always govern over this workbook. If there is any disagreement between this workbook and those source documents, those source documents are correct.');
       aboutBody('The laboratory director (or designee) is responsible for confirming the policy list matches the laboratory’s actual service mix and state requirements, for the currency of every policy named in the Notes column, and for any operational, personnel, or accreditation decision taken on the basis of this workbook.');
-      aboutBody('VeritaAssure™ / Veritas Lab Services does not: certify accreditation readiness; act as a Business Associate or HIPAA-covered entity for the contents of this workbook; file, renew, or correspond with TJC, CAP, AABB, COLA, CMS, OSHA, NRC, FDA, or any state agency on the laboratory’s behalf; perform mock inspections or gap analyses unless separately engaged; warrant that adopting every policy in this workbook will result in a passing inspection; or provide legal, regulatory, or clinical advice. This workbook is an informational and operational planning aid only.');
+      aboutBody('VeritaAssure® / Veritas Lab Services does not: certify accreditation readiness; act as a Business Associate or HIPAA-covered entity for the contents of this workbook; file, renew, or correspond with TJC, CAP, AABB, COLA, CMS, OSHA, NRC, FDA, or any state agency on the laboratory’s behalf; perform mock inspections or gap analyses unless separately engaged; warrant that adopting every policy in this workbook will result in a passing inspection; or provide legal, regulatory, or clinical advice. This workbook is an informational and operational planning aid only.');
       aboutBlank();
       aboutSection('Lab identity');
       aboutBody(`This workbook was prepared for ${labName} (CLIA ${cliaNumber}). The accrediting body on file for this lab is ${aoLabel}. The lab name and CLIA appear on every printed page header and footer.`);

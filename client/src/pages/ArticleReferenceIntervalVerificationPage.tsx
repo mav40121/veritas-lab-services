@@ -238,7 +238,7 @@ export default function ArticleReferenceIntervalVerificationPage() {
               patients it actually serves, or whether it can only show the box it came in.
             </p>
             <Callout type="info">
-              VeritaCheck&trade; runs reference interval verification as a study type built on the CLSI approach, so the 20-sample comparison and the
+              VeritaCheck&reg; runs reference interval verification as a study type built on the CLSI approach, so the 20-sample comparison and the
               pass or fail against the proposed interval are calculated and documented in a report ready for laboratory director or designee
               sign-off. The principle holds with any tool or none: a reference interval is a claim about your patients, and the record that
               protects the laboratory is the verification behind it.

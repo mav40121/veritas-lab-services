@@ -239,7 +239,7 @@ export default function CumsumPage() {
   if (!isLoggedIn) {
     return (
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-16 text-center">
-        <h2 className="text-2xl font-serif font-bold mb-4">VeritaCheck™ CUMSUM</h2>
+        <h2 className="text-2xl font-serif font-bold mb-4">VeritaCheck® CUMSUM</h2>
         <p className="text-muted-foreground mb-4">Sign in to access the CUMSUM study type for monitoring PTT heparin sensitivity across lot changes.</p>
         <Button asChild><Link href="/login">Sign In</Link></Button>
       </div>
@@ -453,9 +453,9 @@ export default function CumsumPage() {
       <section className="border-b border-border bg-primary/5">
         <div className="container-default py-14">
           <div className="flex items-center gap-2 mb-4">
-            <Badge className="bg-primary/10 text-primary border-0">VeritaCheck™</Badge>
+            <Badge className="bg-primary/10 text-primary border-0">VeritaCheck®</Badge>
           </div>
-          <h1 className="font-serif text-4xl font-bold mb-3">VeritaCheck™ CUMSUM</h1>
+          <h1 className="font-serif text-4xl font-bold mb-3">VeritaCheck® CUMSUM</h1>
           <p className="text-muted-foreground text-lg max-w-2xl leading-relaxed">
             Persistent cumulative summation tracking for PTT lot-to-lot changes. Monitor heparin sensitivity across the instrument lifecycle. ACCEPT when |CumSum| ≤ 7.0 seconds, ACTION REQUIRED otherwise.
           </p>
@@ -467,7 +467,7 @@ export default function CumsumPage() {
           <Button onClick={() => setShowNewTracker(true)} disabled={showNewTracker || readOnly} title={readOnly ? "Resubscribe to add new records" : undefined}>
             <PlusCircle size={14} className="mr-1.5" />New Tracker
           </Button>
-          <Button asChild variant="outline"><Link href="/veritacheck">Back to VeritaCheck™</Link></Button>
+          <Button asChild variant="outline"><Link href="/veritacheck">Back to VeritaCheck®</Link></Button>
         </div>
 
         {showNewTracker && (

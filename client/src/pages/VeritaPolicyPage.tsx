@@ -256,7 +256,7 @@ export default function VeritaPolicyPage() {
         <div className="container-default text-center">
           <h2 className="text-2xl font-bold text-foreground mb-4">Ready for your next {profile.surveyTerm}?</h2>
           <p className="text-muted-foreground mb-8 max-w-xl mx-auto">
-            VeritaDC&#8482; is included with all paid VeritaAssure&#8482; plans. No additional cost.
+            VeritaDC&#8482; is included with all paid VeritaAssure&#174; plans. No additional cost.
           </p>
           <div className="flex flex-wrap gap-3 justify-center">
             <Link href={labRoute("/veritapolicy-app")}>

@@ -367,7 +367,7 @@ export default function VeritaResponseAppPage() {
           "Click New Finding and pick the type: inspection finding, PT failure, internal event (NCE) or FDA product deviation. QC and alternative-assessment escalations arrive here on their own.",
           "For an inspection finding, pick the accreditor and enter the date its clock starts (receipt, inspection or final report); the due date follows. An FDA deviation gets its Form FDA 3486 report-by date from the three reportability questions.",
           "Work the plan: immediate action and containment, root cause, corrective action, preventive action and the monitoring plan, with the completion date.",
-          "Check the linked evidence (VeritaScan™ documents, the VeritaQC™ corrective action, and your most recent VeritaCheck™ study when the finding cites a 42 CFR 493 standard), then generate the response document: a CMS-2567-compatible plan of correction, or the CAP, TJC, COLA, AABB or internal event report.",
+          "Check the linked evidence (VeritaScan® documents, the VeritaQC™ corrective action, and your most recent VeritaCheck® study when the finding cites a 42 CFR 493 standard), then generate the response document: a CMS-2567-compatible plan of correction, or the CAP, TJC, COLA, AABB or internal event report.",
           "The medical director or designee signs off, and the 30, 60 and 90-day effectiveness checks confirm the fix held."
         ]}
       />
