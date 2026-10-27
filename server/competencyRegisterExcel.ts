@@ -7,9 +7,13 @@
 // of duty-change reevaluations. Follows the customer-facing workbook standard in CLAUDE.md §6 (About sheet first,
 // lab identity in three layers, brand colors, protection). The row builder (buildCompetencyRegisterRows) is pure and
 // exercised by scripts/verify-competency-register.ts.
+// BUG-069 (Michael Q34 = 1, 2026-10-27): status and next due follow each person's per-method sign-offs (a person is due
+// when any assigned method is due), and a "By Method" sheet lists every method's own dates.
 
-import { deriveCompetencyStatus, patientTestingClearance } from "./competencyReminders";
+import { deriveCompetencyStatus, patientTestingClearance, isoDayOf } from "./competencyReminders";
 import { addMonthsIso, isWaivedComplexity } from "./competencySchedule";
+import type { PersonMethodClock } from "./competencyMethodClock";
+import { MILESTONE_LABEL } from "@shared/competencySignoff";
 
 export interface RegisterEmployeeInput {
   id: number;
@@ -73,6 +77,18 @@ export interface RegisterRow {
   openReevaluations: number;
 }
 
+export interface MethodRow {
+  name: string;
+  method: string;
+  complexity: string;
+  initialSigned: string | null;
+  lastSignoff: string;               // "6-month, 2026-09-15" or "" when none
+  nextItem: string;
+  nextDue: string | null;
+  lateCeiling: string | null;         // the latest the next competency may be done (TJC/NYS tolerance)
+  status: string;                     // Overdue | Remediation open | Initial not signed | Due in 30 days | Due in 90 days | Current
+}
+
 export interface ReevaluationRow {
   name: string;
   testSystem: string;
@@ -100,9 +116,9 @@ const complexityLabel = (c?: string | null): string => {
 };
 
 export function buildCompetencyRegisterRows(
-  input: { employees: RegisterEmployeeInput[]; testSystems: Map<number, string[]>; events: RegisterEventInput[]; nys: boolean },
+  input: { employees: RegisterEmployeeInput[]; testSystems: Map<number, string[]>; events: RegisterEventInput[]; nys: boolean; methods?: Map<number, PersonMethodClock[]> },
   today: Date,
-): { personnel: RegisterRow[]; reevaluations: ReevaluationRow[] } {
+): { personnel: RegisterRow[]; byMethod: MethodRow[]; reevaluations: ReevaluationRow[] } {
   const openByEmp = new Map<number, number>();
   for (const ev of input.events) {
     if (!ev.resolved_at) openByEmp.set(ev.employee_id, (openByEmp.get(ev.employee_id) || 0) + 1);
@@ -112,7 +128,7 @@ export function buildCompetencyRegisterRows(
     const name = personName(e);
     nameById.set(e.id, name);
     const waived = isWaivedComplexity(e.highest_complexity);
-    const st = deriveCompetencyStatus(e, today);
+    const st = deriveCompetencyStatus(e, today, input.methods?.get(e.id));
     const clr = patientTestingClearance(e);
     const initial = ymd(e.initial_completed_at);
     // The 1st annual is due 12 months after the initial (the first year of patient testing). The stored column is
@@ -154,6 +170,34 @@ export function buildCompetencyRegisterRows(
   });
   personnel.sort((a, b) => a.name.localeCompare(b.name));
 
+  // By Method: each assigned method's own clock (BUG-069).
+  const todayIso = isoDayOf(today);
+  const byMethod: MethodRow[] = [];
+  for (const e of input.employees) {
+    for (const m of input.methods?.get(e.id) || []) {
+      const c = m.clock;
+      const last = c.last;
+      const days = c.nextDue?.targetDate ? Math.round((Date.parse(`${c.nextDue.targetDate}T00:00:00Z`) - Date.parse(`${todayIso}T00:00:00Z`)) / 86400000) : null;
+      const status = !m.signed ? "Initial not signed"
+        : c.needsRemediation ? "Remediation open"
+        : c.overdue ? "Overdue"
+        : days != null && days <= 30 ? "Due in 30 days"
+        : days != null && days <= 90 ? "Due in 90 days" : "Current";
+      byMethod.push({
+        name: nameById.get(e.id) || personName(e),
+        method: m.name,
+        complexity: complexityLabel(m.complexity),
+        initialSigned: ymd(c.initialDate),
+        lastSignoff: last ? `${last.milestone ? MILESTONE_LABEL[last.milestone as keyof typeof MILESTONE_LABEL] : "Sign-off"}, ${ymd(last.signedDate) || ""}${last.determination && last.determination !== "pass" ? ` (${last.determination})` : ""}` : "",
+        nextItem: !m.signed ? "Initial competency (before patient testing on this method)" : `${MILESTONE_LABEL[c.nextMilestone]} competency`,
+        nextDue: ymd(c.nextDue?.targetDate || null),
+        lateCeiling: ymd(c.nextDue?.latest || null),
+        status,
+      });
+    }
+  }
+  byMethod.sort((a, b) => a.name.localeCompare(b.name) || a.method.localeCompare(b.method));
+
   // Real duty changes only: items closed as "recorded at setup" were never a change in duties.
   const reevaluations: ReevaluationRow[] = input.events
     .filter((ev) => ev.resolution_type !== "setup" && nameById.has(ev.employee_id))
@@ -169,11 +213,11 @@ export function buildCompetencyRegisterRows(
         : ev.resolution_type === "not_a_change" ? (ev.resolution_reason || "") : "Reevaluated (competency assessment on file).",
     }))
     .sort((a, b) => (a.status === "Open" ? 0 : 1) - (b.status === "Open" ? 0 : 1) || a.name.localeCompare(b.name) || String(a.addedOn).localeCompare(String(b.addedOn)));
-  return { personnel, reevaluations };
+  return { personnel, byMethod, reevaluations };
 }
 
 export async function generateCompetencyRegisterExcel(
-  rows: { personnel: RegisterRow[]; reevaluations: ReevaluationRow[] },
+  rows: { personnel: RegisterRow[]; byMethod?: MethodRow[]; reevaluations: ReevaluationRow[] },
   identity: { labName: string; cliaNumber: string },
   exportedOn: Date,
 ): Promise<Buffer> {
@@ -227,6 +271,7 @@ export async function generateCompetencyRegisterExcel(
   put("This register lists every active testing person on the laboratory's VeritaStaff™ roster and the dates of each competency milestone the laboratory has recorded, with what is due next. It is the laboratory's own record, built from data entered in VeritaStaff™ and VeritaComp™. It is not a regulatory determination; the laboratory director or designee is responsible for its accuracy.", "p");
   put("How to use it", "h");
   put("Testing Personnel: one row per person. Hire date, whether the person was recorded as a new hire or as existing staff, orientation/training (date, who documented it, a link to the record), the initial competency and its evaluator, whether the person is cleared for patient testing, each due and completed date, what is due next, and the test systems assigned. Filter the Status column to see who is overdue or coming due.", "p");
+  put("By Method: one row per person and assigned method (an analyzer, or a group of analyzers the laboratory signs as one). Since competencies are signed method by method, each method runs its own clock from its own signed initial; this sheet shows each method's last sign-off, what is due next, its due date and the latest date it may be done. A person's status on Testing Personnel is the earliest of these.", "p");
   put("Duty-Change Reevaluations: each test system added to a person after their setup, whether they have been reevaluated on it, and items the laboratory closed as not a change with its reason.", "p");
   put("How the timing works", "h");
   put("1. Orientation and training are completed and documented before the initial competency.", "p");
@@ -297,6 +342,23 @@ export async function generateCompetencyRegisterExcel(
   }
   ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: headers.length } };
   await ws.protect(exportPwd, lockedProtect);
+
+  // ── By Method (BUG-069) ──
+  const bm = wb.addWorksheet("By Method", { headerFooter, views: [{ state: "frozen", xSplit: 1, ySplit: 1 }], pageSetup: { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0 } });
+  const bh = ["Name", "Method", "Complexity", "Initial signed", "Last sign-off", "Next item", "Next due", "Latest allowed", "Status"];
+  styleHeader(bm, bh, [24, 36, 12, 12, 26, 34, 12, 12, 18]);
+  const byMethod = rows.byMethod || [];
+  for (const m of byMethod) {
+    bm.addRow([m.name, m.method, m.complexity, toDate(m.initialSigned), m.lastSignoff || null, m.nextItem, toDate(m.nextDue), toDate(m.lateCeiling), m.status]);
+  }
+  styleBody(bm, bh.length, [4, 7, 8], 9, (v) =>
+    v === "Current" ? green : v === "Overdue" ? red : v.startsWith("Due in") || v === "Remediation open" || v === "Initial not signed" ? amber : gray);
+  if (byMethod.length === 0) {
+    bm.getCell("A2").value = "No methods are assigned to testing personnel yet (VeritaStaff, assigned test systems).";
+    bm.getCell("A2").font = { name: "Calibri", size: 10, italic: true, color: { argb: gray } };
+  }
+  bm.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: bh.length } };
+  await bm.protect(exportPwd, lockedProtect);
 
   // ── Duty-Change Reevaluations ──
   const dc = wb.addWorksheet("Duty-Change Reevaluations", { headerFooter, views: [{ state: "frozen", xSplit: 1, ySplit: 1 }], pageSetup: { orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0 } });
