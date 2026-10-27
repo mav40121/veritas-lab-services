@@ -3733,6 +3733,38 @@ sqlite.exec(`
     const taskCols = (sqlite.prepare("PRAGMA table_info(veritatrack_tasks)").all() as { name: string }[]).map(c => c.name);
     if (!taskCols.includes("owner_employee_id")) sqlite.exec("ALTER TABLE veritatrack_tasks ADD COLUMN owner_employee_id INTEGER");
     if (!taskCols.includes("owner_email")) sqlite.exec("ALTER TABLE veritatrack_tasks ADD COLUMN owner_email TEXT");
+    // #111 (Michael 2026-10-26): Weekly. Day-based interval; NULL for the month-based frequencies.
+    if (!taskCols.includes("frequency_days")) sqlite.exec("ALTER TABLE veritatrack_tasks ADD COLUMN frequency_days INTEGER");
+  } catch {
+    // fresh DB: CREATE TABLE above handled it
+  }
+}
+
+// #110 (Michael 2026-10-26): per-lab VeritaTrack categories. The built-in categories stay for every lab; a lab's
+// owners and admins add their own here, rename them, or retire them (a retired category stays on the tasks that use
+// it but is no longer offered for new ones).
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS veritatrack_categories (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    retired INTEGER NOT NULL DEFAULT 0,
+    created_by INTEGER,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(lab_id, name)
+  );
+  CREATE INDEX IF NOT EXISTS idx_vtrack_categories_lab ON veritatrack_categories(lab_id);
+`);
+// PRAGMA migration block per the New DB Table Rule (CLAUDE.md §8).
+{
+  try {
+    const cols = (sqlite.prepare("PRAGMA table_info(veritatrack_categories)").all() as { name: string }[]).map(c => c.name);
+    if (cols.length > 0) {
+      if (!cols.includes("retired")) sqlite.exec("ALTER TABLE veritatrack_categories ADD COLUMN retired INTEGER NOT NULL DEFAULT 0");
+      if (!cols.includes("created_by")) sqlite.exec("ALTER TABLE veritatrack_categories ADD COLUMN created_by INTEGER");
+      if (!cols.includes("updated_at")) sqlite.exec("ALTER TABLE veritatrack_categories ADD COLUMN updated_at TEXT");
+    }
   } catch {
     // fresh DB: CREATE TABLE above handled it
   }

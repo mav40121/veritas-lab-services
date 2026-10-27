@@ -6,7 +6,8 @@ import type { LicenseContext } from "@shared/licenseText";
 import { resolveRowForMutation, resolveLegacyLabId } from "./labAccessGuard";
 import { blockNonOperatorSeat } from "./seatAccess";
 import { preserveMapLink, applyMapSignoffWriteback, deriveMapLink, analyteFromTaskName } from "./veritatrackMapSync";
-import { labLocalDate } from "./dateLocal";
+import { labLocalDate, labToday, addLabDays, labTimeZoneById, setRequestLabTz } from "./dateLocal";
+import { DEFAULT_TRACK_CATEGORIES, cleanCategoryName, isDefaultTrackCategory, categoryNameProblem } from "@shared/veritatrackCategories";
 import { labWideCorrelation } from "./labWideCorrelation";
 import { exportAllPlanBypass } from "./exportAllContext";
 
@@ -38,8 +39,14 @@ function trackLicenseCtx(req: any): LicenseContext {
   return { licensee: "Demo Preview", email: ipHash, plan: "demo", issueDate: labLocalDate(new Date().toISOString()) };
 }
 
+// Parking lot #111 (Michael 2026-10-26): Weekly. A weekly task has frequency_months = 0 and frequency_days = 7; every
+// other frequency is whole months (frequency_days NULL).
+function frequencyToDays(freq: string): number | null {
+  return freq === "Weekly" ? 7 : null;
+}
 function frequencyToMonths(freq: string): number {
   switch (freq) {
+    case "Weekly":    return 0;
     case "Monthly":   return 1;
     case "Quarterly": return 3;
     case "Biannual":  return 6;
@@ -49,10 +56,15 @@ function frequencyToMonths(freq: string): number {
   }
 }
 
-export function nextDue(lastDate: string | null, frequencyMonths: number): string {
-  const base = lastDate ? new Date(lastDate) : new Date();
-  base.setMonth(base.getMonth() + frequencyMonths);
-  return base.toISOString().split("T")[0];
+// Next due date: pure calendar arithmetic on the lab's day (addLabDays), so a month end clamps (Jan 31 + 1 month =
+// Feb 28/29; Date.setMonth gave Mar 3) and the server's own zone never matters. Weekly counts days (#111).
+export function nextDue(lastDate: string | null, frequencyMonths: number, frequencyDays?: number | null): string {
+  const base = lastDate ? String(lastDate).slice(0, 10) : labToday();
+  return frequencyDays && frequencyDays > 0 ? addLabDays(base, frequencyDays) : addLabDays(base, 0, frequencyMonths || 0);
+}
+// How many days before the due date a task counts as "due soon": 30, or a third of a short interval (2 days for weekly).
+export function dueSoonWindow(t: { frequency_days?: number | null }): number {
+  return t.frequency_days && t.frequency_days > 0 ? Math.min(30, Math.max(1, Math.floor(t.frequency_days / 3))) : 30;
 }
 
 // #6 (2026-07-11): whole-day difference between today and a YYYY-MM-DD date,
@@ -60,15 +72,15 @@ export function nextDue(lastDate: string | null, frequencyMonths: number): strin
 // UTC-midnight due date against a live timestamp, so in any US (negative-UTC-
 // offset) timezone a task read "overdue" on its actual due date and the
 // Due-Today bucket was always empty. Date-only makes due-today == 0.
-export function daysUntilDateOnly(dateStr: string): number {
-  const todayStr = new Date().toISOString().slice(0, 10);
+export function daysUntilDateOnly(dateStr: string, todayStr: string = labToday()): number {
+  // The lab's day (per-lab time zone, 2026-10-26), not the UTC day.
   return Math.round((Date.parse(dateStr + "T00:00:00Z") - Date.parse(todayStr + "T00:00:00Z")) / 86400000);
 }
 
-function taskStatus(nextDueDate: string): "overdue" | "due_soon" | "current" | "not_started" {
+function taskStatus(nextDueDate: string, soonDays = 30): "overdue" | "due_soon" | "current" | "not_started" {
   const daysUntil = daysUntilDateOnly(nextDueDate);
   if (daysUntil < 0) return "overdue";
-  if (daysUntil <= 30) return "due_soon";
+  if (daysUntil <= soonDays) return "due_soon";
   return "current";
 }
 
@@ -101,6 +113,34 @@ export function registerVeritaTrackRoutes(
         "INSERT INTO veritatrack_audit (lab_id, task_id, signoff_id, event, detail, by_user_id) VALUES (?,?,?,?,?,?)"
       ).run(opts.labId ?? null, opts.taskId ?? null, opts.signoffId ?? null, opts.event, opts.detail ?? null, opts.byUserId ?? null);
     } catch { /* audit must never break the operation */ }
+  }
+
+  // Per-lab time zone (2026-10-26): the legacy /api/veritatrack/* routes resolve their lab with resolveLegacyLabId, not
+  // the lab-scope middleware, so set the request's lab clock here. Returns the lab's calendar day.
+  function labDayFor(labId: number | null | undefined): string {
+    const tz = labTimeZoneById(sqlite, labId);
+    setRequestLabTz(tz);
+    return labToday(tz);
+  }
+
+  // #110: the lab's own categories (veritatrack_categories), retired ones included.
+  function labCategories(labId: number | null | undefined): { id: number; name: string; retired: number }[] {
+    if (!labId) return [];
+    try {
+      return sqlite.prepare("SELECT id, name, retired FROM veritatrack_categories WHERE lab_id = ? ORDER BY name COLLATE NOCASE").all(labId) as any[];
+    } catch { return []; }
+  }
+  // Why a task cannot be saved with this category, or null. A built-in or an active lab category is fine; the task's
+  // current category is always fine, so editing a task on a retired category does not force a change.
+  function taskCategoryProblem(labId: number | null | undefined, category: unknown, currentCategory?: string | null): string | null {
+    const c = cleanCategoryName(category);
+    if (!c) return null; // blank falls back to "Other"
+    if (currentCategory != null && c === currentCategory) return null;
+    if (isDefaultTrackCategory(c)) return null;
+    const row = labCategories(labId).find((r) => r.name === c);
+    if (!row) return `"${c}" is not one of this lab's VeritaTrack categories.`;
+    if (row.retired) return `"${c}" has been retired for this lab.`;
+    return null;
   }
 
   function hasTrackAccess(user: any, lab?: any) {
@@ -187,14 +227,13 @@ export function registerVeritaTrackRoutes(
       const tasks = sqlite.prepare(
         "SELECT * FROM veritatrack_tasks WHERE lab_id = ? AND active = 1 ORDER BY category, name"
       ).all(labId) as any[];
-      const today = new Date();
-      const todayStr = today.toISOString().split("T")[0];
+      const todayStr = labDayFor(labId);
       const buckets: any = { overdue: [], due_today: [], due_this_week: [], due_next_30: [] };
       for (const t of tasks) {
         const last = sqlite.prepare(
           "SELECT * FROM veritatrack_signoffs WHERE task_id = ? ORDER BY completed_date DESC LIMIT 1"
         ).get(t.id) as any;
-        const nextDueDate = last ? nextDue(last.completed_date, t.frequency_months) : null;
+        const nextDueDate = last ? nextDue(last.completed_date, t.frequency_months, t.frequency_days) : null;
         // Not-started tasks (no signoff yet) appear as overdue so the
         // director sees them immediately rather than having them sit
         // invisible until their first signoff.
@@ -202,9 +241,8 @@ export function registerVeritaTrackRoutes(
           buckets.overdue.push({ ...t, last_signoff: null, next_due: null, status: "not_started" });
           continue;
         }
-        const due = new Date(nextDueDate!);
-        const daysUntil = Math.floor((due.getTime() - today.getTime()) / 86400000);
-        const enriched = { ...t, last_signoff: last, next_due: nextDueDate, status: taskStatus(nextDueDate!) };
+        const daysUntil = daysUntilDateOnly(nextDueDate!, todayStr);
+        const enriched = { ...t, last_signoff: last, next_due: nextDueDate, status: taskStatus(nextDueDate!, dueSoonWindow(t)) };
         if (daysUntil < 0) buckets.overdue.push(enriched);
         else if (nextDueDate === todayStr) buckets.due_today.push(enriched);
         else if (daysUntil <= 7) buckets.due_this_week.push(enriched);
@@ -443,6 +481,7 @@ export function registerVeritaTrackRoutes(
     if (!hasTrackAccess(req.user, trackLab(req))) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
     const labId = resolveLegacyLabId((db as any).$client, req);
     if (!labId) return res.json([]);
+    labDayFor(labId);
     const tasks = sqlite.prepare(
       "SELECT * FROM veritatrack_tasks WHERE lab_id = ? AND active = 1 ORDER BY category, name"
     ).all(labId) as any[];
@@ -450,8 +489,8 @@ export function registerVeritaTrackRoutes(
       const last = sqlite.prepare(
         "SELECT * FROM veritatrack_signoffs WHERE task_id = ? ORDER BY completed_date DESC LIMIT 1"
       ).get(t.id) as any;
-      const nextDueDate = last ? nextDue(last.completed_date, t.frequency_months) : null;
-      const status = last ? taskStatus(nextDueDate!) : "not_started";
+      const nextDueDate = last ? nextDue(last.completed_date, t.frequency_months, t.frequency_days) : null;
+      const status = last ? taskStatus(nextDueDate!, dueSoonWindow(t)) : "not_started";
       return { ...t, last_signoff: last || null, next_due: nextDueDate, status };
     });
     res.json(result);
@@ -466,12 +505,13 @@ export function registerVeritaTrackRoutes(
       if (status === 403) return res.status(403).json({ error: "You don't have access to this task's lab" });
       return res.status(404).json({ error: "Task not found" });
     }
+    labDayFor(task.lab_id);
     const signoffs = sqlite.prepare(
       "SELECT * FROM veritatrack_signoffs WHERE task_id = ? ORDER BY completed_date DESC"
     ).all(task.id);
     const last = (signoffs as any[])[0] || null;
-    const nextDueDate = last ? nextDue(last.completed_date, task.frequency_months) : null;
-    res.json({ ...task, signoffs, next_due: nextDueDate, status: last ? taskStatus(nextDueDate!) : "not_started" });
+    const nextDueDate = last ? nextDue(last.completed_date, task.frequency_months, task.frequency_days) : null;
+    res.json({ ...task, signoffs, next_due: nextDueDate, status: last ? taskStatus(nextDueDate!, dueSoonWindow(task)) : "not_started" });
   });
 
   // ── VeritaTrack due-date reminders config (2026-07-26, Longstreth request).
@@ -506,12 +546,14 @@ export function registerVeritaTrackRoutes(
     const { name, category, instrument, owner, owner_employee_id, owner_email, frequency, frequency_months, map_analyte, map_field, notes } = req.body;
     if (!name) return res.status(400).json({ error: "name required" });
     const cleanOwnerEmail = (owner_email && String(owner_email).includes("@")) ? String(owner_email).trim() : null;
-    const freqMonths = frequency_months || frequencyToMonths(frequency || "Monthly");
+    const freqMonths = frequency === "Weekly" ? 0 : (frequency_months || frequencyToMonths(frequency || "Monthly"));
     const now = new Date().toISOString();
     // write-path Shape A (resolver unification PR B): tag via the SAME shared
     // resolveLegacyLabId the tasks list read uses, so write==read in every
     // branch (validated active lab -> default lab -> first membership).
     const newLabId = resolveLegacyLabId(sqlite, req) ?? null;
+    const catProblem = taskCategoryProblem(newLabId, category);
+    if (catProblem) return res.status(400).json({ error: catProblem });
     // Auto-link to the VeritaMap when the caller OMITTED the linkage (both fields
     // undefined) but the category is map-tracked and the analyte matches a live map
     // row. Closes the gap that let bulk-imported Precision Verification tasks land
@@ -523,8 +565,8 @@ export function registerVeritaTrackRoutes(
       if (derived) { ma = derived.map_analyte; mf = derived.map_field; }
     }
     const r = sqlite.prepare(
-      "INSERT INTO veritatrack_tasks (user_id,name,category,instrument,owner,owner_employee_id,owner_email,frequency,frequency_months,map_analyte,map_field,notes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
-    ).run(userId, name, category || "Other", instrument || null, owner || null, owner_employee_id || null, cleanOwnerEmail, frequency || "Monthly", freqMonths, ma || null, mf || null, notes || null, now, now);
+      "INSERT INTO veritatrack_tasks (user_id,name,category,instrument,owner,owner_employee_id,owner_email,frequency,frequency_months,frequency_days,map_analyte,map_field,notes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+    ).run(userId, name, category || "Other", instrument || null, owner || null, owner_employee_id || null, cleanOwnerEmail, frequency || "Monthly", freqMonths, frequencyToDays(frequency || "Monthly"), ma || null, mf || null, notes || null, now, now);
     try {
       sqlite.prepare("UPDATE veritatrack_tasks SET lab_id = ? WHERE id = ?").run(newLabId, r.lastInsertRowid);
     } catch {}
@@ -546,7 +588,9 @@ export function registerVeritaTrackRoutes(
       return res.status(404).json({ error: "Task not found" });
     }
     const { name, category, instrument, owner, owner_employee_id, owner_email, frequency, frequency_months, notes, active } = req.body;
-    const freqMonths = frequency_months || frequencyToMonths(frequency || "Monthly");
+    const catProblem = taskCategoryProblem((existing as any).lab_id, category, (existing as any).category);
+    if (catProblem) return res.status(400).json({ error: catProblem });
+    const freqMonths = frequency === "Weekly" ? 0 : (frequency_months || frequencyToMonths(frequency || "Monthly"));
     // Keep the VeritaMap linkage when the edit form omits map_analyte/map_field,
     // so a routine edit never silently unlinks an imported task from the map.
     const link = preserveMapLink(req.body, existing as any);
@@ -557,8 +601,8 @@ export function registerVeritaTrackRoutes(
       ? ((existing as any).owner_email ?? null)
       : ((owner_email && String(owner_email).includes("@")) ? String(owner_email).trim() : null);
     sqlite.prepare(
-      "UPDATE veritatrack_tasks SET name=?,category=?,instrument=?,owner=?,owner_employee_id=?,owner_email=?,frequency=?,frequency_months=?,map_analyte=?,map_field=?,notes=?,active=?,updated_at=datetime('now') WHERE id=?"
-    ).run(name, category || "Other", instrument || null, owner || null, ownerEmpId, ownerEmailVal, frequency || "Monthly", freqMonths, link.map_analyte, link.map_field, notes || null, active !== false ? 1 : 0, taskId);
+      "UPDATE veritatrack_tasks SET name=?,category=?,instrument=?,owner=?,owner_employee_id=?,owner_email=?,frequency=?,frequency_months=?,frequency_days=?,map_analyte=?,map_field=?,notes=?,active=?,updated_at=datetime('now') WHERE id=?"
+    ).run(name, category || "Other", instrument || null, owner || null, ownerEmpId, ownerEmailVal, frequency || "Monthly", freqMonths, frequencyToDays(frequency || "Monthly"), link.map_analyte, link.map_field, notes || null, active !== false ? 1 : 0, taskId);
     const wasDeactivated = (existing as any).active === 1 && active === false;
     trackAudit({
       labId: (existing as any).lab_id ?? null, taskId,
@@ -786,9 +830,9 @@ export function registerVeritaTrackRoutes(
     const tasks = sqlite.prepare(
       "SELECT * FROM veritatrack_tasks WHERE lab_id = ? AND active = 1"
     ).all(labId) as any[];
-    const now = new Date();
-    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-    const thirtyDays = new Date(now.getTime() + 30 * 86400000);
+    const todayStr = labDayFor(labId);
+    const monthEnd = addLabDays(todayStr.slice(0, 8) + "01", -1, 1); // last day of the lab's month
+    const thirtyDays = addLabDays(todayStr, 30);
     let overdue = 0, dueThisMonth = 0, dueSoon = 0, current = 0, notStarted = 0;
     const overdueItems: any[] = [], dueThisMonthItems: any[] = [], dueSoonItems: any[] = [];
     for (const t of tasks) {
@@ -796,12 +840,11 @@ export function registerVeritaTrackRoutes(
         "SELECT completed_date FROM veritatrack_signoffs WHERE task_id = ? ORDER BY completed_date DESC LIMIT 1"
       ).get(t.id) as any;
       if (!last) { notStarted++; continue; }
-      const nextDueDate = nextDue(last.completed_date, t.frequency_months);
-      const due = new Date(nextDueDate);
-      const daysUntil = daysUntilDateOnly(nextDueDate);
+      const nextDueDate = nextDue(last.completed_date, t.frequency_months, t.frequency_days);
+      const daysUntil = daysUntilDateOnly(nextDueDate, todayStr);
       if (daysUntil < 0) { overdue++; overdueItems.push({ ...t, next_due: nextDueDate, days_overdue: -daysUntil }); }
-      else if (due <= monthEnd) { dueThisMonth++; dueThisMonthItems.push({ ...t, next_due: nextDueDate, days_until: daysUntil }); }
-      else if (due <= thirtyDays) { dueSoon++; dueSoonItems.push({ ...t, next_due: nextDueDate, days_until: daysUntil }); }
+      else if (nextDueDate <= monthEnd) { dueThisMonth++; dueThisMonthItems.push({ ...t, next_due: nextDueDate, days_until: daysUntil }); }
+      else if (nextDueDate <= thirtyDays) { dueSoon++; dueSoonItems.push({ ...t, next_due: nextDueDate, days_until: daysUntil }); }
       else { current++; }
     }
     res.json({ overdue, dueThisMonth, dueSoon, current, notStarted, total: tasks.length, overdueItems, dueThisMonthItems, dueSoonItems });
@@ -890,6 +933,7 @@ export function registerVeritaTrackRoutes(
     // task under user_id across all labs. A surveyor-facing export must never
     // mix labs together.
     const labId = resolveLegacyLabId(sqlite, req);
+    const exportToday = labDayFor(labId);
     const tasks = sqlite.prepare(
       "SELECT * FROM veritatrack_tasks WHERE lab_id = ? AND active = 1 ORDER BY category, name"
     ).all(labId) as any[];
@@ -1003,11 +1047,9 @@ export function registerVeritaTrackRoutes(
       const last = sqlite.prepare(
         "SELECT * FROM veritatrack_signoffs WHERE task_id = ? ORDER BY completed_date DESC LIMIT 1"
       ).get(t.id) as any;
-      const nextDueDate = last ? nextDue(last.completed_date, t.frequency_months) : null;
-      const status = last ? taskStatus(nextDueDate!) : "not_started";
-      const daysUntil = nextDueDate
-        ? Math.floor((new Date(nextDueDate).getTime() - now.getTime()) / 86400000)
-        : null;
+      const nextDueDate = last ? nextDue(last.completed_date, t.frequency_months, t.frequency_days) : null;
+      const status = last ? taskStatus(nextDueDate!, dueSoonWindow(t)) : "not_started";
+      const daysUntil = nextDueDate ? daysUntilDateOnly(nextDueDate, exportToday) : null;
       const daysLabel = daysUntil === null ? "" : daysUntil < 0 ? `${-daysUntil}d overdue` : daysUntil === 0 ? "Due today" : `${daysUntil}d`;
       const statusLabel = status === "overdue" ? "Overdue" : status === "due_soon" ? "Due Soon" : status === "current" ? "Current" : "Not Started";
 
@@ -1076,9 +1118,92 @@ export function registerVeritaTrackRoutes(
     res.send(Buffer.from(buf));
   });
 
+  // ── #110 (Michael 2026-10-26): per-lab categories ──
+  // The list a task form offers: the built-in categories, then the lab's own. `custom` carries every lab category,
+  // retired ones included, with how many active tasks use it (for the manage dialog).
+  function categoriesPayload(labId: number | null | undefined, canEdit: boolean) {
+    const custom = labCategories(labId);
+    const counts = new Map<string, number>();
+    if (labId) {
+      for (const r of sqlite.prepare("SELECT category, COUNT(*) AS n FROM veritatrack_tasks WHERE lab_id = ? AND active = 1 GROUP BY category").all(labId) as any[]) {
+        counts.set(r.category, Number(r.n));
+      }
+    }
+    return {
+      defaults: [...DEFAULT_TRACK_CATEGORIES],
+      custom: custom.map((c) => ({ id: c.id, name: c.name, retired: !!c.retired, task_count: counts.get(c.name) || 0 })),
+      active: [...DEFAULT_TRACK_CATEGORIES, ...custom.filter((c) => !c.retired).map((c) => c.name)],
+      can_edit: canEdit,
+    };
+  }
+
+  app.get("/api/veritatrack/categories", authMiddleware, (req: any, res) => {
+    if (blockNonOperatorSeat(req, res)) return;
+    if (!hasTrackAccess(req.user, trackLab(req))) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
+    res.json(categoriesPayload(resolveLegacyLabId(sqlite, req), false));
+  });
+
   // ── MULTI-LAB Tier 2 — Phase 3.7b: lab-scoped VeritaTrack entry endpoints ──
   const labScopeMiddleware = (app as any).locals?.labScopeMiddleware;
   if (labScopeMiddleware) {
+    const isOwnerOrAdmin = (req: any) => req.scope?.role === "owner" || req.scope?.role === "admin";
+
+    app.get("/api/labs/:labId/veritatrack/categories", authMiddleware, labScopeMiddleware, (req: any, res) => {
+      if (!hasTrackAccess(req.user, trackLab(req))) return res.status(403).json({ error: "VeritaTrack™ subscription required" });
+      res.json(categoriesPayload(req.scope.labId, isOwnerOrAdmin(req)));
+    });
+
+    // Add a category (owners and admins). Adding a name the lab retired brings it back.
+    app.post("/api/labs/:labId/veritatrack/categories", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritatrack'), (req: any, res) => {
+      if (!hasTrackAccess(req.user, trackLab(req))) return res.status(403).json({ error: "VeritaTrack™ subscription required" });
+      if (!isOwnerOrAdmin(req)) return res.status(403).json({ error: "Only a lab owner or admin can change categories." });
+      const labId = req.scope.labId;
+      const name = cleanCategoryName(req.body?.name);
+      const existing = labCategories(labId);
+      const retiredMatch = existing.find((c) => c.retired && c.name.toLowerCase() === name.toLowerCase());
+      if (retiredMatch) {
+        sqlite.prepare("UPDATE veritatrack_categories SET retired = 0, updated_at = datetime('now') WHERE id = ?").run(retiredMatch.id);
+        trackAudit({ labId, taskId: null, event: "category_restored", detail: retiredMatch.name, byUserId: req.user?.userId ?? null });
+        return res.json(categoriesPayload(labId, true));
+      }
+      const problem = categoryNameProblem(name, existing.map((c) => c.name));
+      if (problem) return res.status(400).json({ error: problem });
+      sqlite.prepare("INSERT INTO veritatrack_categories (lab_id, name, created_by) VALUES (?, ?, ?)").run(labId, name, req.user?.userId ?? null);
+      trackAudit({ labId, taskId: null, event: "category_added", detail: name, byUserId: req.user?.userId ?? null });
+      res.json(categoriesPayload(labId, true));
+    });
+
+    // Rename and/or retire a lab category (owners and admins). A rename moves the lab's tasks to the new name, with an
+    // audit row on each task; retiring leaves the tasks on it and stops offering it for new tasks.
+    app.put("/api/labs/:labId/veritatrack/categories/:id", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritatrack'), (req: any, res) => {
+      if (!hasTrackAccess(req.user, trackLab(req))) return res.status(403).json({ error: "VeritaTrack™ subscription required" });
+      if (!isOwnerOrAdmin(req)) return res.status(403).json({ error: "Only a lab owner or admin can change categories." });
+      const labId = req.scope.labId;
+      const row = sqlite.prepare("SELECT id, name, retired FROM veritatrack_categories WHERE id = ? AND lab_id = ?").get(Number(req.params.id), labId) as any;
+      if (!row) return res.status(404).json({ error: "Category not found" });
+      const byUserId = req.user?.userId ?? null;
+      const wantName = req.body?.name === undefined ? row.name : cleanCategoryName(req.body.name);
+      const wantRetired = req.body?.retired === undefined ? !!row.retired : !!req.body.retired;
+      if (wantName !== row.name) {
+        const problem = categoryNameProblem(wantName, labCategories(labId).filter((c) => c.id !== row.id).map((c) => c.name));
+        if (problem) return res.status(400).json({ error: problem });
+      }
+      sqlite.transaction(() => {
+        if (wantName !== row.name) {
+          const moved = sqlite.prepare("SELECT id FROM veritatrack_tasks WHERE lab_id = ? AND category = ?").all(labId, row.name) as any[];
+          sqlite.prepare("UPDATE veritatrack_categories SET name = ?, updated_at = datetime('now') WHERE id = ?").run(wantName, row.id);
+          sqlite.prepare("UPDATE veritatrack_tasks SET category = ?, updated_at = datetime('now') WHERE lab_id = ? AND category = ?").run(wantName, labId, row.name);
+          trackAudit({ labId, taskId: null, event: "category_renamed", detail: `${row.name} -> ${wantName}`, byUserId });
+          for (const t of moved) trackAudit({ labId, taskId: t.id, event: "task_updated", detail: `Category renamed from ${row.name} to ${wantName}`, byUserId });
+        }
+        if (wantRetired !== !!row.retired) {
+          sqlite.prepare("UPDATE veritatrack_categories SET retired = ?, updated_at = datetime('now') WHERE id = ?").run(wantRetired ? 1 : 0, row.id);
+          trackAudit({ labId, taskId: null, event: wantRetired ? "category_retired" : "category_restored", detail: wantName, byUserId });
+        }
+      })();
+      res.json(categoriesPayload(labId, true));
+    });
+
     app.get("/api/labs/:labId/veritatrack/tasks", authMiddleware, labScopeMiddleware, (req: any, res) => {
       if (!hasTrackAccess(req.user, trackLab(req))) return res.status(403).json({ error: "VeritaTrack™ subscription required" });
       const tasks = sqlite.prepare(
@@ -1088,8 +1213,8 @@ export function registerVeritaTrackRoutes(
         const last = sqlite.prepare(
           "SELECT * FROM veritatrack_signoffs WHERE task_id = ? ORDER BY completed_date DESC LIMIT 1"
         ).get(t.id) as any;
-        const nextDueDate = last ? nextDue(last.completed_date, t.frequency_months) : null;
-        const status = last ? taskStatus(nextDueDate!) : "not_started";
+        const nextDueDate = last ? nextDue(last.completed_date, t.frequency_months, t.frequency_days) : null;
+        const status = last ? taskStatus(nextDueDate!, dueSoonWindow(t)) : "not_started";
         return { ...t, last_signoff: last || null, next_due: nextDueDate, status };
       });
       res.json(result);
@@ -1099,12 +1224,14 @@ export function registerVeritaTrackRoutes(
       if (!hasTrackAccess(req.user, trackLab(req))) return res.status(403).json({ error: "VeritaTrack™ subscription required" });
       const { name, category, instrument, owner, frequency, frequency_months, map_analyte, map_field, notes } = req.body || {};
       if (!name?.trim()) return res.status(400).json({ error: "name required" });
+      const catProblem = taskCategoryProblem(req.scope.labId, category);
+      if (catProblem) return res.status(400).json({ error: catProblem });
       // #54: the client sends only the `frequency` STRING (e.g. "Quarterly"),
       // not frequency_months. Deriving months from the string (as the legacy
       // create + the edit path already do) keeps the two columns consistent;
       // the old `Number(frequency_months || 1)` defaulted every create to 1,
       // so a Quarterly task rendered as Monthly in the list until re-saved.
-      const freqMonths = Number(frequency_months) || frequencyToMonths(frequency || "Monthly");
+      const freqMonths = frequency === "Weekly" ? 0 : (Number(frequency_months) || frequencyToMonths(frequency || "Monthly"));
       const now = new Date().toISOString();
       const ownerRow = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(req.scope.labId) as any;
       const userIdForRow = ownerRow?.owner_user_id ?? req.userId;
@@ -1118,8 +1245,8 @@ export function registerVeritaTrackRoutes(
         if (derived) { ma = derived.map_analyte; mf = derived.map_field; }
       }
       const r = sqlite.prepare(
-        "INSERT INTO veritatrack_tasks (user_id,lab_id,name,category,instrument,owner,frequency,frequency_months,map_analyte,map_field,notes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)"
-      ).run(userIdForRow, req.scope.labId, name, category || "Other", instrument || null, owner || null, frequency || "Monthly", freqMonths, ma || null, mf || null, notes || null, now, now);
+        "INSERT INTO veritatrack_tasks (user_id,lab_id,name,category,instrument,owner,frequency,frequency_months,frequency_days,map_analyte,map_field,notes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+      ).run(userIdForRow, req.scope.labId, name, category || "Other", instrument || null, owner || null, frequency || "Monthly", freqMonths, frequencyToDays(frequency || "Monthly"), ma || null, mf || null, notes || null, now, now);
       trackAudit({ labId: req.scope.labId, taskId: Number(r.lastInsertRowid), event: "task_created", detail: `${name} (${frequency || "Monthly"})`, byUserId: req.user?.userId ?? null });
       res.json(sqlite.prepare("SELECT * FROM veritatrack_tasks WHERE id = ?").get(r.lastInsertRowid));
     });
@@ -1134,9 +1261,9 @@ export function registerVeritaTrackRoutes(
       // and Due Soon cards are not blank on the multi-lab path (they previously
       // read dashboard.dueThisMonth / dashboard.dueSoon against a snake_case,
       // dueThisMonth-less response).
-      const now = new Date();
-      const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-      const thirtyDays = new Date(now.getTime() + 30 * 86400000);
+      const todayStr = labDayFor(req.scope.labId);
+      const monthEnd = addLabDays(todayStr.slice(0, 8) + "01", -1, 1); // last day of the lab's month
+      const thirtyDays = addLabDays(todayStr, 30);
       let overdue = 0, dueThisMonth = 0, dueSoon = 0, current = 0, notStarted = 0;
       const overdueItems: any[] = [], dueThisMonthItems: any[] = [], dueSoonItems: any[] = [];
       for (const t of tasks) {
@@ -1144,12 +1271,11 @@ export function registerVeritaTrackRoutes(
           "SELECT completed_date FROM veritatrack_signoffs WHERE task_id = ? ORDER BY completed_date DESC LIMIT 1"
         ).get(t.id) as any;
         if (!last) { notStarted++; continue; }
-        const nextDueDate = nextDue(last.completed_date, t.frequency_months);
-        const due = new Date(nextDueDate);
-        const daysUntil = daysUntilDateOnly(nextDueDate);
+        const nextDueDate = nextDue(last.completed_date, t.frequency_months, t.frequency_days);
+        const daysUntil = daysUntilDateOnly(nextDueDate, todayStr);
         if (daysUntil < 0) { overdue++; overdueItems.push({ ...t, next_due: nextDueDate, days_overdue: -daysUntil }); }
-        else if (due <= monthEnd) { dueThisMonth++; dueThisMonthItems.push({ ...t, next_due: nextDueDate, days_until: daysUntil }); }
-        else if (due <= thirtyDays) { dueSoon++; dueSoonItems.push({ ...t, next_due: nextDueDate, days_until: daysUntil }); }
+        else if (nextDueDate <= monthEnd) { dueThisMonth++; dueThisMonthItems.push({ ...t, next_due: nextDueDate, days_until: daysUntil }); }
+        else if (nextDueDate <= thirtyDays) { dueSoon++; dueSoonItems.push({ ...t, next_due: nextDueDate, days_until: daysUntil }); }
         else { current++; }
       }
       res.json({ overdue, dueThisMonth, dueSoon, current, notStarted, total: tasks.length, overdueItems, dueThisMonthItems, dueSoonItems });
