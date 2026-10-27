@@ -49,6 +49,10 @@ test.describe("VeritaMap: shared date entry on the map cells", () => {
     let target = inputs.first();
     for (let i = 0; i < n; i++) { const v = await inputs.nth(i).inputValue(); if (!v) { target = inputs.nth(i); break; } }
 
+    // Whatever happens below, the sandbox cell ends empty: a run that failed between the first save and step 4 used
+    // to leave its date behind, which threw off the cal ver counts the next runs check (2026-10-27).
+    let cleared = false;
+    try {
     // 1. Typed without slashes -> masked -> saved as ISO on blur. A fixed past
     //    date, so step 3 (Today) is always a change.
     await target.click();
@@ -79,5 +83,16 @@ test.describe("VeritaMap: shared date entry on the map cells", () => {
     await page.getByTestId("date-entry-clear").click();
     await expect.poll(() => puts.length, { timeout: 8_000 }).toBe(3);
     await expect(target).toHaveValue("");
+    cleared = true;
+    } finally {
+      const first = puts[0];
+      const field = first ? Object.keys(first.body || {}).find((k) => /^last_/.test(k)) : undefined;
+      if (!cleared && first && field) {
+        await page.request.put(first.url, {
+          headers: { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json" },
+          data: { [field]: null },
+        }).catch(() => {});
+      }
+    }
   });
 });
