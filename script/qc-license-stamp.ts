@@ -1,6 +1,6 @@
 // Local QC script for the license-stamp work. Builds a representative
 // stamped artefact for each of the 9 generator paths the task identifies and
-// writes them to /home/user/workspace/license-stamp-qc/. Open each in a
+// writes them to $OUT (default ./license-stamp-qc/). Open each in a
 // viewer and confirm: (a) footer band on every page, (b) Copyright + License
 // Terms section visible (PDF appendix or XLSX About sheet), (c) author
 // metadata set, (d) no overlap with existing layout.
@@ -10,36 +10,18 @@
 // Skips paths that require a database (VeritaPolicy, VeritaTrack) or live
 // session data; for those, use the dev server.
 
-import { writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-const OUT_DIR = "/home/user/workspace/license-stamp-qc";
+// 2026-10-27: was /home/user/workspace/license-stamp-qc (a folder from the old machine). Created if missing.
+const OUT_DIR = process.env.OUT || "license-stamp-qc";
+mkdirSync(OUT_DIR, { recursive: true });
 const ctx = {
   licensee: "Riverside Regional Medical Center",
   email: "director@riverside.example",
   plan: "hospital",
   issueDate: "2026-05-05",
 };
-
-async function qcClientPdf() {
-  const { default: jsPDF } = await import("jspdf");
-  const { applyLicenseToPdf } = await import("../client/src/lib/licenseStamp");
-  const doc = new jsPDF({ unit: "mm", format: "letter", orientation: "portrait" });
-  doc.setFontSize(20);
-  doc.text("VeritaCheck Client PDF Sample", 20, 30);
-  doc.setFontSize(11);
-  doc.text("This page exercises client/src/lib/pdfGenerator.ts.", 20, 45);
-  doc.text("Original layout content occupies the rest of this page,", 20, 53);
-  doc.text("with the license footer band painted at the bottom edge.", 20, 61);
-  doc.addPage();
-  doc.setFontSize(16);
-  doc.text("Page 2 of the underlying study report", 20, 30);
-  doc.text("(The license appendix is appended after this page.)", 20, 50);
-  applyLicenseToPdf(doc, ctx);
-  const buf = doc.output("arraybuffer");
-  writeFileSync(join(OUT_DIR, "veritacheck_client_post_stamp.pdf"), Buffer.from(buf));
-  console.log("wrote veritacheck_client_post_stamp.pdf");
-}
 
 async function qcServerPdf() {
   const { generatePDFBuffer } = await import("../server/pdfReport");
@@ -195,7 +177,6 @@ async function qcExcelJs() {
 }
 
 async function main() {
-  await qcClientPdf();
   await qcServerPdf();
   await qcVeritaScanPdf();
   await qcCompetencyPdf();
