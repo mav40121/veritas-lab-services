@@ -102,6 +102,11 @@ async function main() {
     const adm = await call("POST", "/api/admin/update-lab", { secret: process.env.ADMIN_SECRET, labId: mi.labId, timeZone: "America/Denver" });
     const admBad = await call("POST", "/api/admin/update-lab", { secret: process.env.ADMIN_SECRET, labId: mi.labId, timeZone: "Nowhere/Here" });
     check("4a. admin update-lab sets the zone and refuses an unlisted one", adm.status === 200 && adm.body?.lab?.time_zone === "America/Denver" && admBad.status === 400, JSON.stringify(adm.body?.lab ?? adm.body).slice(0, 160));
+    const list = await call("POST", "/api/admin/lab-time-zones", { secret: process.env.ADMIN_SECRET });
+    const byId = (id: number) => list.body?.labs?.find((l: any) => l.lab_id === id);
+    check("4b. the admin list reports each lab's zone and who should confirm", list.status === 200 && byId(az.labId)?.time_zone === "Pacific/Guam" && byId(mi.labId)?.source === "set" && typeof list.body?.needs_confirm === "number", JSON.stringify(byId(az.labId)));
+    const listNo = await call("POST", "/api/admin/lab-time-zones", { secret: "wrong" });
+    check("4c. the admin list is refused without the secret", listNo.status === 403);
   } finally {
     server.close();
   }
