@@ -11,7 +11,7 @@ import { addLot, reconcileLots } from "./inventoryLots";
 import { resolveLegacyLabId } from "./labAccessGuard";
 import { blockNonOperatorSeat } from "./seatAccess";
 import { DEMO_USER_EMAIL } from "./constants";
-import { labLocalDate } from "./dateLocal";
+import { labLocalDate, labToday } from "./dateLocal";
 import { applyLicenseToExcelJS } from "./licenseStamp";
 import type { LicenseContext } from "@shared/licenseText";
 import { generateReorderListPDF, generateReorderListExcel, generateSnapOrderPDF, type ReorderItem, type SnapOrderItem, type VendorRecordForPdf } from "./orderDocument";
@@ -388,8 +388,8 @@ export function registerVeritaBenchRoutes(
         fteGap: fc.gap?.fteGap ?? null,
         projectedProductivity: fc.gap?.projectedProductivity ?? null,
       };
-      const pdfBuffer = await generateLeverageReportPDF(data, { labName, cliaNumber, preparedBy, date: new Date().toISOString().slice(0, 10) });
-      const filename = `VeritaPace_Leverage_Report_${new Date().toISOString().slice(0, 10)}.pdf`;
+      const pdfBuffer = await generateLeverageReportPDF(data, { labName, cliaNumber, preparedBy, date: labToday() });
+      const filename = `VeritaPace_Leverage_Report_${labToday()}.pdf`;
       const token = storePdfToken(pdfBuffer, filename);
       res.json({ token });
     } catch (err: any) {
@@ -565,7 +565,7 @@ export function registerVeritaBenchRoutes(
 
       applyLicenseToExcelJS(wb, bencheLicenseCtx(req));
       const buffer = await wb.xlsx.writeBuffer();
-      res.set("Content-Disposition", `attachment; filename="VeritaBench-Productivity_${new Date().toISOString().split("T")[0]}.xlsx"`);
+      res.set("Content-Disposition", `attachment; filename="VeritaBench-Productivity_${labToday()}.xlsx"`);
       res.set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
       res.send(buffer);
     } catch (err: any) {
@@ -987,7 +987,7 @@ export function registerVeritaBenchRoutes(
       const vendorRecords = buildVendorRecordMap(labIdForVendors);
 
       const pdfBuffer = await generateReorderListPDF(items, { labName, cliaNumber, preparedBy, vendorRecords, ...reorderFilterContext(req.query) });
-      const datestamp = new Date().toISOString().slice(0, 10);
+      const datestamp = labToday();
       const filename = `VeritaStock_Reorder${reorderFilenameSuffix(req.query)}_${datestamp}.pdf`;
       const token = storePdfToken(pdfBuffer, filename);
       res.json({ token, totalCount: items.length });
@@ -1027,7 +1027,7 @@ export function registerVeritaBenchRoutes(
       const report = buildCountHistory(sqlite, labId, { days });
       const labRow = sqlite.prepare("SELECT lab_name, clia_number FROM labs WHERE id = ?").get(labId) as any;
       const buffer = await generateCountHistoryExcel(report, { labName: labRow?.lab_name ?? null, cliaNumber: labRow?.clia_number ?? null });
-      const filename = `VeritaStock_Count_History_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      const filename = `VeritaStock_Count_History_${labToday()}.xlsx`;
       const token = storePdfToken(buffer, filename);
       res.json({ token, itemCount: report.items.length });
     } catch (err: any) {
@@ -1074,7 +1074,7 @@ export function registerVeritaBenchRoutes(
       }
 
       const xlsxBuffer = await generateReorderListExcel(items, { labName, cliaNumber, preparedBy, ...reorderFilterContext(req.query) });
-      const datestamp = new Date().toISOString().slice(0, 10);
+      const datestamp = labToday();
       const filename = `VeritaStock_Reorder${reorderFilenameSuffix(req.query)}_${datestamp}.xlsx`;
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
       res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
@@ -1167,7 +1167,7 @@ export function registerVeritaBenchRoutes(
 
       const snapLabRow = sqlite.prepare("SELECT lab_id FROM users WHERE id = ?").get(accountId) as any;
       const pdfBuffer = await generateSnapOrderPDF(items, { labName, cliaNumber, preparedBy, poNumber, accountNumber, nameReason, vendorRecords: buildVendorRecordMap(snapLabRow?.lab_id || null) });
-      const datestamp = new Date().toISOString().slice(0, 10);
+      const datestamp = labToday();
       const filename = `VeritaStock_SnapOrder_${datestamp}.pdf`;
       const token = storePdfToken(pdfBuffer, filename);
       res.json({ token, totalCount: items.length });
@@ -1247,7 +1247,7 @@ export function registerVeritaBenchRoutes(
       }
 
       const pdfBuffer = await generateBarcodeLabelSheetPdf(labels, { labName, cliaNumber });
-      const datestamp = new Date().toISOString().slice(0, 10);
+      const datestamp = labToday();
       const filename = `VeritaStock_Labels_${datestamp}.pdf`;
       const token = storePdfToken(pdfBuffer, filename);
       res.json({ token, totalCount: labels.length });
@@ -1325,7 +1325,7 @@ export function registerVeritaBenchRoutes(
       const filterLabel = filterLabelParts.length > 0 ? filterLabelParts.join(" / ") : null;
 
       const xlsxBuffer = await generateInventoryCountExcel(items, { labName, cliaNumber, preparedBy, filterLabel });
-      const datestamp = new Date().toISOString().slice(0, 10);
+      const datestamp = labToday();
       const filename = `VeritaStock_Count${reorderFilenameSuffix(req.query)}_${datestamp}.xlsx`;
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
       res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
@@ -2693,7 +2693,7 @@ export function registerVeritaBenchRoutes(
       "SELECT * FROM pi_plan_review WHERE plan_id = ? AND account_id = ? ORDER BY review_date DESC, id DESC"
     ).all(plan.id, accountId) as any[];
     const last = reviews[0] || null;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = labToday();
     const review_status = {
       never_reviewed: !last,
       last_review_date: last?.review_date || null,
@@ -2953,7 +2953,7 @@ export function registerVeritaBenchRoutes(
         const report = buildCountHistory(sqlite, req.scope.labId, { days });
         const labRow = sqlite.prepare("SELECT lab_name, clia_number FROM labs WHERE id = ?").get(req.scope.labId) as any;
         const buffer = await generateCountHistoryExcel(report, { labName: labRow?.lab_name ?? null, cliaNumber: labRow?.clia_number ?? null });
-        const filename = `VeritaStock_Count_History_${new Date().toISOString().slice(0, 10)}.xlsx`;
+        const filename = `VeritaStock_Count_History_${labToday()}.xlsx`;
         const token = storePdfToken(buffer, filename);
         res.json({ token, itemCount: report.items.length });
       } catch (err: any) {
@@ -2989,7 +2989,7 @@ export function registerVeritaBenchRoutes(
           vendorRecords: buildVendorRecordMap(req.scope.labId),
           ...reorderFilterContext(req.query),
         });
-        const datestamp = new Date().toISOString().slice(0, 10);
+        const datestamp = labToday();
         const safeLab = (labRow?.lab_name || "Lab").replace(/[^A-Za-z0-9]+/g, "_").slice(0, 40);
         const filename = `VeritaStock_Reorder_${safeLab}${reorderFilenameSuffix(req.query)}_${datestamp}.pdf`;
         const token = storePdfToken(pdfBuffer, filename);
@@ -3026,7 +3026,7 @@ export function registerVeritaBenchRoutes(
           preparedBy: userRow?.name || userRow?.email || null,
           ...reorderFilterContext(req.query),
         });
-        const datestamp = new Date().toISOString().slice(0, 10);
+        const datestamp = labToday();
         const safeLab = (labRow?.lab_name || "Lab").replace(/[^A-Za-z0-9]+/g, "_").slice(0, 40);
         const filename = `VeritaStock_Reorder_${safeLab}${reorderFilenameSuffix(req.query)}_${datestamp}.xlsx`;
         res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
@@ -3113,7 +3113,7 @@ export function registerVeritaBenchRoutes(
         if (!pf.ok) return res.status(409).json({ error: "intacct_preflight_failed", missing: pf.missing });
         const csv = buildIntacctCSV(lines, config, vendorMap);
         const labRow = sqlite.prepare("SELECT lab_name FROM labs WHERE id = ?").get(labId) as any;
-        const datestamp = new Date().toISOString().slice(0, 10);
+        const datestamp = labToday();
         const safeLab = (labRow?.lab_name || "Location").replace(/[^A-Za-z0-9]+/g, "_").slice(0, 40);
         const filename = `SageIntacct_Purchasing_${safeLab}${reorderFilenameSuffix(req.query)}_${datestamp}.csv`;
         res.setHeader("Content-Type", "text/csv; charset=utf-8");
@@ -3174,7 +3174,7 @@ export function registerVeritaBenchRoutes(
           preparedBy: userRow?.name || userRow?.email || null,
           filterLabel,
         });
-        const datestamp = new Date().toISOString().slice(0, 10);
+        const datestamp = labToday();
         const safeLab = (labRow?.lab_name || "Lab").replace(/[^A-Za-z0-9]+/g, "_").slice(0, 40);
         const filename = `VeritaStock_Count_${safeLab}${reorderFilenameSuffix(req.query)}_${datestamp}.xlsx`;
         res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
@@ -3306,7 +3306,7 @@ export function registerVeritaBenchRoutes(
         const cliaNumber: string | null = labRow?.clia_number || null;
 
         const pdfBuffer = await generateBarcodeLabelSheetPdf(labels, { labName, cliaNumber });
-        const datestamp = new Date().toISOString().slice(0, 10);
+        const datestamp = labToday();
         const filename = `VeritaStock_Labels_${datestamp}.pdf`;
         const token = storePdfToken(pdfBuffer, filename);
         res.json({ token, totalCount: labels.length });
@@ -3382,7 +3382,7 @@ export function registerVeritaBenchRoutes(
           nameReason,
           vendorRecords: buildVendorRecordMap(req.scope.labId),
         });
-        const datestamp = new Date().toISOString().slice(0, 10);
+        const datestamp = labToday();
         const safeLab = (labRow?.lab_name || "Lab").replace(/[^A-Za-z0-9]+/g, "_").slice(0, 40);
         const filename = `VeritaStock_SnapOrder_${safeLab}_${datestamp}.pdf`;
         const token = storePdfToken(pdfBuffer, filename);

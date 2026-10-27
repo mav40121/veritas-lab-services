@@ -2,7 +2,8 @@
 //
 // Receipt for the VeritaStock recall tracker (2026-10-08). Boots the real
 // routes on a scratch DB and proves:
-//   1. intake: a case opened on a Friday is due Monday; lot numbers parsed
+//   1. intake: opened on the lab's day, due the next business day (Friday -> Monday is pinned in
+//      scripts/verify-stock-recall-logic.mts); lot numbers parsed
 //   2. lot match spans the owner's locations (lot rows AND single-lot items),
 //      flags vendor mismatches, never shows another owner's stock; another
 //      owner's token is refused
@@ -34,6 +35,8 @@ async function main() {
   const { db } = await import("../../server/db");
   const { registerRoutes } = await import("../../server/routes");
   const { setRecallMailerForTests, runRecallReminders } = await import("../../server/stockRecalls");
+  const { nextBusinessDay } = await import("../../server/stockRecallLogic");
+  const { labLocalDate, labTimeZoneById } = await import("../../server/dateLocal");
   const sqlite = (db as any).$client;
   const ADMIN = process.env.ADMIN_SECRET || "test-admin-secret";
 
@@ -79,11 +82,13 @@ async function main() {
   const ownerB = (sqlite.prepare("SELECT owner_user_id o FROM labs WHERE id = ?").get(labB) as any)?.o;
   const itemB = Number(sqlite.prepare("INSERT INTO inventory_items (account_id, lab_id, item_name, vendor, lot_number, quantity_on_hand, unit, unit_cost, status, created_at, updated_at) VALUES (?, ?, 'B item', 'Beckman Coulter', 'AB-1234', 7, 'kit', 10, 'active', ?, ?)").run(ownerB, labB, now, now).lastInsertRowid);
 
-  // 1. intake on a Friday
-  const created = await call("POST", R, { notice_type: "recall", notice_date: "2026-10-06", vendor: "Beckman Coulter", product: "Access hsTnI Reagent", recall_number: "FA-2026/014", lot_numbers: "AB-1234\nab-1234", details: "Falsely elevated results", assigned_user_id: ownerA, local_date: "2026-10-09" }, OA.token);
+  // 1. intake. The server takes the browser's date only within a day of the lab's own day (anti-spoof), so the test
+  //    sends the lab's real day; it used to hard-code 2026-10-09 and failed every day after it was written.
+  const labDayA = labLocalDate(new Date().toISOString(), false, labTimeZoneById(sqlite, labA));
+  const created = await call("POST", R, { notice_type: "recall", notice_date: "2026-10-06", vendor: "Beckman Coulter", product: "Access hsTnI Reagent", recall_number: "FA-2026/014", lot_numbers: "AB-1234\nab-1234", details: "Falsely elevated results", assigned_user_id: ownerA, local_date: labDayA }, OA.token);
   const c1 = await j(created);
   check("case created (200)", created.status === 200 && c1.id > 0, `status=${created.status} ${JSON.stringify(c1).slice(0, 200)}`);
-  check("opened Friday 10/09 -> due Monday 10/12", c1.opened_on === "2026-10-09" && c1.due_date === "2026-10-12", `${c1.opened_on} -> ${c1.due_date}`);
+  check("opened on the lab's day, due the next business day", c1.opened_on === labDayA && c1.due_date === nextBusinessDay(labDayA), `${c1.opened_on} -> ${c1.due_date} (lab day ${labDayA})`);
   check("duplicate lot numbers collapsed", JSON.stringify(c1.lot_numbers) === JSON.stringify(["AB-1234"]), JSON.stringify(c1.lot_numbers));
   check("assigned manager resolved", !!c1.assigned_name && !!c1.assigned_email, `${c1.assigned_name} <${c1.assigned_email}>`);
   const bad = await call("POST", R, { vendor: "", product: "x" }, OA.token);

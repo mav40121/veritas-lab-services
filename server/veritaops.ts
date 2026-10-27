@@ -10,6 +10,7 @@ import { generateCprtPdf } from "./veritaopsPdf";
 import { resolveRowForMutation, resolveLegacyLabId } from "./labAccessGuard";
 import { blockNonOperatorSeat } from "./seatAccess";
 import { exportAllPlanBypass } from "./exportAllContext";
+import { labToday } from "./dateLocal";
 
 // Plain-language tier labels. Used by the client to show what is in the
 // final CPRT number for a given study.
@@ -311,7 +312,7 @@ export function registerVeritaOpsRoutes(
         preparedBy: userRow?.name || userRow?.email || null,
       });
       const safeName = String(study.test_name || "Study").replace(/[^A-Za-z0-9]+/g, "_").slice(0, 40);
-      const datestamp = new Date().toISOString().slice(0, 10);
+      const datestamp = labToday();
       const filename = `VeritaOps_CPRT_${safeName}_${datestamp}.pdf`;
       const token = storePdfToken(pdfBuffer, filename);
       res.json({ token, filename });
@@ -466,7 +467,7 @@ export function registerVeritaOpsRoutes(
         });
         const safeLab = String(labRow?.lab_name || "Lab").replace(/[^A-Za-z0-9]+/g, "_").slice(0, 24);
         const safeName = String(study.test_name || "Study").replace(/[^A-Za-z0-9]+/g, "_").slice(0, 40);
-        const datestamp = new Date().toISOString().slice(0, 10);
+        const datestamp = labToday();
         const filename = `VeritaOps_CPRT_${safeLab}_${safeName}_${datestamp}.pdf`;
         const token = storePdfToken(pdfBuffer, filename);
         res.json({ token, filename });

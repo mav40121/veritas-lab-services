@@ -28,6 +28,7 @@ import { SCAN_ITEMS } from "../client/src/lib/veritaScanData";
 import { logAudit } from "./audit";
 import { issuePurposeToken, verifyPurposeToken } from "./sessionAuth";
 import { buildStudyPdf } from "./studyPdf";
+import { labToday, labTimeZoneOf } from "./dateLocal";
 
 export const EXPORT_RETENTION_MS = 24 * 60 * 60 * 1000;
 export const WEEKLY_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
@@ -389,7 +390,7 @@ export async function buildExportZip(sqlite: any, ctx: ExportCtx, opts: { base: 
   const labName = ctx.lab.lab_name || "Laboratory";
   const clia = ctx.lab.clia_number || "Not on file";
   const idLine = `${labName}    CLIA: ${clia}`;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = labToday(labTimeZoneOf(ctx.lab)); // the lab's calendar day (per-lab time zone)
   const protectPwd = process.env.EXCEL_PROTECT_PASSWORD || "veritaassure-export";
   const manifest: Array<{ folder: string; file: string; what: string; count: string; status: string }> = [];
 
