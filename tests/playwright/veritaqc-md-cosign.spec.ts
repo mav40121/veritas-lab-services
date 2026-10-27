@@ -34,7 +34,7 @@ test.describe("VeritaQC MD co-signature", () => {
   test("Monthly Review card exposes the co-signature toggle", async ({ page }) => {
     test.skip(!TOKEN, "PW_TOKEN not set — skipping authenticated UI exercise");
     await injectAuth(page, BASE, TOKEN);
-    await page.goto(`${BASE}/labs/${LAB_ID}/veritaqc-daily-review`);
+    await page.goto(`${BASE}/labs/${LAB_ID}/veritaqc-app/review`);
     await expect(page.getByText(/Medical Director co-signature/i).first()).toBeVisible({ timeout: 15000 });
   });
 });
