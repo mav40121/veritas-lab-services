@@ -22,6 +22,11 @@ import type { Study } from "../../../shared/schema";
 // which every calculate* filters; substitute -> imputed number) before
 // computing, so the screen matches the server-rendered PDF. No-op when the blob
 // has no censored values.
+// BUG-085: the reason a study cannot be evaluated (its listed analyzers have no values in its data), or null.
+export function notEvaluableReason(results: any): string | null {
+  return results && results.notEvaluable ? String(results.summary || "Not evaluable") : null;
+}
+
 export function deepResolveCensored(obj: any, policy: CensoringPolicy): any {
   if (isCensored(obj)) return censorValueForMath(obj, policy);
   if (Array.isArray(obj)) return obj.map((x) => deepResolveCensored(x, policy));
@@ -383,6 +388,14 @@ export function computeStudyResults(study: Study): StudyResults {
         const isPercentage = (study as any).teaIsPercentage !== 0;
         const absFloor = (study as any).cliaAbsoluteFloor ?? null;
         results = calculateMethodComparison(dp, comparisonNames.length > 0 ? comparisonNames : instrumentNames, study.cliaAllowableError, isPercentage, absFloor);
+        // BUG-085 (2026-10-27, Michael Q18 = 1): when NONE of the listed analyzers has values in the data (the list was
+        // changed after the data was entered), the math above runs on empty columns and reads as FAIL. That is not a
+        // verdict, so say what is wrong instead; the page, the PDF route and the records export all honor it.
+        const inData = Array.from(new Set(dp.flatMap((p) => Object.keys((p && p.instrumentValues) || {}))));
+        if (dp.length > 0 && inData.length > 0 && !instrumentNames.some((n) => inData.includes(n))) {
+          (results as any).notEvaluable = { listed: instrumentNames, inData };
+          (results as any).summary = `Not evaluable: none of this study's listed analyzers (${instrumentNames.join(", ")}) has values in its data, which is recorded for ${inData.join(", ")}. Correct the analyzer list so it matches the data; no verdict is shown until then.`;
+        }
       }
     }
   } else if (study.studyType === "cal_ver_correlation") {

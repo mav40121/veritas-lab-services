@@ -10,7 +10,7 @@
 // reporting locks: exporting records is not printing a report.
 
 import { generatePDFBuffer } from "./pdfReport";
-import { computeStudyResults } from "../client/src/lib/studyResults";
+import { computeStudyResults, notEvaluableReason } from "../client/src/lib/studyResults";
 import { labLocalDate } from "./dateLocal";
 
 export function studyRowToClient(row: any): any {
@@ -117,6 +117,10 @@ export function studyPdfFilename(study: { studyType: string; testName: string; d
 export async function buildStudyPdf(sqlite: any, row: any, lab: any, owner: any): Promise<{ buffer: Buffer; filename: string }> {
   const study = studyRowToClient(row);
   const results = computeStudyResults(study);
+  // BUG-085: a study whose listed analyzers have no values in its data has no verdict; the records export lists it as
+  // not included with this reason instead of printing a FAIL.
+  const notEvaluable = notEvaluableReason(results);
+  if (notEvaluable) throw new Error(notEvaluable);
   if (lab?.lab_name) study._labName = lab.lab_name;
   if (study.instrumentMeta) {
     const resolved = resolveInstrumentDisplay(sqlite, study.instrumentMeta);

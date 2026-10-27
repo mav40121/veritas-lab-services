@@ -13457,6 +13457,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       if (!study || typeof study !== "object" || !results || typeof results !== "object") {
         return res.status(400).json({ error: "study and results must be JSON objects" });
       }
+      // BUG-085: no PDF for a study whose listed analyzers have no values in its data (it has no verdict).
+      if ((results as any).notEvaluable) {
+        return res.status(400).json({ error: String((results as any).summary || "This study cannot be evaluated: its analyzer list does not match its data.") });
+      }
       // Fetch CLIA number from labs table if authenticated, falling back to user record
       let cliaNumber: string | undefined;
       let cliaLabName: string | undefined;
@@ -35994,6 +35998,49 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   //     rather than given fake cal-ver studies a lab director would see through.
   //   - Existing draft method-comparison studies are finalized in place (repair,
   //     not duplicate) so Coverage shows one signed row per analyte.
+  // POST /api/admin/veritacheck/align-study-analyzers (BUG-085, Michael Q18 = 1, 2026-10-27). DEMO LABS ONLY
+  // (labs.is_demo = 1, or the documented demo fixture CLIA 22D0999999): sets a study's analyzer list to the analyzers its
+  // data actually carries (no data value changes) and recomputes the stored status the way a save does. It edits
+  // finalized studies in place, which the amendment workflow exists to prevent on real records; that is why it refuses
+  // every other lab. Body { secret, labId, studyIds[], dryRun } (dry run unless dryRun === false). Skips a study whose list
+  // already matches, a data shape without per-analyzer values, and a study with a director's verdict override.
+  app.post("/api/admin/veritacheck/align-study-analyzers", (req: any, res) => {
+    const { secret, labId, studyIds, dryRun } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    const sqlite = (db as any).$client;
+    const lab = sqlite.prepare("SELECT id, lab_name, clia_number, is_demo, owner_user_id FROM labs WHERE id = ?").get(Number(labId)) as any;
+    if (!lab) return res.status(404).json({ error: "lab not found" });
+    const isDemoLab = Number(lab.is_demo) === 1 || String(lab.clia_number || "").trim() === "22D0999999";
+    if (!isDemoLab) return res.status(403).json({ error: "demo labs only: this repair edits finalized studies in place; real records change through the amendment workflow" });
+    if (!Array.isArray(studyIds) || studyIds.length === 0) return res.status(400).json({ error: "studyIds[] required" });
+    const apply = dryRun === false;
+    const results: any[] = [];
+    for (const sid of studyIds) {
+      const row = sqlite.prepare("SELECT * FROM studies WHERE id = ? AND lab_id = ?").get(Number(sid), lab.id) as any;
+      if (!row) { results.push({ studyId: sid, action: "skip", reason: "not a study on this lab" }); continue; }
+      if (row.verdict_override_justification) { results.push({ studyId: row.id, action: "skip", reason: "the director overrode the verdict" }); continue; }
+      const listed: string[] = safeJsonParse(row.instruments, []);
+      const data = safeJsonParse(row.data_points, null);
+      if (!Array.isArray(data)) { results.push({ studyId: row.id, action: "skip", reason: "data has no per-analyzer values" }); continue; }
+      const inData: string[] = Array.from(new Set(data.flatMap((p: any) => Object.keys((p && p.instrumentValues) || {}))));
+      if (inData.length === 0) { results.push({ studyId: row.id, action: "skip", reason: "no analyzer values in the data" }); continue; }
+      if (listed.length > 0 && listed.every((n) => inData.includes(n))) { results.push({ studyId: row.id, action: "skip", reason: "analyzer list already matches the data" }); continue; }
+      // Keep the listed order for names that are in the data, then the data's other names in the order they appear.
+      const next = [...listed.filter((n) => inData.includes(n)), ...inData.filter((n) => !listed.includes(n))];
+      const status = computeStudyStatus(row.study_type, row.data_points, JSON.stringify(next), row.clia_allowable_error,
+        row.tea_is_percentage !== 0, row.clia_absolute_floor ?? null, row.censoring_policy ?? "exclude");
+      const item = { studyId: row.id, testName: row.test_name, action: apply ? "updated" : "would update",
+        before: { instruments: listed, status: row.status }, after: { instruments: next, status } };
+      if (apply) {
+        sqlite.prepare("UPDATE studies SET instruments = ?, status = ? WHERE id = ?").run(JSON.stringify(next), status, row.id);
+        logAudit({ userId: lab.owner_user_id, ownerUserId: lab.owner_user_id, module: "veritacheck", action: "update", entityType: "study",
+          entityId: row.id, entityLabel: `${row.test_name} (demo data repair, BUG-085)`, before: item.before, after: item.after, ipAddress: req.ip });
+      }
+      results.push(item);
+    }
+    res.json({ dryRun: !apply, lab: { id: lab.id, labName: lab.lab_name }, results });
+  });
+
   app.post("/api/admin/veritacheck/seed-coverage-studies", (req, res) => {
     const { secret, labId, calVerTargetPct, mcTargetPct, setExemptions, reset, archiveCruft, dryRun } = req.body || {};
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
