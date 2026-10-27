@@ -715,7 +715,19 @@ Open questions for the scope:
 **What:** the production time zone list (2026-10-27) shows lab 18 "Georgetown Community Hospital" with no CLIA state, so labs.clia_number on lab 18 is not in the CLIA form (two digits, D, seven digits). The account notes say her real CLIA is 18D0322357 (from her CLIA certificate, 2026-09-28; Clinic sale closed 2026-10-05). Check what lab 18 stores and what its reports print, then correct it on Michael's go. Its time zone is right either way: Georgetown, KY is Eastern.
 
 **Source:** production time zone list, 2026-10-27 (PR #1722 admin route).
-**Status:** Open. Read 2026-10-27 (admin report, read-only): labs.clia_number on lab 18 is "PENDING-GEORGETOWN-LPNT" with clia_locked = 1 (locked after its first report), and the owner's account CLIA is the same placeholder, so its reports print the placeholder; support could not correct it (update-lab returned 409 for any locked value). PR #1730 lets support replace a locked placeholder once (a real CLIA stays locked). Data fix ready, dry run by default: vls-ops/prod_fix_lab18_clia.sh (lab 18 -> 18D0322357, owner read from production). Waits on Michael's go. BUG-107.
+**Status:** Open. Read 2026-10-27 (admin report, read-only): labs.clia_number on lab 18 is "PENDING-GEORGETOWN-LPNT" with clia_locked = 1 (locked after its first report), and the owner's account CLIA is the same placeholder, so its reports print the placeholder; support could not correct it (update-lab returned 409 for any locked value). PR #1730 lets support replace a locked placeholder once (a real CLIA stays locked). Data fix ready, dry run by default: vls-ops/prod_fix_lab18_clia.sh (lab 18 -> 18D0322357, owner read from production). Waits on Michael's go. BUG-107. **Applied 2026-10-27 ~07:55 ET (Michael Q3 = 1):** lab 18 and its owner (user 83) now carry 18D0322357 (rule fix #1730 live 7f37ed28). Michael closes.
+
+---
+
+### 114. Schedules: a detailed conversation with Michael, with possible impact on UNC Nash
+
+**Effort:** N/A (a conversation first; any build is sized after it)
+**Importance:** High. Michael flagged that it may affect UNC Nash, our primary customer.
+
+**What:** Michael wants a detailed conversation about schedules before anything is built or changed. Which schedules are meant, and how they touch the UNC Nash engagement, is for that conversation; nothing is assumed here. Bring to it: what VeritaAssure schedules today (VeritaShift Scheduler, competency and calibration due dates, VeritaTrack tasks) and the open UNC Nash work items, so the discussion can map his concerns to the product and the engagement.
+
+**Source:** Michael, 2026-10-27: "Parking lot: I want to have a detailed conversation about schedules it may have impact on Unc Nash".
+**Status:** Open. Waiting on Michael to set a time; on the Thursday 2 PM ET outstanding review if it has not happened by then.
 
 ---
 
