@@ -34692,7 +34692,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     }));
     const count = (o: string) => results.filter((r: any) => r.outcome === o).length;
     res.json({ dryRun: !apply, wouldClearOrCleared: count("cleared"), alreadyCleared: count("already_cleared"), existingStaff: count("existing_staff"),
-      hasOtherDates: count("has_other_dates"), results: results.map((r: any) => ({ staffEmployeeId: r.staffEmployeeId, name: r.name, labId: r.labId, outcome: r.outcome, initialDate: r.initialDate, source: r.source })) });
+      hasOtherDates: count("has_other_dates"), beforeHire: count("before_hire"), results: results.map((r: any) => ({ staffEmployeeId: r.staffEmployeeId, name: r.name, labId: r.labId, outcome: r.outcome, initialDate: r.initialDate, source: r.source })) });
   });
 
   app.get("/api/admin/competency/not-cleared-audit", (req, res) => {

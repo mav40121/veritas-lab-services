@@ -7,7 +7,9 @@
 //      6-month due), written to the audit log
 //   2. it leaves Existing staff alone (no first-year clock) and leaves a person with other dates entered alone
 //   3. POST /api/admin/competency/sync-clearance: the dry run lists a person whose signed initial never reached
-//      VeritaStaff and writes nothing; the real run clears them; a second run reports already cleared
+//      VeritaStaff and writes nothing; the real run clears them; a second run reports already cleared; an initial dated
+//      before the hire date clears no one (before_hire), and with initials on both sides of the hire date the earliest
+//      one after hire is used (Michael Q26 = 1)
 //   4. POST /api/labs/:labId/staff/competency/recorded-as marks only unmarked people (a lab's New hire marking is kept;
 //      another lab's person is not touched); the marked person reads cleared as existing staff
 //   5. the roster import: the template carries the optional "Recorded as" column; uploading Existing staff / New hire /
@@ -98,6 +100,19 @@ async function main() {
   const ce = Number(sqlite.prepare("INSERT INTO competency_employees (user_id, lab_id, staff_employee_id, name, title, status, created_at) VALUES (1, ?, ?, 'Bea Before', '', 'active', ?)").run(A.labId, old, now).lastInsertRowid);
   sqlite.prepare(`INSERT INTO competency_assessments (program_id, employee_id, assessment_type, assessment_date, evaluator_name, evaluator_title, evaluator_initials, competency_type, status, remediation_plan, employee_acknowledged, supervisor_acknowledged, created_at, locked, completion_date)
     VALUES (?, ?, 'initial', '2026-06-20', 'R. Supervisor', '', '', 'technical', 'pass', '', 0, 0, ?, 1, '2026-06-20')`).run(prog, ce, now);
+  // Michael Q26 = 1: an initial dated before the hire date is never used. Gail's only initial predates her hire (left
+  // alone, reported before_hire); Hal has one before and one after his hire, and the one after wins.
+  const compEmp = (staffId: number, nm: string) =>
+    Number(sqlite.prepare("INSERT INTO competency_employees (user_id, lab_id, staff_employee_id, name, title, status, created_at) VALUES (1, ?, ?, ?, '', 'active', ?)").run(A.labId, staffId, nm, now).lastInsertRowid);
+  const addInitial = (c: number, date: string) =>
+    sqlite.prepare(`INSERT INTO competency_assessments (program_id, employee_id, assessment_type, assessment_date, evaluator_name, evaluator_title, evaluator_initials, competency_type, status, remediation_plan, employee_acknowledged, supervisor_acknowledged, created_at, locked, completion_date)
+      VALUES (?, ?, 'initial', ?, 'R. Supervisor', '', '', 'technical', 'pass', '', 0, 0, ?, 1, ?)`).run(prog, c, date, now, date);
+  const preHire = await mkEmp(A, "Prehire", "Gail", "2026-08-27", false);
+  addInitial(compEmp(preHire, "Gail Prehire"), "2026-06-20");
+  const bothSides = await mkEmp(A, "Both", "Hal", "2026-08-27", false);
+  const halComp = compEmp(bothSides, "Hal Both");
+  addInitial(halComp, "2026-06-20");
+  addInitial(halComp, "2026-09-15");
   const dry = await call("POST", "/api/admin/competency/sync-clearance", { secret: ADMIN, labIds: [A.labId] });
   const dryRow = (dry.j.results || []).find((r: any) => r.staffEmployeeId === old);
   check("3a. backfill dry run lists the person and writes nothing", dry.s === 200 && dry.j.dryRun === true && dryRow?.outcome === "cleared" && dryRow?.initialDate === "2026-06-20" && !sched(old)?.initial_completed_at,
@@ -107,6 +122,13 @@ async function main() {
   check("3b. real run clears them; a second run reports already cleared",
     run.s === 200 && sched(old)?.initial_completed_at === "2026-06-20" && (again.j.results || []).find((r: any) => r.staffEmployeeId === old)?.outcome === "already_cleared",
     JSON.stringify({ after: sched(old)?.initial_completed_at, again: (again.j.results || []).find((r: any) => r.staffEmployeeId === old)?.outcome }));
+  const rowOf = (res: any, id: number) => (res.j.results || []).find((r: any) => r.staffEmployeeId === id);
+  check("3c. an initial dated before the hire date clears no one: dry run and real run report before_hire, VeritaStaff stays empty",
+    rowOf(dry, preHire)?.outcome === "before_hire" && rowOf(run, preHire)?.outcome === "before_hire" && run.j.beforeHire >= 1 && !sched(preHire)?.initial_completed_at,
+    JSON.stringify({ dry: rowOf(dry, preHire), run: rowOf(run, preHire), beforeHire: run.j.beforeHire, sched: sched(preHire)?.initial_completed_at ?? null }));
+  check("3d. with initials on both sides of the hire date, the earliest one after hire is used",
+    rowOf(run, bothSides)?.outcome === "cleared" && sched(bothSides)?.initial_completed_at === "2026-09-15",
+    JSON.stringify({ run: rowOf(run, bothSides), sched: sched(bothSides)?.initial_completed_at ?? null }));
 
   const unmarked1 = await mkEmp(A, "Roster", "Rae", "2010-01-01", false);
   const unmarked2 = await mkEmp(A, "Roster", "Ray", "2011-01-01", false);
