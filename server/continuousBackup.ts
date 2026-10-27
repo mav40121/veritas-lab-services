@@ -12,6 +12,14 @@
 //
 // Each Railway service replicates to its own folder (backupScope, BUG-082): two writers on one replica path can make
 // it unrestorable.
+//
+// Recovery from broken local state (BUG-111, 2026-10-27): after the 03:07 UTC restart Litestream logged "LTX file is
+// missing" every few minutes and shipped nothing to R2. Litestream's remedy is `litestream reset`, which deletes only
+// its tracking files (the .db-litestream folder), never the database, and makes a fresh snapshot on the next sync. Two
+// layers apply it: the replica's auto-recover setting (Litestream 0.5.7+), and this supervisor, which stops
+// Litestream, runs the reset and starts it again when the same error repeats (at most once per 30 minutes, so a reset
+// that does not help cannot loop). Point-in-time restore to before a reset is lost; the hourly and nightly copies
+// (server/backup.ts) keep that history.
 
 import { spawn, execFileSync, execFile, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
@@ -42,10 +50,12 @@ export function continuousBackupReplicaPath(env: NodeJS.ProcessEnv = process.env
 // real Litestream round trip on Linux without R2 credentials.
 export function litestreamConfig(dbPath: string, replicaPath: string, fileReplicaDir?: string): string {
   const replica = fileReplicaDir
-    ? ["    replica:", "      type: file", `      path: ${JSON.stringify(path.join(fileReplicaDir, replicaPath))}`]
+    ? ["    replica:", "      type: file", `      path: ${JSON.stringify(path.join(fileReplicaDir, replicaPath))}`, "      auto-recover: true"]
     : [
       "    replica:",
       "      type: s3",
+      // BUG-111: on an LTX replication error Litestream resets its own tracking state and takes a fresh snapshot.
+      "      auto-recover: true",
       "      bucket: ${BACKUP_S3_BUCKET}",
       `      path: ${replicaPath}`,
       "      endpoint: ${BACKUP_S3_ENDPOINT}",
@@ -82,16 +92,55 @@ interface State {
   startedAt: string | null;
   restarts: number;
   lastExit: { at: string; code: number | null; signal: string | null } | null;
+  // BUG-111: resets of Litestream's local tracking state made by this supervisor.
+  resets: number;
+  lastReset: { at: string; ok: boolean; trigger: string; out: string } | null;
   log: string[];
 }
 
 const state: State = {
   enabled: false, reason: "not started", bin: "", version: null, configPath: null, dbPath: null, replicaPath: null,
-  running: false, pid: null, startedAt: null, restarts: 0, lastExit: null, log: [],
+  running: false, pid: null, startedAt: null, restarts: 0, lastExit: null, resets: 0, lastReset: null, log: [],
 };
 let child: ChildProcess | null = null;
 let stopping = false;
 let quickFailures = 0;
+
+// BUG-111: the messages Litestream gives when its local tracking state is broken and a reset is the remedy (its own
+// hint on the first one is "Run 'litestream reset <db>'"; the others are the ones its reset documentation lists).
+export const RESET_HINT = /LTX file is missing|non-contiguous transaction files|nonsequential page numbers|cannot close, expected page/i;
+const RESET_AFTER = 2; // the same error twice in one run
+const RESET_MIN_GAP_MS = 30 * 60 * 1000;
+let hintsThisRun = 0;
+let resetting = false;
+let resetTrigger = "";
+let lastResetMs = 0;
+
+function maybeReset(line: string) {
+  hintsThisRun += 1;
+  if (resetting || stopping || !child || hintsThisRun < RESET_AFTER) return;
+  if (lastResetMs && Date.now() - lastResetMs < RESET_MIN_GAP_MS) return;
+  resetting = true;
+  lastResetMs = Date.now();
+  resetTrigger = line.slice(0, 200);
+  note("local replication state is broken; stopping Litestream to reset it (tracking files only, the database is not touched)");
+  try { child.kill("SIGTERM"); } catch { /* exit handler runs the reset either way */ }
+}
+
+// Tests only: forget when the last reset happened, so each test case starts with the reset allowed.
+export function _clearResetClockForTests() {
+  lastResetMs = 0;
+  resetting = false;
+}
+
+async function resetAndRelaunch() {
+  const r = await run(state.bin, ["reset", "-config", state.configPath!, state.dbPath!], 120000);
+  state.resets += 1;
+  state.lastReset = { at: new Date().toISOString(), ok: r.ok, trigger: resetTrigger, out: r.out.slice(0, 300) };
+  note(`litestream reset ${r.ok ? "done" : "FAILED"}${r.out ? `: ${r.out.slice(0, 300)}` : ""}`);
+  resetting = false;
+  if (!stopping) launch();
+}
 
 function note(line: string) {
   const stamped = `${new Date().toISOString()} ${line}`;
@@ -115,7 +164,11 @@ function launch() {
   state.pid = p.pid ?? null;
   state.startedAt = new Date().toISOString();
   note(`replicating ${state.dbPath} to ${state.replicaPath} (pid ${state.pid})`);
-  const onData = (buf: Buffer) => String(buf).split(/\r?\n/).filter((l) => l.trim()).forEach((l) => note(l.slice(0, 500)));
+  hintsThisRun = 0;
+  const onData = (buf: Buffer) => String(buf).split(/\r?\n/).filter((l) => l.trim()).forEach((l) => {
+    note(l.slice(0, 500));
+    if (RESET_HINT.test(l)) maybeReset(l);
+  });
   p.stdout?.on("data", onData);
   p.stderr?.on("data", onData);
   p.on("error", (err) => note(`process error: ${err.message}`));
@@ -125,6 +178,7 @@ function launch() {
     state.pid = null;
     state.lastExit = { at: new Date().toISOString(), code, signal };
     if (stopping) return;
+    if (resetting) { void resetAndRelaunch(); return; }
     note(`exited (code ${code}, signal ${signal}); restarting`);
     scheduleRestart(startedMs);
   });

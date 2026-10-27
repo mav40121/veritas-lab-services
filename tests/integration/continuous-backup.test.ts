@@ -9,6 +9,11 @@
 //      switches to WAL, Litestream replicates to R2 under a throwaway folder, a change made 5 s before a restore is in
 //      the restored copy, integrity_check = ok, a killed Litestream is restarted, and shutdown stops it. The throwaway
 //      folder is deleted afterwards.
+//   5. BUG-111 (2026-10-27), recovery from broken local state: the config turns on Litestream's auto-recover; with a
+//      stand-in litestream (Linux only) that reports "LTX file is missing", the supervisor stops it, runs
+//      `litestream reset` once and starts it again; with the real binary (4g), after a restart with the replica gone
+//      and the first local LTX file missing (the production state of 2026-10-27 03:07 UTC), a change again reaches
+//      the replica.
 // Run: npm run test:continuous-backup
 
 import fs from "node:fs";
@@ -18,7 +23,7 @@ import { createRequire } from "node:module";
 import Database from "better-sqlite3";
 import {
   continuousBackupPlan, continuousBackupReplicaPath, litestreamConfig, startContinuousBackup, stopContinuousBackup,
-  continuousBackupStatus, continuousRestoreSelfTest,
+  continuousBackupStatus, continuousRestoreSelfTest, RESET_HINT, _clearResetClockForTests,
 } from "../../server/continuousBackup";
 
 (globalThis as any).require ??= createRequire(import.meta.url);
@@ -67,6 +72,61 @@ async function main() {
 
   const fileCfg = litestreamConfig("/data/veritas.db", main, "/tmp/replica");
   check("3d. the local folder replica (tests only) carries no credentials", fileCfg.includes("type: file") && !fileCfg.includes("access-key-id") && !fileCfg.includes("type: s3"));
+  check("3e. BUG-111: auto-recover is on for the R2 replica and the test folder replica", /replica:[\s\S]*auto-recover: true/.test(cfg) && /replica:[\s\S]*auto-recover: true/.test(fileCfg));
+  check("3f. BUG-111: the production error of 2026-10-27 is recognized as a reset case",
+    RESET_HINT.test('level=ERROR msg="monitor error" system=store db=veritas.db replica=s3 error="open ltx file /data/.veritas.db-litestream/ltx/0/0000000000000001-0000000000000001.ltx: no such file or directory" hint="LTX file is missing. This can happen after VACUUM, manual checkpoint, or state corruption."')
+    && !RESET_HINT.test('level=WARN msg="sync: retrying" error="timeout"'));
+
+  // 5) BUG-111 supervisor reset, with a stand-in litestream (a shell script; Linux and macOS only)
+  if (process.platform === "win32") {
+    console.log("SKIP  5. supervisor reset (needs a POSIX shell for the stand-in litestream)");
+  } else {
+    const fdir = fs.mkdtempSync(path.join(os.tmpdir(), "cb-fake-"));
+    const fake = path.join(fdir, "litestream");
+    const FAKE_ERR = `level=ERROR msg="monitor error" error="open ltx file /x/ltx/0/0000000000000001-0000000000000001.ltx: no such file or directory" hint="LTX file is missing."`;
+    fs.writeFileSync(fake, [
+      "#!/bin/sh",
+      'D="$(dirname "$0")"',
+      'case "$1" in',
+      '  version) echo "v0.0.0-standin";;',
+      '  reset) echo "$@" > "$D/reset-args"; echo "reset ok";;',
+      '  status) echo "[]";;',
+      '  replicate)',
+      '    if [ ! -f "$D/reset-args" ]; then',
+      `      echo '${FAKE_ERR}' 1>&2`,
+      "      sleep 1",
+      `      echo '${FAKE_ERR}' 1>&2`,
+      "    fi",
+      "    exec sleep 300;;",
+      "esac",
+      "",
+    ].join("\n"), { mode: 0o755 });
+    const fdb = new Database(path.join(fdir, "veritas.db"));
+    fdb.exec("CREATE TABLE t (id INTEGER PRIMARY KEY)");
+    _clearResetClockForTests();
+    try {
+      const st = startContinuousBackup(fdb, { ...process.env, CONTINUOUS_BACKUP: "1", LITESTREAM_BIN: fake, LITESTREAM_FILE_REPLICA: path.join(fdir, "replica") });
+      const firstPid = st.pid;
+      let done = false;
+      for (let i = 0; i < 60 && !done; i++) {
+        await new Promise((r) => setTimeout(r, 250));
+        const s2 = continuousBackupStatus();
+        done = s2.resets === 1 && s2.running && s2.pid !== firstPid;
+      }
+      const s3 = continuousBackupStatus();
+      const args = fs.existsSync(path.join(fdir, "reset-args")) ? fs.readFileSync(path.join(fdir, "reset-args"), "utf8").trim() : "";
+      check("5a. on a repeated 'LTX file is missing' the supervisor resets Litestream's state once and starts it again", done && s3.lastReset?.ok === true && /LTX file is missing/.test(s3.lastReset?.trigger || ""),
+        JSON.stringify({ resets: s3.resets, running: s3.running, lastReset: s3.lastReset }));
+      check("5b. the reset names the config and the database path", args.startsWith("reset -config ") && args.endsWith(path.join(fdir, "veritas.db")), args);
+      await new Promise((r) => setTimeout(r, 1500));
+      check("5c. it does not loop: one reset, still running", continuousBackupStatus().resets === 1 && continuousBackupStatus().running);
+    } finally {
+      await stopContinuousBackup();
+      fdb.close();
+      fs.rmSync(fdir, { recursive: true, force: true });
+      _clearResetClockForTests();
+    }
+  }
 
   // 4) live round trip: R2 when its settings are present (local), else a local folder replica (CI, Linux)
   const fileReplica = String(process.env.LITESTREAM_FILE_REPLICA || "").trim();
@@ -100,6 +160,32 @@ async function main() {
       check("4d. a killed Litestream is restarted", back, JSON.stringify({ old: pid, now: continuousBackupStatus().pid, restarts: continuousBackupStatus().restarts }));
       await stopContinuousBackup();
       check("4e. shutdown stops it", !continuousBackupStatus().running);
+
+      // 4g. BUG-111: the production state of 2026-10-27 03:07 UTC. Restart with the replica unreadable (here: gone) and
+      // the first local LTX file missing; a later change must reach the replica again (auto-recover or the supervisor
+      // reset), within two minutes.
+      if (fileReplica) {
+        const ltx0 = path.join(dir, ".veritas.db-litestream", "ltx", "0");
+        const files = fs.existsSync(ltx0) ? fs.readdirSync(ltx0).filter((f) => f.endsWith(".ltx")).sort() : [];
+        fs.rmSync(path.join(fileReplica, tag), { recursive: true, force: true });
+        if (files[0]) fs.rmSync(path.join(ltx0, files[0]));
+        _clearResetClockForTests();
+        const before = continuousBackupStatus().resets;
+        startContinuousBackup(sqlite, env);
+        let ok = false;
+        let last: any = null;
+        for (let i = 0; i < 8 && !ok; i++) {
+          await new Promise((r) => setTimeout(r, 10000));
+          ins.run(`after-reset ${i}`);
+          last = await continuousRestoreSelfTest(sqlite, 5000);
+          ok = last.verdict === "PASS";
+        }
+        const s4 = continuousBackupStatus();
+        const how = s4.resets > before ? "supervisor reset" : s4.log.some((l) => /auto.?recover|reset/i.test(l)) ? "Litestream auto-recover" : "no reset needed";
+        check("4g. BUG-111: after a restart with the replica gone and the first local LTX file missing, changes reach the replica again", ok,
+          JSON.stringify({ removedLtx: files[0] || null, how, verdict: last?.verdict, notes: last?.notes, log: s4.log.slice(-6) }));
+        await stopContinuousBackup();
+      }
     } catch (e: any) {
       console.error(e);
       failures++;
