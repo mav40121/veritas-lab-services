@@ -71,7 +71,8 @@ test("each VeritaResponse entry type opens on its own template", async ({ page, 
   await page.getByTestId("finding-status").click();
   await expect(page.getByRole("option", { name: "Closed" })).toHaveCount(0);
   await page.keyboard.press("Escape");
-  await expect(page.getByTestId("finding-signoff-btn")).toHaveText("Sign off and close (medical director or designee)");
+  // BUG-080 (2026-10-27): the button names how this user signs; the seeded user is the lab owner (logged override).
+  await expect(page.getByTestId("finding-signoff-btn")).toHaveText("Sign off and close (owner override)");
   await page.getByTestId("finding-type-details").scrollIntoViewIfNeeded();
   await page.screenshot({ path: "test-results/vr-type-pt.png" });
 
