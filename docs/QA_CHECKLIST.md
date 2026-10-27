@@ -82,7 +82,7 @@ For each: click in, click out, confirm lab URL preserved.
 ## 10. Public copy sanity (run `script/audit.py`)
 
 - [ ] `python script/audit.py` returns `Audit PASSED -- 0 errors`. The single live-seats warning is acceptable (admin endpoint auth, unrelated to copy).
-- [ ] If you shipped any new PDF / Excel / public marketing copy, spot check one for em-dashes (none allowed), product names (™ not ®), URL canonicalization (no `/#/`, no `localhost`, no Railway internal hostnames).
+- [ ] If you shipped any new PDF / Excel / public marketing copy, spot check one for em-dashes (none allowed), product names (® on VeritaAssure, VeritaMap, VeritaScan and VeritaCheck as software; ™ on every other Verita name and on VeritaAssure as consulting), URL canonicalization (no `/#/`, no `localhost`, no Railway internal hostnames).
 
 ## 11. Email reminder dispatch (only if shipping VeritaResponse changes)
 
