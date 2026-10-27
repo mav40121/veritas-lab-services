@@ -117,6 +117,14 @@ jobs:
         run: npx tsx scripts/verify-lab-local-date.ts
       - name: No UTC today in client code
         run: node scripts/verify-client-lab-today.mjs
+      - name: Run VeritaTrack categories and Weekly integration test
+        # #110 per-lab categories (owner/admin add, rename, retire; built-ins stay) and #111 Weekly (7-day interval,
+        # 2-day due-soon window, day-before reminder), Michael 2026-10-26.
+        run: npm run test:veritatrack-categories-weekly
+      - name: VeritaTrack due dates and reminder decisions
+        run: npx tsx scripts/verify-veritatrack-reminders.mts
+      - name: VeritaTrack frequency derivation
+        run: node scripts/verify-veritatrack-frequency.mjs
       - name: Run VeritaResponse entry-type templates integration test
         # Per-type clocks and fields (PT, NCE, QC and alternative-assessment escalations), type_details sanitizing,
         # closing only through the gated sign-off (Michael 2026-10-26, mock D1-D7).
