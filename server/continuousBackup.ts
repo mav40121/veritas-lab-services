@@ -20,6 +20,14 @@
 // Litestream, runs the reset and starts it again when the same error repeats (at most once per 30 minutes, so a reset
 // that does not help cannot loop). Point-in-time restore to before a reset is lost; the hourly and nightly copies
 // (server/backup.ts) keep that history.
+//
+// Generations (BUG-111 part 2, 2026-10-27 04:40 UTC): a reset starts Litestream's transaction ids again at 1, but the
+// replica folder still held the old snapshot at transaction 0xc212, so every restore read that old snapshot (the
+// production restore test stayed FAIL after the auto-recover at 04:23). So every reset now also moves replication to a
+// new, empty folder: litestream/g<N>/veritas.db, N kept in <db>.litestream-generation beside the database on the volume.
+// Generation 1 is the original litestream/veritas.db. GENERATION_FLOOR = 2 moves production off the folder that holds
+// the stale snapshot on the first boot of this code (with a reset first, so the new folder starts from a clean state).
+// Old generation folders are never deleted by this code; removing one is a manual decision.
 
 import { spawn, execFileSync, execFile, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
@@ -42,8 +50,20 @@ export function continuousBackupPlan(env: NodeJS.ProcessEnv = process.env): { en
 }
 
 // The replica folder: the main app writes litestream/veritas.db; any other Railway service writes under its own scope.
-export function continuousBackupReplicaPath(env: NodeJS.ProcessEnv = process.env): string {
-  return `${backupScope(env)}litestream/veritas.db`;
+// Generation 2 and later write litestream/g<N>/veritas.db (see the Generations note above).
+export function continuousBackupReplicaPath(env: NodeJS.ProcessEnv = process.env, generation = 1): string {
+  return generation > 1 ? `${backupScope(env)}litestream/g${generation}/veritas.db` : `${backupScope(env)}litestream/veritas.db`;
+}
+
+export const GENERATION_FLOOR = 2;
+export function generationFilePath(dbPath: string): string {
+  return `${dbPath}.litestream-generation`;
+}
+function readGeneration(dbPath: string): number {
+  try { const n = parseInt(fs.readFileSync(generationFilePath(dbPath), "utf8").trim(), 10); return Number.isInteger(n) && n > 0 ? n : 0; } catch { return 0; }
+}
+function writeGeneration(dbPath: string, n: number) {
+  fs.writeFileSync(generationFilePath(dbPath), `${n}\n`);
 }
 
 // fileReplicaDir (tests only, LITESTREAM_FILE_REPLICA): replicate to a local folder instead of R2, so CI can run the
@@ -95,13 +115,16 @@ interface State {
   // BUG-111: resets of Litestream's local tracking state made by this supervisor.
   resets: number;
   lastReset: { at: string; ok: boolean; trigger: string; out: string } | null;
+  // BUG-111 part 2: the replica generation in use (folder litestream/g<N>/veritas.db from 2 on).
+  generation: number;
   log: string[];
 }
 
 const state: State = {
   enabled: false, reason: "not started", bin: "", version: null, configPath: null, dbPath: null, replicaPath: null,
-  running: false, pid: null, startedAt: null, restarts: 0, lastExit: null, resets: 0, lastReset: null, log: [],
+  running: false, pid: null, startedAt: null, restarts: 0, lastExit: null, resets: 0, lastReset: null, generation: 0, log: [],
 };
+let fileReplicaDir: string | undefined;
 let child: ChildProcess | null = null;
 let stopping = false;
 let quickFailures = 0;
@@ -109,6 +132,8 @@ let quickFailures = 0;
 // BUG-111: the messages Litestream gives when its local tracking state is broken and a reset is the remedy (its own
 // hint on the first one is "Run 'litestream reset <db>'"; the others are the ones its reset documentation lists).
 export const RESET_HINT = /LTX file is missing|non-contiguous transaction files|nonsequential page numbers|cannot close, expected page/i;
+// Litestream's own auto-recover has reset the local state: the folder in use now holds transaction ids above the new ones.
+export const AUTO_RECOVERED = /auto-recovery enabled, resetting local state/i;
 const RESET_AFTER = 2; // the same error twice in one run
 const RESET_MIN_GAP_MS = 30 * 60 * 1000;
 let hintsThisRun = 0;
@@ -116,14 +141,14 @@ let resetting = false;
 let resetTrigger = "";
 let lastResetMs = 0;
 
-function maybeReset(line: string) {
+function maybeReset(line: string, now = false) {
   hintsThisRun += 1;
-  if (resetting || stopping || !child || hintsThisRun < RESET_AFTER) return;
+  if (resetting || stopping || !child || (!now && hintsThisRun < RESET_AFTER)) return;
   if (lastResetMs && Date.now() - lastResetMs < RESET_MIN_GAP_MS) return;
   resetting = true;
   lastResetMs = Date.now();
   resetTrigger = line.slice(0, 200);
-  note("local replication state is broken; stopping Litestream to reset it (tracking files only, the database is not touched)");
+  note("local replication state was reset or is broken; stopping Litestream to reset it and move to a new replica generation (tracking files only, the database is not touched)");
   try { child.kill("SIGTERM"); } catch { /* exit handler runs the reset either way */ }
 }
 
@@ -133,11 +158,20 @@ export function _clearResetClockForTests() {
   resetting = false;
 }
 
+// Points the config at generation n (and records it), so the next Litestream run writes a new, empty folder.
+function useGeneration(n: number, env: NodeJS.ProcessEnv = process.env) {
+  state.generation = n;
+  writeGeneration(state.dbPath!, n);
+  state.replicaPath = continuousBackupReplicaPath(env, n);
+  fs.writeFileSync(state.configPath!, litestreamConfig(state.dbPath!, state.replicaPath, fileReplicaDir));
+}
+
 async function resetAndRelaunch() {
+  useGeneration(state.generation + 1);
   const r = await run(state.bin, ["reset", "-config", state.configPath!, state.dbPath!], 120000);
   state.resets += 1;
   state.lastReset = { at: new Date().toISOString(), ok: r.ok, trigger: resetTrigger, out: r.out.slice(0, 300) };
-  note(`litestream reset ${r.ok ? "done" : "FAILED"}${r.out ? `: ${r.out.slice(0, 300)}` : ""}`);
+  note(`litestream reset ${r.ok ? "done" : "FAILED"}${r.out ? `: ${r.out.slice(0, 300)}` : ""}; now replicating to generation ${state.generation} (${state.replicaPath})`);
   resetting = false;
   if (!stopping) launch();
 }
@@ -168,6 +202,7 @@ function launch() {
   const onData = (buf: Buffer) => String(buf).split(/\r?\n/).filter((l) => l.trim()).forEach((l) => {
     note(l.slice(0, 500));
     if (RESET_HINT.test(l)) maybeReset(l);
+    else if (AUTO_RECOVERED.test(l)) maybeReset(l, true);
   });
   p.stdout?.on("data", onData);
   p.stderr?.on("data", onData);
@@ -216,10 +251,20 @@ export function startContinuousBackup(sqlite: Database.Database, env: NodeJS.Pro
     return state;
   }
   state.dbPath = path.resolve(sqlite.name);
-  state.replicaPath = continuousBackupReplicaPath(env);
   state.configPath = path.join(os.tmpdir(), "veritas-litestream.yml");
-  const fileReplicaDir = String(env.LITESTREAM_FILE_REPLICA ?? "").trim() || undefined;
-  fs.writeFileSync(state.configPath, litestreamConfig(state.dbPath, state.replicaPath, fileReplicaDir));
+  fileReplicaDir = String(env.LITESTREAM_FILE_REPLICA ?? "").trim() || undefined;
+  const stored = readGeneration(state.dbPath);
+  const generation = Math.max(stored, GENERATION_FLOOR);
+  useGeneration(generation, env);
+  if (stored < generation) {
+    // First boot on a new generation floor: clear Litestream's local state so the empty folder starts from a clean one.
+    try {
+      const out = execFileSync(state.bin, ["reset", "-config", state.configPath, state.dbPath], { timeout: 120000, windowsHide: true }).toString().trim();
+      note(`moved to replica generation ${generation} (${state.replicaPath}); local state reset${out ? `: ${out.slice(0, 200)}` : ""}`);
+    } catch (err: any) {
+      note(`moved to replica generation ${generation}; litestream reset FAILED: ${String(err?.message || err).slice(0, 200)}`);
+    }
+  }
   state.enabled = true;
   state.reason = "on";
   stopping = false;
