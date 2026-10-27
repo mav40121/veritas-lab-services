@@ -34964,6 +34964,19 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // (FK cascade gap left orphaned instruments/instrument_tests behind). Deletes
   // ONLY rows whose map_id is absent from veritamap_maps; nothing on a live map
   // is touched. Children-first order. { dryRun: true } previews counts.
+  // Per-lab time zone (2026-10-26): read-only list of every lab's zone, where it came from, and whether the lab should
+  // confirm it (split state or no CLIA state), so Veritas knows whom to ask.
+  app.post("/api/admin/lab-time-zones", (req: any, res) => {
+    const { secret } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    const rows = (db as any).$client.prepare("SELECT id, lab_name, clia_number, time_zone, is_demo FROM labs ORDER BY id").all() as any[];
+    const labs = rows.map((l) => {
+      const i = labTimeZoneInfo(l);
+      return { lab_id: l.id, lab_name: l.lab_name, is_demo: l.is_demo === 1, state: i.state, time_zone: i.timeZone, source: i.source, needs_confirm: i.needsConfirm };
+    });
+    res.json({ count: labs.length, needs_confirm: labs.filter((l) => l.needs_confirm).length, labs });
+  });
+
   // VeritaResponse legacy cleanup (parking lot #109, Michael 2026-10-26 option 1). Two kinds of findings predate
   // that day's changes:
   //   A. a finding escalated from a QC run that was voided before #100 shipped: it stayed open and kept reminding.
