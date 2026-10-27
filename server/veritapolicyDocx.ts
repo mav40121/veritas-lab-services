@@ -22,7 +22,8 @@ import {
 } from "docx";
 import { CFR_TOPICS_IN_OUR_WORDS } from "./cfrTopicsInOurWords";
 import { buildUmassMilfordDocument, buildRedingtonFairviewDocument, buildSampsonRegionalDocument, type HouseFormatContext } from "./veritapolicyHouseFormats";
-import { labToday } from "./dateLocal";
+import { labToday } from "./dateLocal";
+import { fixDocxListRestarts } from "./docxListRestart";
 
 // Brand palette per CLAUDE.md §6.
 const TEAL = "01696F";
@@ -675,5 +676,6 @@ export async function generatePolicyDocxBuffer(
         ? buildSampsonRegionalDocument(tmpl, lab, crosswalk ?? null, opts, houseCtx)
         : buildDocument(tmpl, lab, crosswalk ?? null, opts);
   const buf = await Packer.toBuffer(doc);
-  return buf;
+  // BUG-088: drop the per-instance start overrides Word's PDF export re-applies mid-document (server/docxListRestart.ts).
+  return fixDocxListRestarts(buf);
 }
