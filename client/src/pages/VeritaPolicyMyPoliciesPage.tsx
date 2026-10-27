@@ -2997,7 +2997,7 @@ export default function VeritaPolicyMyPoliciesPage() {
                   {trackerData.staffSignatures.length > 0 && (
                     <div>
                       <div className="text-xs font-medium text-muted-foreground mb-1">
-                        Staff Portal read-and-sign ({trackerData.staffSignatures.length})
+                        Staff read-and-sign ({trackerData.staffSignatures.length})
                       </div>
                       <div className="border rounded divide-y max-h-40 overflow-y-auto">
                         {trackerData.staffSignatures.map((s) => (

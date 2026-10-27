@@ -1747,7 +1747,7 @@ export default function VeritaQCAppPage() {
                       <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
                         <span className="font-medium">{n.author_name}</span>
                         <span>{new Date(n.created_at).toLocaleString()}</span>
-                        {n.source === "staff_portal" && <Badge variant="outline" className="text-[10px]">Staff Portal</Badge>}
+                        {n.source === "staff_portal" && <Badge variant="outline" className="text-[10px]">Staff login</Badge>}
                       </div>
                     </div>
                   ))

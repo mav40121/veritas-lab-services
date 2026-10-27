@@ -134,7 +134,7 @@ export async function generatePolicySignatureReportExcel(
   body(`This report is the combined signature record for a single policy: ${data.doc.title}${data.doc.policy_number ? ` (${data.doc.policy_number})` : ""}. It shows the director or designee approval and the full roster of everyone assigned to attest, who has signed, who is still pending, and the bench staff who read and signed at the kiosk. It is a point-in-time proof a surveyor can review in one place.`);
   blank();
   section("How to read it");
-  body("The Director Approval block lists each approval sign-off on the current version. The Signature Roster lists every assigned writer attestation and every Staff Portal signature, pending first so open items are obvious. 'Signed an earlier version' flags a signature captured before the current version, which usually needs a fresh attestation.");
+  body("The Director Approval block lists each approval sign-off on the current version. The Signature Roster lists every assigned writer attestation and every staff signature, pending first so open items are obvious. 'Signed an earlier version' flags a signature captured before the current version, which usually needs a fresh attestation.");
   blank();
   section("Disclaimer");
   body("This is a snapshot, not the authoritative record. The live VeritaAssure record is audit-grade. The laboratory director or designee is responsible for resolving any pending signature and for keeping the underlying data current.");

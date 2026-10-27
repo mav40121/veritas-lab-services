@@ -1363,7 +1363,7 @@ function EmployeeDialog({ open, onOpenChange, employee, lab, fromMember = null }
               Default off; lab director enables per-employee. */}
           <div className="border border-border rounded-lg p-3 bg-muted/30 space-y-2">
             <div className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">
-              Staff Portal access
+              Staff login access
             </div>
             <p className="text-xs text-muted-foreground">
               Policies and competency sign-offs are always available to every employee. Toggle the operational surfaces below per employee.
@@ -1528,9 +1528,9 @@ function EmployeeDialog({ open, onOpenChange, employee, lab, fromMember = null }
               PIN. */}
           {isEdit && employee && (
             <div className="border border-border rounded-md p-3 space-y-2 bg-muted/20">
-              <div className="text-xs font-semibold">Staff Portal Access</div>
+              <div className="text-xs font-semibold">Staff login</div>
               <p className="text-[11px] text-muted-foreground">
-                Send {employee.first_name} {employee.last_name} an invite to set up their own Staff Portal account.
+                Send {employee.first_name} {employee.last_name} an invite to set up their own VeritaAssure staff login.
                 They log in with their personal email and password (not a shared PIN), take quizzes, sign policies,
                 and view their records on their phone.
               </p>

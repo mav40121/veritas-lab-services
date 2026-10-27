@@ -117,6 +117,9 @@ jobs:
       - name: Run QC void settles its finding integration test
         # Voiding a QC run closes its untouched VeritaResponse finding or flags a worked one (parking lot #100).
         run: npm run test:qc-void-finding
+      - name: No customer-facing Staff Portal wording
+        # Parking lot #101: staff seats / staff login since 2026-10-09; comments and identifiers are ignored.
+        run: node scripts/verify-no-staff-portal-wording.mjs
       - name: Run ISO 15189 accreditation integration test
         # ISO 15189 add-on (#108): findings table rebuilt to accept ISO with rows, indexes and child rows intact;
         # settings round trip and audit; ISO findings gated by the lab flag and take the lab-entered due date.

@@ -52,7 +52,7 @@ test.describe("Staff Portal auth unification", () => {
     const editTrigger = page.locator('button:has-text("Edit")').first();
     await expect(editTrigger).toBeVisible({ timeout: 10000 });
     await editTrigger.click();
-    await expect(page.getByText("Staff Portal Access")).toBeVisible();
+    await expect(page.getByText(/^(Staff Portal Access|Staff login)$/)).toBeVisible(); // #101 wording
     await expect(page.getByTestId("staff-portal-invite-email")).toBeVisible();
     await expect(page.getByTestId("staff-portal-invite-send")).toBeVisible();
   });

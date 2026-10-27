@@ -114,7 +114,7 @@ export async function generateCountHistoryExcel(report: CountHistoryReport, ctx:
     { header: "Source", key: "src", width: 14 },
   ];
   hist.columns = HCOLS.map((c) => ({ header: c.header, key: c.key, width: c.width }));
-  const sourceLabel = (s: string) => (s === "kiosk" ? "Count kiosk" : s === "staff_portal" ? "Staff portal" : s === "director" ? "Director" : s);
+  const sourceLabel = (s: string) => (s === "kiosk" ? "Count kiosk" : s === "staff_portal" ? "Staff login" : s === "director" ? "Director" : s);
   for (const it of report.items) {
     for (const c of it.counts) {
       hist.addRow([

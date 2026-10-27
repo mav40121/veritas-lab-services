@@ -5330,7 +5330,7 @@ function AssignQuizDialog({
         </DialogHeader>
         <div className="space-y-4">
           <p className="text-xs text-muted-foreground">
-            Each picked employee will see this quiz in their Staff Portal under "Take a Quiz". Employees already
+            Each picked employee will see this quiz under My sign-offs, "Take a Quiz", when they sign in with their staff login. Employees already
             assigned to this quiz are shown but cannot be re-assigned.
           </p>
 

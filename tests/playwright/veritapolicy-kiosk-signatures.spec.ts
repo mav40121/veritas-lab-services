@@ -34,6 +34,6 @@ test.describe("VeritaPolicy compliance: kiosk staff signatures surfaced (LHF-1)"
     // The kiosk-signatures panel is the LHF-1 addition. Its presence proves the
     // director surface now reads staff_portal_policy_signatures, not just
     // writer-account attestations.
-    await expect(page.getByText("Staff Portal signatures", { exact: true })).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText(/^(Staff Portal signatures|Staff signatures)$/)).toBeVisible({ timeout: 15000 }); // #101 wording
   });
 });
