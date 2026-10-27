@@ -12,6 +12,7 @@
 import { db } from "./db";
 import { decideTaskReminder } from "./veritatrackReminders";
 import { daysUntilDateOnly } from "./veritatrack";
+import { labToday, labTimeZoneById } from "./dateLocal";
 
 export interface EquipmentReminderSummary {
   labs: number; equipmentChecked: number; notifiable: number; emailsSent: number; skipped: number; errors: number;
@@ -20,7 +21,7 @@ export interface EquipmentReminderSummary {
 export async function runEquipmentReminders(): Promise<EquipmentReminderSummary> {
   const summary: EquipmentReminderSummary = { labs: 0, equipmentChecked: 0, notifiable: 0, emailsSent: 0, skipped: 0, errors: 0 };
   const sqlite = (db as any).$client;
-  const today = new Date().toISOString().slice(0, 10);
+  // "today" is per lab, set at the top of the lab loop below.
 
   let resend: any = null;
   try {
@@ -42,6 +43,9 @@ export async function runEquipmentReminders(): Promise<EquipmentReminderSummary>
 
   for (const cfg of configs) {
     summary.labs++;
+    // Per-lab time zone (2026-10-27): this job runs at midnight UTC, when the UTC day is already tomorrow for every US
+    // lab, so count from each lab's own calendar day (reminders were going out a day early).
+    const today = labToday(labTimeZoneById(sqlite, cfg.lab_id));
     let recipients: { email: string; name?: string }[] = [];
     try { recipients = JSON.parse(cfg.recipients_json || "[]"); } catch { recipients = []; }
     recipients = recipients.filter(r => r && typeof r.email === "string" && r.email.includes("@"));
@@ -65,7 +69,7 @@ export async function runEquipmentReminders(): Promise<EquipmentReminderSummary>
     for (const eq of equipment) {
       summary.equipmentChecked++;
       const due = eq.next_due_date;
-      const days = daysUntilDateOnly(due);
+      const days = daysUntilDateOnly(due, today);
 
       const approachingKindsSent = new Set<string>(
         (sqlite.prepare(

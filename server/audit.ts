@@ -7,6 +7,7 @@
 import { db } from "./db";
 import { vlsContext } from "./vlsSupport";
 import { findingTemplate } from "@shared/findingTypes";
+import { labToday, labTimeZoneById } from "./dateLocal";
 
 export type AuditModule =
   | "veritamap"
@@ -246,10 +247,6 @@ export function getSnapshot(snapshotId: number): any | null {
 
 const REMINDER_WINDOWS = [14, 7, 3, 1] as const;
 
-function utcDateOnly(d: Date): string {
-  return d.toISOString().slice(0, 10);
-}
-
 function daysBetweenUtc(fromIso: string, toIso: string): number | null {
   if (!fromIso || !toIso) return null;
   const from = new Date(fromIso + "T00:00:00Z").getTime();
@@ -272,7 +269,7 @@ export interface ReminderRunSummary {
 // which test or level it was without signing in.
 export function findingReminderCandidates(sqlite: any): any[] {
   return sqlite.prepare(`
-    SELECT f.id, f.user_id, f.accreditor, f.source_type, f.due_date, f.status,
+    SELECT f.id, f.user_id, f.lab_id, f.accreditor, f.source_type, f.due_date, f.status,
            f.finding_number, f.standard_ref, f.qc_run_voided_note,
            u.email AS recipient_email, u.name AS recipient_name,
            l.lab_name, l.clia_number,
@@ -344,7 +341,13 @@ export function findingReminderEmail(c: any, days: number): { subject: string; t
 export async function runFindingReminders(): Promise<ReminderRunSummary> {
   const summary: ReminderRunSummary = { checked: 0, sent: 0, skipped: 0, errors: 0, details: [] };
   const sqlite = (db as any).$client;
-  const today = utcDateOnly(new Date());
+  // Per-lab time zone (2026-10-27): this job runs at midnight UTC, when the UTC day is already tomorrow for every US
+  // lab, so count each finding's days from its lab's own calendar day (T-7 went out at T-8 before).
+  const labDay = new Map<number | null, string>();
+  const todayFor = (labId: number | null) => {
+    if (!labDay.has(labId)) labDay.set(labId, labToday(labTimeZoneById(sqlite, labId)));
+    return labDay.get(labId)!;
+  };
 
   // Pull resend at call time so an env without RESEND_API_KEY doesn't
   // crash the module on import; we just log-and-skip the actual send.
@@ -367,7 +370,7 @@ export async function runFindingReminders(): Promise<ReminderRunSummary> {
   }
 
   for (const c of candidates) {
-    const days = daysBetweenUtc(today, String(c.due_date).slice(0, 10));
+    const days = daysBetweenUtc(todayFor(c.lab_id ?? null), String(c.due_date).slice(0, 10));
     if (days === null) continue;
     if (!REMINDER_WINDOWS.includes(days as any)) continue;
     summary.checked++;
