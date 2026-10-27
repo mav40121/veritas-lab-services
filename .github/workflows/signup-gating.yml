@@ -253,6 +253,10 @@ jobs:
         # BUG-069: the register, reminders, roster status and dashboard read each method's own clock; a person is due
         # when any assigned method is due; people with no method sign-offs keep the VeritaStaff record.
         run: npm run test:competency-method-due
+      - name: Run inventory adjust switch integration test
+        # BUG-078: a Staff Portal login whose VeritaStaff "Can adjust inventory" switch is off is refused on every
+        # inventory change (adjust, receive, write-off, scan, lot use); writers, owners and lookups unaffected.
+        run: npm run test:inventory-adjust-switch
       - name: Run competency observer role integration test
         # BUG-075: the Element 1 / 4 observer must be one of the lab's LD/TC/TS people in VeritaStaff; every save path
         # refuses anyone else on new or changed values; values already on the record stay.
