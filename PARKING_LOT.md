@@ -606,7 +606,7 @@ _(item #88 closed 2026-10-08; see C91 below)_
 2. Client: the SOP Review cell gets "Link policy" (search this lab's VeritaDC policies), then shows the policy title, its last review date and a status chip, with Unlink; one policy can be linked to several analytes at once (one chemistry procedure often covers many tests).
 3. Optional: the VeritaDC policy row shows "Used by N tests on VeritaMap".
 Receipts: an integration test for the derivation (linked, unlinked fallback, unapproved, review passed, recertified) that fails on the old code, and a browser receipt for the link picker.
-**Status:** Steps 1 and 2 approved (Michael Q86 = 1, 2026-10-11); build starts Thursday 10/15. Step 3 stays parked.
+**Status:** Steps 1 and 2 SHIPPED: PR #1736 merged 2026-10-27 (2cdb9621), live in 3e6a4006 (05:11 UTC). A test's SOP can link to a VeritaDC policy (Link policy on the SOP cell; one or many tests at once); the map, the lab-wide view, the Excel export and VeritaTrack's import read the policy's review state (Current while approved and inside its next review date, Overdue otherwise, with the reason). tests/integration/veritamap-sop-link.test.ts 12/12; production check: map detail carries sop_document_id and sop_link (sandbox lab 35, 05:13 UTC). Step 3 stays parked.
 
 ---
 
@@ -631,18 +631,6 @@ Receipts: an integration test for the derivation (linked, unlinked fallback, una
 
 **Source:** BUG-044 follow-up, Q128 (2026-10-12, 9:36 PM ET; Claude recommended parking it until after the 10/14 demo). Q128 was never answered.
 **Status:** Open. Waiting on Michael's Q128 (park and build, or leave as is).
-
----
-
-### 101. "Staff Portal" wording is still on the Plans page and in 11 other screens
-
-**Effort:** XS to S (copy sweep plus a check of each screen)
-**Importance:** Medium. Public pricing names a product that no longer exists; prospects and our own drafts repeat it.
-
-**What:** since 2026-10-09 (#1548, C93) staff sign in to the same VeritaAssure app with a staff login and setup locked; there is no separate Staff Portal. The phrase is still in client code on main (14fa0274): PricingPage.tsx (4, including the "Staff Portal Add-On" heading and the above-250 line), LabMembersPage.tsx (11), VeritaStaffAppPage.tsx (9), StaffPortalPage.tsx (4), VeritaPolicyCompliancePage.tsx (3), App.tsx (2), and one each in InventoryCountWorkflow, HospitalInventoryPage, VeritaCompAppPage, VeritaPolicyMyPoliciesPage, VeritaQCAppPage and VeritaStockPage. Rename to "staff seats" / "staff login" where it describes access, keep the flat-band pricing, and check whether StaffPortalPage is still routed or is dead code. Same sweep for faqContent, seo-metadata, static prerender text and generated PDFs/emails.
-
-**Source:** Michael 2026-10-14 ("there is no staff portal anymore, correct?") while reviewing the St. Charles reply; Claude had used the term in the draft email and SBAR (both corrected the same evening).
-**Status:** Open.
 
 ---
 
@@ -732,6 +720,12 @@ Open questions for the scope:
 ---
 
 ## CLOSED (audit trail)
+
+### C108. "Staff Portal" wording gone from every screen a customer reads (was #101)
+
+**Effort:** was XS to S / **Importance:** Medium.
+
+**Closure evidence:** PR #1735 merged 2026-10-27 05:05 UTC (379c2892), live in 3e6a4006 (2026-10-27 05:11 UTC). Customer copy says staff seats (pricing) and staff login (access). scripts/verify-no-staff-portal-wording.mjs in CI fails if the phrase returns to client pages, server messages, emails, PDFs or spreadsheets. Production 2026-10-27 05:13 UTC (vls-ops/prod_overnight_checks.mjs): 0 occurrences of "Staff Portal" across the 251 served JavaScript files (16 on the build before).
 
 ### C107. VeritaTrack: a Weekly frequency (was #111)
 
