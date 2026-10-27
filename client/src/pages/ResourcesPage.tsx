@@ -10,13 +10,13 @@ import { teaData } from "@/lib/cliaTeaData";
 const articles = [
   {
     slug: "getting-started",
-    title: "Getting Started with VeritaAssure™",
+    title: "Getting Started with VeritaAssure®",
     summary: "A step-by-step setup path plus a getting-started checklist for every one of the eighteen modules. Check items off as you go, or print the guide.",
     category: "Getting Started",
     readTime: "Interactive checklist",
     author: "Veritas Lab Services",
     date: "October 2026",
-    tags: ["Getting Started", "Onboarding", "VeritaAssure™"],
+    tags: ["Getting Started", "Onboarding", "VeritaAssure®"],
     featured: true,
   },
   {
@@ -38,18 +38,18 @@ const articles = [
     readTime: "9 min read",
     author: "Michael Veri",
     date: "October 2026",
-    tags: ["Buyer's Guide", "Lab Compliance Software", "Accreditation", "CLIA", "VeritaAssure™"],
+    tags: ["Buyer's Guide", "Lab Compliance Software", "Accreditation", "CLIA", "VeritaAssure®"],
     featured: true,
   },
   {
     slug: "veritacheck-vs-ep-evaluator",
-    title: "VeritaCheck™ vs EP Evaluator: CLIA Verification Compared",
+    title: "VeritaCheck® vs EP Evaluator: CLIA Verification Compared",
     summary: "An honest side-by-side of VeritaCheck and EP Evaluator for CLIA performance verification: statistical study coverage, whole-menu coverage, the 42 CFR-cited and director-signed report, delivery, and pricing, including where EP Evaluator is stronger.",
     category: "Comparison",
     readTime: "7 min read",
     author: "Michael Veri",
     date: "October 2026",
-    tags: ["Comparison", "EP Evaluator", "Method Verification", "CLIA", "VeritaCheck™"],
+    tags: ["Comparison", "EP Evaluator", "Method Verification", "CLIA", "VeritaCheck®"],
     featured: false,
   },
   {
@@ -60,7 +60,7 @@ const articles = [
     readTime: "9 min read",
     author: "Michael Veri",
     date: "September 2026",
-    tags: ["Post-Analytical", "Critical Values", "Corrected Reports", "Autoverification", "VeritaMap™"],
+    tags: ["Post-Analytical", "Critical Values", "Corrected Reports", "Autoverification", "VeritaMap®"],
     featured: true,
   },
   {
@@ -93,7 +93,7 @@ const articles = [
     readTime: "10 min read",
     author: "Michael Veri",
     date: "July 2026",
-    tags: ["Reference Intervals", "CLSI EP28-A3c", "CLIA", "Verification", "VeritaCheck™"],
+    tags: ["Reference Intervals", "CLSI EP28-A3c", "CLIA", "Verification", "VeritaCheck®"],
     featured: false,
   },
   {
@@ -120,13 +120,13 @@ const articles = [
   },
   {
     slug: "why-veritacheck-vs-legacy-verification",
-    title: "Why VeritaCheck™ vs. Legacy Verification Software",
+    title: "Why VeritaCheck® vs. Legacy Verification Software",
     summary: "Side-by-side comparison authored for lab directors evaluating a tool change. Four dimensions: cost ($299 vs. typical $800-$3,000 per seat), time-to-first-study, integration breadth across the VeritaAssure platform, and compliance defensibility under 42 CFR Part 493.",
     category: "Product Positioning",
     readTime: "5 min read",
     author: "Veritas Lab Services",
     date: "May 2026",
-    tags: ["VeritaCheck™", "Method Verification", "CLIA", "Lab Software"],
+    tags: ["VeritaCheck®", "Method Verification", "CLIA", "Lab Software"],
     featured: false,
   },
   {
@@ -142,13 +142,13 @@ const articles = [
   },
   {
     slug: "how-veritaassure-trains-lab-leaders",
-    title: "How VeritaAssure™ Trains the Next Generation of Lab Leaders",
-    summary: "Most lab directors learn compliance the hard way. VeritaAssure™ changes that. Here is how the modules work as a leadership development curriculum.",
+    title: "How VeritaAssure® Trains the Next Generation of Lab Leaders",
+    summary: "Most lab directors learn compliance the hard way. VeritaAssure® changes that. Here is how the modules work as a leadership development curriculum.",
     category: "Leadership Development",
     readTime: "14 min read",
     author: "Michael Veri",
     date: "March 2026",
-    tags: ["Leadership Development", "Lab Director", "CLIA", "VeritaAssure™"],
+    tags: ["Leadership Development", "Lab Director", "CLIA", "VeritaAssure®"],
     featured: false,
   },
   {
@@ -208,8 +208,8 @@ const articles = [
   },
   {
     slug: "how-to-validate-veritacheck-clia",
-    title: "How to Validate VeritaCheck™ for Your Clinical Laboratory",
-    summary: "A step-by-step guide to completing IQ/OQ/PQ software validation for VeritaCheck™, with a free downloadable template. Most labs finish in under two hours.",
+    title: "How to Validate VeritaCheck® for Your Clinical Laboratory",
+    summary: "A step-by-step guide to completing IQ/OQ/PQ software validation for VeritaCheck®, with a free downloadable template. Most labs finish in under two hours.",
     category: "Software Validation",
     readTime: "8 min read",
     author: "Michael Veri",
@@ -325,15 +325,15 @@ return (
           <div className="grid sm:grid-cols-2 gap-3">
             {[
               {
-                title: "VeritaCheck™ CLSI Compliance Matrix",
-                desc: "One-page landscape reference mapping the core VeritaCheck™ verification study types to CLSI, CLIA (42 CFR), CAP, and TJC standards. Use this with inspectors to demonstrate regulatory alignment.",
+                title: "VeritaCheck® CLSI Compliance Matrix",
+                desc: "One-page landscape reference mapping the core VeritaCheck® verification study types to CLSI, CLIA (42 CFR), CAP, and TJC standards. Use this with inspectors to demonstrate regulatory alignment.",
                 url: "/api/downloads/clsi-compliance-matrix",
                 filename: "VeritaCheck_CLSI_Compliance_Matrix.pdf",
                 icon: Shield,
               },
               {
-                title: "VeritaCheck™ Software Validation Template",
-                desc: "4-page fillable template to validate VeritaCheck™ for compliance documentation before placing it into service. Satisfies CAP GEN.20316, TJC QSA.15.01.01 EP1, and CLIA 42 CFR 493.1251.",
+                title: "VeritaCheck® Software Validation Template",
+                desc: "4-page fillable template to validate VeritaCheck® for compliance documentation before placing it into service. Satisfies CAP GEN.20316, TJC QSA.15.01.01 EP1, and CLIA 42 CFR 493.1251.",
                 url: "/api/downloads/software-validation-template",
                 filename: "VeritaCheck_Software_Validation_Template.pdf",
                 icon: CheckCircle2,
@@ -441,7 +441,7 @@ return (
           <FlaskConical size={28} className="mx-auto mb-3 opacity-80" />
           <h2 className="font-serif text-xl font-bold mb-2">Put the knowledge to work.</h2>
           <p className="text-primary-foreground/80 text-sm max-w-md mx-auto mb-5">
-            VeritaCheck™ runs the studies described in these articles automatically: calibration verification, method comparison, and EP15 precision verification, with CLIA-compliant PDF reports.
+            VeritaCheck® runs the studies described in these articles automatically: calibration verification, method comparison, and EP15 precision verification, with CLIA-compliant PDF reports.
           </p>
           <Button asChild size="lg" className="bg-white text-primary hover:bg-white/90 font-semibold">
             <Link href="/veritacheck">Run a Free Study <ChevronRight size={15} className="ml-1" /></Link>

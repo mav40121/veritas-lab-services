@@ -77,7 +77,7 @@ const TOP_PLANS = [
     badge: null,
   },
   {
-    name: "VeritaCheck\u2122 Unlimited",
+    name: "VeritaCheck\u00AE Unlimited",
     price: "$299",
     period: "first year",
     // Y2+ renewal disclosure surfaced as a second prominent line in the
@@ -88,7 +88,7 @@ const TOP_PLANS = [
     description: "Single user. Method verification suite only. First-year discount auto-applied at checkout.",
     features: [
       "Unlimited studies",
-      "All VeritaCheck\u2122 study types",
+      "All VeritaCheck\u00AE study types",
       "Full PDF reports",
       "Study history dashboard",
     ],
@@ -110,7 +110,7 @@ const SUITE_PLANS = [
     period: "/yr",
     description: "Certificate of Waiver labs and small clinics.",
     features: [
-      "Full VeritaAssure\u2122 suite including all future modules",
+      "Full VeritaAssure\u00AE suite including all future modules",
       "2 active seats included ($500/seat)",
       "One free medical director seat",
       "Additional seats at $500 each, your tier rate",
@@ -161,7 +161,7 @@ const SUITE_PLANS = [
 ];
 
 export default function PricingPage() {
-    useSEO({ title: "Pricing | VeritaAssure™ Lab Compliance Software", description: "Simple annual pricing for clinical laboratory compliance software. Plans for individual labs, community hospitals, regional hospitals, and enterprise health systems." });
+    useSEO({ title: "Pricing | VeritaAssure® Lab Compliance Software", description: "Simple annual pricing for clinical laboratory compliance software. Plans for individual labs, community hospitals, regional hospitals, and enterprise health systems." });
 return (
     <div className="min-h-screen bg-background">
 
@@ -196,7 +196,7 @@ return (
             the top row and bottom row can share it without duplication. */}
         {(() => {
           const tierSlug: Record<string, string> = {
-            "VeritaCheck\u2122 Unlimited": "veritacheck",
+            "VeritaCheck\u00AE Unlimited": "veritacheck",
             "Clinic": "clinic",
             "Community": "community",
             "Hospital": "hospital",
@@ -401,7 +401,7 @@ return (
               <Badge variant="outline" className="border-primary/40 text-primary">Limited cohort</Badge>
             </div>
             <p className="text-base mb-4 leading-relaxed">
-              Become a charter customer of VeritaAssure™.
+              Become a charter customer of VeritaAssure®.
             </p>
             <ul className="space-y-2 mb-5">
               <li className="flex items-start gap-2 text-sm">
@@ -514,7 +514,7 @@ return (
         {/* Guest Study CTA */}
         <div className="bg-muted/30 border border-border rounded-lg p-5 text-center">
           <p className="text-sm text-muted-foreground">
-            Not ready to commit? Run a single VeritaCheck&#8482; study for $25, no account required.{" "}
+            Not ready to commit? Run a single VeritaCheck&#174; study for $25, no account required.{" "}
             <Link href="/veritacheck" className="text-primary font-medium hover:underline inline-flex items-center gap-1">
               Try it now <ArrowRight size={13} />
             </Link>
@@ -541,10 +541,10 @@ return (
               </thead>
               <tbody className="divide-y divide-border">
                 {[
-                  { feature: "VeritaCheck\u2122 studies (including CUMSUM)", values: ["1 study", true, true, true, true] },
+                  { feature: "VeritaCheck\u00AE studies (including CUMSUM)", values: ["1 study", true, true, true, true] },
                   { feature: "Full PDF reports with CLIA number", values: [true, true, true, true, true] },
-                  { feature: "VeritaScan\u2122 inspection readiness", values: [false, false, true, true, true] },
-                  { feature: "VeritaMap\u2122 test menu mapping", values: [false, false, true, true, true] },
+                  { feature: "VeritaScan\u00AE inspection readiness", values: [false, false, true, true, true] },
+                  { feature: "VeritaMap\u00AE test menu mapping", values: [false, false, true, true, true] },
                   { feature: "VeritaComp\u2122 competency tracking", values: [false, false, true, true, true] },
                   { feature: "VeritaStaff\u2122 personnel management", values: [false, false, true, true, true] },
                   { feature: "VeritaTrack\u2122 regulatory calendar", values: [false, false, true, true, true] },
@@ -630,7 +630,7 @@ return (
             <div className="text-center px-4">
               <Quote size={24} className="text-primary/40 mx-auto mb-3" />
               <p className="text-base italic leading-relaxed mb-4">
-                "I didn't know what questions to ask because I didn't know where my gaps were. VeritaAssure™ showed me what I was missing before a surveyor found it first."
+                "I didn't know what questions to ask because I didn't know where my gaps were. VeritaAssure® showed me what I was missing before a surveyor found it first."
               </p>
               <p className="text-sm font-semibold">John Hall</p>
               <p className="text-xs text-muted-foreground">Laboratory Director, San Carlos Apache Healthcare Corporation</p>
@@ -638,7 +638,7 @@ return (
             <div className="text-center px-4">
               <Quote size={24} className="text-primary/40 mx-auto mb-3" />
               <p className="text-base italic leading-relaxed mb-4">
-                "VeritaAssure™ is a suite of tools that will revolutionize the regulatory side of laboratory management. Whether your lab is accredited by CAP, TJC, or COLA, this streamlines your entire compliance workflow."
+                "VeritaAssure® is a suite of tools that will revolutionize the regulatory side of laboratory management. Whether your lab is accredited by CAP, TJC, or COLA, this streamlines your entire compliance workflow."
               </p>
               <p className="text-sm font-semibold">Lisa Veri</p>
               <p className="text-xs text-muted-foreground">Administrative Lab Director, Milford Regional Medical Center</p>

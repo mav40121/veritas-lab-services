@@ -26,7 +26,7 @@ const ok = (label, cond) => { console.log(`${cond ? "PASS" : "FAIL"}: ${label}`)
 
 ok("VeritaPT footer template exists", /const VERITAPT_FOOTER_TEMPLATE = `/.test(pdf));
 ok("VeritaPT footer carries the brand line (Sec 5)",
-  /VeritaAssure&trade; \| VeritaPT&trade; \| Confidential - For Internal Lab Use Only/.test(pdf));
+  /VeritaAssure&reg; \| VeritaPT&trade; \| Confidential - For Internal Lab Use Only/.test(pdf));
 ok("VeritaPT footer carries Page X of Y",
   /const VERITAPT_FOOTER_TEMPLATE = `[\s\S]{0,700}Page <span class="pageNumber"><\/span> of <span class="totalPages"><\/span>/.test(pdf));
 ok("generateVeritaPTPDF passes the template (not the empty string)",

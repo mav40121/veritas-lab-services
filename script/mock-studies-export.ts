@@ -278,7 +278,7 @@ async function main() {
 
   // Title block (rows 1-3)
   ws.mergeCells("A1:I1");
-  ws.getCell("A1").value = `VeritaCheck\u2122 Studies Summary: ${labName}`;
+  ws.getCell("A1").value = `VeritaCheck\u00AE Studies Summary: ${labName}`;
   ws.getCell("A1").font = { name: "Calibri", bold: true, size: 14, color: { argb: "FF01696F" } };
   ws.getCell("A1").alignment = { vertical: "middle", horizontal: "left" };
   ws.getRow(1).height = 22;
@@ -372,7 +372,7 @@ async function main() {
 
   const footerRowNum = 5 + studies.length + 1;
   ws.mergeCells(`A${footerRowNum}:I${footerRowNum}`);
-  ws.getCell(`A${footerRowNum}`).value = "VeritaAssure\u2122 | VeritaCheck\u2122 | Confidential, For Internal Lab Use Only";
+  ws.getCell(`A${footerRowNum}`).value = "VeritaAssure\u00AE | VeritaCheck\u00AE | Confidential, For Internal Lab Use Only";
   ws.getCell(`A${footerRowNum}`).font = { name: "Calibri", italic: true, size: 8, color: { argb: "FF7A7974" } };
   ws.getCell(`A${footerRowNum}`).alignment = { vertical: "middle", horizontal: "center" };
 

@@ -1,4 +1,4 @@
-// VeritaScan™ Custom Questions (parking-lot #55, phase 2)
+// VeritaScan® Custom Questions (parking-lot #55, phase 2)
 //
 // Lab-authored scan items that sit ALONGSIDE the curated 173-item master set.
 // This page is the author / edit / retire surface; it is lab-scoped (a custom
@@ -165,7 +165,7 @@ export default function VeritaScanCustomQuestionsPage() {
             <Lock className="h-8 w-8 mx-auto text-muted-foreground" />
             <h1 className="text-xl font-semibold">Custom Questions</h1>
             <p className="text-sm text-muted-foreground">
-              Available for VeritaScan™ subscribers. Add VeritaScan to author your own
+              Available for VeritaScan® subscribers. Add VeritaScan to author your own
               site-specific scan items.
             </p>
             <Button asChild variant="outline"><Link href="/veritascan">View plans</Link></Button>

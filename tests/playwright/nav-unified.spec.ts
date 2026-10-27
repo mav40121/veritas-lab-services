@@ -52,7 +52,7 @@ test.describe("Unified VeritaAssure nav", () => {
     // Both stream sub-headers and one module from each stream are present.
     await expect(banner.getByText("Compliance", { exact: true })).toBeVisible();
     await expect(banner.getByText("Operations", { exact: true })).toBeVisible();
-    await expect(banner.getByRole("link", { name: "VeritaCheck™", exact: true })).toBeVisible();  // compliance
+    await expect(banner.getByRole("link", { name: "VeritaCheck®", exact: true })).toBeVisible();  // compliance
     await expect(banner.getByRole("link", { name: "VeritaStock™", exact: true })).toBeVisible();  // operations
   });
 });

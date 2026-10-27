@@ -347,10 +347,10 @@ export default function VeritaPTAppPage() {
         <FlaskConical size={48} className="mx-auto mb-4 text-[#006064]" />
         <h2 className="text-2xl font-bold mb-2">VeritaPT™</h2>
         <p className="text-muted-foreground mb-6">
-          No test menu found. Add your instruments and tests in VeritaMap™ to see your PT coverage analysis here.
+          No test menu found. Add your instruments and tests in VeritaMap® to see your PT coverage analysis here.
         </p>
         <Button asChild className="bg-[#006064] hover:bg-[#004d50] text-white">
-          <Link href="/veritamap">Go to VeritaMap™</Link>
+          <Link href="/veritamap">Go to VeritaMap®</Link>
         </Button>
       </div>
     );

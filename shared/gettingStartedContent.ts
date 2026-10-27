@@ -49,15 +49,15 @@ export const SYSTEM_PHASES: PhaseBlock[] = [
   {
     title: "Phase 2: Build your lab foundation",
     steps: [
-      { key: "p2.map", task: "VeritaMap™: add each instrument and its analytes, and set complexity (waived, moderate, or high) on each test.", who: "Owner or admin", kind: "derived", route: "/veritamap-app" },
-      { key: "p2.ranges", task: "VeritaMap™: enter your verified reference ranges, AMR, and MEC-adopted critical values. The system never pre-fills these.", who: "Owner or admin", kind: "derived", route: "/veritamap-app" },
+      { key: "p2.map", task: "VeritaMap®: add each instrument and its analytes, and set complexity (waived, moderate, or high) on each test.", who: "Owner or admin", kind: "derived", route: "/veritamap-app" },
+      { key: "p2.ranges", task: "VeritaMap®: enter your verified reference ranges, AMR, and MEC-adopted critical values. The system never pre-fills these.", who: "Owner or admin", kind: "derived", route: "/veritamap-app" },
       { key: "p2.staff", task: "VeritaStaff™: build the employee roster and assign instruments to each employee.", who: "Owner or admin", kind: "derived", route: "/veritastaff-app" },
     ],
   },
   {
     title: "Phase 3: Compliance modules",
     steps: [
-      { key: "p3.study", task: "Run your first VeritaCheck™ verification study and generate the PDF for the medical director or designee to sign.", who: "Tech or writer", kind: "derived", route: "/study/new" },
+      { key: "p3.study", task: "Run your first VeritaCheck® verification study and generate the PDF for the medical director or designee to sign.", who: "Tech or writer", kind: "derived", route: "/study/new" },
       { key: "p3.competency", task: "Assess an employee's competency in VeritaComp™ and capture the evaluator sign-off.", who: "Technical consultant or supervisor", kind: "derived", route: "/veritacomp-app" },
       { key: "p3.policy", task: "Author or import a policy in VeritaPolicy™ and assign it for read-and-sign.", who: "Owner or admin", kind: "derived", route: "/veritapolicy-app" },
       { key: "p3.qc", task: "Enter QC in VeritaQC™, apply Westgard rules, and capture the medical director or designee co-sign.", who: "Tech or writer", kind: "derived", route: "/veritaqc-app" },
@@ -92,7 +92,7 @@ export const MANUAL_STEP_KEYS = SYSTEM_PHASES.flatMap((p) => p.steps.filter((s) 
 
 // ---- Per-module getting-started checklists (all 18 modules) ----
 export const MODULE_GUIDES: ModuleGuide[] = [
-  { name: "VeritaMap™", stream: "Compliance", what: "Your instrument and test menu, the foundation the other modules read from.", steps: [
+  { name: "VeritaMap®", stream: "Compliance", what: "Your instrument and test menu, the foundation the other modules read from.", steps: [
     "Add each instrument and its analytes to your lab's map.",
     "Set complexity (waived, moderate, or high) on every test; it drives PT, verification, competency, QC, and personnel.",
     "Enter your verified reference ranges, AMR, and MEC-adopted critical values.",
@@ -102,7 +102,7 @@ export const MODULE_GUIDES: ModuleGuide[] = [
     "Assign instruments to each employee; these assignments drive competency coverage.",
     "Track credentials and continuing education.",
   ]},
-  { name: "VeritaCheck™", stream: "Compliance", what: "CLIA performance verification with a 42 CFR-cited, director-signed report.", steps: [
+  { name: "VeritaCheck®", stream: "Compliance", what: "CLIA performance verification with a 42 CFR-cited, director-signed report.", steps: [
     "Pick an instrument and start a study (precision, correlation / method comparison, or calibration verification / linearity).",
     "Enter your data and review the regulatory verdict and coverage.",
     "Generate the PDF for the medical director or designee to sign.",
@@ -117,7 +117,7 @@ export const MODULE_GUIDES: ModuleGuide[] = [
     "Assign it for read-and-sign.",
     "Use the major-revision workflow when a policy changes materially.",
   ]},
-  { name: "VeritaScan™", stream: "Compliance", what: "Self-audit and document library against the requirements that apply to you.", steps: [
+  { name: "VeritaScan®", stream: "Compliance", what: "Self-audit and document library against the requirements that apply to you.", steps: [
     "Run a compliance audit.",
     "Work the needs-review items.",
     "Keep source documents in the library.",

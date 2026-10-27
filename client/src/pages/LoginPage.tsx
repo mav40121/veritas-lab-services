@@ -387,7 +387,7 @@ export default function LoginPage() {
           <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-3">
             <FlaskConical size={22} className="text-primary" />
           </div>
-          <h1 className="font-serif text-2xl font-bold">{onStock ? "VeritaStock™" : "VeritaAssure™ Account"}</h1>
+          <h1 className="font-serif text-2xl font-bold">{onStock ? "VeritaStock™" : "VeritaAssure® Account"}</h1>
           <p className="text-sm text-muted-foreground mt-1">{onStock ? "Sign in to manage your multi-location inventory" : (wantRegister ? "Create a free account to run and save your studies. Two free studies to start." : "Sign in to save and access your studies")}</p>
         </div>
         <Card>
@@ -683,7 +683,7 @@ export default function LoginPage() {
                           className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary shrink-0"
                         />
                         <span className="text-sm text-foreground leading-relaxed">
-                          I understand that VeritaAssure&#8482; is not a HIPAA-covered platform and is not designed to store, process, or transmit protected health information (PHI). I agree to use only de-identified data, sample IDs, QC lot numbers, and non-patient-identifiable information when entering data into any VeritaAssure&#8482; module.
+                          I understand that VeritaAssure&#174; is not a HIPAA-covered platform and is not designed to store, process, or transmit protected health information (PHI). I agree to use only de-identified data, sample IDs, QC lot numbers, and non-patient-identifiable information when entering data into any VeritaAssure&#174; module.
                         </span>
                       </label>
                       {hipaaError && <p className="text-sm text-red-600">{hipaaError}</p>}

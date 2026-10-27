@@ -1,4 +1,4 @@
-// VeritaScan™ Evidence Library (Phase A, 2026-06-02)
+// VeritaScan® Evidence Library (Phase A, 2026-06-02)
 //
 // URL-pointers-only document library per the locked architectural decision
 // (see project_veritascan_url_pointers_only memory entry). No file uploads.
@@ -250,7 +250,7 @@ export default function VeritaScanDocumentLibraryPage() {
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
       <div className="flex items-start justify-between gap-3 mb-6">
         <div>
-          <h1 className="text-2xl font-bold">VeritaScan™ Evidence Library</h1>
+          <h1 className="text-2xl font-bold">VeritaScan® Evidence Library</h1>
           <p className="text-sm text-muted-foreground mt-1">
             Link external documents that satisfy your accreditation checklists. URLs only. Files stay in your SharePoint, Drive, OneDrive, or network share.
           </p>

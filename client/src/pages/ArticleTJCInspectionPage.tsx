@@ -115,12 +115,12 @@ return (
             <strong>The most expensive phrase in lab compliance:</strong> "We do it, we just do not document it." This is the sentence that turns a correctable practice gap into a deficiency. If you perform proficiency testing and there is no record, a surveyor cannot distinguish your compliant lab from a non-compliant one. Documentation is not paperwork, it is the evidence that your quality practices exist.
           </Callout>
 
-          <h2 className="font-serif text-2xl font-bold mt-10 mb-3">How VeritaAssure™ Addresses Each Area</h2>
+          <h2 className="font-serif text-2xl font-bold mt-10 mb-3">How VeritaAssure® Addresses Each Area</h2>
           <p>
-            VeritaMap™ maintains your complete instrument and test menu inventory. When a surveyor asks which instruments perform a test and what their verification history looks like, you open VeritaMap™ and show them.
+            VeritaMap® maintains your complete instrument and test menu inventory. When a surveyor asks which instruments perform a test and what their verification history looks like, you open VeritaMap® and show them.
           </p>
           <p>
-            VeritaCheck™ stores every validation study with date, analyst, pass or fail determination, and medical director or designee signature. Generating any report for surveyor review takes under thirty seconds.
+            VeritaCheck® stores every validation study with date, analyst, pass or fail determination, and medical director or designee signature. Generating any report for surveyor review takes under thirty seconds.
           </p>
           <p>
             VeritaComp™ links competency assessments to specific method groups in your test menu. The gap between "we assessed competency" and "we assessed competency for this method, for this person, on this date" is exactly what surveyors are testing.
@@ -140,12 +140,12 @@ return (
             <div className="flex items-start gap-3">
               <FlaskConical size={20} className="text-primary shrink-0 mt-0.5" />
               <div>
-                <div className="font-semibold text-sm mb-1">VeritaAssure™ keeps your lab survey-ready</div>
+                <div className="font-semibold text-sm mb-1">VeritaAssure® keeps your lab survey-ready</div>
                 <p className="text-sm text-muted-foreground mb-3">
-                  Explore the full VeritaAssure™ suite at veritaslabservices.com and see how integrated documentation changes the survey experience.
+                  Explore the full VeritaAssure® suite at veritaslabservices.com and see how integrated documentation changes the survey experience.
                 </p>
                 <Button asChild size="sm" className="bg-primary text-primary-foreground">
-                  <Link href="/veritaassure">Explore VeritaAssure™ <ChevronRight size={13} className="ml-1" /></Link>
+                  <Link href="/veritaassure">Explore VeritaAssure® <ChevronRight size={13} className="ml-1" /></Link>
                 </Button>
               </div>
             </div>
@@ -171,14 +171,14 @@ return (
             <FlaskConical size={28} className="mx-auto mb-3 opacity-80" />
             <h3 className="font-serif text-xl font-bold mb-2">Ready to prepare for your next survey?</h3>
             <p className="text-primary-foreground/80 text-sm max-w-md mx-auto mb-5">
-              VeritaScan™ provides a complete TJC compliance checklist mapped to every standard. Run your own mock survey and identify gaps before the surveyor does.
+              VeritaScan® provides a complete TJC compliance checklist mapped to every standard. Run your own mock survey and identify gaps before the surveyor does.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Button asChild size="lg" className="bg-white text-primary hover:bg-white/90 font-semibold">
-                <Link href="/veritascan">Explore VeritaScan™ <ChevronRight size={15} className="ml-1" /></Link>
+                <Link href="/veritascan">Explore VeritaScan® <ChevronRight size={15} className="ml-1" /></Link>
               </Button>
               <Button asChild size="lg" variant="outline" className="border-white/40 text-white hover:bg-white/10">
-                <Link href="/veritaassure">Full VeritaAssure™ Suite <ExternalLink size={13} className="ml-1" /></Link>
+                <Link href="/veritaassure">Full VeritaAssure® Suite <ExternalLink size={13} className="ml-1" /></Link>
               </Button>
             </div>
           </div>

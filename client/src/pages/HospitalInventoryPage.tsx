@@ -146,7 +146,7 @@ export default function HospitalInventoryPage() {
           <h2 className="font-serif text-3xl sm:text-4xl font-bold text-white mb-3">Stop running out. Stop expiring. Stop guessing.</h2>
           <p className="text-[#9FE1CB] mb-8 max-w-xl mx-auto">See it on your own stockroom in a 20-minute demo.</p>
           <Button asChild size="lg" className="bg-white text-[#04342C] hover:bg-white/90 font-semibold"><a href={DEMO_MAILTO}>Book a demo <ArrowRight size={16} className="ml-1" /></a></Button>
-          <p className="text-sm text-white/60 mt-8">From the team behind VeritaAssure&trade;. Built by lab and quality professionals. No patient data, ever.</p>
+          <p className="text-sm text-white/60 mt-8">From the team behind VeritaAssure&reg;. Built by lab and quality professionals. No patient data, ever.</p>
         </div>
       </section>
     </div>

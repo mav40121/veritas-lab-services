@@ -539,7 +539,7 @@ function IntelligenceBanner({
       <div className="px-4 pt-3 pb-2 flex items-center gap-2 border-b border-red-200/60 dark:border-red-900/40">
         <GitMerge size={15} className="text-red-600 dark:text-red-400 shrink-0" />
         <span className="text-sm font-bold text-red-800 dark:text-red-200">
-          VeritaMap™ Intelligence
+          VeritaMap® Intelligence
         </span>
         <span className="text-xs text-red-600/70 dark:text-red-400/70 ml-1">
           - Cross-instrument correlation & compliance engine
@@ -629,7 +629,7 @@ function IntelligenceBanner({
                 className="inline-flex items-center text-[11px] font-semibold text-primary hover:underline"
               >
                 <FlaskConical size={10} className="mr-1" />
-                Run a Study in VeritaCheck{"\u2122"}
+                Run a Study in VeritaCheck{"\u00AE"}
                 <ChevronRight size={10} className="ml-0.5" />
               </Link>
             )}
@@ -3257,7 +3257,7 @@ export default function VeritaMapMapPage() {
           >
             <Link href="/veritacheck">
               <FlaskConical size={11} className="mr-1.5" />
-              Run a Study in VeritaCheck{"\u2122"}
+              Run a Study in VeritaCheck{"\u00AE"}
             </Link>
           </Button>}
         </div>
@@ -3275,12 +3275,12 @@ export default function VeritaMapMapPage() {
           role="status"
           className="mb-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200"
         >
-          You have view-only access to VeritaMap{"™"} for this lab. Values and dates are shown but cannot be changed here; ask the lab owner or an admin for edit access.
+          You have view-only access to VeritaMap{"®"} for this lab. Values and dates are shown but cannot be changed here; ask the lab owner or an admin for edit access.
         </div>
       )}
       <ModuleHowToCard
         moduleKey="veritamap"
-        moduleName="VeritaMap™"
+        moduleName="VeritaMap®"
         whatItDoes="VeritaMap is where you build your facility's test menu. Pick the instruments your lab runs, toggle the tests you actually perform on each, and the menu becomes the source of truth that feeds VeritaCheck (study setup), VeritaComp (competency programs), VeritaPT (PT coverage), and VeritaTrack (regulatory calendar). The menu also captures CLIA complexity, specialty, FDA classification, and fields for the critical values, reference intervals, and AMR your lab will verify and enter per 42 CFR 493.1253."
         howToUse={[
           "Add the instruments your lab runs from the database of 269 FDA-cleared analyzers.",

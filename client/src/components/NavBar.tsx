@@ -40,9 +40,9 @@ type NavLink = { href: string; label: string; header?: boolean };
 // actions; multi-lab roll-up), not a module, so it sits at the top of the menu beside All Modules Overview.
 const readinessLink: NavLink = { href: "/readiness", label: "Inspection Readiness" };
 const complianceModules: NavLink[] = [
-  { href: "/veritacheck", label: "VeritaCheck\u2122" },
-  { href: "/veritamap", label: "VeritaMap\u2122" },
-  { href: "/veritascan", label: "VeritaScan\u2122" },
+  { href: "/veritacheck", label: "VeritaCheck\u00AE" },
+  { href: "/veritamap", label: "VeritaMap\u00AE" },
+  { href: "/veritascan", label: "VeritaScan\u00AE" },
   { href: "/veritacomp", label: "VeritaComp\u2122" },
   { href: "/veritadc", label: "VeritaDC\u2122" },
   { href: "/veritastaff", label: "VeritaStaff\u2122" },
@@ -250,7 +250,7 @@ export function NavBar() {
                   : "text-muted-foreground hover:text-foreground hover:bg-secondary"
               )}>
                 <ShieldCheck size={13} className="text-primary" />
-                VeritaAssure&#8482;
+                VeritaAssure&#174;
                 <ChevronDown size={12} />
               </button>
             </DropdownMenuTrigger>
@@ -471,7 +471,7 @@ export function NavBar() {
 
             {!onStockHost && (<>
             <MobileGroup
-              label="VeritaAssure™"
+              label="VeritaAssure®"
               icon={<ShieldCheck size={14} className="text-primary" />}
               expanded={mobileExpanded.has("va")}
               onToggle={() => toggleMobileGroup("va")}

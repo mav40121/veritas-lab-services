@@ -245,7 +245,7 @@ export default function VeritaMapLabwidePage() {
         </div>
       <ModuleHowToCard
         moduleKey="veritamap"
-        moduleName="VeritaMap™"
+        moduleName="VeritaMap®"
         whatItDoes="VeritaMap is where you build your facility's test menu. Pick the instruments your lab runs, toggle the tests you actually perform on each, and the menu becomes the source of truth that feeds VeritaCheck (study setup), VeritaComp (competency programs), VeritaPT (PT coverage), and VeritaTrack (regulatory calendar). The menu also captures CLIA complexity, specialty, FDA classification, and fields for the critical values, reference intervals, and AMR your lab will verify and enter per 42 CFR 493.1253."
         howToUse={[
           "Add the instruments your lab runs from the database of 269 FDA-cleared analyzers.",

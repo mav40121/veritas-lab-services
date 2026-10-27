@@ -1,4 +1,4 @@
-// VeritaScan™ Evidence Library — Inspection Proof View (Phase C, 2026-06-02)
+// VeritaScan® Evidence Library — Inspection Proof View (Phase C, 2026-06-02)
 //
 // Per-accreditor coverage rollup over the static SCAN_ITEMS list. Drives the
 // "I am being surveyed by CAP next week, show me which checklist items are

@@ -166,12 +166,12 @@ export default function ArticlePostAnalyticalPage() {
           {/* Bottom CTA */}
           <Card className="mt-12 border-primary/20 bg-primary/5">
             <CardContent className="p-6 sm:p-8 text-center">
-              <h3 className="font-serif text-xl font-semibold mb-2">Give the critical value list an owner with VeritaMap™</h3>
+              <h3 className="font-serif text-xl font-semibold mb-2">Give the critical value list an owner with VeritaMap®</h3>
               <p className="text-sm text-muted-foreground max-w-xl mx-auto mb-4">
-                VeritaMap™ is where a laboratory records the critical value thresholds its medical executive committee has
+                VeritaMap® is where a laboratory records the critical value thresholds its medical executive committee has
                 actually adopted, with the review documented, so the list stops belonging to no one. Or have a former Joint
                 Commission surveyor follow a real critical value, or a real corrected report, from the analyzer to the bedside
-                in a mock inspection and find where the loop breaks. Included in every VeritaAssure™ plan.
+                in a mock inspection and find where the loop breaks. Included in every VeritaAssure® plan.
               </p>
               <div className="flex flex-wrap justify-center gap-3">
                 <Button asChild className="bg-primary hover:bg-primary/90">

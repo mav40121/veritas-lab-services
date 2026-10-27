@@ -30,7 +30,7 @@ async function getMailer(): Promise<ReminderMailer | null> {
   const { Resend } = await import("resend");
   const resend = new Resend(process.env.RESEND_API_KEY);
   return async (m) => {
-    const r: any = await resend.emails.send({ from: "VeritaAssure™ <info@veritaslabservices.com>", to: m.to, subject: m.subject, html: m.html });
+    const r: any = await resend.emails.send({ from: "VeritaAssure® <info@veritaslabservices.com>", to: m.to, subject: m.subject, html: m.html });
     if (r?.error) throw new Error(r.error.message || String(r.error));
   };
 }
@@ -64,7 +64,7 @@ export function buildReminderEmail(r: { reminder_type: string; cert_name: string
       <p style="margin-bottom:20px">Open VeritaLab™ to review the certificate and upload renewal documentation.</p>
       <a href="${link}" style="display:inline-block;background:#01696F;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600">Open VeritaLab™</a>
       <hr style="border:none;border-top:1px solid #eee;margin:24px 0"/>
-      <p style="color:#999;font-size:12px">VeritaAssure™ | Veritas Lab Services, LLC</p>
+      <p style="color:#999;font-size:12px">VeritaAssure® | Veritas Lab Services, LLC</p>
     </div>`;
   return { subject, html };
 }

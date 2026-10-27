@@ -44,7 +44,7 @@ console.log("\n=== #5 footer: source proofs ===");
 ok("#5 VERITARESPONSE_FOOTER_TEMPLATE is defined",
   /const VERITARESPONSE_FOOTER_TEMPLATE = `/.test(pdf));
 ok("#5 footer carries the brand line",
-  /VeritaAssure&trade; \| VeritaResponse&trade; \| Confidential - For Internal Lab Use Only/.test(pdf));
+  /VeritaAssure&reg; \| VeritaResponse&trade; \| Confidential - For Internal Lab Use Only/.test(pdf));
 ok("#5 footer carries Page X of Y",
   /Page <span class="pageNumber"><\/span> of <span class="totalPages"><\/span>/.test(pdf));
 // The footer template block must not contain an em-dash (Sec 3 / Sec 6.6).

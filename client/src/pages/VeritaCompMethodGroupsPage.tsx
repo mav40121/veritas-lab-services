@@ -87,7 +87,7 @@ export default function VeritaCompMethodGroupsPage() {
       {data && (
         <>
           <Card data-testid="suggested-groups"><CardContent className="p-4 space-y-2">
-            <div className="flex items-center justify-between"><span className="font-semibold text-sm">Suggested ({data.suggestions.length})</span><span className="text-[11px] text-muted-foreground">Same make and model family on your VeritaMap&trade;</span></div>
+            <div className="flex items-center justify-between"><span className="font-semibold text-sm">Suggested ({data.suggestions.length})</span><span className="text-[11px] text-muted-foreground">Same make and model family on your VeritaMap&reg;</span></div>
             {data.suggestions.length === 0 && <p className="text-xs text-muted-foreground">No suggestions right now.</p>}
             {data.suggestions.map((s) => (
               <div key={s.key} className="rounded-md border p-2.5 flex items-center justify-between gap-3 flex-wrap" data-testid="suggestion">

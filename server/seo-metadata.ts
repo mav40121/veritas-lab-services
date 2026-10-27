@@ -117,15 +117,15 @@ function articleJsonLd(opts: {
 
 export const seoMetadataMap: Record<string, SEOMetadata> = {
   "/": {
-    title: "VeritaAssure\u2122 Lab Compliance Software | Veritas Lab Services",
-    description: "VeritaAssure\u2122 is the all-in-one compliance platform for clinical laboratories. Performance verification, inspection readiness, PT, competency tracking.",
+    title: "VeritaAssure\u00AE Lab Compliance Software | Veritas Lab Services",
+    description: "VeritaAssure\u00AE is the all-in-one compliance platform for clinical laboratories. Performance verification, inspection readiness, PT, competency tracking.",
   },
   "/veritaassure": {
-    title: "VeritaAssure\u2122 | Lab Compliance Software Suite for Clinical Laboratories",
-    description: "The complete laboratory compliance platform. VeritaCheck™, VeritaMap™, VeritaScan™, VeritaTrack™, VeritaDC™, and more - built by a lab professional who conducted 200+ Joint Commission surveys.",
+    title: "VeritaAssure\u00AE | Lab Compliance Software Suite for Clinical Laboratories",
+    description: "The complete laboratory compliance platform. VeritaCheck®, VeritaMap®, VeritaScan®, VeritaTrack™, VeritaDC™, and more - built by a lab professional who conducted 200+ Joint Commission surveys.",
   },
   "/pricing": {
-    title: "Pricing | VeritaAssure\u2122 Lab Compliance Software",
+    title: "Pricing | VeritaAssure\u00AE Lab Compliance Software",
     description: "Simple annual pricing for clinical laboratory compliance software. Plans for individual labs, community hospitals, regional hospitals, and enterprise health systems.",
   },
   "/services": {
@@ -134,54 +134,54 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
   },
   "/contact": {
     title: "Contact | Veritas Lab Services",
-    description: "Get in touch with Veritas Lab Services. Questions about VeritaAssure\u2122, laboratory consulting, or scheduling a demo.",
+    description: "Get in touch with Veritas Lab Services. Questions about VeritaAssure\u00AE, laboratory consulting, or scheduling a demo.",
   },
   "/team": {
     title: "Our Team | Veritas Lab Services",
     description: "Meet the Veritas Lab Services team: founder Michael Veri, MS, MBA, MLS(ASCP), CPHQ, a former Joint Commission surveyor, and David McCormick.",
   },
   "/faq": {
-    title: "FAQ | VeritaAssure\u2122 Lab Compliance Software",
-    description: "Frequently asked questions about VeritaAssure\u2122, CLIA compliance software, performance verification, and laboratory inspection readiness tools.",
+    title: "FAQ | VeritaAssure\u00AE Lab Compliance Software",
+    description: "Frequently asked questions about VeritaAssure\u00AE, CLIA compliance software, performance verification, and laboratory inspection readiness tools.",
     jsonLd: faqPageJsonLd(flattenFaq(FAQ_CATEGORIES)),
   },
   "/getting-started": {
-    title: "Getting Started | VeritaAssure\u2122 Lab Compliance Software",
-    description: "Get started with VeritaAssure\u2122. Follow the step-by-step onboarding guide to set up your laboratory compliance platform.",
+    title: "Getting Started | VeritaAssure\u00AE Lab Compliance Software",
+    description: "Get started with VeritaAssure\u00AE. Follow the step-by-step onboarding guide to set up your laboratory compliance platform.",
   },
   "/book": {
     title: "Book a Consultation | Veritas Lab Services",
-    description: "Schedule a consultation or demo with Michael Veri. Learn how VeritaAssure\u2122 can help your laboratory stay compliant and survey-ready.",
+    description: "Schedule a consultation or demo with Michael Veri. Learn how VeritaAssure\u00AE can help your laboratory stay compliant and survey-ready.",
   },
   "/demo": {
-    title: "Demo | VeritaAssure\u2122 Lab Compliance & Operations Software",
-    description: "Explore VeritaAssure\u2122 in action. Choose from operations tools (productivity, staffing) or the full compliance suite (performance verification, inspection readiness, competency tracking).",
+    title: "Demo | VeritaAssure\u00AE Lab Compliance & Operations Software",
+    description: "Explore VeritaAssure\u00AE in action. Choose from operations tools (productivity, staffing) or the full compliance suite (performance verification, inspection readiness, competency tracking).",
     ogImage: `${BASE_URL}/demo-og.png`,
   },
   "/demo/operations": {
-    title: "VeritaBench\u2122 Demo - Lab Productivity & Staffing Tools | VeritaAssure\u2122",
+    title: "VeritaBench\u2122 Demo - Lab Productivity & Staffing Tools | VeritaAssure\u00AE",
     description: "See VeritaBench\u2122 in action. Interactive productivity calculator, monthly tracking, and by-hour staffing analysis built for clinical laboratories.",
     ogImage: `${BASE_URL}/demo-og.png`,
   },
   "/demo/compliance": {
-    title: "Compliance Suite Demo | VeritaAssure\u2122 Lab Compliance Software",
-    description: "Try the VeritaAssure\u2122 compliance demo. Explore VeritaCheck™ performance verification, VeritaScan™ inspection readiness, VeritaMap™ reportable ranges, and VeritaComp™ competency tracking.",
+    title: "Compliance Suite Demo | VeritaAssure\u00AE Lab Compliance Software",
+    description: "Try the VeritaAssure\u00AE compliance demo. Explore VeritaCheck® performance verification, VeritaScan® inspection readiness, VeritaMap® reportable ranges, and VeritaComp™ competency tracking.",
     ogImage: `${BASE_URL}/demo-og.png`,
   },
   "/roadmap": {
-    title: "Product Roadmap | VeritaAssure\u2122 Lab Compliance Software",
-    description: "See what is coming next for VeritaAssure\u2122. Upcoming features for clinical laboratory compliance, quality management, and accreditation readiness.",
+    title: "Product Roadmap | VeritaAssure\u00AE Lab Compliance Software",
+    description: "See what is coming next for VeritaAssure\u00AE. Upcoming features for clinical laboratory compliance, quality management, and accreditation readiness.",
   },
   "/veritacheck": {
-    title: "VeritaCheck\u2122 Performance Verification | CLIA Calibration Verification and Method Comparison",
+    title: "VeritaCheck\u00AE Performance Verification | CLIA Calibration Verification and Method Comparison",
     description: "Run CLIA Calibration Verification / Linearity, Correlation / Method Comparison, and CLSI EP15 precision studies, and generate surveyor-ready, CFR-cited PDF reports, inside the VeritaAssure compliance platform. Built by a former Joint Commission surveyor.",
   },
   "/veritascan": {
-    title: "VeritaScan™ | Laboratory Inspection Readiness Checklist Software",
+    title: "VeritaScan® | Laboratory Inspection Readiness Checklist Software",
     description: "173-item TJC-standard inspection checklist for clinical laboratories. Track your readiness, identify gaps, and walk into every survey prepared.",
   },
   "/veritamap": {
-    title: "VeritaMap™ | Clinical Laboratory Test Menu Mapping Software",
+    title: "VeritaMap® | Clinical Laboratory Test Menu Mapping Software",
     description: "Map your complete laboratory test menu with instrument assignments, reference ranges, and critical values. Built for CLIA compliance and accreditation surveys.",
   },
   "/veritacomp": {
@@ -439,12 +439,12 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
     ],
   },
   "/resources/how-veritaassure-trains-lab-leaders": {
-    title: "How VeritaAssure\u2122 Trains Lab Leaders | Veritas Lab Services",
-    description: "How VeritaAssure\u2122 helps laboratory leaders build compliance knowledge and stay current with CLIA, Joint Commission, and COLA requirements.",
+    title: "How VeritaAssure\u00AE Trains Lab Leaders | Veritas Lab Services",
+    description: "How VeritaAssure\u00AE helps laboratory leaders build compliance knowledge and stay current with CLIA, Joint Commission, and COLA requirements.",
     jsonLd: articleJsonLd({
-      headline: "How VeritaAssure\u2122 Trains the Next Generation of Lab Leaders",
-      description: "How VeritaAssure\u2122 helps laboratory leaders build compliance knowledge and stay current with CLIA, Joint Commission, and COLA requirements.",
-      articleBody: "Most lab directors learn compliance the hard way: the first time a surveyor walks in and asks for documentation they don't have. There is no formal curriculum for laboratory leadership. You earn a degree in laboratory science, pass your boards, work the bench for years, and then one day you are handed keys to a department with CLIA obligations, accreditation requirements, and a staff looking to you for direction. Nobody teaches you how to manage a calibration verification program. Nobody explains what a surveyor actually looks for when they pull your competency records. You figure it out, sometimes with the help of a mentor, sometimes the hard way. VeritaAssure\u2122 was built to change that. Each VeritaAssure\u2122 module teaches the regulatory framework it operates within, not just how to fill out forms. New directors can build institutional knowledge in their first 90 days using a structured five-module path. Health systems can use VeritaAssure\u2122 as a shared training environment across multiple labs and supervisors. Lab Management 101 (the book) and VeritaAssure\u2122 (the software) form a complete leadership curriculum. The documentation produced during training is real and audit-ready, not a separate exercise. Sections: The Gap Between Bench Competence and Leadership Competence; Why Software Can Teach; The Curriculum Nobody Offers; Lab Management 101 and the Full Picture; A Practical Development Path; Built for the Leaders Who Come Next.",
+      headline: "How VeritaAssure\u00AE Trains the Next Generation of Lab Leaders",
+      description: "How VeritaAssure\u00AE helps laboratory leaders build compliance knowledge and stay current with CLIA, Joint Commission, and COLA requirements.",
+      articleBody: "Most lab directors learn compliance the hard way: the first time a surveyor walks in and asks for documentation they don't have. There is no formal curriculum for laboratory leadership. You earn a degree in laboratory science, pass your boards, work the bench for years, and then one day you are handed keys to a department with CLIA obligations, accreditation requirements, and a staff looking to you for direction. Nobody teaches you how to manage a calibration verification program. Nobody explains what a surveyor actually looks for when they pull your competency records. You figure it out, sometimes with the help of a mentor, sometimes the hard way. VeritaAssure\u00AE was built to change that. Each VeritaAssure\u00AE module teaches the regulatory framework it operates within, not just how to fill out forms. New directors can build institutional knowledge in their first 90 days using a structured five-module path. Health systems can use VeritaAssure\u00AE as a shared training environment across multiple labs and supervisors. Lab Management 101 (the book) and VeritaAssure\u00AE (the software) form a complete leadership curriculum. The documentation produced during training is real and audit-ready, not a separate exercise. Sections: The Gap Between Bench Competence and Leadership Competence; Why Software Can Teach; The Curriculum Nobody Offers; Lab Management 101 and the Full Picture; A Practical Development Path; Built for the Leaders Who Come Next.",
       path: "/resources/how-veritaassure-trains-lab-leaders",
       datePublished: "2026-04-25",
     }),
@@ -455,7 +455,7 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
     jsonLd: articleJsonLd({
       headline: "Calibration Verification Requirements Under CLIA: What Every Lab Director Needs to Know",
       description: "Detailed breakdown of CLIA calibration verification requirements including frequency, documentation, acceptable performance criteria, and common surveyor findings.",
-      articleBody: "Calibration verification is one of the most consistently cited deficiencies in CLIA and CAP laboratory inspections. This article covers what the regulation requires and what your records need to show. Calibration verification must be performed at least every six months for all non-waived quantitative tests. Several events trigger out-of-cycle verification beyond the standard schedule. Documentation completeness is the most common inspection finding, not whether the verification was performed. VeritaCheck™ automates calculations, applies acceptance criteria, and generates inspector-ready PDF reports. Sections: What the Regulation Requires; When You Must Verify Beyond the Six-Month Cycle; What Analytes Require It; What Your Documentation Must Include; Common Inspection Findings; A More Efficient Approach.",
+      articleBody: "Calibration verification is one of the most consistently cited deficiencies in CLIA and CAP laboratory inspections. This article covers what the regulation requires and what your records need to show. Calibration verification must be performed at least every six months for all non-waived quantitative tests. Several events trigger out-of-cycle verification beyond the standard schedule. Documentation completeness is the most common inspection finding, not whether the verification was performed. VeritaCheck® automates calculations, applies acceptance criteria, and generates inspector-ready PDF reports. Sections: What the Regulation Requires; When You Must Verify Beyond the Six-Month Cycle; What Analytes Require It; What Your Documentation Must Include; Common Inspection Findings; A More Efficient Approach.",
       path: "/resources/calibration-verification-requirements-clia",
       datePublished: "2026-04-25",
     }),
@@ -466,7 +466,7 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
     jsonLd: articleJsonLd({
       headline: "How to Perform a Method Comparison Study in Your Clinical Laboratory",
       description: "Step-by-step guide to performing a CLIA-compliant method comparison study, including sample requirements, statistical analysis, and acceptable bias thresholds.",
-      articleBody: "A method comparison study, also called a Correlation study, is required whenever your laboratory implements a new test method, adds a new instrument that performs an existing test, or needs to demonstrate equivalence between two instruments running the same analyte. Done correctly, it provides documented evidence that the new method produces results comparable to your existing method across the full analytical range. Done incorrectly or incompletely, it is a finding waiting to appear on your CAP or TJC inspection report. Method comparison is required when placing a new analyzer into service, adding a new reagent system, or comparing two instruments. Use a minimum of 40 patient specimens spanning the full analytical measurement range. Define your acceptance criteria before running the study, not after. VeritaCheck™ handles regression calculations and generates an inspector-ready report automatically. Sections: When a Method Comparison Is Required; Specimen Requirements; Running the Study; What Pass or Fail Means; Common Mistakes; Documentation for Your Inspection File.",
+      articleBody: "A method comparison study, also called a Correlation study, is required whenever your laboratory implements a new test method, adds a new instrument that performs an existing test, or needs to demonstrate equivalence between two instruments running the same analyte. Done correctly, it provides documented evidence that the new method produces results comparable to your existing method across the full analytical range. Done incorrectly or incompletely, it is a finding waiting to appear on your CAP or TJC inspection report. Method comparison is required when placing a new analyzer into service, adding a new reagent system, or comparing two instruments. Use a minimum of 40 patient specimens spanning the full analytical measurement range. Define your acceptance criteria before running the study, not after. VeritaCheck® handles regression calculations and generates an inspector-ready report automatically. Sections: When a Method Comparison Is Required; Specimen Requirements; Running the Study; What Pass or Fail Means; Common Mistakes; Documentation for Your Inspection File.",
       path: "/resources/how-to-perform-method-comparison-study",
       datePublished: "2026-04-25",
     }),
@@ -491,11 +491,11 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
     }),
   },
   "/resources/getting-started": {
-    title: "Getting Started with VeritaAssure™: Setup and Per-Module Checklists",
-    description: "A step-by-step guide to set up a laboratory on VeritaAssure™: the system onboarding path plus a getting-started checklist for all eighteen modules. Printable, with progress you can check off.",
+    title: "Getting Started with VeritaAssure®: Setup and Per-Module Checklists",
+    description: "A step-by-step guide to set up a laboratory on VeritaAssure®: the system onboarding path plus a getting-started checklist for all eighteen modules. Printable, with progress you can check off.",
   },
   "/resources/veritacheck-vs-ep-evaluator": {
-    title: "VeritaCheck™ vs EP Evaluator: CLIA Verification Compared",
+    title: "VeritaCheck® vs EP Evaluator: CLIA Verification Compared",
     description: "How VeritaCheck and EP Evaluator compare for CLIA performance verification: statistical study coverage, 42 CFR citation, whole-menu coverage, reporting, and pricing. An honest side-by-side from a former Joint Commission surveyor.",
     jsonLd: articleJsonLd({
       headline: "VeritaCheck vs EP Evaluator: CLIA Verification Compared",
@@ -517,12 +517,12 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
     }),
   },
   "/resources/how-to-validate-veritacheck-clia": {
-    title: "How to Validate VeritaCheck\u2122 for CLIA Compliance | Veritas Lab Services",
-    description: "Software validation documentation for VeritaCheck\u2122 under CLIA requirements. How to validate laboratory information systems and comply with 42 CFR 493.1252.",
+    title: "How to Validate VeritaCheck\u00AE for CLIA Compliance | Veritas Lab Services",
+    description: "Software validation documentation for VeritaCheck\u00AE under CLIA requirements. How to validate laboratory information systems and comply with 42 CFR 493.1252.",
     jsonLd: articleJsonLd({
-      headline: "How to Validate VeritaCheck\u2122 for Your Clinical Laboratory: A Step-by-Step Guide for Lab Directors",
-      description: "Software validation documentation for VeritaCheck\u2122 under CLIA requirements. How to validate laboratory information systems and comply with 42 CFR 493.1252.",
-      articleBody: "If you are preparing to use VeritaCheck\u2122 in your clinical laboratory, your first question should be: do we have a validation record on file? For most regulated labs, the answer needs to be yes before you run a single study through any software tool. The good news is that validating VeritaCheck\u2122 is straightforward, and most labs can complete it in under two hours. Software validation is required under CLIA 42 CFR 493.1251 and CAP checklist item COM.01300. The appropriate framework is IQ/OQ/PQ: Installation Qualification, Operational Qualification, Performance Qualification. Most labs complete the full process in under two hours. A free Software Validation Record template is available at veritaslabservices.com. Sections: Why Software Validation Is Required; What Validating VeritaCheck\u2122 Actually Means; Step-by-Step Validation Process; The Software Validation Template; How Long Does It Take?; What to Keep on File.",
+      headline: "How to Validate VeritaCheck\u00AE for Your Clinical Laboratory: A Step-by-Step Guide for Lab Directors",
+      description: "Software validation documentation for VeritaCheck\u00AE under CLIA requirements. How to validate laboratory information systems and comply with 42 CFR 493.1252.",
+      articleBody: "If you are preparing to use VeritaCheck\u00AE in your clinical laboratory, your first question should be: do we have a validation record on file? For most regulated labs, the answer needs to be yes before you run a single study through any software tool. The good news is that validating VeritaCheck\u00AE is straightforward, and most labs can complete it in under two hours. Software validation is required under CLIA 42 CFR 493.1251 and CAP checklist item COM.01300. The appropriate framework is IQ/OQ/PQ: Installation Qualification, Operational Qualification, Performance Qualification. Most labs complete the full process in under two hours. A free Software Validation Record template is available at veritaslabservices.com. Sections: Why Software Validation Is Required; What Validating VeritaCheck\u00AE Actually Means; Step-by-Step Validation Process; The Software Validation Template; How Long Does It Take?; What to Keep on File.",
       path: "/resources/how-to-validate-veritacheck-clia",
       datePublished: "2026-05-17",
     }),
@@ -543,68 +543,68 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
     description: "Look up total allowable error (TEa) limits by analyte for CLIA compliance. Reference values from CLIA proficiency testing criteria and RCPA quality specifications.",
   },
   "/calculator": {
-    title: "VeritaBench\u2122 | Free Lab Productivity Scorecard | VeritaAssure\u2122",
+    title: "VeritaBench\u2122 | Free Lab Productivity Scorecard | VeritaAssure\u00AE",
     description: "Free VeritaBench\u2122 productivity tool. Enter monthly billable volume and paid hours to score your lab against community hospital, large trauma center, and reference lab peer benchmarks.",
   },
   "/veritabench": {
-    title: "VeritaPace\u2122 | Monthly Lab Productivity Tracker | VeritaAssure\u2122",
-    description: "Track monthly lab productivity with VeritaPace\u2122. Billable tests per paid hour benchmarking, FTE and overtime analysis, and peer comparisons. Included with VeritaAssure\u2122 Suite plans.",
+    title: "VeritaPace\u2122 | Monthly Lab Productivity Tracker | VeritaAssure\u00AE",
+    description: "Track monthly lab productivity with VeritaPace\u2122. Billable tests per paid hour benchmarking, FTE and overtime analysis, and peer comparisons. Included with VeritaAssure\u00AE Suite plans.",
   },
   "/veritabench/staffing": {
-    title: "VeritaShift\u2122 | By-Hour Lab Staffing Analyzer | VeritaAssure\u2122",
-    description: "Analyze by-hour staffing demand against actual coverage with VeritaShift\u2122. Identify overstaffed and understaffed periods in your clinical laboratory. Included with VeritaAssure\u2122 Suite plans.",
+    title: "VeritaShift\u2122 | By-Hour Lab Staffing Analyzer | VeritaAssure\u00AE",
+    description: "Analyze by-hour staffing demand against actual coverage with VeritaShift\u2122. Identify overstaffed and understaffed periods in your clinical laboratory. Included with VeritaAssure\u00AE Suite plans.",
   },
   "/veritabench/pi": {
-    title: "VeritaQA\u2122 | Lab Quality Metrics Dashboard | VeritaAssure\u2122",
-    description: "Track department-level laboratory quality metrics with VeritaQA\u2122. Performance improvement dashboards aligned to TJC and CAP standards. Included with VeritaAssure\u2122 Suite plans.",
+    title: "VeritaQA\u2122 | Lab Quality Metrics Dashboard | VeritaAssure\u00AE",
+    description: "Track department-level laboratory quality metrics with VeritaQA\u2122. Performance improvement dashboards aligned to TJC and CAP standards. Included with VeritaAssure\u00AE Suite plans.",
   },
   "/veritastock": {
-    title: "VeritaStock\u2122 | Laboratory Inventory & Reagent Management | VeritaAssure\u2122",
-    description: "Track reagent and supply inventory with burn rate calculations, automated par levels, and expiration alerts for your clinical laboratory. Included with VeritaAssure\u2122 Suite plans.",
+    title: "VeritaStock\u2122 | Laboratory Inventory & Reagent Management | VeritaAssure\u00AE",
+    description: "Track reagent and supply inventory with burn rate calculations, automated par levels, and expiration alerts for your clinical laboratory. Included with VeritaAssure\u00AE Suite plans.",
   },
   "/veritatrack": {
-    title: "VeritaTrack\u2122 | Laboratory QC Task Tracking & Sign-off | VeritaAssure\u2122",
-    description: "Track recurring QC tasks, daily checks, maintenance, and quality sign-offs across your lab. Due-date alerts, full sign-off history, and Excel export. Included with VeritaAssure\u2122 Suite plans.",
+    title: "VeritaTrack\u2122 | Laboratory QC Task Tracking & Sign-off | VeritaAssure\u00AE",
+    description: "Track recurring QC tasks, daily checks, maintenance, and quality sign-offs across your lab. Due-date alerts, full sign-off history, and Excel export. Included with VeritaAssure\u00AE Suite plans.",
   },
   "/veritatrack-app": {
-    title: "VeritaTrack\u2122 App | QC Task Sign-off | VeritaAssure\u2122",
+    title: "VeritaTrack\u2122 App | QC Task Sign-off | VeritaAssure\u00AE",
     description: "Recurring QC task tracking with sign-off, due-date alerts, and Excel export for your clinical laboratory.",
   },
   "/study-guide": {
-    title: "Study Guide | VeritaAssure\u2122 Lab Compliance Software",
-    description: "Comprehensive guide to running studies in VeritaAssure\u2122. Step-by-step instructions for performance verification, calibration verification, and EP studies.",
+    title: "Study Guide | VeritaAssure\u00AE Lab Compliance Software",
+    description: "Comprehensive guide to running studies in VeritaAssure\u00AE. Step-by-step instructions for performance verification, calibration verification, and EP studies.",
   },
   "/terms": {
     title: "Terms of Service | Veritas Lab Services",
-    description: "Terms of service for Veritas Lab Services and the VeritaAssure\u2122 laboratory compliance software platform.",
+    description: "Terms of service for Veritas Lab Services and the VeritaAssure\u00AE laboratory compliance software platform.",
   },
   "/privacy": {
     title: "Privacy Policy | Veritas Lab Services",
-    description: "Privacy policy for Veritas Lab Services and the VeritaAssure\u2122 laboratory compliance software platform.",
+    description: "Privacy policy for Veritas Lab Services and the VeritaAssure\u00AE laboratory compliance software platform.",
   },
   "/trust": {
     title: "Trust & Security | Veritas Lab Services",
-    description: "How VeritaAssure\u2122 protects your laboratory data: hosting, encryption, multi-lab isolation, PHI-free design, subprocessors, and HIPAA BAA availability.",
+    description: "How VeritaAssure\u00AE protects your laboratory data: hosting, encryption, multi-lab isolation, PHI-free design, subprocessors, and HIPAA BAA availability.",
   },
   "/security": {
     title: "Trust & Security | Veritas Lab Services",
-    description: "How VeritaAssure\u2122 protects your laboratory data: hosting, encryption, multi-lab isolation, PHI-free design, subprocessors, and HIPAA BAA availability.",
+    description: "How VeritaAssure\u00AE protects your laboratory data: hosting, encryption, multi-lab isolation, PHI-free design, subprocessors, and HIPAA BAA availability.",
   },
   "/operations": {
-    title: "Operations | VeritaAssure\u2122 Lab Productivity & CPRT",
+    title: "Operations | VeritaAssure\u00AE Lab Productivity & CPRT",
     description: "VeritaOps\u2122 tools for lab operations: cost-per-reportable-test analytics, productivity benchmarking, by-hour staffing, monthly tracking, and quality metrics.",
   },
   "/book/scoping-call": {
     title: "Book a Scoping Call | Veritas Lab Services",
-    description: "Schedule a 30-minute scoping call with Michael Veri to plan your VeritaAssure\u2122 rollout, accreditation timeline, or lab operations review.",
+    description: "Schedule a 30-minute scoping call with Michael Veri to plan your VeritaAssure\u00AE rollout, accreditation timeline, or lab operations review.",
   },
   "/founding-labs": {
-    title: "Founding Labs | VeritaAssure\u2122 Founding Lab Program",
-    description: "The charter customers of VeritaAssure\u2122. Founding labs share their experience on reference calls with laboratories evaluating the platform. Apply to join the Founding Lab Program.",
+    title: "Founding Labs | VeritaAssure\u00AE Founding Lab Program",
+    description: "The charter customers of VeritaAssure\u00AE. Founding labs share their experience on reference calls with laboratories evaluating the platform. Apply to join the Founding Lab Program.",
   },
   "/founding-lab/apply": {
-    title: "Founding Lab Program Application | VeritaAssure\u2122",
-    description: "Apply to the VeritaAssure\u2122 Founding Lab Program. Locked rate, annual at-will mutual renewal, priority support Year 1, and named recognition.",
+    title: "Founding Lab Program Application | VeritaAssure\u00AE",
+    description: "Apply to the VeritaAssure\u00AE Founding Lab Program. Locked rate, annual at-will mutual renewal, priority support Year 1, and named recognition.",
   },
   "/demo/cprt": {
     title: "VeritaOps\u2122 CPRT Demo | Cost Per Reportable Test",
@@ -648,12 +648,12 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
     }),
   },
   "/resources/why-veritacheck-vs-legacy-verification": {
-    title: "VeritaCheck\u2122 vs Legacy Verification | Veritas Lab Services",
-    description: "How VeritaCheck\u2122 improves on legacy EP15, EP9, calibration verification, and method comparison workflows. CLIA-compliant PDF output, director sign-off.",
+    title: "VeritaCheck\u00AE vs Legacy Verification | Veritas Lab Services",
+    description: "How VeritaCheck\u00AE improves on legacy EP15, EP9, calibration verification, and method comparison workflows. CLIA-compliant PDF output, director sign-off.",
     jsonLd: articleJsonLd({
-      headline: "Why VeritaCheck\u2122 vs. Legacy Verification Software",
-      description: "How VeritaCheck\u2122 improves on legacy EP15, EP9, calibration verification, and method comparison workflows. CLIA-compliant PDF output, director sign-off.",
-      articleBody: "A side-by-side comparison authored for lab directors evaluating a tool change. Four dimensions: cost, time-to-first-study, integration breadth, and compliance defensibility. Most clinical laboratories that run method verification studies today use a legacy desktop verification tool that has been the de facto standard for the better part of two decades. The tool works. It is also priced for an era before browser-based clinical software, structured to assume a single Windows workstation, and integrated only with itself. VeritaCheck\u2122 is a browser-based alternative that produces the same verification studies under the same CLSI EP standards, at a cost that is closer to a consumer SaaS subscription than a per-seat enterprise license, integrated into a broader VeritaAssure\u2122 platform that handles policy, mapping, competency, lab certificates, and cost-per-reportable-test in one login. This page lays out the four dimensions a lab director should compare before switching. Sections: When to switch.",
+      headline: "Why VeritaCheck\u00AE vs. Legacy Verification Software",
+      description: "How VeritaCheck\u00AE improves on legacy EP15, EP9, calibration verification, and method comparison workflows. CLIA-compliant PDF output, director sign-off.",
+      articleBody: "A side-by-side comparison authored for lab directors evaluating a tool change. Four dimensions: cost, time-to-first-study, integration breadth, and compliance defensibility. Most clinical laboratories that run method verification studies today use a legacy desktop verification tool that has been the de facto standard for the better part of two decades. The tool works. It is also priced for an era before browser-based clinical software, structured to assume a single Windows workstation, and integrated only with itself. VeritaCheck\u00AE is a browser-based alternative that produces the same verification studies under the same CLSI EP standards, at a cost that is closer to a consumer SaaS subscription than a per-seat enterprise license, integrated into a broader VeritaAssure\u00AE platform that handles policy, mapping, competency, lab certificates, and cost-per-reportable-test in one login. This page lays out the four dimensions a lab director should compare before switching. Sections: When to switch.",
       path: "/resources/why-veritacheck-vs-legacy-verification",
       datePublished: "2026-06-14",
     }),

@@ -18,7 +18,7 @@ test.describe("Resources: Getting Started guide", () => {
     await expect(page.getByRole("heading", { name: "The setup path" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "By module" })).toBeVisible();
     // A module card and the print control are present.
-    await expect(page.getByText("VeritaCheck™", { exact: false }).first()).toBeVisible();
+    await expect(page.getByText("VeritaCheck®", { exact: false }).first()).toBeVisible();
     await expect(page.getByRole("button", { name: /Print or save as PDF/i })).toBeVisible();
 
     // Copy rule: no em dash on a customer-facing page.

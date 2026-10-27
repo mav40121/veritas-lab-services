@@ -1004,8 +1004,8 @@ function InventorySection() {
 
 export default function DemoPage() {
   useSEO({
-    title: "Demo | VeritaAssure\u2122 Lab Compliance & Operations Software",
-    description: "Explore VeritaAssure\u2122 in action. Choose from operations tools (productivity, staffing) or the full compliance suite (method verification, inspection readiness, competency tracking).",
+    title: "Demo | VeritaAssure\u00AE Lab Compliance & Operations Software",
+    description: "Explore VeritaAssure\u00AE in action. Choose from operations tools (productivity, staffing) or the full compliance suite (method verification, inspection readiness, competency tracking).",
   });
   const [activeSection, setActiveSection] = useState("calculator");
 

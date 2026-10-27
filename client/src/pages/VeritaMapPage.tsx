@@ -19,7 +19,7 @@ const COLUMNS = [
   { col: "Reference Range Source", reg: "42 CFR §493.1253(b)(3)",desc: "Reference intervals must be established or verified for each patient population served." },
   { col: "SOP / Policy Location",  reg: "42 CFR §493.1251–§493.1252",desc: "Written procedures must be accessible at the bench and reviewed on a defined schedule." },
   { col: "IQCP Implemented?",      reg: "42 CFR §493.1256(d)",   desc: "Individualized QC Plans require a risk assessment, QC plan, and annual quality assessment." },
-  { col: "Regulatory Gaps / Notes",reg: "All",                   desc: "Open items, action plans, and findings linked directly to VeritaScan™ domain findings." },
+  { col: "Regulatory Gaps / Notes",reg: "All",                   desc: "Open items, action plans, and findings linked directly to VeritaScan® domain findings." },
 ];
 
 const FEATURES = [
@@ -27,7 +27,7 @@ const FEATURES = [
   "Identify linearity and correlation gaps across the entire test menu",
   "Track QC requirements, IQCP status, and reference range sources",
   "Document SOP locations for every test. Surveyors ask, you answer",
-  "Regulatory gap column links directly to VeritaScan™ findings",
+  "Regulatory gap column links directly to VeritaScan® findings",
   "Filter by specialty/section: focus on one department at a time",
   "Sort by complexity: see all high-complexity tests instantly",
   "Know your PT obligations before the enrollment deadline",
@@ -38,7 +38,7 @@ const FEATURES = [
 export default function VeritaMapPage() {
   const labRoute = useLabRoute();
   const { isLoggedIn } = useAuth();
-    useSEO({ title: "VeritaMap™ | Clinical Laboratory Test Menu Mapping Software", description: "Map your complete laboratory test menu with instrument assignments, reference ranges, and critical values. Built for CLIA compliance and accreditation surveys." });
+    useSEO({ title: "VeritaMap® | Clinical Laboratory Test Menu Mapping Software", description: "Map your complete laboratory test menu with instrument assignments, reference ranges, and critical values. Built for CLIA compliance and accreditation surveys." });
 return (
     <div>
       {/* Hero */}
@@ -51,7 +51,7 @@ return (
                 <Badge className="bg-primary/10 text-primary border-0">New Product</Badge>
                 <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 border">Now Live</Badge>
               </div>
-              <h1 className="font-serif text-5xl font-bold mb-3 leading-tight">VeritaMap™</h1>
+              <h1 className="font-serif text-5xl font-bold mb-3 leading-tight">VeritaMap®</h1>
               <p className="text-xl text-muted-foreground font-medium mb-5">
                 Laboratory Test Menu Regulatory Mapping Tool
               </p>
@@ -61,10 +61,10 @@ return (
                 </p>
               </div>
               <p className="text-muted-foreground leading-relaxed mb-4">
-                VeritaMap™ is the master regulatory map for your test menu. For every test your laboratory performs, VeritaMap™ documents the CLIA complexity, PT enrollment, competency assignment, linearity and correlation requirements, QC obligations, reference range source, and SOP location, all mapped to the exact CFR and TJC standards that require it.
+                VeritaMap® is the master regulatory map for your test menu. For every test your laboratory performs, VeritaMap® documents the CLIA complexity, PT enrollment, competency assignment, linearity and correlation requirements, QC obligations, reference range source, and SOP location, all mapped to the exact CFR and TJC standards that require it.
               </p>
               <p className="text-muted-foreground leading-relaxed mb-6">
-                Most laboratories discover regulatory gaps during inspections. VeritaMap™ finds them first. Built by a former TJC laboratory surveyor with 200+ facility inspections.
+                Most laboratories discover regulatory gaps during inspections. VeritaMap® finds them first. Built by a former TJC laboratory surveyor with 200+ facility inspections.
               </p>
 
               {!isLoggedIn && (
@@ -82,7 +82,7 @@ return (
 
               <div className="flex flex-col sm:flex-row gap-3">
                 <Link href={labRoute("/veritamap-app")} className="inline-flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-6 py-3 rounded-lg text-sm transition-colors">
-                  Launch VeritaMap™ →
+                  Launch VeritaMap® →
                 </Link>
                 <Link href="/login" className="inline-flex items-center justify-center gap-2 border border-border hover:bg-secondary text-foreground font-semibold px-6 py-3 rounded-lg text-sm transition-colors">
                   Sign In / Create Account
@@ -96,7 +96,7 @@ return (
                 <div className="w-64 h-80 bg-gradient-to-br from-[#0e8a82] to-[#0a5e58] rounded-lg shadow-2xl flex flex-col p-6 text-white">
                   <div className="flex items-center gap-2 mb-4">
                     <Map size={20} className="text-white/80" />
-                    <span className="font-serif font-bold text-lg">VeritaMap™</span>
+                    <span className="font-serif font-bold text-lg">VeritaMap®</span>
                   </div>
                   <div className="space-y-2 flex-1">
                     {["Glucose · Chem · Mod · PT ✓","HgbA1C · Chem · Mod · Lin ✓","CBC · Heme · Mod · Corr ✓","PT/INR · Coag · Mod · PT ✓","Blood Cx · Micro · High · -","Urine Cx · Micro · High · -","ABO/Rh · BB · High · Corr ✓","UA Dipstick · UA · Waived · -"].map((t, i) => (
@@ -122,18 +122,18 @@ return (
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
           <div className="grid lg:grid-cols-3 gap-10">
             <div className="lg:col-span-2 space-y-5">
-              <h2 className="font-serif text-3xl font-bold">What is VeritaMap™?</h2>
+              <h2 className="font-serif text-3xl font-bold">What is VeritaMap®?</h2>
               <p className="text-muted-foreground leading-relaxed">
                 Every clinical laboratory has a test menu. Every test on that menu carries a specific set of regulatory obligations: a CLIA complexity designation, a proficiency testing requirement, a competency assessment obligation, a linearity or correlation study requirement, a quality control standard, a reference range verification requirement, and a written procedure. Most laboratories track these obligations inconsistently, if at all.
               </p>
               <p className="text-muted-foreground leading-relaxed">
-                VeritaMap™ is the infrastructure that makes every obligation visible. One row per test. One column per regulatory requirement. Every cell mapped to the exact 42 CFR section and TJC standards that mandate it. The result is a complete, auditable picture of your laboratory's regulatory obligations across the entire test menu, and a clear view of where the gaps are before a surveyor finds them.
+                VeritaMap® is the infrastructure that makes every obligation visible. One row per test. One column per regulatory requirement. Every cell mapped to the exact 42 CFR section and TJC standards that mandate it. The result is a complete, auditable picture of your laboratory's regulatory obligations across the entire test menu, and a clear view of where the gaps are before a surveyor finds them.
               </p>
               <p className="text-muted-foreground leading-relaxed">
-                VeritaMap™ is designed to be permanent infrastructure. Unlike a self-inspection that happens once before a survey, VeritaMap™ is updated when tests are added, instruments change, PT programs shift, or competency assignments are reassigned. A laboratory that maintains a current VeritaMap™ can answer any regulatory question about any test in seconds, because the documentation is already there.
+                VeritaMap® is designed to be permanent infrastructure. Unlike a self-inspection that happens once before a survey, VeritaMap® is updated when tests are added, instruments change, PT programs shift, or competency assignments are reassigned. A laboratory that maintains a current VeritaMap® can answer any regulatory question about any test in seconds, because the documentation is already there.
               </p>
               <p className="text-muted-foreground leading-relaxed">
-                When VeritaMap™ identifies that a test requires linearity verification, one click opens VeritaCheck™ to run the study. When it flags a competency gap, it links directly to the corresponding VeritaScan™ finding for the corrective action workflow. The three tools are designed to work together.
+                When VeritaMap® identifies that a test requires linearity verification, one click opens VeritaCheck® to run the study. When it flags a competency gap, it links directly to the corresponding VeritaScan® finding for the corrective action workflow. The three tools are designed to work together.
               </p>
               <p className="text-base font-semibold text-foreground">
                 Know your obligations. Document your compliance. Find the gaps before the survey does.
@@ -156,10 +156,10 @@ return (
                 <div className="text-xs font-semibold text-primary mb-1">Integrates with</div>
                 <div className="space-y-1.5">
                   <Link href="/veritacheck" className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors">
-                    <FlaskConical size={12} />VeritaCheck™ - run linearity & correlation studies
+                    <FlaskConical size={12} />VeritaCheck® - run linearity & correlation studies
                   </Link>
                   <Link href="/veritascan" className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors">
-                    <Shield size={12} />VeritaScan™ - link gaps to domain findings
+                    <Shield size={12} />VeritaScan® - link gaps to domain findings
                   </Link>
                 </div>
               </div>
@@ -228,7 +228,7 @@ return (
                   ))}
                 </ul>
                 <Link href={labRoute("/veritamap-app")} className="block w-full border border-primary rounded-lg py-2.5 text-sm font-semibold text-primary text-center hover:bg-primary/5 transition-colors">
-                  Launch VeritaMap™
+                  Launch VeritaMap®
                 </Link>
               </CardContent>
             </Card>
@@ -238,7 +238,7 @@ return (
                 <Badge className="bg-primary text-primary-foreground">Full Access</Badge>
               </div>
               <CardContent className="p-6">
-                <div className="font-bold text-lg mb-1">VeritaAssure&#8482; Suite</div>
+                <div className="font-bold text-lg mb-1">VeritaAssure&#174; Suite</div>
                 <div className="flex items-baseline gap-1 mb-3">
                   <span className="text-sm text-muted-foreground">from</span>
                   <span className="text-4xl font-bold">$999</span>
@@ -248,7 +248,7 @@ return (
                   Unlimited instruments and analytes. Full regulatory gap report. CLIA tier-based pricing determined by your certificate.
                 </p>
                 <ul className="space-y-2 mb-6">
-                  {["Unlimited instruments and analytes","Full regulatory gap report PDF","VeritaCheck™ + VeritaScan™ included","Annual review cycle tracking","Priority support"].map(f => (
+                  {["Unlimited instruments and analytes","Full regulatory gap report PDF","VeritaCheck® + VeritaScan® included","Annual review cycle tracking","Priority support"].map(f => (
                     <li key={f} className="flex items-center gap-2 text-sm">
                       <CheckCircle2 size={13} className="text-primary shrink-0" />{f}
                     </li>
@@ -265,17 +265,17 @@ return (
           <div className="mt-6 max-w-2xl">
             <div className="bg-gradient-to-r from-primary/10 to-primary/5 border border-primary/20 rounded-xl p-5">
               <div className="font-bold text-base mb-1">
-                VeritaAssure&#8482; Suite: <span className="text-primary">Starting at $999/year</span>
+                VeritaAssure&#174; Suite: <span className="text-primary">Starting at $999/year</span>
                 <Badge className="ml-2 bg-primary text-primary-foreground text-xs">Full Suite</Badge>
               </div>
               <p className="text-sm text-muted-foreground mb-3">
-                The complete clinical laboratory regulatory compliance platform. All three tools, VeritaCheck™, VeritaScan™, and VeritaMap™, in one plan.
+                The complete clinical laboratory regulatory compliance platform. All three tools, VeritaCheck®, VeritaScan®, and VeritaMap®, in one plan.
               </p>
               <div className="grid sm:grid-cols-3 gap-3 mb-3">
                 {[
-                  { icon: <FlaskConical size={14} />, name: "VeritaCheck™", desc: "Unlimited EP studies" },
-                  { icon: <Shield size={14} />, name: "VeritaScan™", desc: "Self-inspection audit" },
-                  { icon: <Map size={14} />, name: "VeritaMap™", desc: "Test menu mapping" },
+                  { icon: <FlaskConical size={14} />, name: "VeritaCheck®", desc: "Unlimited EP studies" },
+                  { icon: <Shield size={14} />, name: "VeritaScan®", desc: "Self-inspection audit" },
+                  { icon: <Map size={14} />, name: "VeritaMap®", desc: "Test menu mapping" },
                 ].map((t, i) => (
                   <div key={i} className="bg-card border border-border rounded-lg p-3 text-center">
                     <div className="flex items-center justify-center gap-1 text-primary mb-1">{t.icon}<span className="font-semibold text-xs">{t.name}</span></div>
@@ -291,7 +291,7 @@ return (
 
           <p className="text-xs text-muted-foreground mt-5">
             Questions?{" "}
-            <a href="mailto:info@veritaslabservices.com?subject=VeritaMap™ Purchase Inquiry" className="text-primary hover:underline">
+            <a href="mailto:info@veritaslabservices.com?subject=VeritaMap® Purchase Inquiry" className="text-primary hover:underline">
               Contact us
             </a>
           </p>
@@ -307,11 +307,11 @@ return (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {[
               { title: "Laboratory Directors", desc: "You're responsible for every test on that menu. Know what each one requires and where your documentation lives." },
-              { title: "Quality Managers", desc: "Your QA program can't monitor what it can't see. VeritaMap™ makes every obligation visible and trackable." },
-              { title: "New Lab Administrators", desc: "Inherited a test menu with unknown compliance status? VeritaMap™ tells you where you stand for every test, fast." },
-              { title: "Lab Compliance Consultants", desc: "Deploy VeritaMap™ at every client engagement. Consistent, defensible, citation-mapped. The same tool every time." },
-              { title: "Survey-Prep Teams", desc: "Surveyors ask about specific tests. VeritaMap™ means you can answer, with documentation, for any test in seconds." },
-              { title: "Growing Laboratories", desc: "Adding tests? VeritaMap™ ensures every new test is mapped to its regulatory obligations before the first patient result." },
+              { title: "Quality Managers", desc: "Your QA program can't monitor what it can't see. VeritaMap® makes every obligation visible and trackable." },
+              { title: "New Lab Administrators", desc: "Inherited a test menu with unknown compliance status? VeritaMap® tells you where you stand for every test, fast." },
+              { title: "Lab Compliance Consultants", desc: "Deploy VeritaMap® at every client engagement. Consistent, defensible, citation-mapped. The same tool every time." },
+              { title: "Survey-Prep Teams", desc: "Surveyors ask about specific tests. VeritaMap® means you can answer, with documentation, for any test in seconds." },
+              { title: "Growing Laboratories", desc: "Adding tests? VeritaMap® ensures every new test is mapped to its regulatory obligations before the first patient result." },
             ].map((item, i) => (
               <div key={i} className="bg-card border border-border rounded-xl p-4">
                 <div className="font-semibold text-sm mb-1.5">{item.title}</div>
@@ -327,11 +327,11 @@ return (
         <div className="max-w-xl mx-auto px-4 sm:px-6 text-center">
           <h2 className="font-serif text-2xl font-bold mb-3">Ready to map your test menu?</h2>
           <p className="text-muted-foreground mb-6">
-            VeritaMap™ is live. Select your instruments, pull the FDA-cleared test menu, and have a compliance map for your lab in minutes.
+            VeritaMap® is live. Select your instruments, pull the FDA-cleared test menu, and have a compliance map for your lab in minutes.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
-              <Link href={labRoute("/veritamap-app")}>Launch VeritaMap™ <ChevronRight size={15} className="ml-1" /></Link>
+              <Link href={labRoute("/veritamap-app")}>Launch VeritaMap® <ChevronRight size={15} className="ml-1" /></Link>
             </Button>
             <Button asChild variant="outline" size="lg">
               <Link href="/login">Sign In / Create Account</Link>
@@ -339,10 +339,10 @@ return (
           </div>
           <div className="mt-6 flex flex-col gap-2 items-center">
             <Link href="/veritacheck" className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline font-medium">
-              <FlaskConical size={14} />Also try VeritaCheck™ - EP studies<ChevronRight size={13} />
+              <FlaskConical size={14} />Also try VeritaCheck® - EP studies<ChevronRight size={13} />
             </Link>
             <Link href="/veritascan" className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline font-medium">
-              <Shield size={14} />Also try VeritaScan™ - inspection readiness<ChevronRight size={13} />
+              <Shield size={14} />Also try VeritaScan® - inspection readiness<ChevronRight size={13} />
             </Link>
           </div>
         </div>

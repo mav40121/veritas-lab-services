@@ -6,7 +6,7 @@ const modules = [
   {
     key: "compliance",
     label: "Compliance Demo",
-    brand: "VeritaAssure\u2122 Suite",
+    brand: "VeritaAssure\u00AE Suite",
     path: "/demo/compliance",
     color: "#1e40af",
     icon: (
@@ -18,9 +18,9 @@ const modules = [
       </svg>
     ),
     features: [
-      "VeritaCheck\u2122 Method Verification",
-      "VeritaScan\u2122 Inspection Readiness",
-      "VeritaMap\u2122 Reportable Range Mapping",
+      "VeritaCheck\u00AE Method Verification",
+      "VeritaScan\u00AE Inspection Readiness",
+      "VeritaMap\u00AE Reportable Range Mapping",
       "VeritaComp\u2122 Competency Tracking",
       "VeritaQC\u2122 Westgard + Monthly Attestation (Phase 1 preview)",
     ],
@@ -137,7 +137,7 @@ export default function DemoSelectorPage() {
             lineHeight: 1.15,
           }}
         >
-          Experience VeritaAssure&#8482;
+          Experience VeritaAssure&#174;
         </h1>
         <p
           style={{
@@ -295,7 +295,7 @@ export default function DemoSelectorPage() {
       <div style={{ maxWidth: "960px", margin: "0 auto", padding: "8px 20px 48px" }}>
         <div style={{ height: "1px", background: "linear-gradient(to right, transparent, #01696F30, transparent)", marginBottom: "40px" }} />
         <SampleReportsSection
-          heading="VeritaCheck™ Sample Reports"
+          heading="VeritaCheck® Sample Reports"
           subheading="Download a real, generated PDF for each EP study type. Demo lab identity is Riverside Regional Medical Center (CLIA 22D0999999), a fixture for demonstration only."
         />
       </div>

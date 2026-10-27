@@ -1499,7 +1499,7 @@ export default function VeritaResponseFindingPage() {
         <Card>
           <CardHeader className="py-3 px-4 border-b">
             <CardTitle className="text-base font-semibold">
-              Most recent VeritaCheck&trade;
+              Most recent VeritaCheck&reg;
               {vcLink.normalizedKey && (
                 <span className="ml-2 text-xs font-normal text-muted-foreground">for {vcLink.normalizedKey}</span>
               )}

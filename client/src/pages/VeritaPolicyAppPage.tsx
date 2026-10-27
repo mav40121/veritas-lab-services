@@ -459,7 +459,7 @@ export default function VeritaPolicyAppPage() {
       <div className="min-h-[60vh] flex flex-col items-center justify-center text-center px-4">
         <Lock size={40} className="text-muted-foreground mb-4" />
         <h2 className="text-xl font-semibold text-foreground mb-2">Sign in to access VeritaDC&#8482;</h2>
-        <p className="text-muted-foreground text-sm">Your policy compliance tracker requires a VeritaAssure&#8482; account.</p>
+        <p className="text-muted-foreground text-sm">Your policy compliance tracker requires a VeritaAssure&#174; account.</p>
       </div>
     );
   }
@@ -469,7 +469,7 @@ export default function VeritaPolicyAppPage() {
       <div className="min-h-[60vh] flex flex-col items-center justify-center text-center px-4">
         <Lock size={40} className="text-muted-foreground mb-4" />
         <h2 className="text-xl font-semibold text-foreground mb-2">Upgrade to access VeritaDC&#8482;</h2>
-        <p className="text-muted-foreground text-sm mb-4">VeritaDC&#8482; is included with all paid VeritaAssure&#8482; plans.</p>
+        <p className="text-muted-foreground text-sm mb-4">VeritaDC&#8482; is included with all paid VeritaAssure&#174; plans.</p>
         <a href="/pricing"><Button>View Plans</Button></a>
       </div>
     );

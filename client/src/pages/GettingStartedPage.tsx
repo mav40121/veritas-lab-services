@@ -44,10 +44,10 @@ const STEPS = [
   {
     key: "map_created" as const,
     number: 2,
-    title: "Build your VeritaMap™",
-    description: "Map your instruments and test menu. VeritaMap™ feeds your competency programs, study instrument selection, and inspection checklist.",
+    title: "Build your VeritaMap®",
+    description: "Map your instruments and test menu. VeritaMap® feeds your competency programs, study instrument selection, and inspection checklist.",
     time: "15 minutes",
-    buttonLabel: "Open VeritaMap™",
+    buttonLabel: "Open VeritaMap®",
     route: "/veritamap-app",
     icon: Map,
   },
@@ -64,10 +64,10 @@ const STEPS = [
   {
     key: "scan_started" as const,
     number: 4,
-    title: "Complete VeritaScan™",
+    title: "Complete VeritaScan®",
     description: "Walk through 168 TJC and CAP inspection standards. Know exactly where you stand before a surveyor arrives.",
     time: "30 minutes",
-    buttonLabel: "Open VeritaScan™",
+    buttonLabel: "Open VeritaScan®",
     route: "/veritascan-app",
     icon: ClipboardCheck,
   },
@@ -75,7 +75,7 @@ const STEPS = [
     key: "comp_created" as const,
     number: 5,
     title: "Set up VeritaComp™",
-    description: "Create a competency program using your VeritaMap™ instruments. All three CLIA competency types in one place.",
+    description: "Create a competency program using your VeritaMap® instruments. All three CLIA competency types in one place.",
     time: "15 minutes",
     buttonLabel: "Open VeritaComp™",
     route: "/veritacomp-app",
@@ -127,16 +127,16 @@ export default function GettingStartedPage() {
   const onboardingCopy = (() => {
     const plan = (user?.plan || "").toLowerCase();
     if (plan === "hospital") {
-      return "Your plan includes a complimentary 2-hour onboarding session via Zoom or Teams with a VeritaAssure\u2122 specialist.";
+      return "Your plan includes a complimentary 2-hour onboarding session via Zoom or Teams with a VeritaAssure\u00AE specialist.";
     }
     if (plan === "enterprise" || plan === "large_hospital") {
       return "Your plan includes custom onboarding tailored to your facility. Contact us to schedule.";
     }
     if (plan === "clinic" || plan === "waived" || plan === "community") {
-      return "Your plan includes a complimentary 1-hour onboarding session via Zoom or Teams with a VeritaAssure\u2122 specialist.";
+      return "Your plan includes a complimentary 1-hour onboarding session via Zoom or Teams with a VeritaAssure\u00AE specialist.";
     }
     // Fallback for free / per_study / veritacheck_only / unknown: keep generic, no duration claim
-    return "Need help getting started? Reach out and a VeritaAssure\u2122 specialist will follow up to walk you through the platform.";
+    return "Need help getting started? Reach out and a VeritaAssure\u00AE specialist will follow up to walk you through the platform.";
   })();
 
   const { data: status, isLoading } = useQuery<OnboardingStatus>({
@@ -152,13 +152,13 @@ export default function GettingStartedPage() {
     }
   }, [isLoggedIn, status]);
 
-  useSEO({ title: "Getting Started | VeritaAssure™ Lab Compliance Software", description: "Get started with VeritaAssure™. Follow the step-by-step onboarding guide to set up your laboratory compliance platform." });
+  useSEO({ title: "Getting Started | VeritaAssure® Lab Compliance Software", description: "Get started with VeritaAssure®. Follow the step-by-step onboarding guide to set up your laboratory compliance platform." });
 
   if (!isLoggedIn) {
     return (
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold mb-2">Getting Started with VeritaAssure&#8482;</h1>
+          <h1 className="text-2xl font-bold mb-2">Getting Started with VeritaAssure&#174;</h1>
           <p className="text-muted-foreground">Seven steps to a fully configured lab. Most labs complete setup in under an hour.</p>
         </div>
 
@@ -211,7 +211,7 @@ export default function GettingStartedPage() {
     <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-2xl font-bold">Getting Started with VeritaAssure&#8482;</h1>
+        <h1 className="text-2xl font-bold">Getting Started with VeritaAssure&#174;</h1>
         <p className="text-muted-foreground mt-1">
           Follow these steps to set up your lab. Most labs are fully configured in under an hour.
         </p>
@@ -305,7 +305,7 @@ export default function GettingStartedPage() {
       <div className="mt-8 rounded-xl border border-primary/20 bg-card p-6">
         <div className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3">Free Downloads</div>
         <p className="text-sm text-muted-foreground mb-4">
-          Download these two documents to validate and deploy VeritaCheck&#8482; for compliance documentation. No login required.
+          Download these two documents to validate and deploy VeritaCheck&#174; for compliance documentation. No login required.
         </p>
         <div className="grid sm:grid-cols-2 gap-3">
           <div className="rounded-lg border border-border bg-muted/30 p-4">
@@ -314,7 +314,7 @@ export default function GettingStartedPage() {
               <span className="font-semibold text-sm">CLSI Compliance Matrix</span>
             </div>
             <p className="text-xs text-muted-foreground leading-relaxed mb-3">
-              One-page reference mapping the core VeritaCheck&#8482; verification study types to CLSI, CLIA, CAP, and TJC standards.
+              One-page reference mapping the core VeritaCheck&#174; verification study types to CLSI, CLIA, CAP, and TJC standards.
             </p>
             <a
               href="/api/downloads/clsi-compliance-matrix"
@@ -330,7 +330,7 @@ export default function GettingStartedPage() {
               <span className="font-semibold text-sm">Software Validation Template</span>
             </div>
             <p className="text-xs text-muted-foreground leading-relaxed mb-3">
-              Validate VeritaCheck&#8482; for compliance documentation before placing it into service. Satisfies CAP GEN.20316 and CLIA 493.1251.
+              Validate VeritaCheck&#174; for compliance documentation before placing it into service. Satisfies CAP GEN.20316 and CLIA 493.1251.
             </p>
             <a
               href="/api/downloads/software-validation-template"

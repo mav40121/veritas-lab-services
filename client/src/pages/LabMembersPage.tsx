@@ -787,7 +787,7 @@ function ExportAllCard({ labId }: { labId: number }) {
       </CardHeader>
       <CardContent className="space-y-3 text-sm">
         <p className="text-muted-foreground">
-          One zip with every record this lab keeps in VeritaAssure™: a workbook per module, stored documents including every policy version, and the reports the modules produce. It works after a subscription ends. Only the lab owner can build or download it, and each download is kept for 24 hours.
+          One zip with every record this lab keeps in VeritaAssure®: a workbook per module, stored documents including every policy version, and the reports the modules produce. It works after a subscription ends. Only the lab owner can build or download it, and each download is kept for 24 hours.
         </p>
         <div className="rounded-md border border-border p-3 flex items-start justify-between gap-3">
           <div>

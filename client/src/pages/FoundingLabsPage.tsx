@@ -17,7 +17,7 @@ export default function FoundingLabsPage() {
         <Badge variant="outline" className="border-primary/40 text-primary">Founding Lab Program</Badge>
         <h1 className="font-serif text-3xl sm:text-4xl font-bold">Founding Labs</h1>
         <p className="text-base text-muted-foreground leading-relaxed max-w-2xl">
-          The charter customers of VeritaAssure™. Founding labs share their experience on reference calls with
+          The charter customers of VeritaAssure®. Founding labs share their experience on reference calls with
           laboratories that are evaluating the platform.
         </p>
       </header>
@@ -47,7 +47,7 @@ export default function FoundingLabsPage() {
           <span className="text-primary">★</span>
           Join the Founding Lab Program
         </h2>
-        <p className="text-base mb-4 leading-relaxed">Become a charter customer of VeritaAssure™.</p>
+        <p className="text-base mb-4 leading-relaxed">Become a charter customer of VeritaAssure®.</p>
         <ul className="space-y-2 mb-5">
           <li className="flex items-start gap-2 text-sm">
             <CheckCircle2 size={16} className="text-primary mt-0.5 shrink-0" />

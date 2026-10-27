@@ -186,9 +186,9 @@ console.log("\nCase 4: copy guardrails on EVERY product block and featureList");
     }
   }
   // Cross-product marks appearing inside another product's copy.
-  check("/veritastaff block marks VeritaMap", /VeritaMap&#8482;/.test(bodyOf("renderVeritaStaffContent")));
-  check("/veritatrack block marks VeritaMap", /VeritaMap&#8482;/.test(bodyOf("renderVeritaTrackContent")));
-  check("/veritapt block marks VeritaScan", /VeritaScan&#8482;/.test(bodyOf("renderVeritaPTContent")));
+  check("/veritastaff block marks VeritaMap", /VeritaMap&#174;/.test(bodyOf("renderVeritaStaffContent")));
+  check("/veritatrack block marks VeritaMap", /VeritaMap&#174;/.test(bodyOf("renderVeritaTrackContent")));
+  check("/veritapt block marks VeritaScan", /VeritaScan&#174;/.test(bodyOf("renderVeritaPTContent")));
 }
 
 console.log("\nCase 4c: the consulting pages state the credential faithfully");

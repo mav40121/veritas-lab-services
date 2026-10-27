@@ -12,7 +12,7 @@ const FEATURES = [
   "Enter survey results with peer comparison and automatic SDI calculation",
   "Corrective action documentation with root cause, action taken, and verification",
   "Surveyor-ready PDF report with full PT history by analyte",
-  "Integrates with VeritaScan™ to auto-complete PT compliance checklist items",
+  "Integrates with VeritaScan® to auto-complete PT compliance checklist items",
 ];
 
 const HOW_IT_WORKS = [
@@ -184,7 +184,7 @@ return (
         <div className="container-default py-14 text-center">
           <h2 className="font-serif text-3xl font-bold mb-3">Ready to track PT the right way?</h2>
           <p className="text-muted-foreground max-w-xl mx-auto mb-8">
-            VeritaPT™ is included in your VeritaAssure™ subscription. Sign in to get started.
+            VeritaPT™ is included in your VeritaAssure® subscription. Sign in to get started.
           </p>
           {isLoggedIn ? (
             <Button asChild size="lg">

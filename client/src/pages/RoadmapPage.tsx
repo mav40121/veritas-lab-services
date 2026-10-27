@@ -9,14 +9,14 @@ interface RoadmapItem {
 
 const completedItems: RoadmapItem[] = [
   {
-    title: "VeritaCheck™ - Method Verification Suite",
+    title: "VeritaCheck® - Method Verification Suite",
     description:
       "Runs EP studies required for CLIA and CAP compliance: method comparison, calibration verification/linearity, accuracy, precision, lot-to-lot verification, QC range establishment, and multi-analyte comparison. Generates compliant PDF reports with statistical tables.",
   },
   {
-    title: "VeritaCheck™ - Reference Range Verification Workflow",
+    title: "VeritaCheck® - Reference Range Verification Workflow",
     description:
-      "Establishes your lab's verified reference ranges through a structured EP28 verification study. Once verified, results feed directly into VeritaMap™, replacing the blank reference range fields with your lab's own compliant values. Satisfies CLIA 493.1253 requirements for reference range establishment and verification.",
+      "Establishes your lab's verified reference ranges through a structured EP28 verification study. Once verified, results feed directly into VeritaMap®, replacing the blank reference range fields with your lab's own compliant values. Satisfies CLIA 493.1253 requirements for reference range establishment and verification.",
   },
   {
     title: "VeritaStock™ - Laboratory Inventory Management",
@@ -24,12 +24,12 @@ const completedItems: RoadmapItem[] = [
       "Par level-based inventory tracking built for clinical labs. Track items by department, burn rate, lead time, and standing order status. Auto-calculates par levels, order-to quantities, and order quantities in both units and order units. Surfaces what needs to be ordered today, with no spreadsheet math required.",
   },
   {
-    title: "VeritaMap™ - Laboratory Test Menu Mapping",
+    title: "VeritaMap® - Laboratory Test Menu Mapping",
     description:
       "Builds a complete instrument and test menu inventory for your lab. Maps 269 instruments across all specialties; the lab verifies and adopts its own reference ranges, critical values, and AMR. Exports a formatted Excel workbook with compliance tracking. Free tier available.",
   },
   {
-    title: "VeritaScan™ - Inspection Readiness Checklist",
+    title: "VeritaScan® - Inspection Readiness Checklist",
     description:
       "173-item checklist covering the most commonly cited TJC and CAP standards. Walks through every major inspection domain, tracks completion status, and exports results to Excel. Built for pre-survey walkthroughs and ongoing readiness monitoring.",
   },
@@ -44,12 +44,12 @@ const completedItems: RoadmapItem[] = [
       "Every account is tied to a specific CLIA certificate. Lab tier and pricing are suggested based on certificate type. You can always select a different tier. No self-reporting or manual verification required.",
   },
   {
-    title: "VeritaAssure™ Consulting Services",
+    title: "VeritaAssure® Consulting Services",
     description:
       "Mock inspections, regulatory gap analysis, laboratory director services, and policy and procedure development. Available as a standalone engagement or alongside the software suite.",
   },
   {
-    title: "VeritaCheck™ - PT/INR Geometric Mean Calculator",
+    title: "VeritaCheck® - PT/INR Geometric Mean Calculator",
     description:
       "Re-establishes the Mean Normal PT (MNPT) from a cohort of healthy normal patients when the PT reagent lot changes, then verifies the new INR equation against the prior lot on patient samples. Generates a compliant PDF with full statistical tables and the new geometric mean for instrument and LIS programming. Laboratory director or designee review and approval required.",
   },
@@ -97,7 +97,7 @@ const comingSoonItems: RoadmapItem[] = [
   {
     title: "Enterprise API Access",
     description:
-      "REST API for health systems and reference labs that need to integrate VeritaAssure™ data into existing LIS, LIMS, or compliance platforms.",
+      "REST API for health systems and reference labs that need to integrate VeritaAssure® data into existing LIS, LIMS, or compliance platforms.",
   },
 ];
 
@@ -140,7 +140,7 @@ function RoadmapSection({ label, icon, accentColor, borderColor, items }: Sectio
 }
 
 export default function RoadmapPage() {
-    useSEO({ title: "Product Roadmap | VeritaAssure™ Lab Compliance Software", description: "See what is coming next for VeritaAssure™. Upcoming features for clinical laboratory compliance, quality management, and accreditation readiness." });
+    useSEO({ title: "Product Roadmap | VeritaAssure® Lab Compliance Software", description: "See what is coming next for VeritaAssure®. Upcoming features for clinical laboratory compliance, quality management, and accreditation readiness." });
 return (
     <div>
       {/* Header */}
@@ -149,7 +149,7 @@ return (
           <div className="max-w-3xl">
             <h1 className="font-serif text-4xl sm:text-5xl font-bold mb-4">Product Roadmap</h1>
             <p className="text-lg text-muted-foreground leading-relaxed">
-              What we have built, what we are actively working on, and what is coming next. No hype, no dates - just an honest picture of where VeritaAssure™ is headed.
+              What we have built, what we are actively working on, and what is coming next. No hype, no dates - just an honest picture of where VeritaAssure® is headed.
             </p>
           </div>
         </div>

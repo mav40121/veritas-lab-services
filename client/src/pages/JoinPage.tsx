@@ -224,7 +224,7 @@ export default function JoinPage() {
                   className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary shrink-0"
                 />
                 <span className="text-sm text-foreground leading-relaxed">
-                  I understand that VeritaAssure&#8482; is not a HIPAA-covered platform and is not designed to store, process, or transmit protected health information (PHI). I agree to use only de-identified data, sample IDs, QC lot numbers, and non-patient-identifiable information when entering data into any VeritaAssure&#8482; module.
+                  I understand that VeritaAssure&#174; is not a HIPAA-covered platform and is not designed to store, process, or transmit protected health information (PHI). I agree to use only de-identified data, sample IDs, QC lot numbers, and non-patient-identifiable information when entering data into any VeritaAssure&#174; module.
                 </span>
               </label>
               {hipaaError && <p className="text-sm text-red-600">{hipaaError}</p>}

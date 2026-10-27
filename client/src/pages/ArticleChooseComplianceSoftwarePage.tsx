@@ -76,21 +76,21 @@ export default function ArticleChooseComplianceSoftwarePage() {
           <p>Compliance software should let you start small and prove value before you commit a budget. Look for transparent published pricing rather than a mandatory sales call, a real free trial so you can load your own data, and a plan that fits your laboratory's size instead of an enterprise contract you do not need. A vendor confident in the product lets you try it.</p>
 
           <h2 className="font-serif text-2xl font-bold mt-10 mb-3">The kinds of tools you will find</h2>
-          <p>In practice you will run into four categories. General document-management and QMS platforms are strong at storing and routing files but know nothing about CLIA, so you supply all the regulatory content yourself. Laboratory information systems run testing and can hold some quality records, but compliance is a side feature, not their purpose. Spreadsheets are free and universal and are exactly what surveyors find failing. And purpose-built laboratory compliance software is designed around the survey itself. Match the category to how much of the work you want the software to actually know. For a named example, see how VeritaCheck&#8482; compares with <Link href="/resources/veritacheck-vs-ep-evaluator" className="text-primary hover:underline">EP Evaluator</Link>.</p>
+          <p>In practice you will run into four categories. General document-management and QMS platforms are strong at storing and routing files but know nothing about CLIA, so you supply all the regulatory content yourself. Laboratory information systems run testing and can hold some quality records, but compliance is a side feature, not their purpose. Spreadsheets are free and universal and are exactly what surveyors find failing. And purpose-built laboratory compliance software is designed around the survey itself. Match the category to how much of the work you want the software to actually know. For a named example, see how VeritaCheck&#174; compares with <Link href="/resources/veritacheck-vs-ep-evaluator" className="text-primary hover:underline">EP Evaluator</Link>.</p>
 
           <h2 className="font-serif text-2xl font-bold mt-10 mb-3">Where VeritaAssure fits</h2>
-          <p><Link href="/veritaassure" className="text-primary hover:underline">VeritaAssure&#8482;</Link> is the purpose-built option, an integrated eighteen-module compliance and operations suite built by a former Joint Commission laboratory surveyor. Its content is crosswalked to CLIA, CAP, TJC, and COLA; it covers the full lifecycle from verification to inspection readiness; its reports cite the CFR section and carry the director signature block; it stores no protected health information; and it <Link href="/pricing" className="text-primary hover:underline">publishes its pricing</Link> with a free trial. Whether you choose it or not, evaluate any platform against the six questions above. The one that answers all six is the one that will hold up when a surveyor is sitting across from you.</p>
+          <p><Link href="/veritaassure" className="text-primary hover:underline">VeritaAssure&#174;</Link> is the purpose-built option, an integrated eighteen-module compliance and operations suite built by a former Joint Commission laboratory surveyor. Its content is crosswalked to CLIA, CAP, TJC, and COLA; it covers the full lifecycle from verification to inspection readiness; its reports cite the CFR section and carry the director signature block; it stores no protected health information; and it <Link href="/pricing" className="text-primary hover:underline">publishes its pricing</Link> with a free trial. Whether you choose it or not, evaluate any platform against the six questions above. The one that answers all six is the one that will hold up when a surveyor is sitting across from you.</p>
 
           <div className="rounded-xl border-2 border-primary/20 bg-primary/5 p-6 my-8">
             <div className="flex items-start gap-3">
               <FlaskConical size={20} className="text-primary shrink-0 mt-0.5" />
               <div>
-                <div className="font-semibold text-sm mb-1">VeritaAssure&#8482; answers all six questions</div>
+                <div className="font-semibold text-sm mb-1">VeritaAssure&#174; answers all six questions</div>
                 <p className="text-sm text-muted-foreground mb-3">
                   Crosswalked to CLIA, CAP, TJC, and COLA, covering the full lifecycle, with CFR-cited reports, no stored PHI, and published pricing with a free trial.
                 </p>
                 <Button asChild size="sm" className="bg-primary text-primary-foreground">
-                  <Link href="/veritaassure">Explore VeritaAssure&#8482; <ChevronRight size={13} className="ml-1" /></Link>
+                  <Link href="/veritaassure">Explore VeritaAssure&#174; <ChevronRight size={13} className="ml-1" /></Link>
                 </Button>
               </div>
             </div>
@@ -110,11 +110,11 @@ export default function ArticleChooseComplianceSoftwarePage() {
             <FlaskConical size={28} className="mx-auto mb-3 opacity-80" />
             <h3 className="font-serif text-xl font-bold mb-2">Evaluate the platform that answers all six</h3>
             <p className="text-primary-foreground/80 text-sm max-w-md mx-auto mb-5">
-              See the full VeritaAssure&#8482; suite, or start with its published pricing and a free trial.
+              See the full VeritaAssure&#174; suite, or start with its published pricing and a free trial.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Button asChild size="lg" className="bg-white text-primary hover:bg-white/90 font-semibold">
-                <Link href="/veritaassure">Explore VeritaAssure&#8482; <ChevronRight size={15} className="ml-1" /></Link>
+                <Link href="/veritaassure">Explore VeritaAssure&#174; <ChevronRight size={15} className="ml-1" /></Link>
               </Button>
               <Button asChild size="lg" variant="outline" className="border-white/40 text-white hover:bg-white/10">
                 <Link href="/pricing">See Pricing <ExternalLink size={13} className="ml-1" /></Link>

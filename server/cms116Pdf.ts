@@ -149,7 +149,7 @@ const SECTION_VIII_GROUPS: Array<{ label: string; items: Array<[string, string]>
 const FOOTER_TEMPLATE = `
 <div style="width:100%;padding:0 14mm;box-sizing:border-box;font-family:Helvetica,Arial,sans-serif">
   <div style="border-top:1px solid #d2d7dc;padding-top:3px;display:flex;justify-content:space-between;font-size:7px;color:#646e78">
-    <span>VeritaAssure&trade; | VeritaLab&trade; | CMS-116 Draft</span>
+    <span>VeritaAssure&reg; | VeritaLab&trade; | CMS-116 Draft</span>
     <span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>
   </div>
 </div>`;

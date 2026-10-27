@@ -81,7 +81,7 @@ mkdirSync(outDir, { recursive: true });
   await page.pdf({
     path: pdfPath, format: "Letter", printBackground: true, displayHeaderFooter: true,
     headerTemplate: "<span></span>",
-    footerTemplate: `<div style="font-size:7pt;width:100%;text-align:center;color:#646e78">VeritaAssure&trade; | VeritaCheck&trade; | Confidential - For Internal Lab Use Only Page <span class="pageNumber"></span> of <span class="totalPages"></span></div>`,
+    footerTemplate: `<div style="font-size:7pt;width:100%;text-align:center;color:#646e78">VeritaAssure&reg; | VeritaCheck&reg; | Confidential - For Internal Lab Use Only Page <span class="pageNumber"></span> of <span class="totalPages"></span></div>`,
     margin: { top: "14mm", right: "15mm", bottom: "20mm", left: "15mm" },
   });
   // page-1 visual: render inside the real print margins at Letter width so the

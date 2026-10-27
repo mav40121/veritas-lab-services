@@ -366,7 +366,7 @@ export default function VeritaPacePage() {
 
   const facilityBenchmark = currentMonth ? BENCHMARKS[currentMonth.facility_type] : BENCHMARKS.community;
 
-  useSEO({ title: "VeritaPace\u2122 | Monthly Lab Productivity Tracker | VeritaAssure\u2122", description: "Track monthly lab productivity with VeritaPace\u2122. Productive hours per billable test against published facility-type reference ranges, FTE and overtime analysis, and year-over-year trend. Included with VeritaAssure\u2122 Suite plans." });
+  useSEO({ title: "VeritaPace\u2122 | Monthly Lab Productivity Tracker | VeritaAssure\u00AE", description: "Track monthly lab productivity with VeritaPace\u2122. Productive hours per billable test against published facility-type reference ranges, FTE and overtime analysis, and year-over-year trend. Included with VeritaAssure\u00AE Suite plans." });
 
   // Unauthenticated gate - marketing landing
   if (!isLoggedIn) {
@@ -418,7 +418,7 @@ export default function VeritaPacePage() {
                 <div className="flex flex-wrap gap-3 mb-8">
                   <div className="bg-card border border-border rounded-lg px-4 py-2.5 text-center">
                     <div className="text-2xl font-bold text-primary">From $999/yr</div>
-                    <div className="text-xs text-muted-foreground">Included with VeritaAssure{"\u2122"} Suite</div>
+                    <div className="text-xs text-muted-foreground">Included with VeritaAssure{"\u00AE"} Suite</div>
                   </div>
                   <div className="bg-card border border-border rounded-lg px-4 py-2.5 text-center">
                     <div className="text-2xl font-bold text-primary">Free</div>
@@ -455,7 +455,7 @@ export default function VeritaPacePage() {
                       <div>Excel Export</div>
                     </div>
                     <div className="w-12 h-0.5 bg-white/40 mb-4" />
-                    <div className="text-xs text-white/60 text-center">VeritaAssure{"\u2122"} Suite Module</div>
+                    <div className="text-xs text-white/60 text-center">VeritaAssure{"\u00AE"} Suite Module</div>
                   </div>
                   <div className="absolute -bottom-2 -right-2 w-64 h-80 bg-black/20 rounded-lg -z-10" />
                 </div>
@@ -472,7 +472,7 @@ export default function VeritaPacePage() {
       <div className="min-h-[60vh] flex flex-col items-center justify-center text-center px-4">
         <Users size={40} className="text-muted-foreground mb-4" />
         <h2 className="font-serif text-2xl font-bold mb-2">Upgrade to access VeritaPace{"\u2122"}</h2>
-        <p className="text-muted-foreground mb-6 max-w-md">VeritaPace{"\u2122"} is included in all VeritaAssure{"\u2122"} suite plans. Subscribe to get started.</p>
+        <p className="text-muted-foreground mb-6 max-w-md">VeritaPace{"\u2122"} is included in all VeritaAssure{"\u00AE"} suite plans. Subscribe to get started.</p>
         <Button asChild style={{ backgroundColor: "#01696F" }}><Link href="/pricing">View Plans</Link></Button>
       </div>
     );

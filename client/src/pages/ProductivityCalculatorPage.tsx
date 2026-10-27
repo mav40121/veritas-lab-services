@@ -64,7 +64,7 @@ function GaugeBar({ ratio, low, high }: { ratio: number; low: number; high: numb
 }
 
 export default function ProductivityCalculatorPage() {
-  useSEO({ title: "VeritaBench\u2122 | Free Lab Productivity Scorecard | VeritaAssure\u2122", description: "Free VeritaBench\u2122 productivity tool. Enter monthly billable volume and paid hours to score your lab against community hospital, large trauma center, and reference lab peer benchmarks." });
+  useSEO({ title: "VeritaBench\u2122 | Free Lab Productivity Scorecard | VeritaAssure\u00AE", description: "Free VeritaBench\u2122 productivity tool. Enter monthly billable volume and paid hours to score your lab against community hospital, large trauma center, and reference lab peer benchmarks." });
   const [productiveHours, setProductiveHours] = useState<string>("");
   const [billableTests, setBillableTests] = useState<string>("");
   const [facilityType, setFacilityType] = useState<string>("community");
@@ -301,7 +301,7 @@ export default function ProductivityCalculatorPage() {
 
                   {/* CTA */}
                   <div className="p-4 rounded-lg text-center" style={{ backgroundColor: "#01696F10" }}>
-                    <p className="text-sm font-medium mb-3">Track this over time with VeritaAssure{"\u2122"}</p>
+                    <p className="text-sm font-medium mb-3">Track this over time with VeritaAssure{"\u00AE"}</p>
                     <Button asChild style={{ backgroundColor: "#01696F" }} className="hover:opacity-90">
                       <Link href="/pricing">
                         <Users size={14} className="mr-2" />

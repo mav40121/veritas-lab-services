@@ -19,7 +19,7 @@ const TEXT_DARK = "#28251D";
 const FOOTER_TEMPLATE = `
 <div style="width:100%;padding:0 14mm;box-sizing:border-box;font-family:Helvetica,Arial,sans-serif">
   <div style="border-top:1px solid #d2d7dc;padding-top:3px;display:flex;justify-content:space-between;font-size:7px;color:#646e78">
-    <span>VeritaAssure&trade; | VeritaCheck&trade; positioning | www.veritaslabservices.com</span>
+    <span>VeritaAssure&reg; | VeritaCheck&reg; positioning | www.veritaslabservices.com</span>
     <span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>
   </div>
 </div>`;
@@ -49,41 +49,41 @@ function buildHtml(): string {
 <body>
 
 <div class="title-bar">
-  <h1>Why VeritaCheck&trade; vs. Legacy Verification Software</h1>
+  <h1>Why VeritaCheck&reg; vs. Legacy Verification Software</h1>
   <div class="sub">A side-by-side comparison for lab directors evaluating a tool change.</div>
 </div>
 
 <div class="lede">
   <p>Most labs running method verification today use a legacy desktop tool that has been the de facto standard for two decades. The tool works. It is also priced for an era before browser-based clinical software, structured around a single Windows workstation, and integrated only with itself.</p>
-  <p>VeritaCheck&trade; is a browser-based alternative producing the same verification studies under the same CLSI EP standards, at a cost closer to a SaaS subscription than a per-seat license, integrated into the broader VeritaAssure&trade; platform.</p>
+  <p>VeritaCheck&reg; is a browser-based alternative producing the same verification studies under the same CLSI EP standards, at a cost closer to a SaaS subscription than a per-seat license, integrated into the broader VeritaAssure&reg; platform.</p>
 </div>
 
 <div class="grid">
 
   <div class="panel">
     <h3>1. Cost</h3>
-    <p>VeritaCheck&trade; Unlimited is $299 in Year 1, $499 per year after, for the entire lab. Per-study pricing for occasional use is $25 one-time. Every paid plan includes one free medical director seat for the lab's named director, which does not count against your active seats. Other reviewers, such as the technical consultant and technical supervisor, use active seats.</p>
+    <p>VeritaCheck&reg; Unlimited is $299 in Year 1, $499 per year after, for the entire lab. Per-study pricing for occasional use is $25 one-time. Every paid plan includes one free medical director seat for the lab's named director, which does not count against your active seats. Other reviewers, such as the technical consultant and technical supervisor, use active seats.</p>
     <p>Legacy verification software is typically licensed per seat at $800 to $3,000 per analyst per year. A community-hospital lab with three technologists and one reviewer pays $2,400 to $9,000 per year before any tech time is spent.</p>
     <p>The CFO sees a $499 line as a rounding error. A $5,000 line gets reviewed every renewal cycle.</p>
   </div>
 
   <div class="panel">
     <h3>2. Time to first study</h3>
-    <p>VeritaCheck&trade; opens in a browser. No install, no driver, no IT ticket. A technologist with a fresh login completes a method comparison study end-to-end in under 20 minutes. By the third study the form is muscle memory.</p>
+    <p>VeritaCheck&reg; opens in a browser. No install, no driver, no IT ticket. A technologist with a fresh login completes a method comparison study end-to-end in under 20 minutes. By the third study the form is muscle memory.</p>
     <p>Legacy verification software requires Windows install, spreadsheet-style training, and IT involvement on workstation changes. A new user spends a half-day to a full day before a first defensible report.</p>
     <p>Time matters most onboarding a new analyzer or analyte. Cutting verification from days to hours moves the go-live date.</p>
   </div>
 
   <div class="panel">
     <h3>3. Integration breadth</h3>
-    <p>VeritaCheck&trade; runs fourteen study types under one tool: Precision Verification (EP15-A3), Method Comparison / Multi-Instrument Correlation (EP09), Calibration Verification (EP06), Linearity (EP06), Reagent Lot Verification (EP26), QC Lot Verification (C24-Ed4), PT/INR Geometric Mean (H47), Multi-Analyte Lot Comparison, Coag (EP26), Reference Range Verification (EP28), Sensitivity Verification (EP17-A2), Carryover Verification (EP10-A3), Accuracy / Bias (EP15-A3), Reportable Range / AMR Verification (CLIA 493.1255), and Manual Differential (CLSI H20).</p>
-    <p>Around it in the same VeritaAssure&trade; platform: VeritaDC&trade;, VeritaMap&trade;, VeritaComp&trade;, VeritaLab&trade;, VeritaOps&trade;, VeritaStock&trade;. One login covers all of them.</p>
+    <p>VeritaCheck&reg; runs fourteen study types under one tool: Precision Verification (EP15-A3), Method Comparison / Multi-Instrument Correlation (EP09), Calibration Verification (EP06), Linearity (EP06), Reagent Lot Verification (EP26), QC Lot Verification (C24-Ed4), PT/INR Geometric Mean (H47), Multi-Analyte Lot Comparison, Coag (EP26), Reference Range Verification (EP28), Sensitivity Verification (EP17-A2), Carryover Verification (EP10-A3), Accuracy / Bias (EP15-A3), Reportable Range / AMR Verification (CLIA 493.1255), and Manual Differential (CLSI H20).</p>
+    <p>Around it in the same VeritaAssure&reg; platform: VeritaDC&trade;, VeritaMap&reg;, VeritaComp&trade;, VeritaLab&trade;, VeritaOps&trade;, VeritaStock&trade;. One login covers all of them.</p>
     <p>Legacy software covers method comparison and precision well. Other study types scatter across separate vendors and spreadsheets.</p>
   </div>
 
   <div class="panel">
     <h3>4. Compliance defensibility</h3>
-    <p>Every VeritaCheck&trade; PDF has the laboratory director or designee signature block on page 1, alongside the results, the narrative, and the specialty-correct 42 CFR Part 493 citation (Chemistry 493.931, Hematology 493.941, etc.). ADLM internal goals appear alongside CLIA Total Allowable Error where applicable.</p>
+    <p>Every VeritaCheck&reg; PDF has the laboratory director or designee signature block on page 1, alongside the results, the narrative, and the specialty-correct 42 CFR Part 493 citation (Chemistry 493.931, Hematology 493.941, etc.). ADLM internal goals appear alongside CLIA Total Allowable Error where applicable.</p>
     <p>Every change to a study is captured in the audit log with timestamp and user identity. The lab name and CLIA number are stamped on every page header.</p>
     <p>Legacy reports vary in CFR citation accuracy and signature placement. A surveyor has to do their own regulatory cross-reference.</p>
   </div>
@@ -96,7 +96,7 @@ function buildHtml(): string {
 </div>
 
 <div class="disclaimer">
-  VeritaAssure&trade; is a statistical calculation tool. Results require interpretation by the laboratory director or designee. Legacy figures are typical operator-reported ranges, not a quote from any specific vendor. Lab tier pricing current as of the most recent Stripe schedule. Final approval and clinical determination must be made by the laboratory director or designee.
+  VeritaAssure&reg; is a statistical calculation tool. Results require interpretation by the laboratory director or designee. Legacy figures are typical operator-reported ranges, not a quote from any specific vendor. Lab tier pricing current as of the most recent Stripe schedule. Final approval and clinical determination must be made by the laboratory director or designee.
 </div>
 
 </body></html>`;

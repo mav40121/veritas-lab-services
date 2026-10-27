@@ -4,7 +4,7 @@ export default function TrustPage() {
   useSEO({
     title: "Trust & Security | Veritas Lab Services",
     description:
-      "How VeritaAssure™ protects your laboratory data: hosting, encryption, multi-lab isolation, PHI-free design, subprocessors, and HIPAA BAA availability.",
+      "How VeritaAssure® protects your laboratory data: hosting, encryption, multi-lab isolation, PHI-free design, subprocessors, and HIPAA BAA availability.",
   });
 
   return (
@@ -16,7 +16,7 @@ export default function TrustPage() {
 
         <section>
           <h2 className="font-semibold text-base mb-2">1. Overview</h2>
-          <p>VeritaAssure&trade; is operated by Veritas Lab Services, LLC. This page describes the technical and operational measures we use to protect customer data. It is a companion to our <a href="/privacy" className="text-primary hover:underline">Privacy Policy</a>, which covers what we collect and how we use it. This page covers how we protect it.</p>
+          <p>VeritaAssure&reg; is operated by Veritas Lab Services, LLC. This page describes the technical and operational measures we use to protect customer data. It is a companion to our <a href="/privacy" className="text-primary hover:underline">Privacy Policy</a>, which covers what we collect and how we use it. This page covers how we protect it.</p>
           <p>If anything on this page is unclear or you need specific assurances for a procurement review, contact <a href="mailto:info@veritaslabservices.com" className="text-primary hover:underline">info@veritaslabservices.com</a>.</p>
         </section>
 
@@ -40,16 +40,16 @@ export default function TrustPage() {
 
         <section>
           <h2 className="font-semibold text-base mb-2">4. What We Do Not Store</h2>
-          <p>VeritaAssure&trade; is designed for laboratory quality assurance and compliance documentation, not patient care. By policy and by design we do not store Protected Health Information (PHI):</p>
+          <p>VeritaAssure&reg; is designed for laboratory quality assurance and compliance documentation, not patient care. By policy and by design we do not store Protected Health Information (PHI):</p>
           <ul className="list-disc pl-5 space-y-1">
             <li>No patient names, dates of birth, medical record numbers, or other patient identifiers</li>
             <li>No clinical results tied to identified individuals</li>
             <li>No images, scans, or attachments containing PHI</li>
           </ul>
-          <p>The VeritaResponse&trade; finding-management module enforces this in-app: it is labeled a "PHI-free zone" and instructs users to reference patients or samples by internal case number, never by name or MRN. Specimen concentration values entered into VeritaCheck&trade; should likewise be de-identified before entry.</p>
+          <p>The VeritaResponse&trade; finding-management module enforces this in-app: it is labeled a "PHI-free zone" and instructs users to reference patients or samples by internal case number, never by name or MRN. Specimen concentration values entered into VeritaCheck&reg; should likewise be de-identified before entry.</p>
           <p>We also check for patient information at four points, using one set of patterns (a Social Security number, or a labeled medical record number, date of birth or patient name):</p>
           <ul className="list-disc pl-5 space-y-1">
-            <li><strong>At sign-up:</strong> signing up requires acknowledging that VeritaAssure&trade; is not for patient information, and the acknowledgment is recorded with its date and time.</li>
+            <li><strong>At sign-up:</strong> signing up requires acknowledging that VeritaAssure&reg; is not for patient information, and the acknowledgment is recorded with its date and time.</li>
             <li><strong>As you type:</strong> when the text in a field looks like patient information, a warning asks you to remove it. The check runs in your browser and the text is not sent anywhere.</li>
             <li><strong>On upload:</strong> every stored upload is checked. Word, Excel, text and web files are read, and if one looks like it carries patient identifiers, the person who uploaded it is asked to remove them and upload a corrected version. Blank form templates (for example "Patient Name: ____") do not trigger it.</li>
             <li><strong>Nightly:</strong> the whole database is scanned for the same patterns. Each run is logged with counts only, never the matched text, and any finding comes to Veritas so we can work with the lab to remove it.</li>
@@ -58,7 +58,7 @@ export default function TrustPage() {
 
         <section>
           <h2 className="font-semibold text-base mb-2">5. Account and Customer Isolation</h2>
-          <p>VeritaAssure&trade; supports multi-lab organizations through an explicit lab membership model. When a user belongs to multiple labs, only data scoped to a lab they actively belong to is returned by the API. Membership is checked on every read and every write, not just at login.</p>
+          <p>VeritaAssure&reg; supports multi-lab organizations through an explicit lab membership model. When a user belongs to multiple labs, only data scoped to a lab they actively belong to is returned by the API. Membership is checked on every read and every write, not just at login.</p>
         </section>
 
         <section>
@@ -113,12 +113,12 @@ export default function TrustPage() {
 
         <section>
           <h2 className="font-semibold text-base mb-2">12. HIPAA Business Associate Agreement</h2>
-          <p>Because VeritaAssure&trade; is designed to operate without PHI (see section 4), most customers do not need a Business Associate Agreement. For customers whose compliance program requires a BAA on file for every vendor regardless, we can provide one on request. Contact <a href="mailto:info@veritaslabservices.com" className="text-primary hover:underline">info@veritaslabservices.com</a>.</p>
+          <p>Because VeritaAssure&reg; is designed to operate without PHI (see section 4), most customers do not need a Business Associate Agreement. For customers whose compliance program requires a BAA on file for every vendor regardless, we can provide one on request. Contact <a href="mailto:info@veritaslabservices.com" className="text-primary hover:underline">info@veritaslabservices.com</a>.</p>
         </section>
 
         <section>
           <h2 className="font-semibold text-base mb-2">13. Reporting Security Issues</h2>
-          <p>If you believe you have found a security vulnerability in VeritaAssure&trade;, please send a description to <a href="mailto:info@veritaslabservices.com" className="text-primary hover:underline">info@veritaslabservices.com</a> with the subject line "Security Report". Include reproduction steps where possible and please do not publicly disclose the issue before we have had a chance to respond.</p>
+          <p>If you believe you have found a security vulnerability in VeritaAssure&reg;, please send a description to <a href="mailto:info@veritaslabservices.com" className="text-primary hover:underline">info@veritaslabservices.com</a> with the subject line "Security Report". Include reproduction steps where possible and please do not publicly disclose the issue before we have had a chance to respond.</p>
           <p>We will acknowledge receipt within five business days and provide an update on remediation within thirty days for confirmed issues. We do not currently operate a paid bug-bounty program, but we will publicly credit responsible disclosures with the reporter's permission.</p>
         </section>
 

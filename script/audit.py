@@ -13,6 +13,15 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ERRORS = []
 WARNINGS = []
 
+# USPTO registrations issued 2026-10-27 (see the copy check in section 3). Add a mark here only when its own
+# registration certificate has issued.
+REGISTERED_MARKS = {"VeritaAssure", "VeritaMap", "VeritaScan", "VeritaCheck"}
+_REG_FORMS = r'(?:\u00ae|\\u00[aA][eE]|&reg;|&#174;)'
+_TM_FORMS = r'(?:\u2122|\\u2122|&trade;|&#8482;)'
+# Optional JSX wrapper: VeritaCheck{"\u00ae"} as well as VeritaCheck\u00ae.
+MARK_REG_ON_UNREGISTERED = re.compile(r'(?<![A-Za-z])(Verita[A-Z][A-Za-z]*)(?:\{["\'])?' + _REG_FORMS)
+MARK_TM_ON_REGISTERED = re.compile(r'(?<![A-Za-z])(VeritaAssure|VeritaMap|VeritaScan|VeritaCheck)(?:\{["\'])?' + _TM_FORMS)
+
 SKIP_DIRS = {"node_modules", "dist", ".git", ".claude"}
 SKIP_EXTENSIONS = {".lock", ".map", ".png", ".jpg", ".jpeg", ".ico", ".woff", ".woff2", ".ttf", ".eot"}
 SCAN_EXTENSIONS = {".ts", ".tsx", ".html", ".md"}
@@ -114,13 +123,15 @@ def check_file(rel, fpath):
                 WARNINGS.append(f"[{rel}:{i}] Em dash in user-facing content -- use comma, colon, or hyphen:")
                 WARNINGS.append(f"  >> {stripped[:120]}")
 
-        # ® on product names
-        product_reg = re.compile(
-            r'(VeritaCheck|VeritaMap|VeritaScan|VeritaComp|VeritaStaff|VeritaLab|VeritaAssure|VeritaPT)\u00ae',
-            re.IGNORECASE
-        )
-        if product_reg.search(line):
-            ERRORS.append(f"[{rel}:{i}] Registered trademark ® on product name -- must be ™")
+        # Trademark symbols (Michael 2026-10-27, after the USPTO registrations issued that day): the four REGISTERED
+        # marks (VeritaAssure SN 99731002, VeritaMap SN 99730987, VeritaScan SN 99730993, VeritaCheck SN 99730975) carry
+        # the registered symbol; every other Verita mark stays TM until its own registration issues. Both directions
+        # are errors, in every form the code uses (character, \u escape, HTML entity, JSX {"..."}).
+        for m in MARK_REG_ON_UNREGISTERED.finditer(line):
+            if m.group(1) not in REGISTERED_MARKS:
+                ERRORS.append(f"[{rel}:{i}] Registered symbol on {m.group(1)}, which is not registered -- must be TM")
+        for m in MARK_TM_ON_REGISTERED.finditer(line):
+            ERRORS.append(f"[{rel}:{i}] {m.group(1)} is a registered mark (2026-10-27) -- use the registered symbol, not TM")
 
         # EP Evaluator naming rule RELAXED 2026-09-27 (Michael): the name MAY now
         # appear in public-facing copy. In our field everyone knows the name, and

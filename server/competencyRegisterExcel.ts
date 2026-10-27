@@ -222,7 +222,7 @@ export async function generateCompetencyRegisterExcel(
     }
     r += 1;
   };
-  put("VeritaAssure™ | Testing Personnel Competency Register", "title");
+  put("VeritaAssure® | Testing Personnel Competency Register", "title");
   put(`Prepared for: ${labName}    CLIA: ${cliaNumber}    Exported: ${mdy(exportedOn)}`, "id");
   put("This register lists every active testing person on the laboratory's VeritaStaff™ roster and the dates of each competency milestone the laboratory has recorded, with what is due next. It is the laboratory's own record, built from data entered in VeritaStaff™ and VeritaComp™. It is not a regulatory determination; the laboratory director or designee is responsible for its accuracy.", "p");
   put("How to use it", "h");
@@ -239,7 +239,7 @@ export async function generateCompetencyRegisterExcel(
   put("42 CFR §493.1451(b)(9) (high complexity) and §493.1413(b)(9) (moderate complexity): competency is evaluated \"at least semiannually during the first year the individual tests patient specimens. Thereafter, evaluations must be performed at least annually unless test methodology or instrumentation changes, in which case, prior to reporting patient test results, the individual's performance must be reevaluated to include the use of the new test methodology or instrumentation.\"", "p");
   put("The Joint Commission: HR.01.04.01 (orientation and initial competency before patient testing) and HR.01.06.01 (competency assessment: semiannual in the first year, annual thereafter). Cited by number; see the current TJC standard for the text.", "p");
   put("Coverage gaps", "h");
-  put("Dates appear only where the laboratory recorded them; a blank cell means not recorded, not not done. Status and next due come from the same rules the VeritaAssure™ dashboard uses. To report a problem or a missing field, write info@veritaslabservices.com.", "p");
+  put("Dates appear only where the laboratory recorded them; a blank cell means not recorded, not not done. Status and next due come from the same rules the VeritaAssure® dashboard uses. To report a problem or a missing field, write info@veritaslabservices.com.", "p");
   await about.protect(exportPwd, { ...lockedProtect, sort: false, autoFilter: false, selectLockedCells: false, selectUnlockedCells: false });
 
   const styleHeader = (ws: any, headers: string[], widths: number[]) => {

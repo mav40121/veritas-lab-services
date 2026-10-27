@@ -39,7 +39,7 @@ CARDS = {
     ],
   ),
   "VeritaMapAppPage": dict(
-    moduleKey="veritamap", moduleName="VeritaMap™",
+    moduleKey="veritamap", moduleName="VeritaMap®",
     what="VeritaMap maps every instrument and analyte in your lab with CLIA complexity, specialty, FDA classification, reportable range, reference intervals, and critical values. The test menu feeds VeritaCheck for study setup, VeritaComp for competency programs, and VeritaPT for proficiency testing coverage.",
     how=[
       "Pick your instruments from the database of 269 FDA-cleared analyzers.",
@@ -50,7 +50,7 @@ CARDS = {
     ],
   ),
   "VeritaScanAppPage": dict(
-    moduleKey="veritascan", moduleName="VeritaScan™",
+    moduleKey="veritascan", moduleName="VeritaScan®",
     what="VeritaScan walks 168 inspection-readiness items across 10 domains aligned to TJC and CAP standards. Item-by-item status (compliant, needs attention, not applicable), evidence attachment, executive summary, full PDF export for internal-use distribution.",
     how=[
       "Pick a new scan and walk through items domain by domain.",

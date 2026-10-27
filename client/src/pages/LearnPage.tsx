@@ -24,9 +24,9 @@ type LessonModule = {
 };
 
 const COMPLIANCE: LessonModule[] = [
-  { video: "veritacheck", label: "VeritaCheck™", desc: "Run a verification study and watch the coverage map turn green.", icon: FlaskConical, color: "text-teal-600 bg-teal-500/10 border-teal-500/20" },
-  { video: "veritamap", label: "VeritaMap™", desc: "Build your test menu: instruments, analytes, CLIA complexity.", icon: Map, color: "text-blue-600 bg-blue-500/10 border-blue-500/20" },
-  { video: "veritascan", label: "VeritaScan™", desc: "See exactly where you stand before a surveyor arrives.", icon: ClipboardCheck, color: "text-purple-600 bg-purple-500/10 border-purple-500/20" },
+  { video: "veritacheck", label: "VeritaCheck®", desc: "Run a verification study and watch the coverage map turn green.", icon: FlaskConical, color: "text-teal-600 bg-teal-500/10 border-teal-500/20" },
+  { video: "veritamap", label: "VeritaMap®", desc: "Build your test menu: instruments, analytes, CLIA complexity.", icon: Map, color: "text-blue-600 bg-blue-500/10 border-blue-500/20" },
+  { video: "veritascan", label: "VeritaScan®", desc: "See exactly where you stand before a surveyor arrives.", icon: ClipboardCheck, color: "text-purple-600 bg-purple-500/10 border-purple-500/20" },
   { video: "veritatrack", label: "VeritaTrack™", desc: "Your regulatory calendar, imported straight from the map.", icon: CalendarDays, color: "text-indigo-600 bg-indigo-500/10 border-indigo-500/20" },
   { video: "veritapt", label: "VeritaPT™", desc: "Check every analyte against CLIA proficiency-testing rules.", icon: TestTubes, color: "text-cyan-600 bg-cyan-500/10 border-cyan-500/20" },
   { video: "veritacomp", label: "VeritaComp™", desc: "Competency programs across all six CLIA assessment elements.", icon: Award, color: "text-amber-600 bg-amber-500/10 border-amber-500/20" },
@@ -79,9 +79,9 @@ function LessonGrid({ modules }: { modules: LessonModule[] }) {
 export default function LearnPage() {
   const { isLoggedIn } = useAuth();
   useSEO({
-    title: "Learn VeritaAssure™ | Getting-Started Video Library",
+    title: "Learn VeritaAssure® | Getting-Started Video Library",
     description:
-      "Short getting-started videos for every VeritaAssure™ module: performance verification, test menu mapping, inspection readiness, QC, staffing, and cost per reportable test. Built by a former Joint Commission laboratory surveyor.",
+      "Short getting-started videos for every VeritaAssure® module: performance verification, test menu mapping, inspection readiness, QC, staffing, and cost per reportable test. Built by a former Joint Commission laboratory surveyor.",
   });
 
   return (
@@ -93,13 +93,13 @@ export default function LearnPage() {
             Video Library
           </Badge>
           <h1 className="font-serif text-4xl sm:text-5xl font-bold tracking-tight mb-4 leading-tight">
-            Learn VeritaAssure&#8482;
+            Learn VeritaAssure&#174;
           </h1>
           <p className="text-xl text-primary font-semibold mb-3">
             See every module in about thirty seconds.
           </p>
           <p className="text-muted-foreground text-lg max-w-2xl leading-relaxed mb-8">
-            Short getting-started videos across the VeritaAssure&#8482; suite. No sign-in, no sales call.
+            Short getting-started videos across the VeritaAssure&#174; suite. No sign-in, no sales call.
             Watch how a lab builds its test menu, runs a verification study, and stays inspection-ready,
             then try the same flow yourself in the live demo.
           </p>
@@ -126,7 +126,7 @@ export default function LearnPage() {
             Compliance
           </div>
           <p className="text-sm text-muted-foreground mb-6 max-w-2xl">
-            The compliance modules for staying inspection-ready, starting with the two that set VeritaAssure&#8482; apart:
+            The compliance modules for staying inspection-ready, starting with the two that set VeritaAssure&#174; apart:
             performance verification and the coverage map behind it.
           </p>
           <LessonGrid modules={COMPLIANCE} />

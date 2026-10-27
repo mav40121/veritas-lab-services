@@ -110,7 +110,7 @@ console.log(`\nHTML written to ${htmlPath}`);
     displayHeaderFooter: true,
     headerTemplate: "<span></span>",
     footerTemplate: `<div style="font-size:7pt;width:100%;text-align:center;color:#646e78">
-      VeritaCheck&trade; | Precision | Confidential - For Internal Lab Use Only | Page <span class="pageNumber"></span> of <span class="totalPages"></span>
+      VeritaCheck&reg; | Precision | Confidential - For Internal Lab Use Only | Page <span class="pageNumber"></span> of <span class="totalPages"></span>
     </div>`,
     margin: { top: "14mm", right: "15mm", bottom: "16mm", left: "15mm" },
   });

@@ -449,12 +449,12 @@ def main() -> None:
 
     # 3. Update the file header comment to mention AABB + COLA.
     header_old = (
-        '// VeritaScan™ — 168-item compliance checklist\n'
+        '// VeritaScan® — 168-item compliance checklist\n'
         '// Domains: 10 compliance domains covering CLIA, TJC, CAP\n'
         '// Each item: id, domain, question, TJC standard, CAP requirement, CFR citation'
     )
     header_new = (
-        '// VeritaScan™ — 168-item compliance checklist\n'
+        '// VeritaScan® — 168-item compliance checklist\n'
         '// Domains: 10 compliance domains covering CLIA, TJC, CAP, AABB, COLA\n'
         '// Each item: id, domain, question, TJC standard, CAP requirement, CFR citation,\n'
         '// AABB standard (Blood Bank primary, "N/A" elsewhere), COLA criterion.\n'

@@ -232,7 +232,7 @@ export default function ArticleProficiencyTestingPage() {
               <p className="text-sm text-muted-foreground max-w-xl mx-auto mb-4">
                 VeritaPT™ reads your test menu, checks every analyte against its current CLIA PT requirement, and surfaces the regulated
                 analytes with no enrollment and the unregulated ones with no documented alternative assessment. Or have a former Joint
-                Commission surveyor walk your menu and your PT referral procedures in a mock inspection. Included in every VeritaAssure™ plan.
+                Commission surveyor walk your menu and your PT referral procedures in a mock inspection. Included in every VeritaAssure® plan.
               </p>
               <div className="flex flex-wrap justify-center gap-3">
                 <Button asChild className="bg-primary hover:bg-primary/90">

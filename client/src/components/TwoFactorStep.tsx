@@ -97,7 +97,7 @@ export function TwoFactorSignIn({ step, email, onDone, onCancel }: {
       {mode === "app" && (
         <div>
           <h2 className="text-lg font-semibold">Enter your 6-digit code</h2>
-          <p className="text-sm text-muted-foreground">Open your authenticator app and enter the code shown for VeritaAssure™ ({email}).</p>
+          <p className="text-sm text-muted-foreground">Open your authenticator app and enter the code shown for VeritaAssure® ({email}).</p>
         </div>
       )}
       {mode === "email" && (

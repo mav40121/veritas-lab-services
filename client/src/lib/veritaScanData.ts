@@ -1,4 +1,4 @@
-// VeritaScan™ — 173-item compliance checklist
+// VeritaScan® — 173-item compliance checklist
 // Domains: 10 compliance domains covering CLIA, TJC, CAP, AABB, COLA
 // Each item: id, domain, question, TJC standard, CAP requirement, CFR citation,
 // AABB standard (Blood Bank primary, "N/A" elsewhere), COLA criterion.

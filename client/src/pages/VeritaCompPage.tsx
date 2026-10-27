@@ -15,7 +15,7 @@ const COMPETENCY_TYPES = [
     cap: "CAP GEN.55500",
     icon: FlaskConical,
     color: "text-blue-600 bg-blue-500/10 border-blue-500/20",
-    desc: "Non-waived testing staff. 6 CLIA-required assessment methods \u00D7 method groups (instruments from your VeritaMap\u2122). Semiannual in year 1, annual thereafter.",
+    desc: "Non-waived testing staff. 6 CLIA-required assessment methods \u00D7 method groups (instruments from your VeritaMap\u00AE). Semiannual in year 1, annual thereafter.",
     methods: [
       "Direct observation of routine patient test performance",
       "Monitoring recording and reporting of test results",
@@ -55,12 +55,12 @@ const COMPETENCY_TYPES = [
 const FEATURES = [
   "Three competency types in one system: technical, waived, and non-technical",
   "6-method \u00D7 method-group matrix for technical competency (EP 18)",
-  "VeritaMap\u2122 integration: auto-import instruments and suggest method groups",
+  "VeritaMap\u00AE integration: auto-import instruments and suggest method groups",
   "Employee roster with hire date, LIS initials, and status tracking",
   "Pre-populated department checklists (Chemistry, Phlebotomy, Hematology, Microbiology)",
   "Assessment history per employee with due-date tracking",
   "PDF reports with signature on page 1, matrix/checklist at end, Pass/Fail verdict",
-  "VeritaScan\u2122 integration: completed assessments auto-check Domain IX items",
+  "VeritaScan\u00AE integration: completed assessments auto-check Domain IX items",
   "Remediation tracking with action plans and timelines",
   "Written by a former TJC laboratory surveyor with 200+ facility inspections",
 ];
@@ -92,7 +92,7 @@ return (
               </div>
               <p className="text-muted-foreground leading-relaxed mb-6">
                 Every non-waived laboratory must demonstrate staff competency using the 6 CLIA-required methods. Every facility performing waived testing must document 2-of-4 methods per test. And every lab must assess non-technical duties at orientation and biennially.
-                Whether your lab is accredited by TJC, CAP, COLA, or operates under CLIA only, VeritaComp{"™"} provides the documentation framework your surveyors expect, with direct integration to VeritaMap{"™"} for automatic instrument and method group setup. Built by a former TJC laboratory surveyor with 200+ facility inspections.
+                Whether your lab is accredited by TJC, CAP, COLA, or operates under CLIA only, VeritaComp{"™"} provides the documentation framework your surveyors expect, with direct integration to VeritaMap{"®"} for automatic instrument and method group setup. Built by a former TJC laboratory surveyor with 200+ facility inspections.
               </p>
 
               {/* Pricing - public visitors only */}
@@ -201,10 +201,10 @@ return (
                 Competency assessment is one of the most frequently cited deficiencies during TJC and CAP laboratory surveys. The requirement is deceptively simple: demonstrate that every person who touches a patient specimen is competent to do so. The reality is that most labs manage this with a filing cabinet full of paper forms, inconsistent documentation, and no systematic way to know who is due.
               </p>
               <p className="text-muted-foreground leading-relaxed">
-                VeritaComp{"™"} replaces the filing cabinet. It reads your test menu directly from VeritaMap{"™"}, automatically groups instruments into method groups (because competency is assessed per workflow, not per analyte), and generates the correct assessment form for each staff member: 6-method technical matrix, 2-of-4 waived form, or departmental checklist.
+                VeritaComp{"™"} replaces the filing cabinet. It reads your test menu directly from VeritaMap{"®"}, automatically groups instruments into method groups (because competency is assessed per workflow, not per analyte), and generates the correct assessment form for each staff member: 6-method technical matrix, 2-of-4 waived form, or departmental checklist.
               </p>
               <p className="text-muted-foreground leading-relaxed">
-                When an assessment is completed, the system generates a signed PDF report and auto-completes the relevant VeritaScan{"™"} Domain IX items. No dual entry. No missed deadlines. No citations.
+                When an assessment is completed, the system generates a signed PDF report and auto-completes the relevant VeritaScan{"®"} Domain IX items. No dual entry. No missed deadlines. No citations.
               </p>
             </div>
             <div className="space-y-3">
@@ -227,10 +227,10 @@ return (
           <p className="text-muted-foreground mb-8">Four steps from setup to signed assessment.</p>
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {[
-              { step: "1", title: "Create Program", desc: "Name your program, choose the department, select the competency type, and optionally link to a VeritaMap\u2122." },
+              { step: "1", title: "Create Program", desc: "Name your program, choose the department, select the competency type, and optionally link to a VeritaMap\u00AE." },
               { step: "2", title: "Define Groups", desc: "For technical: define method groups from your instruments. For non-technical: customize the departmental checklist." },
               { step: "3", title: "Add Employees", desc: "Build your employee roster with name, title, hire date, and LIS initials. Reuse across programs." },
-              { step: "4", title: "Assess & Sign", desc: "Complete the assessment form, mark Pass/Fail, generate a signed PDF, and auto-update VeritaScan\u2122." },
+              { step: "4", title: "Assess & Sign", desc: "Complete the assessment form, mark Pass/Fail, generate a signed PDF, and auto-update VeritaScan\u00AE." },
             ].map((s, i) => (
               <div key={i} className="border border-border rounded-xl p-4 bg-card">
                 <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center mb-3">
@@ -261,15 +261,15 @@ return (
                   <span className="text-4xl font-bold">Included</span>
                 </div>
                 <p className="text-sm text-muted-foreground mb-5">
-                  Included in all VeritaAssure&#8482; plans (starting at $999/yr). Full access to all three competency types with PDF generation, employee management, and VeritaScan&#8482; integration.
+                  Included in all VeritaAssure&#174; plans (starting at $999/yr). Full access to all three competency types with PDF generation, employee management, and VeritaScan&#174; integration.
                 </p>
                 <ul className="space-y-2 mb-6">
                   {[
                     "Technical, Waived, and Non-Technical competency types",
-                    "VeritaMap\u2122 integration for method group auto-setup",
+                    "VeritaMap\u00AE integration for method group auto-setup",
                     "Employee roster management across programs",
                     "PDF reports with signatures and compliance data",
-                    "VeritaScan\u2122 Domain IX auto-completion",
+                    "VeritaScan\u00AE Domain IX auto-completion",
                     "Pre-populated department checklists",
                     "Remediation tracking with action plans",
                   ].map(f => (
@@ -291,11 +291,11 @@ return (
               <FlaskConical size={20} className="text-primary mt-0.5 shrink-0" />
               <div>
                 <div className="font-semibold text-sm mb-1">
-                  VeritaAssure&#8482; Suite: <span className="text-primary">Starting at $999/year</span>
+                  VeritaAssure&#174; Suite: <span className="text-primary">Starting at $999/year</span>
                   <Badge className="ml-2 bg-primary/10 text-primary border-0 text-xs">Best Value</Badge>
                 </div>
                 <p className="text-sm text-muted-foreground mb-2">
-                  VeritaCheck{"™"} + VeritaScan{"™"} + VeritaMap{"™"} + VeritaComp{"™"}: the complete clinical laboratory regulatory compliance platform. One subscription, full access.
+                  VeritaCheck{"®"} + VeritaScan{"®"} + VeritaMap{"®"} + VeritaComp{"™"}: the complete clinical laboratory regulatory compliance platform. One subscription, full access.
                 </p>
                 <Link href="/pricing" className="inline-flex items-center gap-1 text-sm text-primary hover:underline font-medium">
                   View all plans <ChevronRight size={13} />
@@ -348,12 +348,12 @@ return (
           <div className="mt-6 flex flex-col sm:flex-row gap-4 justify-center">
             <Link href="/veritascan" className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline font-medium">
               <Shield size={14} />
-              VeritaScan{"™"} - Inspection Readiness
+              VeritaScan{"®"} - Inspection Readiness
               <ChevronRight size={13} />
             </Link>
             <Link href="/veritamap" className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline font-medium">
               <ClipboardCheck size={14} />
-              VeritaMap{"™"} - Test Menu Mapping
+              VeritaMap{"®"} - Test Menu Mapping
               <ChevronRight size={13} />
             </Link>
           </div>

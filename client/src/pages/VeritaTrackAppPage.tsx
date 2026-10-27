@@ -1207,7 +1207,7 @@ export default function VeritaTrackAppPage() {
         <CalendarDays size={40} className="mx-auto text-muted-foreground mb-4" />
         <h2 className="text-xl font-bold mb-2">VeritaTrack™</h2>
         <p className="text-sm text-muted-foreground mb-6">
-          Regulatory compliance calendar with automated due-date tracking, sign-off logging, and VeritaMap™ integration.
+          Regulatory compliance calendar with automated due-date tracking, sign-off logging, and VeritaMap® integration.
           Available on all full-suite plans.
         </p>
         <Button asChild><a href="/pricing">View Plans</a></Button>
@@ -1252,9 +1252,9 @@ export default function VeritaTrackAppPage() {
             Quick Setup
           </Button>}
           {!isReadOnly && <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={handleImport} disabled={importLoading}
-            title="Import calibration verification, correlation / method comparison, precision, and SOP schedules from VeritaMap™">
+            title="Import calibration verification, correlation / method comparison, precision, and SOP schedules from VeritaMap®">
             <Upload size={12} />
-            {importLoading ? "Importing..." : "Import from VeritaMap™"}
+            {importLoading ? "Importing..." : "Import from VeritaMap®"}
           </Button>}
           <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={handleExcelExport}>
             <Download size={12} />
@@ -1396,7 +1396,7 @@ export default function VeritaTrackAppPage() {
       {importResult && (
         <div className="mb-4 p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 text-sm flex items-center justify-between">
           <span className="text-emerald-800 dark:text-emerald-200">
-            Imported {importResult.created} tasks from VeritaMap™.
+            Imported {importResult.created} tasks from VeritaMap®.
             {importResult.skipped > 0 && ` ${importResult.skipped} already existed and were skipped.`}
           </span>
           <button onClick={() => setImportResult(null)} className="text-emerald-600 hover:text-emerald-800 text-xs">Dismiss</button>
@@ -1490,11 +1490,11 @@ export default function VeritaTrackAppPage() {
           <CalendarDays size={36} className="mx-auto text-muted-foreground mb-3" />
           <h3 className="font-semibold text-foreground mb-1">No tasks yet</h3>
           <p className="text-sm text-muted-foreground mb-4 max-w-sm mx-auto">
-            {isReadOnly ? "Tasks the lab sets up will appear here for sign-off." : "Add tasks manually or import your calibration, correlation, and SOP schedule from VeritaMap™."}
+            {isReadOnly ? "Tasks the lab sets up will appear here for sign-off." : "Add tasks manually or import your calibration, correlation, and SOP schedule from VeritaMap®."}
           </p>
           {!isReadOnly && <div className="flex items-center justify-center gap-3">
             <Button size="sm" variant="outline" onClick={handleImport} disabled={importLoading}>
-              <Upload size={12} className="mr-1" />Import from VeritaMap™
+              <Upload size={12} className="mr-1" />Import from VeritaMap®
             </Button>
             <TaskFormDialog trigger={<Button size="sm"><Plus size={12} className="mr-1" />Add Task</Button>} onDone={() => refetch()} trackApi={trackApi} tasksKey={tasksKey} dashKey={dashKey} />
           </div>}

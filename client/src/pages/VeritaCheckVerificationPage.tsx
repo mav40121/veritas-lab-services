@@ -531,7 +531,7 @@ function NewVerificationForm({ onCreated, onCancel }: { onCreated: (id: number) 
           {/* Optional VeritaMap pre-fill */}
           {mapInstruments.length > 0 && (
             <div>
-              <Label className="text-xs mb-1 block text-muted-foreground">Pre-fill from VeritaMap™ (optional)</Label>
+              <Label className="text-xs mb-1 block text-muted-foreground">Pre-fill from VeritaMap® (optional)</Label>
               <Select onValueChange={handleMapSelect}>
                 <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Select an instrument from your test menu" /></SelectTrigger>
                 <SelectContent>

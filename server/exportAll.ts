@@ -452,13 +452,13 @@ export async function buildExportZip(sqlite: any, ctx: ExportCtx, opts: { base: 
     wb.creator = "Perplexity Computer";
     wb.created = new Date();
     const total = recs.reduce((a, r) => a + r.rows.length, 0);
-    const about = addAbout(wb, `VeritaAssure™ | ${module} records`, `Prepared for: ${labName}    CLIA: ${clia}    Exported: ${today}`, [
+    const about = addAbout(wb, `VeritaAssure® | ${module} records`, `Prepared for: ${labName}    CLIA: ${clia}    Exported: ${today}`, [
       [MODULE_ABOUT[module] || "The laboratory's records for this module.", "p"],
       ["How to use it", "h"],
       [`One sheet per table, ${recs.length} sheets, ${total} rows in all. Column names are the database field names, so the rows can be loaded into another system; Records/JSON in the zip holds the same rows at full length. Dates are as stored (ISO format, UTC where a time is shown).`, "p"],
       ...(empty.length ? [[`Tables with no records for this lab (no sheet): ${empty.join(", ")}.`, "p"] as [string, "p"]] : []),
       ["Source", "h"],
-      ["Exported from VeritaAssure™ by the lab owner with Download all records. Each row is the lab's own record as stored at the time of the export.", "p"],
+      ["Exported from VeritaAssure® by the lab owner with Download all records. Each row is the lab's own record as stored at the time of the export.", "p"],
       ["Not included", "h"],
       ["Passwords, sign-in codes, invite links and billing-processor identifiers are never exported. Questions or anything missing: info@veritaslabservices.com", "p"],
     ]);
@@ -535,15 +535,15 @@ export async function buildExportZip(sqlite: any, ctx: ExportCtx, opts: { base: 
   job.step = "Writing the index";
   const wb = new ExcelJS.Workbook();
   wb.creator = "Perplexity Computer";
-  const about = addAbout(wb, "VeritaAssure™ | All laboratory records", `Prepared for: ${labName}    CLIA: ${clia}    Exported: ${today}`, [
-    ["This zip holds the laboratory's records from VeritaAssure™ as of the export date. It is the lab's own data; VeritaAssure™ does not make regulatory determinations, and the laboratory director or designee is responsible for the records.", "p"],
+  const about = addAbout(wb, "VeritaAssure® | All laboratory records", `Prepared for: ${labName}    CLIA: ${clia}    Exported: ${today}`, [
+    ["This zip holds the laboratory's records from VeritaAssure® as of the export date. It is the lab's own data; VeritaAssure® does not make regulatory determinations, and the laboratory director or designee is responsible for the records.", "p"],
     ["How to use it", "h"],
     ["Records: one workbook per module with every row the lab owns, one sheet per table, plus a JSON copy of each table for loading into another system.", "p"],
     ["Files: stored documents, including every version of each policy document and uploaded attachments.", "p"],
     ["Reports: the same exports the app produces (maps, coverage, scans, the competency Survey Bundle, QC monthly reviews, IQCP plans, letters of delegation, the personnel register, the policy master list).", "p"],
     ["The Contents sheet lists every file and anything that could not be included.", "p"],
     ["Source", "h"],
-    ["Built by VeritaAssure™ when the lab owner chose Download all records. The download link is kept for 24 hours.", "p"],
+    ["Built by VeritaAssure® when the lab owner chose Download all records. The download link is kept for 24 hours.", "p"],
     ["Coverage gaps", "h"],
     ["Reports/VeritaCheck/Studies has one PDF report per VeritaCheck study (drafts are not included); a study whose report could not be built is listed on the Contents sheet with the reason. Never exported: passwords, sign-in codes, invite links, billing-processor identifiers, and organization-level documents of a multi-lab system. Records saved before multi-lab support carry no lab and are included under the owner's account. Anything missing: info@veritaslabservices.com", "p"],
   ]);
@@ -630,7 +630,7 @@ async function weeklyMailer(): Promise<WeeklyMailer | null> {
   const { Resend } = await import("resend");
   const resend = new Resend(process.env.RESEND_API_KEY);
   return async (m) => {
-    const r: any = await resend.emails.send({ from: "VeritaAssure™ <info@veritaslabservices.com>", to: m.to, subject: m.subject, html: m.html });
+    const r: any = await resend.emails.send({ from: "VeritaAssure® <info@veritaslabservices.com>", to: m.to, subject: m.subject, html: m.html });
     if (r?.error) throw new Error(r.error.message || String(r.error));
   };
 }
@@ -645,12 +645,12 @@ export function weeklyCopyEmail(labId: number, labName: string, builtAt: Date): 
   const html = `
     <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:24px">
       <h2 style="color:#01696F;margin-bottom:16px">Your weekly copy is ready</h2>
-      <p style="margin-bottom:12px">This week's copy of every record ${lab} keeps in VeritaAssure™ is built: a workbook per module, stored documents including every policy version, and the reports the modules produce, in one zip file.</p>
+      <p style="margin-bottom:12px">This week's copy of every record ${lab} keeps in VeritaAssure® is built: a workbook per module, stored documents including every policy version, and the reports the modules produce, in one zip file.</p>
       <p style="margin-bottom:20px">Sign in and open Download all records to save it. It is kept until ${until}. This email has no download link on purpose: only the lab owner, signed in, can download the copy.</p>
       <a href="${link}" style="display:inline-block;background:#01696F;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600">Open Download all records</a>
       <p style="color:#666;font-size:12px;margin-top:20px">You get this email because weekly copies are turned on for ${lab}. To stop them, turn off "Build a copy every week" on the same page.</p>
       <hr style="border:none;border-top:1px solid #eee;margin:24px 0"/>
-      <p style="color:#999;font-size:12px">VeritaAssure™ | Veritas Lab Services, LLC</p>
+      <p style="color:#999;font-size:12px">VeritaAssure® | Veritas Lab Services, LLC</p>
     </div>`;
   return { subject: `Your weekly copy of ${labName} records is ready`, html };
 }

@@ -134,9 +134,9 @@ export default function AccountSettingsPage() {
   // shared/schema.ts (the resolver and server middleware key off that list).
   // Display order here drives the per-module list when Custom mode is picked.
   const MODULE_LIST = [
-    { key: 'veritacheck',  label: 'VeritaCheck™' },
-    { key: 'veritamap',    label: 'VeritaMap™' },
-    { key: 'veritascan',   label: 'VeritaScan™' },
+    { key: 'veritacheck',  label: 'VeritaCheck®' },
+    { key: 'veritamap',    label: 'VeritaMap®' },
+    { key: 'veritascan',   label: 'VeritaScan®' },
     { key: 'veritacomp',   label: 'VeritaComp™' },
     { key: 'veritastaff',  label: 'VeritaStaff™' },
     { key: 'veritabench',  label: 'VeritaQA™ Suite' }, // VeritaPace, VeritaShift, VeritaQA
@@ -597,7 +597,7 @@ export default function AccountSettingsPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Select your laboratory's accreditation. The corresponding standard references will appear on all VeritaCheck™ and VeritaScan™ reports. CLIA/CFR citations are always included regardless of selection.
+            Select your laboratory's accreditation. The corresponding standard references will appear on all VeritaCheck® and VeritaScan® reports. CLIA/CFR citations are always included regardless of selection.
           </p>
           {settings?.is_seat && settings?.owner_name && (
             <p className="text-sm text-muted-foreground bg-muted/50 rounded-md px-3 py-2">
@@ -881,7 +881,7 @@ export default function AccountSettingsPage() {
             {!isViewingNonPrimaryLab && (
               <>
                 <p className="text-sm text-muted-foreground">
-                  Invite staff to access your {onStock ? "VeritaStock™" : "VeritaAssure™"} account. {usedSeats - 1} of {seatCount - 1} additional seat{seatCount - 1 !== 1 ? "s" : ""} used.
+                  Invite staff to access your {onStock ? "VeritaStock™" : "VeritaAssure®"} account. {usedSeats - 1} of {seatCount - 1} additional seat{seatCount - 1 !== 1 ? "s" : ""} used.
                 </p>
                 <p className="text-xs text-muted-foreground mt-2">
                   Some hospital and corporate email systems quarantine outside invitations before they reach the inbox. If a teammate hasn&apos;t received their email after a few minutes, click &quot;Copy invite link&quot; on their row and send the link to them directly through email, Teams, Slack, or text.

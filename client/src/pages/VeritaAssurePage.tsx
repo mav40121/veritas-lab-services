@@ -14,7 +14,7 @@ import {
 const COMPLIANCE_MODULES = [
   {
     href: "/veritacheck",
-    label: "VeritaCheck™",
+    label: "VeritaCheck®",
     desc: "EP Study Analysis",
     detail:
       "Calibration Verification / Linearity, Correlation / Method Comparison, Precision, Reagent Lot Verification (EP26), QC Lot Verification (C24-Ed4), and Coagulation New Lot studies. CLIA-compliant PDF reports with signature block on page 1.",
@@ -25,10 +25,10 @@ const COMPLIANCE_MODULES = [
   },
   {
     href: "/veritamap",
-    label: "VeritaMap™",
+    label: "VeritaMap®",
     desc: "Test Menu Regulatory Mapping",
     detail:
-      "Map every instrument and analyte in your lab with CLIA complexity, specialty, and FDA classification. More than 260 instruments across 18 departments. Feeds VeritaCheck™ instrument selection and VeritaComp™ competency programs.",
+      "Map every instrument and analyte in your lab with CLIA complexity, specialty, and FDA classification. More than 260 instruments across 18 departments. Feeds VeritaCheck® instrument selection and VeritaComp™ competency programs.",
     badge: "Live",
     badgeColor: "emerald",
     icon: Map,
@@ -36,7 +36,7 @@ const COMPLIANCE_MODULES = [
   },
   {
     href: "/veritascan",
-    label: "VeritaScan™",
+    label: "VeritaScan®",
     desc: "Inspection Readiness",
     detail:
       "173 compliance items across 10 domains aligned to TJC and CAP standards. Know exactly where you stand before a surveyor arrives. Executive summary and full PDF export.",
@@ -106,7 +106,7 @@ const COMPLIANCE_MODULES = [
     label: "VeritaTrack™",
     desc: "Regulatory Compliance Calendar",
     detail:
-      "Track every timed regulatory task: calibration verification, correlations, competency, equipment calibration, QC review, and more. One-click import of your VeritaMap™ test menu. Sign-off logging with initials and dates. Excel export in a standard regulatory-calendar layout.",
+      "Track every timed regulatory task: calibration verification, correlations, competency, equipment calibration, QC review, and more. One-click import of your VeritaMap® test menu. Sign-off logging with initials and dates. Excel export in a standard regulatory-calendar layout.",
     badge: "Live",
     badgeColor: "emerald",
     icon: CalendarDays,
@@ -117,7 +117,7 @@ const COMPLIANCE_MODULES = [
     label: "VeritaPT™",
     desc: "Proficiency Testing Tracker",
     detail:
-      "Reads your VeritaMap™ test menu, checks each analyte against CLIA PT requirements, and surfaces gaps, recommended programs, and current coverage. Tracks CAP, API, and WSLH enrollments. AAA-covered analytes count as coverage with 8 alternative assessment methods per 42 CFR 493.1236(c)(1).",
+      "Reads your VeritaMap® test menu, checks each analyte against CLIA PT requirements, and surfaces gaps, recommended programs, and current coverage. Tracks CAP, API, and WSLH enrollments. AAA-covered analytes count as coverage with 8 alternative assessment methods per 42 CFR 493.1236(c)(1).",
     badge: "Live",
     badgeColor: "emerald",
     icon: TestTubes,
@@ -218,16 +218,16 @@ const OPERATIONS_MODULES = [
 
 const DOWNLOADS = [
   {
-    title: "VeritaCheck™ CLSI Compliance Matrix",
-    desc: "One-page landscape reference. Maps the core VeritaCheck™ verification study types to applicable CLSI, CLIA (42 CFR), CAP checklist, and TJC standards. Use this to demonstrate regulatory alignment to inspectors.",
+    title: "VeritaCheck® CLSI Compliance Matrix",
+    desc: "One-page landscape reference. Maps the core VeritaCheck® verification study types to applicable CLSI, CLIA (42 CFR), CAP checklist, and TJC standards. Use this to demonstrate regulatory alignment to inspectors.",
     badge: "Free Download",
     url: "/api/downloads/clsi-compliance-matrix",
     filename: "VeritaCheck_CLSI_Compliance_Matrix.pdf",
     icon: Shield,
   },
   {
-    title: "VeritaCheck™ Software Validation Template",
-    desc: "4-page fillable validation template. Structured workflow to validate VeritaCheck™ for compliance documentation before placing it into service. Satisfies CAP GEN.20316, TJC QSA.15.01.01 EP1, and CLIA 42 CFR 493.1251.",
+    title: "VeritaCheck® Software Validation Template",
+    desc: "4-page fillable validation template. Structured workflow to validate VeritaCheck® for compliance documentation before placing it into service. Satisfies CAP GEN.20316, TJC QSA.15.01.01 EP1, and CLIA 42 CFR 493.1251.",
     badge: "Free Download",
     url: "/api/downloads/software-validation-template",
     filename: "VeritaCheck_Software_Validation_Template.pdf",
@@ -283,7 +283,7 @@ function ModuleGrid({ modules }: { modules: typeof COMPLIANCE_MODULES }) {
 
 export default function VeritaAssurePage() {
     const { isLoggedIn } = useAuth();
-    useSEO({ title: "VeritaAssure™ | Complete Lab Compliance and Operations Software Suite", description: "The complete laboratory platform: eighteen modules across compliance and operations. VeritaCheck™, VeritaMap™, VeritaScan™, VeritaDC™, VeritaStock™, VeritaOps™, and more, built by a lab professional who conducted 200+ Joint Commission surveys." });
+    useSEO({ title: "VeritaAssure® | Complete Lab Compliance and Operations Software Suite", description: "The complete laboratory platform: eighteen modules across compliance and operations. VeritaCheck®, VeritaMap®, VeritaScan®, VeritaDC™, VeritaStock™, VeritaOps™, and more, built by a lab professional who conducted 200+ Joint Commission surveys." });
 return (
     <div className="min-h-screen bg-background">
 
@@ -297,13 +297,13 @@ return (
             The Complete Suite
           </Badge>
           <h1 className="font-serif text-4xl sm:text-5xl font-bold tracking-tight mb-4 leading-tight">
-            VeritaAssure&#8482;
+            VeritaAssure&#174;
           </h1>
           <p className="text-xl text-primary font-semibold mb-3">
             Confidence and clarity for lab compliance and operations.
           </p>
           <p className="text-muted-foreground text-lg max-w-2xl leading-relaxed mb-8">
-            VeritaAssure&#8482; is the integrated laboratory platform from Veritas Lab Services, LLC:
+            VeritaAssure&#174; is the integrated laboratory platform from Veritas Lab Services, LLC:
             eighteen modules across two streams. Twelve compliance modules (performance verification,
             inspection readiness, test menu mapping, competency, personnel, policy, QC, and equipment maintenance) and six
             operations modules (productivity benchmarking, staffing, quality metrics, cost per reportable test,
@@ -359,7 +359,7 @@ return (
             Free Downloads
           </div>
           <p className="text-sm text-muted-foreground mb-5 max-w-2xl">
-            Two documents to help your lab validate and deploy VeritaCheck&#8482; for compliance documentation.
+            Two documents to help your lab validate and deploy VeritaCheck&#174; for compliance documentation.
             No login required.
           </p>
           <div className="grid sm:grid-cols-2 gap-4">
@@ -416,7 +416,7 @@ return (
 
         {/* Why VeritaAssure */}
         <section className="rounded-2xl border border-border bg-card p-8">
-          <h2 className="font-serif text-2xl font-bold mb-4">Why VeritaAssure&#8482;</h2>
+          <h2 className="font-serif text-2xl font-bold mb-4">Why VeritaAssure&#174;</h2>
           <div className="grid sm:grid-cols-2 gap-x-10 gap-y-3">
             {[
               "Fewer surprises during inspections: know your status before a surveyor arrives.",
@@ -440,10 +440,10 @@ return (
         <section className="rounded-2xl bg-primary text-primary-foreground p-10 text-center">
           <FlaskConical size={30} className="mx-auto mb-3 opacity-80" />
           <h2 className="font-serif text-2xl font-bold mb-3">
-            Ready to see VeritaAssure&#8482; in action?
+            Ready to see VeritaAssure&#174; in action?
           </h2>
           <p className="text-primary-foreground/80 text-sm max-w-md mx-auto mb-6">
-            The live demo runs the core compliance suite (VeritaCheck™, VeritaScan™, VeritaMap™, and VeritaComp™) with real data and generates actual PDF reports. No login required.
+            The live demo runs the core compliance suite (VeritaCheck®, VeritaScan®, VeritaMap®, and VeritaComp™) with real data and generates actual PDF reports. No login required.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Button asChild size="lg" className="bg-white text-primary hover:bg-white/90 font-semibold">

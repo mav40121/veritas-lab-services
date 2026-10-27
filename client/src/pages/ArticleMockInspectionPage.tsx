@@ -112,18 +112,18 @@ export default function ArticleMockInspectionPage() {
           <h2 className="font-serif text-2xl font-bold mt-10 mb-3">From finding to corrective action</h2>
           <p>A finding is only closed when the corrective action is defensible, and a defensible corrective action has three parts: the root cause, the action taken, and the verification that the action worked. Naming the root cause is what separates a real fix from a promise to try harder. The verification of effectiveness is what a surveyor looks for on the next visit. Final sign-off rests with the medical director or designee. A mock inspection that produces findings without corrective actions has only rehearsed the bad news.</p>
 
-          <p>That is the work VeritaAssure™ was built to make repeatable, from the proficiency testing and correlation records a surveyor pulls first to the competency, policy, and readiness documentation the tracers eventually reach. If you are evaluating a platform to manage this, here is how to choose <Link href="/resources/how-to-choose-lab-compliance-software" className="text-primary hover:underline">lab compliance software</Link>. The method in this article works with any tool or none. What matters is that you run it before someone else does.</p>
+          <p>That is the work VeritaAssure® was built to make repeatable, from the proficiency testing and correlation records a surveyor pulls first to the competency, policy, and readiness documentation the tracers eventually reach. If you are evaluating a platform to manage this, here is how to choose <Link href="/resources/how-to-choose-lab-compliance-software" className="text-primary hover:underline">lab compliance software</Link>. The method in this article works with any tool or none. What matters is that you run it before someone else does.</p>
 
           <div className="rounded-xl border-2 border-primary/20 bg-primary/5 p-6 my-8">
             <div className="flex items-start gap-3">
               <FlaskConical size={20} className="text-primary shrink-0 mt-0.5" />
               <div>
-                <div className="font-semibold text-sm mb-1">VeritaAssure&#8482; keeps your lab survey-ready</div>
+                <div className="font-semibold text-sm mb-1">VeritaAssure&#174; keeps your lab survey-ready</div>
                 <p className="text-sm text-muted-foreground mb-3">
                   The proficiency testing, correlation, competency, and readiness records a surveyor pulls first, kept current and retrievable in one place.
                 </p>
                 <Button asChild size="sm" className="bg-primary text-primary-foreground">
-                  <Link href="/veritaassure">Explore VeritaAssure&#8482; <ChevronRight size={13} className="ml-1" /></Link>
+                  <Link href="/veritaassure">Explore VeritaAssure&#174; <ChevronRight size={13} className="ml-1" /></Link>
                 </Button>
               </div>
             </div>
@@ -143,14 +143,14 @@ export default function ArticleMockInspectionPage() {
             <FlaskConical size={28} className="mx-auto mb-3 opacity-80" />
             <h3 className="font-serif text-xl font-bold mb-2">Rehearse the method before someone else does</h3>
             <p className="text-primary-foreground/80 text-sm max-w-md mx-auto mb-5">
-              VeritaScan&#8482; maps a mock inspection to every standard so you can find your gaps first. See the full VeritaAssure&#8482; suite.
+              VeritaScan&#174; maps a mock inspection to every standard so you can find your gaps first. See the full VeritaAssure&#174; suite.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Button asChild size="lg" className="bg-white text-primary hover:bg-white/90 font-semibold">
-                <Link href="/veritascan">Explore VeritaScan&#8482; <ChevronRight size={15} className="ml-1" /></Link>
+                <Link href="/veritascan">Explore VeritaScan&#174; <ChevronRight size={15} className="ml-1" /></Link>
               </Button>
               <Button asChild size="lg" variant="outline" className="border-white/40 text-white hover:bg-white/10">
-                <Link href="/veritaassure">Full VeritaAssure&#8482; Suite <ExternalLink size={13} className="ml-1" /></Link>
+                <Link href="/veritaassure">Full VeritaAssure&#174; Suite <ExternalLink size={13} className="ml-1" /></Link>
               </Button>
             </div>
           </div>
