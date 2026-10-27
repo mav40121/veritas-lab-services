@@ -235,3 +235,21 @@ export function runPolicyAutoExpire(): {
   }
   return stats;
 }
+
+// BUG-081 (Michael Q45 = 1, 2026-10-27): the nightly VeritaPolicy job. Review reminders first, then the auto-expire
+// sweep above (approved policies more than AUTO_EXPIRE_GRACE_DAYS past next_review_date flip to 'expired', one audit
+// row each). The sweep was built 2026-06-02 to run from this entry point but was only reachable from the admin route.
+// A reminder failure does not stop the sweep.
+export async function runNightlyPolicyJobs(): Promise<{
+  reminders: Awaited<ReturnType<typeof runPolicyReviewReminders>> | null;
+  expire: ReturnType<typeof runPolicyAutoExpire>;
+}> {
+  let reminders: Awaited<ReturnType<typeof runPolicyReviewReminders>> | null = null;
+  try {
+    reminders = await runPolicyReviewReminders();
+  } catch (err: any) {
+    console.error("[policy-nightly] review reminders failed:", err?.message || err);
+  }
+  const expire = runPolicyAutoExpire();
+  return { reminders, expire };
+}

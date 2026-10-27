@@ -317,23 +317,22 @@ app.use((req, res, next) => {
   // policy_review_reminders UNIQUE constraint on (document_id, version_id,
   // reminder_type) at the application level; safe to re-run.
   try {
-    const { runPolicyReviewReminders } = await import("./veritapolicyReminders");
+    // BUG-081 (2026-10-27): the nightly job also runs the auto-expire sweep (runNightlyPolicyJobs).
+    const { runNightlyPolicyJobs } = await import("./veritapolicyReminders");
+    const runPolicyNightly = () => {
+      console.log("[policy-reminders] Running review-reminder dispatch + auto-expire...");
+      runNightlyPolicyJobs()
+        .then((s) => console.log(`[policy-reminders] reminders sent ${s.reminders?.sent ?? "n/a"}; auto-expire flipped ${s.expire.flipped} of ${s.expire.scanned}`))
+        .catch((err) => console.error("[policy-reminders] Run failed:", err?.message || err));
+    };
     const schedulePolicyReminders = () => {
       const now = new Date();
       const midnight = new Date(now);
       midnight.setUTCHours(24, 0, 0, 0);
       const msUntilMidnight = midnight.getTime() - now.getTime();
       setTimeout(() => {
-        console.log("[policy-reminders] Running review-reminder dispatch...");
-        runPolicyReviewReminders().catch((err) =>
-          console.error("[policy-reminders] Run failed:", err?.message || err)
-        );
-        setInterval(() => {
-          console.log("[policy-reminders] Running review-reminder dispatch...");
-          runPolicyReviewReminders().catch((err) =>
-            console.error("[policy-reminders] Run failed:", err?.message || err)
-          );
-        }, 24 * 60 * 60 * 1000);
+        runPolicyNightly();
+        setInterval(runPolicyNightly, 24 * 60 * 60 * 1000);
       }, msUntilMidnight);
       console.log(
         `[policy-reminders] Review-reminder dispatch scheduled in ${Math.round(msUntilMidnight / 60000)} minutes`
