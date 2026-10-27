@@ -1,5 +1,5 @@
 import { NaReasonPresets } from "@/components/competency/NaReasonPresets";
-import { labTodayIso } from "@/lib/labDate";
+import { labTodayIso, labLocaleDate } from "@/lib/labDate";
 import { useState, useEffect, useLayoutEffect, useMemo, useRef, type ReactNode, type ComponentProps } from "react";
 import DOMPurify from "dompurify";
 import { Link, useLocation, useParams } from "wouter";
@@ -2421,7 +2421,7 @@ function OverviewTab({ program }: { program: Program & { employees: Employee[]; 
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
           <div><span className="text-xs text-muted-foreground block">Type</span>{programKindLabel(program.type, program.record_kind)}</div>
           <div><span className="text-xs text-muted-foreground block">Department</span>{program.department}</div>
-          <div><span className="text-xs text-muted-foreground block">Created</span>{new Date(program.created_at).toLocaleDateString()}</div>
+          <div><span className="text-xs text-muted-foreground block">Created</span>{labLocaleDate(program.created_at)}</div>
           {program.type === "technical" && (
             <div><span className="text-xs text-muted-foreground block">Method Groups</span>{program.methodGroups?.length || 0}</div>
           )}

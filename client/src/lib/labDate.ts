@@ -67,3 +67,13 @@ export function labStampLabel(stamp: string | null | undefined): string {
     return day;
   }
 }
+
+// The lab's day for a stored date or moment, in the browser's usual date format (what new Date(x).toLocaleDateString()
+// showed before, without its two faults: a bare YYYY-MM-DD read as UTC midnight is the day before in the US, and a
+// stored UTC moment shows the viewer's day, not the lab's). BUG-110.
+export function labLocaleDate(stamp: string | null | undefined): string {
+  const day = labDayOfStamp(stamp);
+  if (!day) return "";
+  const [y, m, d] = day.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString();
+}

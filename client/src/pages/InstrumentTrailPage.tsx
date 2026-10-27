@@ -21,6 +21,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { ArrowLeft, AlertTriangle, CheckCircle2, Clock, Wrench, Printer, ClipboardList } from "lucide-react";
+import { labStampLabel } from "@/lib/labDate";
 
 interface Violation { id: number; rule_code: string; severity: "warning" | "rejection"; detail: string | null }
 interface Finding { id: number; status?: string; signed_by?: string | null; signed_at?: string | null; completion_date?: string | null }
@@ -217,14 +218,14 @@ export default function InstrumentTrailPage() {
                         <div className="mt-2 space-y-2">
                           {it.f.corrective_actions.map((c) => (
                             <div key={c.id} className="rounded-md border border-border bg-card p-2 text-sm" data-testid={`trail-ca-${c.id}`}>
-                              <div><span className="font-medium">Corrective action</span> <span className="text-xs text-muted-foreground">filed {c.taken_at.slice(0, 16).replace("T", " ")}{c.taken_by_name ? ` by ${c.taken_by_name}` : ""}</span></div>
+                              <div><span className="font-medium">Corrective action</span> <span className="text-xs text-muted-foreground">filed {labStampLabel(c.taken_at)}{c.taken_by_name ? ` by ${c.taken_by_name}` : ""}</span></div>
                               <div className="mt-0.5 whitespace-pre-wrap">{c.action_taken}</div>
                               {c.follow_up_notes && <div className="text-xs text-muted-foreground mt-0.5">Follow-up: {c.follow_up_notes}</div>}
                               {c.resolved_at ? (
                                 <div className="mt-1.5 flex items-start gap-1.5 text-emerald-700 dark:text-emerald-400" data-testid={`trail-ca-closed-${c.id}`}>
                                   <CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" />
                                   <div>
-                                    <div className="font-medium">Closed out {c.resolved_at.slice(0, 16).replace("T", " ")}{c.resolved_by_name ? ` by ${c.resolved_by_name}` : ""}</div>
+                                    <div className="font-medium">Closed out {labStampLabel(c.resolved_at)}{c.resolved_by_name ? ` by ${c.resolved_by_name}` : ""}</div>
                                     {c.resolution_notes && <div className="text-foreground whitespace-pre-wrap">{c.resolution_notes}</div>}
                                   </div>
                                 </div>
@@ -245,7 +246,7 @@ export default function InstrumentTrailPage() {
                       {it.f.notes.length > 0 && (
                         <ul className="mt-2 space-y-1">
                           {it.f.notes.map((n) => (
-                            <li key={n.id} className="text-xs text-muted-foreground">Note, {n.author_name}, {n.created_at.slice(0, 16).replace("T", " ")}: {n.note}</li>
+                            <li key={n.id} className="text-xs text-muted-foreground">Note, {n.author_name}, {labStampLabel(n.created_at)}: {n.note}</li>
                           ))}
                         </ul>
                       )}

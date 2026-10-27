@@ -7,7 +7,7 @@
 // reminders + auto-expire.
 
 import { useState } from "react";
-import { labTodayIso } from "@/lib/labDate";
+import { labTodayIso, labLocaleDate } from "@/lib/labDate";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
@@ -99,7 +99,7 @@ interface Compliance {
 function fmtDate(s: string | null): string {
   if (!s) return "-";
   try {
-    return new Date(s).toLocaleDateString();
+    return labLocaleDate(s);
   } catch {
     return s;
   }

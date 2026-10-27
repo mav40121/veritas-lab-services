@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { labTodayIso } from "@/lib/labDate";
+import { labTodayIso, labLocaleDate } from "@/lib/labDate";
 import ExcelJS from "exceljs";
 import { saveAs } from "file-saver";
 import { applyLicenseToExcelJS } from "@/lib/licenseStamp";
@@ -978,7 +978,7 @@ export default function AdminReportPage() {
                       <td className="px-3 py-2 font-medium">{p.seat_email}</td>
                       <td className="px-3 py-2">{p.owner_name || p.owner_email}</td>
                       <td className="px-3 py-2 text-muted-foreground">{p.owner_lab_name || "-"}</td>
-                      <td className="px-3 py-2 text-xs whitespace-nowrap">{new Date(p.invited_at).toLocaleDateString()}</td>
+                      <td className="px-3 py-2 text-xs whitespace-nowrap">{labLocaleDate(p.invited_at)}</td>
                       <td className={`px-3 py-2 text-xs whitespace-nowrap ${expired ? "text-red-600 font-semibold" : stale ? "text-amber-600" : ""}`}>
                         {daysPending}d {expired && "(expired)"}
                       </td>
@@ -1477,7 +1477,7 @@ function UserActivityModal({ userId, secret, onClose }: { userId: number; secret
             <h2 className="text-lg font-semibold">User Activity</h2>
             {data && (
               <p className="text-xs text-muted-foreground">
-                {data.user.name || data.user.email} &middot; user id {data.user.id} &middot; joined {new Date(data.user.created_at).toLocaleDateString()}
+                {data.user.name || data.user.email} &middot; user id {data.user.id} &middot; joined {labLocaleDate(data.user.created_at)}
               </p>
             )}
           </div>

@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { VerificationAnalytesPanel } from "@/components/VerificationAnalytesPanel";
+import { labLocaleDate } from "@/lib/labDate";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -370,7 +371,7 @@ function VerificationList({ verifications, isLoading, onOpen, onDeleted, onNew }
               <div className="text-xs text-muted-foreground mt-1 flex gap-3 flex-wrap">
                 <span>{TRIGGER_TYPES.find(t => t.value === v.trigger_type)?.label ?? v.trigger_type}</span>
                 {v.unit_count > 0 && <span>· {v.unit_count} unit{v.unit_count !== 1 ? "s" : ""}</span>}
-                <span>· {new Date(v.created_at).toLocaleDateString()}</span>
+                <span>· {labLocaleDate(v.created_at)}</span>
               </div>
               {/* Inline confirm - appears below text, no dialog conflict */}
               {confirmId === v.id && (
@@ -1134,7 +1135,7 @@ function ElementCard({ element, slot, suggested, verificationId, onPatch }: {
                 )}
                 {suggested.map(s => (
                   <SelectItem key={s.id} value={String(s.id)} className="text-xs">
-                    {s.testName} - {new Date(s.createdAt).toLocaleDateString()}
+                    {s.testName} - {labLocaleDate(s.createdAt)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -1276,7 +1277,7 @@ function AnalyteSlotRow({ element, analyteName, slot, suggested, verificationId,
                 <SelectItem value="__none" disabled className="text-xs text-muted-foreground">No studies found</SelectItem>
               )}
               {suggested.map(s => (
-                <SelectItem key={s.id} value={String(s.id)} className="text-xs">{s.testName} - {new Date(s.createdAt).toLocaleDateString()}</SelectItem>
+                <SelectItem key={s.id} value={String(s.id)} className="text-xs">{s.testName} - {labLocaleDate(s.createdAt)}</SelectItem>
               ))}
             </SelectContent>
           </Select>

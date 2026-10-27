@@ -4,7 +4,7 @@
 // the active lab's calendar day. SQLite datetime('now') stamps carry no zone and are UTC; a browser reading one with
 // new Date() takes it as local time, so 03:39 UTC on 10/27 printed as 10/27 in Boston at 23:39 on 10/26.
 // Run: npx tsx scripts/verify-lab-day-of-stamp.ts
-import { labDayOfStamp, labStampLabel, setActiveLabTimeZone } from "../client/src/lib/labDate";
+import { labDayOfStamp, labStampLabel, labLocaleDate, setActiveLabTimeZone } from "../client/src/lib/labDate";
 
 let failures = 0;
 function check(name: string, got: string, want: string) {
@@ -26,6 +26,11 @@ setActiveLabTimeZone("America/New_York");
 check("8. labStampLabel: SQLite stamp on the lab clock, 24-hour", labStampLabel("2026-10-27 03:39:56"), "2026-10-26 23:39");
 check("9. labStampLabel: ISO with Z, afternoon", labStampLabel("2026-10-27T18:05:00.000Z"), "2026-10-27 14:05");
 check("10. labStampLabel: a bare day stays a day; empty stays empty", [labStampLabel("2026-10-27"), labStampLabel(null)].join("|"), "2026-10-27|");
+// labLocaleDate keeps the browser's usual date format; compare with a local-midnight Date so any locale passes.
+const loc = (y: number, m: number, d: number) => new Date(y, m - 1, d).toLocaleDateString();
+check("11. labLocaleDate: a bare day is that day (new Date('2026-10-27') showed 10/26 in the US)", labLocaleDate("2026-10-27"), loc(2026, 10, 27));
+check("12. labLocaleDate: a SQLite stamp after 8 PM Eastern is the lab's day", labLocaleDate("2026-10-27 03:39:56"), loc(2026, 10, 26));
+check("13. labLocaleDate: empty stays empty", labLocaleDate(undefined), "");
 setActiveLabTimeZone(null);
 
 console.log(failures ? `\n${failures} FAILED` : "\nALL PASS");
