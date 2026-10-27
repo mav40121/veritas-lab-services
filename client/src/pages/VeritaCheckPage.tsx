@@ -111,18 +111,18 @@ const CLIA_PRESETS = [
   { label: "TSH (±20% or ±0.2 mIU/L)",                value: 0.20,  absoluteFloor: 0.2, absoluteUnit: "mIU/L", cfr: "42 CFR §493.933" },
   { label: "T4, Thyroxine (±20% or ±1.0 mcg/dL)",    value: 0.20,  absoluteFloor: 1.0, absoluteUnit: "mcg/dL", cfr: "42 CFR §493.933" },
   { label: "Vitamin B12 (±25% or ±30 pg/mL)",         value: 0.25,  absoluteFloor: 30, absoluteUnit: "pg/mL", cfr: "42 CFR §493.933" },
-  // ── Toxicology §493.935 ──────────────────────────────────────────────────
-  { label: "Acetaminophen (±15% or ±3 mcg/mL)",       value: 0.15,  absoluteFloor: 3, absoluteUnit: "mcg/mL", cfr: "42 CFR §493.935" },
-  { label: "Alcohol, Blood (±20%)",                    value: 0.20,  cfr: "42 CFR §493.935" },
-  { label: "Blood Lead (±10% or ±2 mcg/dL)",          value: 0.10,  absoluteFloor: 2, absoluteUnit: "mcg/dL", cfr: "42 CFR §493.935" },
-  { label: "Carbamazepine (±20% or ±1.0 mcg/mL)",     value: 0.20,  absoluteFloor: 1.0, absoluteUnit: "mcg/mL", cfr: "42 CFR §493.935" },
-  { label: "Digoxin (±15% or ±0.2 ng/mL)",            value: 0.15,  absoluteFloor: 0.2, absoluteUnit: "ng/mL", cfr: "42 CFR §493.935" },
-  { label: "Gentamicin (±25%)",                        value: 0.25,  cfr: "42 CFR §493.935" },
-  { label: "Lithium (±15% or ±0.3 mmol/L)",           value: 0.15,  absoluteFloor: 0.3, absoluteUnit: "mmol/L", cfr: "42 CFR §493.935" },
-  { label: "Phenobarbital (±15% or ±2 mcg/mL)",       value: 0.15,  absoluteFloor: 2, absoluteUnit: "mcg/mL", cfr: "42 CFR §493.935" },
-  { label: "Phenytoin (±15% or ±2 mcg/mL)",           value: 0.15,  absoluteFloor: 2, absoluteUnit: "mcg/mL", cfr: "42 CFR §493.935" },
-  { label: "Salicylate (±15% or ±2 mcg/mL)",          value: 0.15,  absoluteFloor: 2, absoluteUnit: "mcg/mL", cfr: "42 CFR §493.935" },
-  { label: "Theophylline (±20%)",                      value: 0.20,  cfr: "42 CFR §493.935" },
+  // ── Toxicology §493.937 ──────────────────────────────────────────────────
+  { label: "Acetaminophen (±15% or ±3 mcg/mL)",       value: 0.15,  absoluteFloor: 3, absoluteUnit: "mcg/mL", cfr: "42 CFR §493.937" },
+  { label: "Alcohol, Blood (±20%)",                    value: 0.20,  cfr: "42 CFR §493.937" },
+  { label: "Blood Lead (±10% or ±2 mcg/dL)",          value: 0.10,  absoluteFloor: 2, absoluteUnit: "mcg/dL", cfr: "42 CFR §493.937" },
+  { label: "Carbamazepine (±20% or ±1.0 mcg/mL)",     value: 0.20,  absoluteFloor: 1.0, absoluteUnit: "mcg/mL", cfr: "42 CFR §493.937" },
+  { label: "Digoxin (±15% or ±0.2 ng/mL)",            value: 0.15,  absoluteFloor: 0.2, absoluteUnit: "ng/mL", cfr: "42 CFR §493.937" },
+  { label: "Gentamicin (±25%)",                        value: 0.25,  cfr: "42 CFR §493.937" },
+  { label: "Lithium (±15% or ±0.3 mmol/L)",           value: 0.15,  absoluteFloor: 0.3, absoluteUnit: "mmol/L", cfr: "42 CFR §493.937" },
+  { label: "Phenobarbital (±15% or ±2 mcg/mL)",       value: 0.15,  absoluteFloor: 2, absoluteUnit: "mcg/mL", cfr: "42 CFR §493.937" },
+  { label: "Phenytoin (±15% or ±2 mcg/mL)",           value: 0.15,  absoluteFloor: 2, absoluteUnit: "mcg/mL", cfr: "42 CFR §493.937" },
+  { label: "Salicylate (±15% or ±2 mcg/mL)",          value: 0.15,  absoluteFloor: 2, absoluteUnit: "mcg/mL", cfr: "42 CFR §493.937" },
+  { label: "Theophylline (±20%)",                      value: 0.20,  cfr: "42 CFR §493.937" },
   // ── Hematology §493.941 ──────────────────────────────────────────────────
   { label: "Erythrocyte Count / RBC (±4%)",            value: 0.04,  cfr: "42 CFR §493.941" },
   { label: "Fibrinogen (±20%)",                        value: 0.20,  cfr: "42 CFR §493.941" },
@@ -3183,7 +3183,7 @@ return (
                             <SelectGroup><SelectLabel className="text-xs text-muted-foreground">Endocrinology §493.933</SelectLabel>
                               {CLIA_PRESETS.slice(37, 55).map((p, i) => <SelectItem key={37+i} value={String(37+i)}>{p.label}</SelectItem>)}
                             </SelectGroup>
-                            <SelectGroup><SelectLabel className="text-xs text-muted-foreground">Toxicology §493.935</SelectLabel>
+                            <SelectGroup><SelectLabel className="text-xs text-muted-foreground">Toxicology §493.937</SelectLabel>
                               {CLIA_PRESETS.slice(55, 66).map((p, i) => <SelectItem key={55+i} value={String(55+i)}>{p.label}</SelectItem>)}
                             </SelectGroup>
                             <SelectGroup><SelectLabel className="text-xs text-muted-foreground">Hematology §493.941</SelectLabel>
