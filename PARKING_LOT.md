@@ -719,19 +719,6 @@ Open questions for the scope:
 
 ---
 
-### 109. QC runs voided before 2026-10-26 still have open findings (Hiltunen finding #10)
-
-**Effort:** XS (a one-time, dry-run-first admin pass using the same rule as C103)
-**Importance:** Medium. C103 settles a finding only when its run is voided from now on. Runs voided earlier keep their findings open and reminding: lab 19 (Gameday, Traverse City) finding #10 "QC-1-3s" is still open, due 2026-10-15, with no completion date (read-only check 2026-10-26 18:45Z), though Mike Hiltunen voided its run (957) on 2026-10-12.
-
-**What:** an admin route that finds every open VeritaQC-escalated finding whose run is already voided and applies the C103 rule (untouched: close with the void reason; worked: flag "QC run voided"), dry run first, listing lab and finding. Writes on client labs, so it runs only on Michael's go.
-
-**Source:** Claude, 2026-10-26, checking the client side after #100 shipped. Related: REQ-063 (Client told 2026-10-14).
-**Also (2026-10-26):** QC and alternative-assessment escalations made before the entry-type templates (#1718) are still stored as CMS inspection findings with the 10-day clock; the same admin pass can move them to qc_escalation / aaa_escalation with the 30-day lab target.
-**Status:** Open. Question queued for Michael.
-
----
-
 ### 110. VeritaTrack: each lab adds its own task categories
 
 **Effort:** S (a per-lab category list with add, rename and retire; the task form and filters read it)
@@ -756,19 +743,19 @@ Open questions for the scope:
 
 ---
 
-### 112. VeritaResponse reports for the new entry types (PT investigation, FDA deviation summary, QC look-back)
-
-**Effort:** M (three report builders in the existing house style, a Generate button on each type's page, tests)
-**Importance:** Medium. The entry-type templates (#1718, Michael's mock answers D1-D7, 2026-10-26) capture the PT checklist, the FDA reportability facts and the QC patient look-back, but those types have no printable record yet.
-
-**What:** D3 PT investigation report (with an alternative-assessment variant), D5 FDA deviation investigation summary (the facts for Form FDA 3486, not the form), D7 QC event and patient look-back report (lives in VeritaResponse; the VeritaQC monthly review links to it). Medical director or designee block on page 1; CFR quoted only.
-
-**Source:** Michael, 2026-10-26, entry-type mock D3, D5, D7 ("1 approve all"). Layout mock: Product Specs\VeritaResponse\VeritaResponse_Report_Layouts_MOCK_2026-10-26.pdf.
-**Status:** Layouts sent to Michael 2026-10-26; build waits on his approval (mock-PDF-first rule).
-
----
-
 ## CLOSED (audit trail)
+
+### C105. VeritaResponse reports for the new entry types (was #112)
+
+**Effort:** was M / **Importance:** Medium.
+
+**Closure evidence:** PR #1719 (Michael approved the layout mock, 2026-10-26), live in e2474483. PT investigation report (with the alternative-assessment variant), FDA deviation investigation summary and QC event and patient look-back report, each with a Generate button; the review block stays on page 1 (the renderer moves it under the identification grid when the report would spill). Receipts: scripts/verify-veritaresponse-type-reports.ts in the PDF signature guard (PASS on CI fonts: typical PT moves the block up at 957 px, the others fit one page); production check in sandbox lab 35 rendered the PT report (render 200, 91,512 bytes, review on page 1) and deleted the test finding.
+
+### C104. QC runs voided before 2026-10-26 kept open findings; older escalations on the CMS clock (was #109)
+
+**Effort:** was XS / **Importance:** Medium.
+
+**Closure evidence:** PR #1720, POST /api/admin/veritaresponse/legacy-cleanup (dry run by default). Production dry run 2026-10-26 across all labs found one finding: lab 19 (Gameday) finding #10. Michael approved option 1; applied to lab 19: closed with the void note (run #957 voided 2026-10-12 by Michael Hiltunen, "Entered incorrectly during training"), reclassified to qc_escalation / Other, due date kept; read-back status closed, completion 2026-10-26; a second dry run found nothing. REQ-063 updated.
 
 ### C103. Voiding a QC run leaves its auto-created finding open (was #100)
 
