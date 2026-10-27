@@ -13,6 +13,8 @@
 //   5. re-sending the real CLIA on file saves with no audit entry for clia_number
 //   6. a blank CLIA still clears the field
 //   7. a LOCKED lab: re-sending its CLIA saves (no 403); a different CLIA is still refused (403)
+//   8. support (admin/update-lab) can replace a LOCKED placeholder with the real CLIA once; a locked real CLIA is still
+//      refused (409) (2026-10-27, lab 18 "PENDING-GEORGETOWN-LPNT")
 //
 // Run (Windows, from bash): rm -f .tmp-clia-placeholder.db && DB_PATH=.tmp-clia-placeholder.db JWT_SECRET=test-jwt-secret ADMIN_SECRET=test-admin-secret STRIPE_SECRET_KEY=sk_test_dummy STRIPE_WEBHOOK_SECRET=whsec_dummy npx tsx tests/integration/clia-placeholder-save.test.ts
 import http from "node:http";
@@ -97,6 +99,20 @@ async function main() {
   check("7. locked lab: re-sending its CLIA saves (no 403)", r7.status === 200 && row(locked).accreditation_tjc === 1, `status=${r7.status}`);
   const r7b = await save(locked, { clia_number: "22D0002222", clia_lab_name: "Locked Test Lab", accreditation_choice: "TJC" });
   check("7b. locked lab: a different CLIA is still refused (403)", r7b.status === 403 && row(locked).clia_number === "22D0001111", `status=${r7b.status}`);
+
+  // 8. support corrects a locked placeholder
+  const adminUpdate = async (labId: number, cliaNumber: string) => {
+    const r = await fetch(`${base}/api/admin/update-lab`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ secret: process.env.ADMIN_SECRET, labId, cliaNumber }) });
+    let body: any = {}; try { body = await r.json(); } catch {}
+    return { status: r.status, body };
+  };
+  const lockedPh = mkLab("Locked Placeholder Lab", "PENDING-LOCKED-TEST", 1);
+  const r8 = await adminUpdate(lockedPh, "18D0322357");
+  check("8. support replaces a locked placeholder with the real CLIA", r8.status === 200 && row(lockedPh).clia_number === "18D0322357", `status=${r8.status} ${JSON.stringify(r8.body).slice(0, 160)}`);
+  const r8b = await adminUpdate(lockedPh, "18D0000001");
+  check("8b. once real, it is locked again (409)", r8b.status === 409 && row(lockedPh).clia_number === "18D0322357", `status=${r8b.status}`);
+  const r8c = await adminUpdate(locked, "22D0003333");
+  check("8c. a locked real CLIA is still refused through support (409)", r8c.status === 409 && row(locked).clia_number === "22D0001111", `status=${r8c.status}`);
 
   server.close();
   console.log(failures ? `${failures} FAIL` : "ALL PASS");
