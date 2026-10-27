@@ -38,6 +38,8 @@ export interface ParsedRow {
     /** 2026-06-08 Staff Portal access toggles. Y/N in template; 0/1 here. */
     canAdjustInventory: 0 | 1;
     canViewAudit: 0 | 1;
+    /** Michael Q19 = 1 (2026-10-27): the optional "Recorded as" column. null = left blank. */
+    recordedAs: "existing" | "new_hire" | null;
     roles: { role: "LD" | "CC" | "TC" | "TS" | "GS" | "TP"; specialtyNumber: number | null }[];
   };
 }
@@ -88,6 +90,21 @@ const HEADERS = [
   "Can Adjust Inventory (Y/N)",
   "Can View Audit (Y/N)",
 ] as const;
+
+// Optional trailing columns (Michael Q19 = 1, 2026-10-27): the template carries them, an older template without them
+// still uploads. "Recorded as" marks a person Existing staff (already testing before the lab's records were kept here)
+// or New hire, so a whole roster can be loaded without every existing person reading "Not cleared".
+const OPTIONAL_HEADERS = ["Recorded as (Existing staff / New hire)"] as const;
+const ALL_HEADERS = [...HEADERS, ...OPTIONAL_HEADERS];
+
+// "Existing staff" / "existing" / "E" and "New hire" / "new" / "N"; blank is null; anything else is "invalid".
+export function parseRecordedAs(v: string): "existing" | "new_hire" | null | "invalid" {
+  const t = v.trim().toLowerCase().replace(/\s+/g, " ");
+  if (!t) return null;
+  if (t === "existing" || t === "existing staff" || t === "e") return "existing";
+  if (t === "new hire" || t === "new" || t === "newhire" || t === "n") return "new_hire";
+  return "invalid";
+}
 
 export async function buildStaffImportWorkbook(opts: { labName?: string }): Promise<Buffer> {
   const { default: ExcelJS } = await import("exceljs");
@@ -154,13 +171,15 @@ export async function buildStaffImportWorkbook(opts: { labName?: string }): Prom
   const look = wb.addWorksheet("Lookups", { state: "veryHidden" });
   look.getColumn(1).values = ["YesNo", "Yes", "No"];
   look.getColumn(2).values = ["Complexity", "W", "M", "H"];
+  look.getColumn(3).values = ["RecordedAs", "Existing staff", "New hire"];
   // Defined names so the dropdowns reference these by name
   wb.definedNames.add("Lookups!$A$2:$A$3", "YesNoList");
   wb.definedNames.add("Lookups!$B$2:$B$4", "ComplexityList");
+  wb.definedNames.add("Lookups!$C$2:$C$3", "RecordedAsList");
 
   // ── Roster sheet ──
   const ros = wb.addWorksheet("Roster", { views: [{ state: "frozen", ySplit: 1 }] });
-  ros.columns = HEADERS.map((h) => {
+  ros.columns = ALL_HEADERS.map((h) => {
     const w = h.length < 18 ? 18 : h.length < 30 ? 26 : 36;
     return { header: h, width: w };
   });
@@ -189,6 +208,12 @@ export async function buildStaffImportWorkbook(opts: { labName?: string }): Prom
       formulae: ["YesNoList"],
       showErrorMessage: true, errorTitle: "Invalid value", error: "Use Yes or No.",
     };
+    // Recorded as (col 20, optional)
+    ros.getCell(i, HEADERS.length + 1).dataValidation = {
+      type: "list", allowBlank: true,
+      formulae: ["RecordedAsList"],
+      showErrorMessage: true, errorTitle: "Invalid value", error: "Use Existing staff or New hire, or leave blank.",
+    };
     // Role columns 10..15 (LD, CC, TC, TS, GS, TP)
     for (let c = 10; c <= 15; c++) {
       ros.getCell(i, c).dataValidation = {
@@ -202,7 +227,7 @@ export async function buildStaffImportWorkbook(opts: { labName?: string }): Prom
   // Sample shows: high complexity tech who is GS + TS for Chemistry and Hematology
   const sample = [
     "", "Smith", "Jane", "A", "MT(ASCP)", "2024-03-15", "BS Medical Technology, MT(ASCP)",
-    "H", "Yes", "No", "No", "No", "Yes", "Yes", "No", "", "7,8",
+    "H", "Yes", "No", "No", "No", "Yes", "Yes", "No", "", "7,8", "No", "No", "Existing staff",
   ];
   const sampleRow = ros.getRow(2);
   sample.forEach((v, idx) => { sampleRow.getCell(idx + 1).value = v; });
@@ -304,6 +329,9 @@ export async function parseStaffWorkbook(buffer: Buffer): Promise<{ rows: Parsed
     }
   }
 
+  const recordedAsCol = cellToString(headerRow.getCell(HEADERS.length + 1).value).toLowerCase().replace(/\s+/g, " ").trim()
+    === OPTIONAL_HEADERS[0].toLowerCase() ? HEADERS.length + 1 : 0;
+
   const rows: ParsedRow[] = [];
   ros.eachRow({ includeEmpty: false }, (row, rowNumber) => {
     if (rowNumber === 1) return;
@@ -311,6 +339,8 @@ export async function parseStaffWorkbook(buffer: Buffer): Promise<{ rows: Parsed
     for (let c = 1; c <= HEADERS.length; c++) {
       cells.push(cellToString(row.getCell(c).value) as any);
     }
+    const recordedAsRaw = recordedAsCol ? cellToString(row.getCell(recordedAsCol).value) : "";
+    const recordedAsParsed = parseRecordedAs(recordedAsRaw);
     // Skip fully blank rows
     if (cells.every((v) => v === null || v === undefined || v === "")) return;
 
@@ -373,6 +403,7 @@ export async function parseStaffWorkbook(buffer: Buffer): Promise<{ rows: Parsed
         performsTesting: performs ? 1 : 0,
         canAdjustInventory,
         canViewAudit,
+        recordedAs: recordedAsParsed === "invalid" ? null : recordedAsParsed,
         roles: expanded,
       },
     });
@@ -381,6 +412,7 @@ export async function parseStaffWorkbook(buffer: Buffer): Promise<{ rows: Parsed
     if (hireDate.error) (raw as any).__hireDateError = hireDate.error;
     if (tcSpecs.bad.length) (raw as any).__tcBad = tcSpecs.bad.join(", ");
     if (tsSpecs.bad.length) (raw as any).__tsBad = tsSpecs.bad.join(", ");
+    if (recordedAsParsed === "invalid") (raw as any).__recordedAsBad = recordedAsRaw;
   });
 
   return { rows };
@@ -425,6 +457,9 @@ export function validateRows(rows: ParsedRow[], ctx: ValidationContext): Validat
     }
     if ((r.raw as any).__tcBad) {
       issues.push({ field: "TC Specialties", severity: "error", message: `Invalid TC specialty numbers: ${(r.raw as any).__tcBad}. Use 1-17.` });
+    }
+    if ((r.raw as any).__recordedAsBad) {
+      issues.push({ field: "Recorded as", severity: "warning", message: `Recorded as '${(r.raw as any).__recordedAsBad}' is not Existing staff or New hire; it will be left blank.` });
     }
     if ((r.raw as any).__tsBad) {
       issues.push({ field: "TS Specialties", severity: "error", message: `Invalid TS specialty numbers: ${(r.raw as any).__tsBad}. Use 1-17.` });

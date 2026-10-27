@@ -36,6 +36,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { DocumentLinkDialog, STAFF_DOC_TYPES, expirationStatus } from "@/components/DocumentLinkDialog";
 import { EmployeeInstrumentsPickerDialog, type LabInstrument, instrumentLabel } from "@/components/EmployeeInstrumentsPickerDialog";
 import { InstrumentStaffAssignDialog } from "@/components/InstrumentStaffAssignDialog";
+import { MarkExistingStaffDialog, unmarkedTestingStaff } from "@/components/MarkExistingStaffDialog";
 import { RosterMembersPrompt, rosterPromptKey, type RosterMember } from "@/components/RosterMembersPrompt";
 import { getStaffTitleLabel, getCredentialPickerGroups, buildCredentialFields, parseCredentialFields } from "@shared/staffTitles";
 import { CLIA_ROLE_QUALIFICATIONS, tsQualificationsFor, QUALIFICATION_FOOTNOTE } from "@shared/cliaRoleQualifications";
@@ -223,6 +224,7 @@ export default function VeritaStaffAppPage() {
   const [generatingPacket, setGeneratingPacket] = useState(false);
   const [showBulkImport, setShowBulkImport] = useState(false);
   const [showInstrumentAssign, setShowInstrumentAssign] = useState(false);
+  const [showMarkExisting, setShowMarkExisting] = useState(false);
   // VeritaCEU rides in VeritaStaff as a tab (not a separate module).
   // ?tab=delegations deep-links to the Delegations tab (the "send this to the
   // medical director to sign" link on a draft letter).
@@ -456,6 +458,13 @@ export default function VeritaStaffAppPage() {
                 {generatingPacket ? "Building packet..." : "Day-1 Survey Packet"}
               </Button>
               <CompetencyRegisterButton />
+              {/* Michael Q19 = 1: mark a loaded roster's existing staff in one step (only shown while someone is unmarked). */}
+              {unmarkedTestingStaff(employees as any).length > 0 && (
+                <Button variant="outline" size="sm" onClick={() => setShowMarkExisting(true)} disabled={readOnly} data-testid="button-mark-existing"
+                  title="Mark the people who were testing before your lab kept competency records here">
+                  <Users size={14} className="mr-1.5" /> Mark existing staff ({unmarkedTestingStaff(employees as any).length})
+                </Button>
+              )}
             </>
           )}
         </div>
@@ -642,6 +651,7 @@ export default function VeritaStaffAppPage() {
           lab={lab}
         />
       )}
+      <MarkExistingStaffDialog open={showMarkExisting} onOpenChange={setShowMarkExisting} labId={activeLabId} employees={employees as any} />
       {/* #48 dual view: assign staff from the instrument side */}
       <InstrumentStaffAssignDialog open={showInstrumentAssign} onOpenChange={setShowInstrumentAssign} labId={activeLabId} />
     </div>
