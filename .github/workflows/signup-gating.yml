@@ -110,6 +110,11 @@ jobs:
         # ISO 15189 add-on (#108): findings table rebuilt to accept ISO with rows, indexes and child rows intact;
         # settings round trip and audit; ISO findings gated by the lab flag and take the lab-entered due date.
         run: npm run test:iso-15189
+      - name: Run per-lab time zone integration test
+        # Zone from labs.time_zone, else the CLIA state, else Eastern; lab-scoped stamps use the lab's day (2026-10-26).
+        run: npm run test:lab-time-zone
+      - name: Lab-local dates and zone rules
+        run: npx tsx scripts/verify-lab-local-date.ts
       - name: Run VeritaResponse entry-type templates integration test
         # Per-type clocks and fields (PT, NCE, QC and alternative-assessment escalations), type_details sanitizing,
         # closing only through the gated sign-off (Michael 2026-10-26, mock D1-D7).
