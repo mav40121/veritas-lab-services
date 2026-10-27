@@ -10,6 +10,7 @@ import { SecuritySettingsCard } from "@/components/SecuritySettingsCard";
 import { trackEvent } from "@/lib/analytics";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
@@ -46,6 +47,14 @@ interface AccountSettings {
   preferred_standards: AccreditationBody[]; // legacy, retained for back-compat
   accreditation_choice: AccreditationChoice;
   accreditation_iso?: boolean; // ISO 15189 add-on (#108)
+  // Per-lab time zone (2026-10-26)
+  time_zone?: string;
+  time_zone_set?: string | null;
+  time_zone_source?: "set" | "clia" | "clia_main_zone" | "default";
+  time_zone_state?: string | null;
+  time_zone_needs_confirm?: boolean;
+  time_zone_choices?: { value: string; label: string; suggested: boolean }[];
+  lab_today?: string;
   preferred_pt_vendor: PtVendorPref;
   // Lab role context from server
   is_seat: boolean;
@@ -117,6 +126,7 @@ export default function AccountSettingsPage() {
   const [labName, setLabName] = useState("");
   const [accreditationChoice, setAccreditationChoice] = useState<AccreditationChoice>("CLIA");
   const [accreditationIso, setAccreditationIso] = useState(false);
+  const [timeZone, setTimeZone] = useState<string>("auto");
   const onStock = isStockHost();  // VeritaStock deployment: hide lab/compliance settings
   const [preferredPtVendor, setPreferredPtVendor] = useState<PtVendorPref>("none");
 
@@ -368,6 +378,7 @@ export default function AccountSettingsPage() {
       setLabName(settings.clia_lab_name || "");
       setAccreditationChoice(settings.accreditation_choice || "CLIA");
       setAccreditationIso(!!settings.accreditation_iso);
+      setTimeZone(settings.time_zone_set || "auto");
       setPreferredPtVendor(settings.preferred_pt_vendor || "none");
     }
   }, [settings]);
@@ -394,6 +405,7 @@ export default function AccountSettingsPage() {
           clia_lab_name: labName,
           accreditation_choice: accreditationChoice,
           accreditation_iso: accreditationIso,
+          time_zone: timeZone,
           preferredPtVendor,
         }),
       });
@@ -519,6 +531,41 @@ export default function AccountSettingsPage() {
               </p>
             )}
           </div>)}
+          {/* Per-lab time zone (2026-10-26): the lab's calendar day for dates, due dates and reminders. */}
+          {!noLab && settings?.time_zone && (() => {
+            const choices = settings.time_zone_choices || [];
+            const label = (v?: string | null) => choices.find((c) => c.value === v)?.label || v || "";
+            const autoText = settings.time_zone_source === "set"
+              ? "Automatic (from the CLIA state)"
+              : settings.time_zone_source === "clia"
+              ? `Automatic: ${label(settings.time_zone)} (from the CLIA state, ${settings.time_zone_state})`
+              : settings.time_zone_source === "clia_main_zone"
+              ? `Automatic: ${label(settings.time_zone)} (most of ${settings.time_zone_state}; please confirm)`
+              : `Automatic: ${label(settings.time_zone)} (no CLIA state on file; please confirm)`;
+            const sorted = [...choices.filter((c) => c.suggested), ...choices.filter((c) => !c.suggested)];
+            return (
+              <div className="space-y-2">
+                <Label htmlFor="lab_time_zone">Time zone</Label>
+                <Select value={timeZone} onValueChange={setTimeZone} disabled={isLoading || !!settings?.is_seat}>
+                  <SelectTrigger id="lab_time_zone" className="h-9 text-sm" data-testid="lab-time-zone"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="auto">{autoText}</SelectItem>
+                    {sorted.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Dates, due dates and reminders use the lab's calendar day in this zone. Today in the lab: <span data-testid="lab-today">{settings.lab_today}</span>.
+                </p>
+                {settings.time_zone_needs_confirm && !settings.time_zone_set && (
+                  <p className="text-xs text-amber-700 dark:text-amber-400" data-testid="lab-time-zone-confirm">
+                    {settings.time_zone_state
+                      ? `${settings.time_zone_state} spans more than one time zone. Pick yours and save.`
+                      : "Pick your lab's time zone and save."}
+                  </p>
+                )}
+              </div>
+            );
+          })()}
           {!settings?.is_seat && !noLab && (
             <Button
               onClick={() => saveMutation.mutate()}
