@@ -44,7 +44,9 @@ export function orgSeatCapForOwner(
   try {
     const row = sqlite
       .prepare(
-        "SELECT o.id AS org_id, o.active_seat_pool AS pool FROM labs l JOIN organizations o ON o.id = l.organization_id WHERE l.owner_user_id = ? AND l.organization_id IS NOT NULL LIMIT 1",
+        // ORDER BY l.id: an owner can bill more than one organization (provision-system newOrganization), so the
+        // pool comes from the organization of their oldest lab, the same answer as before a second one existed.
+        "SELECT o.id AS org_id, o.active_seat_pool AS pool FROM labs l JOIN organizations o ON o.id = l.organization_id WHERE l.owner_user_id = ? AND l.organization_id IS NOT NULL ORDER BY l.id LIMIT 1",
       )
       .get(ownerUserId) as any;
     if (row) {
