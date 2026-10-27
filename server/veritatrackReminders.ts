@@ -10,6 +10,7 @@
 // Due dates reuse veritatrack.ts nextDue()/daysUntilDateOnly() so the reminder
 // date always equals the date shown on the VeritaTrack screen (no drift).
 import { db } from "./db";
+import { labToday, labTimeZoneById } from "./dateLocal";
 import { nextDue, daysUntilDateOnly } from "./veritatrack";
 
 // Approaching-reminder ladder (days before due). Filtered to <= the lab's
@@ -96,7 +97,7 @@ export interface VeritaTrackReminderSummary {
 export async function runVeritaTrackReminders(): Promise<VeritaTrackReminderSummary> {
   const summary: VeritaTrackReminderSummary = { labs: 0, tasksChecked: 0, notifiable: 0, emailsSent: 0, skipped: 0, errors: 0 };
   const sqlite = (db as any).$client;
-  const today = new Date().toISOString().slice(0, 10);
+  // "today" is now per lab, set at the top of the lab loop below.
 
   let resend: any = null;
   try {
@@ -118,6 +119,8 @@ export async function runVeritaTrackReminders(): Promise<VeritaTrackReminderSumm
 
   for (const cfg of configs) {
     summary.labs++;
+    // Per-lab time zone (2026-10-26): each lab's reminders count from that lab's calendar day.
+    const today = labToday(labTimeZoneById(sqlite, cfg.lab_id));
     // Recipients: the configured list, else fall back to the lab owner so it is
     // never silently off.
     let recipients: { email: string; name?: string }[] = [];
@@ -142,8 +145,8 @@ export async function runVeritaTrackReminders(): Promise<VeritaTrackReminderSumm
       const last = sqlite.prepare(
         "SELECT completed_date FROM veritatrack_signoffs WHERE task_id = ? ORDER BY completed_date DESC LIMIT 1"
       ).get(t.id) as any;
-      const due = last ? nextDue(last.completed_date, t.frequency_months) : null;
-      const days = due ? daysUntilDateOnly(due) : null;
+      const due = last ? nextDue(last.completed_date, t.frequency_months, t.frequency_days) : null;
+      const days = due ? daysUntilDateOnly(due, today) : null;
 
       const approachingKindsSent = new Set<string>(
         (sqlite.prepare(
@@ -159,7 +162,8 @@ export async function runVeritaTrackReminders(): Promise<VeritaTrackReminderSumm
 
       const decision = decideTaskReminder({
         daysUntilDue: days,
-        leadDays: cfg.lead_days,
+        // #111: a weekly task gets one reminder the day before, not the 30/14/7/3/1 ladder (three emails a week).
+        leadDays: t.frequency_days && t.frequency_days <= 7 ? Math.min(cfg.lead_days, 1) : cfg.lead_days,
         overdueCadenceDays: cfg.overdue_cadence_days,
         approachingKindsSent,
         daysSinceLastOverdue,

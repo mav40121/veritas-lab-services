@@ -18,8 +18,9 @@ import {
 import {
   CheckCircle2, Plus, Download, Upload,
   ChevronDown, ChevronRight, Pencil, Trash2, CalendarDays, List, Settings, History,
-  AlertTriangle, Bell, Mail,
+  AlertTriangle, Bell, Mail, Tag,
 } from "lucide-react";
+import { DEFAULT_TRACK_CATEGORIES, TRACK_FREQUENCIES, CATEGORY_NAME_MAX } from "@shared/veritatrackCategories";
 import { useAuth } from "@/components/AuthContext";
 import { ModuleHowToCard } from "@/components/ModuleHowToCard";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -36,6 +37,7 @@ interface Task {
   owner_email?: string | null;
   frequency: string;
   frequency_months: number;
+  frequency_days?: number | null;
   map_analyte?: string | null;
   map_field?: string | null;
   notes?: string | null;
@@ -66,21 +68,31 @@ interface Dashboard {
   dueSoonItems: Task[];
 }
 
-const CATEGORIES = [
-  "Calibration Verification", "Correlation", "Precision Verification",
-  "Policy Review", "QC Review", "Water Contamination",
-  "Blood Bank Alarm Checks", "Equipment Calibration",
-  "Competency", "Quality Assessment", "HIPAA", "Bloodborne Pathogen",
-  "Other",
-];
+// #110/#111 (Michael 2026-10-26): the built-in categories and the frequencies (Weekly added) live in
+// shared/veritatrackCategories.ts; a lab's own categories come from the server (useTrackCategories).
+const FREQUENCIES = TRACK_FREQUENCIES;
 
-const FREQUENCIES = [
-  { label: "Monthly",   value: "Monthly",   months: 1  },
-  { label: "Quarterly", value: "Quarterly", months: 3  },
-  { label: "Biannual",  value: "Biannual",  months: 6  },
-  { label: "Annual",    value: "Annual",    months: 12 },
-  { label: "Biennial",  value: "Biennial",  months: 24 },
-];
+interface TrackCategories {
+  defaults: string[];
+  custom: { id: number; name: string; retired: boolean; task_count: number }[];
+  active: string[];
+  can_edit: boolean;
+}
+function useTrackCategories(trackApi: string) {
+  return useQuery<TrackCategories>({
+    queryKey: [`${trackApi}/categories`],
+    queryFn: async () => {
+      const r = await fetch(`${trackApi}/categories`, { headers: authHeaders() });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.json();
+    },
+  });
+}
+// The server answers {"error": "..."}; show that sentence, not the raw JSON.
+function errorText(err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err ?? "");
+  try { return JSON.parse(raw)?.error || raw; } catch { return raw; }
+}
 
 // ── Default task toggles ─────────────────────────────────────────────────────
 const DEFAULT_TOGGLES = [
@@ -287,6 +299,15 @@ function TaskFormDialog({ trigger, existing, onDone, trackApi, tasksKey, dashKey
   const [staff, setStaff] = useState<{ id: number; first_name?: string; last_name?: string }[]>([]);
   const [frequency, setFrequency] = useState(existing?.frequency || "Monthly");
   const [notes, setNotes] = useState(existing?.notes || "");
+  const { data: cats } = useTrackCategories(trackApi);
+  // Offer the built-ins and the lab's active categories; keep a task's current category in the list even when the
+  // lab has since retired it, so editing the task does not force a change.
+  const categoryOptions = useMemo(() => {
+    const list = cats?.active?.length ? [...cats.active] : [...DEFAULT_TRACK_CATEGORIES];
+    if (category && !list.includes(category)) list.push(category);
+    return list;
+  }, [cats, category]);
+  const retiredNames = useMemo(() => new Set((cats?.custom || []).filter(c => c.retired).map(c => c.name)), [cats]);
 
   // #51: owner is chosen from the built VeritaStaff roster. Fetch it when the
   // dialog opens (lab-scoped when a lab is active, legacy otherwise).
@@ -346,9 +367,9 @@ function TaskFormDialog({ trigger, existing, onDone, trackApi, tasksKey, dashKey
           <div>
             <label className="text-xs text-muted-foreground font-medium block mb-1">Category</label>
             <Select value={category} onValueChange={setCategory}>
-              <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-8 text-sm" data-testid="task-category"><SelectValue /></SelectTrigger>
               <SelectContent>
-                {CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                {categoryOptions.map(c => <SelectItem key={c} value={c}>{retiredNames.has(c) ? `${c} (retired)` : c}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -381,7 +402,7 @@ function TaskFormDialog({ trigger, existing, onDone, trackApi, tasksKey, dashKey
           <div>
             <label className="text-xs text-muted-foreground font-medium block mb-1">Frequency</label>
             <Select value={frequency} onValueChange={setFrequency}>
-              <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-8 text-sm" data-testid="task-frequency"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {FREQUENCIES.map(f => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}
               </SelectContent>
@@ -391,9 +412,97 @@ function TaskFormDialog({ trigger, existing, onDone, trackApi, tasksKey, dashKey
             <label className="text-xs text-muted-foreground font-medium block mb-1">Notes</label>
             <Input placeholder="Optional" value={notes} onChange={e => setNotes(e.target.value)} className="h-8 text-sm" />
           </div>
+          {mut.isError && <p className="text-xs text-destructive" data-testid="task-form-error">{errorText(mut.error)}</p>}
           <Button className="w-full" disabled={!name || mut.isPending} onClick={() => mut.mutate()}>
             {mut.isPending ? "Saving..." : existing ? "Save Changes" : "Add Task"}
           </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── #110: the lab's own categories (owners and admins) ───────────────────────
+function CategoryManagerDialog({ trackApi, tasksKey, dashKey }: { trackApi: string; tasksKey: string; dashKey: string }) {
+  const qc = useQueryClient();
+  const { data: cats } = useTrackCategories(trackApi);
+  const [newName, setNewName] = useState("");
+  const [editId, setEditId] = useState<number | null>(null);
+  const [editName, setEditName] = useState("");
+  const send = useMutation({
+    mutationFn: async (req: { method: "POST" | "PUT"; path: string; body: unknown }) => {
+      const r = await fetch(`${trackApi}/categories${req.path}`, {
+        method: req.method,
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify(req.body),
+      });
+      if (!r.ok) throw new Error(await r.text());
+      return r.json();
+    },
+    onSuccess: (data) => {
+      qc.setQueryData([`${trackApi}/categories`], data);
+      qc.invalidateQueries({ queryKey: [tasksKey] });
+      qc.invalidateQueries({ queryKey: [dashKey] });
+      setNewName(""); setEditId(null);
+    },
+  });
+  if (!cats?.can_edit) return null;
+  return (
+    <Dialog onOpenChange={() => { send.reset(); setEditId(null); }}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="outline" className="h-8 text-xs gap-1" data-testid="track-categories-button" title="Add, rename or retire this lab's task categories">
+          <Tag size={12} /> Categories
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="text-sm">Task categories</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 mt-1 text-sm">
+          <div>
+            <p className="text-xs font-medium text-muted-foreground mb-1">Your lab's categories</p>
+            {cats.custom.length === 0 && <p className="text-xs text-muted-foreground">None yet. Add one below.</p>}
+            <ul className="space-y-1.5">
+              {cats.custom.map(c => (
+                <li key={c.id} className="flex items-center gap-2" data-testid={`track-category-row-${c.id}`}>
+                  {editId === c.id ? (
+                    <>
+                      <Input value={editName} maxLength={CATEGORY_NAME_MAX} onChange={e => setEditName(e.target.value)} className="h-7 text-sm flex-1" data-testid="track-category-rename-input" />
+                      <Button size="sm" className="h-7 text-xs" disabled={send.isPending || !editName.trim()}
+                        onClick={() => send.mutate({ method: "PUT", path: `/${c.id}`, body: { name: editName } })} data-testid="track-category-rename-save">Save</Button>
+                      <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setEditId(null)}>Cancel</Button>
+                    </>
+                  ) : (
+                    <>
+                      <span className={`flex-1 ${c.retired ? "text-muted-foreground line-through" : ""}`}>{c.name}</span>
+                      <span className="text-[11px] text-muted-foreground">{c.task_count} task{c.task_count === 1 ? "" : "s"}{c.retired ? ", retired" : ""}</span>
+                      {!c.retired && <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setEditId(c.id); setEditName(c.name); send.reset(); }} data-testid="track-category-rename">Rename</Button>}
+                      <Button size="sm" variant="ghost" className="h-7 text-xs" disabled={send.isPending}
+                        onClick={() => send.mutate({ method: "PUT", path: `/${c.id}`, body: { retired: !c.retired } })}
+                        data-testid={c.retired ? "track-category-restore" : "track-category-retire"}>{c.retired ? "Restore" : "Retire"}</Button>
+                    </>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div className="flex items-center gap-2">
+            <Input placeholder="New category, e.g. Safety Inspections" value={newName} maxLength={CATEGORY_NAME_MAX}
+              onChange={e => setNewName(e.target.value)} className="h-8 text-sm flex-1" data-testid="track-category-new"
+              onKeyDown={e => { if (e.key === "Enter" && newName.trim()) send.mutate({ method: "POST", path: "", body: { name: newName } }); }} />
+            <Button size="sm" className="h-8 text-xs gap-1" disabled={send.isPending || !newName.trim()}
+              onClick={() => send.mutate({ method: "POST", path: "", body: { name: newName } })} data-testid="track-category-add"><Plus size={12} />Add</Button>
+          </div>
+          {send.isError && <p className="text-xs text-destructive" data-testid="track-category-error">{errorText(send.error)}</p>}
+          <p className="text-[11px] text-muted-foreground">
+            Renaming moves this lab's tasks to the new name. A retired category stays on the tasks that use it but is no longer offered for new tasks.
+          </p>
+          <div>
+            <p className="text-xs font-medium text-muted-foreground mb-1">Built-in categories (always available)</p>
+            <div className="flex flex-wrap gap-1">
+              {cats.defaults.map(d => <Badge key={d} variant="secondary" className="text-[11px] font-normal">{d}</Badge>)}
+            </div>
+          </div>
         </div>
       </DialogContent>
     </Dialog>
@@ -1151,8 +1260,9 @@ export default function VeritaTrackAppPage() {
             <Download size={12} />
             Export Excel
           </Button>
+          {!isReadOnly && <CategoryManagerDialog trackApi={trackApi} tasksKey={tasksKey} dashKey={dashKey} />}
           {!isReadOnly && <TaskFormDialog
-            trigger={<Button size="sm" className="h-8 text-xs gap-1"><Plus size={12} />Add Task</Button>}
+            trigger={<Button size="sm" className="h-8 text-xs gap-1" data-testid="add-task-button"><Plus size={12} />Add Task</Button>}
             onDone={() => refetch()}
             trackApi={trackApi}
             tasksKey={tasksKey}
