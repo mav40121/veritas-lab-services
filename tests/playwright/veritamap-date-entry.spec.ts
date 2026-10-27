@@ -2,7 +2,7 @@
 //
 // Gate 3 step 8 for parking-lot #78 (2026-10-07): the Cal Ver / Method
 // Comparison cells on the map page use the shared DateEntry. Typing a date
-// with no slashes saves it as ISO, Today saves today's local date, Clear saves
+// with no slashes saves it as ISO, Today saves the lab's calendar day, Clear saves
 // an empty value, and a nonsense entry is refused without a save. Authed, so
 // env-gated; writes dates into the FIRST undated row of the target map, so
 // point PW_MAP_URL only at a QA map, never a customer lab. It restores the
@@ -15,9 +15,16 @@ const BASE = process.env.PW_BASE || "https://www.veritaslabservices.com";
 const TOKEN = process.env.PW_TOKEN || "";
 const MAP_URL = process.env.PW_MAP_URL || "";
 
-function todayLocalISO(): string {
-  const n = new Date();
-  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
+// "Today" is the active lab's calendar day (per-lab time zone, PR #1723), worked out in the page the way the app does
+// it: the lab's zone cached by the app, else the browser's own day. The test runner's clock is the wrong reference:
+// CI runs in UTC, which is already tomorrow for a US lab in the evening (this failed main's smoke at 01:35 UTC).
+async function labTodayInPage(page: import("@playwright/test").Page): Promise<string> {
+  return page.evaluate(() => {
+    const tz = localStorage.getItem("veritas_active_lab_tz") || Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const p = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
+    const g = (t: string) => p.find((x) => x.type === t)?.value;
+    return `${g("year")}-${g("month")}-${g("day")}`;
+  });
 }
 
 test.describe("VeritaMap: shared date entry on the map cells", () => {
@@ -65,7 +72,7 @@ test.describe("VeritaMap: shared date entry on the map cells", () => {
     await expect(page.getByTestId("date-entry-popover")).toBeVisible();
     await page.getByTestId("date-entry-today").click();
     await expect.poll(() => puts.length, { timeout: 8_000 }).toBe(2);
-    expect(JSON.stringify(puts[1].body)).toContain(todayLocalISO());
+    expect(JSON.stringify(puts[1].body)).toContain(await labTodayInPage(page));
 
     // 4. Clear restores the empty cell (leaves the sandbox as found).
     await wrap.getByTestId("date-entry-calendar").click();
