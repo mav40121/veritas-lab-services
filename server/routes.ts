@@ -34879,12 +34879,16 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     }
     const labPlan = planProvisionLabs(labs, ownerId, existingByClia);
     const errors = labPlan.filter((p) => p.action === "error");
-    const existingOrg = sqlite.prepare("SELECT id, name, active_seat_pool FROM organizations WHERE billing_owner_user_id = ?").get(ownerId) as any;
+    // organization.newOrganization: true starts a separate organization even when the owner already bills one
+    // (2026-10-27, Michael Q14: a demo system he owns must not fold into his "A - Veritas QA System"). Without it the
+    // owner's existing organization is reused and renamed, as before.
+    const newOrganization = organization?.newOrganization === true;
+    const existingOrg = newOrganization ? null : sqlite.prepare("SELECT id, name, active_seat_pool FROM organizations WHERE billing_owner_user_id = ?").get(ownerId) as any;
 
     if (dryRun === true) {
       return res.json({
         dryRun: true,
-        org: { name: orgName, billingOwnerUserId: ownerId, plan: orgPlan, activeSeatPool: plannedPool, reuseExisting: !!existingOrg, existingOrgId: existingOrg?.id ?? null },
+        org: { name: orgName, billingOwnerUserId: ownerId, plan: orgPlan, activeSeatPool: plannedPool, newOrganization, reuseExisting: !!existingOrg, existingOrgId: existingOrg?.id ?? null },
         labs: labPlan,
         errors,
       });
