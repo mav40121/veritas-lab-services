@@ -2313,7 +2313,45 @@ function BottomPDFButton({ study, results }: { study: Study; results: StudyResul
   );
 }
 
+// BUG-084 (2026-10-28): a study saved in a shape this page cannot read (an early data format, or data that does not fit
+// its study type) threw during render and took the whole app down to the global "Something went wrong" screen. This
+// boundary keeps it to the study: a plain message, the study number to quote, and the way back to My Studies.
+class UnreadableStudyBoundary extends React.Component<{ children: React.ReactNode; studyId: string; backHref: string }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  componentDidCatch(error: Error) {
+    console.error(`Study ${this.props.studyId} could not be displayed:`, error);
+  }
+  render() {
+    if (!this.state.failed) return this.props.children;
+    return (
+      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-16 text-center" data-testid="study-unreadable">
+        <h2 className="text-xl font-bold mb-2">This study can't be displayed</h2>
+        <p className="text-muted-foreground mb-6">
+          Study #{this.props.studyId} was saved in a format this page can't read, so its results can't be shown or printed here.
+          Nothing in it was changed. Write to info@veritaslabservices.com with the study number and we will fix it.
+        </p>
+        <div className="flex gap-3 justify-center">
+          <Button variant="outline" asChild><Link href={this.props.backHref}>My Studies</Link></Button>
+        </div>
+      </div>
+    );
+  }
+}
+
 export default function StudyResults() {
+  const params = useParams<{ id: string }>();
+  const labRoute = useLabRoute();
+  return (
+    <UnreadableStudyBoundary key={params.id} studyId={params.id || ""} backHref={labRoute("/dashboard")}>
+      <StudyResultsPage />
+    </UnreadableStudyBoundary>
+  );
+}
+
+function StudyResultsPage() {
   const params = useParams<{ id: string }>();
   const id = parseInt(params.id || "0");
   const { isLoggedIn } = useAuth();
