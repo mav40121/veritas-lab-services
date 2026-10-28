@@ -92,6 +92,7 @@ export const EXPORT_TABLES: Record<string, ExportTable> = {
   competency_assessments: child("VeritaComp", "program_id", "competency_programs"),
   competency_assessment_items: child("VeritaComp", "assessment_id", "competency_assessments"),
   competency_checklist_items: child("VeritaComp", "program_id", "competency_programs"),
+  competency_checklist_images: lab("VeritaComp"),
   competency_element_documents: child("VeritaComp", "assessment_id", "competency_assessments"),
   competency_method_groups: child("VeritaComp", "program_id", "competency_programs"),
   competency_quiz_results: child("VeritaComp", "assessment_id", "competency_assessments"),
