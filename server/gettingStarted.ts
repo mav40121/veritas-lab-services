@@ -11,6 +11,8 @@
 // "todo" with the reason in `detail`, never "done".
 import type Database from "better-sqlite3";
 import { SYSTEM_PHASES, MANUAL_STEP_KEYS, SYSTEM_STEP_COUNT, type GuideStep } from "@shared/gettingStartedContent";
+import { needsNoPhiAcknowledgment } from "./noPhiAcknowledgment";
+import { DEMO_USER_EMAIL } from "./constants";
 
 export type StepStatus = "done" | "todo" | "manual";
 export interface ScoredStep extends GuideStep {
@@ -45,7 +47,7 @@ export function computeGettingStarted(sqlite: Database.Database, labId: number, 
 
   const lab = sqlite.prepare("SELECT id, lab_name, clia_number, owner_user_id, medical_director_name, medical_director_email FROM labs WHERE id = ?").get(labId) as any;
   const owner = lab?.owner_user_id ?? userId;
-  const user = sqlite.prepare("SELECT name, hipaa_acknowledged, hipaa_acknowledged_at FROM users WHERE id = ?").get(userId) as any;
+  const user = sqlite.prepare(`SELECT name, email, hipaa_acknowledged, hipaa_acknowledged_at${hasCol("users", "hipaa_ack_source") ? ", hipaa_ack_source" : ""} FROM users WHERE id = ?`).get(userId) as any;
   // Count rows of a table that belong to this lab: lab_id, else account_id, else the owner's user_id.
   const scoped = (table: string, extra = ""): number => {
     if (hasCol(table, "lab_id")) return n(`SELECT COUNT(*) AS n FROM ${table} WHERE lab_id = ? ${extra}`, labId);
@@ -68,7 +70,8 @@ export function computeGettingStarted(sqlite: Database.Database, labId: number, 
         return { status: ok ? "done" : "todo", detail: ok ? `Signed in as ${user.name}.` : "Your profile has no display name yet." };
       }
       case "p1.hipaa": {
-        const ok = !!(user?.hipaa_acknowledged || user?.hipaa_acknowledged_at);
+        // BUG-083: done only when the acknowledgment is the person's own click.
+        const ok = !!user && !needsNoPhiAcknowledgment(user, DEMO_USER_EMAIL);
         return { status: ok ? "done" : "todo", detail: ok ? `HIPAA acknowledged ${String(user.hipaa_acknowledged_at || "").slice(0, 10)}.` : "HIPAA acknowledgment not on file for your account." };
       }
       case "p1.identity": {
