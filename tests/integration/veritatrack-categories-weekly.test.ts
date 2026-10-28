@@ -176,10 +176,14 @@ async function main() {
     await signoff(b, wkIn3.body.id, addLabDays(today, -4));
     const wkTomorrow = await mkTask(b, { name: "Weekly tomorrow", category: "Other", frequency: "Weekly" });
     await signoff(b, wkTomorrow.body.id, addLabDays(today, -6));
-    const moIn3 = await mkTask(b, { name: "Monthly in 3", category: "Other", frequency: "Monthly" });
-    await signoff(b, moIn3.body.id, addLabDays(addLabDays(today, 3), 0, -1));
+    // The monthly task must fall due on a ladder day. 3 days out works except near a month end: on 10/28 the target
+    // is 10/31, and no September sign-off falls due on 10/31 (9/30 + 1 month = 10/30), so the test failed on those
+    // days only. Use the first of 3, 7, 14 days out that a monthly sign-off can land on exactly.
+    const moLead = [3, 7, 14].find((k) => { const due = addLabDays(today, k); return addLabDays(addLabDays(due, 0, -1), 0, 1) === due; })!;
+    const moIn3 = await mkTask(b, { name: `Monthly in ${moLead}`, category: "Other", frequency: "Monthly" });
+    await signoff(b, moIn3.body.id, addLabDays(addLabDays(today, moLead), 0, -1));
     const summary = await runVeritaTrackReminders();
-    check("5a. reminders: weekly due in 3 days is quiet, weekly due tomorrow and monthly due in 3 days are reminded (2 of 3)", rem.status === 200 && summary.labs === 1 && summary.tasksChecked === 3 && summary.notifiable === 2, JSON.stringify(summary));
+    check(`5a. reminders: weekly due in 3 days is quiet, weekly due tomorrow and monthly due in ${moLead} days are reminded (2 of 3)`, rem.status === 200 && summary.labs === 1 && summary.tasksChecked === 3 && summary.notifiable === 2, JSON.stringify(summary));
   } finally {
     server.close();
   }
