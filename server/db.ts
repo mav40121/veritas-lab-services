@@ -1581,6 +1581,30 @@ sqlite.exec(`
   }
 }
 
+// Not applicable on one program (2026-10-28, BUG-115, RFGH Brandy Morgan: "To mark an employee N/A for something they
+// do not perform ... how do I do so without inactivating them mistakenly?"). Every program lists every active person in
+// the lab; a row here takes one person off ONE program (no "Not assessed", not offered for a new assessment) without
+// touching competency_employees.status or VeritaStaff. Deleting the row makes the program apply to them again.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS competency_program_not_applicable (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    program_id INTEGER NOT NULL,
+    employee_id INTEGER NOT NULL,
+    reason TEXT,
+    marked_by_user_id INTEGER,
+    marked_at TEXT NOT NULL,
+    UNIQUE (program_id, employee_id)
+  )
+`);
+{
+  const naCols = (sqlite.prepare("PRAGMA table_info(competency_program_not_applicable)").all() as Array<{ name: string }>).map((c) => c.name);
+  for (const [col, colType] of [["program_id", "INTEGER"], ["employee_id", "INTEGER"], ["reason", "TEXT"], ["marked_by_user_id", "INTEGER"], ["marked_at", "TEXT"]] as const) {
+    if (!naCols.includes(col)) {
+      try { sqlite.exec(`ALTER TABLE competency_program_not_applicable ADD COLUMN ${col} ${colType}`); } catch {}
+    }
+  }
+}
+
 // Per-method competency sign-off (2026-10-13, Michael Q156/Q158): one row per person, per method (instrument), per
 // competency (initial, 6-month, first annual, annual). Signing freezes that method's items (items.signoff_id); the
 // person's other methods stay open. revoked_at reopens the method (Unlock). The signer is a VeritaStaff person whose

@@ -143,6 +143,7 @@ class DatabaseStorage implements IStorage {
       sqlite.prepare("DELETE FROM competency_assessments WHERE program_id IN (SELECT id FROM competency_programs WHERE user_id = ?)").run(id);
       sqlite.prepare("DELETE FROM competency_method_groups WHERE program_id IN (SELECT id FROM competency_programs WHERE user_id = ?)").run(id);
       sqlite.prepare("DELETE FROM competency_checklist_items WHERE program_id IN (SELECT id FROM competency_programs WHERE user_id = ?)").run(id);
+      sqlite.prepare("DELETE FROM competency_program_not_applicable WHERE program_id IN (SELECT id FROM competency_programs WHERE user_id = ?)").run(id);
       sqlite.prepare("DELETE FROM veritascan_items WHERE scan_id IN (SELECT id FROM veritascan_scans WHERE user_id = ?)").run(id);
       sqlite.prepare("DELETE FROM cumsum_entries WHERE tracker_id IN (SELECT id FROM cumsum_trackers WHERE user_id = ?)").run(id);
       sqlite.prepare("DELETE FROM veritamap_amr_values WHERE map_id IN (SELECT id FROM veritamap_maps WHERE user_id = ?)").run(id);
