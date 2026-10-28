@@ -115,6 +115,13 @@ interface Program {
   checklistItems: ChecklistItem[];
   // BUG-114: picture id -> picture for the checklist items and the assessment items (program detail only).
   checklistImages?: Record<string, string>;
+  // BUG-115: people marked Not applicable on this program (program detail only).
+  notApplicable?: { employee_id: number; reason: string | null; marked_at: string }[];
+}
+
+// BUG-115: the ids of people marked Not applicable on this program.
+function notApplicableSet(program: Pick<Program, "notApplicable">): Set<number> {
+  return new Set((program.notApplicable || []).map(r => Number(r.employee_id)));
 }
 
 // The picture a checklist item or a saved assessment item points at, from the program's picture map.
@@ -2267,7 +2274,7 @@ function ProgramDetailView({ programId }: { programId: number }) {
       {/* Tab content */}
       {activeTab === "overview" && <OverviewTab program={program} />}
       {activeTab === "assessments" && <AssessmentsTab program={program} onNewAssessment={() => setNewAssessmentOpen(true)} onEdit={(a) => setEditingAssessment(a)} />}
-      {activeTab === "employees" && <EmployeesTab employees={program.employees || []} programId={program.id} />}
+      {activeTab === "employees" && <EmployeesTab employees={program.employees || []} programId={program.id} programName={program.name} notApplicable={notApplicableSet(program)} />}
       {activeTab === "quizzes" && <QuizzesTab program={program} autoOpenNew={initialNewQuiz && !isReadOnly} />}
       {activeTab === "settings" && <SettingsTab program={program} />}
 
@@ -2396,6 +2403,7 @@ function OverviewTab({ program }: { program: Program & { employees: Employee[]; 
   const employees = program.employees || [];
   const assessments = program.assessments || [];
   const activeEmployees = employees.filter(e => e.status === "active");
+  const notApplicable = notApplicableSet(program);
   const activeLabId = useActiveLabId();
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -2439,7 +2447,7 @@ function OverviewTab({ program }: { program: Program & { employees: Employee[]; 
       {/* Stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
-          { label: "Employees", value: activeEmployees.length, icon: Users },
+          { label: "Employees", value: activeEmployees.filter(e => !notApplicable.has(e.id)).length, icon: Users },
           { label: "Assessments", value: assessments.length, icon: ClipboardCheck },
           { label: "Passing", value: assessments.filter(a => a.status === "pass").length, icon: CheckCircle2 },
           { label: "Remediation", value: assessments.filter(a => a.status === "remediation" || a.status === "fail").length, icon: AlertTriangle },
@@ -2488,10 +2496,12 @@ function OverviewTab({ program }: { program: Program & { employees: Employee[]; 
             {activeEmployees.map(emp => {
               const empAssessments = assessments.filter(a => a.employee_id === emp.id);
               const latest = empAssessments[0];
-              const statusColor = !latest ? "text-muted-foreground bg-muted" :
+              // BUG-115: someone marked Not applicable on this program is never "Not assessed" here.
+              const na = notApplicable.has(emp.id);
+              const statusColor = na ? "text-muted-foreground bg-muted" : !latest ? "text-muted-foreground bg-muted" :
                 latest.status === "pass" ? "text-emerald-600 bg-emerald-500/10" :
                 "text-red-600 bg-red-500/10";
-              const statusLabel = !latest ? "Not assessed" :
+              const statusLabel = na ? "Not applicable" : !latest ? "Not assessed" :
                 latest.status === "pass" ? "Current" :
                 latest.status === "fail" ? "Failed" : "Remediation";
               return (
@@ -3230,7 +3240,7 @@ function AssessmentDocumentsDialog({ assessmentId, onClose }: { assessmentId: nu
 
 // ── Employees Tab ──────────────────────────────────────────────────────
 
-function EmployeesTab({ employees, programId }: { employees: Employee[]; programId: number }) {
+function EmployeesTab({ employees, programId, programName, notApplicable }: { employees: Employee[]; programId: number; programName: string; notApplicable: Set<number> }) {
   // #84 Phase 3: VeritaComp writes need VeritaComp edit (server-enforced).
   const isReadOnly = useIsReadOnly("veritacomp");
   const qc = useQueryClient();
@@ -3293,11 +3303,38 @@ function EmployeesTab({ employees, programId }: { employees: Employee[]; program
     qc.invalidateQueries({ queryKey: [programDetailKey] });
   };
 
+  // BUG-115 (2026-10-28): take one person off THIS program only, or put them back. Their status, VeritaStaff record,
+  // other programs and saved assessments are untouched (server/competencyNotApplicable.ts).
+  const [naBusy, setNaBusy] = useState<number | null>(null);
+  const setNotApplicable = async (emp: Employee, on: boolean) => {
+    if (!activeLabId) return;
+    setNaBusy(emp.id);
+    try {
+      const base = `${API_BASE}/api/labs/${activeLabId}/competency/programs/${programId}/not-applicable`;
+      const res = on
+        ? await fetch(base, { method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() }, body: JSON.stringify({ employeeId: emp.id }) })
+        : await fetch(`${base}/${emp.id}`, { method: "DELETE", headers: authHeaders() });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast({ title: "No change made", description: err.error || `HTTP ${res.status}`, variant: "destructive" });
+        return;
+      }
+      await qc.invalidateQueries({ queryKey: [programDetailKey] });
+      toast({ title: on ? `${emp.name}: Not applicable` : `${emp.name}: applies again`, description: on ? `Taken off ${programName} only. Still active everywhere else.` : `${programName} applies to ${emp.name} again.` });
+    } catch {
+      toast({ title: "No change made", description: "Network error.", variant: "destructive" });
+    } finally {
+      setNaBusy(null);
+    }
+  };
+  const activeCount = employees.filter(e => e.status === "active").length;
+  const naCount = employees.filter(e => e.status === "active" && notApplicable.has(e.id)).length;
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <p className="text-sm text-muted-foreground">
-          {employees.filter(e => e.status === "active").length} active employee(s)
+        <p className="text-sm text-muted-foreground" data-testid="employees-count">
+          {activeCount} active employee(s){naCount > 0 && `, ${naCount} not applicable to this competency`}
         </p>
         <Dialog open={addOpen} onOpenChange={setAddOpen}>
           <DialogTrigger asChild>
@@ -3348,12 +3385,15 @@ function EmployeesTab({ employees, programId }: { employees: Employee[]; program
                 <th className="text-left p-3 font-medium text-xs">Hire Date</th>
                 <th className="text-left p-3 font-medium text-xs">LIS</th>
                 <th className="text-left p-3 font-medium text-xs">Status</th>
+                <th className="text-left p-3 font-medium text-xs">This competency</th>
                 <th className="p-3 w-10"></th>
               </tr>
             </thead>
             <tbody>
-              {employees.map(emp => (
-                <tr key={emp.id} className="border-b border-border last:border-0">
+              {employees.map(emp => {
+                const na = notApplicable.has(emp.id);
+                return (
+                <tr key={emp.id} className="border-b border-border last:border-0" data-testid={`employee-row-${emp.id}`}>
                   <td className="p-3 font-medium">{emp.name}</td>
                   <td className="p-3 text-muted-foreground">{emp.title || "-"}</td>
                   <td className="p-3 text-muted-foreground">{emp.hire_date || "-"}</td>
@@ -3364,21 +3404,45 @@ function EmployeesTab({ employees, programId }: { employees: Employee[]; program
                     </Badge>
                   </td>
                   <td className="p-3">
+                    {emp.status === "active" && (
+                      <div className="flex items-center gap-2">
+                        {na && <Badge variant="outline" className="text-[10px] text-muted-foreground bg-muted" data-testid={`na-badge-${emp.id}`}>Not applicable</Badge>}
+                        {!isReadOnly && activeLabId && (na ? (
+                          <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" disabled={naBusy === emp.id} onClick={() => setNotApplicable(emp, false)} data-testid={`na-clear-${emp.id}`}>
+                            Applies again
+                          </Button>
+                        ) : (
+                          <ConfirmDialog
+                            title="Not applicable to this competency?"
+                            message={`Mark ${emp.name} Not applicable on ${programName}? This competency stops listing them as Not assessed and leaves them out of New Assessment. They stay active in VeritaStaff and in every other competency, and anything already saved here is kept. You can undo it here with Applies again.`}
+                            confirmLabel="Mark not applicable"
+                            onConfirm={() => setNotApplicable(emp, true)}
+                          >
+                            <Button variant="outline" size="sm" className="h-7 px-2 text-xs" disabled={naBusy === emp.id} data-testid={`na-mark-${emp.id}`}>
+                              Mark not applicable
+                            </Button>
+                          </ConfirmDialog>
+                        ))}
+                      </div>
+                    )}
+                  </td>
+                  <td className="p-3">
                     {emp.status === "active" && !isReadOnly && (
                       <ConfirmDialog
-                        title="Deactivate Employee?"
-                        message={`Deactivate ${emp.name}? Their competency records will be retained but they will be marked inactive.`}
-                        confirmLabel="Deactivate"
+                        title="Deactivate in every competency?"
+                        message={`Deactivate ${emp.name} in VeritaComp? This takes them off EVERY competency program in this lab, not just ${programName}. Their records are kept. To take them off only this competency, use Not applicable instead.`}
+                        confirmLabel="Deactivate everywhere"
                         onConfirm={() => deactivate(emp.id)}
                       >
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive">
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" title="Deactivate in every competency program" aria-label={`Deactivate ${emp.name} in every competency program`} data-testid={`deactivate-${emp.id}`}>
                           <X size={14} />
                         </Button>
                       </ConfirmDialog>
                     )}
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -3592,8 +3656,11 @@ function NewAssessmentDialog({
     for (const e of eligible?.employees || []) {
       if (!seen.has(e.id)) { list.push(e); seen.add(e.id); }
     }
-    return list;
-  }, [employees, eligible]);
+    // BUG-115: people marked Not applicable on this program are not offered (the server refuses them too); a record
+    // being edited keeps its own person.
+    const na = notApplicableSet(program);
+    return list.filter(e => !na.has(e.id) || e.id === editing?.employee_id);
+  }, [employees, eligible, program.notApplicable, editing?.employee_id]);
   // Hint count = roster members assigned to this program's instruments (whether
   // or not they were already bridged on an earlier open), so the hint is stable.
   const rosterOnlyCount = (eligible?.employees || []).length;

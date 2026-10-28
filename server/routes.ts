@@ -218,6 +218,7 @@ import { loadQualifiedObservers, observerProblem, itemObserverEntries, storedObs
 import { summarizeCspReport, cspHeaderName } from "./securityHeaders";
 import { normalizeChecklistItems } from "@shared/competencyChecklist";
 import { checklistImageIdProblem, checklistItemImageIds, checklistForAudit, checklistImageMap, withChecklistImages, snapshotChecklistItemImages } from "./competencyChecklistImages";
+import { notApplicableRows, notApplicableIds, notApplicableProblem, NOT_APPLICABLE_REASON_MAX } from "./competencyNotApplicable";
 import { assessmentTypeLabel, assessmentTypeProblem, isEvaluationProgram, normalizeRecordKind } from "@shared/competencyEvaluation";
 import { normalizeSpecimen, normalizeReportableField, specimenLabel } from "@shared/veritamapSpecimen";
 import { buildCompetencyRegisterRows, generateCompetencyRegisterExcel } from "./competencyRegisterExcel";
@@ -24157,7 +24158,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       ...(checklistItems as any[]).map((c) => c.image_id),
       ...assessmentsWithItems.flatMap((a: any) => (a.items as any[]).map((i) => i.nt_item_image_id)),
     ]);
-    res.json({ ...program, methodGroups, checklistItems, checklistImages, employees, assessments: assessmentsWithItems });
+    // BUG-115: the people marked Not applicable on this program.
+    const notApplicable = notApplicableRows((db as any).$client, program.id);
+    res.json({ ...program, methodGroups, checklistItems, checklistImages, employees, assessments: assessmentsWithItems, notApplicable });
   }
 
   app.get("/api/competency/programs/:id", authMiddleware, (req: any, res) => {
@@ -24251,6 +24254,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const ownerRow = client.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(labId) as any;
     const ownerUserId = ownerRow?.owner_user_id ?? req.userId;
     const now = new Date().toISOString();
+    // BUG-115: people marked Not applicable on this program are not offered for a new assessment on it.
+    const notApplicable = notApplicableIds(client, program.id);
     const employees = Array.from(byStaff.values()).map((s) => {
       let comp = client.prepare("SELECT id, name, status FROM competency_employees WHERE staff_employee_id = ? AND lab_id = ?").get(s.id, labId) as any;
       if (!comp) {
@@ -24260,7 +24265,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         comp = { id: Number(r.lastInsertRowid), name: s.name, status: "active" };
       }
       return { id: comp.id, name: comp.name || s.name, title: s.title, hire_date: s.hire_date, status: comp.status || "active", staff_employee_id: s.id, instruments: Array.from(s.instruments).sort() };
-    }).filter((e) => e.status === "active");
+    }).filter((e) => e.status === "active" && !notApplicable.has(Number(e.id)));
     res.json({ programId: program.id, matchedBy: wanted.size > 0 ? "program-instruments" : "any-instrument", instruments: Array.from(wanted).sort(), employees });
   });
 
@@ -24399,6 +24404,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // delete-reinsert-ok: program delete cascade (this line and the next); nothing is re-inserted
     (db as any).$client.prepare("DELETE FROM competency_method_groups WHERE program_id = ?").run(req.params.id);
     (db as any).$client.prepare("DELETE FROM competency_checklist_items WHERE program_id = ?").run(req.params.id);
+    (db as any).$client.prepare("DELETE FROM competency_program_not_applicable WHERE program_id = ?").run(req.params.id);
     (db as any).$client.prepare("DELETE FROM competency_programs WHERE id = ?").run(req.params.id);
     res.json({ ok: true });
   });
@@ -24666,6 +24672,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     (db as any).$client.prepare("DELETE FROM competency_assessments WHERE program_id = ?").run(req.params.id);
     (db as any).$client.prepare("DELETE FROM competency_method_groups WHERE program_id = ?").run(req.params.id);
     (db as any).$client.prepare("DELETE FROM competency_checklist_items WHERE program_id = ?").run(req.params.id);
+    (db as any).$client.prepare("DELETE FROM competency_program_not_applicable WHERE program_id = ?").run(req.params.id);
     (db as any).$client.prepare("DELETE FROM competency_programs WHERE id = ?").run(req.params.id);
     res.json({ ok: true });
   });
@@ -24679,6 +24686,41 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (!emp) return res.status(404).json({ error: "Employee not found" });
     (db as any).$client.prepare("UPDATE competency_employees SET status = 'inactive' WHERE id = ?").run(req.params.id);
     res.json({ ok: true });
+  });
+
+  // BUG-115 (2026-10-28): mark a person Not applicable on ONE program, or clear it. Never changes the person's status,
+  // VeritaStaff, other programs, or assessments already saved. Lab-scoped only: the program and the person must both
+  // belong to the URL's lab.
+  const notApplicableTargets = (req: any) => {
+    const client = (db as any).$client;
+    const program = client.prepare("SELECT id, name FROM competency_programs WHERE id = ? AND lab_id = ?").get(req.params.id, req.scope.labId) as any;
+    const employeeId = Number(req.params.employeeId ?? req.body?.employeeId);
+    const emp = Number.isInteger(employeeId) && employeeId > 0
+      ? client.prepare("SELECT id, name FROM competency_employees WHERE id = ? AND lab_id = ?").get(employeeId, req.scope.labId) as any
+      : null;
+    return { client, program, emp };
+  };
+  app.post("/api/labs/:labId/competency/programs/:id/not-applicable", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const { client, program, emp } = notApplicableTargets(req);
+    if (!program) return res.status(404).json({ error: "Program not found" });
+    if (!emp) return res.status(404).json({ error: "Employee not found in this lab" });
+    const reason = typeof req.body?.reason === "string" && req.body.reason.trim() ? req.body.reason.trim() : null;
+    if (reason && reason.length > NOT_APPLICABLE_REASON_MAX) return res.status(400).json({ error: `Keep the reason under ${NOT_APPLICABLE_REASON_MAX} characters.` });
+    const r = client.prepare(
+      "INSERT OR IGNORE INTO competency_program_not_applicable (program_id, employee_id, reason, marked_by_user_id, marked_at) VALUES (?, ?, ?, ?, ?)",
+    ).run(program.id, emp.id, reason, req.userId ?? req.user?.userId ?? null, new Date().toISOString());
+    if (r.changes) logAudit({ userId: req.userId ?? req.user?.userId, ownerUserId: req.ownerUserId ?? req.userId ?? req.user?.userId, module: "veritacomp", action: "update", entityType: "program_not_applicable", entityId: `${program.id}:${emp.id}`, entityLabel: `${emp.name} / ${program.name}`, before: { notApplicable: false }, after: { notApplicable: true, reason }, ipAddress: req.ip });
+    res.json({ ok: true, notApplicable: notApplicableRows(client, program.id) });
+  });
+  app.delete("/api/labs/:labId/competency/programs/:id/not-applicable/:employeeId", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const { client, program, emp } = notApplicableTargets(req);
+    if (!program) return res.status(404).json({ error: "Program not found" });
+    if (!emp) return res.status(404).json({ error: "Employee not found in this lab" });
+    const r = client.prepare("DELETE FROM competency_program_not_applicable WHERE program_id = ? AND employee_id = ?").run(program.id, emp.id);
+    if (r.changes) logAudit({ userId: req.userId ?? req.user?.userId, ownerUserId: req.ownerUserId ?? req.userId ?? req.user?.userId, module: "veritacomp", action: "update", entityType: "program_not_applicable", entityId: `${program.id}:${emp.id}`, entityLabel: `${emp.name} / ${program.name}`, before: { notApplicable: true }, after: { notApplicable: false }, ipAddress: req.ip });
+    res.json({ ok: true, notApplicable: notApplicableRows(client, program.id) });
   });
 
   // ── ASSESSMENTS ───────────────────────────────────────────────────────────
@@ -24710,6 +24752,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (obsProblem) return res.status(400).json({ error: obsProblem });
     const emp = userCanAccessLabRow('competency_employees', employeeId, req);
     if (!emp) return res.status(404).json({ error: "Employee not found" });
+    const naProblem = notApplicableProblem((db as any).$client, programId, employeeId); // BUG-115
+    if (naProblem) return res.status(400).json({ error: naProblem });
     const now = new Date().toISOString();
     // reviewPeriodStart / reviewPeriodEnd added 2026-06-05 customer-blockers
     // wave. If the client doesn't supply them, derive sensible defaults so
@@ -25130,6 +25174,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       "SELECT * FROM competency_employees WHERE id = ? AND lab_id = ?"
     ).get(resolvedEmployeeId, labId);
     if (!emp) return res.status(404).json({ error: "Employee not found" });
+    // BUG-115: no new assessment on a program the person is marked Not applicable on.
+    const naProblem = notApplicableProblem((db as any).$client, programId, resolvedEmployeeId);
+    if (naProblem) return res.status(400).json({ error: naProblem });
     const now = new Date().toISOString();
     const aDate = assessmentDate || labToday();
     const defEnd = aDate;

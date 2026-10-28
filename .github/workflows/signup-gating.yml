@@ -286,6 +286,10 @@ jobs:
         # BUG-114 (RFGH Brandy Morgan 10/28): a checklist item carries one picture, stored once per lab; saved
         # assessments keep the picture they were done on; another lab's picture id is refused; no picture in the audit log.
         run: npm run test:competency-checklist-pictures
+      - name: Run competency Not applicable integration test
+        # BUG-115 (RFGH Brandy Morgan 10/28): a person can be marked Not applicable on ONE program without being
+        # deactivated; that program refuses a new assessment for them and does not offer them; other programs still apply.
+        run: npm run test:competency-not-applicable
       - name: Run VeritaComp new-hire evaluation integration test
         # Sampson REQ-076: 30/60/90-day evaluations titled Evaluation, due from hire date, types checked, new hires
         # with no instrument listed, kept out of competency compliance, PDF never says competency.
