@@ -3,6 +3,7 @@ import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "@shared/schema";
 import { OWNER_EMAIL, OWNER_CLIA } from "./constants";
 import { existsSync as _dbExistsSync } from "fs";
+import { classifyExistingNoPhiAcknowledgments } from "./noPhiAcknowledgment";
 
 // Use /data volume if available (Railway persistent volume), otherwise local
 const DB_PATH = process.env.DB_PATH || (_dbExistsSync('/data') ? '/data/veritas.db' : 'veritas.db');
@@ -8890,4 +8891,17 @@ try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_veritaceu_profiles_lab ON veri
 {
   const cols = (sqlite.prepare("PRAGMA table_info(labs)").all() as any[]).map((c: any) => c.name);
   if (!cols.includes("weekly_export_enabled")) { try { sqlite.exec("ALTER TABLE labs ADD COLUMN weekly_export_enabled INTEGER NOT NULL DEFAULT 0"); } catch {} }
+}
+
+// No-PHI acknowledgment source (BUG-083, Michael Q66 = 1, 2026-10-28; server/noPhiAcknowledgment.ts). Existing rows are
+// classified ONCE, in the same step that adds the column, so a later boot never re-derives them.
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(users)").all() as any[]).map((c: any) => c.name);
+  if (!cols.includes("hipaa_ack_source")) {
+    try {
+      sqlite.exec("ALTER TABLE users ADD COLUMN hipaa_ack_source TEXT");
+      const r = classifyExistingNoPhiAcknowledgments(sqlite);
+      console.log(`[migration] hipaa_ack_source added: ${r.onBehalf} set up by Veritas (asked at next sign-in), ${r.signup} from the sign-up form`);
+    } catch (e: any) { console.error("[migration] hipaa_ack_source:", e?.message); }
+  }
 }

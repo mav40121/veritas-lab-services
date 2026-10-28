@@ -219,6 +219,7 @@ import { summarizeCspReport, cspHeaderName } from "./securityHeaders";
 import { normalizeChecklistItems } from "@shared/competencyChecklist";
 import { checklistImageIdProblem, checklistItemImageIds, checklistForAudit, checklistImageMap, withChecklistImages, snapshotChecklistItemImages } from "./competencyChecklistImages";
 import { notApplicableRows, notApplicableIds, notApplicableProblem, NOT_APPLICABLE_REASON_MAX } from "./competencyNotApplicable";
+import { noPhiAcknowledgmentStatus, recordNoPhiAcknowledgment } from "./noPhiAcknowledgment";
 import { assessmentTypeLabel, assessmentTypeProblem, isEvaluationProgram, normalizeRecordKind } from "@shared/competencyEvaluation";
 import { normalizeSpecimen, normalizeReportableField, specimenLabel } from "@shared/veritamapSpecimen";
 import { buildCompetencyRegisterRows, generateCompetencyRegisterExcel } from "./competencyRegisterExcel";
@@ -1703,6 +1704,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
     try {
       const rows = (db as any).$client.prepare(sql).all(...params) as any[];
+      // BUG-083: "HIPAA Ack" is Yes only for the person's own click, never one Veritas recorded for them.
+      for (const r of rows) if (r.hipaa_ack_source === "on_behalf") r.hipaa_acknowledged = 0;
 
       // ── Study attribution pass ─────────────────────────────────────────
       // For each user, sum studies they ran. Two signals:
@@ -3413,9 +3416,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const u = storage.createUser(normEmail, throwaway, ownerName ? String(ownerName) : "");
       newUserId = u.id;
       sqlite.exec("BEGIN");
+      // BUG-083: the no-PHI acknowledgment is left for the owner's own click at first sign-in
+      // (server/noPhiAcknowledgment.ts); Veritas does not record it for them.
       sqlite.prepare(
-        "UPDATE users SET hipaa_acknowledged = 1, hipaa_acknowledged_at = ?, plan = ?, seat_count = ? WHERE id = ?"
-      ).run(now, resolvedPlan, seatN, newUserId);
+        "UPDATE users SET plan = ?, seat_count = ? WHERE id = ?" // PHASE5-OK provision-owner-lab onboarding state
+      ).run(resolvedPlan, seatN, newUserId);
       const labResult = sqlite.prepare(
         `INSERT INTO labs (
           clia_number, lab_name, owner_user_id,
@@ -6576,9 +6581,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         const placeholderHash = await bcrypt.hash(crypto.randomBytes(32).toString("hex"), 10);
         const newUser = storage.createUser(normalizedEmail, placeholderHash, billing_contact_name);
         userId = newUser.id;
+        // BUG-083: the billing contact's form has no no-PHI acknowledgment; the account holder gives it at first sign-in.
         db.$client.prepare(
-          "UPDATE users SET plan = 'pending_invoice', hipaa_acknowledged = 1, hipaa_acknowledged_at = ? WHERE id = ?" // PHASE5-OK pending-invoice onboarding state
-        ).run(new Date().toISOString(), userId);
+          "UPDATE users SET plan = 'pending_invoice' WHERE id = ?" // PHASE5-OK pending-invoice onboarding state
+        ).run(userId);
       }
 
       // Generate password reset token (1 hour expiry)
@@ -6923,6 +6929,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       (db as any).$client.prepare(
         "UPDATE users SET hipaa_acknowledged = 1, hipaa_acknowledged_at = ?, plan = ?, seat_count = ?, hospital_name = ?, hospital_state = ?, bed_count = ?, signup_selected_tier = ? WHERE id = ?"
       ).run(new Date().toISOString(), selectedPlan, selectedSeatCount, effHospitalName, effHospitalState, effBedCount, signupSelectedTier, user.id);
+      // BUG-083: the acknowledgment above is the person's own click on this form.
+      try { (db as any).$client.prepare("UPDATE users SET hipaa_ack_source = 'signup' WHERE id = ?").run(user.id); } catch {}
       // Also update in-memory storage so the returned user object reflects the new plan
       storage.updateUserPlan(user.id, selectedPlan, user.studyCredits);
     } catch {}
@@ -7383,6 +7391,18 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       },
     };
   }
+
+  // No-PHI acknowledgment at sign-in (BUG-083, Michael Q66 = 1): an account whose acknowledgment is not the person's
+  // own click (set up by Veritas, or older than the sign-up checkbox) is asked once; this records that click.
+  app.get("/api/auth/no-phi-acknowledgment", authMiddleware, (req: any, res) => {
+    res.json(noPhiAcknowledgmentStatus((db as any).$client, req.userId, DEMO_USER_EMAIL));
+  });
+  app.post("/api/auth/no-phi-acknowledgment", authMiddleware, (req: any, res) => {
+    if (req.body?.acknowledged !== true) return res.status(400).json({ error: "Check the box to acknowledge the no-PHI rule." });
+    const r = recordNoPhiAcknowledgment((db as any).$client, req.userId, DEMO_USER_EMAIL);
+    if (r.recorded) console.log(`[no-phi-ack] user ${req.userId} acknowledged at sign-in ${r.acknowledgedAt}`);
+    res.json({ ok: true, ...r });
+  });
 
   app.get("/api/auth/me", authMiddleware, (req: any, res) => {
     const user = storage.getUserById(req.userId);
