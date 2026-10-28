@@ -1550,6 +1550,37 @@ try { sqlite.exec("ALTER TABLE competency_programs ADD COLUMN is_implicit INTEGE
   }
 }
 
+// Checklist item pictures (2026-10-28, BUG-114, RFGH Brandy Morgan: Gram stain slides on a MediaLab checklist). One
+// picture per item, stored once per lab by its SHA-256 (server/competencyChecklistImages.ts) and referenced by id, so
+// the assessments that snapshot an item (competency_assessment_items.nt_item_image_id) share it rather than copy it.
+// A stored picture is never changed or deleted while referenced; a new picture is a new row.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS competency_checklist_images (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    sha256 TEXT NOT NULL,
+    data_url TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    UNIQUE (lab_id, sha256)
+  )
+`);
+{
+  const imgCols = (sqlite.prepare("PRAGMA table_info(competency_checklist_images)").all() as Array<{ name: string }>).map((c) => c.name);
+  for (const [col, colType] of [["lab_id", "INTEGER"], ["sha256", "TEXT"], ["data_url", "TEXT"], ["created_at", "TEXT"]] as const) {
+    if (!imgCols.includes(col)) {
+      try { sqlite.exec(`ALTER TABLE competency_checklist_images ADD COLUMN ${col} ${colType}`); } catch {}
+    }
+  }
+  const itemCols = (sqlite.prepare("PRAGMA table_info(competency_checklist_items)").all() as Array<{ name: string }>).map((c) => c.name);
+  if (!itemCols.includes("image_id")) {
+    try { sqlite.exec("ALTER TABLE competency_checklist_items ADD COLUMN image_id INTEGER"); } catch {}
+  }
+  const aiCols = (sqlite.prepare("PRAGMA table_info(competency_assessment_items)").all() as Array<{ name: string }>).map((c) => c.name);
+  if (!aiCols.includes("nt_item_image_id")) {
+    try { sqlite.exec("ALTER TABLE competency_assessment_items ADD COLUMN nt_item_image_id INTEGER"); } catch {}
+  }
+}
+
 // Per-method competency sign-off (2026-10-13, Michael Q156/Q158): one row per person, per method (instrument), per
 // competency (initial, 6-month, first annual, annual). Signing freezes that method's items (items.signoff_id); the
 // person's other methods stay open. revoked_at reopens the method (Unlock). The signer is a VeritaStaff person whose

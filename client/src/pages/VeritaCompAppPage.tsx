@@ -113,6 +113,15 @@ interface Program {
   assessmentCount: number;
   methodGroups: MethodGroup[];
   checklistItems: ChecklistItem[];
+  // BUG-114: picture id -> picture for the checklist items and the assessment items (program detail only).
+  checklistImages?: Record<string, string>;
+}
+
+// The picture a checklist item or a saved assessment item points at, from the program's picture map.
+function checklistPicture(program: Pick<Program, "checklistImages">, imageId: number | null | undefined): string | null {
+  if (imageId == null) return null;
+  const src = program.checklistImages?.[String(imageId)];
+  return isQuizImage(src) ? src : null;
 }
 
 interface MethodGroup {
@@ -131,6 +140,7 @@ interface ChecklistItem {
   description: string;
   sort_order: number;
   stage?: string | null; // new-hire evaluation stage ("30day" | "60day" | "90day"); null = every stage
+  image_id?: number | null; // BUG-114: the item's picture, looked up in Program.checklistImages
 }
 
 interface Employee {
@@ -364,8 +374,18 @@ function AutoGrowTextarea(props: ComponentProps<typeof Textarea>) {
 // The non-technical checklist editor: used when a program is set up (New Program, the header shortcut)
 // and on an existing program's Overview tab. Items are re-lettered by position (A..Z, AA, ...). On a new-hire
 // evaluation (stages) each item also picks its stage: the 30, 60 or 90-day evaluation, or every stage.
-type EditableChecklistItem = { label: string; description: string; stage?: string | null };
+// BUG-114 (2026-10-28): each item may carry one picture (a Gram stain slide). `image` is the picture shown; `imageId`
+// is set only while the item keeps the picture it was loaded with, so saving sends the id instead of the picture again.
+type EditableChecklistItem = { label: string; description: string; stage?: string | null; image?: string | null; imageId?: number | null };
 const EVERY_STAGE = "all";
+// The save payload for one item: a kept picture by id, a new one as the picture itself.
+function checklistItemPayload(it: EditableChecklistItem, stage: string | null) {
+  return {
+    description: it.description,
+    stage,
+    ...(it.imageId != null ? { imageId: it.imageId } : isQuizImage(it.image) ? { image: it.image } : {}),
+  };
+}
 function ChecklistItemsEditor({
   items,
   onChange,
@@ -375,6 +395,7 @@ function ChecklistItemsEditor({
   onChange: (items: EditableChecklistItem[]) => void;
   stages?: boolean;
 }) {
+  const { toast } = useToast();
   const relabel = (list: EditableChecklistItem[]) => list.map((it, i) => ({ ...it, label: checklistLabel(i) }));
   const move = (i: number, d: -1 | 1) => {
     const j = i + d;
@@ -388,8 +409,9 @@ function ChecklistItemsEditor({
       {items.map((item, i) => (
         <div key={i} className="flex items-start gap-2" data-testid="checklist-editor-row">
           <span className="text-xs font-bold text-muted-foreground w-7 shrink-0 pt-2">{checklistLabel(i)}.</span>
+          <div className="flex-1 min-w-0 space-y-1.5">
           {/* On a phone the stage picker sits under the item text, so the text keeps the row's width. */}
-          <div className="flex-1 min-w-0 flex flex-col sm:flex-row gap-2">
+          <div className="flex flex-col sm:flex-row gap-2">
           <AutoGrowTextarea
             value={item.description}
             onChange={e => {
@@ -420,6 +442,17 @@ function ChecklistItemsEditor({
               </SelectContent>
             </Select>
           )}
+          </div>
+          <QuizImagePicker
+            value={item.image ?? null}
+            onChange={img => {
+              const next = [...items];
+              next[i] = { ...next[i], image: img, imageId: null };
+              onChange(next);
+            }}
+            onError={message => toast({ title: "Picture not added", description: message, variant: "destructive" })}
+            testId={`checklist-picture-${i}`}
+          />
           </div>
           <div className="flex shrink-0">
             <Button type="button" variant="ghost" size="icon" className="h-8 w-7 text-muted-foreground" disabled={i === 0} onClick={() => move(i, -1)} aria-label={`Move item ${checklistLabel(i)} up`}>
@@ -1828,7 +1861,7 @@ function NewProgramWizard({ onClose, onCreated }: { onClose: () => void; onCreat
   const [type, setType] = useState<"technical" | "waived" | "nontechnical">("technical");
   const [mapId, setMapId] = useState<number | null>(null);
   const [methodGroups, setMethodGroups] = useState<{ name: string; instruments: string[]; analytes: string[] }[]>([]);
-  const [checklistItems, setChecklistItems] = useState<{ label: string; description: string }[]>([]);
+  const [checklistItems, setChecklistItems] = useState<EditableChecklistItem[]>([]);
   const [creating, setCreating] = useState(false);
 
   // Fetch the active lab's VeritaMap maps. Without the lab-scoped URL,
@@ -1894,7 +1927,7 @@ function NewProgramWizard({ onClose, onCreated }: { onClose: () => void; onCreat
           type,
           mapId,
           methodGroups: type === "technical" ? methodGroups : undefined,
-          checklistItems: type === "nontechnical" ? checklistItems : undefined,
+          checklistItems: type === "nontechnical" ? checklistItems.map(it => checklistItemPayload(it, null)) : undefined,
         }),
       });
       if (!res.ok) throw new Error("Failed to create program");
@@ -2271,7 +2304,10 @@ function ChecklistCard({ program }: { program: Program }) {
     ? `/api/labs/${activeLabId}/competency/programs/${program.id}`
     : `/api/competency/programs/${program.id}`;
   const isEval = program.type === "nontechnical" && program.record_kind === "evaluation";
-  const current: EditableChecklistItem[] = (program.checklistItems || []).map(it => ({ label: it.label, description: it.description, stage: it.stage ?? null }));
+  const current: EditableChecklistItem[] = (program.checklistItems || []).map(it => {
+    const image = checklistPicture(program, it.image_id);
+    return { label: it.label, description: it.description, stage: it.stage ?? null, image, imageId: image ? it.image_id ?? null : null };
+  });
   const [editing, setEditing] = useState(() => !isReadOnly && typeof window !== "undefined" && window.location.search.includes("editChecklist=1"));
   const [draft, setDraft] = useState<EditableChecklistItem[]>(() => current.length ? current : defaultChecklistFor(program.department));
   const [saving, setSaving] = useState(false);
@@ -2285,7 +2321,7 @@ function ChecklistCard({ program }: { program: Program }) {
       const res = await fetch(`${API_BASE}${programDetailKey}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ checklistItems: draft.map(it => ({ description: it.description, stage: isEval ? it.stage ?? null : null })) }),
+        body: JSON.stringify({ checklistItems: draft.map(it => checklistItemPayload(it, isEval ? it.stage ?? null : null)) }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -2335,7 +2371,10 @@ function ChecklistCard({ program }: { program: Program }) {
           {current.map(it => (
             <li key={it.label} className="flex gap-2">
               <span className="font-bold text-muted-foreground w-7 shrink-0">{it.label}.</span>
-              <span className="whitespace-pre-line">{it.description}</span>
+              <div className="min-w-0">
+                <span className="whitespace-pre-line">{it.description}</span>
+                <QuizQuestionImage src={it.image} className="mt-1.5 max-h-48 max-w-full rounded border border-border bg-white object-contain" />
+              </div>
               {isEval && (
                 <Badge variant="outline" className="ml-auto shrink-0 h-5 text-[10px]" data-testid={`checklist-stage-badge-${it.label}`}>
                   {it.stage ? assessmentTypeLabel(it.stage) : "Every stage"}
@@ -2849,7 +2888,10 @@ function AssessmentsTab({ program, onNewAssessment, onEdit }: { program: Program
                           return (
                             <tr key={i.id ?? idx} className="border-b border-border/50">
                               <td className="py-1 pr-2">{i.nt_item_label || i.item_label || idx + 1}</td>
-                              <td className="py-1 pr-2">{i.nt_item_description || i.item_description || ""}</td>
+                              <td className="py-1 pr-2">
+                                <div className="whitespace-pre-line">{i.nt_item_description || i.item_description || ""}</div>
+                                <QuizQuestionImage src={checklistPicture(program, i.nt_item_image_id)} className="mt-1 max-h-32 max-w-full rounded border border-border bg-white object-contain" />
+                              </td>
                               <td className="py-1 text-center">
                                 <Badge className={met
                                   ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px]"
@@ -4817,7 +4859,10 @@ function NewAssessmentDialog({
                       return (
                         <tr key={item.label} className="border-t border-border">
                           <td className="p-2 font-bold align-top">{item.label}.</td>
-                          <td className="p-2 whitespace-pre-line">{item.description}</td>
+                          <td className="p-2">
+                            <div className="whitespace-pre-line">{item.description}</div>
+                            <QuizQuestionImage src={checklistPicture(program, item.image_id)} className="mt-1.5 max-h-56 max-w-full rounded border border-border bg-white object-contain" />
+                          </td>
                           <td className="p-1.5">
                             <Input type="date" className="text-xs h-7" value={cell.dateMet} onChange={e => setNonTechItems(prev => ({ ...prev, [item.label]: { ...cell, dateMet: e.target.value } }))} />
                           </td>

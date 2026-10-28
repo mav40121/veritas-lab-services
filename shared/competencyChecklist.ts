@@ -5,6 +5,8 @@
 // on (competency_assessment_items.nt_item_label / nt_item_description), so changing a program's
 // checklist never rewrites a saved assessment. Used by the client editor and re-checked on the server.
 
+import { isQuizImage, QUIZ_IMAGE_MAX_CHARS, QUIZ_IMAGES_TOTAL_MAX_CHARS } from "./quizImages";
+
 export const CHECKLIST_MAX_ITEMS = 200;
 export const CHECKLIST_MAX_DESCRIPTION = 2000;
 
@@ -20,7 +22,13 @@ export function checklistLabel(index: number): string {
   return s;
 }
 
-export type ChecklistItemInput = { label?: string; description?: string; stage?: string | null } | string;
+export type ChecklistItemInput = { label?: string; description?: string; stage?: string | null; image?: string | null; imageId?: number | null } | string;
+
+// A checklist item may carry ONE picture (2026-10-28, BUG-114: Gram stain slides on a MediaLab checklist). Same rules
+// as a quiz picture (shared/quizImages.ts): an uploaded PNG/JPEG/GIF/WebP data URL, never a link, no patient
+// identifiers. On save an item sends either `image` (a new picture) or `imageId` (the picture it already has, so an
+// unchanged picture is not sent again); the server checks the id belongs to the lab.
+export type ChecklistItemPicture = { image: string | null; imageId: number | null };
 
 // New-hire evaluation stages (2026-10-19, Natalie Lamb, Sampson Regional: her forms list different items for the
 // 30, 60 and 90-day evaluations, "I would need them separately"). An item of an evaluation program may belong to one
@@ -41,7 +49,7 @@ export function checklistItemsForType<T extends { stage?: string | null }>(items
 // Clean a checklist for saving: trims each description, keeps line breaks (detailed items), re-letters
 // by position, and rejects an empty list, a blank item, or an oversized one. A stage is kept only when it is one of
 // the three evaluation stages; anything else that is not empty is refused rather than guessed.
-export function normalizeChecklistItems(raw: unknown): { items: { label: string; description: string; stage: ChecklistStage | null }[] } | { error: string } {
+export function normalizeChecklistItems(raw: unknown): { items: ({ label: string; description: string; stage: ChecklistStage | null } & ChecklistItemPicture)[] } | { error: string } {
   if (!Array.isArray(raw)) return { error: "The checklist must be a list of items." };
   if (raw.length === 0) return { error: "A non-technical checklist needs at least one item." };
   if (raw.length > CHECKLIST_MAX_ITEMS) return { error: `A checklist can have up to ${CHECKLIST_MAX_ITEMS} items.` };
@@ -58,7 +66,27 @@ export function normalizeChecklistItems(raw: unknown): { items: { label: string;
   const stages = raw.map((it: any) => (it && typeof it === "object" && it.stage != null && it.stage !== "" ? it.stage : null));
   const badStage = stages.findIndex((s) => s !== null && !isChecklistStage(s));
   if (badStage >= 0) return { error: `Item ${checklistLabel(badStage)} has an unknown stage. Use 30-Day, 60-Day, 90-Day or every stage.` };
-  return { items: descriptions.map((description, i) => ({ label: checklistLabel(i), description, stage: stages[i] as ChecklistStage | null })) };
+  const pictures: ChecklistItemPicture[] = [];
+  let newPictureChars = 0;
+  for (let i = 0; i < raw.length; i++) {
+    const it: any = raw[i];
+    const img = it && typeof it === "object" ? it.image : null;
+    const id = it && typeof it === "object" ? it.imageId : null;
+    if (img !== undefined && img !== null && img !== "") {
+      if (typeof img !== "string" || !img.startsWith("data:image/")) return { error: `Item ${checklistLabel(i)}: the picture must be an uploaded image (PNG, JPEG, GIF or WebP), not a link.` };
+      if (img.length > QUIZ_IMAGE_MAX_CHARS) return { error: `Item ${checklistLabel(i)}: the picture is too large; use a smaller image.` };
+      if (!isQuizImage(img)) return { error: `Item ${checklistLabel(i)}: the picture must be a PNG, JPEG, GIF or WebP image.` };
+      newPictureChars += img.length;
+      pictures.push({ image: img, imageId: null });
+    } else if (id !== undefined && id !== null && id !== "") {
+      if (!Number.isInteger(id) || id <= 0) return { error: `Item ${checklistLabel(i)}: unknown picture.` };
+      pictures.push({ image: null, imageId: id });
+    } else {
+      pictures.push({ image: null, imageId: null });
+    }
+  }
+  if (newPictureChars > QUIZ_IMAGES_TOTAL_MAX_CHARS) return { error: "Too many new pictures to save at once. Save a few, then add the rest." };
+  return { items: descriptions.map((description, i) => ({ label: checklistLabel(i), description, stage: stages[i] as ChecklistStage | null, ...pictures[i] })) };
 }
 
 // Match a saved assessment's checklist rows to the program's current checklist when an unsigned
