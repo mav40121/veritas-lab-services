@@ -5736,13 +5736,18 @@ export function buildCompetencyHTML(input: CompetencyPDFInput): string {
     // Wave G PR G1: blank-worksheet branch for nontechnical programs.
     // Render one row per checklist item from the program with blank
     // date/initials cells so the supervisor can hand-complete on paper.
+    // An item's picture (BUG-114): a validated data URL, so it can go in the src as is. It sits under the item's
+    // wording, outside the pre-line block so the markup adds no blank lines.
+    const itemPicture = (src: any) => isQuizImage(src)
+      ? `<div><img src="${src}" alt="" style="max-height:2in;max-width:100%;margin:4px 0 2px;border:1px solid #e0e4e8;"></div>`
+      : "";
     if (input.blank) {
       // The blank evaluation worksheet covers all three stages, so a stage-only item says which stage it is for.
       for (const ci of checklistItems) {
         const stageTag = isEvaluation && ci.stage ? `${assessmentTypeLabel(ci.stage)}: ` : "";
         html += `<tr style="height:22px;">
           <td><strong>${esc(ci.label || "")}</strong></td>
-          <td style="white-space:pre-line">${esc(stageTag + (ci.description || ""))}</td>
+          <td><div style="white-space:pre-line">${esc(stageTag + (ci.description || ""))}</div>${itemPicture(ci.image)}</td>
           <td>&nbsp;</td>
           <td>&nbsp;</td>
           <td>&nbsp;</td>
@@ -5752,7 +5757,7 @@ export function buildCompetencyHTML(input: CompetencyPDFInput): string {
       for (const item of items) {
         html += `<tr>
           <td><strong>${esc(item.nt_item_label || item.item_label || "")}</strong></td>
-          <td style="white-space:pre-line">${esc(item.nt_item_description || item.item_description || "")}</td>
+          <td><div style="white-space:pre-line">${esc(item.nt_item_description || item.item_description || "")}</div>${itemPicture(item.nt_item_image)}</td>
           <td>${esc(item.nt_date_met || item.date_met || "")}</td>
           <td>${esc(item.nt_employee_initials || item.employee_initials || "")}</td>
           <td>${esc(item.nt_supervisor_initials || item.supervisor_initials || "")}</td>

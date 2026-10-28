@@ -282,6 +282,10 @@ jobs:
         # blank/empty lists refused with nothing changed, audit-logged edits, saved assessments keep their items,
         # technical programs refused, cross-lab 404, legacy route validated.
         run: npm run test:competency-checklist
+      - name: Run competency checklist pictures integration test
+        # BUG-114 (RFGH Brandy Morgan 10/28): a checklist item carries one picture, stored once per lab; saved
+        # assessments keep the picture they were done on; another lab's picture id is refused; no picture in the audit log.
+        run: npm run test:competency-checklist-pictures
       - name: Run VeritaComp new-hire evaluation integration test
         # Sampson REQ-076: 30/60/90-day evaluations titled Evaluation, due from hire date, types checked, new hires
         # with no instrument listed, kept out of competency compliance, PDF never says competency.

@@ -217,6 +217,7 @@ import { syncInitialToStaffSchedule, earliestSignedInitials } from "./competency
 import { loadQualifiedObservers, observerProblem, itemObserverEntries, storedObserverValues } from "./competencyObserver";
 import { summarizeCspReport, cspHeaderName } from "./securityHeaders";
 import { normalizeChecklistItems } from "@shared/competencyChecklist";
+import { checklistImageIdProblem, checklistItemImageIds, checklistForAudit, checklistImageMap, withChecklistImages, snapshotChecklistItemImages } from "./competencyChecklistImages";
 import { assessmentTypeLabel, assessmentTypeProblem, isEvaluationProgram, normalizeRecordKind } from "@shared/competencyEvaluation";
 import { normalizeSpecimen, normalizeReportableField, specimenLabel } from "@shared/veritamapSpecimen";
 import { buildCompetencyRegisterRows, generateCompetencyRegisterExcel } from "./competencyRegisterExcel";
@@ -24150,7 +24151,13 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       ).all(a.id);
       return { ...a, items };
     });
-    res.json({ ...program, methodGroups, checklistItems, employees, assessments: assessmentsWithItems });
+    // BUG-114: checklist and assessment-item pictures as one id -> picture map, so a picture shared by every
+    // assessment of the program is sent once (items carry image_id / nt_item_image_id).
+    const checklistImages = checklistImageMap((db as any).$client, [
+      ...(checklistItems as any[]).map((c) => c.image_id),
+      ...assessmentsWithItems.flatMap((a: any) => (a.items as any[]).map((i) => i.nt_item_image_id)),
+    ]);
+    res.json({ ...program, methodGroups, checklistItems, checklistImages, employees, assessments: assessmentsWithItems });
   }
 
   app.get("/api/competency/programs/:id", authMiddleware, (req: any, res) => {
@@ -24421,20 +24428,24 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // saved assessments keep their own copy of the items they were done on, so nothing else changes).
   // An item's stage (30, 60 or 90-day) is kept only on a new-hire evaluation program; on a competency it is dropped,
   // so every caller (both create routes, both edit routes) gets the same rule from here.
-  const replaceChecklistItems = (client: any, programId: number | string, items: { label: string; description: string; stage?: string | null }[]) => {
-    const prog = client.prepare("SELECT type, record_kind FROM competency_programs WHERE id = ?").get(programId) as any;
+  // BUG-114 (2026-10-28): an item may carry one picture, stored once per lab (server/competencyChecklistImages.ts);
+  // the item keeps its image_id. A kept picture arrives as imageId, a new one as image.
+  type SavedChecklistItem = { label: string; description: string; stage?: string | null; image?: string | null; imageId?: number | null };
+  const replaceChecklistItems = (client: any, programId: number | string, items: SavedChecklistItem[]) => {
+    const prog = client.prepare("SELECT type, record_kind, lab_id FROM competency_programs WHERE id = ?").get(programId) as any;
     const staged = isEvaluationProgram(prog);
+    const imageIds = checklistItemImageIds(client, Number(prog?.lab_id ?? 0), items);
     client.transaction(() => {
       client.prepare("DELETE FROM competency_checklist_items WHERE program_id = ?").run(programId);
-      const ins = client.prepare("INSERT INTO competency_checklist_items (program_id, label, description, sort_order, stage) VALUES (?, ?, ?, ?, ?)");
-      items.forEach((it, idx) => ins.run(programId, it.label, it.description, idx, staged ? it.stage ?? null : null));
+      const ins = client.prepare("INSERT INTO competency_checklist_items (program_id, label, description, sort_order, stage, image_id) VALUES (?, ?, ?, ?, ?, ?)");
+      items.forEach((it, idx) => ins.run(programId, it.label, it.description, idx, staged ? it.stage ?? null : null, imageIds[idx]));
     })();
   };
-  const saveChecklistEdit = (req: any, program: any, items: { label: string; description: string; stage?: string | null }[]) => {
+  const saveChecklistEdit = (req: any, program: any, items: SavedChecklistItem[]) => {
     const client = (db as any).$client;
-    const before = client.prepare("SELECT label, description, stage FROM competency_checklist_items WHERE program_id = ? ORDER BY sort_order").all(program.id);
+    const before = client.prepare("SELECT label, description, stage, image_id FROM competency_checklist_items WHERE program_id = ? ORDER BY sort_order").all(program.id);
     replaceChecklistItems(client, program.id, items);
-    logAudit({ userId: req.userId ?? req.user?.userId, ownerUserId: req.ownerUserId ?? req.userId ?? req.user?.userId, module: "veritacomp", action: "update", entityType: "program_checklist", entityId: String(program.id), entityLabel: program.name || undefined, before: { items: before }, after: { items }, ipAddress: req.ip });
+    logAudit({ userId: req.userId ?? req.user?.userId, ownerUserId: req.ownerUserId ?? req.userId ?? req.user?.userId, module: "veritacomp", action: "update", entityType: "program_checklist", entityId: String(program.id), entityLabel: program.name || undefined, before: { items: checklistForAudit(before) }, after: { items: checklistForAudit(items) }, ipAddress: req.ip });
   };
 
   app.put("/api/competency/programs/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
@@ -24447,6 +24458,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const checklist = Array.isArray(checklistItems) ? normalizeChecklistItems(checklistItems) : null;
     if (checklist && "error" in checklist) return res.status(400).json({ error: checklist.error });
     if (checklist && program.type !== "nontechnical") return res.status(400).json({ error: "Only a non-technical competency has a checklist." });
+    const pictureProblem = checklist ? checklistImageIdProblem((db as any).$client, Number(program.lab_id ?? 0), checklist.items) : null;
+    if (pictureProblem) return res.status(400).json({ error: pictureProblem });
     const now = new Date().toISOString();
     if (name) (db as any).$client.prepare("UPDATE competency_programs SET name = ?, updated_at = ? WHERE id = ?").run(name.trim(), now, req.params.id);
     if (department) (db as any).$client.prepare("UPDATE competency_programs SET department = ?, updated_at = ? WHERE id = ?").run(department, now, req.params.id);
@@ -24628,6 +24641,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const checklist = Array.isArray(checklistItems) ? normalizeChecklistItems(checklistItems) : null;
     if (checklist && "error" in checklist) return res.status(400).json({ error: checklist.error });
     if (checklist && program.type !== "nontechnical") return res.status(400).json({ error: "Only a non-technical competency has a checklist." });
+    const pictureProblem = checklist ? checklistImageIdProblem((db as any).$client, Number(req.scope.labId), checklist.items) : null;
+    if (pictureProblem) return res.status(400).json({ error: pictureProblem });
     const now = new Date().toISOString();
     if (name) (db as any).$client.prepare("UPDATE competency_programs SET name = ?, updated_at = ? WHERE id = ?").run(name.trim(), now, req.params.id);
     if (department) (db as any).$client.prepare("UPDATE competency_programs SET department = ?, updated_at = ? WHERE id = ?").run(department, now, req.params.id);
@@ -24767,6 +24782,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           item.ntDateMet ?? null, item.ntEmployeeInitials ?? null, item.ntSupervisorInitials ?? null
         );
       }
+      snapshotChecklistItemImages((db as any).$client, assessmentId);
     }
 
     // Update program updated_at
@@ -24889,6 +24905,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           );
         }
       })();
+      snapshotChecklistItemImages((db as any).$client, req.params.id);
     }
     res.json({ ok: true });
   });
@@ -25176,6 +25193,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           item.ntDateMet ?? null, item.ntEmployeeInitials ?? null, item.ntSupervisorInitials ?? null
         );
       }
+      snapshotChecklistItemImages((db as any).$client, assessmentId);
     }
     (db as any).$client.prepare("UPDATE competency_programs SET updated_at = ? WHERE id = ?").run(now, programId);
     // A new-hire evaluation is not a competency, so it never marks VeritaScan competency items compliant.
@@ -25289,6 +25307,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           );
         }
       })();
+      snapshotChecklistItemImages(sqlite, req.params.id);
     }
     const after = sqlite.prepare("SELECT * FROM competency_assessments WHERE id = ?").get(req.params.id);
     const afterItems = sqlite.prepare("SELECT * FROM competency_assessment_items WHERE assessment_id = ?").all(req.params.id);
@@ -26050,7 +26069,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
          WHERE assessment_id = ?
          ORDER BY element_number, created_at`
       ).all(assessment.id);
-      const pdfBuffer = await generateCompetencyPDF({ assessment, items, methodGroups, checklistItems, labName, quizResults, cliaNumber: cliaForComp, elementDocuments, primaryRegime: compLab?.primary_regime }, licenseCtxFromReq(req));
+      const pdfBuffer = await generateCompetencyPDF({ assessment, items: withChecklistImages((db as any).$client, items), methodGroups, checklistItems: withChecklistImages((db as any).$client, checklistItems), labName, quizResults, cliaNumber: cliaForComp, elementDocuments, primaryRegime: compLab?.primary_regime }, licenseCtxFromReq(req));
       const safeName = assessment.employee_name.replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
       const date = labToday();
       const typeLabel = assessment.program_record_kind === "evaluation" ? "Evaluation" : assessment.program_type === "technical" ? "Technical" : assessment.program_type === "waived" ? "Waived" : "NonTechnical";
@@ -26124,7 +26143,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         assessment: stubAssessment,
         items: [],
         methodGroups,
-        checklistItems,
+        checklistItems: withChecklistImages((db as any).$client, checklistItems),
         labName,
         quizResults: [],
         cliaNumber: cliaForComp,
@@ -26363,7 +26382,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
            WHERE assessment_id = ?
            ORDER BY element_number, created_at`
         ).all(a.id);
-        const pdfBuffer = await generateCompetencyPDF({ assessment: a, items, methodGroups, checklistItems, labName, quizResults, cliaNumber, elementDocuments, primaryRegime: compLab?.primary_regime }, licenseCtxFromReq(req));
+        const pdfBuffer = await generateCompetencyPDF({ assessment: a, items: withChecklistImages((db as any).$client, items), methodGroups, checklistItems: withChecklistImages((db as any).$client, checklistItems), labName, quizResults, cliaNumber, elementDocuments, primaryRegime: compLab?.primary_regime }, licenseCtxFromReq(req));
         zip.file(candidate, pdfBuffer);
         bundleRows.push({ a, filename: candidate, ok: true });
       } catch (err: any) {
@@ -26575,7 +26594,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       cliaForComp = compUserRow?.clia_number || undefined;
     }
     try {
-      const pdfBuffer = await generateCompetencyPDF({ assessment, items, methodGroups, checklistItems, labName, quizResults, cliaNumber: cliaForComp }, licenseCtxFromReq(req));
+      const pdfBuffer = await generateCompetencyPDF({ assessment, items: withChecklistImages((db as any).$client, items), methodGroups, checklistItems: withChecklistImages((db as any).$client, checklistItems), labName, quizResults, cliaNumber: cliaForComp }, licenseCtxFromReq(req));
       const safeName = assessment.employee_name.replace(/[^a-zA-Z0-9_\- ]/g, "").trim();
       const date = labToday();
       const typeLabel = assessment.program_record_kind === "evaluation" ? "Evaluation" : assessment.program_type === "technical" ? "Technical" : assessment.program_type === "waived" ? "Waived" : "NonTechnical";
@@ -26648,9 +26667,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     try {
       const pdfBuffer = await generateCompetencyPDF({
         assessment,
-        items,
+        items: withChecklistImages((db as any).$client, items),
         methodGroups,
-        checklistItems,
+        checklistItems: withChecklistImages((db as any).$client, checklistItems),
         labName,
         quizResults,
         cliaNumber: compUserRow2?.clia_number || undefined,
