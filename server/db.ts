@@ -1519,6 +1519,9 @@ const newCompItemCols: [string, string][] = [
   // Per-method sign-off (2026-10-13, Michael Q158 = 1): the items a method was signed on point at that sign-off and are
   // frozen. NULL = the working set still being entered for the method's next competency.
   ["signoff_id", "INTEGER"],
+  // Element 5 with more than one blind / PT sample (2026-10-30, Michael Q71 = 1): the full list as JSON when there is
+  // more than one; sample 1 also stays in el5_sample_type / el5_sample_id / el5_acceptable (shared/competencyEl5Samples.ts).
+  ["el5_samples_json", "TEXT"],
 ];
 for (const [col, colType] of newCompItemCols) {
   if (!compItemColNames.includes(col)) {

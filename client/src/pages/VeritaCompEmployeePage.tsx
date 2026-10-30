@@ -25,7 +25,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2, ChevronLeft, FlaskConical, FileDown } from "lucide-react";
+import { Loader2, ChevronLeft, FlaskConical, FileDown, Plus, X } from "lucide-react";
+import type { El5Sample } from "@shared/competencyEl5Samples";
 import MethodSignOffPanel, { signoffSummary, type MethodSignState } from "@/components/MethodSignOffPanel";
 import { MILESTONE_LABEL } from "@shared/competencySignoff";
 import { ObserverInitialsField, type QualifiedObserver } from "@/components/ObserverInitialsField";
@@ -55,6 +56,12 @@ const ELEMENT_FIELDS: Record<number, Array<{ key: string; label: string; type: "
 };
 
 interface ElementData { num: number; status: string; passed?: boolean; na?: boolean; naJustification?: string; [k: string]: any; }
+// Element 5 can record more than one blind / PT sample for a test system (Michael Q71 = 1). The edit buffer keeps them
+// in `samples`; a record saved before the list existed seeds one row from its single fields.
+const BLANK_SAMPLE: El5Sample = { sampleType: "", sampleId: "", acceptable: null };
+const samplesOf = (f: any): El5Sample[] =>
+  Array.isArray(f?.samples) && f.samples.length ? f.samples
+    : [{ sampleType: f?.sampleType ?? "", sampleId: f?.sampleId ?? "", acceptable: f?.acceptable ?? null }];
 interface WaivedMethod { num: number; name: string; evidence: string; date: string; initials: string; passed: boolean; status: string; }
 interface TestSystem extends MethodSignState {
   department: string | null; analyteCount: number; covered: boolean; elements: ElementData[];
@@ -146,6 +153,13 @@ export default function VeritaCompEmployeePage() {
   const setField = (num: number, key: string, value: any) => {
     setForm((prev) => ({ ...prev, [num]: { ...(prev[num] || {}), [key]: value } }));
   };
+  const setSamples = (fn: (list: El5Sample[]) => El5Sample[]) => {
+    setForm((prev) => {
+      const list = fn(samplesOf(prev[5]));
+      return { ...prev, 5: { ...(prev[5] || {}), samples: list.length ? list : [{ ...BLANK_SAMPLE }] } };
+    });
+  };
+  const setSample = (i: number, key: keyof El5Sample, value: any) => setSamples((list) => list.map((s, j) => (j === i ? { ...s, [key]: value } : s)));
   const setWField = (num: number, key: string, value: any) => {
     setWform((prev) => ({ ...prev, [num]: { ...(prev[num] || {}), [key]: value } }));
   };
@@ -354,6 +368,42 @@ export default function VeritaCompEmployeePage() {
                                     value={f.naJustification || ""} onChange={(e) => setField(el.num, "naJustification", e.target.value)} data-testid={`element-${el.num}-na-just`} />
                                   <NaReasonPresets element={el.num} disabled={readOnly} onPick={(r) => setField(el.num, "naJustification", r)} />
                                 </>
+                              ) : el.num === 5 ? (
+                                <div className="space-y-2" data-testid="element-5-samples">
+                                  {samplesOf(f).map((s, i, all) => (
+                                    <div key={i} className="flex flex-wrap items-end gap-2" data-testid={`element-5-sample-${i}`}>
+                                      <div className="flex-1 min-w-[120px]">
+                                        <label className="text-[10px] text-muted-foreground">{all.length > 1 ? `Sample ${i + 1} type` : "Sample type"}</label>
+                                        <Input className="text-xs h-8" disabled={readOnly} value={s.sampleType ?? ""}
+                                          onChange={(e) => setSample(i, "sampleType", e.target.value)} data-testid={`element-5-sampleType-${i}`} />
+                                      </div>
+                                      <div className="flex-1 min-w-[120px]">
+                                        <label className="text-[10px] text-muted-foreground">Sample ID</label>
+                                        <Input className="text-xs h-8" disabled={readOnly} value={s.sampleId ?? ""}
+                                          onChange={(e) => setSample(i, "sampleId", e.target.value)} data-testid={`element-5-sampleId-${i}`} />
+                                      </div>
+                                      <div className="min-w-[90px]">
+                                        <label className="text-[10px] text-muted-foreground">Acceptable</label>
+                                        <label className="flex items-center gap-1 text-xs h-8">
+                                          <input type="checkbox" className="w-3.5 h-3.5" disabled={readOnly} checked={!!s.acceptable}
+                                            onChange={(e) => setSample(i, "acceptable", e.target.checked)} data-testid={`element-5-acceptable-${i}`} /> Yes
+                                        </label>
+                                      </div>
+                                      {!readOnly && all.length > 1 && (
+                                        <Button type="button" variant="ghost" size="sm" className="h-8 px-2" aria-label={`Remove sample ${i + 1}`}
+                                          onClick={() => setSamples((list) => list.filter((_, j) => j !== i))} data-testid={`element-5-remove-${i}`}>
+                                          <X size={14} />
+                                        </Button>
+                                      )}
+                                    </div>
+                                  ))}
+                                  {!readOnly && (
+                                    <Button type="button" variant="outline" size="sm" className="h-7 text-xs"
+                                      onClick={() => setSamples((list) => [...list, { ...BLANK_SAMPLE }])} data-testid="element-5-add-sample">
+                                      <Plus size={12} className="mr-1" /> Add another sample
+                                    </Button>
+                                  )}
+                                </div>
                               ) : (
                                 <div className="flex flex-wrap gap-2">
                                   {fields.map((fld) => (
