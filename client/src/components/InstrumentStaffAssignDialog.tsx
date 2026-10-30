@@ -97,7 +97,10 @@ export function InstrumentStaffAssignDialog({
     } finally { setSaving(false); }
   }
 
-  const InstrumentList = () => (
+  // BUG-119 (RFGH, 2026-10-29): these two are plain render functions, called below, never <InstrumentList /> elements.
+  // A component defined inside this dialog is a new type on every render, so each checkbox click remounted the staff
+  // list (its scroll box jumped back to the top) and each keystroke remounted the filter box (it lost focus).
+  const renderInstrumentList = () => (
     <div className="space-y-3">
       <p className="text-xs text-muted-foreground">Pick a test system or manual test, then choose the staff who run it. This is the same assignment as the per-employee view, from the instrument side.</p>
       <Input placeholder="Filter by name, nickname, S/N, category, map..." value={filter} onChange={(e) => setFilter(e.target.value)} data-testid="instrument-assign-filter" />
@@ -118,7 +121,7 @@ export function InstrumentStaffAssignDialog({
     </div>
   );
 
-  const StaffList = () => (
+  const renderStaffList = () => (
     <div className="space-y-3">
       <button type="button" onClick={() => { setPickedId(null); setPickedName(""); }} className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"><ChevronLeft size={13} /> All instruments</button>
       <p className="text-sm">Who runs <span className="font-semibold">{pickedName}</span>?</p>
@@ -150,7 +153,7 @@ export function InstrumentStaffAssignDialog({
         <DialogHeader>
           <DialogTitle>Assign by Instrument</DialogTitle>
         </DialogHeader>
-        <div className="pt-2">{pickedId ? <StaffList /> : <InstrumentList />}</div>
+        <div className="pt-2">{pickedId ? renderStaffList() : renderInstrumentList()}</div>
       </DialogContent>
     </Dialog>
   );
