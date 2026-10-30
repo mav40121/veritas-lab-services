@@ -83,6 +83,7 @@ import { incompleteElementCells as compIncompleteCells, incompleteElementCellsBy
 import { competencyDueColumns, competencySeedAtCreate, nextCompetencyDue } from "./competencySchedule";
 import { methodSignerOptions, nextMilestoneAfter, milestonesForComplexity, MILESTONE_LABEL, alignAnnualToMonth, MONTH_NAMES, type SignerCandidate, type MethodMilestone } from "@shared/competencySignoff";
 import { isManualMethod, groupProblem, suggestGroups, groupKey } from "@shared/competencyGrouping";
+import { cleanEl5Samples, el5Columns, el5SamplesFromRow } from "@shared/competencyEl5Samples";
 import { quizImageProblem } from "@shared/quizImages";
 import { certificateExtras } from "./veritalabRegistry";
 
@@ -29337,7 +29338,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         else if (el === 2) { data.evidence = row.el2_evidence || ""; data.date = row.el2_date || ""; }
         else if (el === 3) { data.qcDate = row.el3_qc_date || ""; }
         else if (el === 4) { data.dateObserved = row.el4_date_observed || ""; data.observerInitials = row.el4_observer_initials || ""; }
-        else if (el === 5) { data.sampleType = row.el5_sample_type || ""; data.sampleId = row.el5_sample_id || ""; data.acceptable = row.el5_acceptable == null ? null : !!row.el5_acceptable; }
+        else if (el === 5) { data.sampleType = row.el5_sample_type || ""; data.sampleId = row.el5_sample_id || ""; data.acceptable = row.el5_acceptable == null ? null : !!row.el5_acceptable; data.samples = el5SamplesFromRow(row); }
         else if (el === 6) { data.quizId = row.el6_quiz_id || ""; data.score = row.el6_score == null ? "" : row.el6_score; data.dateTaken = row.el6_date_taken || ""; }
         else if (el === 7) { data.dateObserved = row.el7_date_observed || ""; data.observerInitials = row.el7_observer_initials || ""; }
         else if (el === 8) { data.functionAssessed = row.el8_function_assessed || ""; data.date = row.el8_date || ""; }
@@ -29611,12 +29612,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
            el2_evidence, el2_date, el2_na, el2_na_justification,
            el3_qc_date, el3_na, el3_na_justification,
            el4_date_observed, el4_observer_initials, el4_na, el4_na_justification,
-           el5_sample_type, el5_sample_id, el5_acceptable, el5_na, el5_na_justification,
+           el5_sample_type, el5_sample_id, el5_acceptable, el5_samples_json, el5_na, el5_na_justification,
            el6_quiz_id, el6_score, el6_date_taken, el6_na, el6_na_justification,
            el7_date_observed, el7_observer_initials, el7_na, el7_na_justification,
            el8_function_assessed, el8_date, el8_na, el8_na_justification,
            passed
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       );
       const byNum = new Map<number, any>();
       for (const el of elements) { if (Number.isFinite(Number(el?.num))) byNum.set(Number(el.num), el); }
@@ -29624,13 +29625,17 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         const d = byNum.get(n) || {};
         const na = d.na ? 1 : 0;
         const naJ = d.na ? (String(d.naJustification || "").trim() || null) : null;
+        // Element 5 takes a list of samples; a caller that sends the single fields is one sample.
+        const e5 = n === 5
+          ? el5Columns(cleanEl5Samples(Array.isArray(d.samples) ? d.samples : [{ sampleType: d.sampleType, sampleId: d.sampleId, acceptable: d.acceptable }]))
+          : null;
         stmt.run(
           assessment.id, storeId, n, n, inst.instrument_name, inst.instrument_name,
           n === 1 ? (d.specimenId ?? null) : null, n === 1 ? (d.observerInitials ?? null) : null, n === 1 ? na : 0, n === 1 ? naJ : null,
           n === 2 ? (d.evidence ?? null) : null, n === 2 ? (d.date ?? null) : null, n === 2 ? na : 0, n === 2 ? naJ : null,
           n === 3 ? (d.qcDate ?? null) : null, n === 3 ? na : 0, n === 3 ? naJ : null,
           n === 4 ? (d.dateObserved ?? null) : null, n === 4 ? (d.observerInitials ?? null) : null, n === 4 ? na : 0, n === 4 ? naJ : null,
-          n === 5 ? (d.sampleType ?? null) : null, n === 5 ? (d.sampleId ?? null) : null, n === 5 ? (d.acceptable != null ? (d.acceptable ? 1 : 0) : null) : null, n === 5 ? na : 0, n === 5 ? naJ : null,
+          e5 ? e5.type : null, e5 ? e5.id : null, e5 ? e5.acceptable : null, e5 ? e5.json : null, n === 5 ? na : 0, n === 5 ? naJ : null,
           n === 6 ? (d.quizId ?? null) : null, n === 6 ? (d.score != null && d.score !== "" ? Number(d.score) : null) : null, n === 6 ? (d.dateTaken ?? null) : null, n === 6 ? na : 0, n === 6 ? naJ : null,
           n === 7 ? (d.dateObserved ?? null) : null, n === 7 ? (d.observerInitials ?? null) : null, n === 7 ? na : 0, n === 7 ? naJ : null,
           n === 8 ? (d.functionAssessed ?? null) : null, n === 8 ? (d.date ?? null) : null, n === 8 ? na : 0, n === 8 ? naJ : null,

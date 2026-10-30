@@ -261,6 +261,10 @@ jobs:
         # BUG-075: the Element 1 / 4 observer must be one of the lab's LD/TC/TS people in VeritaStaff; every save path
         # refuses anyone else on new or changed values; values already on the record stay.
         run: npm run test:competency-observer-role
+      - name: Run competency Element 5 samples integration test
+        # Michael Q71 = 1: Element 5 holds more than one blind / PT sample per test system; sample 1 stays in the
+        # el5 columns, the list in el5_samples_json; a column edit to sample 1 wins; the PDF prints every sample.
+        run: npm run test:competency-el5-samples
       - name: Run policy auto-expire nightly integration test
         # BUG-081: the nightly VeritaPolicy job runs the auto-expire sweep (approved policies 60+ days past review
         # -> expired, one audit row each), not only the review reminders; idempotent.

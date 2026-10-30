@@ -16,6 +16,7 @@ import { hasRunDetails, runDetailRows } from "@shared/studyRunDetails";
 import { PT_CHECKLIST, parseTypeDetails, ptScorePercent, PATIENT_IMPACT, FDA_DISPOSITIONS, QC_CAUSES } from "@shared/findingTypes";
 import { rootCauseLabel } from "@shared/ptFailure";
 import { assessmentTypeLabel, evaluationDueDate } from "@shared/competencyEvaluation";
+import { el5SamplesFromRow } from "@shared/competencyEl5Samples";
 import { existsSync as _teaExistsSync, readFileSync as _teaReadFileSync } from "fs";
 import { resolve as _teaResolve } from "path";
 import {
@@ -5517,11 +5518,18 @@ export function buildCompetencyHTML(input: CompetencyPDFInput): string {
         title: "Element 5: Blind / PT Sample Performance",
         note: "The PT report or blind sample log serves as the supporting record. Do not enter patient specimen data here.",
         cols: ["Method Group", "Sample Type", "Sample ID", "Acceptable", "Pass"],
-        render: (item: any) => `<td>${esc(item.method_group_name || "")}</td>
-          <td>${esc(item.el5_sample_type || "")}</td>
-          <td>${esc(item.el5_sample_id || item.specimen_info || "")}</td>
-          <td>${item.el5_acceptable ? "Yes" : item.el5_acceptable === 0 ? "No" : "-"}</td>
-          ${compItemVerdictCell(item)}`,
+        // Every sample prints, one line each (Michael Q71 = 1); a legacy row with only specimen_info prints that.
+        render: (item: any) => {
+          const samples = el5SamplesFromRow(item);
+          const lines = samples.length
+            ? samples.map((s, i) => (i === 0 && !s.sampleId ? { ...s, sampleId: item.specimen_info || "" } : s))
+            : [{ sampleType: "", sampleId: item.specimen_info || "", acceptable: null }];
+          return `<td>${esc(item.method_group_name || "")}</td>
+          <td>${lines.map((s) => esc(s.sampleType)).join("<br>")}</td>
+          <td>${lines.map((s) => esc(s.sampleId)).join("<br>")}</td>
+          <td>${lines.map((s) => (s.acceptable ? "Yes" : s.acceptable === false ? "No" : "-")).join("<br>")}</td>
+          ${compItemVerdictCell(item)}`;
+        },
       },
       {
         num: 6,
