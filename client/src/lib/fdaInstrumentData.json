@@ -32485,23 +32485,23 @@
     "category": "Manual Procedures",
     "testCount": 8,
     "tests": {
-      "Neutrophils": {
+      "NEUT%": {
         "specialty": "Hematology",
         "complexity": "MODERATE"
       },
-      "Lymphocytes": {
+      "LYMPH%": {
         "specialty": "Hematology",
         "complexity": "MODERATE"
       },
-      "Monocytes": {
+      "MONO%": {
         "specialty": "Hematology",
         "complexity": "MODERATE"
       },
-      "Eosinophils": {
+      "EO%": {
         "specialty": "Hematology",
         "complexity": "MODERATE"
       },
-      "Basophils": {
+      "BASO%": {
         "specialty": "Hematology",
         "complexity": "MODERATE"
       },
@@ -32513,7 +32513,7 @@
         "specialty": "Hematology",
         "complexity": "MODERATE"
       },
-      "NRBC (manual)": {
+      "NRBC%": {
         "specialty": "Hematology",
         "complexity": "MODERATE"
       }

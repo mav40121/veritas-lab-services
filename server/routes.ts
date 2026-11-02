@@ -84,6 +84,7 @@ import { competencyDueColumns, competencySeedAtCreate, nextCompetencyDue } from 
 import { methodSignerOptions, nextMilestoneAfter, milestonesForComplexity, MILESTONE_LABEL, alignAnnualToMonth, MONTH_NAMES, type SignerCandidate, type MethodMilestone } from "@shared/competencySignoff";
 import { isManualMethod, groupProblem, suggestGroups, groupKey } from "@shared/competencyGrouping";
 import { cleanEl5Samples, el5Columns, el5SamplesFromRow } from "@shared/competencyEl5Samples";
+import { oneRowKey, sameTestNameOnMap } from "@shared/presetAnalytes";
 import { quizImageProblem } from "@shared/quizImages";
 import { certificateExtras } from "./veritalabRegistry";
 
@@ -16401,12 +16402,16 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   function replaceInstrumentTests(instId: string | number, mapId: string | number, tests: any[]) {
     const client = (db as any).$client;
     const ins = client.prepare("INSERT OR IGNORE INTO veritamap_instrument_tests (instrument_id, map_id, analyte, specialty, complexity, active) VALUES (?, ?, ?, ?, ?, ?)");
+    // Michael 2026-11-02: a manual differential cell line is the analyzer's percent test, so it takes the name the map
+    // already uses on another instrument ("Eosinophils" saves as "EO%") and the map keeps one row with both methods.
+    const others = (client.prepare("SELECT DISTINCT analyte FROM veritamap_instrument_tests WHERE map_id = ? AND instrument_id != ?").all(mapId, instId) as any[]).map((r) => r.analyte);
+    const nameOf = (a: string) => sameTestNameOnMap(a, others);
     client.transaction(() => {
-      const exSnapshot = captureInstrumentExemptions(instId, mapId);
+      const exSnapshot = captureInstrumentExemptions(instId, mapId).map((e) => ({ ...e, k: nameOf(e.k).toLowerCase().trim() }));
       client.prepare("DELETE FROM veritamap_instrument_tests WHERE instrument_id = ? AND map_id = ?").run(instId, mapId);
       for (const t of tests) {
         const active = typeof t.active === 'boolean' ? (t.active ? 1 : 0) : (t.active ?? 1);
-        ins.run(instId, mapId, String(t.analyte || ''), String(t.specialty || ''), String(t.complexity || ''), active);
+        ins.run(instId, mapId, nameOf(String(t.analyte || '')), String(t.specialty || ''), String(t.complexity || ''), active);
       }
       restoreInstrumentExemptions(instId, mapId, exSnapshot);
       rebuildMapTests(mapId);
@@ -36206,6 +36211,125 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     res.json({ ok: true, dryRun: !!dryRun, mapId, analyte, inserted, results });
   });
 
+  // POST /api/admin/veritamap/merge-analyte (Michael 2026-11-02: "these are the same test", "any, all. The manual diff
+  // tests are the cell line % tests"). Folds a map's manual differential cell lines into the analyzer's percent rows
+  // ("Eosinophils" into "EO%"), so each test is one row with every method on it. Body { secret, labId, mapId, pairs?,
+  // dryRun } (a dry run unless dryRun === false). pairs [{ from, into }] default to every differential / NRBC percent
+  // test the map carries under two names, into the analyzer's % name; a pair must be the same test (oneRowKey).
+  // For each pair, in one transaction:
+  //   - instrument rows: from -> into (the row id, exemption flags and so its correlations' meaning stay); an
+  //     instrument that already has into keeps its into row and drops the duplicate
+  //   - reference / critical bands: a band into lacks moves; a band into has keeps into's values, takes from's where
+  //     into's are blank, and reports any value that differs (conflicts are listed, never silently chosen)
+  //   - AMR rows move per instrument (into on the same instrument wins, reported)
+  //   - the map row's dates and notes fill into's blanks (differences reported); correlations on from point at into
+  //   - then rebuildMapTests drops the from row. Other modules that name from (studies, PT, QC) are counted, not changed.
+  app.post("/api/admin/veritamap/merge-analyte", (req, res) => {
+    const { secret, labId, mapId: wantMapId, pairs: wantPairs } = req.body || {};
+    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    const apply = req.body?.dryRun === false;
+    const sqlite = (db as any).$client;
+    const map = sqlite.prepare("SELECT id, lab_id, name FROM veritamap_maps WHERE id = ?").get(Number(wantMapId)) as any;
+    if (!map || map.lab_id !== Number(labId)) return res.status(400).json({ error: `map ${wantMapId} is not one of lab ${labId}'s maps` });
+    const mapId = map.id;
+    const names = (sqlite.prepare("SELECT DISTINCT analyte FROM veritamap_instrument_tests WHERE map_id = ?").all(mapId) as any[]).map((r) => r.analyte as string);
+    let pairs: Array<{ from: string; into: string }>;
+    if (Array.isArray(wantPairs) && wantPairs.length) {
+      pairs = wantPairs.map((p: any) => ({ from: String(p?.from || ""), into: String(p?.into || "") }));
+      for (const p of pairs) {
+        if (!names.includes(p.from) || !names.includes(p.into)) return res.status(400).json({ error: `"${p.from}" and "${p.into}" must both be on map ${mapId}` });
+        if (p.from === p.into || !oneRowKey(p.from) || oneRowKey(p.from) !== oneRowKey(p.into)) return res.status(400).json({ error: `"${p.from}" and "${p.into}" are not the same differential test` });
+      }
+    } else {
+      const byKey = new Map<string, string[]>();
+      for (const n of names) { const k = oneRowKey(n); if (k) byKey.set(k, [...(byKey.get(k) || []), n]); }
+      pairs = [];
+      for (const group of Array.from(byKey.values())) {
+        if (group.length < 2) continue;
+        const into = group.find((g) => g.includes("%")) ?? group[0];
+        for (const from of group) if (from !== into) pairs.push({ from, into });
+      }
+    }
+
+    const VALUE_COLS = ["ref_range_low", "ref_range_high", "critical_low", "critical_high", "units"];
+    const TEST_COLS = ["last_cal_ver", "last_method_comp", "last_precision", "last_sop_review", "notes"];
+    const blank = (v: any) => v === null || v === undefined || String(v).trim() === "";
+    const otherRefs = (a: string) => ({
+      studies: (sqlite.prepare("SELECT COUNT(*) n FROM studies WHERE lab_id = ? AND (coverage_analyte = ? OR test_name = ?)").get(map.lab_id, a, a) as any)?.n ?? 0,
+    });
+    const report: any[] = [];
+    class DryRun extends Error {}
+    try {
+      sqlite.transaction(() => {
+        for (const { from, into } of pairs) {
+          const r: any = { from, into, instrumentRows: [], bands: [], amr: [], mapRow: [], correlations: 0, conflicts: [], elsewhere: null };
+          r.complexityBefore = (sqlite.prepare("SELECT complexity FROM veritamap_tests WHERE map_id = ? AND analyte = ?").get(mapId, into) as any)?.complexity ?? null;
+          // 1. Instrument rows.
+          const fromRows = sqlite.prepare("SELECT it.id, it.instrument_id, i.instrument_name FROM veritamap_instrument_tests it JOIN veritamap_instruments i ON i.id = it.instrument_id WHERE it.map_id = ? AND it.analyte = ?").all(mapId, from) as any[];
+          for (const fr of fromRows) {
+            const has = sqlite.prepare("SELECT id FROM veritamap_instrument_tests WHERE instrument_id = ? AND analyte = ?").get(fr.instrument_id, into) as any;
+            if (has) { sqlite.prepare("DELETE FROM veritamap_instrument_tests WHERE id = ?").run(fr.id); r.instrumentRows.push(`${fr.instrument_name}: already had ${into}; duplicate ${from} row removed`); }
+            else { sqlite.prepare("UPDATE veritamap_instrument_tests SET analyte = ? WHERE id = ?").run(into, fr.id); r.instrumentRows.push(`${fr.instrument_name}: ${from} -> ${into}`); }
+          }
+          // 2. Reference / critical bands.
+          const fromBands = sqlite.prepare("SELECT * FROM veritamap_analyte_values WHERE map_id = ? AND analyte = ?").all(mapId, from) as any[];
+          for (const b of fromBands) {
+            const band = `${b.age_min_days}-${b.age_max_days}d ${b.sex}${b.specimen_type ? ` ${b.specimen_type}` : ""}`;
+            const tgt = sqlite.prepare("SELECT * FROM veritamap_analyte_values WHERE map_id = ? AND analyte = ? AND age_min_days = ? AND age_max_days = ? AND sex = ? AND specimen_type = ?").get(mapId, into, b.age_min_days, b.age_max_days, b.sex, b.specimen_type) as any;
+            if (!tgt) { sqlite.prepare("UPDATE veritamap_analyte_values SET analyte = ? WHERE id = ?").run(into, b.id); r.bands.push(`${band}: moved`); continue; }
+            const fill: string[] = [];
+            for (const c of VALUE_COLS) {
+              if (blank(b[c])) continue;
+              if (blank(tgt[c])) { sqlite.prepare(`UPDATE veritamap_analyte_values SET ${c} = ? WHERE id = ?`).run(b[c], tgt.id); fill.push(c); }
+              else if (String(tgt[c]).trim() !== String(b[c]).trim()) r.conflicts.push(`${band} ${c}: kept ${into} "${tgt[c]}", ${from} had "${b[c]}"`);
+            }
+            sqlite.prepare("DELETE FROM veritamap_analyte_values WHERE id = ?").run(b.id);
+            r.bands.push(`${band}: ${into} kept${fill.length ? `, filled ${fill.join(", ")} from ${from}` : ""}`);
+          }
+          // 3. AMR rows (per instrument).
+          const fromAmr = sqlite.prepare("SELECT * FROM veritamap_amr_values WHERE map_id = ? AND analyte = ?").all(mapId, from) as any[];
+          for (const a of fromAmr) {
+            const tgt = sqlite.prepare("SELECT id FROM veritamap_amr_values WHERE map_id = ? AND instrument_id = ? AND analyte = ? AND specimen_type = ?").get(mapId, a.instrument_id, into, a.specimen_type) as any;
+            if (tgt) { sqlite.prepare("DELETE FROM veritamap_amr_values WHERE id = ?").run(a.id); r.amr.push(`instrument ${a.instrument_id}: ${into} row kept, ${from} row removed`); r.conflicts.push(`AMR instrument ${a.instrument_id}: kept ${into}'s row`); }
+            else { sqlite.prepare("UPDATE veritamap_amr_values SET analyte = ? WHERE id = ?").run(into, a.id); r.amr.push(`instrument ${a.instrument_id}: moved`); }
+          }
+          // 4. Map row fields and correlations.
+          const fromTest = sqlite.prepare("SELECT * FROM veritamap_tests WHERE map_id = ? AND analyte = ?").get(mapId, from) as any;
+          const intoTest = sqlite.prepare("SELECT * FROM veritamap_tests WHERE map_id = ? AND analyte = ?").get(mapId, into) as any;
+          if (fromTest && intoTest) {
+            for (const c of TEST_COLS) {
+              if (blank(fromTest[c])) continue;
+              if (blank(intoTest[c])) { sqlite.prepare(`UPDATE veritamap_tests SET ${c} = ? WHERE id = ?`).run(fromTest[c], intoTest.id); r.mapRow.push(`${c} filled from ${from}`); }
+              else if (String(intoTest[c]).trim() !== String(fromTest[c]).trim()) r.conflicts.push(`map row ${c}: kept ${into} "${intoTest[c]}", ${from} had "${fromTest[c]}"`);
+            }
+            const f = fromTest.id, i = intoTest.id;
+            r.correlations = sqlite.prepare(
+              `UPDATE veritamap_test_correlations
+                 SET test_a_id = min(CASE WHEN test_a_id = ? THEN ? ELSE test_a_id END, CASE WHEN test_b_id = ? THEN ? ELSE test_b_id END),
+                     test_b_id = max(CASE WHEN test_a_id = ? THEN ? ELSE test_a_id END, CASE WHEN test_b_id = ? THEN ? ELSE test_b_id END),
+                     updated_at = ?
+               WHERE test_a_id = ? OR test_b_id = ?`
+            ).run(f, i, f, i, f, i, f, i, new Date().toISOString(), f, f).changes;
+          }
+          r.elsewhere = otherRefs(from);
+          report.push(r);
+        }
+        rebuildMapTests(mapId);
+        // The map row takes the highest complexity among its methods (rebuildMapTests); say when that changes.
+        for (const r of report) r.complexityAfter = (sqlite.prepare("SELECT complexity FROM veritamap_tests WHERE map_id = ? AND analyte = ?").get(mapId, r.into) as any)?.complexity ?? null;
+        if (!apply) throw new DryRun();
+      })();
+    } catch (e: any) {
+      if (!(e instanceof DryRun)) return res.status(500).json({ error: String(e?.message || e) });
+    }
+    if (apply && pairs.length) {
+      const ownerUserId = (sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(map.lab_id) as any)?.owner_user_id;
+      logAudit({ userId: 0, ownerUserId, module: "veritamap", action: "update", entityType: "veritamap_map", entityId: String(mapId),
+        entityLabel: `${map.name}: merged ${pairs.map((p) => `${p.from} into ${p.into}`).join("; ")} (admin merge-analyte)`, after: { pairs, report }, ipAddress: req.ip });
+    }
+    res.json({ ok: true, dryRun: !apply, labId: map.lab_id, mapId, mapName: map.name, pairs: pairs.length, report });
+  });
+
   // ── VeritaCheck Coverage demo seeder ──────────────────────────────────────
   // Generates map-matched covering studies + clinically-correct cal-ver
   // exemptions for a lab, so its Coverage view reads ~target% covered with a few
@@ -37357,9 +37481,11 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       );
       let inserted = 0;
       const skipped: string[] = [];
+      // One row per test (Michael 2026-11-02): a manual differential line takes the map's percent name.
+      const others = (sqlite.prepare("SELECT DISTINCT analyte FROM veritamap_instrument_tests WHERE map_id = ? AND instrument_id != ?").all(mapId, instrumentId) as any[]).map((r) => r.analyte);
       const tx = sqlite.transaction((rows: any[]) => {
         for (const t of rows) {
-          const analyte = String(t.analyte || "").trim();
+          const analyte = sameTestNameOnMap(String(t.analyte || "").trim(), others);
           if (!analyte) continue;
           const specialty = String(t.specialty || "").trim();
           // Validated above; stored canonical-uppercase so the rollup's
@@ -37531,8 +37657,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
             if (row) { instrumentId = row.id; }
             else { instrumentId = Number(createInst.run(Number(mapId), iname, "Primary", category, serial, null, now).lastInsertRowid); created = true; }
             let inserted = 0; let skipped = 0;
+            // One row per test (Michael 2026-11-02): a manual differential line takes the map's percent name.
+            const others = (sqlite.prepare("SELECT DISTINCT analyte FROM veritamap_instrument_tests WHERE map_id = ? AND instrument_id != ?").all(Number(mapId), instrumentId) as any[]).map((r) => r.analyte);
             for (const t of inst.tests) {
-              const analyte = String(t.analyte).trim();
+              const analyte = sameTestNameOnMap(String(t.analyte).trim(), others);
               const specialty = String(t.specialty || "").trim();
               const complexity = String(t.complexity).trim().toUpperCase();
               const active = (typeof t.active === "number" && (t.active === 0 || t.active === 1)) ? t.active : dActive;

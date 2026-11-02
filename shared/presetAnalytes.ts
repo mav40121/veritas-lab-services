@@ -387,6 +387,30 @@ export function correlationGroupKey(analyte: string): string {
   return sameTestKeys(analyte)[0];
 }
 
+// One VeritaMap row per test (Michael 2026-11-02: "these are the same test", "The manual diff tests are the cell line %
+// tests"). A manual differential cell line is the analyzer's percent ("Eosinophils" = "EO%", "NRBC (manual)" = "NRBC%"),
+// so the map carries it on one row with every method on it, and the comparison between methods shows as a requirement.
+// Scoped to the single-class differential and NRBC percent keys; absolute counts (#), Bands and Blasts never match.
+const ONE_ROW_KEY = /^(diff:[a-z]+:pct|nrbc:pct)$/;
+export function oneRowKey(analyte: string): string | null {
+  const keys = sameTestKeys(analyte);
+  return keys.length === 1 && ONE_ROW_KEY.test(keys[0]) ? keys[0] : null;
+}
+
+/**
+ * The name a test should take on a map that already carries mapAnalytes (on its other instruments): the map's own name
+ * for the same differential percent test, preferring the analyzer's form ("EO%"); otherwise the name as given.
+ */
+export function sameTestNameOnMap(analyte: string, mapAnalytes: string[]): string {
+  const key = oneRowKey(analyte);
+  if (!key) return analyte;
+  const lower = String(analyte).trim().toLowerCase();
+  if (mapAnalytes.some((a) => String(a).trim().toLowerCase() === lower)) return analyte;
+  const peers = Array.from(new Set(mapAnalytes.filter((a) => oneRowKey(a) === key)));
+  if (!peers.length) return analyte;
+  return peers.find((p) => p.includes("%")) ?? peers[0];
+}
+
 export interface CorrelationGroupInfo {
   /** Distinct instruments running this test under any name on the map. */
   instrumentCount: number;
