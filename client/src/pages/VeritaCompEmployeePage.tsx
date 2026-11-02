@@ -30,30 +30,7 @@ import type { El5Sample } from "@shared/competencyEl5Samples";
 import MethodSignOffPanel, { signoffSummary, type MethodSignState } from "@/components/MethodSignOffPanel";
 import { MILESTONE_LABEL } from "@shared/competencySignoff";
 import { ObserverInitialsField, type QualifiedObserver } from "@/components/ObserverInitialsField";
-
-const ELEMENT_NAMES: Record<number, string> = {
-  1: "Direct Observation of Routine Patient Test Performance",
-  2: "Monitoring, Recording and Reporting of Test Results",
-  3: "QC Performance",
-  4: "Direct Observation of Instrument Maintenance",
-  5: "Blind / PT Sample Performance",
-  6: "Problem-Solving Assessment (Quiz)",
-  7: "Safe Work Practices (NYS)",
-  8: "Delegated Supervisory Functions (NYS)",
-};
-// Which raw fields each element captures (drives the entry inputs).
-// "observer" = the lab's LD/TC/TS people in VeritaStaff, picked from a list (BUG-075, Michael Q35 = 1); the server
-// refuses anyone else on a new or changed value. Element 7 (NYS) keeps typed entry.
-const ELEMENT_FIELDS: Record<number, Array<{ key: string; label: string; type: "text" | "date" | "number" | "bool" | "observer" }>> = {
-  1: [{ key: "specimenId", label: "Specimen ID observed", type: "text" }, { key: "observerInitials", label: "Observer (LD / TC / TS)", type: "observer" }],
-  2: [{ key: "evidence", label: "Evidence", type: "text" }, { key: "date", label: "Date", type: "date" }],
-  3: [{ key: "qcDate", label: "Date QC was run", type: "date" }],
-  4: [{ key: "dateObserved", label: "Date observed", type: "date" }, { key: "observerInitials", label: "Observer (LD / TC / TS)", type: "observer" }],
-  5: [{ key: "sampleType", label: "Sample type", type: "text" }, { key: "sampleId", label: "Sample ID", type: "text" }, { key: "acceptable", label: "Acceptable", type: "bool" }],
-  6: [{ key: "quizId", label: "Quiz ID", type: "text" }, { key: "score", label: "Score", type: "number" }, { key: "dateTaken", label: "Date taken", type: "date" }],
-  7: [{ key: "dateObserved", label: "Date observed", type: "date" }, { key: "observerInitials", label: "Observer", type: "text" }],
-  8: [{ key: "functionAssessed", label: "Function assessed", type: "text" }, { key: "date", label: "Date", type: "date" }],
-};
+import { ELEMENT_NAMES, ELEMENT_FIELDS } from "@/lib/competencyElements";
 
 interface ElementData { num: number; status: string; passed?: boolean; na?: boolean; naJustification?: string; [k: string]: any; }
 // Element 5 can record more than one blind / PT sample for a test system (Michael Q71 = 1). The edit buffer keeps them
@@ -102,7 +79,11 @@ export default function VeritaCompEmployeePage() {
   const qc = useQueryClient();
   const params = useParams();
   const employeeId = Number((params as any).employeeId);
-  const [activeTs, setActiveTs] = useState<number | null>(null);
+  // ?method=<instrumentId>&signoff=<signoffId> (a row on the Signed competencies list): open that method with that
+  // sign-off's entries showing.
+  const linked = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
+  const linkedSignoff = Number(linked?.get("signoff")) || null;
+  const [activeTs, setActiveTs] = useState<number | null>(() => Number(linked?.get("method")) || null);
   // Edit buffer for the active test system: { [elementNum]: { field: value } }.
   const [form, setForm] = useState<Record<number, any>>({});
   // Waived test system edit buffer: { [methodNum]: { evidence, date, initials, passed } }.
@@ -131,7 +112,7 @@ export default function VeritaCompEmployeePage() {
   });
 
   const testSystems = data?.testSystems || [];
-  const current = activeTs != null ? testSystems.find((t) => t.instrumentId === activeTs) : testSystems[0];
+  const current = (activeTs != null ? testSystems.find((t) => t.instrumentId === activeTs) : undefined) ?? testSystems[0];
   const signedCount = testSystems.filter((t) => t.signedCurrent).length;
   const readyCount = testSystems.filter((t) => t.signable).length;
   const overdueCount = testSystems.filter((t) => t.overdue).length;
@@ -283,7 +264,7 @@ export default function VeritaCompEmployeePage() {
                         <Badge className={`text-[10px] ${TONE[signoffSummary(current).tone]}`}>{signoffSummary(current).label}</Badge>
                       </div>
                       <div className="mb-3">
-                        <MethodSignOffPanel part="status" labId={activeLabId!} employeeId={employeeId} employeeName={data.employee.name} ts={current} readOnly={readOnly} onChanged={refresh} />
+                        <MethodSignOffPanel part="status" labId={activeLabId!} employeeId={employeeId} employeeName={data.employee.name} ts={current} readOnly={readOnly} onChanged={refresh} openSignoffId={linkedSignoff} />
                       </div>
                       {current.groupMembers?.length ? (
                         <p className="text-[11px] mb-2 rounded px-2 py-1.5 bg-teal-50 dark:bg-teal-900/20 text-teal-900 dark:text-teal-200" data-testid="group-note">

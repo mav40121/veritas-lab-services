@@ -18,17 +18,8 @@ import { Badge } from "@/components/ui/badge";
 import { ChevronLeft, ExternalLink } from "lucide-react";
 import MethodSignOffPanel, { signoffSummary, type MethodSignState, type MethodSignoff } from "@/components/MethodSignOffPanel";
 import { MILESTONE_LABEL, type MethodMilestone } from "@shared/competencySignoff";
+import { ELEMENT_NAMES } from "@/lib/competencyElements";
 
-const ELEMENT_NAMES: Record<number, string> = {
-  1: "Direct Observation of Routine Patient Test Performance",
-  2: "Monitoring, Recording and Reporting of Test Results",
-  3: "QC Performance",
-  4: "Direct Observation of Instrument Maintenance",
-  5: "Blind / PT Sample Performance",
-  6: "Problem-Solving Assessment (Quiz)",
-  7: "Safe Work Practices (NYS)",
-  8: "Delegated Supervisory Functions (NYS)",
-};
 // The one or two fields worth showing at a glance per element (read-only summary).
 const ELEMENT_SUMMARY: Record<number, Array<[string, string]>> = {
   1: [["specimenId", "Specimen"], ["observerInitials", "Observer"]],
@@ -50,7 +41,7 @@ const TONE: Record<string, string> = {
 
 interface ElementData { num: number; status: string; na?: boolean; naJustification?: string; [k: string]: any; }
 interface WaivedMethod { num: number; name: string; evidence?: string; date: string; initials?: string; passed?: boolean; status: string; }
-interface SignedSet extends MethodSignoff { elements?: Array<{ num: number; status: string }>; waivedPassed?: number | null; waivedMethods?: WaivedMethod[]; }
+interface SignedSet extends MethodSignoff { waivedPassed?: number | null; waivedMethods?: WaivedMethod[]; }
 interface TestSystem extends MethodSignState {
   department: string | null; analyteCount: number; elements: ElementData[];
   waived?: boolean; waivedRequired?: number; waivedPassed?: number; waivedMethods?: WaivedMethod[];
@@ -177,7 +168,7 @@ export default function VeritaCompInstrumentPage() {
                     ) : (
                       <div className="space-y-2">
                         {(showSigned ? (ts.lastSignoff!.elements || []) : ts.elements).map((el: any) => {
-                          const facts = showSigned ? [] : (ELEMENT_SUMMARY[el.num] || []).map(([k, label]) => (el[k] !== undefined && el[k] !== "" && el[k] !== null ? `${label}: ${el[k]}` : null)).filter(Boolean);
+                          const facts = (ELEMENT_SUMMARY[el.num] || []).map(([k, label]) => (el[k] !== undefined && el[k] !== "" && el[k] !== null ? `${label}: ${el[k]}` : null)).filter(Boolean);
                           return (
                             <div key={el.num} className="rounded-md border p-2.5 flex items-start justify-between gap-3" data-testid="element-row">
                               <div className="text-sm">
