@@ -33,6 +33,8 @@ import { matchObserver } from "@shared/competencyObserver";
 export interface QualifiedObserver {
   employeeId: number;
   name: string;
+  firstName?: string;
+  lastName?: string;
   initials: string;
   roles: string[];
   /** false for someone who has left the lab (still a valid observer for past entries). */
