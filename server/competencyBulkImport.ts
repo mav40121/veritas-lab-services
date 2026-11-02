@@ -66,7 +66,9 @@ export interface ValidatedRow {
 export interface ValidationContext {
   competencyEmployees: Array<{ id: number; name: string; staff_employee_id: number | null }>;
   staffEmployees: Array<{ id: number; first_name: string; last_name: string }>;
-  programs: Array<{ id: number; name: string }>;
+  // type and namedAnalyzers (BUG-120): a technical program that names no analyzer on the lab's maps imports fine but
+  // counts toward no one's due dates on the VeritaComp person page, so the row is warned.
+  programs: Array<{ id: number; name: string; type?: string | null; namedAnalyzers?: number }>;
 }
 
 // ─── Template generation ─────────────────────────────────────────
@@ -304,6 +306,7 @@ export function validateRows(rows: ParsedRow[], ctx: ValidationContext): Validat
   }
   const programByName = new Map<string, number>();
   for (const p of ctx.programs) programByName.set(normalizeName(p.name), p.id);
+  const programById = new Map(ctx.programs.map((p) => [p.id, p]));
 
   const out: ValidatedRow[] = [];
   for (const r of rows) {
@@ -350,6 +353,10 @@ export function validateRows(rows: ParsedRow[], ctx: ValidationContext): Validat
       const pid = programByName.get(normalizeName(r.parsed.programName));
       if (pid) resolvedProgramId = pid;
       else issues.push({ field: "Program Name", severity: "error", message: `Program '${r.parsed.programName}' not found. Create it in VeritaComp first.` });
+      const prog = pid ? programById.get(pid) : undefined;
+      if (prog?.type === "technical" && prog.namedAnalyzers === 0) {
+        issues.push({ field: "Program Name", severity: "warning", message: `'${prog.name}' names no analyzers on your VeritaMap, so this record will not count toward anyone's due dates on their VeritaComp page. Add the analyzers to the program first.` });
+      }
     }
 
     let status: "ok" | "warning" | "error" = "ok";

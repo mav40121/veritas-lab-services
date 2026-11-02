@@ -224,7 +224,7 @@ import { noPhiAcknowledgmentStatus, recordNoPhiAcknowledgment } from "./noPhiAck
 import { assessmentTypeLabel, assessmentTypeProblem, isEvaluationProgram, normalizeRecordKind } from "@shared/competencyEvaluation";
 import { normalizeSpecimen, normalizeReportableField, specimenLabel } from "@shared/veritamapSpecimen";
 import { buildCompetencyRegisterRows, generateCompetencyRegisterExcel } from "./competencyRegisterExcel";
-import { methodClock, loadInstrumentGroups, loadLabMethodClocks, type InstrumentGroup } from "./competencyMethodClock";
+import { methodClock, loadInstrumentGroups, loadLabMethodClocks, loadImportedHistory, programNamedInstrumentIds, type InstrumentGroup } from "./competencyMethodClock";
 import {
   deriveCompetencyStatus, competencyView, labMethodClocks,
   readCompetencyReminderConfig, writeCompetencyReminderConfig, planCompetencyReminders, runCompetencyReminders,
@@ -29166,6 +29166,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // Items frozen by a per-method sign-off, and items on a whole-record signed (Phase 3a, locked) record: neither is
     // the working set. The latter reads as a sign-off made before per-method sign-off existed.
     const legacyLockedByInstrument = new Map<number, any>();
+    // BUG-120 (Michael Q92 = 1): records in a named technical program (Bulk Import history and older program records).
+    const importedHist = loadImportedHistory(sqlite, labId, empId);
     let latestAssessmentId: number | null = null;
     if (compEmp) {
       const assessments = sqlite.prepare(
@@ -29254,6 +29256,23 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           waivedPassed: waivedPassedOf(legacyItems),
           waivedMethods: waivedSummary(legacyItems),
         });
+      }
+      // BUG-120 (Michael Q92 = 1): with no per-method sign-off, imported history for this method's analyzers counts too,
+      // merged with the older whole-record sign by date (the same rule as loadLabMethodClocks).
+      if (!rows.length) {
+        const seenRec = new Set<number>();
+        const imported = (inst.memberIds as number[]).flatMap((id) => importedHist.get(`${empId}:${id}`) || [])
+          .filter((r) => { if (seenRec.has(r.assessmentId)) return false; seenRec.add(r.assessmentId); return true; });
+        for (const r of imported) {
+          signoffs.push({
+            id: null, legacy: false, imported: true, importedFrom: r.programName, milestone: r.milestone, signedDate: r.signedDate,
+            signerName: r.evaluatorName, signerRole: r.evaluatorTitle, signerInitials: r.evaluatorInitials, documentation: null,
+            determination: "pass", remediationPlan: null, remediationTargetDate: null,
+            elements: Array.from({ length: elementCount }, (_, i) => ({ num: i + 1, status: compAggregateElementStatus([], i + 1) })),
+            waivedPassed: null, waivedMethods: waivedSummary([]),
+          });
+        }
+        if (imported.length) signoffs.sort((a: any, b: any) => String(b.signedDate).localeCompare(String(a.signedDate)));
       }
       // The clock (next milestone, due date, overdue, remediation) is the shared one in server/competencyMethodClock.ts
       // (BUG-069), so the register, reminders, roster status and dashboard read the same answer as this view.
@@ -30682,9 +30701,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const staffRows = (db as any).$client.prepare(
       `SELECT id, first_name, last_name FROM staff_employees WHERE tier2_lab_id = ? AND status = 'active'`
     ).all(labId) as Array<{ id: number; first_name: string; last_name: string }>;
-    const programRows = (db as any).$client.prepare(
-      `SELECT id, name FROM competency_programs WHERE lab_id = ?`
-    ).all(labId) as Array<{ id: number; name: string }>;
+    // BUG-120: a technical program's analyzer count, so a row whose program names none is warned in the preview.
+    const named = programNamedInstrumentIds((db as any).$client, labId);
+    const programRows = ((db as any).$client.prepare(
+      `SELECT id, name, type FROM competency_programs WHERE lab_id = ?`
+    ).all(labId) as Array<{ id: number; name: string; type: string | null }>)
+      .map((p) => ({ ...p, namedAnalyzers: (named.get(p.id) || []).length }));
     return { competencyEmployees: compRows, staffEmployees: staffRows, programs: programRows };
   }
 
