@@ -24,6 +24,9 @@ import { isValidYmd } from "./competencyBulkImport";
 export const ALLOWED_TYPES = ["initial", "6month", "annual", "reassessment", "orientation", "duty_change"] as const;
 export const ALLOWED_STATUSES = ["pass", "fail", "remediation"] as const;
 
+export const TECHNICAL_COHORT_MESSAGE =
+  "Technical competencies are signed on each person's page, one analyzer at a time, so the sign-off moves that person's due date. Cohort Sign-off is for waived and non-technical competencies.";
+
 export type AllowedType = (typeof ALLOWED_TYPES)[number];
 export type AllowedStatus = (typeof ALLOWED_STATUSES)[number];
 
@@ -71,7 +74,7 @@ export interface CohortPreview {
 
 export interface CohortContext {
   competencyEmployees: Array<{ id: number; name: string }>;
-  programs: Array<{ id: number; name: string }>;
+  programs: Array<{ id: number; name: string; type?: string | null }>;
   existingAssessments: Array<{
     id: number;
     program_id: number;
@@ -85,8 +88,12 @@ export function validateCohort(input: CohortInput, ctx: CohortContext): CohortPr
   const sharedIssues: CohortIssue[] = [];
 
   const program = ctx.programs.find((p) => p.id === input.programId);
-  const programOk = !!program;
-  if (!programOk) sharedIssues.push({ field: "programId", severity: "error", message: `Program ${input.programId} not found in this lab.` });
+  // BUG-120 (Michael Q91 = 1, 2026-11-02): a cohort row is one locked record with no per-analyzer detail, which the
+  // person page never reads, so a technical cohort left everyone showing as due. Technical is signed on the person's page.
+  const technical = program?.type === "technical";
+  const programOk = !!program && !technical;
+  if (!program) sharedIssues.push({ field: "programId", severity: "error", message: `Program ${input.programId} not found in this lab.` });
+  else if (technical) sharedIssues.push({ field: "programId", severity: "error", message: TECHNICAL_COHORT_MESSAGE });
 
   const typeOk = (ALLOWED_TYPES as readonly string[]).includes(input.assessmentType);
   if (!typeOk) sharedIssues.push({ field: "assessmentType", severity: "error", message: `Assessment type "${input.assessmentType}" not in: ${ALLOWED_TYPES.join(", ")}` });

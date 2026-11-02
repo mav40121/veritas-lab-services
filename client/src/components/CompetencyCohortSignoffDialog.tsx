@@ -81,10 +81,16 @@ export function CompetencyCohortSignoffDialog({ open, onOpenChange, labId }: Pro
   const [committing, setCommitting] = useState(false);
 
   // Programs + employees feed the dropdowns.
-  const programsQ = useQuery<Array<{ id: number; name: string }>>({
+  const programsQ = useQuery<Array<{ id: number; name: string; type?: string; record_kind?: string | null }>>({
     queryKey: [`/api/labs/${labId}/competency/programs`],
     enabled: open,
   });
+  // BUG-120 (Michael Q91 = 1): technical competencies are signed on each person's page (the server refuses them here),
+  // and new-hire evaluations are not cohort-signed, so neither is offered.
+  const cohortPrograms = useMemo(
+    () => (programsQ.data || []).filter((p) => p.type !== "technical" && p.record_kind !== "evaluation"),
+    [programsQ.data]
+  );
   const employeesQ = useQuery<Array<{ id: number; name: string; status: string }>>({
     queryKey: [`/api/labs/${labId}/competency/employees`],
     enabled: open,
@@ -224,10 +230,13 @@ export function CompetencyCohortSignoffDialog({ open, onOpenChange, labId }: Pro
                   onChange={(e) => { setProgramId(e.target.value === "" ? "" : Number(e.target.value)); setPreview(null); }}
                 >
                   <option value="">Select a program...</option>
-                  {(programsQ.data || []).map((p) => (
+                  {cohortPrograms.map((p) => (
                     <option key={p.id} value={p.id}>{p.name}</option>
                   ))}
                 </select>
+                <p className="text-[11px] text-muted-foreground mt-1" data-testid="cohort-technical-note">
+                  Waived and non-technical only. Technical competencies are signed on each person's page, one analyzer at a time.
+                </p>
               </div>
               <div>
                 <Label className="text-xs">Assessment date</Label>
