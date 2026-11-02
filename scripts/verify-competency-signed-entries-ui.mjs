@@ -13,11 +13,15 @@
 //      entries; the Signed competencies list filters and each row opens the person page with that sign-off's entries
 //      showing; the By-instrument page shows the signed facts; the VeritaComp landing links the list; no horizontal
 //      page scroll
+//   E. the record PDF downloads with the signed entries after page 1 (text checked by
+//      scripts/verify-competency-record-pdf-entries.py)
 // Run: PW_BASE=http://localhost:5197 SCRATCH_DB=<db> OUT=<dir> node scripts/verify-competency-signed-entries-ui.mjs
 import { createRequire } from "node:module";
+import fs from "node:fs";
 const require = createRequire(import.meta.url);
 const { chromium } = require("@playwright/test");
 const Database = require("better-sqlite3");
+const { PDFDocument } = require("pdf-lib");
 const BASE = process.env.PW_BASE, ADMIN = "test-admin-secret", OUT = process.env.OUT || ".";
 let failures = 0;
 const check = (name, cond, detail = "") => { console.log(`${cond ? "PASS" : "FAIL"}  ${name}${detail ? "  :: " + detail : ""}`); if (!cond) failures++; };
@@ -125,6 +129,16 @@ check("C1. a typed name that names the lab's TC (\"Tate, Casey\") is accepted", 
 r = await put(kim, CHEM, { elements: kimEls("Tate, Casey", "Lee Unknown") });
 check("C2. an unknown name (\"Lee Unknown\") is still refused", r.status === 400 && /Lee Unknown/.test(r.body.error || ""), `${r.status} ${r.body.error}`);
 { const db = new Database(process.env.SCRATCH_DB); db.prepare("UPDATE competency_assessment_items SET el4_observer_initials = 'Pat Nobody' WHERE instrument_id = ? AND element_number = 4 AND signoff_id IS NULL").run(CHEM); db.close(); }
+
+// ---------- E. record PDF ----------
+// The signed entries print after page 1 (the sign-off lines stay on page 1). Text and layout are read from the saved
+// file by scripts/verify-competency-record-pdf-entries.py.
+const tok = (await call("GET", `${L}/competency/employee/${pat}/record-pdf`, undefined, T)).body.token;
+const pdfRes = await fetch(`${BASE}/api/pdf/${tok}`, { headers: { Authorization: `Bearer ${T}` } });
+const pdfBuf = Buffer.from(await pdfRes.arrayBuffer());
+fs.writeFileSync(`${OUT}/record.pdf`, pdfBuf);
+let pages = 0; try { pages = (await PDFDocument.load(pdfBuf)).getPageCount(); } catch {}
+check("E1. the record PDF downloads: record page, signed-entries page, license page", pdfRes.status === 200 && pages >= 3, `${pdfRes.status} ${pages} pages`);
 
 // ---------- D. browser ----------
 const browser = await chromium.launch();

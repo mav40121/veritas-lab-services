@@ -5918,9 +5918,12 @@ export async function generateCompetencyPDF(input: CompetencyPDFInput, licenseCt
 interface RecordSignoff {
   legacy?: boolean; milestone: string | null; signedDate: string | null;
   signerName: string | null; signerRole: string | null; signerInitials: string | null;
-  elements?: Array<{ num: number; status: string }>;
+  // Michael 2026-11-02: each element carries the entries it was signed on (specimen ID, observer and observerName,
+  // dates, Element 5 samples, N/A reason); hasEntries is false for imported history.
+  elements?: Array<{ num: number; status: string; na?: boolean; naJustification?: string; observerName?: string | null; [k: string]: any }>;
   waivedPassed?: number | null;
-  waivedMethods?: Array<{ num: number; name: string; date: string; status: string }>;
+  waivedMethods?: Array<{ num: number; name: string; date: string; status: string; evidence?: string; initials?: string }>;
+  hasEntries?: boolean; documentation?: string | null;
   // BUG-051 (2026-10-14): Overall Determination; absent reads as pass (signed before the field existed).
   determination?: "pass" | "fail" | "remediation";
   remediationPlan?: string | null; remediationTargetDate?: string | null;
@@ -6024,6 +6027,48 @@ export function buildEmployeeCompetencyRecordHTML(input: EmployeeCompetencyRecor
   const elHeaders = anyElements ? Array.from({ length: elementCount }, (_, i) => `<th>El ${i + 1}</th>`).join("") : `<th>Waived methods</th>`;
   const legend = anyElements ? Array.from({ length: elementCount }, (_, i) => `<div>El ${i + 1}: ${EMP_REC_ELEMENT_NAMES[i + 1]}</div>`).join("") : "";
   const colCount = (anyElements ? elementCount : 1) + 6;
+  // Michael 2026-11-02: the entries each method was signed on, after page 1 (the sign-off lines stay on page 1, CLAUDE.md
+  // section 5). Every sign-off with stored entries, newest first per method; imported history has none here.
+  const ENTRY_FIELDS: Record<number, Array<[string, string, "text" | "date" | "bool"]>> = {
+    1: [["specimenId", "Specimen ID observed", "text"], ["observerInitials", "Observer", "text"]],
+    2: [["evidence", "Evidence", "text"], ["date", "Date", "date"]],
+    3: [["qcDate", "Date QC was run", "date"]],
+    4: [["dateObserved", "Date observed", "date"], ["observerInitials", "Observer", "text"]],
+    5: [["sampleType", "Sample type", "text"], ["sampleId", "Sample ID", "text"], ["acceptable", "Acceptable", "bool"]],
+    6: [["quizId", "Quiz ID", "text"], ["score", "Score", "text"], ["dateTaken", "Date taken", "date"]],
+    7: [["dateObserved", "Date observed", "date"], ["observerInitials", "Observer", "text"]],
+    8: [["functionAssessed", "Function assessed", "text"], ["date", "Date", "date"]],
+  };
+  const mdy = (iso: unknown) => { const s = String(iso || "").slice(0, 10); const [y, m, d] = s.split("-"); return y && m && d ? `${m}/${d}/${y}` : s; };
+  const val = (v: unknown, kind: "text" | "date" | "bool") => (v === null || v === undefined || v === "" ? "" : kind === "date" ? mdy(v) : kind === "bool" ? (v ? "Yes" : "No") : String(v));
+  const entryCell = (el: any): string => {
+    if (el.na) return `N/A: ${esc(el.naJustification || "no reason entered")}`;
+    if (el.num === 5 && Array.isArray(el.samples) && el.samples.length) {
+      return el.samples.map((s: any, i: number) => `${el.samples.length > 1 ? `Sample ${i + 1}: ` : ""}${[s.sampleType, s.sampleId].filter(Boolean).map((x: any) => esc(String(x))).join(", ")}${s.acceptable == null ? "" : s.acceptable ? ", acceptable" : ", not acceptable"}`).join("<br>");
+    }
+    return (ENTRY_FIELDS[el.num] || []).map(([k, label, kind]) => {
+      const raw = val(el[k], kind);
+      const shown = k === "observerInitials" && raw && el.observerName ? `${raw} (${el.observerName})` : raw;
+      return shown ? `${label}: ${esc(shown)}` : "";
+    }).filter(Boolean).join("; ") || `<span style="color:#7A7974;">Not entered</span>`;
+  };
+  const entryBlocks: string[] = [];
+  for (const ts of input.testSystems) {
+    for (const s of (ts.signoffs || []) as any[]) {
+      if (!s.hasEntries) continue;
+      const det = s.determination || "pass";
+      const head = `${esc(ts.instrumentName)} &middot; ${s.legacy ? "Signed" : esc(ms(s.milestone))} ${esc(mdy(s.signedDate))}${s.signerName ? ` by ${esc(s.signerName)}${s.signerRole ? `, ${esc(role(s.signerRole))}` : ""}` : ""}: ${det === "fail" ? "Fail" : det === "remediation" ? "Remediation Required" : "Pass"}`;
+      const doc = s.documentation ? `<div class="edoc">Documentation: ${esc(s.documentation)}</div>` : "";
+      const body = ts.waived
+        ? `<table class="m e"><thead><tr><th style="width:34%">Waived method</th><th style="width:9%">Result</th><th>Evidence</th><th style="width:11%">Date</th><th style="width:9%">Initials</th></tr></thead><tbody>${
+            ((s.waivedMethods || []) as any[]).map((m) => `<tr><td style="text-align:left;">${esc(m.name)}</td><td style="text-align:center;">${chip(m.status === "pass" ? "pass" : m.status === "fail" ? "fail" : "inc")}</td><td style="text-align:left;">${esc(m.evidence || "")}</td><td class="nw">${esc(mdy(m.date))}</td><td>${esc(m.initials || "")}</td></tr>`).join("")
+          }</tbody></table>`
+        : `<table class="m e"><thead><tr><th style="width:34%">Element</th><th style="width:9%">Result</th><th>Entries as signed</th></tr></thead><tbody>${
+            ((s.elements || []) as any[]).map((el) => `<tr><td style="text-align:left;">El ${el.num}: ${EMP_REC_ELEMENT_NAMES[el.num] || ""}</td><td style="text-align:center;">${chip(el.na ? "na" : el.status)}</td><td style="text-align:left;">${entryCell(el)}</td></tr>`).join("")
+          }</tbody></table>`;
+      entryBlocks.push(`<div class="eblock"><div class="ehead">${head}</div>${doc}${body}</div>`);
+    }
+  }
 
   return `<!doctype html><html lang="en"><head><meta charset="utf-8" />
   <style>
@@ -6062,6 +6107,11 @@ export function buildEmployeeCompetencyRecordHTML(input: EmployeeCompetencyRecor
     .sign table { width:100%; border-collapse:collapse; font-size:9.5px; }
     .sign th { text-align:left; font-size:8px; color:#6b6b6b; text-transform:uppercase; letter-spacing:.3px; padding:3px 4px; border-bottom:1px solid #D0D0D0; }
     .sign td { padding:5px 4px; border-bottom:1px solid #999; font-weight:600; height:20px; }
+    .entries { page-break-before: always; }
+    .eblock { page-break-inside: avoid; margin: 0 0 12px; }
+    .ehead { font-weight:700; font-size:10px; color:#0A3A3D; margin: 8px 2px 3px; }
+    .edoc { font-size:8.5px; color:#6b6b6b; margin: 0 2px 3px; }
+    table.e td { text-align:left; vertical-align:top; }
   </style></head><body>
     <div class="band">
       <div>
@@ -6102,6 +6152,7 @@ export function buildEmployeeCompetencyRecordHTML(input: EmployeeCompetencyRecor
     <table class="m"><thead><tr><th style="width:22%">Method</th><th>Determination</th><th>Action plan</th><th>Target completion</th></tr></thead>
       <tbody>${remediationLines.join("")}</tbody></table>
     <div class="reg">The employee may not perform patient testing on these methods unsupervised until remediation is complete and the method is signed again with Pass.</div>` : ""}
+    ${entryBlocks.length ? `<div class="entries"><h2>Signed entries</h2><div class="reg">The entries each method was signed on, as recorded in VeritaComp&trade;. Observers are shown with the VeritaStaff&trade; person they name. Imported history is kept in its program record.</div>${entryBlocks.join("")}</div>` : ""}
   </body></html>`;
 }
 
