@@ -328,7 +328,7 @@ export default function LabMembersPage() {
       <div>
         <h1 className="text-2xl font-bold">Lab Members</h1>
         <p className="text-sm text-muted-foreground">
-          Your role on this lab: {roleBadge(myRole)}
+          Your role on this lab: {roleBadge(myRole)}{myRole === "owner" && <> {roleBadge("admin")}</>}
           {!canManage && " — read-only view. Only the owner or an admin can invite or remove members."}
         </p>
       </div>
@@ -525,6 +525,9 @@ export default function LabMembersPage() {
                         <td className="py-2 pr-3">
                           <div className="flex items-center gap-1 flex-wrap">
                             {roleBadge(m.role)}
+                            {/* An owner holds every admin right (canManageLabMembers is owner || admin), so the owner
+                                also shows the Admin badge (Michael 2026-11-02, Heywood: "he is not showing as the admin"). */}
+                            {m.role === "owner" && roleBadge("admin")}
                             {isMedicalDirector(m.email) && medicalDirectorBadge()}
                           </div>
                         </td>
