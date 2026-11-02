@@ -15,4 +15,3 @@ tests/playwright/veritamap-cal-ver-exempt.spec.ts
 tests/playwright/veritamap-cal-ver-na.spec.ts
 tests/playwright/module-howto-progress.spec.ts
 tests/playwright/veritamap-date-entry.spec.ts
-tests/playwright/veritacomp-element-date-entry.spec.ts
