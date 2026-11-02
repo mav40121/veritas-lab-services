@@ -215,7 +215,7 @@ function headerRowHeight(headers: string[], colWidths: number[]): number {
 
 import { logAudit } from "./audit";
 import { syncInitialToStaffSchedule, earliestSignedInitials } from "./competencyClearanceSync";
-import { loadQualifiedObservers, observerProblem, itemObserverEntries, storedObserverValues } from "./competencyObserver";
+import { loadQualifiedObservers, observerProblem, itemObserverEntries, storedObserverValues, matchObserver } from "./competencyObserver";
 import { summarizeCspReport, cspHeaderName } from "./securityHeaders";
 import { normalizeChecklistItems } from "@shared/competencyChecklist";
 import { checklistImageIdProblem, checklistItemImageIds, checklistForAudit, checklistImageMap, withChecklistImages, snapshotChecklistItemImages } from "./competencyChecklistImages";
@@ -29208,11 +29208,38 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
        ORDER BY signed_date DESC, id DESC`
     );
     const frozenStmt = sqlite.prepare("SELECT * FROM competency_assessment_items WHERE signoff_id = ?");
-    // The passed waived methods on a signed set, for the record ("Blind specimen testing (2026-10-05)").
+    // The waived methods on a signed set, for the record ("Blind specimen testing (2026-10-05)") and the read-only view
+    // of what was signed (Michael 2026-11-02: evidence, date and initials as entered).
     const waivedSummary = (rows: any[]) => rows.filter((r: any) => r.waived_method_number != null).map((r: any) => ({
       num: Number(r.waived_method_number), name: WAIVED_METHOD_NAMES[Number(r.waived_method_number) - 1] || "",
       date: r.waived_date || "", status: waivedMethodPassed(r) ? "pass" : r.passed ? "incomplete" : "fail",
+      evidence: r.waived_evidence || "", initials: r.waived_initials || "", passed: !!r.passed,
     }));
+    // Element 1 / 4 observers resolved to the VeritaStaff person, so a signed set reads "MV (Veri, Michael)".
+    const qualifiedObservers = loadQualifiedObservers(sqlite, labId);
+    const observerName = (v: unknown): string | null => { const o = matchObserver(qualifiedObservers, v); return o ? o.name : null; };
+    // One element's raw entries from its item row: the entry form pre-fills from these, and a signed set shows them
+    // read-only (Michael 2026-11-02: "once it is signed, the supporting documentation is no longer visible").
+    const elementData = (rows: any[], el: number): any => {
+      const row: any = rows.find((it: any) => Number(it.element_number ?? it.method_number) === el) || {};
+      const data: any = { passed: !!row.passed, na: !!row[`el${el}_na`], naJustification: row[`el${el}_na_justification`] || "" };
+      if (el === 1) { data.specimenId = row.el1_specimen_id || ""; data.observerInitials = row.el1_observer_initials || ""; }
+      else if (el === 2) { data.evidence = row.el2_evidence || ""; data.date = row.el2_date || ""; }
+      else if (el === 3) { data.qcDate = row.el3_qc_date || ""; }
+      else if (el === 4) { data.dateObserved = row.el4_date_observed || ""; data.observerInitials = row.el4_observer_initials || ""; }
+      else if (el === 5) { data.sampleType = row.el5_sample_type || ""; data.sampleId = row.el5_sample_id || ""; data.acceptable = row.el5_acceptable == null ? null : !!row.el5_acceptable; data.samples = el5SamplesFromRow(row); }
+      else if (el === 6) { data.quizId = row.el6_quiz_id || ""; data.score = row.el6_score == null ? "" : row.el6_score; data.dateTaken = row.el6_date_taken || ""; }
+      else if (el === 7) { data.dateObserved = row.el7_date_observed || ""; data.observerInitials = row.el7_observer_initials || ""; }
+      else if (el === 8) { data.functionAssessed = row.el8_function_assessed || ""; data.date = row.el8_date || ""; }
+      return data;
+    };
+    // A signed set: each element's status with its entries (observers named), and whether any entries are stored.
+    const signedElements = (rows: any[]) => Array.from({ length: elementCount }, (_, i) => {
+      const n = i + 1;
+      const d = elementData(rows, n);
+      if (n === 1 || n === 4) d.observerName = d.observerInitials ? observerName(d.observerInitials) : null;
+      return { num: n, status: compAggregateElementStatus(rows, n), ...d };
+    });
     const signerCandidates = loadCompetencySignerCandidates(sqlite, labId);
     const today = labLocalDate(new Date().toISOString());
     // Passed waived methods on a set of rows, counted on the analyzer those rows were saved under.
@@ -29233,7 +29260,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           // BUG-051: rows signed before the determination existed could only be signed complete, so they read as pass.
           determination: s.determination || "pass",
           remediationPlan: s.remediation_plan || null, remediationTargetDate: s.remediation_target_date || null,
-          elements: Array.from({ length: elementCount }, (_, i) => ({ num: i + 1, status: compAggregateElementStatus(frozen, i + 1) })),
+          elements: signedElements(frozen), hasEntries: frozen.length > 0,
           waivedPassed: waivedPassedOf(frozen),
           waivedMethods: waivedSummary(frozen),
         };
@@ -29252,7 +29279,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           // BUG-051: the whole-record form's own Overall Determination.
           determination: legacy.status === "fail" || legacy.status === "remediation" ? legacy.status : "pass",
           remediationPlan: legacy.remediation_plan || null, remediationTargetDate: null,
-          elements: Array.from({ length: elementCount }, (_, i) => ({ num: i + 1, status: compAggregateElementStatus(legacyItems, i + 1) })),
+          elements: signedElements(legacyItems), hasEntries: legacyItems.length > 0,
           waivedPassed: waivedPassedOf(legacyItems),
           waivedMethods: waivedSummary(legacyItems),
         });
@@ -29268,7 +29295,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
             id: null, legacy: false, imported: true, importedFrom: r.programName, milestone: r.milestone, signedDate: r.signedDate,
             signerName: r.evaluatorName, signerRole: r.evaluatorTitle, signerInitials: r.evaluatorInitials, documentation: null,
             determination: "pass", remediationPlan: null, remediationTargetDate: null,
-            elements: Array.from({ length: elementCount }, (_, i) => ({ num: i + 1, status: compAggregateElementStatus([], i + 1) })),
+            elements: Array.from({ length: elementCount }, (_, i) => ({ num: i + 1, status: compAggregateElementStatus([], i + 1) })), hasEntries: false,
             waivedPassed: null, waivedMethods: waivedSummary([]),
           });
         }
@@ -29345,23 +29372,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const elements = [];
       for (let el = 1; el <= elementCount; el++) {
         const st = compAggregateElementStatus(instItems, el);
-        const row: any = instItems.find((it: any) => Number(it.element_number ?? it.method_number) === el) || {};
         // Raw per-element data so the entry form can pre-fill. Only the fields
         // that element uses are populated; the rest stay empty.
-        const data: any = {
-          passed: !!row.passed,
-          na: !!row[`el${el}_na`],
-          naJustification: row[`el${el}_na_justification`] || "",
-        };
-        if (el === 1) { data.specimenId = row.el1_specimen_id || ""; data.observerInitials = row.el1_observer_initials || ""; }
-        else if (el === 2) { data.evidence = row.el2_evidence || ""; data.date = row.el2_date || ""; }
-        else if (el === 3) { data.qcDate = row.el3_qc_date || ""; }
-        else if (el === 4) { data.dateObserved = row.el4_date_observed || ""; data.observerInitials = row.el4_observer_initials || ""; }
-        else if (el === 5) { data.sampleType = row.el5_sample_type || ""; data.sampleId = row.el5_sample_id || ""; data.acceptable = row.el5_acceptable == null ? null : !!row.el5_acceptable; data.samples = el5SamplesFromRow(row); }
-        else if (el === 6) { data.quizId = row.el6_quiz_id || ""; data.score = row.el6_score == null ? "" : row.el6_score; data.dateTaken = row.el6_date_taken || ""; }
-        else if (el === 7) { data.dateObserved = row.el7_date_observed || ""; data.observerInitials = row.el7_observer_initials || ""; }
-        else if (el === 8) { data.functionAssessed = row.el8_function_assessed || ""; data.date = row.el8_date || ""; }
-        elements.push({ num: el, status: st === "none" ? "incomplete" : st, ...data });
+        elements.push({ num: el, status: st === "none" ? "incomplete" : st, ...elementData(instItems, el) });
       }
       const incomplete = elements.some((e) => e.status === "incomplete");
       const complete = !incomplete && instItems.length > 0;
@@ -29460,6 +29473,37 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       };
     });
     res.json({ instruments: rows });
+  });
+
+  // GET /api/labs/:labId/competency/signoffs : every signed competency in the lab, newest first (Michael 2026-11-02: "an
+  // easy way to see 'completed' competencies to see supporting documentation"). Read-only. Built from each active
+  // person's assembleEmployeeCompetencyView, so the list holds exactly the sign-offs the person page shows (per-method
+  // sign-offs, records signed on the whole record before 10/13, and imported history); each row opens that page.
+  app.get("/api/labs/:labId/competency/signoffs", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const labId = req.scope.labId;
+    const sqlite = (db as any).$client;
+    const people = sqlite.prepare(
+      "SELECT id FROM staff_employees WHERE tier2_lab_id = ? AND status = 'active' ORDER BY last_name, first_name"
+    ).all(labId) as any[];
+    const rows: any[] = [];
+    for (const p of people) {
+      const view = assembleEmployeeCompetencyView(sqlite, labId, p.id);
+      for (const ts of view?.testSystems || []) {
+        for (const s of ts.signoffs || []) {
+          rows.push({
+            employeeId: view.employee.id, employeeName: view.employee.name, employeeTitle: view.employee.title,
+            instrumentId: ts.instrumentId, methodName: ts.instrumentName, department: ts.department, complexity: ts.complexity,
+            groupMembers: ts.groupMembers || null,
+            signoffId: s.id, legacy: !!s.legacy, imported: !!s.imported, importedFrom: s.importedFrom || null,
+            milestone: s.milestone, signedDate: s.signedDate, signerName: s.signerName, signerRole: s.signerRole,
+            determination: s.determination || "pass", hasEntries: !!s.hasEntries,
+          });
+        }
+      }
+    }
+    rows.sort((a, b) => String(b.signedDate || "").localeCompare(String(a.signedDate || "")) || a.employeeName.localeCompare(b.employeeName));
+    res.json({ signoffs: rows });
   });
 
   // GET /api/labs/:labId/competency/instrument/:instrumentId : the instrument and each assigned person's block.

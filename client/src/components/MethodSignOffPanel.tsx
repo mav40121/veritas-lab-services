@@ -3,7 +3,8 @@
 // Per-method sign-off (2026-10-13, Michael Q156/Q158): sign ONE method's competency for one person, from the person
 // page (By tech) or the instrument page (By instrument). Shows the method's sign-off history and next due date, the
 // "Signed by" list (eligible people first; the rest greyed out with the reason, from shared/competencySignoff.ts), and
-// Unlock for the most recent sign-off. The server re-checks every rule.
+// Unlock for the most recent sign-off. The server re-checks every rule. "View signed entries" (and each earlier sign-off)
+// opens the entries the method was signed on, read-only (SignedEntries, Michael 2026-11-02).
 //   POST /api/labs/:labId/competency/employee/:employeeId/test-system/:instrumentId/sign
 //   POST /api/labs/:labId/competency/employee/:employeeId/test-system/:instrumentId/signoffs/:signoffId/revoke
 import { useEffect, useMemo, useState } from "react";
@@ -14,8 +15,9 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Loader2, CheckCircle2, AlertTriangle, ChevronDown, ChevronUp } from "lucide-react";
 import { MILESTONE_LABEL, MONTH_NAMES, initialsOf, milestonesForComplexity, type MethodMilestone, type SignerOption } from "@shared/competencySignoff";
+import SignedEntries from "@/components/SignedEntries";
 
 // BUG-051 (2026-10-14): the Overall Determination from the whole-record form, now on each method's sign-off.
 export type Determination = "pass" | "fail" | "remediation";
@@ -27,9 +29,15 @@ export interface MethodSignoff {
   determination?: Determination; remediationPlan?: string | null; remediationTargetDate?: string | null;
   // BUG-120: a record from a named technical program (Bulk Import history or an older program record).
   imported?: boolean; importedFrom?: string | null;
+  // Michael 2026-11-02: the entries the method was signed on, shown read-only (SignedEntries). hasEntries is false for
+  // imported history, whose entries live in the program record.
+  elements?: Array<{ num: number; status: string; na?: boolean; naJustification?: string; observerName?: string | null; [k: string]: any }>;
+  waivedPassed?: number | null;
+  waivedMethods?: Array<{ num: number; name: string; date: string; status: string; evidence?: string; initials?: string; passed?: boolean }>;
+  hasEntries?: boolean;
 }
 export interface MethodSignState {
-  instrumentId: number; instrumentName: string; complexity: string;
+  instrumentId: number; instrumentName: string; complexity: string; waived?: boolean;
   signable: boolean; complete: boolean; hasData: boolean; fromLegacyProgram?: boolean;
   signoffs: MethodSignoff[]; lastSignoff: MethodSignoff | null; needsRemediation?: boolean;
   elements?: Array<{ num: number; status: string }>;
@@ -67,9 +75,10 @@ export function signoffSummary(ts: MethodSignState): { label: string; tone: "gre
 }
 
 // part: "status" = the signed banner only (top of the method), "sign" = the sign form only (under the elements), "all" = both.
-export default function MethodSignOffPanel({ labId, employeeId, employeeName, ts, readOnly, onChanged, part = "all" }: {
+// openSignoffId: open that sign-off's entries on arrival (a row on the Signed competencies list links here with it).
+export default function MethodSignOffPanel({ labId, employeeId, employeeName, ts, readOnly, onChanged, part = "all", openSignoffId }: {
   labId: number | string; employeeId: number; employeeName: string; ts: MethodSignState; readOnly: boolean; onChanged: () => void;
-  part?: "status" | "sign" | "all";
+  part?: "status" | "sign" | "all"; openSignoffId?: number | null;
 }) {
   const showStatus = part !== "sign";
   const showSign = part !== "status";
@@ -135,6 +144,15 @@ export default function MethodSignOffPanel({ labId, employeeId, employeeName, ts
   });
 
   const last = ts.lastSignoff;
+  // Which sign-off's entries are open (read-only, SignedEntries): keyed by id, or by position for one with no id
+  // (signed on the whole record, or imported history).
+  const viewKey = (s: MethodSignoff, idx: number) => (s.id != null ? `id${s.id}` : `i${idx}`);
+  const [viewing, setViewing] = useState<string | null>(null);
+  const toggleView = (k: string) => setViewing((cur) => (cur === k ? null : k));
+  useEffect(() => {
+    setViewing(openSignoffId != null && ts.signoffs.some((s) => s.id === openSignoffId) ? `id${openSignoffId}` : null);
+  }, [ts.instrumentId, employeeId, openSignoffId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const viewedSignoff = viewing ? ts.signoffs.find((s, i) => viewKey(s, i) === viewing) || null : null;
   const lastNotPass = !!last && !!last.determination && last.determination !== "pass";
   const warn = ts.overdue || lastNotPass;
   return (
@@ -167,17 +185,41 @@ export default function MethodSignOffPanel({ labId, employeeId, employeeName, ts
               {last.legacy && <div className="text-xs text-muted-foreground mt-0.5">Signed on the whole record before per-method sign-off.</div>}
               {last.imported && <div className="text-xs text-muted-foreground mt-0.5" data-testid="method-imported">Imported history from {last.importedFrom}. The next sign-off is recorded on this page.</div>}
               {ts.signoffs.length > 1 && (
-                <div className="text-[11px] text-muted-foreground mt-1">
-                  Earlier: {ts.signoffs.slice(1).map((s) => `${s.milestone ? MILESTONE_LABEL[s.milestone] : "Signed"} ${fmt(s.signedDate)}${s.determination && s.determination !== "pass" ? ` ${DETERMINATION_LABEL[s.determination]}` : ""}${s.signerName ? ` (${s.signerName})` : ""}`).join("; ")}
+                <div className="text-[11px] text-muted-foreground mt-1" data-testid="method-earlier">
+                  Earlier:{" "}
+                  {ts.signoffs.slice(1).map((s, i) => (
+                    <span key={`${s.id ?? "x"}-${i}`}>
+                      {i > 0 ? "; " : ""}
+                      <button type="button" className="underline decoration-dotted hover:text-primary" onClick={() => toggleView(viewKey(s, i + 1))}
+                        aria-expanded={viewing === viewKey(s, i + 1)} data-testid="method-earlier-view">
+                        {`${s.milestone ? MILESTONE_LABEL[s.milestone] : "Signed"} ${fmt(s.signedDate)}${s.determination && s.determination !== "pass" ? ` ${DETERMINATION_LABEL[s.determination]}` : ""}${s.signerName ? ` (${s.signerName})` : ""}`}
+                      </button>
+                    </span>
+                  ))}
                 </div>
               )}
             </div>
           </div>
-          {!readOnly && last.id != null && !ts.hasData && (
-            <Button size="sm" variant="outline" onClick={() => unlock.mutate(last.id as number)} disabled={unlock.isPending} data-testid="method-unlock">
-              {unlock.isPending && <Loader2 className="animate-spin mr-1" size={12} />} Unlock
+          <div className="flex items-center gap-2 shrink-0">
+            <Button size="sm" variant="outline" onClick={() => toggleView(viewKey(last, 0))} aria-expanded={viewing === viewKey(last, 0)} data-testid="method-view-entries">
+              {viewing === viewKey(last, 0) ? <ChevronUp className="mr-1" size={12} /> : <ChevronDown className="mr-1" size={12} />} View signed entries
             </Button>
-          )}
+            {!readOnly && last.id != null && !ts.hasData && (
+              <Button size="sm" variant="outline" onClick={() => unlock.mutate(last.id as number)} disabled={unlock.isPending} data-testid="method-unlock">
+                {unlock.isPending && <Loader2 className="animate-spin mr-1" size={12} />} Unlock
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+      {showStatus && viewedSignoff && (
+        <div>
+          <div className="text-xs font-medium mb-1" data-testid="signed-entries-title">
+            {viewedSignoff.legacy ? "Signed" : `${MILESTONE_LABEL[viewedSignoff.milestone as MethodMilestone]} signed`} {fmt(viewedSignoff.signedDate)}
+            {viewedSignoff.signerName ? ` by ${viewedSignoff.signerName}${viewedSignoff.signerRole ? `, ${ROLE_NAME[viewedSignoff.signerRole] || viewedSignoff.signerRole}` : ""}` : ""}
+            {viewedSignoff.determination ? `: ${DETERMINATION_LABEL[viewedSignoff.determination]}` : ""}
+          </div>
+          <SignedEntries signoff={viewedSignoff} waived={ts.waived} />
         </div>
       )}
 
