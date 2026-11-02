@@ -269,6 +269,10 @@ jobs:
         # BUG-120 (Michael Q91 = 1): Cohort Sign-off refuses a technical program (its records never reach the person
         # page's due dates); waived and non-technical cohorts still commit.
         run: npm run test:competency-cohort-technical
+      - name: Run competency imported-history integration test
+        # BUG-120 (Michael Q92 = 1): a locked, passed record in a named technical program counts as imported history
+        # for each analyzer the program names; a live sign-off wins; a program naming no analyzers counts nothing.
+        run: npm run test:competency-imported-history
       - name: Run policy auto-expire nightly integration test
         # BUG-081: the nightly VeritaPolicy job runs the auto-expire sweep (approved policies 60+ days past review
         # -> expired, one audit row each), not only the review reminders; idempotent.
