@@ -25,6 +25,8 @@ export interface MethodSignoff {
   id: number | null; legacy: boolean; milestone: MethodMilestone | null; signedDate: string | null;
   signerName: string | null; signerRole: string | null; signerInitials: string | null; documentation: string | null;
   determination?: Determination; remediationPlan?: string | null; remediationTargetDate?: string | null;
+  // BUG-120: a record from a named technical program (Bulk Import history or an older program record).
+  imported?: boolean; importedFrom?: string | null;
 }
 export interface MethodSignState {
   instrumentId: number; instrumentName: string; complexity: string;
@@ -163,6 +165,7 @@ export default function MethodSignOffPanel({ labId, employeeId, employeeName, ts
                 </div>
               )}
               {last.legacy && <div className="text-xs text-muted-foreground mt-0.5">Signed on the whole record before per-method sign-off.</div>}
+              {last.imported && <div className="text-xs text-muted-foreground mt-0.5" data-testid="method-imported">Imported history from {last.importedFrom}. The next sign-off is recorded on this page.</div>}
               {ts.signoffs.length > 1 && (
                 <div className="text-[11px] text-muted-foreground mt-1">
                   Earlier: {ts.signoffs.slice(1).map((s) => `${s.milestone ? MILESTONE_LABEL[s.milestone] : "Signed"} ${fmt(s.signedDate)}${s.determination && s.determination !== "pass" ? ` ${DETERMINATION_LABEL[s.determination]}` : ""}${s.signerName ? ` (${s.signerName})` : ""}`).join("; ")}

@@ -105,6 +105,73 @@ const rankC = (c: string): number => { const u = String(c || "").toUpperCase(); 
 const cLabel = (r: number): string => (r >= 3 ? "HIGH" : r === 2 ? "MODERATE" : r === 1 ? "WAIVED" : "UNSPECIFIED");
 const LEGACY_MILESTONE: Record<string, string> = { initial: "initial", "6month": "six_month", six_month: "six_month", first_annual: "first_annual", annual: "annual" };
 
+// BUG-120 (Michael Q92 = 1, 2026-11-02): a record in a NAMED technical program (Bulk Import history; Cohort Sign-off
+// before #1775; the program form before #1774) carries no per-analyzer items, so no reader counted it and a person
+// brought over with years of competencies still showed the Initial as due. A program names analyzers through its method
+// groups (instrument names); each name matches the same-named analyzers on this lab's maps.
+export function programNamedInstrumentIds(sqlite: any, labId: number): Map<number, number[]> {
+  const idsByName = new Map<string, number[]>();
+  for (const i of sqlite.prepare(
+    `SELECT i.id, i.instrument_name FROM veritamap_instruments i JOIN veritamap_maps m ON m.id = i.map_id WHERE m.lab_id = ?`
+  ).all(labId) as any[]) {
+    const k = String(i.instrument_name || "").trim().toLowerCase();
+    if (k) idsByName.set(k, [...(idsByName.get(k) || []), i.id]);
+  }
+  const out = new Map<number, number[]>();
+  for (const g of sqlite.prepare(
+    `SELECT mg.program_id, mg.instruments FROM competency_method_groups mg JOIN competency_programs p ON p.id = mg.program_id
+     WHERE p.lab_id = ? AND p.type = 'technical'`
+  ).all(labId) as any[]) {
+    let names: string[] = [];
+    try { const v = JSON.parse(g.instruments || "[]"); if (Array.isArray(v)) names = v.map((x: any) => String(x).trim().toLowerCase()); } catch { /* malformed group JSON: names nothing */ }
+    const ids = new Set(out.get(g.program_id) || []);
+    for (const n of names) for (const id of idsByName.get(n) || []) ids.add(id);
+    out.set(g.program_id, Array.from(ids));
+  }
+  return out;
+}
+
+// Imported history: each locked, passed Initial / 6-month / Annual in a named technical program, for every analyzer the
+// program names, keyed `${staffEmployeeId}:${instrumentId}`, newest first. A reader uses it only for a method with no
+// per-method sign-off (a live sign-off always wins), merged by date with the older whole-record sign.
+export interface ImportedRecord {
+  assessmentId: number; milestone: string; signedDate: string | null; programName: string;
+  evaluatorName: string | null; evaluatorTitle: string | null; evaluatorInitials: string | null;
+}
+export function loadImportedHistory(sqlite: any, labId: number, staffEmployeeId?: number): Map<string, ImportedRecord[]> {
+  const out = new Map<string, ImportedRecord[]>();
+  const named = programNamedInstrumentIds(sqlite, labId);
+  if (!named.size) return out;
+  const rows = sqlite.prepare(
+    `SELECT a.id, ce.staff_employee_id, a.program_id, p.name AS program_name, a.assessment_type, a.assessment_date,
+            a.completion_date, a.signed_on_paper_date, a.evaluator_name, a.evaluator_title, a.evaluator_initials
+     FROM competency_assessments a
+     JOIN competency_programs p ON p.id = a.program_id
+     JOIN competency_employees ce ON ce.id = a.employee_id
+     WHERE p.lab_id = ? AND p.type = 'technical' AND COALESCE(p.is_implicit, 0) = 0
+       AND COALESCE(p.record_kind, 'competency') <> 'evaluation'
+       AND a.locked = 1 AND a.status = 'pass' AND ce.staff_employee_id IS NOT NULL ${staffEmployeeId != null ? "AND ce.staff_employee_id = ?" : ""}
+     ORDER BY a.assessment_date DESC, a.id DESC`
+  ).all(...(staffEmployeeId != null ? [labId, staffEmployeeId] : [labId])) as any[];
+  for (const r of rows) {
+    const milestone = LEGACY_MILESTONE[String(r.assessment_type || "")];
+    if (!milestone) continue; // orientation, reassessment, duty change: not a clock milestone
+    // A date-only value is already the lab's calendar day; a timestamp is converted to it (BUG-047).
+    const done = String(r.completion_date || "");
+    const signedDate = String(r.signed_on_paper_date || "").slice(0, 10) || (done.length === 10 ? done : done ? labLocalDate(done) : "") || r.assessment_date || null;
+    const rec: ImportedRecord = {
+      assessmentId: r.id, milestone, signedDate, programName: r.program_name,
+      evaluatorName: r.evaluator_name || null, evaluatorTitle: r.evaluator_title || null, evaluatorInitials: r.evaluator_initials || null,
+    };
+    for (const inst of named.get(r.program_id) || []) {
+      const k = `${r.staff_employee_id}:${inst}`;
+      out.set(k, [...(out.get(k) || []), rec]);
+    }
+  }
+  for (const list of Array.from(out.values())) list.sort((x, y) => String(y.signedDate).localeCompare(String(x.signedDate)) || (y.assessmentId - x.assessmentId));
+  return out;
+}
+
 export interface PersonMethodClock {
   methodId: number;                    // the analyzer id, or a group's lead analyzer id
   name: string;                        // the analyzer's name, or the group's name
@@ -165,6 +232,7 @@ export function loadLabMethodClocks(sqlite: any, labId: number, today: string): 
     const k = `${r.staff_employee_id}:${r.instrument_id}`;
     if (!legacyByPersonInst.has(k)) legacyByPersonInst.set(k, r);
   }
+  const importedByPersonInst = loadImportedHistory(sqlite, labId);
 
   const ctxRows = sqlite.prepare(
     `SELECT e.id, e.hire_date, sl.accreditation_body, sl.includes_nys, sl.competency_annual_month
@@ -200,6 +268,14 @@ export function loadLabMethodClocks(sqlite: any, labId: number, today: string): 
           milestone: LEGACY_MILESTONE[String(legacy.assessment_type || "")] || null, signedDate: signed,
           determination: legacy.status === "fail" || legacy.status === "remediation" ? legacy.status : "pass",
         }];
+      }
+      // BUG-120: imported history for the method's analyzers, merged with the older whole-record sign by date.
+      const seenRec = new Set<number>();
+      const imported = memberIds.flatMap((id) => importedByPersonInst.get(`${a.employee_id}:${id}`) || [])
+        .filter((r) => { if (seenRec.has(r.assessmentId)) return false; seenRec.add(r.assessmentId); return true; });
+      if (imported.length) {
+        list = [...list, ...imported.map((r) => ({ milestone: r.milestone, signedDate: r.signedDate, determination: "pass" }))]
+          .sort((x, y) => String(y.signedDate).localeCompare(String(x.signedDate)));
       }
     }
     const complexity = cLabel(Math.max(...memberIds.map((id) => rankByInst.get(id) || 0)));
