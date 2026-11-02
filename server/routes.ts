@@ -30830,8 +30830,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       `SELECT id, name FROM competency_employees WHERE lab_id = ? AND status = 'active' ORDER BY name`
     ).all(labId) as Array<{ id: number; name: string }>;
     const programRows = sqlite.prepare(
-      `SELECT id, name FROM competency_programs WHERE lab_id = ? AND COALESCE(record_kind, 'competency') <> 'evaluation' ORDER BY name`
-    ).all(labId) as Array<{ id: number; name: string }>;
+      `SELECT id, name, type FROM competency_programs WHERE lab_id = ? AND COALESCE(record_kind, 'competency') <> 'evaluation' ORDER BY name`
+    ).all(labId) as Array<{ id: number; name: string; type: string | null }>;
     const existingAsmt = sqlite.prepare(
       `SELECT a.id, a.program_id, a.employee_id, a.completion_date, a.locked
        FROM competency_assessments a
