@@ -159,6 +159,7 @@ interface Employee {
   lis_initials: string | null;
   status: string;
   created_at: string;
+  staff_employee_id?: number | null;
 }
 
 // 2026-06-09 PR1: shared sanitizer + renderer for quiz question prompts.
@@ -2191,6 +2192,11 @@ function ProgramDetailView({ programId }: { programId: number }) {
     );
   }
 
+  // BUG-118 (Michael Q90 = 1, 2026-11-02): due dates come only from per-method sign-offs on the person's page, so a
+  // technical program's New Assessment opens a person picker there instead of the whole-record form (an Annual signed
+  // in that form left the person showing as due). Editing an existing record still opens the form.
+  const technicalByPerson = program.type === "technical" && program.record_kind !== "evaluation";
+
   const tabs = [
     { key: "overview", label: "Overview", icon: BarChart3 },
     { key: "assessments", label: "Assessments", icon: ClipboardCheck },
@@ -2278,7 +2284,15 @@ function ProgramDetailView({ programId }: { programId: number }) {
       {activeTab === "quizzes" && <QuizzesTab program={program} autoOpenNew={initialNewQuiz && !isReadOnly} />}
       {activeTab === "settings" && <SettingsTab program={program} />}
 
-      {(newAssessmentOpen || editingAssessment) && !isReadOnly && (
+      {newAssessmentOpen && technicalByPerson && !editingAssessment && !isReadOnly && (
+        <TechnicalPersonPickerDialog
+          program={program}
+          employees={program.employees || []}
+          onClose={() => setNewAssessmentOpen(false)}
+          onPick={(staffId) => navigate(activeLabId ? `/labs/${activeLabId}/veritacomp-app/employee/${staffId}` : `/veritacomp-app/employee/${staffId}`)}
+        />
+      )}
+      {((newAssessmentOpen && !technicalByPerson) || editingAssessment) && !isReadOnly && (
         <NewAssessmentDialog
           key={editingAssessment ? `edit-${editingAssessment.id}` : "new"}
           program={program}
@@ -2293,6 +2307,78 @@ function ProgramDetailView({ programId }: { programId: number }) {
         />
       )}
     </div>
+  );
+}
+
+// BUG-118: who to assess, then their person page. Same people the form offered (the program's list plus the VeritaStaff
+// people assigned to its analyzers, less anyone Not applicable here); anyone not in VeritaStaff is named but cannot be
+// picked, since the person page is a VeritaStaff page.
+function TechnicalPersonPickerDialog({ program, employees, onClose, onPick }: {
+  program: Program; employees: Employee[]; onClose: () => void; onPick: (staffEmployeeId: number) => void;
+}) {
+  const activeLabId = useActiveLabId();
+  const eligibleUrl = activeLabId ? `/api/labs/${activeLabId}/competency/programs/${program.id}/eligible-employees` : null;
+  const { data: eligible, isLoading } = useQuery<{ employees: Employee[] }>({
+    queryKey: [eligibleUrl || "no-eligible-employees"],
+    queryFn: async () => {
+      const r = await fetch(`${API_BASE}${eligibleUrl}`, { headers: authHeaders() });
+      if (!r.ok) return { employees: [] };
+      return r.json();
+    },
+    enabled: !!eligibleUrl,
+  });
+  const na = notApplicableSet(program);
+  const people = [...employees.filter(e => e.status === "active")];
+  const seen = new Set(people.map(e => e.id));
+  for (const e of eligible?.employees || []) if (!seen.has(e.id)) { people.push(e); seen.add(e.id); }
+  const listed = people.filter(e => !na.has(e.id)).sort((a, b) => a.name.localeCompare(b.name));
+  const linked = listed.filter(e => e.staff_employee_id);
+  const unlinked = listed.filter(e => !e.staff_employee_id);
+  const allNotApplicable = people.some(e => e.staff_employee_id && na.has(e.id));
+  return (
+    <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
+      <DialogContent className="max-w-md" data-testid="technical-person-picker">
+        <DialogHeader>
+          <DialogTitle>Record on the person's page</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 pt-1">
+          <p className="text-sm text-muted-foreground">
+            Technical competencies are recorded on each person's page, one analyzer at a time, so each sign-off moves that
+            person's due date. Pick who you are assessing.
+          </p>
+          {isLoading ? (
+            <div className="h-24 rounded-md bg-muted/60 animate-pulse" />
+          ) : linked.length === 0 ? (
+            <p className="text-sm" data-testid="technical-person-picker-empty">
+              {allNotApplicable
+                ? <>Everyone in VeritaStaff{"™"} on this competency is marked Not applicable. On the Employees tab, Applies again
+                    brings a person back.</>
+                : <>No one in this program is in VeritaStaff{"™"} yet. Add them in VeritaStaff{"™"} and assign their analyzers, then
+                    record their competency from their page.</>}
+            </p>
+          ) : (
+            <div className="max-h-72 overflow-y-auto rounded-md border border-border divide-y divide-border">
+              {linked.map(e => (
+                <button key={e.id} type="button" onClick={() => onPick(Number(e.staff_employee_id))}
+                  data-testid={`technical-person-pick-${e.staff_employee_id}`}
+                  className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-muted/60">
+                  <span>{e.name}{e.title ? <span className="text-xs text-muted-foreground ml-1.5">{e.title}</span> : null}</span>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                </button>
+              ))}
+            </div>
+          )}
+          {unlinked.length > 0 && (
+            <p className="text-xs text-muted-foreground" data-testid="technical-person-picker-unlinked">
+              Not in VeritaStaff{"™"} yet: {unlinked.map(e => e.name).join(", ")}. Add them there to record their competency.
+            </p>
+          )}
+          <div className="flex justify-end pt-1">
+            <Button variant="outline" onClick={onClose}>Cancel</Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
