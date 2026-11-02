@@ -11,13 +11,15 @@
 // Observers are stored as initials (el1_observer_initials / el4_observer_initials); the matching rule lives in
 // shared/competencyObserver.ts so the pick list and this check agree.
 
-import { normInitials, observerForms } from "@shared/competencyObserver";
+import { normInitials, observerForms, matchObserver } from "@shared/competencyObserver";
 
-export { normInitials, observerForms };
+export { normInitials, observerForms, matchObserver };
 
 export type QualifiedObserver = {
   employeeId: number;
   name: string;
+  firstName: string;
+  lastName: string;
   initials: string;
   roles: string[];
   active: boolean;
@@ -46,6 +48,8 @@ export function loadQualifiedObservers(sqlite: any, labId: number): QualifiedObs
     return {
       employeeId: r.employee_id,
       name: name || `Employee #${r.employee_id}`,
+      firstName: (r.first_name || "").trim(),
+      lastName: (r.last_name || "").trim(),
       initials,
       roles: (r.role_csv || "").split(",").filter(Boolean),
       active: r.status === "active",
@@ -63,12 +67,10 @@ export function observerProblem(
   entries: Array<{ element: number; value: unknown }>,
   kept: Iterable<unknown> = [],
 ): string | null {
-  const allowed = new Set<string>();
-  for (const o of observers) for (const f of observerForms(o)) allowed.add(f);
   const keptSet = new Set(Array.from(kept, normInitials).filter(Boolean));
   for (const { element, value } of entries) {
     const v = normInitials(value);
-    if (!v || keptSet.has(v) || allowed.has(v)) continue;
+    if (!v || keptSet.has(v) || matchObserver(observers, value)) continue;
     return `Element ${element} observer "${String(value).trim()}" is not a Laboratory Director, Technical Consultant or Technical Supervisor in VeritaStaff. Add the observer in VeritaStaff with that role (someone who has left the lab can be added and marked terminated), then pick them from the list.`;
   }
   return null;
