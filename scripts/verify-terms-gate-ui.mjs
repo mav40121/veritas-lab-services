@@ -53,7 +53,8 @@ await op.goto(`${BASE}/labs/${labId}/dashboard`, { waitUntil: "networkidle" }); 
 check("U1. before activation the owner works as before (no agreement)", (await dialog(op).count()) === 0);
 
 // U2
-const act = await call("POST", "/api/admin/terms/activate", { secret: ADMIN, version: "2026-11-03", dryRun: false });
+const VERSION = (await (await fetch(`${BASE}/api/admin/terms/status`, { headers: { "x-admin-secret": ADMIN } })).json()).currentVersion; // the build's own version
+const act = await call("POST", "/api/admin/terms/activate", { secret: ADMIN, version: VERSION, dryRun: false });
 check("U2. activation (admin) succeeded", act.status === 200 && act.body.dryRun === false, JSON.stringify(act.body));
 await op.evaluate(() => { window.history.pushState({}, "", window.location.pathname.replace(/dashboard$/, "veritacheck")); window.dispatchEvent(new PopStateEvent("popstate")); });
 await dialog(op).waitFor({ timeout: 15000 }).catch(() => {});
