@@ -3302,7 +3302,10 @@ return (
                 )}
               </div>}
               {studyType === "manual_diff" && (
-                <ManualDifferentialForm testName={testName} analyst={analyst} date={date} saving={saveMutation.isPending} onSave={(s) => saveMutation.mutate(s)} />
+                <ManualDifferentialForm
+                  key={isEditing ? `edit-${editStudy?.id ?? "loading"}` : "new"}
+                  initial={isEditing && editStudy ? (editStudy.dataPoints ?? editStudy.data_points) : undefined}
+                  testName={testName} analyst={analyst} date={date} saving={saveMutation.isPending} onSave={(s) => saveMutation.mutate(s)} />
               )}
               {studyType === "heparin_range" && (
                 <HeparinRangeForm
