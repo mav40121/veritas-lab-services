@@ -67,7 +67,7 @@ export interface MonthlyReviewPayload {
 const CSS = `
   body { font-family: Helvetica, Arial, sans-serif; color: #1a1a1a; margin: 0; padding: 6mm 14mm 4mm; font-size: 9pt; }
   h1 { font-size: 14pt; margin: 0 0 2pt; color: #01696F; }
-  h2 { font-size: 11pt; margin: 10pt 0 3pt; color: #01696F; border-bottom: 1px solid #d0d0d0; padding-bottom: 2pt; }
+  h2 { font-size: 11pt; margin: 10pt 0 3pt; color: #01696F; border-bottom: 1px solid #d0d0d0; padding-bottom: 2pt; break-after: avoid; page-break-after: avoid; }
   .meta { font-size: 8pt; color: #555; margin-bottom: 6pt; }
   .meta b { color: #1a1a1a; }
   .narrative { font-size: 9pt; line-height: 1.35; margin: 4pt 0 6pt; }

@@ -133,7 +133,7 @@ export function buildPiReportHTML(m: PiMetric, entries: PiEntry[], ctx: PiReport
 
   return `<!doctype html><html><head><meta charset="utf-8"><style>
     * { box-sizing: border-box; } body { font-family: Arial, Helvetica, sans-serif; color: ${DARK}; margin: 0; font-size: 10pt; }
-    h2 { color: ${TEAL}; font-size: 12pt; margin: 14px 0 5px; }
+    h2 { color: ${TEAL}; font-size: 12pt; margin: 14px 0 5px; break-after: avoid; page-break-after: avoid; }
     table { border-collapse: collapse; width: 100%; }
   </style></head><body>
     <div style="background:${TEAL};color:#fff;padding:12px 14px;border-radius:6px;">

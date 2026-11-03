@@ -42,6 +42,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # A PDF section heading keeps with what follows it (2026-11-03: a 14-method VeritaComp record printed
+      # "Competency by method" alone at the bottom of page 1). Every h2 rule in a PDF builder carries break-after: avoid.
+      - name: PDF headings keep with their content
+        run: node scripts/verify-pdf-heading-keep.mjs
+
       # Puppeteer needs a Chrome binary plus the headless system libraries.
       # playwright (a devDependency) provides the OS libs via install-deps; the
       # browser itself comes from puppeteer's own cache.
