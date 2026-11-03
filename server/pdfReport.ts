@@ -5963,7 +5963,9 @@ const EMP_REC_MILESTONE: Record<string, string> = { initial: "Initial", six_mont
 const EMP_REC_ROLE: Record<string, string> = { LD: "Laboratory Director", TC: "Technical Consultant", TS: "Technical Supervisor", GS: "General Supervisor" };
 
 // One document per employee: every assigned method with its latest sign-off (assessment, signer, date, next due), and
-// one evaluator sign-off line per method on page 1 (CLAUDE.md section 5). Methods are signed off separately (per-method
+// one evaluator sign-off line per method on page 1 (CLAUDE.md section 5). Michael 2026-11-03 (Q133 = 1): the sign-off block
+// prints above the method table, so a long method list no longer pushes it past page 1; Role, initials and date stay on
+// one line so each method is one line. Methods are signed off separately (per-method
 // sign-off, 2026-10-13); an unsigned method keeps a blank line so the record can also be signed on paper.
 export function buildEmployeeCompetencyRecordHTML(input: EmployeeCompetencyRecordInput): string {
   const elementCount = input.elementCount === 8 ? 8 : 6;
@@ -6107,6 +6109,7 @@ export function buildEmployeeCompetencyRecordHTML(input: EmployeeCompetencyRecor
     .sign table { width:100%; border-collapse:collapse; font-size:9.5px; }
     .sign th { text-align:left; font-size:8px; color:#6b6b6b; text-transform:uppercase; letter-spacing:.3px; padding:3px 4px; border-bottom:1px solid #D0D0D0; }
     .sign td { padding:5px 4px; border-bottom:1px solid #999; font-weight:600; height:20px; }
+    .sign td:nth-child(n+4) { white-space:nowrap; }
     .entries { page-break-before: always; }
     .eblock { page-break-inside: avoid; margin: 0 0 12px; }
     .ehead { font-weight:700; font-size:10px; color:#0A3A3D; margin: 8px 2px 3px; }
@@ -6134,20 +6137,20 @@ export function buildEmployeeCompetencyRecordHTML(input: EmployeeCompetencyRecor
       <div><span>&nbsp;</span><b>&nbsp;</b></div>
     </div>
     <div class="reg">Technical competency assessed per 42 CFR 493.1235. Each method is evaluated and signed off separately; N/A elements carry a recorded justification. A method covers every analyte run the same way on the instrument it names.${anyWaived ? " Waived test systems are assessed by two of four methods (blind specimen testing, periodic observation by supervisor, monitoring of QC performance, written test) under the accreditor's waived-testing standard." : ""}</div>
+    <div class="sign">
+      <div class="h">EVALUATOR SIGN-OFF BY METHOD</div>
+      <div class="body">
+        <p class="attest">Each evaluator attests that the competency assessment for the method on that line was completed for the elements shown. Final approval and clinical determination must be made by the laboratory director or designee.</p>
+        <table><thead><tr><th style="width:27%">Method</th><th style="width:11%">Assessment</th><th style="width:22%">Evaluator name (signature)</th><th style="width:21%">Role</th><th style="width:7%">Initials</th><th style="width:12%">Date signed</th></tr></thead>
+        <tbody>${signLines.join("") || `<tr><td colspan="6">&nbsp;</td></tr>`}</tbody></table>
+      </div>
+    </div>
     <h2>Competency by method</h2>
     <table class="m">
       <thead><tr><th style="width:22%">Method</th>${elHeaders}<th>Assessment</th><th>Result</th><th style="width:13%">Signed by</th><th>Date</th><th>Next due</th></tr></thead>
       <tbody>${rows || `<tr><td colspan="${colCount}" style="color:#6b6b6b;padding:10px;">No assigned methods.</td></tr>`}</tbody>
     </table>
     <div class="legend">${legend}</div>
-    <div class="sign">
-      <div class="h">EVALUATOR SIGN-OFF BY METHOD</div>
-      <div class="body">
-        <p class="attest">Each evaluator attests that the competency assessment for the method on that line was completed for the elements shown. Final approval and clinical determination must be made by the laboratory director or designee.</p>
-        <table><thead><tr><th style="width:28%">Method</th><th style="width:11%">Assessment</th><th style="width:27%">Evaluator name (signature)</th><th>Role</th><th style="width:7%">Initials</th><th style="width:12%">Date signed</th></tr></thead>
-        <tbody>${signLines.join("") || `<tr><td colspan="6">&nbsp;</td></tr>`}</tbody></table>
-      </div>
-    </div>
     ${remediationLines.length ? `<h2>Remediation</h2>
     <table class="m"><thead><tr><th style="width:22%">Method</th><th>Determination</th><th>Action plan</th><th>Target completion</th></tr></thead>
       <tbody>${remediationLines.join("")}</tbody></table>
