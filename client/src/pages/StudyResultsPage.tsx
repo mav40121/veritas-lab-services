@@ -64,6 +64,7 @@ import { isCensored, censorValueForMath, type CensoringPolicy } from "@shared/ce
 import { computeStudyResults } from "@/lib/studyResults";
 import { evaluateHeparinRange, normalizeHeparinInput, heparinRangeNarrative, heparinRangeChartSVG } from "@shared/heparinRange";
 import { evaluateManualDiff } from "@shared/rumke";
+import { labLocaleDate } from "@/lib/labDate";
 import { teaLabelFor } from "@/lib/cliaTeaData";
 
 import {
@@ -2335,7 +2336,7 @@ function StudySignPanel({ study, isReadOnly, onEdit, onFinalized }: { study: Stu
           </>
         ) : (
           <span className="text-xs text-emerald-700 dark:text-emerald-400" data-testid="study-signed-off">
-            <strong>Signed Off</strong> by {s.finalized_signature} on {s.finalized_at ? new Date(s.finalized_at).toLocaleDateString() : ""}.
+            <strong>Signed Off</strong> by {s.finalized_signature} on {s.finalized_at ? labLocaleDate(s.finalized_at) : ""}.
           </span>
         )}
       </div>
@@ -3364,7 +3365,7 @@ function StudyResultsPage() {
               Amend this study
             </Button>
             <span className="text-xs text-emerald-700 dark:text-emerald-400">
-              <strong>Signed Off</strong> by {(study as any).finalized_signature} on {(study as any).finalized_at ? new Date((study as any).finalized_at).toLocaleDateString() : ""}.
+              <strong>Signed Off</strong> by {(study as any).finalized_signature} on {(study as any).finalized_at ? labLocaleDate((study as any).finalized_at) : ""}.
             </span>
             <Button hidden={isReadOnly} variant="ghost" size="sm" className="text-muted-foreground" onClick={() => setArchiveOpen(true)} data-testid="open-archive-button">
               <Archive size={13} className="mr-1" />Archive
