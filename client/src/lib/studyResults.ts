@@ -13,6 +13,7 @@ import {
   type DataPoint, type PrecisionDataPoint, type QCRangeDataPoint, type StudyResults,
 } from "./calculations";
 import { isCensored, censorValueForMath, type CensoringPolicy } from "../../../shared/censoring";
+import { evaluateHeparinRange } from "../../../shared/heparinRange";
 import type { Study } from "../../../shared/schema";
 
 // 2026-06-11: a saved study's data_points may contain censored ("<17") values
@@ -41,6 +42,11 @@ export function deepResolveCensored(obj: any, policy: CensoringPolicy): any {
 export function computeStudyResults(study: Study): StudyResults {
   if (study.studyType === "sensitivity") {
     return calculateSensitivity((JSON.parse(study.dataPoints) as { input: any }).input) as unknown as StudyResults;
+  }
+  // Heparin Therapeutic Range, aPTT vs Anti-Xa (REQ-124): dataPoints is the input object; the shared evaluator is the
+  // one the server verdict and the PDF use.
+  if (study.studyType === "heparin_range") {
+    return evaluateHeparinRange(JSON.parse(study.dataPoints)) as unknown as StudyResults;
   }
   const instrumentNames: string[] = JSON.parse(study.instruments);
   // Resolve censored ("<17") values per the study's policy BEFORE the numeric

@@ -21,6 +21,7 @@ import { PlusCircle, Trash2, FlaskConical, CheckCircle2, DollarSign, Loader2, XC
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { CoverageAttributionDialog } from "@/components/CoverageAttributionDialog";
 import ManualDifferentialForm from "@/components/ManualDifferentialForm";
+import HeparinRangeForm from "@/components/HeparinRangeForm";
 import { VeritaQcImportModal, type VeritaQcImportPayload } from "@/components/VeritaQcImportModal";
 import { VeritaQcBulkImportModal, type VeritaQcBulkImportPayload } from "@/components/VeritaQcBulkImportModal";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -450,12 +451,14 @@ export default function VeritaCheckPage() {
     "accuracy": "accuracy_bias",
     "linearity": "linearity",
     "reportable_range": "reportable_range",
+    "manual_diff": "manual_diff",
+    "heparin_range": "heparin_range",
   };
   const rawInitialStudyType = (prePopStudyType && studyTypeMap[prePopStudyType]) || "cal_ver";
   const initialStudyType = rawInitialStudyType;
   const initialInstruments = prePopInst1 && prePopInst2 ? [prePopInst1, prePopInst2] : prePopInst1 ? [prePopInst1, "Instrument 2"] : ["Instrument 1", "Instrument 2"];
 
-  const [studyType, setStudyType] = useState<"cal_ver" | "cal_ver_correlation" | "method_comparison" | "precision" | "lot_to_lot" | "pt_coag" | "qc_range" | "multi_analyte_coag" | "ref_interval" | "sensitivity" | "carryover" | "accuracy_bias" | "linearity" | "reportable_range" | "manual_diff">(initialStudyType);
+  const [studyType, setStudyType] = useState<"cal_ver" | "cal_ver_correlation" | "method_comparison" | "precision" | "lot_to_lot" | "pt_coag" | "qc_range" | "multi_analyte_coag" | "ref_interval" | "sensitivity" | "carryover" | "accuracy_bias" | "linearity" | "reportable_range" | "manual_diff" | "heparin_range">(initialStudyType);
   const [instrumentNames, setInstrumentNames] = useState<string[]>(initialInstruments);
   interface LabInstrument { id: number; instrument_name: string; serial_number?: string | null; nickname?: string | null; role?: string; category?: string; map_id?: number; map_name?: string }
   const [veritaMapInstruments, setVeritaMapInstruments] = useState<LabInstrument[]>([]);
@@ -2833,6 +2836,7 @@ return (
                           <SelectItem value="linearity">Linearity (CLSI EP06)</SelectItem>
                           <SelectItem value="reportable_range">Reportable Range / AMR Verification (CLIA §493.1255)</SelectItem>
                           <SelectItem value="manual_diff">Manual Differential (Rümke 95% CI, CLSI H20)</SelectItem>
+                          <SelectItem value="heparin_range">Heparin Therapeutic Range: aPTT vs Anti-Xa (Brill-Edwards)</SelectItem>
                         </SelectContent>
                       </Select>
                       {studyType === "cal_ver" && (
@@ -2888,6 +2892,8 @@ return (
                 </CardContent>
               </Card>
 
+              {/* The heparin range study names its one coagulation analyzer in its own form. */}
+              {studyType !== "heparin_range" && (
               <Card>
                 <CardHeader className="pb-3"><CardTitle className="text-base flex items-center justify-between">
                   {studyType === "method_comparison" ? "Instruments / Methods" : "Instruments / Methods"}
@@ -3005,6 +3011,7 @@ return (
                   )}
                 </CardContent>
               </Card>
+              )}
 
               {/* Assay Type selector - only for method_comparison */}
               {studyType === "method_comparison" && (
@@ -3140,7 +3147,7 @@ return (
                 </Card>
               )}
 
-              {studyType !== "sensitivity" && studyType !== "manual_diff" && (
+              {studyType !== "sensitivity" && studyType !== "manual_diff" && studyType !== "heparin_range" && (
               <Card>
                 <CardHeader className="pb-3"><CardTitle className="text-base">{studyType === "precision" ? "Adopted Precision Acceptance Criterion (CV%)" : "Adopted Acceptance Criterion (TEa)"}</CardTitle></CardHeader>
                 <CardContent className="space-y-3">
@@ -3273,8 +3280,8 @@ return (
                   </button>
                 </div>
               )}
-              {/* CSV Import Button */}
-              <div className="mb-4">
+              {/* CSV Import Button (the heparin range form has its own paste-from-spreadsheet) */}
+              {studyType !== "heparin_range" && <div className="mb-4">
                 {(studyType === "method_comparison" || studyType === "cal_ver" || studyType === "cal_ver_correlation") ? (
                   <Button variant="outline" size="sm" onClick={() => { resetCsvState(); setCsvModalOpen(true); }}>
                     <Upload size={14} className="mr-1.5" />Import from CSV / Excel
@@ -3293,9 +3300,15 @@ return (
                     </Tooltip>
                   </TooltipProvider>
                 )}
-              </div>
+              </div>}
               {studyType === "manual_diff" && (
                 <ManualDifferentialForm testName={testName} analyst={analyst} date={date} saving={saveMutation.isPending} onSave={(s) => saveMutation.mutate(s)} />
+              )}
+              {studyType === "heparin_range" && (
+                <HeparinRangeForm
+                  key={isEditing ? `edit-${editStudy?.id ?? "loading"}` : "new"}
+                  initial={isEditing && editStudy ? { instrument: editStudy.instrument, data: editStudy.dataPoints ?? editStudy.data_points } : undefined}
+                  testName={testName} analyst={analyst} date={date} saving={saveMutation.isPending} onSave={(s) => saveMutation.mutate(s)} />
               )}
               {studyType === "lot_to_lot" ? (
                 <Card>
@@ -4749,7 +4762,7 @@ return (
                     ))}
                   </CardContent>
                 </Card>
-              ) : (
+              ) : studyType === "heparin_range" ? null : (
               <Card>
                 <CardHeader className="pb-3"><CardTitle className="text-base flex items-center justify-between">
                   <span>{studyType === "method_comparison" ? "Sample Data" : "Data Points"}</span>
@@ -4874,7 +4887,7 @@ return (
                 </CardContent>
               </Card>
               )}
-              <div className="mt-4 flex items-center gap-3">
+              <div className={`mt-4 flex items-center gap-3${studyType === "heparin_range" ? " hidden" : ""}`}>
                 <Button variant="outline" size="sm" onClick={() => {
                   setTestName("GC1 CREAT"); setAnalyst("SED"); setDate("2025-02-06");
                   // Creatinine preset (index 19): ±10% or ±0.2 mg/dL, dual-criterion (greater).
@@ -4902,7 +4915,7 @@ return (
               tech does not have to guess why the Generate button is
               disabled. Renders only when the button is disabled for a
               non-pending reason. */}
-          {studyType !== "manual_diff" && (<>
+          {studyType !== "manual_diff" && studyType !== "heparin_range" && (<>
           {(() => {
             const minLevels = studyType === "ref_interval" ? 20
               : studyType === "sensitivity" ? 5

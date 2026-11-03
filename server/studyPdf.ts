@@ -107,7 +107,7 @@ export function resolveInstrumentDisplay(sqlite: any, instrumentMeta: any): Reco
   }
 }
 
-const TYPE_LABEL: Record<string, string> = { cal_ver: "CalVer", cal_ver_correlation: "CalVerCorrelation", precision: "Precision", method_comparison: "MethodComp", lot_to_lot: "LotToLot", pt_coag: "PTCoag", qc_range: "QCRange", multi_analyte_coag: "MultiAnalyteCoag", ref_interval: "RefInterval", sensitivity: "Sensitivity", carryover: "Carryover", accuracy_bias: "AccuracyBias", linearity: "Linearity", reportable_range: "ReportableRange" };
+const TYPE_LABEL: Record<string, string> = { cal_ver: "CalVer", cal_ver_correlation: "CalVerCorrelation", precision: "Precision", method_comparison: "MethodComp", lot_to_lot: "LotToLot", pt_coag: "PTCoag", qc_range: "QCRange", multi_analyte_coag: "MultiAnalyteCoag", ref_interval: "RefInterval", sensitivity: "Sensitivity", carryover: "Carryover", accuracy_bias: "AccuracyBias", linearity: "Linearity", reportable_range: "ReportableRange", manual_diff: "ManualDiff", heparin_range: "HeparinRange" };
 
 export function studyPdfFilename(study: { studyType: string; testName: string; date: string }): string {
   return `VeritaCheck_${TYPE_LABEL[study.studyType] || "Study"}_${String(study.testName || "Study").replace(/\s+/g, "_")}_${study.date}.pdf`;
