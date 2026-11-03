@@ -7449,7 +7449,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // Terms of Use and Confidentiality Agreement (server/termsOfUse.ts; Michael Q141 = 1): the person's own acceptance,
   // with their typed name; a lab owner also accepts for the organization.
   app.get("/api/auth/terms", authMiddleware, (req: any, res) => {
-    res.json(termsStatus((db as any).$client, req.userId, DEMO_USER_EMAIL));
+    // Script tokens and the public demo are not people: the gate lets them through, so the status must not ask them.
+    res.json(termsStatus((db as any).$client, req.userId, DEMO_USER_EMAIL, { notAPerson: req.authKind === "service" || req.isDemo === true }));
   });
   app.post("/api/auth/terms/accept", authMiddleware, (req: any, res) => {
     if (req.isDemo) return res.status(403).json({ error: "The demo account does not accept terms." });
