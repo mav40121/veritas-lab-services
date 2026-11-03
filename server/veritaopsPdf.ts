@@ -99,7 +99,7 @@ function buildCprtHtml(study: CprtStudyForPdf, ctx: CprtLabContext): string {
   .header-bar { background: ${TEAL}; color: white; padding: 8px 12px; display: flex; justify-content: space-between; align-items: center; }
   .header-bar h1 { font-size: 14pt; margin: 0; font-weight: bold; }
   .header-bar .lab { font-size: 9pt; }
-  h2 { color: ${TEAL}; font-size: 12pt; margin: 14px 0 6px 0; border-bottom: 1px solid ${TEAL_TINT}; padding-bottom: 3px; }
+  h2 { color: ${TEAL}; font-size: 12pt; margin: 14px 0 6px 0; border-bottom: 1px solid ${TEAL_TINT}; padding-bottom: 3px; break-after: avoid; page-break-after: avoid; }
   table { width: 100%; border-collapse: collapse; font-size: 9pt; margin-bottom: 8px; }
   th, td { border: 1px solid #d0d0d0; padding: 5px 8px; text-align: left; vertical-align: top; }
   th { background: ${TEAL_TINT}; color: #0A3A3D; font-weight: 600; }

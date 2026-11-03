@@ -211,7 +211,7 @@ function buildCms116Html(draft: Cms116DraftForPdf, ctx: Cms116LabContext): strin
   .page-header .lab { font-size: 8pt; color: #5a5a5a; text-align: right; }
   .page-header .lab strong { color: ${TEXT_DARK}; }
   .form-title { font-size: 9pt; color: #5a5a5a; line-height: 1.3; }
-  .form-title h2 { font-size: 12pt; color: ${TEAL}; margin: 0 0 2px 0; }
+  .form-title h2 { font-size: 12pt; color: ${TEAL}; margin: 0 0 2px 0; break-after: avoid; page-break-after: avoid; }
   .form-title .omb { font-size: 7.5pt; color: #777; margin-top: 2px; }
 
   h3.section { color: ${TEAL}; font-size: 11pt; margin: 12px 0 6px 0; padding-bottom: 3px; border-bottom: 1px solid #d2d7dc; }

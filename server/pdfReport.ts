@@ -4511,7 +4511,7 @@ export async function generateIqcpPDF(
   .title { font-size:15pt; font-weight:800; color:${DK}; margin-top:6px; }
   .subtitle { font-size:10pt; color:${GRY}; margin-top:2px; }
   .sec { margin-top:16px; }
-  .sec h2 { font-size:11pt; color:${TEAL}; border-bottom:1px solid #d9e3e3; padding-bottom:3px; margin-bottom:6px; }
+  .sec h2 { font-size:11pt; color:${TEAL}; border-bottom:1px solid #d9e3e3; padding-bottom:3px; margin-bottom:6px; break-after:avoid; page-break-after:avoid; }
   .kv { font-size:9pt; margin:2px 0; }
   .kv b { display:inline-block; width:180px; color:${GRY}; font-weight:600; }
   .det { background:#eaf5f4; border:1px solid #bcdedb; border-radius:5px; padding:8px 10px; margin-top:8px; color:#0A3A3D; font-size:9pt; }
@@ -4669,7 +4669,7 @@ export async function generateLetterOfDelegationPDF(
   .title { font-size:15pt; font-weight:800; color:${DK}; margin-top:6px; }
   .subtitle { font-size:10pt; color:${GRY}; margin-top:2px; }
   .sec { margin-top:14px; }
-  .sec h2 { font-size:11pt; color:${TEAL}; border-bottom:1px solid #d9e3e3; padding-bottom:3px; margin-bottom:6px; }
+  .sec h2 { font-size:11pt; color:${TEAL}; border-bottom:1px solid #d9e3e3; padding-bottom:3px; margin-bottom:6px; break-after:avoid; page-break-after:avoid; }
   .kv { font-size:9pt; margin:2px 0; }
   .kv b { display:inline-block; width:150px; color:${GRY}; font-weight:600; }
   .att { background:#eaf5f4; border:1px solid #bcdedb; border-radius:5px; padding:8px 10px; margin-top:8px; color:#0A3A3D; font-size:8.6pt; line-height:1.4; }
@@ -6163,7 +6163,7 @@ export function buildEmployeeCompetencyRecordHTML(input: EmployeeCompetencyRecor
     .meta div span { color:#6b6b6b; font-size:8.5px; display:block; text-transform:uppercase; letter-spacing:.4px; }
     .meta div b { font-size:10.5px; font-weight:600; }
     .reg { font-size:8.5px; color:#6b6b6b; margin:8px 2px 4px; }
-    h2 { color:#01696F; font-size:11px; margin:12px 2px 5px; text-transform:uppercase; letter-spacing:.5px; }
+    h2 { color:#01696F; font-size:11px; margin:12px 2px 5px; text-transform:uppercase; letter-spacing:.5px; break-after:avoid; page-break-after:avoid; }
     table.m { width:100%; border-collapse:collapse; font-size:9.5px; }
     table.m th, table.m td { border:1px solid #D0D0D0; padding:4px 4px; text-align:center; vertical-align:middle; }
     table.m th { background:#E6F2F2; color:#01696F; font-size:8px; text-transform:uppercase; letter-spacing:.2px; }
@@ -6751,7 +6751,7 @@ function buildVeritaPTPDFHTML(data: VeritaPTPDFData): string {
     .kpi-card { flex:1; border:1px solid #e5e7eb; border-radius:6px; padding:10px 12px; text-align:center; }
     .kpi-val { font-size:18pt; font-weight:700; color:${teal}; }
     .kpi-label { font-size:7.5pt; color:#6b7280; margin-top:2px; }
-    h2 { font-size:11pt; font-weight:700; color:${teal}; margin:16px 0 8px 0; border-bottom:1px solid #e5e7eb; padding-bottom:4px; }
+    h2 { font-size:11pt; font-weight:700; color:${teal}; margin:16px 0 8px 0; border-bottom:1px solid #e5e7eb; padding-bottom:4px; break-after:avoid; page-break-after:avoid; }
     table { width:100%; border-collapse:collapse; font-size:8.5pt; margin-bottom:10px; }
     table thead tr { background:${teal}; color:white; }
     table thead th { padding:5px 7px; text-align:left; font-weight:600; font-size:8pt; }
