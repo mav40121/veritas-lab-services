@@ -63,6 +63,7 @@ import type { Study } from "@shared/schema";
 import { isCensored, censorValueForMath, type CensoringPolicy } from "@shared/censoring";
 import { computeStudyResults } from "@/lib/studyResults";
 import { evaluateHeparinRange, normalizeHeparinInput, heparinRangeNarrative, heparinRangeChartSVG } from "@shared/heparinRange";
+import { evaluateManualDiff } from "@shared/rumke";
 import { teaLabelFor } from "@/lib/cliaTeaData";
 
 import {
@@ -2314,6 +2315,35 @@ function BottomPDFButton({ study, results }: { study: Study; results: StudyResul
   );
 }
 
+// Edit / Sign and lock / Signed Off for the study types with their own results view (heparin range, manual
+// differential). Same finalize dialog and wording as the main view: the PDF prints DRAFT until the study is signed.
+function StudySignPanel({ study, isReadOnly, onEdit, onFinalized }: { study: Study; isReadOnly: boolean; onEdit: () => void; onFinalized: () => void }) {
+  const [open, setOpen] = useState(false);
+  const s = study as any;
+  return (
+    <>
+      <div className="mb-4 flex items-center gap-3 flex-wrap" data-testid="lifecycle-panel">
+        {s.lifecycle_state !== "finalized" ? (
+          <>
+            <Button hidden={isReadOnly} size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground" onClick={onEdit} data-testid="study-edit">
+              <Pencil size={13} className="mr-1" />Edit
+            </Button>
+            <Button hidden={isReadOnly} variant="outline" size="sm" onClick={() => setOpen(true)} data-testid="open-finalize-dialog">
+              Sign and lock
+            </Button>
+            <span className="text-xs text-muted-foreground">Sign off this study with your signature. The PDF prints DRAFT until it is signed.</span>
+          </>
+        ) : (
+          <span className="text-xs text-emerald-700 dark:text-emerald-400" data-testid="study-signed-off">
+            <strong>Signed Off</strong> by {s.finalized_signature} on {s.finalized_at ? new Date(s.finalized_at).toLocaleDateString() : ""}.
+          </span>
+        )}
+      </div>
+      <StudyFinalizeDialog open={open} onOpenChange={setOpen} studyId={study.id} onFinalized={onFinalized} />
+    </>
+  );
+}
+
 // BUG-084 (2026-10-28): a study saved in a shape this page cannot read (an early data format, or data that does not fit
 // its study type) threw during render and took the whole app down to the global "Something went wrong" screen. This
 // boundary keeps it to the study: a plain message, the study number to quote, and the way back to My Studies.
@@ -2394,6 +2424,7 @@ function StudyResultsPage() {
   const { toast } = useToast();
   const [sensitivityPdfLoading, setSensitivityPdfLoading] = useState(false);
   const [heparinPdfLoading, setHeparinPdfLoading] = useState(false);
+  const [manualDiffPdfLoading, setManualDiffPdfLoading] = useState(false);
   // 2026-06-09 (Michael L feedback): point-exclusion dialog state for
   // Method Comparison studies. Director clicks "Manage data points" on
   // the header -> dialog opens -> per-row Exclude / Restore -> server
@@ -2470,6 +2501,98 @@ function StudyResultsPage() {
   // PT/Coag is now unlocked — Coming Soon gate removed (was previously behind
   // `if (false && ...)` after launch and has been verified live).
 
+  // ── Manual Differential (Rümke 95% CI, CLSI H20) ──────────────────────────
+  // dataPoints is the input object { cellsCounted, referenceSource, classes }, which the main path below cannot read
+  // (a saved study fell to "This study can't be displayed"). The shared evaluator is the one the server verdict and the
+  // PDF (buildManualDiffHTML) use.
+  if (study.studyType === "manual_diff") {
+    let raw: any = {};
+    try { raw = JSON.parse(study.dataPoints); } catch {}
+    const md = evaluateManualDiff({ cellsCounted: Number(raw?.cellsCounted) || 0, referenceSource: raw?.referenceSource || "", classes: Array.isArray(raw?.classes) ? raw.classes : [] });
+    const f1 = (v: number) => (Number.isFinite(v) ? v.toFixed(1) : "-");
+    const exceeded = md.classes.filter((c) => !c.within).map((c) => c.name);
+    return (
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
+        <div className="flex items-start justify-between gap-3 flex-wrap mb-4">
+          <div className="min-w-0">
+            <div className="text-xs text-muted-foreground">Manual Differential (Rümke 95% CI, CLSI H20)</div>
+            <h1 className="text-2xl font-semibold">{study.testName}</h1>
+            <div className="text-sm text-muted-foreground mt-1">
+              Reference: {md.referenceSource || "-"} · {study.date} · Analyst: {study.analyst || "-"}
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button asChild variant="outline" size="sm">
+              <Link href={labRoute("/dashboard")}>Back to Dashboard</Link>
+            </Button>
+            <Button
+              size="sm"
+              disabled={manualDiffPdfLoading}
+              onClick={async () => {
+                setManualDiffPdfLoading(true);
+                try {
+                  await downloadPDF(study, md as unknown as StudyResults);
+                } catch {
+                  toast({ title: "PDF generation failed", description: "Please try again.", variant: "destructive" });
+                } finally {
+                  setManualDiffPdfLoading(false);
+                }
+              }}
+              className="bg-primary hover:bg-primary/90 text-primary-foreground"
+              data-testid="button-download-pdf-manual-diff"
+            >
+              {manualDiffPdfLoading ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : <FileDown size={14} className="mr-1.5" />}
+              {manualDiffPdfLoading ? "Generating..." : "Download PDF"}
+            </Button>
+          </div>
+        </div>
+        <StudySignPanel study={study} isReadOnly={isReadOnly} onEdit={() => navigate(labRoute(`/study/${study.id}/edit`))}
+          onFinalized={() => queryClient.invalidateQueries({ queryKey: [studyUrl] })} />
+        <div className="space-y-4">
+          <div className={`rounded-md border p-3 text-sm font-semibold ${md.overallPass ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30" : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30"}`} data-testid="md-result-verdict">
+            {md.overallPass ? "Every cell class is within the Rümke 95% confidence limits" : `Outside the Rümke 95% confidence limits: ${exceeded.join(", ")}`}
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[["Cells counted", String(md.cellsCounted), "md-result-cells"], ["Cell classes", String(md.classes.length), "md-result-classes"],
+              ["Manual counts total", `${md.countSum} of ${md.cellsCounted}`, "md-result-sum"], ["Acceptance", "Rümke 95% CI (CLSI H20)", "md-result-acceptance"]].map(([label, value, id]) => (
+              <div key={id} className="rounded-md border border-border bg-muted/30 p-3">
+                <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
+                <div className="text-lg font-semibold" data-testid={id}>{value}</div>
+              </div>
+            ))}
+          </div>
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-base">Per-cell-class results</CardTitle></CardHeader>
+            <CardContent className="overflow-x-auto">
+              <table className="w-full text-sm" data-testid="md-result-table">
+                <thead>
+                  <tr className="text-left text-xs text-muted-foreground border-b border-border">
+                    <th className="py-1.5 px-2">Cell class</th><th className="py-1.5 px-2 text-right">Manual (x / N)</th>
+                    <th className="py-1.5 px-2 text-right">Manual %</th><th className="py-1.5 px-2 text-right">Reference %</th>
+                    <th className="py-1.5 px-2 text-right">Rümke 95% CI</th><th className="py-1.5 px-2">Result</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {md.classes.map((c) => (
+                    <tr key={c.name} className="border-b border-border/60">
+                      <td className="py-1 px-2">{c.name}</td>
+                      <td className="py-1 px-2 text-right">{c.manualCount} / {md.cellsCounted}</td>
+                      <td className="py-1 px-2 text-right">{f1(c.manualPct)}%</td>
+                      <td className="py-1 px-2 text-right">{f1(c.referencePct)}%</td>
+                      <td className="py-1 px-2 text-right whitespace-nowrap">{f1(c.ciLoPct)} to {f1(c.ciHiPct)}%</td>
+                      <td className={`py-1 px-2 ${c.within ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400"}`}>{c.within ? "Within" : "Exceeds"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="text-xs text-muted-foreground mt-2">A class is within limits when the reference percentage falls inside the exact binomial (Rümke) 95% confidence interval of the manual count. Final approval and clinical determination must be made by the laboratory director or designee.</p>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
   // ── Heparin Therapeutic Range, aPTT vs Anti-Xa (Brill-Edwards) (REQ-124) ─────
   // Its own data shape (an input object, not an instrument-axis table), so it renders here and returns early, like
   // sensitivity. Everything comes from the shared evaluator the server verdict and the PDF use
@@ -2528,30 +2651,8 @@ function StudyResultsPage() {
           </div>
         </div>
 
-        {/* Sign and lock, as on every other study: the PDF prints DRAFT until the director or designee signs. */}
-        <div className="mb-4 flex items-center gap-3 flex-wrap" data-testid="lifecycle-panel">
-          {(study as any).lifecycle_state !== "finalized" ? (
-            <>
-              <Button hidden={isReadOnly} size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => navigate(labRoute(`/study/${study.id}/edit`))} data-testid="hr-edit">
-                <Pencil size={13} className="mr-1" />Edit
-              </Button>
-              <Button hidden={isReadOnly} variant="outline" size="sm" onClick={() => setFinalizeOpen(true)} data-testid="open-finalize-dialog">
-                Sign and lock
-              </Button>
-              <span className="text-xs text-muted-foreground">Sign off this study with your signature. The PDF prints DRAFT until it is signed.</span>
-            </>
-          ) : (
-            <span className="text-xs text-emerald-700 dark:text-emerald-400" data-testid="hr-signed-off">
-              <strong>Signed Off</strong> by {(study as any).finalized_signature} on {(study as any).finalized_at ? new Date((study as any).finalized_at).toLocaleDateString() : ""}.
-            </span>
-          )}
-        </div>
-        <StudyFinalizeDialog
-          open={finalizeOpen}
-          onOpenChange={setFinalizeOpen}
-          studyId={study.id}
-          onFinalized={() => queryClient.invalidateQueries({ queryKey: [studyUrl] })}
-        />
+        <StudySignPanel study={study} isReadOnly={isReadOnly} onEdit={() => navigate(labRoute(`/study/${study.id}/edit`))}
+          onFinalized={() => queryClient.invalidateQueries({ queryKey: [studyUrl] })} />
 
         <div className="space-y-4">
           <div className={`rounded-md border p-3 text-sm font-semibold ${res.meets ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30" : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30"}`} data-testid="hr-result-verdict">

@@ -113,7 +113,7 @@ for (const [scheme, width] of [["light", 1400], ["dark", 1400], ["light", 390]])
     check("C1. Download PDF downloads the study PDF (results page, samples page, license page)", !!dl && pages >= 2 && /^VeritaCheck_HeparinRange_aPTT_/.test(name), `${name} ${pages} pages`);
 
     // H. Edit reopens the form with the saved study (unsigned only)
-    await page.getByTestId("hr-edit").click();
+    await page.getByTestId("study-edit").click();
     await page.waitForURL(/\/study\/\d+\/edit/, { timeout: 15000 }).catch(() => {});
     await page.waitForTimeout(1200);
     await page.getByRole("tab", { name: "Data Entry" }).click().catch(() => {}); await page.waitForTimeout(500);
@@ -129,7 +129,7 @@ for (const [scheme, width] of [["light", 1400], ["dark", 1400], ["light", 390]])
     await page.getByTestId("study-sign-input").fill("Dr. Example Director");
     await page.getByTestId("study-sign-confirm").click(); await page.waitForTimeout(1200);
     const signed = (await call("GET", `/api/labs/${labId}/studies/${studyId}`, undefined, T)).body;
-    check("G1. Sign and lock finalizes the study and the page shows Signed Off", signed.lifecycle_state === "finalized" && await page.getByTestId("hr-signed-off").isVisible().catch(() => false), signed.lifecycle_state);
+    check("G1. Sign and lock finalizes the study and the page shows Signed Off", signed.lifecycle_state === "finalized" && await page.getByTestId("study-signed-off").isVisible().catch(() => false), signed.lifecycle_state);
     const [dl2] = await Promise.all([page.waitForEvent("download", { timeout: 60000 }).catch(() => null), page.getByTestId("button-download-pdf-heparin").click()]);
     if (dl2) await dl2.saveAs(`${OUT}/heparin_signed.pdf`);
     check("G2. the signed study's PDF downloads (text checked next to it)", !!dl2);

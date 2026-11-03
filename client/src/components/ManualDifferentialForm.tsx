@@ -23,17 +23,24 @@ interface Row { name: string; manualCount: string; referencePct: string }
 const STANDARD_CLASSES = ["Neutrophils", "Lymphocytes", "Monocytes", "Eosinophils", "Basophils"];
 
 export default function ManualDifferentialForm({
-  testName, analyst, date, saving, onSave,
+  testName, analyst, date, saving, onSave, initial,
 }: {
   testName: string;
   analyst: string;
   date: string;
   saving: boolean;
   onSave: (study: InsertStudy) => void;
+  // Editing an unsigned study: its saved data points (the parent remounts the form once they load).
+  initial?: string | object | null;
 }) {
-  const [cellsCounted, setCellsCounted] = useState(100);
-  const [referenceSource, setReferenceSource] = useState("");
-  const [rows, setRows] = useState<Row[]>(STANDARD_CLASSES.map((name) => ({ name, manualCount: "", referencePct: "" })));
+  const init = useMemo(() => {
+    try { return typeof initial === "string" ? JSON.parse(initial) : initial ?? null; } catch { return null; }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- read once per mount
+  const [cellsCounted, setCellsCounted] = useState<number>(Number(init?.cellsCounted) || 100);
+  const [referenceSource, setReferenceSource] = useState<string>(init?.referenceSource || "");
+  const [rows, setRows] = useState<Row[]>(() => Array.isArray(init?.classes) && init.classes.length
+    ? init.classes.map((c: any) => ({ name: String(c.name ?? ""), manualCount: c.manualCount == null ? "" : String(c.manualCount), referencePct: c.referencePct == null ? "" : String(c.referencePct) }))
+    : STANDARD_CLASSES.map((name) => ({ name, manualCount: "", referencePct: "" })));
 
   // Live evaluation from the shared Rümke evaluator (same code the server runs).
   const evalRows = useMemo(() => {
@@ -77,6 +84,8 @@ export default function ManualDifferentialForm({
       dataPoints: JSON.stringify({ cellsCounted, referenceSource: refSrc, classes }),
       instruments: JSON.stringify([refSrc || "Manual differential"]),
       status: "final",
+      // The insert schema requires created_at; without it every save was refused with a 400 (found 2026-11-03).
+      createdAt: new Date().toISOString(),
     } as InsertStudy;
     onSave(study);
   };
