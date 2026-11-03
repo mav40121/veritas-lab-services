@@ -84,7 +84,7 @@ import { competencyDueColumns, competencySeedAtCreate, nextCompetencyDue } from 
 import { methodSignerOptions, nextMilestoneAfter, milestonesForComplexity, MILESTONE_LABEL, alignAnnualToMonth, MONTH_NAMES, type SignerCandidate, type MethodMilestone } from "@shared/competencySignoff";
 import { isManualMethod, groupProblem, suggestGroups, groupKey } from "@shared/competencyGrouping";
 import { cleanEl5Samples, el5Columns, el5SamplesFromRow } from "@shared/competencyEl5Samples";
-import { oneRowKey, sameTestNameOnMap } from "@shared/presetAnalytes";
+import { oneRowKey, sameTestNameOnMap, preferredSameTestName } from "@shared/presetAnalytes";
 import { quizImageProblem } from "@shared/quizImages";
 import { certificateExtras } from "./veritalabRegistry";
 
@@ -36215,7 +36215,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // tests are the cell line % tests"). Folds a map's manual differential cell lines into the analyzer's percent rows
   // ("Eosinophils" into "EO%"), so each test is one row with every method on it. Body { secret, labId, mapId, pairs?,
   // dryRun } (a dry run unless dryRun === false). pairs [{ from, into }] default to every differential / NRBC percent
-  // test the map carries under two names, into the analyzer's % name; a pair must be the same test (oneRowKey).
+  // test the map carries under two names, into the analyzer's name (preferredSameTestName: the % form, else a name without
+  // "manual"); a pair must be the same test (oneRowKey). Map-row "last done" dates keep the later of the two.
   // For each pair, in one transaction:
   //   - instrument rows: from -> into (the row id, exemption flags and so its correlations' meaning stay); an
   //     instrument that already has into keeps its into row and drops the duplicate
@@ -36246,7 +36247,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       pairs = [];
       for (const group of Array.from(byKey.values())) {
         if (group.length < 2) continue;
-        const into = group.find((g) => g.includes("%")) ?? group[0];
+        const into = preferredSameTestName(group);
         for (const from of group) if (from !== into) pairs.push({ from, into });
       }
     }
@@ -36297,10 +36298,20 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           const fromTest = sqlite.prepare("SELECT * FROM veritamap_tests WHERE map_id = ? AND analyte = ?").get(mapId, from) as any;
           const intoTest = sqlite.prepare("SELECT * FROM veritamap_tests WHERE map_id = ? AND analyte = ?").get(mapId, into) as any;
           if (fromTest && intoTest) {
+            // Michael Q127 (11/2, SCAHC dry run): a "last done" date keeps the LATER of the two, so the merged row does not
+            // lose a more recent method comparison; notes keep the % row's text and report the other.
+            const isDate = (v: any) => /^\d{4}-\d{2}-\d{2}/.test(String(v || "").trim());
             for (const c of TEST_COLS) {
               if (blank(fromTest[c])) continue;
-              if (blank(intoTest[c])) { sqlite.prepare(`UPDATE veritamap_tests SET ${c} = ? WHERE id = ?`).run(fromTest[c], intoTest.id); r.mapRow.push(`${c} filled from ${from}`); }
-              else if (String(intoTest[c]).trim() !== String(fromTest[c]).trim()) r.conflicts.push(`map row ${c}: kept ${into} "${intoTest[c]}", ${from} had "${fromTest[c]}"`);
+              if (blank(intoTest[c])) { sqlite.prepare(`UPDATE veritamap_tests SET ${c} = ? WHERE id = ?`).run(fromTest[c], intoTest.id); r.mapRow.push(`${c} filled from ${from}`); continue; }
+              const a = String(intoTest[c]).trim(), b = String(fromTest[c]).trim();
+              if (a === b) continue;
+              if (c !== "notes" && isDate(a) && isDate(b)) {
+                if (b > a) { sqlite.prepare(`UPDATE veritamap_tests SET ${c} = ? WHERE id = ?`).run(fromTest[c], intoTest.id); r.mapRow.push(`${c}: took ${from}'s later date ${b} over ${a}`); }
+                else r.mapRow.push(`${c}: kept ${into}'s later date ${a} over ${b}`);
+                continue;
+              }
+              r.conflicts.push(`map row ${c}: kept ${into} "${intoTest[c]}", ${from} had "${fromTest[c]}"`);
             }
             const f = fromTest.id, i = intoTest.id;
             r.correlations = sqlite.prepare(
