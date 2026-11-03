@@ -306,6 +306,10 @@ jobs:
         # BUG-083: accounts Veritas sets up no longer get the no-PHI acknowledgment recorded on their behalf; anyone
         # whose acknowledgment is not their own click is asked once at sign-in, and the record holds that click.
         run: npm run test:no-phi-acknowledgment
+      - name: Run Terms of Use and Confidentiality Agreement gate integration test
+        # Q141 (2026-11-03): once a version is activated, every signed-in person accepts it with a typed name before any
+        # API route answers; open sessions are held, not logged out; owners also accept for the organization.
+        run: npm run test:terms-gate
       - name: Run VeritaComp new-hire evaluation integration test
         # Sampson REQ-076: 30/60/90-day evaluations titled Evaluation, due from hire date, types checked, new hires
         # with no instrument listed, kept out of competency compliance, PDF never says competency.
