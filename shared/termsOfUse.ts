@@ -27,7 +27,7 @@ export const TERMS_SECTIONS: TermsSection[] = [
   {
     title: "2. The Service",
     paragraphs: [
-      "The \"Service\" means the VeritaAssure® suite of laboratory compliance and operations software, including VeritaCheck®, VeritaMap®, VeritaScan® and the other modules in the suite, the Staff Portal, and the related documentation, training material and support.",
+      "The \"Service\" means the VeritaAssure® suite of laboratory compliance and operations software, including VeritaCheck®, VeritaMap®, VeritaScan® and the other modules in the suite, staff logins, and the related documentation, training material and support.",
       "VeritaScan® citations reference TJC standards (copyright © The Joint Commission) and CAP checklist numbers (copyright © College of American Pathologists) for educational and navigational purposes only. The Service does not reproduce the text of those standards and is not affiliated with, endorsed by, or sponsored by The Joint Commission or the College of American Pathologists.",
     ],
   },
