@@ -42,6 +42,7 @@ import { computeCoverageForLab, setLinearityExemption, alignStudyToAnalyte, reso
 import { buildCoverageReportRows, generateCoverageReportExcel } from "./coverageReport";
 import { CATEGORY_TO_MAP_FIELD, analyteFromTaskName, MAP_SIGNOFF_FIELDS } from "./veritatrackMapSync";
 import { evaluateManualDiff } from "./rumke";
+import { evaluateHeparinRange } from "@shared/heparinRange";
 import { auditVeritamapConsistency } from "./veritamapConsistency";
 import { auditSystemOwnership } from "./systemOwnershipAudit";
 import { computeBackfillCandidates } from "./organizationBackfill";
@@ -344,6 +345,14 @@ function computeStudyStatus(studyType: string, dataPointsJson: string, instrumen
       const input: any = rawData;
       if (!input || typeof input !== "object" || !Array.isArray(input.classes) || input.classes.length === 0) return "fail";
       return evaluateManualDiff(input).overallPass ? "pass" : "fail";
+    }
+
+    // Heparin Therapeutic Range, aPTT vs Anti-Xa (REQ-124, Michael Q134 = 1): dataPoints is the INPUT object
+    // { reagentLot, antiXaMethod, targetLow, targetHigh, samples:[...] }. PASS when the sample set meets the criteria
+    // (shared/heparinRange.ts, the same evaluator the form, results page and PDF use); r never gates.
+    if (studyType === "heparin_range") {
+      if (typeof rawData !== "object" || Array.isArray(rawData) || !Array.isArray((rawData as any).samples)) return "fail";
+      return evaluateHeparinRange(rawData).meets ? "pass" : "fail";
     }
 
     // Calibration Verification + Correlation (Michael 2026-10-15, Q12 = 2): known-value samples run once on every
@@ -11984,6 +11993,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         case "accuracy_bias": return "Accuracy / Bias Verification (CLSI EP15-A3)";
         case "linearity": return "Linearity Verification (CLSI EP06)";
         case "reportable_range": return "Reportable Range Verification (CLSI EP06)";
+        case "manual_diff": return "Manual Differential (Rümke 95% CI, CLSI H20)";
+        case "heparin_range": return "Heparin Therapeutic Range, aPTT vs Anti-Xa";
         default: return st;
       }
     };
@@ -13566,7 +13577,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       }
 
       const pdfBuffer = await generatePDFBuffer(study, results, cliaNumber, preferredStandards as any, licenseCtx ?? licenseCtxFromReq(req));
-      const typeMap: Record<string, string> = { cal_ver: "CalVer", cal_ver_correlation: "CalVerCorrelation", precision: "Precision", method_comparison: "MethodComp", lot_to_lot: "LotToLot", pt_coag: "PTCoag", qc_range: "QCRange", multi_analyte_coag: "MultiAnalyteCoag", ref_interval: "RefRange", sensitivity: "Sensitivity", carryover: "Carryover" };
+      const typeMap: Record<string, string> = { cal_ver: "CalVer", cal_ver_correlation: "CalVerCorrelation", precision: "Precision", method_comparison: "MethodComp", lot_to_lot: "LotToLot", pt_coag: "PTCoag", qc_range: "QCRange", multi_analyte_coag: "MultiAnalyteCoag", ref_interval: "RefRange", sensitivity: "Sensitivity", carryover: "Carryover", accuracy_bias: "AccuracyBias", linearity: "Linearity", reportable_range: "ReportableRange", manual_diff: "ManualDiff", heparin_range: "HeparinRange" };
       const filename = `VeritaCheck_${typeMap[study.studyType] || "Study"}_${study.testName.replace(/\s+/g, "_")}_${study.date}.pdf`;
       // Store in token cache so client can use a direct GET URL (bypasses Adobe interception)
       const pdfToken = storePdfToken(pdfBuffer, filename);

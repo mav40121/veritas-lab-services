@@ -62,6 +62,7 @@ import {
 import type { Study } from "@shared/schema";
 import { isCensored, censorValueForMath, type CensoringPolicy } from "@shared/censoring";
 import { computeStudyResults } from "@/lib/studyResults";
+import { evaluateHeparinRange, normalizeHeparinInput, heparinRangeNarrative, heparinRangeChartSVG } from "@shared/heparinRange";
 import { teaLabelFor } from "@/lib/cliaTeaData";
 
 import {
@@ -94,7 +95,7 @@ async function downloadPDF(study: Study, results: StudyResults) {
   });
   if (!res.ok) throw new Error(await res.text());
 
-  const typeMap: Record<string, string> = { cal_ver: "CalVer", cal_ver_correlation: "CalVerCorrelation", precision: "Precision", method_comparison: "MethodComp", lot_to_lot: "LotToLot", pt_coag: "PTCoag", qc_range: "QCRange", multi_analyte_coag: "MultiAnalyteCoag", ref_interval: "RefInterval", sensitivity: "Sensitivity", carryover: "Carryover", accuracy_bias: "AccuracyBias", linearity: "Linearity", reportable_range: "ReportableRange" };
+  const typeMap: Record<string, string> = { cal_ver: "CalVer", cal_ver_correlation: "CalVerCorrelation", precision: "Precision", method_comparison: "MethodComp", lot_to_lot: "LotToLot", pt_coag: "PTCoag", qc_range: "QCRange", multi_analyte_coag: "MultiAnalyteCoag", ref_interval: "RefInterval", sensitivity: "Sensitivity", carryover: "Carryover", accuracy_bias: "AccuracyBias", linearity: "Linearity", reportable_range: "ReportableRange", manual_diff: "ManualDiff", heparin_range: "HeparinRange" };
   const filename = `VeritaCheck_${typeMap[study.studyType] || "Study"}_${study.testName.replace(/\s+/g, "_")}_${study.date}.pdf`;
 
   const { token } = await res.json();
@@ -2392,6 +2393,7 @@ function StudyResultsPage() {
   // (React requires hooks to be called in the same order every render).
   const { toast } = useToast();
   const [sensitivityPdfLoading, setSensitivityPdfLoading] = useState(false);
+  const [heparinPdfLoading, setHeparinPdfLoading] = useState(false);
   // 2026-06-09 (Michael L feedback): point-exclusion dialog state for
   // Method Comparison studies. Director clicks "Manage data points" on
   // the header -> dialog opens -> per-row Exclude / Restore -> server
@@ -2467,6 +2469,170 @@ function StudyResultsPage() {
 
   // PT/Coag is now unlocked — Coming Soon gate removed (was previously behind
   // `if (false && ...)` after launch and has been verified live).
+
+  // ── Heparin Therapeutic Range, aPTT vs Anti-Xa (Brill-Edwards) (REQ-124) ─────
+  // Its own data shape (an input object, not an instrument-axis table), so it renders here and returns early, like
+  // sensitivity. Everything comes from the shared evaluator the server verdict and the PDF use
+  // (shared/heparinRange.ts); the PDF button calls the same /api/generate-pdf endpoint.
+  if (study.studyType === "heparin_range") {
+    let raw: any = {};
+    try { raw = JSON.parse(study.dataPoints); } catch {}
+    const inp = normalizeHeparinInput(raw);
+    const res = evaluateHeparinRange(inp);
+    const { determination, detail } = heparinRangeNarrative(res, inp.reagentLot, study.instrument);
+    const f1 = (v: number | null) => (v === null || !Number.isFinite(v) ? "-" : v.toFixed(1));
+    const range = res.rangeLowRounded !== null && res.rangeHighRounded !== null ? `${res.rangeLowRounded} to ${res.rangeHighRounded} s` : "Not calculated";
+    const prior = inp.priorLow != null && inp.priorHigh != null ? `${Math.round(inp.priorLow)} to ${Math.round(inp.priorHigh)} s` : "Not entered";
+    const stat = (label: string, value: string, testId: string, tone?: string) => (
+      <div className="rounded-md border border-border bg-muted/30 p-3">
+        <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
+        <div className={`text-lg font-semibold ${tone || ""}`} data-testid={testId}>{value}</div>
+      </div>
+    );
+    return (
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
+        <div className="flex items-start justify-between gap-3 flex-wrap mb-4">
+          <div className="min-w-0">
+            <div className="text-xs text-muted-foreground">Heparin Therapeutic Range: aPTT vs Anti-Xa (Brill-Edwards)</div>
+            <h1 className="text-2xl font-semibold">{study.testName}</h1>
+            <div className="text-sm text-muted-foreground mt-1">
+              {study.instrument || "-"} · {study.date} · Analyst: {study.analyst || "-"}
+            </div>
+            <div className="text-xs text-muted-foreground mt-0.5">
+              aPTT reagent lot {inp.reagentLot || "not entered"}{inp.reagentExp ? ` (exp ${inp.reagentExp})` : ""} · Anti-Xa {inp.antiXaMethod || "not entered"}{inp.antiXaLot ? `, lot ${inp.antiXaLot}` : ""} · Target {inp.targetLow} to {inp.targetHigh} IU/mL
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button asChild variant="outline" size="sm">
+              <Link href={labRoute("/dashboard")}>Back to Dashboard</Link>
+            </Button>
+            <Button
+              size="sm"
+              disabled={heparinPdfLoading}
+              onClick={async () => {
+                setHeparinPdfLoading(true);
+                try {
+                  await downloadPDF(study, res as unknown as StudyResults);
+                } catch {
+                  toast({ title: "PDF generation failed", description: "Please try again.", variant: "destructive" });
+                } finally {
+                  setHeparinPdfLoading(false);
+                }
+              }}
+              className="bg-primary hover:bg-primary/90 text-primary-foreground"
+              data-testid="button-download-pdf-heparin"
+            >
+              {heparinPdfLoading ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : <FileDown size={14} className="mr-1.5" />}
+              {heparinPdfLoading ? "Generating..." : "Download PDF"}
+            </Button>
+          </div>
+        </div>
+
+        {/* Sign and lock, as on every other study: the PDF prints DRAFT until the director or designee signs. */}
+        <div className="mb-4 flex items-center gap-3 flex-wrap" data-testid="lifecycle-panel">
+          {(study as any).lifecycle_state !== "finalized" ? (
+            <>
+              <Button hidden={isReadOnly} size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => navigate(labRoute(`/study/${study.id}/edit`))} data-testid="hr-edit">
+                <Pencil size={13} className="mr-1" />Edit
+              </Button>
+              <Button hidden={isReadOnly} variant="outline" size="sm" onClick={() => setFinalizeOpen(true)} data-testid="open-finalize-dialog">
+                Sign and lock
+              </Button>
+              <span className="text-xs text-muted-foreground">Sign off this study with your signature. The PDF prints DRAFT until it is signed.</span>
+            </>
+          ) : (
+            <span className="text-xs text-emerald-700 dark:text-emerald-400" data-testid="hr-signed-off">
+              <strong>Signed Off</strong> by {(study as any).finalized_signature} on {(study as any).finalized_at ? new Date((study as any).finalized_at).toLocaleDateString() : ""}.
+            </span>
+          )}
+        </div>
+        <StudyFinalizeDialog
+          open={finalizeOpen}
+          onOpenChange={setFinalizeOpen}
+          studyId={study.id}
+          onFinalized={() => queryClient.invalidateQueries({ queryKey: [studyUrl] })}
+        />
+
+        <div className="space-y-4">
+          <div className={`rounded-md border p-3 text-sm font-semibold ${res.meets ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30" : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30"}`} data-testid="hr-result-verdict">
+            {res.meets ? "Sample set meets the study criteria" : "Sample set does not meet the study criteria"}
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {stat("aPTT therapeutic range", range, "hr-result-range", res.meets ? "text-emerald-700 dark:text-emerald-400" : "")}
+            {stat(`Prior lot${inp.priorLot ? ` ${inp.priorLot}` : ""}`, prior, "hr-result-prior")}
+            {stat("Samples included", `${res.n} of ${res.entered}`, "hr-result-n")}
+            {stat("Correlation r", res.r === null ? "-" : res.r.toFixed(3), "hr-result-r")}
+          </div>
+          <div className="grid md:grid-cols-2 gap-4">
+            <Card>
+              <CardContent className="p-3">
+                {/* Numbers-only SVG from the shared builder (no user text), the same chart the PDF prints. */}
+                <div className="w-full overflow-hidden [&>svg]:w-full [&>svg]:h-auto" data-testid="hr-result-chart" dangerouslySetInnerHTML={{ __html: heparinRangeChartSVG(res) }} />
+                <p className="text-[11px] text-muted-foreground mt-1">Filled: included. Open red: excluded. Dashed: aPTT at the anti-Xa targets.</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-3 space-y-3 text-sm">
+                <table className="w-full text-sm">
+                  <tbody>
+                    <tr><td className="py-1 text-muted-foreground">Slope</td><td className="py-1 text-right">{f1(res.slope)} s per IU/mL</td></tr>
+                    <tr><td className="py-1 text-muted-foreground">Intercept</td><td className="py-1 text-right">{f1(res.intercept)} s</td></tr>
+                    <tr><td className="py-1 text-muted-foreground">r / r²</td><td className="py-1 text-right">{res.r === null ? "-" : `${res.r.toFixed(3)} / ${(res.r2 as number).toFixed(3)}`}</td></tr>
+                    <tr><td className="py-1 text-muted-foreground">Standard error of estimate</td><td className="py-1 text-right">{f1(res.see)} s</td></tr>
+                    <tr><td className="py-1 text-muted-foreground">aPTT at {inp.targetLow} IU/mL</td><td className="py-1 text-right font-semibold">{f1(res.rangeLow)} s</td></tr>
+                    <tr><td className="py-1 text-muted-foreground">aPTT at {inp.targetHigh} IU/mL</td><td className="py-1 text-right font-semibold">{f1(res.rangeHigh)} s</td></tr>
+                  </tbody>
+                </table>
+                <ul className="text-xs space-y-1" data-testid="hr-result-criteria">
+                  {res.criteria.map((c) => (
+                    <li key={c.key} className={c.met ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400"}>
+                      {c.met ? "Met" : "Not met"}: {c.label} ({c.value})
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+          </div>
+          <Card>
+            <CardContent className="p-4 text-sm leading-relaxed" data-testid="hr-result-narrative">
+              <span className="font-semibold">{determination}</span> {detail}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-base">Individual results</CardTitle></CardHeader>
+            <CardContent className="overflow-x-auto">
+              <table className="w-full text-sm" data-testid="hr-result-table">
+                <thead>
+                  <tr className="text-left text-xs text-muted-foreground border-b border-border">
+                    <th className="py-1.5 px-2">Sample</th><th className="py-1.5 px-2">Patient code</th>
+                    <th className="py-1.5 px-2 text-right">Anti-Xa</th><th className="py-1.5 px-2 text-right">aPTT (s)</th>
+                    <th className="py-1.5 px-2 text-right">INR</th><th className="py-1.5 px-2">Plasma</th>
+                    <th className="py-1.5 px-2 text-right">Residual</th><th className="py-1.5 px-2">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {res.rows.map((s) => (
+                    <tr key={s.id} className={`border-b border-border/60 ${s.included ? "" : "text-muted-foreground"}`}>
+                      <td className="py-1 px-2 whitespace-nowrap">{s.id}</td><td className="py-1 px-2">{s.patientCode || "-"}</td>
+                      <td className="py-1 px-2 text-right">{s.antiXa === null ? "-" : s.antiXa.toFixed(2)}</td>
+                      <td className="py-1 px-2 text-right">{s.aptt === null ? "-" : s.aptt}</td>
+                      <td className="py-1 px-2 text-right">{s.inr === null ? "-" : s.inr.toFixed(1)}</td>
+                      <td className="py-1 px-2">{s.plasma === "frozen" ? "Frozen" : "Fresh"}</td>
+                      <td className="py-1 px-2 text-right">{f1(s.residual)}</td>
+                      <td className="py-1 px-2">
+                        {s.included ? "Included" : s.exclude ? `Excluded: ${s.excludeReason || "no reason entered"}` : "Not used (value missing)"}
+                        {s.flags.length > 0 && <div className="text-xs text-amber-700 dark:text-amber-400">{s.flags.join("; ")}</div>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   // ── Sensitivity (analytical sensitivity, CLSI EP17-A2) ────────────────
   // Sensitivity studies have a different data shape than the rest of the

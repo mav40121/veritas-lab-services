@@ -26,6 +26,7 @@ import {
 } from "./licenseStamp";
 import { hasCanonicalTea, cfrSectionForTestName } from "./backfillAbsoluteFloor";
 import { evaluateManualDiff } from "./rumke";
+import { evaluateHeparinRange, normalizeHeparinInput, heparinRangeNarrative, heparinRangeChartSVG } from "@shared/heparinRange";
 import { setPdfContent } from "./pdfContent";
 
 // HTML-escape user-provided strings before they land in the rendered
@@ -869,6 +870,7 @@ function headerHTML(study: Study, cliaNumber?: string): string {
     multi_analyte_coag: "Multi-Analyte Lot Comparison (Coag)",
     sensitivity: "Sensitivity Verification (EP17)",
     manual_diff: "Manual Differential (Rümke 95% CI, CLSI H20)",
+    heparin_range: "Heparin Therapeutic Range, aPTT vs Anti-Xa (Brill-Edwards)",
     linearity: "Calibration Verification / Linearity (CLSI EP06)",
     reportable_range: "Reportable Range Verification (CLSI EP06)",
     accuracy_bias: "Accuracy / Bias (CLSI EP15-A3)",
@@ -3084,6 +3086,80 @@ function buildManualDiffHTML(study: Study): string {
   </body></html>`;
 }
 
+// Heparin Therapeutic Range, aPTT vs Anti-Xa (Brill-Edwards) (REQ-124, Michael Q134 = 1; layout = the approved mock).
+// dataPoints is the input object; the shared evaluator recomputes everything, so the PDF is authoritative. Page 1: the
+// range, prior lot, chart, regression, sample-set criteria, the narrative and the director review. Page 2: every sample.
+function buildHeparinRangeHTML(study: Study): string {
+  let input: any = {};
+  try { input = typeof (study as any).dataPoints === "string" ? JSON.parse((study as any).dataPoints) : ((study as any).dataPoints || {}); } catch {}
+  const inp = normalizeHeparinInput(input);
+  const res = evaluateHeparinRange(inp);
+  const passClass = res.meets ? "pass" : "fail";
+  const { determination, detail } = heparinRangeNarrative(res, inp.reagentLot, study.instrument);
+  const f1 = (v: number | null) => (v === null || !Number.isFinite(v) ? "-" : v.toFixed(1));
+  const range = res.rangeLowRounded !== null && res.rangeHighRounded !== null ? `${res.rangeLowRounded} to ${res.rangeHighRounded} s` : "Not calculated";
+  const prior = inp.priorLow != null && inp.priorHigh != null ? `${sf(inp.priorLow, 0)} to ${sf(inp.priorHigh, 0)} s` : "Not entered";
+  const change = inp.priorLow != null && inp.priorHigh != null && res.rangeLowRounded !== null && res.rangeHighRounded !== null
+    ? `${res.rangeLowRounded - Math.round(inp.priorLow) >= 0 ? "+" : ""}${res.rangeLowRounded - Math.round(inp.priorLow)} s / ${res.rangeHighRounded - Math.round(inp.priorHigh) >= 0 ? "+" : ""}${res.rangeHighRounded - Math.round(inp.priorHigh)} s` : "-";
+  const lotLine = [
+    `aPTT reagent lot: ${escapeHtml(inp.reagentLot || "Not entered")}${inp.reagentExp ? ` (exp ${escapeHtml(inp.reagentExp)})` : ""}`,
+    `Anti-Xa: ${escapeHtml(inp.antiXaMethod || "Not entered")}${inp.antiXaLot ? `, lot ${escapeHtml(inp.antiXaLot)}` : ""}`,
+  ].join(" &middot; ");
+  const criteriaRows = res.criteria.map((c) => `<tr><td>${escapeHtml(c.label)}</td><td>${escapeHtml(c.value)}</td><td class="${c.met ? "pass" : "fail"}">${c.met ? "Met" : "Not met"}</td></tr>`).join("");
+  const sampleRows = res.rows.map((s, i) => `<tr class="${i % 2 === 1 ? "stripe" : ""}" style="${s.included ? "" : "color:#7A7974;"}">
+      <td>${escapeHtml(s.id)}</td><td>${escapeHtml(s.patientCode || "-")}</td>
+      <td class="text-right">${s.antiXa === null ? "-" : s.antiXa.toFixed(2)}</td><td class="text-right">${s.aptt === null ? "-" : sf(s.aptt, 1)}</td>
+      <td class="text-right">${s.inr === null ? "-" : s.inr.toFixed(1)}</td><td>${s.plasma === "frozen" ? "Frozen" : "Fresh"}</td>
+      <td class="text-right">${f1(s.residual)}</td>
+      <td>${s.included ? "Included" : s.exclude ? `Excluded: ${escapeHtml(s.excludeReason || "no reason entered")}` : "Not used (value missing)"}${s.flags.length ? `<br><span style="color:#964219;">${escapeHtml(s.flags.join("; "))}</span>` : ""}</td>
+    </tr>`).join("");
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>VeritaCheck® - Heparin Therapeutic Range - ${escapeHtml(study.testName)}</title><style>${CSS}
+  .hr-two { display:flex; gap:12px; align-items:flex-start; margin-top:6px; } .hr-two > div { flex:1; }
+  .hr-two table td, .hr-two table th { border-bottom:1px solid #eef0f2; }
+  .hr-lots { font-size:7.5pt; color:${MUTED}; text-align:center; margin-bottom:4px; }
+  .hr-samples th { text-align:left; } .hr-samples th.text-right { text-align:right; }</style></head><body>
+  ${footerHTML()}
+  ${headerHTML(study, (study as any)._cliaNumber)}
+  <div class="hr-lots">${lotLine} &middot; Target anti-Xa ${inp.targetLow} to ${inp.targetHigh} IU/mL</div>
+  <div class="verdict ${res.meets ? "pass-bg" : "fail-bg"}">${res.meets ? "✔ Sample set meets the study criteria" : "✘ Sample set does not meet the study criteria"}</div>
+  <div class="key-stats">
+    <div class="stat-item"><div class="stat-label">aPTT therapeutic range</div><div class="stat-value ${passClass}">${range}</div></div>
+    <div class="stat-item"><div class="stat-label">Prior lot${inp.priorLot ? ` ${escapeHtml(inp.priorLot)}` : ""}</div><div class="stat-value">${prior}</div></div>
+    <div class="stat-item"><div class="stat-label">Samples included</div><div class="stat-value">${res.n} of ${res.entered}</div></div>
+    <div class="stat-item"><div class="stat-label">Correlation r</div><div class="stat-value">${res.r === null ? "-" : res.r.toFixed(3)}</div></div>
+  </div>
+  <div class="hr-two">
+    <div>${heparinRangeChartSVG(res)}<div style="font-size:6.5pt;color:${MUTED};">Filled: included. Open red: excluded. Dashed: aPTT at the anti-Xa targets.</div></div>
+    <div>
+      <div class="section-label" style="text-align:left;">Regression (ordinary least squares, aPTT on anti-Xa)</div>
+      <table>
+        <tr><td>Slope</td><td class="text-right">${f1(res.slope)} s per IU/mL</td></tr>
+        <tr><td>Intercept</td><td class="text-right">${f1(res.intercept)} s</td></tr>
+        <tr><td>r / r&sup2;</td><td class="text-right">${res.r === null ? "-" : `${res.r.toFixed(3)} / ${(res.r2 as number).toFixed(3)}`}</td></tr>
+        <tr><td>Standard error of estimate</td><td class="text-right">${f1(res.see)} s</td></tr>
+        <tr><td>aPTT at ${inp.targetLow} IU/mL</td><td class="text-right"><b>${f1(res.rangeLow)} s</b></td></tr>
+        <tr><td>aPTT at ${inp.targetHigh} IU/mL</td><td class="text-right"><b>${f1(res.rangeHigh)} s</b></td></tr>
+        <tr><td>Change from prior lot</td><td class="text-right">${change}</td></tr>
+      </table>
+      <div class="section-label" style="text-align:left;">Sample set criteria</div>
+      <table>${criteriaRows}</table>
+    </div>
+  </div>
+  <div style="margin-top:8px;padding:8px 12px;background:#F7F6F2;border:1px solid #D4D1CA;border-radius:5px;">
+    <div style="font-size:7.5pt;font-weight:700;color:#01696F;margin-bottom:4px;letter-spacing:0.04em;text-transform:uppercase;">Study Narrative Summary</div>
+    <p style="font-size:8pt;color:#28251D;line-height:1.5;margin:0;"><b>${determination}</b> ${escapeHtml(detail)}</p>
+  </div>
+  ${directorReviewHTML(study)}
+  <div style="page-break-before:always;"></div>
+  <div class="section-label" style="text-align:left;">Individual results</div>
+  <table class="hr-samples">
+    <thead><tr><th>Sample</th><th>Patient code</th><th class="text-right">Anti-Xa (IU/mL)</th><th class="text-right">aPTT (s)</th><th class="text-right">INR</th><th>Plasma</th><th class="text-right">Residual (s)</th><th>Status</th></tr></thead>
+    <tbody>${sampleRows}</tbody>
+  </table>
+  <p style="font-size:7pt;color:${MUTED};margin-top:8px;line-height:1.4;">Method: Marlar RA, Clement B, Gausman J. Activated partial thromboplastin time monitoring of unfractionated heparin therapy: issues and recommendations. Semin Thromb Hemost. 2017;43:253-260 (Table 2). Marlar RA, Gausman J. The optimum number and types of plasma samples necessary for an accurate activated partial thromboplastin time-based heparin therapeutic range. Arch Pathol Lab Med. 2013;137:77-82. Brill-Edwards P, et al. Establishing a therapeutic range for heparin therapy. Ann Intern Med. 1993;119:104-109. Patient codes are de-identified by the laboratory; no PHI is entered.</p>
+  </body></html>`;
+}
+
 // CLSI EP06 verification: linearity of the analytical measurement range via
 // OLS regression of per-level measured-mean vs assigned target. Results shape
 // matches what StudyResultsPage computes + handleSubmit persists. Acceptance:
@@ -4710,6 +4786,8 @@ export async function generatePDFBuffer(study: Study, results: any, cliaNumber?:
     ? buildReportableRangeHTML(study, results)
     : study.studyType === "manual_diff"
     ? buildManualDiffHTML(study)
+    : study.studyType === "heparin_range"
+    ? buildHeparinRangeHTML(study)
     : isQualResult
     ? buildQualitativeHTML(study, results)
     : isSemiQuantResult

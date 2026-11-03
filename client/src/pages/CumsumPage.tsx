@@ -423,7 +423,11 @@ export default function CumsumPage() {
                             <Badge className="bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 border-0"><XCircle size={12} className="mr-1" />ACTION REQUIRED - |CumSum| &gt; 7.0 sec</Badge>
                             <Alert variant="destructive">
                               <AlertTriangle size={14} />
-                              <AlertDescription>A new Heparin Response Curve is required. Contact instrument technical support.</AlertDescription>
+                              <AlertDescription>
+                                A new heparin therapeutic range is indicated for this lot. It can be set in VeritaCheck&reg; against anti-Xa with a{" "}
+                                {/* Lab-scoped on purpose: the un-prefixed redirect drops the query string. */}
+                                <Link href={`${activeLabId ? `/labs/${activeLabId}` : ""}/veritacheck?studyType=heparin_range&analyte=aPTT`} className="underline font-medium" data-testid="cumsum-heparin-range-link">Heparin Therapeutic Range study</Link>.
+                              </AlertDescription>
                             </Alert>
                           </div>
                         )}
