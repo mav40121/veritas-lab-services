@@ -8743,6 +8743,54 @@ try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_veritaceu_profiles_lab ON veri
   try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_record_views_user ON record_views(user_id, viewed_at)`); } catch {}
 }
 
+// Terms of Use and Confidentiality Agreement (Michael 2026-11-03, Q141 = 1; server/termsOfUse.ts, shared/termsOfUse.ts).
+// terms_acceptances: one row per person per version, with the typed name, time, IP, browser and a hash of the exact
+// text, and for a lab owner the labs and organizations accepted for. terms_activations: which version is being asked
+// (none until an admin activates one). CREATE + ALTER blocks together per the NEW DB TABLE RULE.
+{
+  const addCol = (table: string, col: string, ddl: string) => {
+    const cols = (sqlite.prepare(`PRAGMA table_info(${table})`).all() as any[]).map((c: any) => c.name);
+    if (!cols.includes(col)) { try { sqlite.exec(ddl); } catch {} }
+  };
+  try {
+    sqlite.exec(`CREATE TABLE IF NOT EXISTS terms_acceptances (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      terms_version TEXT NOT NULL,
+      text_sha256 TEXT NOT NULL,
+      signed_name TEXT NOT NULL,
+      account_name TEXT,
+      account_email TEXT,
+      accepted_at TEXT NOT NULL,
+      ip_address TEXT,
+      user_agent TEXT,
+      accepted_for_organization INTEGER NOT NULL DEFAULT 0,
+      organization_lab_ids TEXT,
+      organization_ids TEXT,
+      organization_names TEXT
+    )`);
+  } catch {}
+  for (const [c, d] of [["text_sha256", "TEXT"], ["account_name", "TEXT"], ["account_email", "TEXT"], ["ip_address", "TEXT"], ["user_agent", "TEXT"],
+    ["accepted_for_organization", "INTEGER NOT NULL DEFAULT 0"], ["organization_lab_ids", "TEXT"], ["organization_ids", "TEXT"], ["organization_names", "TEXT"]]) {
+    addCol("terms_acceptances", c, `ALTER TABLE terms_acceptances ADD COLUMN ${c} ${d}`);
+  }
+  try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_terms_acceptances_user_version ON terms_acceptances(user_id, terms_version)`); } catch {}
+  try {
+    sqlite.exec(`CREATE TABLE IF NOT EXISTS terms_activations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      terms_version TEXT NOT NULL,
+      text_sha256 TEXT,
+      active INTEGER NOT NULL DEFAULT 1,
+      activated_at TEXT NOT NULL,
+      activated_by TEXT,
+      deactivated_at TEXT
+    )`);
+  } catch {}
+  for (const [c, d] of [["text_sha256", "TEXT"], ["active", "INTEGER NOT NULL DEFAULT 1"], ["activated_by", "TEXT"], ["deactivated_at", "TEXT"]]) {
+    addCol("terms_activations", c, `ALTER TABLE terms_activations ADD COLUMN ${c} ${d}`);
+  }
+}
+
 // Single sign-on (Michael 2026-10-15, Q39 = 1; server/sso.ts, server/ssoRoutes.ts). OpenID Connect,
 // Microsoft Entra first. sso_configs: one per customer identity provider, routed by email domain,
 // optional or required; a client secret (when the provider uses one) is sealed like the two-factor

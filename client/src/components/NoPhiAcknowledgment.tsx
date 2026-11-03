@@ -14,9 +14,12 @@ import { apiRequest } from "@/lib/queryClient";
 import { isPublicMarketingPath } from "@/lib/auth";
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { useTermsStatus } from "@/components/TermsAcceptance";
 
 export function NoPhiAcknowledgment() {
   const { user, isLoggedIn, logout } = useAuth();
+  // The Terms of Use and Confidentiality Agreement comes first; this waits until it is accepted (TermsAcceptance.tsx).
+  const terms = useTermsStatus();
   const [location, navigate] = useLocation();
   const queryClient = useQueryClient();
   const userId = user?.id ?? null;
@@ -31,7 +34,7 @@ export function NoPhiAcknowledgment() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  const open = isLoggedIn && !!data?.needed && !isPublicMarketingPath(location);
+  const open = isLoggedIn && !!data?.needed && !terms.data?.required && !isPublicMarketingPath(location);
   if (!open) return null;
 
   async function agree() {

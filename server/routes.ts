@@ -223,6 +223,8 @@ import { normalizeChecklistItems } from "@shared/competencyChecklist";
 import { checklistImageIdProblem, checklistItemImageIds, checklistForAudit, checklistImageMap, withChecklistImages, snapshotChecklistItemImages } from "./competencyChecklistImages";
 import { notApplicableRows, notApplicableIds, notApplicableProblem, NOT_APPLICABLE_REASON_MAX } from "./competencyNotApplicable";
 import { noPhiAcknowledgmentStatus, recordNoPhiAcknowledgment } from "./noPhiAcknowledgment";
+import { termsGateMiddleware, termsStatus, acceptTerms, activateTerms, deactivateTerms, acceptanceCounts, activeTermsVersion } from "./termsOfUse";
+import { TERMS_VERSION } from "../shared/termsOfUse";
 import { assessmentTypeLabel, assessmentTypeProblem, isEvaluationProgram, normalizeRecordKind } from "@shared/competencyEvaluation";
 import { normalizeSpecimen, normalizeReportableField, specimenLabel } from "@shared/veritamapSpecimen";
 import { buildCompetencyRegisterRows, generateCompetencyRegisterExcel } from "./competencyRegisterExcel";
@@ -1480,6 +1482,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Record-view logging (server/recordViews.ts; Lifepoint IPS III.1(i)): after a successful signed-in read of
   // lab data, who opened it is recorded. Runs on the response's finish, so it never delays or fails a read.
   app.use(recordViewMiddleware(() => (db as any).$client));
+  // Terms of Use and Confidentiality Agreement (server/termsOfUse.ts; Michael Q141 = 1): once a version is active, a
+  // signed-in person who has not accepted it gets 403 TERMS_REQUIRED on every API route except reading, accepting and
+  // signing out, so an open session is held at the agreement instead of being logged out. Must precede every route.
+  app.use("/api", termsGateMiddleware(() => (db as any).$client, DEMO_USER_EMAIL));
 
   // Public one-click demo login (VeritaStock deployment only).
   registerDemoLogin(app);
@@ -1498,6 +1504,31 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // is the cross-system master overview. Env-overridable; defaults to Michael's
   // address. Not a secret.
   const OPERATOR_OVERVIEW_EMAIL = (process.env.OPERATOR_EMAIL || "verilabguy@gmail.com").trim();
+
+  // Terms of Use and Confidentiality Agreement (server/termsOfUse.ts; Michael Q141 = 1). Nobody is asked until a version
+  // is activated here, after Michael approves the text. Dry run unless dryRun is false. Status is counts only.
+  app.post("/api/admin/terms/activate", (req: any, res) => {
+    const secret = (req.headers["x-admin-secret"] || req.body?.secret) as string | undefined;
+    if (!secret || secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const r = activateTerms((db as any).$client, String(req.body?.version || ""), { dryRun: req.body?.dryRun !== false, by: "admin" });
+    if (!r.ok) return res.status(400).json(r);
+    if (!r.dryRun) console.log(`[terms] version ${r.version} activated; ${r.notYetAccepted} of ${r.users} users will be asked`);
+    res.json(r);
+  });
+  app.post("/api/admin/terms/deactivate", (req: any, res) => {
+    const secret = (req.headers["x-admin-secret"] || req.body?.secret) as string | undefined;
+    if (!secret || secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const r = deactivateTerms((db as any).$client);
+    console.log(`[terms] deactivated (${r.deactivated} activation row(s))`);
+    res.json(r);
+  });
+  app.get("/api/admin/terms/status", (req: any, res) => {
+    const secret = (req.headers["x-admin-secret"] || req.query.secret) as string | undefined;
+    if (!secret || secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const sqlite = (db as any).$client;
+    const active = activeTermsVersion(sqlite);
+    res.json({ activeVersion: active, currentVersion: TERMS_VERSION, ...acceptanceCounts(sqlite, active || TERMS_VERSION) });
+  });
 
   // BUG-068 cleanup (Q52 = 1): clear the made-up competency values the old startup backfill wrote. Dry run unless
   // dryRun is false. Never touches a signed assessment or a lab in excludeLabIds (the demo lab). One audit row per
@@ -7413,6 +7444,19 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const r = recordNoPhiAcknowledgment((db as any).$client, req.userId, DEMO_USER_EMAIL);
     if (r.recorded) console.log(`[no-phi-ack] user ${req.userId} acknowledged at sign-in ${r.acknowledgedAt}`);
     res.json({ ok: true, ...r });
+  });
+
+  // Terms of Use and Confidentiality Agreement (server/termsOfUse.ts; Michael Q141 = 1): the person's own acceptance,
+  // with their typed name; a lab owner also accepts for the organization.
+  app.get("/api/auth/terms", authMiddleware, (req: any, res) => {
+    res.json(termsStatus((db as any).$client, req.userId, DEMO_USER_EMAIL));
+  });
+  app.post("/api/auth/terms/accept", authMiddleware, (req: any, res) => {
+    if (req.isDemo) return res.status(403).json({ error: "The demo account does not accept terms." });
+    const r = acceptTerms((db as any).$client, req.userId, req, req.body);
+    if (!r.ok) return res.status(r.status).json({ error: r.error, code: r.code });
+    if (r.recorded) console.log(`[terms] user ${req.userId} accepted ${r.version} at ${r.acceptedAt}`);
+    res.json({ ...r, status: termsStatus((db as any).$client, req.userId, DEMO_USER_EMAIL) });
   });
 
   app.get("/api/auth/me", authMiddleware, (req: any, res) => {

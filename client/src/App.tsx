@@ -12,6 +12,7 @@ import { queryClient } from "./lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
 import { PhiGuard } from "@/components/PhiGuard";
 import { NoPhiAcknowledgment } from "@/components/NoPhiAcknowledgment";
+import { TermsAcceptance } from "@/components/TermsAcceptance";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider, useAuth } from "@/components/AuthContext";
@@ -629,6 +630,7 @@ function AppContent() {
       <Toaster />
       <IdleSignOut />
       <PhiGuard />
+      <TermsAcceptance />
       <NoPhiAcknowledgment />
       <SubscriptionModal />
       <StudyCreditsModal />

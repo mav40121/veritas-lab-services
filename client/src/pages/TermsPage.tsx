@@ -1,78 +1,27 @@
+// The public Terms of Use and Confidentiality Agreement. The text lives in shared/termsOfUse.ts, the same words every
+// user accepts in the app (client/src/components/TermsAcceptance.tsx; Michael 2026-11-03, Q141 = 1).
+import { TERMS_SECTIONS, TERMS_TITLE, TERMS_VERSION_LABEL } from "@shared/termsOfUse";
+
+const MAIL = "info@veritaslabservices.com";
+
+function withMailLink(text: string) {
+  const parts = text.split(MAIL);
+  return parts.flatMap((p, i) => (i === 0 ? [p] : [<a key={i} href={`mailto:${MAIL}`} className="text-primary hover:underline">{MAIL}</a>, p]));
+}
+
 export default function TermsPage() {
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-16">
-      <h1 className="font-serif text-3xl font-bold mb-2">Terms of Service</h1>
-      <p className="text-sm text-muted-foreground mb-8">Effective Date: April 23, 2026 · Veritas Lab Services, LLC</p>
+      <h1 className="font-serif text-3xl font-bold mb-2">{TERMS_TITLE}</h1>
+      <p className="text-sm text-muted-foreground mb-8">{TERMS_VERSION_LABEL} · Veritas Lab Services, LLC</p>
 
       <div className="prose prose-sm dark:prose-invert max-w-none space-y-6 text-sm leading-relaxed">
-
-        <section>
-          <h2 className="font-semibold text-base mb-2">1. Acceptance of Terms</h2>
-          <p>By accessing or using any product provided by Veritas Lab Services, LLC, including VeritaCheck® and VeritaScan® (collectively, the "Service"), you agree to be bound by these Terms of Service. If you do not agree, do not use the Service.</p>
-        </section>
-
-        <section>
-          <h2 className="font-semibold text-base mb-2">2. Description of Service</h2>
-          <p><strong>VeritaCheck®</strong> is a web-based statistical analysis tool designed to assist qualified laboratory professionals in performing calibration verification, linearity, method comparison, and precision studies in accordance with CLIA, CAP, and CLSI guidelines. It generates statistical calculations and PDF reports based on data entered by the user.</p>
-          <p className="mt-2"><strong>VeritaScan®</strong> is a self-inspection and compliance audit tool that enables laboratory professionals to assess laboratory compliance against TJC, CAP, and federal CLIA requirements. VeritaScan® citations reference TJC standards (copyright © The Joint Commission) and CAP checklist numbers (copyright © College of American Pathologists) for educational and navigational purposes only. VeritaScan® does not reproduce the text of those standards and is not affiliated with, endorsed by, or sponsored by The Joint Commission or the College of American Pathologists.</p>
-        </section>
-
-        <section>
-          <h2 className="font-semibold text-base mb-2">3. Intended Users</h2>
-          <p>The Service is intended exclusively for use by qualified laboratory professionals, including but not limited to laboratory directors, clinical laboratory scientists, medical technologists, and laboratory managers who hold appropriate credentials and operate under applicable federal and state regulations.</p>
-        </section>
-
-        <section>
-          <h2 className="font-semibold text-base mb-2">4. Disclaimer of Medical Advice</h2>
-          <p>The Service is a professional reference and statistical computation tool only. Nothing produced by VeritaCheck® or VeritaScan® constitutes medical advice, diagnosis, treatment, a clinical recommendation, or a substitute for official accreditation review or regulatory inspection of any kind. All output must be reviewed and interpreted by a qualified laboratory director or designee or clinical consultant before being used to make any clinical, regulatory, or operational decision. The Company expressly disclaims any liability for clinical or regulatory decisions made in reliance on Service output.</p>
-        </section>
-
-        <section>
-          <h2 className="font-semibold text-base mb-2">5. User Responsibilities</h2>
-          <p>You are solely responsible for: (a) the accuracy and completeness of data entered into the Service; (b) the interpretation of results; (c) compliance with all applicable laws, regulations, and accreditation standards; and (d) maintaining appropriate oversight by a qualified laboratory director or designee. You represent that you are a credentialed laboratory professional authorized to perform the studies you conduct using this Service.</p>
-        </section>
-
-        <section>
-          <h2 className="font-semibold text-base mb-2">6. Account Security</h2>
-          <p>You are responsible for maintaining the confidentiality of your account credentials. You agree to notify us immediately of any unauthorized use of your account. We are not liable for losses resulting from unauthorized use of your account.</p>
-        </section>
-
-        <section>
-          <h2 className="font-semibold text-base mb-2">7. Payment, Subscriptions, and Refunds</h2>
-          <p>Paid features require a valid payment method. Subscription fees are billed in advance. Per-study purchases are one-time charges. We reserve the right to modify pricing with 30 days' notice.</p>
-          <p className="mt-2"><strong>30-Day Money-Back Guarantee.</strong> For subscription plans only, we will refund your first subscription charge in full if you request a refund within 30 days of that first charge. The guarantee is limited to one refund per customer and applies to the initial subscription charge only, not to subsequent renewals. Per-study purchases, seat add-on charges, and any charges beyond the first subscription charge are non-refundable. To request a refund, contact <a href="mailto:info@veritaslabservices.com" className="text-primary hover:underline">info@veritaslabservices.com</a> from the email address on the account. All other fees are non-refundable except as required by law.</p>
-        </section>
-
-        <section>
-          <h2 className="font-semibold text-base mb-2">8. Intellectual Property</h2>
-          <p>All content, software, design, and reports generated by the Service are the property of Veritas Lab Services, LLC. You may download and retain PDF reports generated from your own study data for your own professional use. You may not reproduce, resell, or redistribute the Service or its outputs for commercial purposes without written consent.</p>
-        </section>
-
-        <section>
-          <h2 className="font-semibold text-base mb-2">9. Limitation of Liability</h2>
-          <p>To the maximum extent permitted by applicable law, Veritas Lab Services, LLC shall not be liable for any indirect, incidental, special, consequential, or punitive damages, including loss of data, revenue, or patient harm, arising out of or related to your use of the Service. Our total liability for any claim shall not exceed the amount you paid us in the 12 months preceding the claim.</p>
-        </section>
-
-        <section>
-          <h2 className="font-semibold text-base mb-2">10. Indemnification</h2>
-          <p>You agree to indemnify and hold harmless Veritas Lab Services, LLC and its officers, directors, employees, and agents from any claims, damages, or expenses arising from your use of the Service, your violation of these Terms, or your violation of any applicable laws or regulations.</p>
-        </section>
-
-        <section>
-          <h2 className="font-semibold text-base mb-2">11. Modifications</h2>
-          <p>We reserve the right to modify these Terms at any time. We will notify registered users by email or in-app notice. Continued use of the Service after changes constitutes acceptance of the revised Terms.</p>
-        </section>
-
-        <section>
-          <h2 className="font-semibold text-base mb-2">12. Governing Law</h2>
-          <p>These Terms are governed by the laws of the Commonwealth of Massachusetts, without regard to conflict of law principles. Any disputes shall be resolved in the state or federal courts located in Massachusetts, and each party consents to the personal jurisdiction of such courts.</p>
-        </section>
-
-        <section>
-          <h2 className="font-semibold text-base mb-2">13. Contact</h2>
-          <p>Questions regarding these Terms may be directed to: <a href="mailto:info@veritaslabservices.com" className="text-primary hover:underline">info@veritaslabservices.com</a></p>
-        </section>
-
+        {TERMS_SECTIONS.map((s) => (
+          <section key={s.title}>
+            <h2 className="font-semibold text-base mb-2">{s.title}</h2>
+            {s.paragraphs.map((p, i) => <p key={i} className={i ? "mt-2" : undefined}>{withMailLink(p)}</p>)}
+          </section>
+        ))}
       </div>
     </div>
   );
