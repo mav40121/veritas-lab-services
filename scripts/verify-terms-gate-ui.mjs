@@ -12,6 +12,8 @@
 //   U5. "Sign out" from the agreement ends the session and goes to the sign-in page
 //   U6. public pages are not covered: /terms shows the new text to anyone, and a held person on the home page sees no
 //       agreement
+//   U7. a brand-new sign-up (onboarding not done) sees only the agreement; the onboarding wizard waits behind it and
+//       opens after acceptance (production 2026-11-03 showed the two stacked)
 // Run: PW_BASE=http://localhost:5197 SCRATCH_DB=<db> OUT=<dir> node scripts/verify-terms-gate-ui.mjs
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
@@ -106,7 +108,12 @@ const tp = await signIn(third.body.token);
 await tp.goto(`${BASE}/dashboard`, { waitUntil: "domcontentloaded" }); await dialog(tp).waitFor({ timeout: 15000 }).catch(() => {});
 await tp.getByTestId("terms-sign-out").click();
 await tp.waitForURL(/\/login/, { timeout: 15000 }).catch(() => {});
-const thirdActive = sql("SELECT COUNT(*) AS n FROM user_sessions WHERE user_id = (SELECT id FROM users WHERE email LIKE 'terms-third-%' ORDER BY id DESC LIMIT 1) AND is_active = 1").n;
+// Sign-out posts /api/auth/logout without waiting (AuthContext.tsx), so give the request up to 6 s to land.
+let thirdActive = 1;
+for (let i = 0; i < 12 && thirdActive !== 0; i++) {
+  thirdActive = sql("SELECT COUNT(*) AS n FROM user_sessions WHERE user_id = (SELECT id FROM users WHERE email LIKE 'terms-third-%' ORDER BY id DESC LIMIT 1) AND is_active = 1").n;
+  if (thirdActive !== 0) await tp.waitForTimeout(500);
+}
 check("U5. 'Sign out' from the agreement ends the session and goes to the sign-in page", /\/login/.test(tp.url()) && thirdActive === 0, `${tp.url()} active=${thirdActive}`);
 
 // U6
@@ -120,6 +127,22 @@ const termsText = await pub.locator("body").innerText();
 check("U6. /terms shows the new agreement to anyone (title, confidentiality, acceptable use, one login per person)",
   /Terms of Use and Confidentiality Agreement/.test(termsText) && /7\. Confidentiality/.test(termsText) && /8\. Acceptable Use/.test(termsText) && /Each login belongs to one person/.test(termsText) && !/—/.test(termsText));
 await pub.screenshot({ path: `${OUT}/terms_public_page.png` });
+
+// U7 (onboarding flags left as a fresh sign-up has them)
+const fresh = await call("POST", "/api/auth/register", { email: `terms-fresh-${Date.now()}@example.com`, password: pw, name: "Casey Fresh", hipaa_acknowledged: true });
+const np = await signIn(fresh.body.token);
+await np.goto(`${BASE}/dashboard`, { waitUntil: "domcontentloaded" });
+await dialog(np).waitFor({ timeout: 15000 }).catch(() => {});
+await np.waitForTimeout(1500);
+const wizard = np.getByText("Is your lab ready for its next inspection?");
+check("U7. a brand-new sign-up sees only the agreement (the onboarding wizard waits)", (await dialog(np).count()) === 1 && (await wizard.count()) === 0, `wizard ${await wizard.count()}`);
+await np.screenshot({ path: `${OUT}/terms_new_signup.png` });
+await np.getByTestId("terms-signed-name").fill("Casey Fresh");
+await np.getByTestId("terms-agree").check();
+await np.getByTestId("terms-accept").click();
+await wizard.waitFor({ timeout: 15000 }).catch(() => {});
+check("U7. after accepting, the onboarding wizard opens", (await dialog(np).count()) === 0 && (await wizard.count()) === 1);
+await np.screenshot({ path: `${OUT}/terms_new_signup_after.png` });
 
 await browser.close();
 console.log(failures ? `${failures} FAIL` : "ALL PASS");
