@@ -14,7 +14,7 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const { chromium } = require("@playwright/test");
 const Database = require("better-sqlite3");
-const BASE = process.env.PW_BASE, ADMIN = "test-admin-secret";
+const BASE = process.env.PW_BASE, ADMIN = "test-admin-secret", OUT = process.env.OUT || ".";
 let failures = 0;
 const check = (name, cond, detail = "") => { console.log(`${cond ? "PASS" : "FAIL"}  ${name}${detail ? "  :: " + detail : ""}`); if (!cond) failures++; };
 const call = async (method, path, body) => { const r = await fetch(BASE + path, { method, headers: { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) }); let j = {}; try { j = await r.json(); } catch {} return j; };
@@ -36,6 +36,9 @@ const p1 = await path();
 const body1 = await page.locator("body").innerText();
 check("R1. direct link keeps the query: Precision picked, Glucose as the test name", p1 === `/labs/${labId}/veritacheck?studyType=precision&analyte=Glucose`
   && /Precision Verification \(CLSI EP15-A3\)/.test(body1) && (await page.getByTestId("input-test-name").inputValue().catch(() => "")) === "Glucose", p1);
+// Receipt: the landing page with the URL stamped on it (the address bar is not in a Playwright screenshot).
+const stamp = (u) => page.evaluate((u) => { const d = document.createElement("div"); d.id = "url-stamp"; d.textContent = `URL: ${u}`; d.style.cssText = "position:fixed;top:0;left:0;right:0;z-index:99999;background:#FFF4D6;color:#6A4B00;font:12px monospace;padding:4px 8px;border-bottom:1px solid #E8C96A"; document.body.appendChild(d); }, u);
+await stamp(p1); await page.screenshot({ path: `${OUT}/redirect_direct_link.png` });
 
 await page.goto(`${BASE}/labs/${labId}/dashboard`, { waitUntil: "networkidle" }); await page.waitForTimeout(800);
 await page.evaluate(() => { window.history.pushState({}, "", "/veritacheck?studyType=lot_to_lot&analyte=Fibrinogen&verificationId=7&element=accuracy#data"); window.dispatchEvent(new PopStateEvent("popstate")); });
@@ -43,6 +46,7 @@ await page.waitForTimeout(1500);
 const p2 = await path();
 check("R2. in-app navigation keeps the query and hash (the workbook Run button's shape)", p2 === `/labs/${labId}/veritacheck?studyType=lot_to_lot&analyte=Fibrinogen&verificationId=7&element=accuracy#data`
   && /Reagent Lot Verification \(CLSI EP26\)/.test(await page.locator("body").innerText()), p2);
+await stamp(p2); await page.screenshot({ path: `${OUT}/redirect_in_app_navigation.png` });
 
 await page.goto(`${BASE}/veritacheck`, { waitUntil: "networkidle" }); await page.waitForTimeout(1200);
 const p3 = await path();
