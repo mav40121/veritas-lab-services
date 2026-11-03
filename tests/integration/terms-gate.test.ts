@@ -109,6 +109,14 @@ async function main() {
     const demoId = Number((sqlite.prepare("SELECT id FROM users WHERE email = ?").get(DEMO_USER_EMAIL) as any).id);
     const demoRes = await call("GET", ROUTE, undefined, session(demoId));
     check("4. a script's service token is not held", svcRes.status === 200, String(svcRes.status));
+    // The CI sandbox receipts drive production with { svc, ci_sandbox } tokens: the status must not tell that browser to
+    // show the agreement, while the same person's real session is still asked (2026-11-03 smoke failures).
+    const ciTok = jwt.sign({ svc: true, ci_sandbox: true, userId: a }, process.env.JWT_SECRET!, { expiresIn: "10m" });
+    const svcSt = await call("GET", "/api/auth/terms", undefined, svc(a));
+    const ciSt = await call("GET", "/api/auth/terms", undefined, ciTok);
+    const personSt = await call("GET", "/api/auth/terms", undefined, aTok);
+    check("4. the agreement status does not ask a script or CI sandbox token, but still asks the person's own session",
+      svcSt.body.required === false && ciSt.body.required === false && personSt.body.required === true, `${svcSt.body.required} ${ciSt.body.required} ${personSt.body.required}`);
     check("4. a request with no sign-in gets its route's own 401, not the agreement", anon.status === 401 && anon.body.code !== "TERMS_REQUIRED", String(anon.status));
     check("4. the shared demo account is not held", demoRes.status === 200, String(demoRes.status));
 

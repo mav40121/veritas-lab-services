@@ -60,13 +60,18 @@ export function ownedBy(sqlite: any, userId: number): Owned {
   return { labs, organizations };
 }
 
-export function termsStatus(sqlite: any, userId: number, demoEmail: string) {
+/**
+ * opts.notAPerson: the request came with a script's service token (svc / ci_sandbox) or the public demo, the same kinds
+ * the gate lets through. Without it, the CI sandbox receipts (which drive production with a ci_sandbox token) were let
+ * through by the gate but shown the agreement by this status, so every UI receipt failed after activation (2026-11-03).
+ */
+export function termsStatus(sqlite: any, userId: number, demoEmail: string, opts: { notAPerson?: boolean } = {}) {
   const active = activeTermsVersion(sqlite);
   const owned = ownedBy(sqlite, userId);
   const last = sqlite.prepare("SELECT terms_version, accepted_at FROM terms_acceptances WHERE user_id = ? ORDER BY id DESC LIMIT 1").get(userId) as
     | { terms_version: string; accepted_at: string }
     | undefined;
-  const exempt = isExempt(sqlite, userId, demoEmail);
+  const exempt = !!opts.notAPerson || isExempt(sqlite, userId, demoEmail);
   const required = !!active && !exempt && !hasAccepted(sqlite, userId, active);
   return {
     required,
