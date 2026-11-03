@@ -48,7 +48,11 @@ export function LegacyWorkspaceRedirect({ children, appPath }: { children: React
     // this the persisted fallback stays empty and requests go out lab-less.
     setActiveLabId(target.labId);
     const dest = appPath ?? location;
-    setLocation(`/labs/${target.labId}${dest}`);
+    // Keep the query string and hash (2026-11-03): wouter's location is the path only, so a link such as the
+    // verification workbook's Run button (/veritacheck?studyType=...&verificationId=...) or VeritaMap's correlation
+    // link landed on /labs/:id/veritacheck with its settings gone.
+    const search = dest.includes("?") ? "" : window.location.search;
+    setLocation(`/labs/${target.labId}${dest}${search}${window.location.hash}`);
   }, [willRedirect, memberships, location, setLocation, appPath]);
 
   // Hold the un-prefixed child until the active lab is known. Rendering the
