@@ -408,7 +408,15 @@ export function sameTestNameOnMap(analyte: string, mapAnalytes: string[]): strin
   if (mapAnalytes.some((a) => String(a).trim().toLowerCase() === lower)) return analyte;
   const peers = Array.from(new Set(mapAnalytes.filter((a) => oneRowKey(a) === key)));
   if (!peers.length) return analyte;
-  return peers.find((p) => p.includes("%")) ?? peers[0];
+  return preferredSameTestName(peers);
+}
+
+/**
+ * Which of several names for one test the map keeps: the analyzer's percent form ("EO%") first, then a name that does
+ * not say "manual" (the Beckman DxH reports "NRBC", which must not become "NRBC (manual)"), then the first given.
+ */
+export function preferredSameTestName(names: string[]): string {
+  return names.find((n) => n.includes("%")) ?? names.find((n) => !/manual/i.test(n)) ?? names[0];
 }
 
 export interface CorrelationGroupInfo {

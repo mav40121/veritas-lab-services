@@ -11,7 +11,8 @@
 //      filled or kept with the conflict reported; AMR moved; map-row notes filled; the method comparison between the
 //      two names becomes the EO% comparison; Bands, Blasts and NEUT# untouched; a second run finds nothing to do
 //   D. builder: a menu saved for the manual differential takes the map's names ("NEUT%" on a Sysmex map, "NE%" on a
-//      Beckman map); absolute counts are never renamed
+//      Beckman map, "NRBC" over "NRBC (manual)" on a map with no % name, Q127); absolute counts are never renamed;
+//      merged "last done" dates keep the later one (C9b, Q127)
 //   E. browser: the map shows EO% once with both instruments (light and dark)
 // Run: PW_BASE=http://localhost:5197 SCRATCH_DB=<db> OUT=<dir> node scripts/verify-manual-diff-one-row.mjs
 import { createRequire } from "node:module";
@@ -56,6 +57,9 @@ const testId = (a) => db.prepare("SELECT id FROM veritamap_tests WHERE map_id = 
 db.prepare("UPDATE veritamap_tests SET notes = 'Manual diff reviewed with pathologist' WHERE map_id = ? AND analyte = 'Monocytes'").run(mapId);
 db.prepare("UPDATE veritamap_tests SET notes = 'XN primary' WHERE map_id = ? AND analyte = 'EO%'").run(mapId);
 db.prepare("UPDATE veritamap_tests SET notes = 'Manual backup' WHERE map_id = ? AND analyte = 'Eosinophils'").run(mapId);
+// Q127 (SCAHC dry run): "last done" dates keep the later one. EO% has the later cal ver, Eosinophils the later method comparison.
+db.prepare("UPDATE veritamap_tests SET last_cal_ver = '2026-07-01', last_method_comp = '2026-06-20' WHERE map_id = ? AND analyte = 'EO%'").run(mapId);
+db.prepare("UPDATE veritamap_tests SET last_cal_ver = '2026-06-19', last_method_comp = '2026-07-03' WHERE map_id = ? AND analyte = 'Eosinophils'").run(mapId);
 const [ca, cb] = [testId("Eosinophils"), testId("EO%")].sort((x, y) => x - y);
 db.prepare("INSERT INTO veritamap_test_correlations (test_a_id, test_b_id, correlation_method, pass_fail, signoff_by_name, created_at, updated_at) VALUES (?, ?, 'Manual vs analyzer', 'Pass', 'Test Director', ?, ?)").run(ca, cb, now, now);
 const corrId = db.prepare("SELECT id FROM veritamap_test_correlations WHERE test_a_id = ? AND test_b_id = ?").get(ca, cb).id;
@@ -108,6 +112,8 @@ check("C8. MONO% takes the manual notes; EO% keeps its own notes (the difference
 const corr = db.prepare("SELECT test_a_id, test_b_id, signoff_by_name FROM veritamap_test_correlations WHERE id = ?").get(corrId);
 const eoTestId = testId("EO%");
 check("C9. the manual-vs-analyzer comparison is now the EO% comparison (both ends on the EO% row), sign-off kept", corr?.test_a_id === eoTestId && corr?.test_b_id === eoTestId && corr?.signoff_by_name === "Test Director", JSON.stringify(corr));
+const eoDates = db.prepare("SELECT last_cal_ver, last_method_comp FROM veritamap_tests WHERE map_id = ? AND analyte = 'EO%'").get(mapId);
+check("C9b. EO% keeps the later of each date: its own cal ver 2026-07-01, and the manual row's later method comparison 2026-07-03", eoDates?.last_cal_ver === "2026-07-01" && eoDates?.last_method_comp === "2026-07-03", JSON.stringify(eoDates));
 const orphans = db.prepare("SELECT COUNT(*) n FROM veritamap_analyte_values WHERE map_id = ? AND analyte IN (" + LEGACY.map(() => "?").join(",") + ")").get(mapId, ...LEGACY).n;
 check("C10. no reference bands left under the old names", orphans === 0, String(orphans));
 const audit = db.prepare("SELECT entity_label FROM audit_log WHERE module = 'veritamap' AND entity_label LIKE '%admin merge-analyte%' ORDER BY id DESC LIMIT 1").get();
@@ -134,6 +140,25 @@ const man3 = db.prepare("SELECT it.analyte FROM veritamap_instrument_tests it JO
 check("D2. on a Beckman map the library's NEUT%/LYMPH%/MONO%/BASO% take the map's NE%/LY%/MO%/BA%", man3 === "BA%, Bands, EO%, LY%, MO%, NE%", man3);
 const rows2 = db.prepare("SELECT analyte FROM veritamap_tests WHERE map_id = ? ORDER BY analyte").all(map2).map((x) => x.analyte).join(", ");
 check("D3. the Beckman map has one row per test (no NEUT%, LYMPH%, MONO%, BASO% rows)", rows2 === "BA%, Bands, EO%, LY%, MO%, NE#, NE%", rows2);
+// D4-D6. Naming (Michael Q127, lab 17 dry run): with no "%" name on the map, the analyzer's name wins over "... (manual)".
+const map3 = (await call("POST", `${L}/veritamap/maps`, { name: "DxH campus" }, T)).body.id;
+await call("POST", `/api/admin/veritamap/seed-map?secret=${ADMIN}`, { mapId: map3, defaultActive: 1, instruments: [
+  { name: "Beckman Coulter DxH 690T", category: "Hematology", tests: [h("NRBC")] },
+  { name: "Manual Differential", category: "Hematology", tests: [h("Bands", "HIGH")] },
+] });
+const man3Id = db.prepare("SELECT id FROM veritamap_instruments WHERE map_id = ? AND instrument_name = 'Manual Differential'").get(map3).id;
+db.prepare("INSERT INTO veritamap_instrument_tests (instrument_id, map_id, analyte, specialty, complexity, active) VALUES (?, ?, 'NRBC (manual)', 'Hematology', 'HIGH', 1)").run(man3Id, map3);
+db.prepare("INSERT INTO veritamap_tests (map_id, analyte, specialty, complexity, active, instrument_source, updated_at) VALUES (?, 'NRBC (manual)', 'Hematology', 'HIGH', 1, 'Manual Differential', ?)").run(map3, now);
+r = await merge({ labId, mapId: map3 });
+const p3 = (r.body.report || []).map((p) => `${p.from}>${p.into}`).join(" ");
+check("D4. with no % name, the dry run folds 'NRBC (manual)' into the analyzer's 'NRBC' (not the reverse)", p3 === "NRBC (manual)>NRBC", p3);
+r = await merge({ labId, mapId: map3, dryRun: false });
+const rows3 = db.prepare("SELECT it.analyte, i.instrument_name FROM veritamap_instrument_tests it JOIN veritamap_instruments i ON i.id = it.instrument_id WHERE it.map_id = ? ORDER BY i.instrument_name, it.analyte").all(map3).map((x) => `${x.instrument_name}:${x.analyte}`).join(", ");
+check("D5. after apply both instruments carry 'NRBC'", rows3 === "Beckman Coulter DxH 690T:NRBC, Manual Differential:Bands, Manual Differential:NRBC", rows3);
+const MAN4 = (await call("POST", `${L}/veritamap/maps/${map3}/instruments`, { instrument_name: "Manual Differential (bench 2)", category: "Hematology" }, T)).body.id;
+await save(map3, MAN4, [h("NRBC (manual)", "HIGH")]);
+const man4 = db.prepare("SELECT analyte FROM veritamap_instrument_tests WHERE instrument_id = ?").all(MAN4).map((x) => x.analyte).join(", ");
+check("D6. on that map, a manual menu's 'NRBC (manual)' saves as 'NRBC'", man4 === "NRBC", man4);
 
 // ---------- E. browser ----------
 db.close();
