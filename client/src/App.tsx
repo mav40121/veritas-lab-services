@@ -12,7 +12,7 @@ import { queryClient } from "./lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
 import { PhiGuard } from "@/components/PhiGuard";
 import { NoPhiAcknowledgment } from "@/components/NoPhiAcknowledgment";
-import { TermsAcceptance } from "@/components/TermsAcceptance";
+import { TermsAcceptance, useTermsStatus } from "@/components/TermsAcceptance";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider, useAuth } from "@/components/AuthContext";
@@ -309,6 +309,8 @@ function GATracker() {
 function OnboardingGuard() {
   const { user, isLoggedIn } = useAuth();
   const [showWizard, setShowWizard] = useState(false);
+  // The Terms of Use and Confidentiality Agreement comes first (TermsAcceptance.tsx); a new sign-up saw both stacked.
+  const terms = useTermsStatus();
 
   useEffect(() => {
     if (!isLoggedIn || !user) { setShowWizard(false); return; }
@@ -324,7 +326,7 @@ function OnboardingGuard() {
     }
   }, [isLoggedIn, user]);
 
-  if (!showWizard || !user) return null;
+  if (!showWizard || !user || terms.data?.required) return null;
 
   const handleComplete = () => {
     localStorage.setItem(`onboarding_dismissed_${user.id}`, "1");
