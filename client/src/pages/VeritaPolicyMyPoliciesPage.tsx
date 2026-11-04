@@ -384,6 +384,23 @@ export default function VeritaPolicyMyPoliciesPage() {
   const typeRule = (t: string | null | undefined) => docTypes.find((r) => r.doc_type === t) || null;
   const NO_TYPE = "__none__";
   const [docTypesOpen, setDocTypesOpen] = useState(false);
+  // Minor revisions (Q154): this lab's choice between re-signing and carrying signatures forward.
+  const { data: minorRevData } = useQuery<{ carryForward: boolean }>({
+    queryKey: [`/api/labs/${activeLabId}/veritapolicy/settings/minor-revisions`],
+    queryFn: getQueryFn({ on401: "throw" }),
+    enabled: !!activeLabId,
+  });
+  const minorRevMutation = useMutation({
+    mutationFn: async (carryForward: boolean) => {
+      const res = await apiRequest("PUT", `/api/labs/${activeLabId}/veritapolicy/settings/minor-revisions`, { carryForward });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/labs/${activeLabId}/veritapolicy/settings/minor-revisions`] });
+      toast({ title: "Saved" });
+    },
+    onError: (err: any) => toast({ title: "Save failed", description: String(err?.message || err), variant: "destructive" }),
+  });
   const docTypeMutation = useMutation({
     mutationFn: async ({ type, body }: { type: string; body: Record<string, unknown> }) => {
       const res = await apiRequest("PUT", `/api/labs/${activeLabId}/veritapolicy/doc-types/${type}`, body);
@@ -2270,6 +2287,26 @@ export default function VeritaPolicyMyPoliciesPage() {
                 </Select>
               </div>
             ))}
+          </div>
+          <div className="rounded-md border p-3 space-y-2" data-testid="minor-revision-setting">
+            <div className="text-sm font-medium">Minor revisions (for example, 1.0 to 1.1)</div>
+            <p className="text-xs text-muted-foreground">
+              When a document gets a minor revision, should staff read and sign it again? A major revision (2.0) always
+              goes back to everyone.
+            </p>
+            <Select
+              value={minorRevData?.carryForward ? "carry" : "resign"}
+              onValueChange={(v) => minorRevMutation.mutate(v === "carry")}
+              disabled={isReadOnly || minorRevMutation.isPending}
+            >
+              <SelectTrigger className="text-sm" aria-label="Minor revisions" data-testid="minor-revision-select">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="resign">Staff read and sign again</SelectItem>
+                <SelectItem value="carry">Signatures carry forward, and staff are told the document changed</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDocTypesOpen(false)}>Close</Button>
