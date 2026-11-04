@@ -38,6 +38,30 @@ const lab = [{ email: "labowner@lab.org", name: "Lab Owner" }];
   ok("no task is dropped (all 3 present across groups)", JSON.stringify(allItemIds) === JSON.stringify([1,2,3]));
 }
 
+// A task's group (Michael 2026-11-04): everyone in it gets the task, on top of the list or the owner.
+{
+  const sup = { name: "Supervisors", recipients: [{ email: "a@lab.org" }, { email: "b@lab.org" }] };
+  const withGroup = (t: any) => (t.id === 1 ? sup : null);
+  const off = groupNotifiableForSend([item(1, null), item(2, null)], false, lab, withGroup);
+  const digestFor = (g: any[], email: string) => g.filter(x => x.recipients.some((r: any) => r.email === email));
+  ok("group, owner-only OFF: the list gets both tasks", digestFor(off, "labowner@lab.org")[0]?.items.length === 2);
+  ok("group, owner-only OFF: a member gets only the group's task", digestFor(off, "a@lab.org")[0]?.items.length === 1 && digestFor(off, "a@lab.org")[0].items[0].task.id === 1);
+  ok("members with the same tasks share one email", digestFor(off, "a@lab.org")[0] === digestFor(off, "b@lab.org")[0]);
+
+  const on = groupNotifiableForSend([item(1, "heme@lab.org"), item(2, null)], true, lab, withGroup);
+  ok("group, owner-only ON: the owner keeps their task", digestFor(on, "heme@lab.org")[0]?.items[0].task.id === 1);
+  ok("group, owner-only ON: the group gets it too", digestFor(on, "a@lab.org")[0]?.items[0].task.id === 1);
+  ok("group, owner-only ON: the list gets only the unowned task", digestFor(on, "labowner@lab.org")[0]?.items.length === 1 && digestFor(on, "labowner@lab.org")[0].items[0].task.id === 2);
+
+  const overlap = groupNotifiableForSend([item(1, null), item(2, null)], false, [{ email: "A@LAB.ORG" }], withGroup);
+  const overlapA = overlap.filter(x => x.recipients.some((r: any) => r.email.toLowerCase() === "a@lab.org"));
+  ok("someone on the list and in the group gets one email, whatever the case of the address", overlapA.length === 1 && overlapA[0].items.length === 2);
+  ok("no task appears twice for one person", overlapA[0].items.filter(i => i.task.id === 1).length === 1);
+
+  const dropped = groupNotifiableForSend([item(1, null)], true, lab, () => null);
+  ok("a task that reaches nobody falls back to the list", dropped.length === 1 && dropped[0].recipients[0].email === "labowner@lab.org");
+}
+
 // Empty input => no groups (no email sent).
 ok("empty notifiable => no groups", groupNotifiableForSend([], true, lab).length === 0);
 

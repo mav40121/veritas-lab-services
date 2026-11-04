@@ -18,7 +18,7 @@ import {
 import {
   CheckCircle2, Plus, Download, Upload,
   ChevronDown, ChevronRight, Pencil, Trash2, CalendarDays, List, Settings, History,
-  AlertTriangle, Bell, Mail, Tag,
+  AlertTriangle, Bell, Mail, Tag, Users,
 } from "lucide-react";
 import { DEFAULT_TRACK_CATEGORIES, TRACK_FREQUENCIES, CATEGORY_NAME_MAX } from "@shared/veritatrackCategories";
 import { useAuth } from "@/components/AuthContext";
@@ -35,6 +35,7 @@ interface Task {
   owner?: string | null;
   owner_employee_id?: number | null;
   owner_email?: string | null;
+  reminder_group_id?: number | null;
   frequency: string;
   frequency_months: number;
   frequency_days?: number | null;
@@ -83,6 +84,22 @@ function useTrackCategories(trackApi: string) {
     queryKey: [`${trackApi}/categories`],
     queryFn: async () => {
       const r = await fetch(`${trackApi}/categories`, { headers: authHeaders() });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.json();
+    },
+  });
+}
+// The lab's groups of people (leads, supervisors, etc.), server/labGroups.ts. `members` and `roster` come back only for the
+// owners and admins who manage groups.
+interface LabGroupMember { id: number; employee_id: number | null; name: string | null; email: string | null; inactive: boolean }
+interface LabGroup { id: number; name: string; retired: boolean; task_count: number; member_count: number; members?: LabGroupMember[] }
+interface LabGroupsData { groups: LabGroup[]; roster: { id: number; name: string; email: string | null }[]; can_edit: boolean }
+const GROUP_NAME_MAX = 60; // the server checks this too (server/labGroups.ts)
+function useLabGroups(trackApi: string) {
+  return useQuery<LabGroupsData>({
+    queryKey: [`${trackApi}/groups`],
+    queryFn: async () => {
+      const r = await fetch(`${trackApi}/groups`, { headers: authHeaders() });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       return r.json();
     },
@@ -296,6 +313,10 @@ function TaskFormDialog({ trigger, existing, onDone, trackApi, tasksKey, dashKey
   const [owner, setOwner] = useState(existing?.owner || "");
   const [ownerEmployeeId, setOwnerEmployeeId] = useState<number | null>(existing?.owner_employee_id ?? null);
   const [ownerEmail, setOwnerEmail] = useState(existing?.owner_email || "");
+  const [reminderGroupId, setReminderGroupId] = useState<number | null>(existing?.reminder_group_id ?? null);
+  const { data: labGroups } = useLabGroups(trackApi);
+  // A task keeps a group retired after it was set; nothing else offers a retired group.
+  const groupOptions = (labGroups?.groups || []).filter(g => !g.retired || g.id === reminderGroupId);
   const [staff, setStaff] = useState<{ id: number; first_name?: string; last_name?: string }[]>([]);
   const [frequency, setFrequency] = useState(existing?.frequency || "Monthly");
   const [notes, setNotes] = useState(existing?.notes || "");
@@ -331,7 +352,7 @@ function TaskFormDialog({ trigger, existing, onDone, trackApi, tasksKey, dashKey
       const r = await fetch(url, {
         method: existing ? "PUT" : "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ name, category, instrument: instrument || null, owner: owner || null, owner_employee_id: ownerEmployeeId, owner_email: ownerEmail || null, frequency, notes: notes || null }),
+        body: JSON.stringify({ name, category, instrument: instrument || null, owner: owner || null, owner_employee_id: ownerEmployeeId, owner_email: ownerEmail || null, reminder_group_id: reminderGroupId, frequency, notes: notes || null }),
       });
       if (!r.ok) throw new Error(await r.text());
       return r.json();
@@ -351,6 +372,7 @@ function TaskFormDialog({ trigger, existing, onDone, trackApi, tasksKey, dashKey
         setName(existing.name); setCategory(existing.category);
         setInstrument(existing.instrument || ""); setOwner(existing.owner || "");
         setOwnerEmployeeId(existing.owner_employee_id ?? null); setOwnerEmail(existing.owner_email || "");
+        setReminderGroupId(existing.reminder_group_id ?? null);
         setFrequency(existing.frequency); setNotes(existing.notes || "");
       }
     }}>
@@ -399,6 +421,19 @@ function TaskFormDialog({ trigger, existing, onDone, trackApi, tasksKey, dashKey
             <Input placeholder="owner@lab.org" value={ownerEmail} onChange={e => setOwnerEmail(e.target.value)} className="h-8 text-sm" />
             <p className="text-[11px] text-muted-foreground mt-1">Used when reminders are set to notify only the task owner.</p>
           </div>
+          {groupOptions.length > 0 && (
+            <div>
+              <label className="text-xs text-muted-foreground font-medium block mb-1">Reminder group</label>
+              <Select value={reminderGroupId != null ? String(reminderGroupId) : "none"} onValueChange={v => setReminderGroupId(v === "none" ? null : Number(v))}>
+                <SelectTrigger className="h-8 text-sm" data-testid="task-reminder-group"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No group</SelectItem>
+                  {groupOptions.map(g => <SelectItem key={g.id} value={String(g.id)}>{g.retired ? `${g.name} (retired)` : g.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground mt-1">Everyone in the group gets this task's reminders.</p>
+            </div>
+          )}
           <div>
             <label className="text-xs text-muted-foreground font-medium block mb-1">Frequency</label>
             <Select value={frequency} onValueChange={setFrequency}>
@@ -509,6 +544,158 @@ function CategoryManagerDialog({ trackApi, tasksKey, dashKey }: { trackApi: stri
   );
 }
 
+// ── The lab's groups (owners and admins) ─────────────────────────────────────
+function GroupMemberRow({ member, onSend, busy }: {
+  member: LabGroupMember;
+  onSend: (req: { method: "PUT" | "DELETE"; path: string; body?: unknown }) => void;
+  busy: boolean;
+}) {
+  const [address, setAddress] = useState("");
+  return (
+    <li className="rounded-lg bg-muted/50 px-3 py-2" data-testid="group-member-row">
+      <div className="flex items-center gap-2">
+        <span className="flex-1 min-w-0 [overflow-wrap:anywhere]">
+          {member.name && <span className="font-medium text-foreground">{member.name} </span>}
+          {member.email && <span className="text-muted-foreground">{member.email}</span>}
+          {member.inactive && <span className="text-muted-foreground"> (no longer on the active roster, not emailed)</span>}
+        </span>
+        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="Take out of this group" disabled={busy}
+          onClick={() => onSend({ method: "DELETE", path: `/members/${member.id}` })} data-testid="group-member-remove"><Trash2 size={13} /></Button>
+      </div>
+      {!member.email && !member.inactive && (
+        <div className="flex items-center gap-2 mt-1.5">
+          <Input value={address} onChange={e => setAddress(e.target.value)} placeholder="No email on file: enter one" className="h-7 text-xs flex-1" data-testid="group-member-address-input" />
+          <Button size="sm" variant="outline" className="h-7 text-xs" disabled={busy || !emailValid(address)}
+            onClick={() => onSend({ method: "PUT", path: `/members/${member.id}`, body: { email: address.trim() } })} data-testid="group-member-address-save">Save</Button>
+        </div>
+      )}
+    </li>
+  );
+}
+
+function GroupManagerDialog({ trackApi }: { trackApi: string }) {
+  const qc = useQueryClient();
+  const { data } = useLabGroups(trackApi);
+  const [newName, setNewName] = useState("");
+  const [openId, setOpenId] = useState<number | null>(null);
+  const [editId, setEditId] = useState<number | null>(null);
+  const [editName, setEditName] = useState("");
+  const [pickId, setPickId] = useState("none");
+  const [memberEmail, setMemberEmail] = useState("");
+  const [memberName, setMemberName] = useState("");
+  const send = useMutation({
+    mutationFn: async (req: { method: "POST" | "PUT" | "DELETE"; path: string; body?: unknown }) => {
+      const r = await fetch(`${trackApi}/groups${req.path}`, {
+        method: req.method,
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: req.body === undefined ? undefined : JSON.stringify(req.body),
+      });
+      if (!r.ok) throw new Error(await r.text());
+      return r.json();
+    },
+    onSuccess: (fresh) => {
+      qc.setQueryData([`${trackApi}/groups`], fresh);
+      setNewName(""); setEditId(null); setPickId("none"); setMemberEmail(""); setMemberName("");
+    },
+  });
+  if (!data?.can_edit) return null;
+  const picked = data.roster.find(p => String(p.id) === pickId);
+  const canAddMember = picked ? (!memberEmail.trim() || emailValid(memberEmail)) : emailValid(memberEmail);
+  return (
+    <Dialog onOpenChange={() => { send.reset(); setEditId(null); }}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="outline" className="h-8 text-xs gap-1" data-testid="groups-manage-button" title="Build this lab's groups, such as leads or supervisors">
+          <Users size={12} /> Manage groups
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="text-sm">Groups</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 mt-1 text-sm min-w-0">
+          {data.groups.length === 0 && <p className="text-xs text-muted-foreground">No groups yet. Add one below, such as Leads or Supervisors.</p>}
+          <ul className="space-y-2">
+            {data.groups.map(g => {
+              const members = g.members || [];
+              const noEmail = members.filter(m => !m.inactive && !m.email).length;
+              const rosterLeft = data.roster.filter(p => !members.some(m => m.employee_id === p.id));
+              return (
+                <li key={g.id} className="rounded-lg border border-border p-2.5" data-testid={`group-row-${g.id}`}>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {editId === g.id ? (
+                      <>
+                        <Input value={editName} maxLength={GROUP_NAME_MAX} onChange={e => setEditName(e.target.value)} className="h-7 text-sm flex-1 min-w-[140px]" data-testid="group-rename-input" />
+                        <Button size="sm" className="h-7 text-xs" disabled={send.isPending || !editName.trim()}
+                          onClick={() => send.mutate({ method: "PUT", path: `/${g.id}`, body: { name: editName } })} data-testid="group-rename-save">Save</Button>
+                        <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setEditId(null)}>Cancel</Button>
+                      </>
+                    ) : (
+                      <>
+                        <span className={`flex-1 min-w-[120px] font-medium ${g.retired ? "text-muted-foreground line-through" : "text-foreground"}`}>{g.name}</span>
+                        <span className="text-[11px] text-muted-foreground">{g.member_count} {g.member_count === 1 ? "person" : "people"}, {g.task_count} task{g.task_count === 1 ? "" : "s"}{g.retired ? ", retired" : ""}</span>
+                        {!g.retired && <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setOpenId(openId === g.id ? null : g.id); setPickId("none"); setMemberEmail(""); setMemberName(""); send.reset(); }} data-testid="group-members-toggle">People</Button>}
+                        {!g.retired && <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setEditId(g.id); setEditName(g.name); send.reset(); }} data-testid="group-rename">Rename</Button>}
+                        <Button size="sm" variant="ghost" className="h-7 text-xs" disabled={send.isPending}
+                          onClick={() => send.mutate({ method: "PUT", path: `/${g.id}`, body: { retired: !g.retired } })}
+                          data-testid={g.retired ? "group-restore" : "group-retire"}>{g.retired ? "Restore" : "Retire"}</Button>
+                      </>
+                    )}
+                  </div>
+                  {openId === g.id && !g.retired && (
+                    <div className="mt-2.5 space-y-2.5">
+                      {members.length === 0 && <p className="text-xs text-muted-foreground">Nobody in this group yet.</p>}
+                      <ul className="space-y-1.5">
+                        {members.map(m => (
+                          <GroupMemberRow key={m.id} member={m} busy={send.isPending}
+                            onSend={req => send.mutate({ ...req, path: `/${g.id}${req.path}` })} />
+                        ))}
+                      </ul>
+                      {noEmail > 0 && (
+                        <p className="text-[11px] text-amber-700 dark:text-amber-400" data-testid="group-no-email-warning">
+                          {noEmail} {noEmail === 1 ? "person has" : "people have"} no email on file and won't get reminders until one is entered.
+                        </p>
+                      )}
+                      <div className="space-y-1.5 rounded-lg bg-muted/30 p-2">
+                        <Select value={pickId} onValueChange={v => { setPickId(v); setMemberName(""); }}>
+                          <SelectTrigger className="h-8 text-sm" data-testid="group-roster-select"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">Someone not on the roster</SelectItem>
+                            {rosterLeft.map(p => <SelectItem key={p.id} value={String(p.id)}>{p.email ? p.name : `${p.name} (no email on file)`}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {!picked?.email && <Input value={memberEmail} onChange={e => setMemberEmail(e.target.value)} placeholder="name@lab.org" className="h-8 text-sm flex-1 min-w-[150px]" data-testid="group-member-email" />}
+                          {!picked && <Input value={memberName} onChange={e => setMemberName(e.target.value)} placeholder="Name (optional)" className="h-8 text-sm flex-1 min-w-[120px]" data-testid="group-member-name" />}
+                          <Button size="sm" variant="outline" className="h-8 text-xs gap-1" disabled={send.isPending || !canAddMember}
+                            onClick={() => send.mutate({
+                              method: "POST", path: `/${g.id}/members`,
+                              body: picked ? { employee_id: picked.id, ...(memberEmail.trim() ? { email: memberEmail.trim() } : {}) } : { email: memberEmail.trim(), name: memberName.trim() },
+                            })} data-testid="group-member-add"><Plus size={12} />Add</Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+          <div className="flex items-center gap-2">
+            <Input placeholder="New group, e.g. Supervisors" value={newName} maxLength={GROUP_NAME_MAX}
+              onChange={e => setNewName(e.target.value)} className="h-8 text-sm flex-1" data-testid="group-new-name"
+              onKeyDown={e => { if (e.key === "Enter" && newName.trim()) send.mutate({ method: "POST", path: "", body: { name: newName } }); }} />
+            <Button size="sm" className="h-8 text-xs gap-1" disabled={send.isPending || !newName.trim()}
+              onClick={() => send.mutate({ method: "POST", path: "", body: { name: newName } })} data-testid="group-add"><Plus size={12} />Add</Button>
+          </div>
+          {send.isError && <p className="text-xs text-destructive" data-testid="group-error">{errorText(send.error)}</p>}
+          <p className="text-[11px] text-muted-foreground">
+            Someone who leaves the VeritaStaff roster stops getting reminders on their own. A retired group is no longer offered, and the tasks that name it go back to this lab's recipient list.
+          </p>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ── Compact task row (inside accordion) ───────────────────────────────────────
 // Wave B3 (2026-06-12): per-task audit trail. Surveyor-facing record of every
 // lifecycle event, especially sign-off deletions, which otherwise vanish.
@@ -600,6 +787,8 @@ function CompactTaskRow({ task, onRefresh, trackApi, tasksKey, dashKey }: {
 
   const isOverdue = task.status === "overdue";
   const isDueSoon = task.status === "due_soon";
+  const { data: labGroups } = useLabGroups(trackApi);
+  const reminderGroup = task.reminder_group_id ? labGroups?.groups.find(g => g.id === task.reminder_group_id) : null;
 
   return (
     <div className={`flex items-center gap-3 px-4 py-2.5 border-b border-border/50 last:border-0 text-xs group
@@ -613,6 +802,9 @@ function CompactTaskRow({ task, onRefresh, trackApi, tasksKey, dashKey }: {
         <span className="font-medium text-foreground truncate block">{task.name}</span>
         {task.instrument && (
           <span className="text-[10px] text-muted-foreground">{task.instrument}</span>
+        )}
+        {reminderGroup && (
+          <span className="text-[10px] text-muted-foreground block" data-testid="task-group-label">Reminders: {reminderGroup.name}</span>
         )}
       </div>
 
@@ -839,6 +1031,7 @@ interface ReminderConfig {
   lead_days: number;
   overdue_cadence_days: number;
   recipients: { email: string; name?: string }[];
+  recipient_group_ids?: number[];
   owner_only?: boolean;
   configured: boolean;
 }
@@ -861,6 +1054,9 @@ function RemindersPanel({ trackApi, cfgKey }: { trackApi: string; cfgKey: string
   const [cadence, setCadence] = useState(2);
   const [recipients, setRecipients] = useState<{ email: string; name?: string }[]>([]);
   const [ownerOnly, setOwnerOnly] = useState(false);
+  const [listGroupIds, setListGroupIds] = useState<number[]>([]);
+  const { data: labGroups } = useLabGroups(trackApi);
+  const activeGroups = (labGroups?.groups || []).filter(g => !g.retired);
   const [newEmail, setNewEmail] = useState("");
   const [newName, setNewName] = useState("");
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -874,6 +1070,7 @@ function RemindersPanel({ trackApi, cfgKey }: { trackApi: string; cfgKey: string
       setCadence(data.overdue_cadence_days);
       setRecipients(data.recipients || []);
       setOwnerOnly(!!data.owner_only);
+      setListGroupIds(data.recipient_group_ids || []);
     }
   }, [data]);
 
@@ -893,7 +1090,7 @@ function RemindersPanel({ trackApi, cfgKey }: { trackApi: string; cfgKey: string
       const r = await fetch(`${trackApi}/reminder-config`, {
         method: "PUT",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ enabled, lead_days: leadDays, overdue_cadence_days: cadence, recipients, owner_only: ownerOnly }),
+        body: JSON.stringify({ enabled, lead_days: leadDays, overdue_cadence_days: cadence, recipients, recipient_group_ids: listGroupIds, owner_only: ownerOnly }),
       });
       if (!r.ok) {
         const j = await r.json().catch(() => ({} as any));
@@ -903,6 +1100,7 @@ function RemindersPanel({ trackApi, cfgKey }: { trackApi: string; cfgKey: string
       qc.setQueryData([cfgKey], saved);
       setRecipients(saved.recipients || []);
       setOwnerOnly(!!saved.owner_only);
+      setListGroupIds(saved.recipient_group_ids || []);
       setSaveState("saved");
       setTimeout(() => setSaveState(s => (s === "saved" ? "idle" : s)), 2500);
     } catch (e: any) {
@@ -939,19 +1137,38 @@ function RemindersPanel({ trackApi, cfgKey }: { trackApi: string; cfgKey: string
 
       {/* Recipients */}
       <div className="rounded-2xl border border-border p-4">
-        <div className="flex items-center gap-2 font-semibold text-foreground mb-1">
-          <Mail size={15} className="text-primary" /> Recipients
+        <div className="flex items-center justify-between gap-2 mb-1 flex-wrap">
+          <div className="flex items-center gap-2 font-semibold text-foreground">
+            <Mail size={15} className="text-primary" /> Recipients
+          </div>
+          <GroupManagerDialog trackApi={trackApi} />
         </div>
         <p className="text-xs text-muted-foreground mb-3">
-          Who receives the reminder emails. If you leave this empty, reminders go to the lab owner.
+          Who receives the reminder emails. If you leave this empty and check no groups, reminders go to the lab owner.
         </p>
         <label className="flex items-start gap-2 mb-3 cursor-pointer" data-testid="reminder-owner-only">
           <input type="checkbox" checked={ownerOnly} onChange={e => setOwnerOnly(e.target.checked)} className="mt-0.5" />
           <span className="text-xs text-foreground">
             <span className="font-medium">Send each task to its owner only.</span>{" "}
-            <span className="text-muted-foreground">When on, each task's reminder goes to that task's Owner email instead of the list below, so the heme owner never gets the chemistry reminders. Tasks with no owner email fall back to this list, so nothing is missed.</span>
+            <span className="text-muted-foreground">When on, each task's reminder goes to that task's Owner email instead of the list below, so the heme owner never gets the chemistry reminders. A task with a reminder group also goes to that group. Tasks that reach nobody this way fall back to this list, so nothing is missed.</span>
           </span>
         </label>
+        {activeGroups.length > 0 && (
+          <div className="mb-3" data-testid="reminder-list-groups">
+            <p className="text-xs font-medium text-foreground mb-1">Whole groups on this list</p>
+            <div className="space-y-1">
+              {activeGroups.map(g => (
+                <label key={g.id} className="flex items-center gap-2 text-xs cursor-pointer">
+                  <input type="checkbox" checked={listGroupIds.includes(g.id)} data-testid={`list-group-${g.id}`}
+                    onChange={e => setListGroupIds(e.target.checked ? [...listGroupIds, g.id] : listGroupIds.filter(id => id !== g.id))} />
+                  <span className="text-foreground">{g.name}</span>
+                  <span className="text-muted-foreground">{g.member_count} {g.member_count === 1 ? "person" : "people"}</span>
+                </label>
+              ))}
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-1">To send a group only certain tasks, leave it unchecked here and pick it on those tasks.</p>
+          </div>
+        )}
         {recipients.length > 0 && (
           <div className="space-y-2 mb-3">
             {recipients.map(r => (

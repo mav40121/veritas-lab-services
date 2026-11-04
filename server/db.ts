@@ -3832,6 +3832,59 @@ sqlite.exec(`
     // fresh DB: CREATE TABLE above handled it
   }
 }
+
+// Michael 2026-11-04: a lab's named groups of people (leads, supervisors, etc.), server/labGroups.ts. A member is a
+// VeritaStaff roster person (employee_id) or a typed address (email, name); a roster person with no login keeps the address
+// the lab typed in email. VeritaTrack reminders use them first: a task can name one group (reminder_group_id) and the lab's
+// reminder settings can add whole groups to the recipient list (recipient_group_ids_json).
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS lab_groups (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    retired INTEGER NOT NULL DEFAULT 0,
+    created_by INTEGER,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(lab_id, name)
+  );
+  CREATE INDEX IF NOT EXISTS idx_lab_groups_lab ON lab_groups(lab_id);
+  CREATE TABLE IF NOT EXISTS lab_group_members (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    group_id INTEGER NOT NULL,
+    lab_id INTEGER NOT NULL,
+    employee_id INTEGER,
+    email TEXT,
+    name TEXT,
+    added_by INTEGER,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_lab_group_members_group ON lab_group_members(group_id);
+`);
+// PRAGMA migration block per the New DB Table Rule (CLAUDE.md §8).
+{
+  try {
+    const groupCols = (sqlite.prepare("PRAGMA table_info(lab_groups)").all() as { name: string }[]).map(c => c.name);
+    if (groupCols.length > 0) {
+      if (!groupCols.includes("retired")) sqlite.exec("ALTER TABLE lab_groups ADD COLUMN retired INTEGER NOT NULL DEFAULT 0");
+      if (!groupCols.includes("created_by")) sqlite.exec("ALTER TABLE lab_groups ADD COLUMN created_by INTEGER");
+      if (!groupCols.includes("updated_at")) sqlite.exec("ALTER TABLE lab_groups ADD COLUMN updated_at TEXT");
+    }
+    const memberCols = (sqlite.prepare("PRAGMA table_info(lab_group_members)").all() as { name: string }[]).map(c => c.name);
+    if (memberCols.length > 0) {
+      if (!memberCols.includes("employee_id")) sqlite.exec("ALTER TABLE lab_group_members ADD COLUMN employee_id INTEGER");
+      if (!memberCols.includes("email")) sqlite.exec("ALTER TABLE lab_group_members ADD COLUMN email TEXT");
+      if (!memberCols.includes("name")) sqlite.exec("ALTER TABLE lab_group_members ADD COLUMN name TEXT");
+      if (!memberCols.includes("added_by")) sqlite.exec("ALTER TABLE lab_group_members ADD COLUMN added_by INTEGER");
+    }
+    const trackTaskCols = (sqlite.prepare("PRAGMA table_info(veritatrack_tasks)").all() as { name: string }[]).map(c => c.name);
+    if (!trackTaskCols.includes("reminder_group_id")) sqlite.exec("ALTER TABLE veritatrack_tasks ADD COLUMN reminder_group_id INTEGER");
+    const trackCfgCols = (sqlite.prepare("PRAGMA table_info(veritatrack_reminder_config)").all() as { name: string }[]).map(c => c.name);
+    if (!trackCfgCols.includes("recipient_group_ids_json")) sqlite.exec("ALTER TABLE veritatrack_reminder_config ADD COLUMN recipient_group_ids_json TEXT NOT NULL DEFAULT '[]'");
+  } catch {
+    // fresh DB: CREATE TABLE above handled it
+  }
+}
 // PRAGMA migration block per the New DB Table Rule (CLAUDE.md §8).
 {
   try {

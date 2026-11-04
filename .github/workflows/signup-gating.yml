@@ -169,6 +169,11 @@ jobs:
         # #110 per-lab categories (owner/admin add, rename, retire; built-ins stay) and #111 Weekly (7-day interval,
         # 2-day due-soon window, day-before reminder), Michael 2026-10-26.
         run: npm run test:veritatrack-categories-weekly
+      - name: Run VeritaTrack reminder groups integration test
+        # A lab's groups (Michael 2026-11-04): who gets which reminders, one email per person, nothing silently dropped.
+        run: npm run test:veritatrack-reminder-groups
+      - name: VeritaTrack reminder routing
+        run: npx tsx scripts/verify-veritatrack-owner-reminders.mts
       - name: VeritaTrack due dates and reminder decisions
         run: npx tsx scripts/verify-veritatrack-reminders.mts
       - name: VeritaTrack frequency derivation
