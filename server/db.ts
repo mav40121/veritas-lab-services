@@ -7714,6 +7714,15 @@ sqlite.exec(`
   )
 `);
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_steps_workflow ON policy_approval_steps(workflow_id)`); } catch {}
+// Michael 2026-11-04 (parity plan Phase 1 item 3): a step can go to "any one member of" a lab group (required_role 'group',
+// approver_group_id in lab_groups). archived_at keeps a step someone already signed: approval history reads its name, so a
+// changed or removed step that has signatures is retired, not overwritten or deleted.
+for (const alterSql of [
+  "ALTER TABLE policy_approval_steps ADD COLUMN approver_group_id INTEGER",
+  "ALTER TABLE policy_approval_steps ADD COLUMN archived_at TEXT",
+]) {
+  try { sqlite.exec(alterSql); } catch {}
+}
 
 sqlite.exec(`
   CREATE TABLE IF NOT EXISTS policy_signoffs (

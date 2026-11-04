@@ -97,6 +97,10 @@ jobs:
         # Q154 = 1 (2026-11-03): per-lab choice, default re-sign; carry-forward keeps signatures across minor revisions,
         # says so on the staff list, and never crosses a major revision.
         run: npm run test:veritadc-minor-revisions
+      - name: Run VeritaDC approval routes integration test
+        # Michael 2026-11-04 (Q155 = 1): a step goes to a role, a named person, or any one member of a group; owners and admins
+        # change routes, every change is audited, a route with documents in review is locked, signed steps keep their history.
+        run: npm run test:veritadc-approval-routes
       - name: Run structure-only database copy integration test
         # GET /api/admin/schema-db (Lifepoint questionnaire: customer data is not used for testing): secret-gated, every
         # table, index, view and trigger rebuilt with the same columns, no rows, nothing from the source in the file, audited.
