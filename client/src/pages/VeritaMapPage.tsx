@@ -14,7 +14,7 @@ const COLUMNS = [
   { col: "PT Program",             reg: "42 CFR §493.801–§493.865",desc: "Regulated analytes require enrollment in a CMS-approved proficiency testing program." },
   { col: "Competency Module",      reg: "42 CFR §493.1451–§493.1495",desc: "All 6 competency assessment methods must be documented for every testing personnel member per test." },
   { col: "Linearity Required?",    reg: "42 CFR §493.1253(b)(2)",desc: "Quantitative tests require verification of the reportable range before patient testing begins." },
-  { col: "Correlation Required?",  reg: "42 CFR §493.1255(b)(3)",desc: "When two or more instruments run the same test, correlation studies are required." },
+  { col: "Correlation Required?",  reg: "42 CFR §493.1281(a)",desc: "When two or more instruments run the same test, correlation studies are required." },
   { col: "Manufacturer QC",        reg: "42 CFR §493.1256",      desc: "QC frequency and materials per manufacturer instructions, unless an IQCP is in place." },
   { col: "Reference Range Source", reg: "42 CFR §493.1253(b)(3)",desc: "Reference intervals must be established or verified for each patient population served." },
   { col: "SOP / Policy Location",  reg: "42 CFR §493.1251–§493.1252",desc: "Written procedures must be accessible at the bench and reviewed on a defined schedule." },

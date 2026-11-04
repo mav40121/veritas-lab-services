@@ -385,7 +385,7 @@ export default function VeritaMapAppPage() {
                       </span>
                       <span className="flex items-center gap-1">
                         <CheckCircle2 size={11} className="text-emerald-500" />
-                        {map.totalTests ?? 0} tests
+                        {map.totalTests ?? 0} test{(map.totalTests ?? 0) !== 1 ? "s" : ""}
                       </span>
                       {(map.gaps ?? 0) > 0 ? (
                         <span className="flex items-center gap-1 text-amber-600 font-medium">

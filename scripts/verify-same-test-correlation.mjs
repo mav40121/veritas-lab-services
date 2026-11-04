@@ -99,6 +99,24 @@ console.log("\n=== part B (Michael, Q42 = 1): kept apart ===");
 diff("Protein, total, urine", "Protein, urine"); diff("Glucose, urine", "Urine qualitative dipstick glucose");
 diff("Opiates", "Morphine");
 
+console.log("\n=== troponin: library and lab spellings of one test (Redington PATHFAST, 2026-11-04) ===");
+same("Troponin-I (cardiac)", "Troponin I");
+same("Troponin-I (cardiac)", "TROPONIN I");
+same("Troponin-I", "Cardiac Troponin I");
+same("cTnI", "Troponin I");
+same("Troponin T (Tn T)", "Troponin T");
+same("Troponin T, cardiac (CTnT)", "Troponin T");
+same("TROPONIN-I HS", "hs-Troponin I");
+same("TROPONIN-I HS", "High-Sensitivity Troponin I");
+same("Troponin I, high-sensitivity", "High Sensitive Troponin-I");
+same("hs-cTnI", "TROPONIN-I HS");
+same("hs-cTnT", "High Sensitivity Troponin T");
+diff("Troponin I", "Troponin T");
+diff("TROPONIN-I HS", "High-Sensitivity Troponin T");
+// Kept apart until Michael rules on whether these are one test for 42 CFR 493.1281.
+diff("TROPONIN-I HS", "Troponin-I (cardiac)");
+diff("hs-cTnT", "Troponin T");
+
 console.log("\n=== correlationGroupsFor on a real map shape (XN-2000 primary + backup, Manual Differential) ===");
 const map = {
   "Lymph%": [{ id: 116 }, { id: 117 }], "Neut%": [{ id: 116 }, { id: 117 }], "LYMPH#": [{ id: 116 }],
