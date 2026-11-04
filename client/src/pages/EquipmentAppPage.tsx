@@ -63,7 +63,10 @@ const EVENT_TYPES: { value: string; label: string }[] = [
   { value: "service", label: "Service" },
   { value: "repair", label: "Repair" },
   { value: "troubleshooting", label: "Troubleshooting" },
+  { value: "solution_change", label: "Solution change" },
 ];
+// 2026-11-04 (Q161): what a stainer's solution record has to say was done to the solution.
+const SOLUTION_ACTIONS = ["Changed", "Filtered", "Added to"];
 const TYPE_LABEL: Record<string, string> = Object.fromEntries(EVENT_TYPES.map(t => [t.value, t.label]));
 
 function todayIso() { return labTodayIso(); }
@@ -183,6 +186,8 @@ export default function EquipmentAppPage() {
   const [tsProblem, setTsProblem] = useState("");
   const [tsAction, setTsAction] = useState("");
   const [tsOutcome, setTsOutcome] = useState("");
+  const [solAction, setSolAction] = useState(SOLUTION_ACTIONS[0]);
+  const [solNames, setSolNames] = useState("");
   const [evSaving, setEvSaving] = useState(false);
 
   // History dialog
@@ -261,15 +266,22 @@ export default function EquipmentAppPage() {
   }
 
   function openLogEvent(e: Equipment) {
+    setSolAction(SOLUTION_ACTIONS[0]); setSolNames("");
     setEvForId(e.id); setEvType("calibration"); setEvDate(todayIso()); setEvBy(""); setEvNextDue(""); setEvNotes(""); setTsProblem(""); setTsAction(""); setTsOutcome(""); setEvOpen(true);
   }
   async function saveEvent() {
     if (!activeLabId || !evForId || !evDate) return;
     const isTs = evType === "troubleshooting";
+    const isSol = evType === "solution_change";
     if (isTs && (!tsProblem.trim() || !tsAction.trim() || !tsOutcome.trim())) {
       toast({ title: "Enter the problem, the action taken and the outcome", variant: "destructive" }); return;
     }
-    const notes = isTs
+    if (isSol && (!evBy.trim() || !solNames.trim())) {
+      toast({ title: "Enter who did it and which solutions", variant: "destructive" }); return;
+    }
+    const notes = isSol
+      ? [`${solAction}: ${solNames.trim()}`, evNotes.trim() ? `Notes: ${evNotes.trim()}` : ""].filter(Boolean).join("\n")
+      : isTs
       ? [`Problem: ${tsProblem.trim()}`, `Action taken: ${tsAction.trim()}`, `Outcome: ${tsOutcome.trim()}`, evNotes.trim() ? `Notes: ${evNotes.trim()}` : ""].filter(Boolean).join("\n")
       : (evNotes || null);
     setEvSaving(true);
@@ -279,7 +291,7 @@ export default function EquipmentAppPage() {
         body: JSON.stringify({ event_type: evType, event_date: evDate, performed_by: evBy || null, next_due_date: evNextDue || null, notes }),
       });
       if (!res.ok) { const e = await res.json().catch(() => ({})); toast({ title: e.error || "Could not log event", variant: "destructive" }); return; }
-      toast({ title: isTs ? "Troubleshooting logged" : "Maintenance logged", description: isTs ? "Recorded on this instrument's history. The maintenance due date is unchanged." : "Next-due updated from the entry or the PM interval." });
+      toast({ title: isSol ? "Solution change logged" : isTs ? "Troubleshooting logged" : "Maintenance logged", description: isTs || isSol ?"Recorded on this instrument's history. The maintenance due date is unchanged." : "Next-due updated from the entry or the PM interval." });
       setEvOpen(false); await load();
     } finally { setEvSaving(false); }
   }
@@ -457,7 +469,7 @@ export default function EquipmentAppPage() {
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Log maintenance</DialogTitle>
-            <DialogDescription>Record a completed maintenance activity or a troubleshooting event. If you leave "next due" blank and the instrument has a PM interval, the next-due date is computed for you (troubleshooting never changes it).</DialogDescription>
+            <DialogDescription>Record a completed maintenance activity or a troubleshooting event. If you leave "next due" blank and the instrument has a PM interval, the next-due date is computed for you (troubleshooting and solution changes never change it).</DialogDescription>
           </DialogHeader>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
@@ -468,8 +480,17 @@ export default function EquipmentAppPage() {
               </Select>
             </div>
             <div><Label htmlFor="ev-date">Date <span className="text-red-600">*</span></Label><Input id="ev-date" type="date" value={evDate} onChange={e => setEvDate(e.target.value)} /></div>
-            <div><Label htmlFor="ev-by">Performed by</Label><Input id="ev-by" value={evBy} onChange={e => setEvBy(e.target.value)} placeholder="Tech or vendor" /></div>
-            <div><Label htmlFor="ev-next">Next due (optional)</Label><Input id="ev-next" type="date" value={evNextDue} onChange={e => setEvNextDue(e.target.value)} /></div>
+            <div><Label htmlFor="ev-by">Performed by{evType === "solution_change" && <span className="text-red-600"> *</span>}</Label><Input id="ev-by" value={evBy} onChange={e => setEvBy(e.target.value)} placeholder="Tech or vendor" /></div>
+            {evType !== "solution_change" && <div><Label htmlFor="ev-next">Next due (optional)</Label><Input id="ev-next" type="date" value={evNextDue} onChange={e => setEvNextDue(e.target.value)} /></div>}
+            {evType === "solution_change" && (<>
+              <div>
+                <Label htmlFor="sol-action">What was done <span className="text-red-600">*</span></Label>
+                <select id="sol-action" className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm" value={solAction} onChange={e => setSolAction(e.target.value)} data-testid="sol-action">
+                  {SOLUTION_ACTIONS.map(a => <option key={a} value={a}>{a}</option>)}
+                </select>
+              </div>
+              <div className="sm:col-span-2"><Label htmlFor="sol-names">Which solutions <span className="text-red-600">*</span></Label><Input id="sol-names" value={solNames} onChange={e => setSolNames(e.target.value)} placeholder="e.g. Hematoxylin, eosin, clarifier" data-testid="sol-names" /></div>
+            </>)}
             {evType === "troubleshooting" && (<>
               <div className="sm:col-span-2"><Label htmlFor="ts-problem">Problem <span className="text-red-600">*</span></Label><Textarea id="ts-problem" rows={2} value={tsProblem} onChange={e => setTsProblem(e.target.value)} placeholder="What happened (error code, symptom, QC shift)" /></div>
               <div className="sm:col-span-2"><Label htmlFor="ts-action">Action taken <span className="text-red-600">*</span></Label><Textarea id="ts-action" rows={2} value={tsAction} onChange={e => setTsAction(e.target.value)} placeholder="Steps taken, parts replaced, vendor contacted" /></div>
