@@ -137,7 +137,7 @@ export function termsGateMiddleware(getSqlite: () => any, demoEmail: string) {
     if (hasAccepted(sqlite, check.userId, active) || isExempt(sqlite, check.userId, demoEmail)) return next();
     res.setHeader("X-Terms-Required", active);
     return res.status(403).json({
-      error: "Please read and accept the Terms of Use and Confidentiality Agreement to continue.",
+      error: "Please reload this page, then read and accept the Terms of Use and Confidentiality Agreement to continue.",
       code: "TERMS_REQUIRED",
       version: active,
     });

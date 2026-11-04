@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Loader2, UserPlus, ShieldCheck, ShieldOff, Trash2, Crown, ArrowRightLeft, Clock, Link as LinkIcon, RotateCw, X, KeyRound, Copy, Check, MapPin, Stethoscope, Pencil, Download } from "lucide-react";
 import { labLocaleDate } from "@/lib/labDate";
+import { RosterStaffCard } from "@/components/RosterStaffCard";
 
 interface LabMember {
   membership_id: number;
@@ -197,7 +198,9 @@ export default function LabMembersPage() {
       return res.json();
     },
     onSuccess: (r) => {
-      toast({ title: "Invitation sent", description: r.emailSent === false ? `Invite created. Email delivery failed; share the invite link manually.` : `Email sent to ${inviteEmail}` });
+      const linked = r.linkedToCard ? `Linked to ${r.linkedName} on your VeritaStaff roster. ` : "";
+      toast({ title: "Invitation sent", description: `${linked}${r.emailSent === false ? `Invite created. Email delivery failed; share the invite link manually.` : `Email sent to ${inviteEmail}`}` });
+      queryClient.invalidateQueries({ queryKey: [`/api/labs/${activeLabId}/staff-roster-status`] });
       setInviteEmail("");
       setInviteFirstName("");
       setInviteLastName("");
@@ -362,7 +365,7 @@ export default function LabMembersPage() {
                       : `${staffPortal ? staffPortal.used : staffPortalInvites.length} read-and-sign staff`}
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    Bench staff who read and sign policies, record QC, and take inventory. They draw from your staff seat band, not your active seats, so adding them never uses an active seat. Add one above with the Staff (read and sign) role.
+                    Bench staff who read and sign policies, record QC, and take inventory. They draw from your staff seat band, not your active seats, so adding them never uses an active seat. Invite anyone on your VeritaStaff roster from the list below, or add someone new with the Staff (read and sign) role.
                   </div>
                 </div>
               </div>
@@ -381,6 +384,8 @@ export default function LabMembersPage() {
           member" for a new person, or use "Make medical director" on any existing
           member row below (the owner included). It remains one free seat, identified
           by email, and is who VeritaPolicy approvals and QC co-sign route to. */}
+
+      {canManage && activeLabId && <RosterStaffCard labId={Number(activeLabId)} />}
 
       {canManage && (
         <Card>

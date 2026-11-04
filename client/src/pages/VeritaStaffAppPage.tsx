@@ -1168,9 +1168,24 @@ function EmployeeDialog({ open, onOpenChange, employee, lab, fromMember = null }
         body: JSON.stringify({ ...form, ...pendingCredFields(), roles, ...(!isEdit && fromMember && activeLabId ? { loginUserId: fromMember.userId } : {}) }),
       });
       if (!res.ok) throw new Error(await res.text());
+      const saved = await res.json().catch(() => ({}));
       await queryClient.invalidateQueries({ predicate: (q) => typeof q.queryKey[0] === 'string' && (q.queryKey[0] as string).endsWith('/staff/employees') });
       if (activeLabId) await queryClient.invalidateQueries({ queryKey: [rosterPromptKey(activeLabId)] });
-      toast({ title: isEdit ? "Employee updated" : "Employee added" });
+      if (activeLabId) await queryClient.invalidateQueries({ queryKey: [`/api/labs/${activeLabId}/staff-roster-status`] });
+      // A new person with an address gets their staff login invite now, on their own row (2026-11-04, Q: "should also be adding them as a staff member").
+      const newEmail = inviteEmail.trim();
+      if (!isEdit && !fromMember && activeLabId && newEmail && saved?.id) {
+        const inv = await fetch(`${API_BASE}/api/labs/${activeLabId}/staff-portal-invites`, {
+          method: "POST", headers: { ...authHeaders(), "Content-Type": "application/json" },
+          body: JSON.stringify({ staff_employee_id: saved.id, email: newEmail }),
+        });
+        const j = await inv.json().catch(() => ({}));
+        setInviteEmail("");
+        if (!inv.ok) toast({ title: "Employee added, invite not sent", description: j.error || `HTTP ${inv.status}`, variant: "destructive" });
+        else toast({ title: "Employee added and invited", description: j.emailSent === false ? `Email delivery failed; share this link manually: ${j.inviteUrl}` : `Sent to ${newEmail}.` });
+      } else {
+        toast({ title: isEdit ? "Employee updated" : "Employee added" });
+      }
       onOpenChange(false);
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
@@ -1562,6 +1577,17 @@ function EmployeeDialog({ open, onOpenChange, employee, lab, fromMember = null }
                   {inviting ? "Sending..." : "Send Invite"}
                 </Button>
               </div>
+            </div>
+          )}
+
+          {!isEdit && !fromMember && activeLabId && (
+            <div className="border border-border rounded-md p-3 space-y-2 bg-muted/20">
+              <div className="text-xs font-semibold">Staff login (optional)</div>
+              <p className="text-[11px] text-muted-foreground">Add their email to send a staff login invite when you save. You can also do this later from Lab Members.</p>
+              <input
+                type="email" placeholder="tech@example.com" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)}
+                className="w-full border border-border rounded-md p-1.5 text-xs bg-background" data-testid="new-employee-invite-email"
+              />
             </div>
           )}
 
