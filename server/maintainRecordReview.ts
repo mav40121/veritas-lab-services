@@ -121,7 +121,11 @@ export function monthReviewItems(sqlite: any, labId: number, month: string) {
     const counts = new Map<string, number>();
     for (const r of readings) counts.set(r.reading_date, (counts.get(r.reading_date) || 0) + 1);
     // Today isn't over, so it can't be short yet. A retired unit stops expecting readings when it was retired.
-    const start = createdDay > first ? createdDay : first;
+    // A unit is in use from its first reading if that is earlier than the day it was added: a lab moving over back-enters its old
+    // logs on a unit it added today, and a gap inside those logs is still a gap.
+    const firstReading = (sqlite.prepare("SELECT MIN(reading_date) AS d FROM temp_log_readings WHERE lab_id = ? AND unit_id = ?").get(labId, u.id) as any)?.d as string | null;
+    const inUseFrom = firstReading && firstReading < createdDay ? firstReading : createdDay;
+    const start = inUseFrom > first ? inUseFrom : first;
     const retiredDay = !u.active ? String(u.updated_at || "").slice(0, 10) : "";
     let end = asOf === today ? addDays(today, -1) : asOf;
     if (retiredDay && retiredDay < end) end = retiredDay;

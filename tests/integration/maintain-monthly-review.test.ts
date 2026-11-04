@@ -8,6 +8,7 @@
 //   4. What was signed is kept: the row holds what was seen, and an entry added afterward shows as added after the review.
 //   5. Another lab can't read or sign. A lab in read-only can't sign. Boot adds the table, and it's in the export-all list.
 //   6. The Excel report has the About sheet first, the review and the underlying records.
+//   7. A unit added today with old logs entered on it: a gap inside those logs is a problem, and the days before its first reading are not.
 //
 // Boots the REAL routes against a throwaway SQLite DB (made-up rows only). Run: npm run test:maintain-monthly-review
 
@@ -211,6 +212,21 @@ async function main() {
     check("6. the readings sheet has the month's readings with their scale", wb.getWorksheet("Temperature Readings")!.rowCount === 60 && String(wb.getWorksheet("Temperature Readings")!.getRow(2).getCell(5).value).length > 0, `${wb.getWorksheet("Temperature Readings")!.rowCount}`);
     check("6. the entries sheet has the solution change in plain words", wb.getWorksheet("Equipment Entries")!.getRow(2).getCell(3).value === "Solution change");
     check("6. lab identity is on the page header", /CLIA/.test(String(review.headerFooter?.oddHeader || "")));
+
+    // 7. A lab moving over: the unit is added today and months of old logs are entered on it. A gap inside those logs still counts.
+    const movedOver = (await call("POST", `${L}/temp-logs/units`, { name: "Made-up moved-over refrigerator", min_value: 2, max_value: 8, readings_per_day: 1 }, A.token)).body.id;
+    for (let d = 5; d <= 30; d += 1) {
+      if (d === 15) continue;
+      const day = `2026-06-${String(d).padStart(2, "0")}`;
+      insertReading.run(A.labId, movedOver, day, 4, 1, null, now);
+    }
+    const noBackLogs = (await call("POST", `${L}/temp-logs/units`, { name: "Made-up new freezer", min_value: -30, max_value: -10, readings_per_day: 1 }, A.token)).body.id;
+    const june = await call("GET", `${R}?month=2026-06`, undefined, A.token);
+    const mv = item(june, "temp_unit", movedOver);
+    check("7. a gap in old logs on a unit added today is a problem", mv?.problems?.length === 1 && /1 day short/.test(mv.problems[0]) && /6\/15/.test(mv.problems[0]), JSON.stringify(mv?.problems));
+    check("7. the days before its first reading aren't counted", !/6\/[1-4]\b/.test(mv?.problems?.[0] || ""), JSON.stringify(mv?.problems));
+    check("7. those readings read as entered late", mv?.summary?.entered_late === 25, String(mv?.summary?.entered_late));
+    check("7. a unit added today with no old logs isn't in that month", !item(june, "temp_unit", noBackLogs));
 
     // Read-only comes last: it blocks the rest
     sqlite.prepare("UPDATE labs SET subscription_status = 'expired', subscription_expires_at = '2020-01-01', plan = 'hospital' WHERE id = ?").run(A.labId);
