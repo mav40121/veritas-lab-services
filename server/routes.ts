@@ -227,6 +227,7 @@ import { termsGateMiddleware, termsStatus, acceptTerms, activateTerms, deactivat
 import { TERMS_VERSION } from "../shared/termsOfUse";
 import { orderManualTree, manualMoveProblem, MAX_MANUAL_DEPTH } from "../shared/manualTree";
 import { versionLabel, nextVersionParts, cleanDocNumber, docNumberKey, DOC_NUMBER_MAX } from "../shared/policyVersion";
+import { isPolicyDocType, docTypeRules, DOC_TYPE_REVIEW_MONTHS } from "../shared/policyDocTypes";
 import { assessmentTypeLabel, assessmentTypeProblem, isEvaluationProgram, normalizeRecordKind } from "@shared/competencyEvaluation";
 import { normalizeSpecimen, normalizeReportableField, specimenLabel } from "@shared/veritamapSpecimen";
 import { buildCompetencyRegisterRows, generateCompetencyRegisterExcel } from "./competencyRegisterExcel";
@@ -8167,6 +8168,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
          WHERE d.lab_id = ?
            AND d.status = 'approved'
            AND d.archived_at IS NULL
+           -- Document types (2026-11-03): a type the lab set to "no read-and-sign" (a form, a job aid) isn't listed.
+           AND NOT EXISTS (SELECT 1 FROM policy_doc_type_settings ts
+                            WHERE ts.lab_id = d.lab_id AND ts.doc_type = d.doc_type AND ts.requires_read_and_sign = 0)
          ORDER BY d.title`
       ).all(employeeId, labId) as any[];
 
@@ -39362,6 +39366,81 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     return Number.isInteger(n) && n > 0 ? n : "bad";
   };
 
+  // Document types (2026-11-03; shared/policyDocTypes.ts): the lab's rule for every type, today's behavior where unset.
+  const labDocTypeRules = (sqlite: any, labId: number) =>
+    docTypeRules(
+      sqlite
+        .prepare("SELECT doc_type, requires_periodic_review, requires_read_and_sign, default_review_months FROM policy_doc_type_settings WHERE lab_id = ?")
+        .all(labId) as any[]
+    );
+  // SQL: true when a policy_documents row's type is one its lab set to "no periodic review".
+  const NO_REVIEW_TYPE_SQL =
+    "EXISTS (SELECT 1 FROM policy_doc_type_settings ts WHERE ts.lab_id = policy_documents.lab_id AND ts.doc_type = policy_documents.doc_type AND ts.requires_periodic_review = 0)";
+  const docTypeFromBody = (v: any): string | null | "bad" => {
+    if (v === null || v === undefined || v === "") return null;
+    return isPolicyDocType(v) ? v : "bad";
+  };
+
+  // GET /api/labs/:labId/veritapolicy/doc-types — every document type with this lab's rule.
+  app.get("/api/labs/:labId/veritapolicy/doc-types", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    const sqlite = (db as any).$client;
+    res.json({ types: labDocTypeRules(sqlite, req.scope.labId), reviewMonths: DOC_TYPE_REVIEW_MONTHS });
+  });
+
+  // PUT /api/labs/:labId/veritapolicy/doc-types/:type — set this lab's rule for one type.
+  // Body: { requiresPeriodicReview?: boolean, requiresReadAndSign?: boolean, defaultReviewMonths?: number | null }.
+  // Applies to documents of this type going forward: a review date is set (or not) at the next approval or re-certify;
+  // read-and-sign follows the rule at once (a type with read-and-sign off leaves the staff list and can't be assigned).
+  app.put(
+    "/api/labs/:labId/veritapolicy/doc-types/:type",
+    authMiddleware,
+    labScopeMiddleware,
+    requireWriteAccess,
+    requireModuleEdit("veritapolicy"),
+    (req: any, res) => {
+      const type = String(req.params.type || "");
+      if (!isPolicyDocType(type)) return res.status(400).json({ error: "Unknown document type", code: "BAD_TYPE" });
+      const sqlite = (db as any).$client;
+      const before = labDocTypeRules(sqlite, req.scope.labId).find((r) => r.doc_type === type)!;
+      const b = req.body || {};
+      const bool = (v: any, cur: boolean) => (v === undefined ? cur : v === true || v === 1 || v === "true");
+      const review = bool(b.requiresPeriodicReview, before.requires_periodic_review);
+      const sign = bool(b.requiresReadAndSign, before.requires_read_and_sign);
+      let months = before.default_review_months;
+      if (Object.prototype.hasOwnProperty.call(b, "defaultReviewMonths")) {
+        months = b.defaultReviewMonths === null || b.defaultReviewMonths === "" ? null : Number(b.defaultReviewMonths);
+        if (months !== null && !(DOC_TYPE_REVIEW_MONTHS as readonly number[]).includes(months)) {
+          return res.status(400).json({ error: `Review interval must be one of ${DOC_TYPE_REVIEW_MONTHS.join(", ")} months, or blank.`, code: "BAD_MONTHS" });
+        }
+      }
+      sqlite
+        .prepare(
+          `INSERT INTO policy_doc_type_settings (lab_id, doc_type, requires_periodic_review, requires_read_and_sign, default_review_months, updated_by, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+           ON CONFLICT(lab_id, doc_type) DO UPDATE SET
+             requires_periodic_review = excluded.requires_periodic_review,
+             requires_read_and_sign = excluded.requires_read_and_sign,
+             default_review_months = excluded.default_review_months,
+             updated_by = excluded.updated_by,
+             updated_at = excluded.updated_at`
+        )
+        .run(req.scope.labId, type, review ? 1 : 0, sign ? 1 : 0, months, req.userId);
+      writeAuditLog(sqlite, {
+        labId: req.scope.labId,
+        userId: req.userId,
+        action: "doc_type_rule_changed",
+        details: {
+          doc_type: type,
+          from: { review: before.requires_periodic_review, read_and_sign: before.requires_read_and_sign, months: before.default_review_months },
+          to: { review, read_and_sign: sign, months },
+        },
+        ipAddress: req.ip,
+        userAgent: req.headers["user-agent"] as string | undefined,
+      });
+      res.json({ ok: true, rule: labDocTypeRules(sqlite, req.scope.labId).find((r) => r.doc_type === type) });
+    }
+  );
+
   // GET /api/labs/:labId/veritapolicy/manuals — list lab manuals (tree order, with parent_id, depth and path).
   // Seeds the 10 default manuals on first call so labs do not start empty.
   app.get(
@@ -39930,7 +40009,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
                   d.owner_user_id, d.effective_date, d.next_review_date,
                   d.review_interval_months, d.workflow_id, d.current_version_id,
                   d.created_at, d.updated_at,
-                  v.version_number AS current_version_number, v.version_major AS current_version_major, v.version_minor AS current_version_minor, d.doc_number,
+                  v.version_number AS current_version_number, v.version_major AS current_version_major, v.version_minor AS current_version_minor, d.doc_number, d.doc_type,
                   v.file_format AS current_file_format,
                   v.uploaded_at AS current_uploaded_at,
                   m.name AS manual_name,
@@ -40026,6 +40105,16 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         }
       }
 
+      // Optional document type (shared/policyDocTypes.ts). When the uploader didn't pick a review interval, the type's
+      // default interval (if the lab set one) is used instead of the lab's usual one.
+      const docType = docTypeFromBody(req.body?.doc_type);
+      if (docType === "bad") return res.status(400).json({ error: "Unknown document type", code: "BAD_TYPE" });
+      const typeRule = docType ? labDocTypeRules(sqlite, labId).find((r) => r.doc_type === docType) : null;
+      const intervalFromType =
+        (rawReviewInterval === undefined || rawReviewInterval === null || rawReviewInterval === "") && typeRule?.default_review_months
+          ? typeRule.default_review_months
+          : null;
+
       // Optional document number (the lab's own, e.g. "AH 12"): unique among the lab's active documents.
       const docNumber = cleanDocNumber(req.body?.doc_number);
       if (docNumber === "bad") return res.status(400).json({ error: `Document number is too long (${DOC_NUMBER_MAX} characters at most).`, code: "DOC_NUMBER_TOO_LONG" });
@@ -40039,8 +40128,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         .prepare(
           `INSERT INTO policy_documents
              (lab_id, manual_id, title, description, status, owner_user_id,
-              review_interval_months, workflow_id, doc_number, created_at, updated_at)
-           VALUES (?, ?, ?, ?, 'draft', ?, ?, NULL, ?, datetime('now'), datetime('now'))`
+              review_interval_months, workflow_id, doc_number, doc_type, created_at, updated_at)
+           VALUES (?, ?, ?, ?, 'draft', ?, ?, NULL, ?, ?, datetime('now'), datetime('now'))`
         )
         .run(
           labId,
@@ -40048,8 +40137,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           title,
           description,
           req.userId,
-          Number.isFinite(reviewIntervalMonths) ? reviewIntervalMonths : stateDefaultInterval,
-          docNumber
+          intervalFromType ?? (Number.isFinite(reviewIntervalMonths) ? reviewIntervalMonths : stateDefaultInterval),
+          docNumber,
+          docType
         );
       const documentId = Number(docInsert.lastInsertRowid);
       const versionNumber = 1;
@@ -40103,6 +40193,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           version_number: versionNumber,
           version_label: "1.0",
           doc_number: docNumber,
+          doc_type: docType,
           file_format: format,
           file_size_bytes: req.file.size,
           file_hash_sha256: fileHash,
@@ -40791,7 +40882,13 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       if (settingNumber && docNumber && docNumberTaken(sqlite, req.scope.labId, docNumber, id)) {
         return res.status(409).json({ error: `Document number ${docNumber} is already used in this lab.`, code: "DOC_NUMBER_TAKEN" });
       }
-      const priorNumber = (sqlite.prepare("SELECT doc_number FROM policy_documents WHERE id = ?").get(id) as any)?.doc_number ?? null;
+      // Document type: present in the body = set it (blank clears it); absent = leave it.
+      const settingType = req.body && Object.prototype.hasOwnProperty.call(req.body, "docType");
+      const docType = settingType ? docTypeFromBody(req.body.docType) : null;
+      if (docType === "bad") return res.status(400).json({ error: "Unknown document type", code: "BAD_TYPE" });
+      const prior = sqlite.prepare("SELECT doc_number, doc_type FROM policy_documents WHERE id = ?").get(id) as any;
+      const priorNumber = prior?.doc_number ?? null;
+      const priorType = prior?.doc_type ?? null;
       sqlite
         .prepare(
           `UPDATE policy_documents
@@ -40800,6 +40897,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
                  manual_id = CASE WHEN ? = 1 THEN ? ELSE manual_id END,
                  review_interval_months = COALESCE(?, review_interval_months),
                  doc_number = CASE WHEN ? = 1 THEN ? ELSE doc_number END,
+                 doc_type = CASE WHEN ? = 1 THEN ? ELSE doc_type END,
                  updated_at = datetime('now')
            WHERE id = ?`
         )
@@ -40814,8 +40912,24 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           reviewIntervalMonths !== undefined ? Number(reviewIntervalMonths) : null,
           settingNumber ? 1 : 0,
           settingNumber ? docNumber : null,
+          settingType ? 1 : 0,
+          settingType ? docType : null,
           id
         );
+      // A type change on an approved document applies its review rule now: a "no periodic review" type clears the
+      // review date; a type with review gives a document that had none a date one interval out.
+      if (settingType && priorType !== docType) {
+        sqlite
+          .prepare(
+            `UPDATE policy_documents
+                SET next_review_date = CASE WHEN ${NO_REVIEW_TYPE_SQL} THEN NULL
+                                            WHEN next_review_date IS NULL AND review_interval_months > 0
+                                              THEN date(?, '+' || review_interval_months || ' months')
+                                            ELSE next_review_date END
+              WHERE id = ? AND status = 'approved'`
+          )
+          .run(labToday(), id);
+      }
       writeAuditLog(sqlite, {
         labId: req.scope.labId,
         documentId: id,
@@ -40825,6 +40939,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           title: title ?? null,
           description: description ?? null,
           ...(settingNumber && priorNumber !== docNumber ? { doc_number_from: priorNumber, doc_number_to: docNumber } : {}),
+          ...(settingType && priorType !== docType ? { doc_type_from: priorType, doc_type_to: docType } : {}),
         },
         ipAddress: req.ip,
         userAgent: req.headers["user-agent"] as string | undefined,
@@ -41115,7 +41230,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
             `UPDATE policy_documents
                SET status = 'approved',
                    effective_date = COALESCE(effective_date, date(?)),
-                   next_review_date = CASE WHEN review_interval_months IS NULL OR review_interval_months <= 0
+                   next_review_date = CASE WHEN review_interval_months IS NULL OR review_interval_months <= 0 OR ${NO_REVIEW_TYPE_SQL}
                                            THEN NULL
                                            ELSE date(?, '+' || review_interval_months || ' months') END,
                    updated_at = datetime('now')
@@ -41659,7 +41774,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const docs = sqlite
       .prepare(
         `SELECT d.id, d.title, d.description, d.effective_date, d.next_review_date,
-                d.review_interval_months, v.version_number AS current_version_number, v.version_major AS current_version_major, v.version_minor AS current_version_minor, d.doc_number,
+                d.review_interval_months, v.version_number AS current_version_number, v.version_major AS current_version_major, v.version_minor AS current_version_minor, d.doc_number, d.doc_type,
                 v.file_format AS current_file_format, d.manual_id, m.name AS manual_name
            FROM policy_documents d
            LEFT JOIN policy_versions v ON v.id = d.current_version_id
@@ -43112,7 +43227,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       sqlite
         .prepare(
           `UPDATE policy_documents
-             SET next_review_date = CASE WHEN review_interval_months IS NULL OR review_interval_months <= 0
+             SET next_review_date = CASE WHEN review_interval_months IS NULL OR review_interval_months <= 0 OR ${NO_REVIEW_TYPE_SQL}
                                          THEN NULL
                                          ELSE date(?, '+' || review_interval_months || ' months') END,
                  updated_at = datetime('now')
@@ -43157,11 +43272,16 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const sqlite = (db as any).$client;
       const doc = sqlite
         .prepare(
-          "SELECT lab_id, status, current_version_id FROM policy_documents WHERE id = ?"
+          "SELECT lab_id, status, current_version_id, doc_type FROM policy_documents WHERE id = ?"
         )
         .get(id) as any;
       if (!doc) return res.status(404).json({ error: "Not found" });
       if (doc.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
+      // Document types: a type the lab set to "no read-and-sign" (a form, a job aid) isn't assigned for attestation.
+      const rule = doc.doc_type ? labDocTypeRules(sqlite, doc.lab_id).find((r) => r.doc_type === doc.doc_type) : null;
+      if (rule && !rule.requires_read_and_sign) {
+        return res.status(409).json({ error: `${rule.label} documents don't need read-and-sign in this lab.`, code: "TYPE_NO_READ_AND_SIGN" });
+      }
       if (doc.status !== "approved") {
         return res.status(409).json({ error: "Only approved policies can be assigned for attestation" });
       }
