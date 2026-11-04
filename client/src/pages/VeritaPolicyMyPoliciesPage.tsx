@@ -2146,7 +2146,9 @@ export default function VeritaPolicyMyPoliciesPage() {
             A manual can sit inside another manual. To move one, pick where it goes; its sub-manuals and
             documents move with it.
           </p>
-          <div className="divide-y border rounded-md" data-testid="manuals-tree">
+          {/* min-w-0: the dialog is a grid, so without it a long manual name widens the tree past the dialog's edge
+              (seen on production 11/4); with it, long names truncate and the full path shows on hover. */}
+          <div className="divide-y border rounded-md min-w-0" data-testid="manuals-tree">
             {manuals.map((m) => {
               const blocked = descendantIds(manuals, m.id);
               return (
@@ -2159,7 +2161,7 @@ export default function VeritaPolicyMyPoliciesPage() {
                     onValueChange={(v) => moveManualMutation.mutate({ id: m.id, parentId: v === TOP_LEVEL ? null : Number(v) })}
                     disabled={isReadOnly || moveManualMutation.isPending}
                   >
-                    <SelectTrigger className="h-8 w-56 text-xs" aria-label={`Where ${m.name} sits`} data-testid={`manual-parent-${m.id}`}>
+                    <SelectTrigger className="h-8 w-56 shrink-0 text-xs" aria-label={`Where ${m.name} sits`} data-testid={`manual-parent-${m.id}`}>
                       {/* The trigger names just the parent; the list shows full paths. */}
                       <SelectValue>
                         {m.parent_id ? `Inside ${manuals.find((o) => o.id === m.parent_id)?.name ?? "another manual"}` : "Top level"}
@@ -2180,7 +2182,7 @@ export default function VeritaPolicyMyPoliciesPage() {
                     hidden={isReadOnly}
                     size="sm"
                     variant="ghost"
-                    className="h-8 text-xs"
+                    className="h-8 shrink-0 text-xs"
                     onClick={() => { setManualsOpen(false); openNewManual(m.id); }}
                     title={`Add a sub-manual inside ${m.name}`}
                   >
