@@ -126,6 +126,7 @@ export const EXPORT_TABLES: Record<string, ExportTable> = {
   // VeritaPolicy
   policy_manuals: lab("VeritaPolicy"),
   policy_documents: lab("VeritaPolicy"),
+  policy_doc_type_settings: lab("VeritaPolicy"),
   policy_versions: child("VeritaPolicy", "document_id", "policy_documents"),
   policy_attestations: child("VeritaPolicy", "document_id", "policy_documents"),
   policy_signoffs: child("VeritaPolicy", "document_id", "policy_documents"),

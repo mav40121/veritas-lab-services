@@ -7989,6 +7989,8 @@ try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_surveyor_links_token ON
   try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_documents_doc_number ON policy_documents(lab_id, doc_number)`); } catch {}
   if (!versionsCols.includes("version_major")) sqlite.exec("ALTER TABLE policy_versions ADD COLUMN version_major INTEGER");
   if (!versionsCols.includes("version_minor")) sqlite.exec("ALTER TABLE policy_versions ADD COLUMN version_minor INTEGER");
+  // Document types (2026-11-03; shared/policyDocTypes.ts): NULL = no type, which behaves as before.
+  if (!docsCols.includes("doc_type")) sqlite.exec("ALTER TABLE policy_documents ADD COLUMN doc_type TEXT");
   const workflowsCols = (sqlite.prepare("PRAGMA table_info(policy_approval_workflows)").all() as { name: string }[]).map((c) => c.name);
   void workflowsCols;
   const stepsCols = (sqlite.prepare("PRAGMA table_info(policy_approval_steps)").all() as { name: string }[]).map((c) => c.name);
@@ -8003,6 +8005,35 @@ try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_surveyor_links_token ON
   void surveyorCols;
   const auditCols = (sqlite.prepare("PRAGMA table_info(policy_audit_log)").all() as { name: string }[]).map((c) => c.name);
   void auditCols;
+}
+
+// Per-lab rule for each document type (2026-11-03; shared/policyDocTypes.ts): whether a type needs periodic review,
+// whether staff read and sign it, and its default review interval. No row = today's behavior (both on, the lab's usual
+// interval). One row per lab and type.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS policy_doc_type_settings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    doc_type TEXT NOT NULL,
+    requires_periodic_review INTEGER,
+    requires_read_and_sign INTEGER,
+    default_review_months INTEGER,
+    updated_by INTEGER,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )
+`);
+try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS uq_policy_doc_type_settings ON policy_doc_type_settings(lab_id, doc_type)`); } catch {}
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(policy_doc_type_settings)").all() as { name: string }[]).map((c) => c.name);
+  for (const [col, ddl] of [
+    ["requires_periodic_review", "INTEGER"],
+    ["requires_read_and_sign", "INTEGER"],
+    ["default_review_months", "INTEGER"],
+    ["updated_by", "INTEGER"],
+    ["updated_at", "TEXT"],
+  ] as const) {
+    if (!cols.includes(col)) sqlite.exec(`ALTER TABLE policy_doc_type_settings ADD COLUMN ${col} ${ddl}`);
+  }
 }
 
 // MediaLab parity #39 item 2 (2026-06-07): quiz questions on policy

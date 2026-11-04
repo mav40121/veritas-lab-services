@@ -89,6 +89,10 @@ jobs:
         # Q154 (2026-11-03): per-lab document numbers (unique among active documents), 1.0 / 1.1 / 2.0 versions with
         # legacy versions reading N.0, number edits audited, no move into another lab's manual.
         run: npm run test:veritadc-doc-numbers
+      - name: Run VeritaDC document types integration test
+        # Q154 (2026-11-03): per-lab rule per type (periodic review, read-and-sign, default interval), applied at upload,
+        # approval/re-certify and type change; a no-read-and-sign type can't be assigned and leaves the staff list.
+        run: npm run test:veritadc-doc-types
       - name: Run structure-only database copy integration test
         # GET /api/admin/schema-db (Lifepoint questionnaire: customer data is not used for testing): secret-gated, every
         # table, index, view and trigger rebuilt with the same columns, no rows, nothing from the source in the file, audited.

@@ -17,6 +17,8 @@ import { VeritaPolicyTabs } from "@/components/VeritaPolicyTabs";
 import { apiRequest, queryClient, getQueryFn } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { MANUAL_PATH_SEPARATOR, descendantIds } from "@shared/manualTree";
+import { POLICY_DOC_TYPES, docTypeLabel, type DocTypeRule } from "@shared/policyDocTypes";
+import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -191,6 +193,7 @@ interface PolicyDocument {
   // major.minor (shared/policyVersion.ts) and the lab's own document number.
   current_version_label?: string | null;
   doc_number?: string | null;
+  doc_type?: string | null;
   current_file_format: string | null;
   current_uploaded_at: string | null;
   manual_name: string | null;
@@ -371,6 +374,28 @@ export default function VeritaPolicyMyPoliciesPage() {
     enabled: !!activeLabId,
   });
 
+  // Document types and this lab's rule for each (shared/policyDocTypes.ts).
+  const { data: docTypesData } = useQuery<{ types: DocTypeRule[]; reviewMonths: number[] }>({
+    queryKey: [`/api/labs/${activeLabId}/veritapolicy/doc-types`],
+    queryFn: getQueryFn({ on401: "throw" }),
+    enabled: !!activeLabId,
+  });
+  const docTypes = docTypesData?.types || [];
+  const typeRule = (t: string | null | undefined) => docTypes.find((r) => r.doc_type === t) || null;
+  const NO_TYPE = "__none__";
+  const [docTypesOpen, setDocTypesOpen] = useState(false);
+  const docTypeMutation = useMutation({
+    mutationFn: async ({ type, body }: { type: string; body: Record<string, unknown> }) => {
+      const res = await apiRequest("PUT", `/api/labs/${activeLabId}/veritapolicy/doc-types/${type}`, body);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/labs/${activeLabId}/veritapolicy/doc-types`] });
+      toast({ title: "Saved" });
+    },
+    onError: (err: any) => toast({ title: "Save failed", description: String(err?.message || err), variant: "destructive" }),
+  });
+
   const documents = docsData?.documents || [];
   const manuals = manualsData?.manuals || [];
 
@@ -409,6 +434,7 @@ export default function VeritaPolicyMyPoliciesPage() {
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadTitle, setUploadTitle] = useState("");
   const [uploadDocNumber, setUploadDocNumber] = useState("");
+  const [uploadDocType, setUploadDocType] = useState<string>("__none__");
   const [uploadDescription, setUploadDescription] = useState("");
   const [uploadManualId, setUploadManualId] = useState<string>("");
   const [uploadReviewMonths, setUploadReviewMonths] = useState<string>("24");
@@ -427,6 +453,7 @@ export default function VeritaPolicyMyPoliciesPage() {
     setUploadFile(null);
     setUploadTitle("");
     setUploadDocNumber("");
+    setUploadDocType("__none__");
     setUploadDescription("");
     setUploadManualId("");
     setUploadReviewMonths(activeDefaultReviewMonths);
@@ -444,6 +471,7 @@ export default function VeritaPolicyMyPoliciesPage() {
       fd.append("file", uploadFile);
       if (uploadTitle.trim()) fd.append("title", uploadTitle.trim());
       if (uploadDocNumber.trim()) fd.append("doc_number", uploadDocNumber.trim());
+      if (uploadDocType !== "__none__") fd.append("doc_type", uploadDocType);
       if (uploadDescription.trim()) fd.append("description", uploadDescription.trim());
       if (uploadManualId) fd.append("manual_id", uploadManualId);
       if (uploadReviewMonths) fd.append("review_interval_months", uploadReviewMonths);
@@ -625,11 +653,13 @@ export default function VeritaPolicyMyPoliciesPage() {
   const [renameDescription, setRenameDescription] = useState("");
   const [renameManualId, setRenameManualId] = useState<string>("");
   const [renameDocNumber, setRenameDocNumber] = useState("");
+  const [renameDocType, setRenameDocType] = useState<string>("__none__");
 
   const openRename = (doc: PolicyDocument) => {
     setRenameDoc(doc);
     setRenameTitle(doc.title);
     setRenameDocNumber(doc.doc_number || "");
+    setRenameDocType(doc.doc_type || "__none__");
     setRenameDescription(doc.description || "");
     setRenameManualId(doc.manual_id ? String(doc.manual_id) : "");
   };
@@ -1136,6 +1166,7 @@ export default function VeritaPolicyMyPoliciesPage() {
           description: renameDescription.trim() || null,
           manualId: renameManualId ? Number(renameManualId) : null,
           docNumber: renameDocNumber.trim(), // blank clears it
+          docType: renameDocType === "__none__" ? null : renameDocType,
         }
       );
       return res.json();
@@ -1508,6 +1539,14 @@ export default function VeritaPolicyMyPoliciesPage() {
           </Button>
           <Button hidden={isReadOnly}
             variant="outline"
+            onClick={() => setDocTypesOpen(true)}
+            title="Set, for each document type, whether it needs periodic review and staff read-and-sign"
+            data-testid="doc-types-open"
+          >
+            <FileText size={14} className="mr-1.5" /> Document types
+          </Button>
+          <Button hidden={isReadOnly}
+            variant="outline"
             disabled={manuals.length === 0}
             onClick={() => {
               setApproverManualId(manuals[0]?.id ? String(manuals[0].id) : "");
@@ -1778,6 +1817,13 @@ export default function VeritaPolicyMyPoliciesPage() {
                             )}
                             {doc.title}
                           </div>
+                          {doc.doc_type && (
+                            <div className="text-[11px] text-muted-foreground" data-testid="doc-type">
+                              {docTypeLabel(doc.doc_type)}
+                              {typeRule(doc.doc_type) && !typeRule(doc.doc_type)!.requires_periodic_review && " · no periodic review"}
+                              {typeRule(doc.doc_type) && !typeRule(doc.doc_type)!.requires_read_and_sign && " · no read-and-sign"}
+                            </div>
+                          )}
                           {doc.description && (
                             <div className="text-xs text-muted-foreground">
                               {doc.description}
@@ -2035,6 +2081,20 @@ export default function VeritaPolicyMyPoliciesPage() {
               />
             </div>
             <div>
+              <Label className="text-xs">Document type (optional)</Label>
+              <Select value={uploadDocType} onValueChange={setUploadDocType}>
+                <SelectTrigger data-testid="upload-doc-type">
+                  <SelectValue placeholder="No type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_TYPE}>No type</SelectItem>
+                  {POLICY_DOC_TYPES.map((t) => (
+                    <SelectItem key={t.key} value={t.key}>{t.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
               <Label className="text-xs">Description (optional)</Label>
               <Textarea
                 value={uploadDescription}
@@ -2157,6 +2217,62 @@ export default function VeritaPolicyMyPoliciesPage() {
               )}
               Create
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Document types: per-type periodic review and read-and-sign ─── */}
+      <Dialog open={docTypesOpen} onOpenChange={setDocTypesOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Document types</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground">
+            For each type, choose whether its documents need periodic review and whether staff read and sign them. A
+            review setting applies when a document of that type is next approved or re-certified; read-and-sign applies
+            right away. Documents with no type keep both on.
+          </p>
+          <div className="border rounded-md divide-y min-w-0" data-testid="doc-types-table">
+            <div className="grid grid-cols-[1fr_7rem_7rem_9rem] gap-2 px-3 py-2 text-xs font-medium text-muted-foreground">
+              <span>Type</span><span>Periodic review</span><span>Read-and-sign</span><span>Default interval</span>
+            </div>
+            {docTypes.map((r) => (
+              <div key={r.doc_type} className="grid grid-cols-[1fr_7rem_7rem_9rem] items-center gap-2 px-3 py-1.5" data-testid={`doc-type-row-${r.doc_type}`}>
+                <span className="text-sm">{r.label}</span>
+                <Switch
+                  checked={r.requires_periodic_review}
+                  disabled={isReadOnly || docTypeMutation.isPending}
+                  onCheckedChange={(v) => docTypeMutation.mutate({ type: r.doc_type, body: { requiresPeriodicReview: v } })}
+                  aria-label={`${r.label}: periodic review`}
+                  data-testid={`doc-type-review-${r.doc_type}`}
+                />
+                <Switch
+                  checked={r.requires_read_and_sign}
+                  disabled={isReadOnly || docTypeMutation.isPending}
+                  onCheckedChange={(v) => docTypeMutation.mutate({ type: r.doc_type, body: { requiresReadAndSign: v } })}
+                  aria-label={`${r.label}: read-and-sign`}
+                  data-testid={`doc-type-sign-${r.doc_type}`}
+                />
+                <Select
+                  value={r.default_review_months ? String(r.default_review_months) : "lab"}
+                  onValueChange={(v) => docTypeMutation.mutate({ type: r.doc_type, body: { defaultReviewMonths: v === "lab" ? null : Number(v) } })}
+                  disabled={isReadOnly || docTypeMutation.isPending || !r.requires_periodic_review}
+                >
+                  <SelectTrigger className="h-8 text-xs" aria-label={`${r.label}: default review interval`}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="lab">Lab's usual</SelectItem>
+                    {(docTypesData?.reviewMonths || []).map((m) => (
+                      <SelectItem key={m} value={String(m)}>{m} months</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDocTypesOpen(false)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -3651,6 +3767,20 @@ export default function VeritaPolicyMyPoliciesPage() {
                 maxLength={60}
                 data-testid="edit-doc-number"
               />
+            </div>
+            <div>
+              <Label className="text-xs">Document type</Label>
+              <Select value={renameDocType} onValueChange={setRenameDocType}>
+                <SelectTrigger data-testid="edit-doc-type">
+                  <SelectValue placeholder="No type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_TYPE}>No type</SelectItem>
+                  {POLICY_DOC_TYPES.map((t) => (
+                    <SelectItem key={t.key} value={t.key}>{t.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label className="text-xs">Description</Label>
