@@ -6,6 +6,7 @@ import { useIsReadOnly, useCanRecord } from "@/components/SubscriptionBanner";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
+import { AssignStaffButton } from "@/components/InstrumentStaffAssignDialog";
 import { useLabRoute } from "@/hooks/useLabRoute";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -406,6 +407,7 @@ export default function EquipmentAppPage() {
                               <Link href={labRoute(`/instruments/${e.map_instrument_id}/trail`)} data-testid={`equip-trail-${e.id}`}>QC trail</Link>
                             </Button>
                           ) : null}
+                          {e.map_instrument_id ? <AssignStaffButton instrument={{ id: e.map_instrument_id, name: e.instrument_name }} testId={`equip-assign-staff-${e.id}`} /> : null}
                           <Button size="sm" variant="ghost" onClick={() => openEdit(e)} disabled={isReadOnly}>Edit</Button>
                           <Button size="sm" variant="ghost" className="text-muted-foreground" onClick={() => retire(e)} disabled={isReadOnly}>Retire</Button>
                         </div>

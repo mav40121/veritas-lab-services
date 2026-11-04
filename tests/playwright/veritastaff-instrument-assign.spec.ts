@@ -32,13 +32,12 @@ test.describe("VeritaStaff instrument-centric assignment (dual view)", () => {
     }
     await btn.click();
     await page.waitForTimeout(600);
-    await expect(page.getByRole("dialog")).toBeVisible();
-    await expect(page.getByText("Assign by Instrument")).toBeVisible();
-    const firstInstrument = page.locator('[data-testid^="instrument-pick-"]').first();
+    const firstInstrument = page.locator('[data-testid^="instrument-panel-assign-"]').first();
     if (await firstInstrument.count()) {
       await firstInstrument.click();
       await page.waitForTimeout(800);
-      // Now on the staff checklist step.
+      // Now on the staff checklist.
+      await expect(page.getByRole("dialog")).toBeVisible();
       await expect(page.getByText(/Who runs/i)).toBeVisible();
       await expect(page.getByTestId("instrument-assign-save")).toBeVisible();
     } else {
