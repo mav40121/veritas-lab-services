@@ -8254,6 +8254,38 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     }
   });
 
+  // Send a stored document version to a staff login: DOCX as HTML, PDF and images as the file, the rest as HTML. Used for
+  // reading a policy to sign it and a document to approve it.
+  async function sendStaffVersion(res: any, row: { version_id: number; file_path: string; file_format: string; expected_hash?: string }) {
+    const { readVersionBuffer, hashBuffer, renderDocxToHtml, inlineDocContentType, htmlForStoredFormat } = await import("./veritapolicyApproval");
+    let buffer: Buffer;
+    try {
+      buffer = readVersionBuffer(row.file_path);
+    } catch (err: any) {
+      console.error("[staff-portal-session/policies render]", err.message);
+      return res.status(500).json({ error: "File missing on server" });
+    }
+    const actualHash = hashBuffer(buffer);
+    const tampered = row.expected_hash && actualHash !== row.expected_hash;
+    if (row.file_format === "docx") {
+      try {
+        const rendered = await renderDocxToHtml(buffer);
+        return res.json({ format: "html", html: rendered.html, version_id: row.version_id, file_hash: actualHash, tampered: !!tampered });
+      } catch (err: any) {
+        return res.status(500).json({ error: "Render failed" });
+      }
+    }
+    if (inlineDocContentType(row.file_format)) {
+      if (tampered) res.setHeader("X-VeritaPolicy-Tamper", "yes");
+      res.setHeader("Access-Control-Expose-Headers", "X-VeritaPolicy-Tamper");
+      res.setHeader("Content-Type", inlineDocContentType(row.file_format) as string);
+      res.setHeader("Content-Disposition", "inline");
+      return res.send(buffer);
+    }
+    // html
+    res.json({ format: "html", html: await htmlForStoredFormat(buffer, row.file_format), version_id: row.version_id, file_hash: actualHash, tampered: !!tampered });
+  }
+
   // GET /api/staff-portal-session/policies/:documentId/render
   //   Render the approved policy's current version for the staff member.
   //   DOCX → mammoth-rendered HTML; PDF → inline binary; HTML → utf-8
@@ -8276,33 +8308,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       ).get(documentId, labId) as any;
       if (!row) return res.status(404).json({ error: "Not found" });
 
-      const { readVersionBuffer, hashBuffer, renderDocxToHtml, inlineDocContentType, htmlForStoredFormat } = require("./veritapolicyApproval");
-      let buffer: Buffer;
-      try {
-        buffer = readVersionBuffer(row.file_path);
-      } catch (err: any) {
-        console.error("[staff-portal-session/policies render]", err.message);
-        return res.status(500).json({ error: "File missing on server" });
-      }
-      const actualHash = hashBuffer(buffer);
-      const tampered = row.expected_hash && actualHash !== row.expected_hash;
-      if (row.file_format === "docx") {
-        try {
-          const rendered = await renderDocxToHtml(buffer);
-          return res.json({ format: "html", html: rendered.html, version_id: row.version_id, file_hash: actualHash, tampered: !!tampered });
-        } catch (err: any) {
-          return res.status(500).json({ error: "Render failed" });
-        }
-      }
-      if (inlineDocContentType(row.file_format)) {
-        if (tampered) res.setHeader("X-VeritaPolicy-Tamper", "yes");
-        res.setHeader("Access-Control-Expose-Headers", "X-VeritaPolicy-Tamper");
-        res.setHeader("Content-Type", inlineDocContentType(row.file_format) as string);
-        res.setHeader("Content-Disposition", "inline");
-        return res.send(buffer);
-      }
-      // html
-      res.json({ format: "html", html: await htmlForStoredFormat(buffer, row.file_format), version_id: row.version_id, file_hash: actualHash, tampered: !!tampered });
+      return await sendStaffVersion(res, row);
     } catch (err: any) {
       console.error("[staff-portal-session/policies render] error:", err);
       return res.status(500).json({ error: err.message || "policy_render_failed" });
@@ -11421,7 +11427,14 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       return true;
     });
 
+    const approvals: any[] = [];
+    for (const labId of new Set(empRows.map((r: any) => Number(r.tier2_lab_id)))) {
+      for (const a of approvalQueueFor(sqlite, labId, req.userId, labLocalDate(new Date().toISOString()))) {
+        approvals.push({ document_id: a.document_id, title: a.title, step_name: a.step_name });
+      }
+    }
     res.json({
+      approvals,
       quizzes: dedupedQuizzes,
       policies: dedupedPolicies.map((p: any) => ({
         document_id: p.document_id,
@@ -39421,6 +39434,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     renumberRouteSteps,
     liveRouteStepIds,
     stepHasSignatures,
+    approvalQueueFor,
+    isNamedOnRoute,
   } = await import("./veritapolicyApproval");
   const { registerLabGroupRoutes } = await import("./labGroups");
 
@@ -41369,244 +41384,224 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     }
   );
 
-  // POST /documents/:id/approve — current user approves the pending step.
-  // Body: { typedSignature, password, comment? }
-  // Phase 3: password re-auth per FDA CPG 7153.17 minimum.
-  app.post(
-    "/api/labs/:labId/veritapolicy/documents/:id/approve",
-    authMiddleware,
-    labScopeMiddleware,
-    requireWriteAccess,
-    requireModuleEdit("veritapolicy"),
-    async (req: any, res) => {
-      const id = Number(req.params.id);
-      if (!Number.isFinite(id)) return res.status(400).json({ error: "Bad id" });
-      const { typedSignature, password, comment } = req.body || {};
-      if (!typedSignature || typeof typedSignature !== "string" || typedSignature.trim().length < 2) {
-        return res.status(400).json({ error: "typedSignature required (full name)" });
-      }
-      if (!password || typeof password !== "string") {
-        return res.status(400).json({ error: "password required for electronic signature" });
-      }
-      const sqlite = (db as any).$client;
-      // 21 CFR Part 11 minimum: re-authenticate with password at signing.
-      const userRow = sqlite
-        .prepare("SELECT id, password_hash FROM users WHERE id = ?")
-        .get(req.userId) as any;
-      if (!userRow || !userRow.password_hash) {
-        return res.status(401).json({ error: "User has no password set; cannot sign electronically" });
-      }
-      const passwordOk = await bcrypt.compare(String(password), userRow.password_hash);
-      if (!passwordOk) {
-        return res.status(401).json({ error: "Password incorrect; signature not recorded" });
-      }
-      const doc = sqlite
-        .prepare(
-          "SELECT lab_id, owner_user_id, current_version_id, status, manual_id FROM policy_documents WHERE id = ?"
-        )
-        .get(id) as any;
-      if (!doc) return res.status(404).json({ error: "Not found" });
-      if (doc.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
-      if (doc.status !== "in_review") {
-        return res.status(409).json({ error: `Cannot approve from status ${doc.status}` });
-      }
-      const pending = getCurrentPendingStep(sqlite, id);
-      if (!pending.step) {
-        return res.status(409).json({ error: "No pending step" });
-      }
-      const check = canUserApproveStepDelegated(sqlite, {
-        userId: req.userId,
-        labId: req.scope.labId,
-        documentOwnerId: doc.owner_user_id,
-        stepRow: pending.step,
-        isMajorRevision: isVersionMajorRevision(sqlite, doc.current_version_id),
-        manualId: doc.manual_id ?? null,
-      }, labLocalDate(new Date().toISOString()));
-      if (!check.ok) return res.status(403).json({ error: (check as any).reason });
-      // Approval delegation (#39): when the approval is taken by a delegate,
-      // resolve the delegator for a non-repudiable attribution note recorded on
-      // the signoff comment and in the audit log.
-      let delegationNote = "";
-      let delegatorUserId: number | null = null;
-      if ((check as any).viaDelegation) {
-        delegatorUserId = (check as any).viaDelegation.delegatorId as number;
-        const du = sqlite.prepare("SELECT name, email FROM users WHERE id = ?").get(delegatorUserId) as any;
-        const dn = du?.name || du?.email || `user #${delegatorUserId}`;
-        delegationNote = ` [Signed as delegate for ${dn} (user #${delegatorUserId})]`;
-      }
-      // Pull the file hash from the current version for non-repudiation.
-      const ver = sqlite
-        .prepare("SELECT file_hash_sha256 FROM policy_versions WHERE id = ?")
-        .get(doc.current_version_id) as { file_hash_sha256: string } | undefined;
-      const hash = ver?.file_hash_sha256 || "missing";
-      sqlite
-        .prepare(
-          `INSERT INTO policy_signoffs
-             (document_id, version_id, workflow_step_id, user_id, action,
-              comment, typed_signature, signed_document_hash, ip_address, user_agent)
-           VALUES (?, ?, ?, ?, 'approved', ?, ?, ?, ?, ?)`
-        )
-        .run(
-          id,
-          doc.current_version_id,
-          pending.step.id,
-          req.userId,
-          (comment ? comment + delegationNote : delegationNote || null),
-          typedSignature.trim(),
-          hash,
-          req.ip || null,
-          (req.headers["user-agent"] as string | undefined) || null
-        );
-      writeAuditLog(sqlite, {
-        labId: req.scope.labId,
-        documentId: id,
-        userId: req.userId,
-        action: "approved",
-        details: {
-          workflow_step_id: pending.step.id,
-          step_order: pending.step.step_order,
-          step_name: pending.step.step_name,
-          ...(delegatorUserId != null ? { via_delegation: true, delegator_user_id: delegatorUserId } : {}),
-        },
-        ipAddress: req.ip,
-        userAgent: req.headers["user-agent"] as string | undefined,
-      });
-      // If this was the final step, flip document to status='approved' and
-      // compute next_review_date.
-      const after = getCurrentPendingStep(sqlite, id);
-      if (!after.step && after.completedSteps >= after.totalSteps) {
-        sqlite
-          .prepare(
-            `UPDATE policy_documents
-               SET status = 'approved',
-                   effective_date = COALESCE(effective_date, date(?)),
-                   next_review_date = CASE WHEN review_interval_months IS NULL OR review_interval_months <= 0 OR ${NO_REVIEW_TYPE_SQL}
-                                           THEN NULL
-                                           ELSE date(?, '+' || review_interval_months || ' months') END,
-                   updated_at = datetime('now')
-             WHERE id = ?`
-          )
-          .run(labToday(), labToday(), id);
-        return res.json({ ok: true, status: "approved" });
-      }
-      res.json({
-        ok: true,
-        status: "in_review",
-        nextStep: after.step ? after.step.step_name : null,
-      });
+  // Approve or reject a document's pending step. One path for the editor screen and the staff login tile, so the password
+  // check, the eligibility check and the signature record can't drift apart. Phase 3: password re-auth per FDA CPG 7153.17
+  // minimum (21 CFR Part 11). A rejection is an electronic signature too: an attestation that this version does not meet standard.
+  async function decideApprovalStep(o: {
+    action: "approved" | "rejected";
+    documentId: number;
+    labId: number;
+    userId: number;
+    typedSignature: unknown;
+    password: unknown;
+    comment?: string | null;
+    ip?: string | null;
+    userAgent?: string;
+  }): Promise<{ status: number; body: any }> {
+    const { action, documentId: id, labId, userId, typedSignature, password, comment } = o;
+    if (!typedSignature || typeof typedSignature !== "string" || typedSignature.trim().length < 2) {
+      return { status: 400, body: { error: "typedSignature required (full name)" } };
     }
-  );
-
-  // POST /documents/:id/reject — current user rejects, returns to draft.
-  // Body: { typedSignature, password, comment? }
-  // Phase 3: password re-auth here too. Rejection is an electronic
-  // signature in 21 CFR Part 11 terms (an attestation that this version
-  // does not meet standard) and must be non-repudiable.
-  app.post(
-    "/api/labs/:labId/veritapolicy/documents/:id/reject",
-    authMiddleware,
-    labScopeMiddleware,
-    requireWriteAccess,
-    requireModuleEdit("veritapolicy"),
-    async (req: any, res) => {
-      const id = Number(req.params.id);
-      if (!Number.isFinite(id)) return res.status(400).json({ error: "Bad id" });
-      const { typedSignature, password, comment } = req.body || {};
-      if (!typedSignature || typeof typedSignature !== "string" || typedSignature.trim().length < 2) {
-        return res.status(400).json({ error: "typedSignature required (full name)" });
-      }
-      if (!password || typeof password !== "string") {
-        return res.status(400).json({ error: "password required for electronic signature" });
-      }
-      const sqlite = (db as any).$client;
-      const userRow = sqlite
-        .prepare("SELECT id, password_hash FROM users WHERE id = ?")
-        .get(req.userId) as any;
-      if (!userRow || !userRow.password_hash) {
-        return res.status(401).json({ error: "User has no password set; cannot sign electronically" });
-      }
-      const passwordOk = await bcrypt.compare(String(password), userRow.password_hash);
-      if (!passwordOk) {
-        return res.status(401).json({ error: "Password incorrect; signature not recorded" });
-      }
-      const doc = sqlite
-        .prepare(
-          "SELECT lab_id, owner_user_id, current_version_id, status, manual_id FROM policy_documents WHERE id = ?"
-        )
-        .get(id) as any;
-      if (!doc) return res.status(404).json({ error: "Not found" });
-      if (doc.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
-      if (doc.status !== "in_review") {
-        return res.status(409).json({ error: `Cannot reject from status ${doc.status}` });
-      }
-      const pending = getCurrentPendingStep(sqlite, id);
-      if (!pending.step) {
-        return res.status(409).json({ error: "No pending step" });
-      }
-      const check = canUserApproveStepDelegated(sqlite, {
-        userId: req.userId,
-        labId: req.scope.labId,
-        documentOwnerId: doc.owner_user_id,
-        stepRow: pending.step,
-        isMajorRevision: isVersionMajorRevision(sqlite, doc.current_version_id),
-        manualId: doc.manual_id ?? null,
-      }, labLocalDate(new Date().toISOString()));
-      if (!check.ok) return res.status(403).json({ error: (check as any).reason });
-      // Approval delegation (#39): attribute a delegate's rejection to the
-      // delegator too (rejection is a 21 CFR Part 11 electronic signature).
-      let delegationNote = "";
-      let delegatorUserId: number | null = null;
-      if ((check as any).viaDelegation) {
-        delegatorUserId = (check as any).viaDelegation.delegatorId as number;
-        const du = sqlite.prepare("SELECT name, email FROM users WHERE id = ?").get(delegatorUserId) as any;
-        const dn = du?.name || du?.email || `user #${delegatorUserId}`;
-        delegationNote = ` [Signed as delegate for ${dn} (user #${delegatorUserId})]`;
-      }
-      const ver = sqlite
-        .prepare("SELECT file_hash_sha256 FROM policy_versions WHERE id = ?")
-        .get(doc.current_version_id) as { file_hash_sha256: string } | undefined;
-      const hash = ver?.file_hash_sha256 || "missing";
-      sqlite
-        .prepare(
-          `INSERT INTO policy_signoffs
-             (document_id, version_id, workflow_step_id, user_id, action,
-              comment, typed_signature, signed_document_hash, ip_address, user_agent)
-           VALUES (?, ?, ?, ?, 'rejected', ?, ?, ?, ?, ?)`
-        )
-        .run(
-          id,
-          doc.current_version_id,
-          pending.step.id,
-          req.userId,
-          (comment ? comment + delegationNote : delegationNote || null),
-          typedSignature.trim(),
-          hash,
-          req.ip || null,
-          (req.headers["user-agent"] as string | undefined) || null
-        );
+    if (!password || typeof password !== "string") {
+      return { status: 400, body: { error: "password required for electronic signature" } };
+    }
+    const sqlite = (db as any).$client;
+    const userRow = sqlite.prepare("SELECT id, password_hash FROM users WHERE id = ?").get(userId) as any;
+    if (!userRow || !userRow.password_hash) {
+      return { status: 401, body: { error: "User has no password set; cannot sign electronically" } };
+    }
+    const passwordOk = await bcrypt.compare(String(password), userRow.password_hash);
+    if (!passwordOk) {
+      return { status: 401, body: { error: "Password incorrect; signature not recorded" } };
+    }
+    const doc = sqlite
+      .prepare("SELECT lab_id, owner_user_id, current_version_id, status, manual_id FROM policy_documents WHERE id = ?")
+      .get(id) as any;
+    if (!doc) return { status: 404, body: { error: "Not found" } };
+    if (doc.lab_id !== labId) return { status: 403, body: { error: "Wrong lab" } };
+    if (doc.status !== "in_review") {
+      return { status: 409, body: { error: `Cannot ${action === "approved" ? "approve" : "reject"} from status ${doc.status}` } };
+    }
+    const pending = getCurrentPendingStep(sqlite, id);
+    if (!pending.step) return { status: 409, body: { error: "No pending step" } };
+    const check = canUserApproveStepDelegated(sqlite, {
+      userId,
+      labId,
+      documentOwnerId: doc.owner_user_id,
+      stepRow: pending.step,
+      isMajorRevision: isVersionMajorRevision(sqlite, doc.current_version_id),
+      manualId: doc.manual_id ?? null,
+    }, labLocalDate(new Date().toISOString()));
+    if (!check.ok) return { status: 403, body: { error: (check as any).reason } };
+    // Approval delegation (#39): a delegate's signature is attributed to the delegator on the signoff comment and in the audit log.
+    let delegationNote = "";
+    let delegatorUserId: number | null = null;
+    if ((check as any).viaDelegation) {
+      delegatorUserId = (check as any).viaDelegation.delegatorId as number;
+      const du = sqlite.prepare("SELECT name, email FROM users WHERE id = ?").get(delegatorUserId) as any;
+      const dn = du?.name || du?.email || `user #${delegatorUserId}`;
+      delegationNote = ` [Signed as delegate for ${dn} (user #${delegatorUserId})]`;
+    }
+    // The file hash from the current version, for non-repudiation.
+    const ver = sqlite
+      .prepare("SELECT file_hash_sha256 FROM policy_versions WHERE id = ?")
+      .get(doc.current_version_id) as { file_hash_sha256: string } | undefined;
+    const hash = ver?.file_hash_sha256 || "missing";
+    sqlite
+      .prepare(
+        `INSERT INTO policy_signoffs
+           (document_id, version_id, workflow_step_id, user_id, action,
+            comment, typed_signature, signed_document_hash, ip_address, user_agent)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        id,
+        doc.current_version_id,
+        pending.step.id,
+        userId,
+        action,
+        (comment ? comment + delegationNote : delegationNote || null),
+        typedSignature.trim(),
+        hash,
+        o.ip || null,
+        o.userAgent || null
+      );
+    const delegationDetails = delegatorUserId != null ? { via_delegation: true, delegator_user_id: delegatorUserId } : {};
+    if (action === "rejected") {
+      sqlite.prepare("UPDATE policy_documents SET status = 'draft', updated_at = datetime('now') WHERE id = ?").run(id);
+      writeAuditLog(sqlite, {
+        labId,
+        documentId: id,
+        userId,
+        action: "rejected",
+        details: { workflow_step_id: pending.step.id, comment: comment || null, ...delegationDetails },
+        ipAddress: o.ip ?? undefined,
+        userAgent: o.userAgent,
+      });
+      return { status: 200, body: { ok: true, status: "draft" } };
+    }
+    writeAuditLog(sqlite, {
+      labId,
+      documentId: id,
+      userId,
+      action: "approved",
+      details: {
+        workflow_step_id: pending.step.id,
+        step_order: pending.step.step_order,
+        step_name: pending.step.step_name,
+        ...delegationDetails,
+      },
+      ipAddress: o.ip ?? undefined,
+      userAgent: o.userAgent,
+    });
+    // If this was the final step, flip the document to approved and compute next_review_date.
+    const after = getCurrentPendingStep(sqlite, id);
+    if (!after.step && after.completedSteps >= after.totalSteps) {
       sqlite
         .prepare(
           `UPDATE policy_documents
-             SET status = 'draft', updated_at = datetime('now')
+             SET status = 'approved',
+                 effective_date = COALESCE(effective_date, date(?)),
+                 next_review_date = CASE WHEN review_interval_months IS NULL OR review_interval_months <= 0 OR ${NO_REVIEW_TYPE_SQL}
+                                         THEN NULL
+                                         ELSE date(?, '+' || review_interval_months || ' months') END,
+                 updated_at = datetime('now')
            WHERE id = ?`
         )
-        .run(id);
-      writeAuditLog(sqlite, {
-        labId: req.scope.labId,
-        documentId: id,
-        userId: req.userId,
-        action: "rejected",
-        details: {
-          workflow_step_id: pending.step.id,
-          comment: comment || null,
-          ...(delegatorUserId != null ? { via_delegation: true, delegator_user_id: delegatorUserId } : {}),
-        },
-        ipAddress: req.ip,
+        .run(labToday(), labToday(), id);
+      return { status: 200, body: { ok: true, status: "approved" } };
+    }
+    return { status: 200, body: { ok: true, status: "in_review", nextStep: after.step ? after.step.step_name : null } };
+  }
+
+  // POST /documents/:id/approve — current user approves the pending step. Body: { typedSignature, password, comment? }
+  // POST /documents/:id/reject — current user rejects, returning the document to draft. Same body.
+  for (const [verb, action] of [["approve", "approved"], ["reject", "rejected"]] as const) {
+    app.post(
+      `/api/labs/:labId/veritapolicy/documents/:id/${verb}`,
+      authMiddleware,
+      labScopeMiddleware,
+      requireWriteAccess,
+      requireModuleEdit("veritapolicy"),
+      async (req: any, res) => {
+        const id = Number(req.params.id);
+        if (!Number.isFinite(id)) return res.status(400).json({ error: "Bad id" });
+        const { typedSignature, password, comment } = req.body || {};
+        const out = await decideApprovalStep({
+          action, documentId: id, labId: req.scope.labId, userId: req.userId, typedSignature, password, comment,
+          ip: req.ip, userAgent: req.headers["user-agent"] as string | undefined,
+        });
+        res.status(out.status).json(out.body);
+      }
+    );
+  }
+
+  // ── Staff login approvals (Michael 2026-11-04, Q155 = 1) ──
+  // A staff login named on a route step, or in a group a step goes to, approves or rejects here with password and typed name. It
+  // uses no editing seat: staff logins never count against the seats. It can read the document it is asked to sign, and nothing
+  // here lets it upload or edit (those routes require VeritaDC edit access, which a staff login doesn't have).
+  const staffApprovalQueue = (req: any) => approvalQueueFor((db as any).$client, req.staffPortalLabId, req.staffPortalUserId, labLocalDate(new Date().toISOString()));
+  // The document this request names, only when this person can sign its pending step right now.
+  const staffApprovalItem = (req: any, res: any, next: any) => {
+    const documentId = Number(req.params.documentId);
+    req.approvalItem = staffApprovalQueue(req).find((d: any) => d.document_id === documentId);
+    if (!req.approvalItem) return res.status(404).json({ error: "This document isn't waiting for your approval." });
+    next();
+  };
+  // A lab in read-only (expired) can't take new approvals, the same rule the editor screen follows.
+  const staffApprovalWriteAccess = (req: any, res: any, next: any) => {
+    const sqlite = (db as any).$client;
+    setRequestLabTz(labTimeZoneById(sqlite, req.staffPortalLabId));
+    req.userId = req.staffPortalUserId;
+    req.scope = { lab: sqlite.prepare("SELECT * FROM labs WHERE id = ?").get(req.staffPortalLabId), labId: req.staffPortalLabId };
+    return requireWriteAccess(req, res, next);
+  };
+
+  app.get("/api/staff-portal-session/approvals", staffPortalAuthMiddleware, (req: any, res) => {
+    const approvals = staffApprovalQueue(req);
+    res.json({ approvals, can_approve: approvals.length > 0 || isNamedOnRoute((db as any).$client, req.staffPortalLabId, req.staffPortalUserId) });
+  });
+
+  app.get("/api/staff-portal-session/approvals/:documentId", staffPortalAuthMiddleware, staffApprovalItem, (req: any, res) => {
+    const sqlite = (db as any).$client;
+    const item = req.approvalItem;
+    const version = sqlite.prepare(
+      "SELECT id, version_number, version_major, version_minor, file_format, file_hash_sha256 FROM policy_versions WHERE id = ?"
+    ).get(item.version_id) as any;
+    if (!version) return res.status(404).json({ error: "Document version not found" });
+    const doc = sqlite.prepare("SELECT description FROM policy_documents WHERE id = ?").get(item.document_id) as any;
+    res.json({ ...item, description: doc?.description ?? null, version_label: versionLabel(version), file_format: version.file_format, file_hash: version.file_hash_sha256 });
+  });
+
+  app.get("/api/staff-portal-session/approvals/:documentId/render", staffPortalAuthMiddleware, staffApprovalItem, async (req: any, res) => {
+    try {
+      const row = (db as any).$client.prepare(
+        "SELECT id AS version_id, file_path, file_format, file_hash_sha256 AS expected_hash FROM policy_versions WHERE id = ?"
+      ).get(req.approvalItem.version_id) as any;
+      if (!row) return res.status(404).json({ error: "Not found" });
+      return await sendStaffVersion(res, row);
+    } catch (err: any) {
+      console.error("[STAFF-APPROVALS] render failed:", err?.message);
+      return res.status(500).json({ error: "Could not open this document" });
+    }
+  });
+
+  for (const [verb, action] of [["approve", "approved"], ["reject", "rejected"]] as const) {
+    app.post(`/api/staff-portal-session/approvals/:documentId/${verb}`, staffPortalAuthMiddleware, staffApprovalWriteAccess, staffApprovalItem, async (req: any, res) => {
+      const { typed_signature, password, comment, version_id } = req.body || {};
+      // The document may have changed since this person opened it (recalled and revised). They sign what they read.
+      if (version_id != null && Number(version_id) !== req.approvalItem.version_id) {
+        return res.status(409).json({ error: "This document changed since you opened it. Please reload and read it again.", code: "VERSION_CHANGED" });
+      }
+      const out = await decideApprovalStep({
+        action, documentId: req.approvalItem.document_id, labId: req.staffPortalLabId, userId: req.staffPortalUserId,
+        typedSignature: typed_signature, password, comment,
+        ip: (req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "").toString().split(",")[0].trim() || null,
         userAgent: req.headers["user-agent"] as string | undefined,
       });
-      res.json({ ok: true, status: "draft" });
-    }
-  );
+      res.status(out.status).json(out.body);
+    });
+  }
 
   // POST /documents/:id/recall — owner pulls back from in_review to draft.
   // Phase 2.1: closes the case where the owner submitted but no eligible
@@ -43961,43 +43956,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     labScopeMiddleware,
     (req: any, res) => {
       const sqlite = (db as any).$client;
-      const inReviewDocs = sqlite
-        .prepare(
-          `SELECT id, title, owner_user_id, workflow_id, manual_id, current_version_id, updated_at
-             FROM policy_documents
-            WHERE lab_id = ? AND status = 'in_review' AND archived_at IS NULL`
-        )
-        .all(req.scope.labId) as any[];
       // Only list docs the caller can actually action: eligible AND holds
       // VeritaPolicy edit access (the approve/reject POSTs require it).
       const hasEdit = hasModuleEditAccess(req.scope.labId, req.userId, "veritapolicy");
-      const pending: any[] = [];
-      for (const d of inReviewDocs) {
-        if (!hasEdit) break;
-        const p = getCurrentPendingStep(sqlite, d.id);
-        if (!p.step) continue;
-        const isMajorRevision = isVersionMajorRevision(sqlite, d.current_version_id);
-        const check = canUserApproveStepDelegated(sqlite, {
-          userId: req.userId,
-          labId: req.scope.labId,
-          documentOwnerId: d.owner_user_id,
-          stepRow: p.step,
-          isMajorRevision,
-          manualId: d.manual_id ?? null,
-        }, labLocalDate(new Date().toISOString()));
-        if (!check.ok) continue;
-        pending.push({
-          document_id: d.id,
-          title: d.title,
-          manual_id: d.manual_id,
-          is_major_revision: isMajorRevision,
-          updated_at: d.updated_at,
-          step_id: p.step.id,
-          step_name: p.step.step_name,
-          step_order: p.step.step_order,
-          total_steps: p.totalSteps,
-        });
-      }
+      const pending = hasEdit ? approvalQueueFor(sqlite, req.scope.labId, req.userId, labLocalDate(new Date().toISOString())) : [];
       res.json({ pending });
     }
   );
