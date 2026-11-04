@@ -28355,6 +28355,84 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     res.json({ ok: true, count: validIds.length, droppedInvalid: ids.length - validIds.length, dutyChangeEventsCreated: eventEmpIds.length });
   });
 
+  // Several instruments at once (Michael 2026-11-04): the staff picked go on every instrument picked. This only adds:
+  // the instruments may each have a different list, so nobody already assigned comes off. Picking one instrument uses the
+  // PUT above, which can also remove. Any id outside this lab refuses the whole request, so nothing is half applied.
+  const parseIdList = (raw: unknown): number[] => {
+    const list = Array.isArray(raw) ? raw : typeof raw === "string" ? raw.split(",") : [];
+    return Array.from(new Set(list.map((v: any) => parseInt(String(v), 10)).filter((n: number) => Number.isFinite(n) && n > 0)));
+  };
+  const allInstrumentsInLab = (client: any, labId: number, ids: number[]): boolean => {
+    const ph = ids.map(() => "?").join(",");
+    const n = client.prepare(
+      `SELECT COUNT(*) AS n FROM veritamap_instruments i JOIN veritamap_maps m ON i.map_id = m.id WHERE i.id IN (${ph}) AND m.lab_id = ?`
+    ).get(...ids, labId) as { n: number };
+    return n.n === ids.length;
+  };
+
+  // GET /api/labs/:labId/staff/instruments-bulk/employees?ids=1,2,3
+  // The lab's active testing staff, each with how many of these instruments they are already on.
+  app.get("/api/labs/:labId/staff/instruments-bulk/employees", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
+    const labId = req.scope.labId;
+    const client = (db as any).$client;
+    const ids = parseIdList(req.query.ids);
+    if (ids.length === 0) return res.status(400).json({ error: "Pick at least one instrument." });
+    if (!allInstrumentsInLab(client, labId, ids)) return res.status(404).json({ error: "Instrument not found in this lab" });
+    const ph = ids.map(() => "?").join(",");
+    const employees = client.prepare(
+      `SELECT e.id, e.first_name, e.last_name, e.middle_initial, e.title,
+              (SELECT COUNT(*) FROM staff_employee_instruments sei WHERE sei.employee_id = e.id AND sei.instrument_id IN (${ph})) AS on_count
+       FROM staff_employees e
+       WHERE e.tier2_lab_id = ? AND e.status = 'active' AND e.performs_testing = 1
+       ORDER BY e.last_name, e.first_name`
+    ).all(...ids, labId);
+    res.json({ employees, instrument_count: ids.length });
+  });
+
+  // POST /api/labs/:labId/staff/instruments-bulk/assign  { instrumentIds: number[], employeeIds: number[] }
+  // Same duty-change rule as the other two paths: a new pairing outside that person's setup session flags a reassessment.
+  app.post("/api/labs/:labId/staff/instruments-bulk/assign", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritastaff'), (req: any, res) => {
+    if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
+    const labId = req.scope.labId;
+    const client = (db as any).$client;
+    const instrumentIds = parseIdList(req.body?.instrumentIds);
+    const employeeIds = parseIdList(req.body?.employeeIds);
+    if (instrumentIds.length === 0) return res.status(400).json({ error: "Pick at least one instrument." });
+    if (employeeIds.length === 0) return res.status(400).json({ error: "Pick at least one person." });
+    if (!allInstrumentsInLab(client, labId, instrumentIds)) return res.status(404).json({ error: "Instrument not found in this lab" });
+    const ph = employeeIds.map(() => "?").join(",");
+    const validStaff = client.prepare(
+      `SELECT COUNT(*) AS n FROM staff_employees WHERE id IN (${ph}) AND tier2_lab_id = ? AND status = 'active'`
+    ).get(...employeeIds, labId) as { n: number };
+    if (validStaff.n !== employeeIds.length) return res.status(400).json({ error: "Someone picked is not on this lab's active staff." });
+    const now = new Date().toISOString();
+    const baselines = new Map(employeeIds.map((eid) => [eid, dutyBaselineAt(client, eid)]));
+    let added = 0;
+    let eventsCreated = 0;
+    const txn = client.transaction(() => {
+      const ins = client.prepare(
+        "INSERT OR IGNORE INTO staff_employee_instruments (employee_id, instrument_id, created_at, created_by_user_id) VALUES (?, ?, ?, ?)"
+      );
+      const setBase = client.prepare("UPDATE staff_employees SET duties_baseline_at = ? WHERE id = ? AND duties_baseline_at IS NULL");
+      const evt = client.prepare("INSERT INTO staff_duty_change_events (lab_id, employee_id, instrument_id, detected_at) VALUES (?, ?, ?, ?)");
+      for (const eid of employeeIds) {
+        for (const instId of instrumentIds) {
+          // Only a pairing that wasn't there already counts, so one already in place keeps its created_at and flags nothing.
+          if (ins.run(eid, instId, now, req.userId ?? null).changes === 0) continue;
+          added += 1;
+          setBase.run(baselines.get(eid) ?? now, eid);
+          if (!inDutySetupWindow(baselines.get(eid) ?? null, now)) {
+            evt.run(labId, eid, instId, now);
+            eventsCreated += 1;
+          }
+        }
+      }
+    });
+    txn();
+    res.json({ ok: true, instruments: instrumentIds.length, staff: employeeIds.length, added, alreadyAssigned: instrumentIds.length * employeeIds.length - added, dutyChangeEventsCreated: eventsCreated });
+  });
+
   // POST /api/admin/staff/repair-owner  { secret, dryRun = true, labIds?: number[] }
   // BUG-032 (2026-10-11): req.scope.lab.owner_user_id was never set, so lab-scoped saves filed rows under whoever
   // made them (a member or Veritas support) instead of the lab owner. staff_employees.user_id, staff_labs.user_id and
@@ -31192,7 +31270,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
     const labId = req.scope.labId;
     const rows = (db as any).$client.prepare(
-      `SELECT i.id, i.instrument_name, i.serial_number, i.nickname, i.category, i.map_id, m.name AS map_name
+      `SELECT i.id, i.instrument_name, i.serial_number, i.nickname, i.category, i.map_id, m.name AS map_name,
+              (SELECT COUNT(*) FROM staff_employee_instruments sei JOIN staff_employees se ON se.id = sei.employee_id
+                WHERE sei.instrument_id = i.id AND se.tier2_lab_id = m.lab_id AND se.status = 'active' AND se.performs_testing = 1) AS assigned_count
        FROM veritamap_instruments i
        JOIN veritamap_maps m ON i.map_id = m.id
        WHERE m.lab_id = ?

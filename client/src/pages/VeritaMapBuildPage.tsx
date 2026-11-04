@@ -5,6 +5,7 @@ import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
+import { AssignStaffButton } from "@/components/InstrumentStaffAssignDialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -699,7 +700,8 @@ function InstrumentTestSection({
           <span className="text-xs text-muted-foreground">
             <span className="font-medium text-foreground">{activeCount}</span>/{tests.length} active
           </span>
-          <span onClick={(e) => e.stopPropagation()}>
+          <span onClick={(e) => e.stopPropagation()} className="flex items-center gap-1">
+            <AssignStaffButton instrument={{ id: instrument.id, name: instTag ? `${instrument.instrument_name} (${instTag})` : instrument.instrument_name }} testId={`map-assign-staff-${instrument.id}`} className="h-7 text-xs px-2" />
             <EditInstrumentDialog instrument={instrument} mapId={mapId} onSaved={() => {}} />
           </span>
         </div>
@@ -2155,6 +2157,7 @@ export default function VeritaMapBuildPage() {
                     </span>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
+                    <AssignStaffButton instrument={{ id: instr.id, name: instrumentTag(instr.nickname, instr.serial_number) ? `${instr.instrument_name} (${instrumentTag(instr.nickname, instr.serial_number)})` : instr.instrument_name }} testId={`map-assign-staff-${instr.id}`} className="h-8 text-xs px-2" />
                     <EditInstrumentDialog instrument={instr} mapId={mapId!} onSaved={() => {}} />
                     <ConfirmDialog
                       title="Remove Instrument?"

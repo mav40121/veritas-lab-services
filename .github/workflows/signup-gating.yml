@@ -109,6 +109,10 @@ jobs:
         # Michael 2026-11-04 (Redington): a typed Staff invite links to the existing roster row; everyone on the roster shows on Lab
         # Members; a second card an invite already made folds into the real one unless it holds real work.
         run: npm run test:staff-roster-one-list
+      - name: Run instrument staff bulk assign integration test
+        # Michael 2026-11-04: tick several instruments and the staff picked go on every one. Only adds; another lab's instrument or person
+        # refuses the whole request; a new pairing past the setup session flags a reassessment.
+        run: npm run test:instrument-staff-bulk
       - name: Run VeritaMaintain monthly review integration test
         # Michael 2026-11-04 (Q161 = 1): the medical director or a named designee signs each record for a month; a problem needs a
         # corrective action; what was signed is kept, and a later entry shows as added after the review.

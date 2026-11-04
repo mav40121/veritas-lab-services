@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { useLabRoute } from "@/hooks/useLabRoute";
 
 export type LabInstrument = {
   id: number;
@@ -43,6 +44,7 @@ export function EmployeeInstrumentsPickerDialog({
   initiallySelected: number[];
   onSubmit: (instrumentIds: number[]) => Promise<void>;
 }) {
+  const labRoute = useLabRoute();
   const [selected, setSelected] = useState<Set<number>>(new Set(initiallySelected));
   const [filter, setFilter] = useState("");
   const [saving, setSaving] = useState(false);
@@ -123,6 +125,9 @@ export function EmployeeInstrumentsPickerDialog({
         <div className="space-y-3 pt-2">
           <p className="text-xs text-muted-foreground">
             Pick the instruments this employee actually runs. The supervisor sees this context when authoring a competency assessment.
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Assigning several people at once? <a href={labRoute("/veritastaff-app?tab=instruments")} className="text-primary underline" data-testid="instruments-picker-by-instrument">Start from the instruments</a>.
           </p>
           <Input placeholder="Filter by name, nickname, S/N, category, map..." value={filter} onChange={e => setFilter(e.target.value)} />
           {visibleIds.length > 0 && (

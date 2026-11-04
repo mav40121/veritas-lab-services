@@ -35,7 +35,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { DocumentLinkDialog, STAFF_DOC_TYPES, expirationStatus } from "@/components/DocumentLinkDialog";
 import { EmployeeInstrumentsPickerDialog, type LabInstrument, instrumentLabel } from "@/components/EmployeeInstrumentsPickerDialog";
-import { InstrumentStaffAssignDialog } from "@/components/InstrumentStaffAssignDialog";
+import { InstrumentStaffPanel } from "@/components/InstrumentStaffAssignDialog";
 import { MarkExistingStaffDialog, unmarkedTestingStaff } from "@/components/MarkExistingStaffDialog";
 import { RosterMembersPrompt, rosterPromptKey, type RosterMember } from "@/components/RosterMembersPrompt";
 import { getStaffTitleLabel, getCredentialPickerGroups, buildCredentialFields, parseCredentialFields } from "@shared/staffTitles";
@@ -192,12 +192,14 @@ const isWebLink = (v: string) => /^https?:\/\/\S+$/i.test(v.trim());
 // Top-level switcher between the staff roster and the embedded VeritaCEU
 // (Continuing Education) dashboard. CE lives as a tab in VeritaStaff, not a
 // separate module.
-function StaffTabs({ active, onChange }: { active: "roster" | "ce" | "delegations"; onChange: (t: "roster" | "ce" | "delegations") => void }) {
+type StaffTab = "roster" | "instruments" | "ce" | "delegations";
+function StaffTabs({ active, onChange }: { active: StaffTab; onChange: (t: StaffTab) => void }) {
   const cls = (on: boolean) =>
     `px-3 py-2 text-sm font-medium -mb-px border-b-2 transition-colors ${on ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`;
   return (
-    <div className="flex gap-1 mb-5 border-b border-border">
+    <div className="flex flex-wrap gap-1 mb-5 border-b border-border">
       <button onClick={() => onChange("roster")} className={cls(active === "roster")}>Staff</button>
+      <button onClick={() => onChange("instruments")} className={cls(active === "instruments")} data-testid="staff-tab-instruments">Instruments</button>
       <button onClick={() => onChange("ce")} className={cls(active === "ce")}>Continuing Education</button>
       <button onClick={() => onChange("delegations")} className={cls(active === "delegations")}>Delegations</button>
     </div>
@@ -223,14 +225,13 @@ export default function VeritaStaffAppPage() {
   const [generating209, setGenerating209] = useState(false);
   const [generatingPacket, setGeneratingPacket] = useState(false);
   const [showBulkImport, setShowBulkImport] = useState(false);
-  const [showInstrumentAssign, setShowInstrumentAssign] = useState(false);
   const [showMarkExisting, setShowMarkExisting] = useState(false);
   // VeritaCEU rides in VeritaStaff as a tab (not a separate module).
   // ?tab=delegations deep-links to the Delegations tab (the "send this to the
   // medical director to sign" link on a draft letter).
-  const [staffTab, setStaffTab] = useState<"roster" | "ce" | "delegations">(() => {
+  const [staffTab, setStaffTab] = useState<StaffTab>(() => {
     const t = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("tab") : null;
-    return t === "delegations" || t === "ce" ? t : "roster";
+    return t === "delegations" || t === "ce" || t === "instruments" ? t : "roster";
   });
 
   // Auth + plan check
@@ -394,6 +395,20 @@ export default function VeritaStaffAppPage() {
     );
   }
 
+  // Instruments tab: who runs what, assigned from the instrument side, one instrument or several at once.
+  if (staffTab === "instruments") {
+    return (
+      <div className="container-default py-8">
+        <h1 className="font-serif text-3xl font-bold flex items-center gap-2 mb-4">
+          <Building2 size={28} className="text-primary" />
+          VeritaStaff{"™"}
+        </h1>
+        <StaffTabs active="instruments" onChange={setStaffTab} />
+        <InstrumentStaffPanel labId={activeLabId} readOnly={readOnly} />
+      </div>
+    );
+  }
+
   // VeritaCEU tab: the embedded Continuing Education dashboard (same lab scope).
   if (staffTab === "ce") {
     return (
@@ -435,7 +450,7 @@ export default function VeritaStaffAppPage() {
               <Button variant="outline" size="sm" onClick={() => setShowBulkImport(true)} disabled={readOnly}>
                 <Upload size={14} className="mr-1.5" /> Bulk Import
               </Button>
-              <Button variant="outline" size="sm" onClick={() => setShowInstrumentAssign(true)} disabled={readOnly} title="Assign staff from the instrument side: pick a test system or manual test, check off who runs it" data-testid="button-assign-by-instrument">
+              <Button variant="outline" size="sm" onClick={() => setStaffTab("instruments")} title="Assign staff from the instrument side: tick test systems or manual tests, then pick who runs them" data-testid="button-assign-by-instrument">
                 <FlaskConical size={14} className="mr-1.5" /> Assign by Instrument
               </Button>
               <Button size="sm" className="bg-primary hover:bg-primary/90" onClick={handleGenerate209} disabled={generating209 || readOnly}>
@@ -652,8 +667,6 @@ export default function VeritaStaffAppPage() {
         />
       )}
       <MarkExistingStaffDialog open={showMarkExisting} onOpenChange={setShowMarkExisting} labId={activeLabId} employees={employees as any} />
-      {/* #48 dual view: assign staff from the instrument side */}
-      <InstrumentStaffAssignDialog open={showInstrumentAssign} onOpenChange={setShowInstrumentAssign} labId={activeLabId} />
     </div>
   );
 
