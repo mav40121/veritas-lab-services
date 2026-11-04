@@ -1,5 +1,8 @@
 // CompetencyBulkImportDialog
 //
+// Michael 2026-11-04 (Q164 = 1): the main tab now loads past dates per person and method, with a template that comes filled in
+// (server/competencyMethodHistory.ts). The older program template below stays for non-technical programs.
+//
 // Wave I PR I4 (2026-06-06). Bulk import historical competency
 // assessments from an xlsx. File picker -> server-side preview ->
 // commit. Mirrors PR #571's staff bulk-import UX so the lab director
@@ -17,13 +20,14 @@
 
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useLabRoute } from "@/hooks/useLabRoute";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Download, Upload, FileSpreadsheet, CheckCircle2, AlertTriangle, XCircle } from "lucide-react";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 type RowIssue = { field?: string; severity: "error" | "warning"; message: string };
 type ValidatedRow = {
@@ -56,6 +60,192 @@ interface Props {
 }
 
 export function CompetencyBulkImportDialog({ open, onOpenChange, labId }: Props) {
+  const [mode, setMode] = useState<"methods" | "programs">("methods");
+  const tab = (on: boolean) => `px-3 py-2 text-sm font-medium -mb-px border-b-2 transition-colors ${on ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`;
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto overflow-x-hidden [&>*]:min-w-0">
+        <DialogHeader>
+          <DialogTitle>Bulk Import Past Competencies</DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-wrap gap-1 border-b border-border">
+          <button type="button" className={tab(mode === "methods")} onClick={() => setMode("methods")} data-testid="bulk-import-tab-methods">Tests and instruments</button>
+          <button type="button" className={tab(mode === "programs")} onClick={() => setMode("programs")} data-testid="bulk-import-tab-programs">Non-technical programs</button>
+        </div>
+        {mode === "methods"
+          ? <MethodHistoryImport labId={labId} onDone={() => onOpenChange(false)} />
+          : <ProgramRecordsImport labId={labId} onDone={() => onOpenChange(false)} />}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Past competency dates per person and method (Michael 2026-11-04, Q164 = 1). The template comes filled in with each person and their
+// methods; the lab types the last date and the evaluator, and that sets the due dates. No programs needed.
+type MethodRow = {
+  rowNumber: number; status: "ok" | "warning" | "error" | "skip"; issues: string[]; person: string; method: string; type: string; date: string | null; evaluator: string;
+  sets?: { label: string; targetDate: string | null; overdue: boolean } | null;
+};
+type MethodPreview = { rows?: MethodRow[]; summary?: { total: number; ok: number; warning: number; error: number; skip: number; blank: number }; schedules?: ScheduleSummary; fatal?: string; error?: string };
+const mdy = (d: string | null | undefined) => (d ? `${d.slice(5, 7)}/${d.slice(8, 10)}/${d.slice(0, 4)}` : "");
+
+function MethodHistoryImport({ labId, onDone }: { labId: number; onDone: () => void }) {
+  const { toast } = useToast();
+  const labRoute = useLabRoute();
+  const queryClient = useQueryClient();
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState<MethodPreview | null>(null);
+  const [busy, setBusy] = useState<"preview" | "commit" | null>(null);
+  const base = `${API_BASE}/api/labs/${labId}/competency/method-history`;
+  const { data: summary } = useQuery<{ people: number; methods: number; peopleListed: number; peopleWithoutMethods: string[] }>({
+    queryKey: [base, "summary"],
+    staleTime: 0,
+    queryFn: async () => { const r = await fetch(`${base}/summary`, { headers: authHeaders() }); if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); },
+  });
+
+  async function downloadTemplate() {
+    try {
+      const r = await fetch(`${base}/template.xlsx`, { headers: authHeaders() });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
+      const url = URL.createObjectURL(await r.blob());
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "VeritaComp_Past_Competency_Dates.xlsx";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      toast({ title: "Template download failed", description: err.message, variant: "destructive" });
+    }
+  }
+
+  async function send(path: "preview" | "commit") {
+    if (!file) return null;
+    const form = new FormData();
+    form.append("file", file);
+    const r = await fetch(`${base}/${path}`, { method: "POST", headers: authHeaders(), body: form });
+    return { ok: r.ok, status: r.status, json: await r.json().catch(() => ({})) };
+  }
+
+  async function doPreview() {
+    setBusy("preview");
+    setPreview(null);
+    try {
+      const out = await send("preview");
+      if (out) setPreview(out.json);
+    } catch (err: any) {
+      toast({ title: "Preview failed", description: err.message, variant: "destructive" });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function doCommit() {
+    setBusy("commit");
+    try {
+      const out = await send("commit");
+      if (!out?.ok) {
+        toast({ title: "Nothing was saved", description: out?.json?.message || out?.json?.fatal || out?.json?.error || `HTTP ${out?.status}`, variant: "destructive" });
+        return;
+      }
+      toast({ title: "Dates loaded", description: `${plural(out.json.imported, "date", "dates")} loaded${out.json.skipped ? `, ${out.json.skipped} already on file or signed` : ""}.` });
+      await queryClient.invalidateQueries({ predicate: (q) => typeof q.queryKey[0] === "string" && (q.queryKey[0] as string).includes("/competency/") });
+      onDone();
+    } catch (err: any) {
+      toast({ title: "Nothing was saved", description: err.message, variant: "destructive" });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const rows = preview?.rows || [];
+  const toLoad = (preview?.summary?.ok ?? 0) + (preview?.summary?.warning ?? 0);
+  return (
+    <div className="space-y-4" data-testid="method-history-import">
+      <div className="border border-border rounded-md p-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="text-sm">
+            <strong>Step 1.</strong> Download your template. It already lists {summary ? <span data-testid="method-history-counts">{plural(summary.peopleListed, "person", "people")} and {plural(summary.methods, "method", "methods")}</span> : "each person and their methods"}.
+          </div>
+          <Button variant="outline" size="sm" onClick={downloadTemplate} data-testid="method-history-template"><Download size={14} className="mr-1.5" /> Template</Button>
+        </div>
+        {!!summary?.peopleWithoutMethods?.length && (
+          <div className="text-xs text-amber-700 dark:text-amber-400 mt-2" data-testid="method-history-no-methods">
+            {plural(summary.peopleWithoutMethods.length, "testing person has", "testing people have")} no instruments assigned, so they aren't on the template. <a href={labRoute("/veritastaff-app?tab=instruments")} className="underline">Assign them on the Instruments tab</a>, then download it.
+          </div>
+        )}
+      </div>
+      <div className="border border-border rounded-md p-3">
+        <div className="text-sm mb-2"><strong>Step 2.</strong> Type the date of each person's last competency and who evaluated it. Check Type: it says Annual, except for people hired in the last year, who need Initial, 6-month or Annual picked. Leave a row blank if you have no record. Then upload it. Nothing is saved until you confirm.</div>
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="flex-1 min-w-[12rem] flex items-center gap-2 border border-dashed border-border rounded-md px-3 py-2 cursor-pointer hover:border-primary/50">
+            <FileSpreadsheet size={16} className="text-muted-foreground" />
+            <input type="file" accept=".xlsx" className="hidden" onChange={(e) => { setFile(e.target.files?.[0] ?? null); setPreview(null); }} data-testid="method-history-file" />
+            <span className="text-sm truncate">{file ? file.name : "Click to pick your filled-in template"}</span>
+          </label>
+          <Button onClick={doPreview} disabled={!file || busy !== null} data-testid="method-history-preview"><Upload size={14} className="mr-1.5" />{busy === "preview" ? "Checking..." : "Preview"}</Button>
+        </div>
+      </div>
+      {(preview?.fatal || preview?.error) && <div className="border border-red-500/30 bg-red-500/10 rounded-md p-3 text-sm text-red-700 dark:text-red-400" data-testid="method-history-fatal">{preview.fatal || preview.error}</div>}
+      {preview?.summary && (
+        <div className="border border-border rounded-md p-3" data-testid="method-history-review">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+            <div className="text-sm"><strong>Step 3.</strong> Check what each date will set.{preview.summary.blank > 0 ? ` ${plural(preview.summary.blank, "row was", "rows were")} left blank.` : ""}</div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge className="text-[10px] border bg-emerald-500/10 text-emerald-700 border-emerald-500/30">{preview.summary.ok} OK</Badge>
+              {preview.summary.warning > 0 && <Badge className="text-[10px] border bg-amber-500/10 text-amber-700 border-amber-500/30">{preview.summary.warning} to check</Badge>}
+              {preview.summary.skip > 0 && <Badge className="text-[10px] border bg-muted text-muted-foreground border-border">{preview.summary.skip} not loaded</Badge>}
+              {preview.summary.error > 0 && <Badge className="text-[10px] border bg-red-500/10 text-red-700 border-red-500/30">{preview.summary.error} to fix</Badge>}
+            </div>
+          </div>
+          {rows.length === 0 && <div className="text-sm text-muted-foreground py-4 text-center">No dates in this file yet.</div>}
+          {rows.length > 0 && (
+            <div className="overflow-x-auto max-h-[40vh]">
+              <table className="w-full text-xs">
+                <thead className="sticky top-0 bg-background">
+                  <tr className="border-b border-border text-muted-foreground text-left">
+                    <th className="py-1 pr-2 font-medium">Status</th><th className="py-1 pr-2 font-medium">Person</th><th className="py-1 pr-2 font-medium">Method</th><th className="py-1 pr-2 font-medium">Type</th><th className="py-1 pr-2 font-medium">Date</th><th className="py-1 pr-2 font-medium">Evaluator</th><th className="py-1 pr-2 font-medium">This sets</th><th className="py-1 pr-2 font-medium">Notes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row) => {
+                    const Icon = row.status === "ok" ? CheckCircle2 : row.status === "error" ? XCircle : AlertTriangle;
+                    const color = row.status === "ok" ? "text-emerald-600" : row.status === "error" ? "text-red-600" : row.status === "warning" ? "text-amber-600" : "text-muted-foreground";
+                    return (
+                      <tr key={row.rowNumber} className="border-b border-border/40" data-testid={`method-history-row-${row.rowNumber}`}>
+                        <td className="py-1 pr-2"><Icon size={12} className={color} /></td>
+                        <td className="py-1 pr-2">{row.person || `Row ${row.rowNumber}`}</td>
+                        <td className="py-1 pr-2">{row.method}</td>
+                        <td className="py-1 pr-2">{row.type}</td>
+                        <td className="py-1 pr-2 whitespace-nowrap">{mdy(row.date)}</td>
+                        <td className="py-1 pr-2">{row.evaluator}</td>
+                        <td className={`py-1 pr-2 whitespace-nowrap ${row.sets?.overdue ? "text-red-600 font-medium" : ""}`}>{row.sets?.targetDate ? `${row.sets.label} ${row.sets.overdue ? "overdue, was due" : "due"} ${mdy(row.sets.targetDate)}` : ""}</td>
+                        <td className="py-1 pr-2 text-[11px] text-muted-foreground">{row.issues.join(" ")}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {preview.schedules && preview.schedules.cleared > 0 && (
+            <div className="mt-3 rounded-md border border-border bg-muted/30 px-3 py-2 text-xs" data-testid="method-history-clearance">
+              {plural(preview.schedules.cleared, "person", "people")} will also count as cleared for patient testing in VeritaStaff{"™"}.
+            </div>
+          )}
+          <div className="flex justify-end gap-2 mt-3">
+            <Button variant="outline" onClick={() => { setFile(null); setPreview(null); }}>Discard</Button>
+            <Button onClick={doCommit} disabled={busy !== null || preview.summary.error > 0 || toLoad === 0} data-testid="method-history-commit">{busy === "commit" ? "Saving..." : `Load ${plural(toLoad, "date", "dates")}`}</Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// The older program template, kept for non-technical programs: orientation and checklists whose records sit in a named program.
+function ProgramRecordsImport({ labId, onDone }: { labId: number; onDone: () => void }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [file, setFile] = useState<File | null>(null);
@@ -137,7 +327,7 @@ export function CompetencyBulkImportDialog({ open, onOpenChange, labId }: Props)
         });
         await queryClient.invalidateQueries({ predicate: (q) => typeof q.queryKey[0] === "string" && (q.queryKey[0] as string).includes("/competency/") });
         reset();
-        onOpenChange(false);
+        onDone();
       }
     } catch (err: any) {
       toast({ title: "Import failed", description: err.message, variant: "destructive" });
@@ -147,12 +337,8 @@ export function CompetencyBulkImportDialog({ open, onOpenChange, labId }: Props)
   }
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) reset(); onOpenChange(v); }}>
-      <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Bulk Import Historical Assessments</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4">
+        <div className="space-y-4" data-testid="program-records-import">
+          <p className="text-sm text-muted-foreground">For past records in a non-technical program, such as orientation or a checklist. The program has to exist in VeritaComp first. For tests and instruments, use the first tab: it needs no programs.</p>
           {/* Step 1: download the template */}
           <div className="border border-border rounded-md p-3">
             <div className="flex items-center justify-between gap-2">
@@ -285,7 +471,5 @@ export function CompetencyBulkImportDialog({ open, onOpenChange, labId }: Props)
             </div>
           )}
         </div>
-      </DialogContent>
-    </Dialog>
   );
 }

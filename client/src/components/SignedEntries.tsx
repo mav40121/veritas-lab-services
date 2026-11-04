@@ -34,7 +34,9 @@ export default function SignedEntries({ signoff, waived }: { signoff: MethodSign
   if (!signoff.hasEntries) {
     return (
       <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground" data-testid={testId}>
-        {signoff.imported
+        {signoff.historyId
+          ? "This date was loaded from the laboratory's past records. The entries behind it are in those records, not on this page."
+          : signoff.imported
           ? `This sign-off was imported from ${signoff.importedFrom || "an earlier program"}; its element entries are kept in that record, not on this page.`
           : "No element entries are stored with this sign-off."}
         {signoff.documentation ? ` Documentation: ${signoff.documentation}` : ""}

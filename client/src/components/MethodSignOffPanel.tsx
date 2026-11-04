@@ -18,6 +18,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Loader2, CheckCircle2, AlertTriangle, ChevronDown, ChevronUp } from "lucide-react";
 import { MILESTONE_LABEL, MONTH_NAMES, initialsOf, milestonesForComplexity, type MethodMilestone, type SignerOption } from "@shared/competencySignoff";
 import SignedEntries from "@/components/SignedEntries";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 // BUG-051 (2026-10-14): the Overall Determination from the whole-record form, now on each method's sign-off.
 export type Determination = "pass" | "fail" | "remediation";
@@ -29,6 +30,8 @@ export interface MethodSignoff {
   determination?: Determination; remediationPlan?: string | null; remediationTargetDate?: string | null;
   // BUG-120: a record from a named technical program (Bulk Import history or an older program record).
   imported?: boolean; importedFrom?: string | null;
+  // A past date loaded through Bulk Import (competency_method_history), which an editor can take back.
+  historyId?: number | null;
   // Michael 2026-11-02: the entries the method was signed on, shown read-only (SignedEntries). hasEntries is false for
   // imported history, whose entries live in the program record.
   elements?: Array<{ num: number; status: string; na?: boolean; naJustification?: string; observerName?: string | null; [k: string]: any }>;
@@ -143,6 +146,17 @@ export default function MethodSignOffPanel({ labId, employeeId, employeeName, ts
     onError: (e: any) => toast({ title: "Could not unlock", description: String(e?.message || e), variant: "destructive" }),
   });
 
+  const removeHistory = useMutation({
+    mutationFn: async (id: number) => {
+      const r = await fetch(`${API_BASE}/api/labs/${labId}/competency/method-history/${id}`, { method: "DELETE", headers: authHeaders() });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || `HTTP ${r.status}`);
+      return d;
+    },
+    onSuccess: () => { toast({ title: "Date removed", description: `${ts.instrumentName}: the loaded date was taken back.` }); onChanged(); },
+    onError: (e: any) => toast({ title: "Could not remove it", description: String(e?.message || e), variant: "destructive" }),
+  });
+
   const last = ts.lastSignoff;
   // Which sign-off's entries are open (read-only, SignedEntries): keyed by id, or by position for one with no id
   // (signed on the whole record, or imported history).
@@ -183,7 +197,16 @@ export default function MethodSignOffPanel({ labId, employeeId, employeeName, ts
                 </div>
               )}
               {last.legacy && <div className="text-xs text-muted-foreground mt-0.5">Signed on the whole record before per-method sign-off.</div>}
-              {last.imported && <div className="text-xs text-muted-foreground mt-0.5" data-testid="method-imported">Imported history from {last.importedFrom}. The next sign-off is recorded on this page.</div>}
+              {last.imported && (
+                <div className="text-xs text-muted-foreground mt-0.5" data-testid="method-imported">
+                  Imported history from {last.importedFrom}. The next sign-off is recorded on this page.
+                  {last.historyId && !readOnly && (
+                    <ConfirmDialog title="Remove this date?" message={`Take back the ${last.signedDate} date loaded for ${employeeName} on ${ts.instrumentName}? The due date goes back to what it was without it.`} confirmLabel="Remove" onConfirm={() => removeHistory.mutate(last.historyId as number)}>
+                      <button type="button" className="ml-1 underline hover:text-foreground" disabled={removeHistory.isPending} data-testid="method-history-remove">Remove this date</button>
+                    </ConfirmDialog>
+                  )}
+                </div>
+              )}
               {ts.signoffs.length > 1 && (
                 <div className="text-[11px] text-muted-foreground mt-1" data-testid="method-earlier">
                   Earlier:{" "}

@@ -137,12 +137,24 @@ export function programNamedInstrumentIds(sqlite: any, labId: number): Map<numbe
 export interface ImportedRecord {
   assessmentId: number; milestone: string; signedDate: string | null; programName: string;
   evaluatorName: string | null; evaluatorTitle: string | null; evaluatorInitials: string | null;
+  historyId?: number;                  // competency_method_history: a past date loaded through Bulk Import, which can be taken back
 }
 export function loadImportedHistory(sqlite: any, labId: number, staffEmployeeId?: number): Map<string, ImportedRecord[]> {
   const out = new Map<string, ImportedRecord[]>();
+  // Past dates loaded per person and method (Q164 = 1). A group's rows share one negative key, so a group counts once.
+  for (const h of sqlite.prepare(
+    `SELECT id, group_history_id, staff_employee_id, instrument_id, milestone, completed_date, evaluator_name FROM competency_method_history
+     WHERE lab_id = ? AND removed_at IS NULL ${staffEmployeeId != null ? "AND staff_employee_id = ?" : ""}`
+  ).all(...(staffEmployeeId != null ? [labId, staffEmployeeId] : [labId])) as any[]) {
+    const lead = h.group_history_id ?? h.id;
+    const k = `${h.staff_employee_id}:${h.instrument_id}`;
+    out.set(k, [...(out.get(k) || []), {
+      assessmentId: -lead, historyId: lead, milestone: h.milestone, signedDate: h.completed_date, programName: "the laboratory's past records",
+      evaluatorName: h.evaluator_name || null, evaluatorTitle: null, evaluatorInitials: null,
+    }]);
+  }
   const named = programNamedInstrumentIds(sqlite, labId);
-  if (!named.size) return out;
-  const rows = sqlite.prepare(
+  const rows = !named.size ? [] : sqlite.prepare(
     `SELECT a.id, ce.staff_employee_id, a.program_id, p.name AS program_name, a.assessment_type, a.assessment_date,
             a.completion_date, a.signed_on_paper_date, a.evaluator_name, a.evaluator_title, a.evaluator_initials
      FROM competency_assessments a
