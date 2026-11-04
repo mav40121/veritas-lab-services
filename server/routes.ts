@@ -39312,7 +39312,15 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     isVersionMajorRevision,
     isPolicyExpired,
     POLICY_EXPIRED_RESPONSE,
+    stepWhoLabel,
+    routePeople,
+    stepAssigneeProblem,
+    routeLockProblem,
+    renumberRouteSteps,
+    liveRouteStepIds,
+    stepHasSignatures,
   } = await import("./veritapolicyApproval");
+  const { registerLabGroupRoutes } = await import("./labGroups");
 
   // Multer config: memory buffer + 25 MB cap. We write to /data/policies on
   // disk after validation rather than storing the blob in SQLite (uploads
@@ -40074,6 +40082,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           pending_step_id: pending.step.id,
           pending_step_name: pending.step.step_name,
           pending_step_role: pending.step.required_role,
+          pending_step_who: stepWhoLabel(sqlite, req.scope.labId, pending.step),
           pending_step_order: pending.step.step_order,
           pending_total_steps: pending.totalSteps,
         };
@@ -40647,19 +40656,44 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       // Attach steps to each workflow.
       const withSteps = workflows.map((wf: any) => ({
         ...wf,
-        steps: sqlite
+        // A route with documents in review can't change (routeLockProblem); the screen shows why.
+        locked_reason: routeLockProblem(sqlite, wf.id),
+        steps: (sqlite
           .prepare(
             `SELECT id, step_order, step_name, required_role,
-                    specific_user_id, allow_self_approval
+                    specific_user_id, approver_group_id, allow_self_approval
                FROM policy_approval_steps
-              WHERE workflow_id = ?
+              WHERE workflow_id = ? AND archived_at IS NULL
               ORDER BY step_order ASC`
           )
-          .all(wf.id),
+          .all(wf.id) as any[]).map((s) => ({ ...s, who: stepWhoLabel(sqlite, labId, s) })),
       }));
-      res.json({ workflows: withSteps });
+      res.json({ workflows: withSteps, can_edit: canManageLabMembers(req.scope) });
     }
   );
+
+  // The people a step can name, for the route screen. Owners and admins only: it lists members' addresses.
+  app.get(
+    "/api/labs/:labId/veritapolicy/route-people",
+    authMiddleware,
+    labScopeMiddleware,
+    (req: any, res) => {
+      if (!canManageLabMembers(req.scope)) return res.status(403).json({ error: "Owner or admin required" });
+      res.json({ people: routePeople((db as any).$client, req.scope.labId) });
+    }
+  );
+
+  // The lab's groups (server/labGroups.ts), the same rows VeritaTrack reminders use. Approval steps can go to any one member.
+  registerLabGroupRoutes(app, {
+    sqlite: (db as any).$client,
+    prefix: "/api/labs/:labId/veritapolicy",
+    readGuards: [authMiddleware, labScopeMiddleware],
+    editGuards: [authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritapolicy")],
+    audit: (req, event, detail) => writeAuditLog((db as any).$client, {
+      labId: req.scope.labId, userId: req.userId, action: event, details: { detail },
+      ipAddress: req.ip, userAgent: req.headers["user-agent"] as string | undefined,
+    }),
+  });
 
   // POST /workflows — create a workflow shell. Steps added via /steps.
   app.post(
@@ -40669,6 +40703,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     requireWriteAccess,
     requireModuleEdit("veritapolicy"),
     (req: any, res) => {
+      if (!canManageLabMembers(req.scope)) return res.status(403).json({ error: "Owner or admin required" });
       const { name, description } = req.body || {};
       if (!name || typeof name !== "string" || name.trim().length === 0) {
         return res.status(400).json({ error: "Name is required" });
@@ -40700,6 +40735,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     requireWriteAccess,
     requireModuleEdit("veritapolicy"),
     (req: any, res) => {
+      if (!canManageLabMembers(req.scope)) return res.status(403).json({ error: "Owner or admin required" });
       const id = Number(req.params.id);
       if (!Number.isFinite(id)) return res.status(400).json({ error: "Bad id" });
       const sqlite = (db as any).$client;
@@ -40752,14 +40788,17 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     requireWriteAccess,
     requireModuleEdit("veritapolicy"),
     (req: any, res) => {
+      if (!canManageLabMembers(req.scope)) return res.status(403).json({ error: "Owner or admin required" });
       const id = Number(req.params.id);
       if (!Number.isFinite(id)) return res.status(400).json({ error: "Bad id" });
       const sqlite = (db as any).$client;
       const row = sqlite
-        .prepare("SELECT lab_id FROM policy_approval_workflows WHERE id = ?")
-        .get(id) as { lab_id: number } | undefined;
+        .prepare("SELECT lab_id, name FROM policy_approval_workflows WHERE id = ?")
+        .get(id) as { lab_id: number; name: string } | undefined;
       if (!row) return res.status(404).json({ error: "Workflow not found" });
       if (row.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
+      const locked = routeLockProblem(sqlite, id);
+      if (locked) return res.status(409).json({ error: locked, code: "ROUTE_LOCKED" });
       sqlite
         .prepare(
           `UPDATE policy_approval_workflows
@@ -40767,52 +40806,62 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
            WHERE id = ?`
         )
         .run(id);
+      writeAuditLog(sqlite, {
+        labId: req.scope.labId,
+        userId: req.userId,
+        action: "workflow_archived",
+        details: { workflow_id: id, name: row.name },
+        ipAddress: req.ip,
+        userAgent: req.headers["user-agent"] as string | undefined,
+      });
       res.json({ ok: true });
     }
   );
 
+  // In front of each route below that changes a route's steps: owner or admin, this lab's route, and not locked by a document
+  // in review. Every change is audited, with who signs a step before and after in words.
+  const routeStepEditor = (req: any, res: any, next: any) => {
+    if (!canManageLabMembers(req.scope)) return res.status(403).json({ error: "Owner or admin required" });
+    const workflowId = Number(req.params.id);
+    if (!Number.isFinite(workflowId)) return res.status(400).json({ error: "Bad id" });
+    const sqlite = (db as any).$client;
+    const wf = sqlite.prepare("SELECT id, lab_id, name FROM policy_approval_workflows WHERE id = ? AND archived_at IS NULL").get(workflowId) as any;
+    if (!wf) return res.status(404).json({ error: "Workflow not found" });
+    if (wf.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
+    const locked = routeLockProblem(sqlite, workflowId);
+    if (locked) return res.status(409).json({ error: locked, code: "ROUTE_LOCKED" });
+    req.route_ = wf;
+    next();
+  };
+  const routeStepGuards = [authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritapolicy"), routeStepEditor];
+  const routeStepAudit = (req: any, action: string, details: Record<string, unknown>) => writeAuditLog((db as any).$client, {
+    labId: req.scope.labId,
+    userId: req.userId,
+    action,
+    details: { workflowId: req.route_.id, workflow: req.route_.name, ...details },
+    ipAddress: req.ip,
+    userAgent: req.headers["user-agent"] as string | undefined,
+  });
+
   // POST /workflows/:id/steps — append a step.
   app.post(
     "/api/labs/:labId/veritapolicy/workflows/:id/steps",
-    authMiddleware,
-    labScopeMiddleware,
-    requireWriteAccess,
-    requireModuleEdit("veritapolicy"),
-    (req: any, res) => {
-      const workflowId = Number(req.params.id);
-      if (!Number.isFinite(workflowId)) return res.status(400).json({ error: "Bad id" });
-      const { stepName, requiredRole, specificUserId, allowSelfApproval } = req.body || {};
-      if (!stepName || typeof stepName !== "string") {
-        return res.status(400).json({ error: "stepName required" });
-      }
-      const validRoles = new Set([
-        "specific_user",
-        "any_active_seat",
-        "any_view_only_seat",
-        "medical_director",
-        "technical_consultant",
-        "technical_supervisor",
-        "general_supervisor",
-      ]);
-      if (!validRoles.has(requiredRole)) {
-        return res.status(400).json({ error: "Invalid requiredRole" });
+    ...routeStepGuards,
+    (req: any, res: any) => {
+      const workflowId = req.route_.id;
+      const { stepName, requiredRole, specificUserId, approverGroupId, allowSelfApproval } = req.body || {};
+      if (!stepName || typeof stepName !== "string" || !stepName.trim()) {
+        return res.status(400).json({ error: "Give the step a name." });
       }
       const sqlite = (db as any).$client;
-      const wf = sqlite
-        .prepare("SELECT lab_id FROM policy_approval_workflows WHERE id = ?")
-        .get(workflowId) as { lab_id: number } | undefined;
-      if (!wf) return res.status(404).json({ error: "Workflow not found" });
-      if (wf.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
-      const nextOrder = (sqlite
-        .prepare(
-          "SELECT COALESCE(MAX(step_order), 0) + 1 AS next FROM policy_approval_steps WHERE workflow_id = ?"
-        )
-        .get(workflowId) as { next: number }).next;
+      const problem = stepAssigneeProblem(sqlite, req.scope.labId, requiredRole, specificUserId, approverGroupId);
+      if (problem) return res.status(400).json({ error: problem });
+      const nextOrder = liveRouteStepIds(sqlite, workflowId).length + 1;
       const result = sqlite
         .prepare(
           `INSERT INTO policy_approval_steps
-             (workflow_id, step_order, step_name, required_role, specific_user_id, allow_self_approval)
-           VALUES (?, ?, ?, ?, ?, ?)`
+             (workflow_id, step_order, step_name, required_role, specific_user_id, approver_group_id, allow_self_approval)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`
         )
         .run(
           workflowId,
@@ -40820,9 +40869,72 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           String(stepName).trim(),
           requiredRole,
           requiredRole === "specific_user" ? Number(specificUserId) : null,
+          requiredRole === "group" ? Number(approverGroupId) : null,
           allowSelfApproval ? 1 : 0
         );
+      const who = stepWhoLabel(sqlite, req.scope.labId, { required_role: requiredRole, specific_user_id: Number(specificUserId), approver_group_id: Number(approverGroupId) });
+      routeStepAudit(req, "workflow_step_added", { stepId: Number(result.lastInsertRowid), step: String(stepName).trim(), who, order: nextOrder });
       res.status(201).json({ id: Number(result.lastInsertRowid), step_order: nextOrder });
+    }
+  );
+
+  // POST /workflows/:id/steps/reorder — { stepIds } in the new order, every live step once.
+  app.post(
+    "/api/labs/:labId/veritapolicy/workflows/:id/steps/reorder",
+    ...routeStepGuards,
+    (req: any, res: any) => {
+      const sqlite = (db as any).$client;
+      const current = liveRouteStepIds(sqlite, req.route_.id);
+      const wanted = Array.isArray(req.body?.stepIds) ? req.body.stepIds.map(Number) : [];
+      const sameSteps = wanted.length === current.length && new Set(wanted).size === wanted.length && wanted.every((id: number) => current.includes(id));
+      if (!sameSteps) return res.status(400).json({ error: "List every step of this route once." });
+      sqlite.transaction(() => renumberRouteSteps(sqlite, wanted))();
+      routeStepAudit(req, "workflow_steps_reordered", { before: current, after: wanted });
+      res.json({ ok: true });
+    }
+  );
+
+  // PUT /workflows/:id/steps/:stepId — change a step's name or who signs it. A step someone already signed is retired and a
+  // new one takes its place, so approval history keeps what they signed.
+  app.put(
+    "/api/labs/:labId/veritapolicy/workflows/:id/steps/:stepId",
+    ...routeStepGuards,
+    (req: any, res: any) => {
+      const workflowId = req.route_.id, stepId = Number(req.params.stepId);
+      const sqlite = (db as any).$client;
+      const step = sqlite.prepare(
+        "SELECT id, step_order, step_name, required_role, specific_user_id, approver_group_id, allow_self_approval FROM policy_approval_steps WHERE id = ? AND workflow_id = ? AND archived_at IS NULL"
+      ).get(stepId, workflowId) as any;
+      if (!step) return res.status(404).json({ error: "Step not found" });
+      const { stepName, requiredRole, specificUserId, approverGroupId } = req.body || {};
+      const name = String(stepName ?? step.step_name).trim();
+      if (!name) return res.status(400).json({ error: "Give the step a name." });
+      const role = requiredRole ?? step.required_role;
+      const person = role === "specific_user" ? Number(specificUserId ?? step.specific_user_id) : null;
+      const group = role === "group" ? Number(approverGroupId ?? step.approver_group_id) : null;
+      const unchanged = role === step.required_role && person === step.specific_user_id && group === step.approver_group_id;
+      if (!unchanged) {
+        const problem = stepAssigneeProblem(sqlite, req.scope.labId, role, person, group);
+        if (problem) return res.status(400).json({ error: problem });
+      }
+      const before = { step: step.step_name, who: stepWhoLabel(sqlite, req.scope.labId, step) };
+      let newId = stepId;
+      sqlite.transaction(() => {
+        if (stepHasSignatures(sqlite, stepId)) {
+          sqlite.prepare("UPDATE policy_approval_steps SET archived_at = datetime('now') WHERE id = ?").run(stepId);
+          newId = Number(sqlite.prepare(
+            `INSERT INTO policy_approval_steps (workflow_id, step_order, step_name, required_role, specific_user_id, approver_group_id, allow_self_approval)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`
+          ).run(workflowId, step.step_order, name, role, person, group, step.allow_self_approval).lastInsertRowid);
+        } else {
+          sqlite.prepare("UPDATE policy_approval_steps SET step_name = ?, required_role = ?, specific_user_id = ?, approver_group_id = ? WHERE id = ?").run(name, role, person, group, stepId);
+        }
+      })();
+      routeStepAudit(req, "workflow_step_edited", {
+        stepId, newStepId: newId, before,
+        after: { step: name, who: stepWhoLabel(sqlite, req.scope.labId, { required_role: role, specific_user_id: person, approver_group_id: group }) },
+      });
+      res.json({ ok: true, id: newId });
     }
   );
 
@@ -40862,29 +40974,25 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     }
   );
 
-  // DELETE /workflows/:id/steps/:stepId — remove a step.
+  // DELETE /workflows/:id/steps/:stepId — remove a step. A step someone already signed is retired, so approval history keeps
+  // its name; the rest of the route closes up.
   app.delete(
     "/api/labs/:labId/veritapolicy/workflows/:id/steps/:stepId",
-    authMiddleware,
-    labScopeMiddleware,
-    requireWriteAccess,
-    requireModuleEdit("veritapolicy"),
-    (req: any, res) => {
-      const workflowId = Number(req.params.id);
-      const stepId = Number(req.params.stepId);
-      if (!Number.isFinite(workflowId) || !Number.isFinite(stepId)) {
-        return res.status(400).json({ error: "Bad id" });
-      }
+    ...routeStepGuards,
+    (req: any, res: any) => {
+      const workflowId = req.route_.id, stepId = Number(req.params.stepId);
       const sqlite = (db as any).$client;
-      const wf = sqlite
-        .prepare("SELECT lab_id FROM policy_approval_workflows WHERE id = ?")
-        .get(workflowId) as { lab_id: number } | undefined;
-      if (!wf || wf.lab_id !== req.scope.labId) return res.status(404).json({ error: "Not found" });
-      sqlite
-        .prepare(
-          "DELETE FROM policy_approval_steps WHERE id = ? AND workflow_id = ?"
-        )
-        .run(stepId, workflowId);
+      const step = sqlite.prepare(
+        "SELECT id, step_name, required_role, specific_user_id, approver_group_id FROM policy_approval_steps WHERE id = ? AND workflow_id = ? AND archived_at IS NULL"
+      ).get(stepId, workflowId) as any;
+      if (!step) return res.status(404).json({ error: "Step not found" });
+      const who = stepWhoLabel(sqlite, req.scope.labId, step);
+      sqlite.transaction(() => {
+        if (stepHasSignatures(sqlite, stepId)) sqlite.prepare("UPDATE policy_approval_steps SET archived_at = datetime('now') WHERE id = ?").run(stepId);
+        else sqlite.prepare("DELETE FROM policy_approval_steps WHERE id = ?").run(stepId);
+        renumberRouteSteps(sqlite, liveRouteStepIds(sqlite, workflowId));
+      })();
+      routeStepAudit(req, "workflow_step_removed", { stepId, step: step.step_name, who });
       res.json({ ok: true });
     }
   );
@@ -41070,7 +41178,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         return res.status(400).json({ error: "Workflow not found in this lab" });
       }
       const stepCount = (sqlite
-        .prepare("SELECT COUNT(*) AS cnt FROM policy_approval_steps WHERE workflow_id = ?")
+        .prepare("SELECT COUNT(*) AS cnt FROM policy_approval_steps WHERE workflow_id = ? AND archived_at IS NULL")
         .get(wfId) as { cnt: number }).cnt;
       if (stepCount === 0) {
         return res.status(400).json({ error: "Workflow has no steps" });
@@ -41474,9 +41582,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       }
       const steps = sqlite
         .prepare(
-          `SELECT id, step_order, step_name, required_role, specific_user_id, allow_self_approval
+          `SELECT id, step_order, step_name, required_role, specific_user_id, approver_group_id, allow_self_approval
              FROM policy_approval_steps
-            WHERE workflow_id = ?
+            WHERE workflow_id = ? AND archived_at IS NULL
             ORDER BY step_order ASC`
         )
         .all(workflowId) as any[];
@@ -41485,6 +41593,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         step_order: s.step_order,
         step_name: s.step_name,
         required_role: s.required_role,
+        who: stepWhoLabel(sqlite, req.scope.labId, s),
         eligible_count: countEligibleReviewersForStepDelegated(sqlite, {
           labId: req.scope.labId,
           documentOwnerId: doc.owner_user_id,

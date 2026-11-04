@@ -15,6 +15,7 @@
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
+import { labGroupSignerIds } from "./labGroups";
 
 export const POLICY_STORAGE_ROOT =
   process.env.POLICY_STORAGE_ROOT || "/data/policies";
@@ -413,6 +414,7 @@ export function canUserApproveStep(
     stepRow: {
       required_role: string;
       specific_user_id: number | null;
+      approver_group_id?: number | null;
       allow_self_approval: number;
     };
     // When true, a medical_director step is restricted to the designated
@@ -433,6 +435,14 @@ export function canUserApproveStep(
     };
   }
   const role = stepRow.required_role;
+  // A group step goes to whichever member signs first (Michael 2026-11-04). The group already names the people, so a
+  // manual's approvers and the role rules below don't apply, the same as a step for one named person.
+  if (role === "group") {
+    if (stepRow.approver_group_id == null) return { ok: false, reason: "Step misconfigured: group not set" };
+    return labGroupSignerIds(sqlite, labId, stepRow.approver_group_id).includes(userId)
+      ? { ok: true }
+      : { ok: false, reason: "This step goes to a group you are not in." };
+  }
   // Per-manual approver override takes precedence over the generic role rule
   // (and over the designated-MD routing): if the document's manual names
   // approver(s) for this role, only they may approve. Self-approval already
@@ -602,6 +612,90 @@ export function canUserApproveStepDelegated(
   return direct;
 }
 
+// ── Approval routes (Michael 2026-11-04; parity plan Phase 1 item 3) ──
+// A route is a workflow and its steps. A step goes to a role, one named person, or any one member of a lab group.
+export const APPROVAL_STEP_ROLES: readonly string[] = [
+  "medical_director", "technical_consultant", "technical_supervisor", "general_supervisor",
+  "any_active_seat", "any_view_only_seat", "specific_user", "group",
+];
+const ROLE_WORDS: Record<string, string> = {
+  medical_director: "Medical director or designee",
+  technical_consultant: "Technical consultant",
+  technical_supervisor: "Technical supervisor",
+  general_supervisor: "General supervisor",
+  any_active_seat: "Anyone with an editing seat",
+  any_view_only_seat: "Any reviewer",
+};
+
+// Who signs a step, in words, for the route screen and the document's submit preview.
+export function stepWhoLabel(sqlite: any, labId: number, step: { required_role: string; specific_user_id?: number | null; approver_group_id?: number | null }): string {
+  if (step.required_role === "group") {
+    const g = sqlite.prepare("SELECT name FROM lab_groups WHERE id = ? AND lab_id = ?").get(step.approver_group_id ?? 0, labId) as any;
+    return g ? `Any one member of ${g.name}` : "A group that no longer exists";
+  }
+  if (step.required_role === "specific_user") {
+    const u = sqlite.prepare("SELECT name, email FROM users WHERE id = ?").get(step.specific_user_id ?? 0) as any;
+    return u?.name || u?.email || "A person who no longer exists";
+  }
+  return ROLE_WORDS[step.required_role] || step.required_role.replace(/_/g, " ");
+}
+
+// The people a step can name: the lab's active members and its staff logins. A staff login signs without an editing seat.
+export function routePeople(sqlite: any, labId: number): { user_id: number; name: string; email: string; staff_login: boolean }[] {
+  const rows = sqlite.prepare(
+    `SELECT u.id AS user_id, u.name, u.email,
+            EXISTS (SELECT 1 FROM user_seats us WHERE us.seat_user_id = u.id AND us.lab_id = ? AND us.status = 'active' AND us.seat_type = 'staff_portal') AS staff_login
+       FROM users u
+      WHERE COALESCE(u.vls_support, 0) = 0
+        AND (EXISTS (SELECT 1 FROM lab_members lm WHERE lm.user_id = u.id AND lm.lab_id = ? AND lm.status = 'active')
+          OR EXISTS (SELECT 1 FROM user_seats us WHERE us.seat_user_id = u.id AND us.lab_id = ? AND us.status = 'active' AND us.seat_type = 'staff_portal'))
+      ORDER BY COALESCE(u.name, u.email) COLLATE NOCASE`
+  ).all(labId, labId, labId) as any[];
+  return rows.map((r) => ({ user_id: r.user_id, name: r.name || r.email, email: r.email, staff_login: !!r.staff_login }));
+}
+
+// Why a step can't go to who was picked, or null when it can.
+export function stepAssigneeProblem(sqlite: any, labId: number, requiredRole: unknown, specificUserId: unknown, approverGroupId: unknown): string | null {
+  if (typeof requiredRole !== "string" || !APPROVAL_STEP_ROLES.includes(requiredRole)) return "Pick who signs this step.";
+  if (requiredRole === "specific_user") {
+    const id = Number(specificUserId);
+    if (!Number.isInteger(id) || !routePeople(sqlite, labId).some((p) => p.user_id === id)) return "That person isn't a member or staff login of this lab.";
+  }
+  if (requiredRole === "group") {
+    const g = sqlite.prepare("SELECT retired FROM lab_groups WHERE id = ? AND lab_id = ?").get(Number(approverGroupId), labId) as any;
+    if (!g) return "That group isn't one of this lab's groups.";
+    if (g.retired) return "That group has been retired. Pick another one.";
+  }
+  return null;
+}
+
+// A route with documents in review is locked: its steps are the ones those documents are moving through.
+export function routeLockProblem(sqlite: any, workflowId: number): string | null {
+  const n = Number((sqlite.prepare(
+    "SELECT COUNT(*) AS n FROM policy_documents WHERE workflow_id = ? AND status = 'in_review' AND archived_at IS NULL"
+  ).get(workflowId) as any).n);
+  if (n === 0) return null;
+  return n === 1
+    ? "1 document is in review on this route. Finish or recall it before changing the route."
+    : `${n} documents are in review on this route. Finish or recall them before changing the route.`;
+}
+
+// Put a route's live steps in the order given (ids), numbered from 1.
+export function renumberRouteSteps(sqlite: any, orderedStepIds: number[]): void {
+  const update = sqlite.prepare("UPDATE policy_approval_steps SET step_order = ? WHERE id = ?");
+  orderedStepIds.forEach((id, i) => update.run(i + 1, id));
+}
+
+export function liveRouteStepIds(sqlite: any, workflowId: number): number[] {
+  return (sqlite.prepare(
+    "SELECT id FROM policy_approval_steps WHERE workflow_id = ? AND archived_at IS NULL ORDER BY step_order ASC"
+  ).all(workflowId) as any[]).map((s) => Number(s.id));
+}
+
+export function stepHasSignatures(sqlite: any, stepId: number): boolean {
+  return !!sqlite.prepare("SELECT 1 FROM policy_signoffs WHERE workflow_step_id = ? LIMIT 1").get(stepId);
+}
+
 // Resolve the current pending step for a document. Returns the step row
 // or null if no step pending (document not in_review, or all steps
 // already approved).
@@ -616,6 +710,7 @@ export function getCurrentPendingStep(
     step_name: string;
     required_role: string;
     specific_user_id: number | null;
+    approver_group_id: number | null;
     allow_self_approval: number;
   } | null;
   totalSteps: number;
@@ -632,9 +727,9 @@ export function getCurrentPendingStep(
   const steps = sqlite
     .prepare(
       `SELECT id, workflow_id, step_order, step_name, required_role,
-              specific_user_id, allow_self_approval
+              specific_user_id, approver_group_id, allow_self_approval
          FROM policy_approval_steps
-        WHERE workflow_id = ?
+        WHERE workflow_id = ? AND archived_at IS NULL
         ORDER BY step_order ASC`
     )
     .all(doc.workflow_id) as any[];
@@ -679,6 +774,7 @@ export function countEligibleReviewersForStep(
     stepRow: {
       required_role: string;
       specific_user_id: number | null;
+      approver_group_id?: number | null;
       allow_self_approval: number;
     };
     // Mirror canUserApproveStep: a major revision's medical_director step only
@@ -704,6 +800,7 @@ export function eligibleReviewerIdsForStep(
     stepRow: {
       required_role: string;
       specific_user_id: number | null;
+      approver_group_id?: number | null;
       allow_self_approval: number;
     };
     isMajorRevision?: boolean;
@@ -725,6 +822,14 @@ export function eligibleReviewerIdsForStep(
       isActiveMember(stepRow.specific_user_id)
     ) {
       eligible.add(stepRow.specific_user_id);
+    }
+    return eligible;
+  }
+  if (stepRow.required_role === "group") {
+    if (stepRow.approver_group_id != null) {
+      for (const uid of labGroupSignerIds(sqlite, labId, stepRow.approver_group_id)) {
+        if (!ownerBlocked(uid)) eligible.add(uid);
+      }
     }
     return eligible;
   }

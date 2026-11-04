@@ -24,6 +24,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { ApprovalRoutesDialog } from "@/components/ApprovalRoutesDialog";
 import {
   Dialog,
   DialogContent,
@@ -135,7 +136,9 @@ interface WorkflowStep {
   step_name: string;
   required_role: string;
   specific_user_id: number | null;
+  approver_group_id?: number | null;
   allow_self_approval: number;
+  who?: string; // who signs this step, in words
 }
 
 interface Workflow {
@@ -143,6 +146,7 @@ interface Workflow {
   name: string;
   description: string | null;
   is_default: number;
+  locked_reason?: string | null;
   steps: WorkflowStep[];
 }
 
@@ -208,6 +212,7 @@ interface PolicyDocument {
   pending_step_id?: number;
   pending_step_name?: string;
   pending_step_role?: string;
+  pending_step_who?: string;
   pending_step_order?: number;
   pending_total_steps?: number;
 }
@@ -241,6 +246,7 @@ interface EligibilityPreview {
     step_order: number;
     step_name: string;
     required_role: string;
+    who?: string;
     eligible_count: number;
   }[];
   minCount: number;
@@ -416,7 +422,7 @@ export default function VeritaPolicyMyPoliciesPage() {
   const documents = docsData?.documents || [];
   const manuals = manualsData?.manuals || [];
 
-  const { data: workflowsData } = useQuery<{ workflows: Workflow[] }>({
+  const { data: workflowsData } = useQuery<{ workflows: Workflow[]; can_edit?: boolean }>({
     queryKey: [`/api/labs/${activeLabId}/veritapolicy/workflows`],
     queryFn: getQueryFn({ on401: "throw" }),
     enabled: !!activeLabId,
@@ -904,22 +910,7 @@ export default function VeritaPolicyMyPoliciesPage() {
     any_active_seat: "Any active (writer) seat",
   };
   const [approversOpen, setApproversOpen] = useState(false);
-  // "Allow the author to approve this step" per workflow step (Michael 2026-10-14, Q187 = 2). Off by default.
   const [stepsOpen, setStepsOpen] = useState(false);
-  const [stepSaving, setStepSaving] = useState<number | null>(null);
-  const setAuthorMayApprove = async (workflowId: number, stepId: number, allow: boolean) => {
-    setStepSaving(stepId);
-    try {
-      await apiRequest("PATCH", `/api/labs/${activeLabId}/veritapolicy/workflows/${workflowId}/steps/${stepId}`, { allowSelfApproval: allow });
-      queryClient.invalidateQueries({ queryKey: [`/api/labs/${activeLabId}/veritapolicy/workflows`] });
-      queryClient.invalidateQueries({ queryKey: [`/api/labs/${activeLabId}/veritapolicy/pending-reviews`] });
-      toast({ title: allow ? "The author can now approve this step" : "The author can no longer approve this step" });
-    } catch (e: any) {
-      toast({ title: "Could not save", description: String(e?.message || e), variant: "destructive" });
-    } finally {
-      setStepSaving(null);
-    }
-  };
   const [approverManualId, setApproverManualId] = useState<string>("");
   const [addApproverRole, setAddApproverRole] = useState<string>("");
   const [addApproverUserId, setAddApproverUserId] = useState<string>("");
@@ -1577,10 +1568,10 @@ export default function VeritaPolicyMyPoliciesPage() {
             variant="outline"
             disabled={workflows.length === 0}
             onClick={() => setStepsOpen(true)}
-            title="Choose, for each review step, whether the policy's author may approve it"
+            title="The steps a document goes through before it is approved, and who signs each one"
             data-testid="approval-steps-button"
           >
-            <CheckCircle2 size={14} className="mr-1.5" /> Approval steps
+            <CheckCircle2 size={14} className="mr-1.5" /> Approval routes
           </Button>
           <Button hidden={isReadOnly}
             variant="outline"
@@ -1855,9 +1846,9 @@ export default function VeritaPolicyMyPoliciesPage() {
                               <span className="font-medium">{doc.pending_step_name}</span>
                               <div className="text-[10px] text-muted-foreground">
                                 awaiting{" "}
-                                {doc.pending_step_role
-                                  ? doc.pending_step_role.replace(/_/g, " ")
-                                  : "reviewer"}
+                                {doc.pending_step_who
+                                  || doc.pending_step_role?.replace(/_/g, " ")
+                                  || "reviewer"}
                               </div>
                             </div>
                           )}
@@ -2803,7 +2794,7 @@ export default function VeritaPolicyMyPoliciesPage() {
                     .map((p) => (
                       <li key={p.step_id}>
                         Step {p.step_order} — {p.step_name} (
-                        {p.required_role.replace(/_/g, " ")})
+                        {p.who || p.required_role.replace(/_/g, " ")})
                       </li>
                     ))}
                 </ul>
@@ -2829,7 +2820,7 @@ export default function VeritaPolicyMyPoliciesPage() {
                         <li key={s.id}>
                           {s.step_name}{" "}
                           <span className="text-[10px] uppercase tracking-wide opacity-70">
-                            ({s.required_role.replace(/_/g, " ")})
+                            ({s.who || s.required_role.replace(/_/g, " ")})
                           </span>
                         </li>
                       ))}
@@ -3369,53 +3360,11 @@ export default function VeritaPolicyMyPoliciesPage() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Per-manual approver mapping (#39) ──────────────────────────── */}
-      <Dialog open={stepsOpen} onOpenChange={(o) => { if (!o) setStepsOpen(false); }}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Approval steps</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              By default, the person who uploads a policy cannot approve it at any step. Turn this on for a step
-              when the author may also do that review, for example a technical consultant or supervisor who writes
-              a policy and does its preliminary review. Each step is set on its own.
-            </p>
-            {workflows.map((w) => (
-              <div key={w.id} className="rounded-md border p-3" data-testid="approval-steps-workflow">
-                <div className="text-sm font-medium">{w.name}</div>
-                {w.description && <div className="text-xs text-muted-foreground mb-2">{w.description}</div>}
-                <ul className="space-y-2 mt-1">
-                  {w.steps.map((s) => (
-                    <li key={s.id} className="flex items-start justify-between gap-3 text-sm">
-                      <span>
-                        {s.step_order}. {s.step_name}{" "}
-                        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">({s.required_role.replace(/_/g, " ")})</span>
-                      </span>
-                      <label className="flex items-center gap-2 text-xs whitespace-nowrap cursor-pointer">
-                        <input
-                          type="checkbox"
-                          className="w-3.5 h-3.5"
-                          checked={!!s.allow_self_approval}
-                          disabled={stepSaving != null}
-                          onChange={(e) => setAuthorMayApprove(w.id, s.id, e.target.checked)}
-                          data-testid="author-may-approve"
-                        />
-                        Allow the author to approve this step
-                        {stepSaving === s.id && <Loader2 className="animate-spin" size={12} />}
-                      </label>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setStepsOpen(false)}>Close</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {stepsOpen && activeLabId && (
+        <ApprovalRoutesDialog labId={activeLabId} routes={workflows} canEdit={!!workflowsData?.can_edit} open={stepsOpen} onOpenChange={setStepsOpen} />
+      )}
 
+      {/* ── Per-manual approver mapping (#39) ──────────────────────────── */}
       <Dialog open={approversOpen} onOpenChange={(o) => { if (!o) setApproversOpen(false); }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>

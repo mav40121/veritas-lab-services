@@ -11,7 +11,7 @@ import { attachSopLinks } from "./veritamapSopLink";
 import { DEFAULT_TRACK_CATEGORIES, cleanCategoryName, isDefaultTrackCategory, categoryNameProblem } from "@shared/veritatrackCategories";
 import { labWideCorrelation } from "./labWideCorrelation";
 import { exportAllPlanBypass } from "./exportAllContext";
-import { EMAIL_RE, cleanGroupName, groupNameProblem, labGroupMembers, labGroupsPayload } from "./labGroups";
+import { labGroupsPayload, registerLabGroupRoutes } from "./labGroups";
 
 function trackLicenseCtx(req: any): LicenseContext {
   const u = req?.user || null;
@@ -1263,111 +1263,15 @@ export function registerVeritaTrackRoutes(
       res.json(categoriesPayload(labId, true));
     });
 
-    // ── The lab's groups (Michael 2026-11-04; server/labGroups.ts) ──
-    // Everyone who can see VeritaTrack reads the group names for the task form; owners and admins, the same people who
-    // change categories, build the groups and see who is in them. There is no group delete, also like categories: a
-    // retired group stays on the tasks that name it and their reminders fall back to the lab's list.
-    app.get("/api/labs/:labId/veritatrack/groups", authMiddleware, labScopeMiddleware, (req: any, res) => {
-      if (!hasTrackAccess(req.user, trackLab(req))) return res.status(403).json({ error: "VeritaTrack™ subscription required" });
-      res.json(labGroupsPayload(sqlite, req.scope.labId, isOwnerOrAdmin(req)));
-    });
-
-    // Runs in front of each route below that changes a group: the access checks, and the group when the path names one.
-    const groupEditor = (req: any, res: any, next: any) => {
-      if (!hasTrackAccess(req.user, trackLab(req))) return res.status(403).json({ error: "VeritaTrack™ subscription required" });
-      if (!isOwnerOrAdmin(req)) return res.status(403).json({ error: "Only a lab owner or admin can change groups." });
-      if (req.params.id !== undefined) {
-        req.labGroup = sqlite.prepare("SELECT id, name, retired FROM lab_groups WHERE id = ? AND lab_id = ?").get(Number(req.params.id), req.scope.labId);
-        if (!req.labGroup) return res.status(404).json({ error: "Group not found" });
-      }
-      next();
-    };
-    const groupGuards = [authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritatrack'), groupEditor];
-    const groupAudit = (req: any, event: string, detail: string) => trackAudit({ labId: req.scope.labId, taskId: null, event, detail, byUserId: req.user?.userId ?? null });
-
-    // Add a group. Adding a name the lab retired brings it back.
-    app.post("/api/labs/:labId/veritatrack/groups", ...groupGuards, (req: any, res: any) => {
-      const labId = req.scope.labId;
-      const name = cleanGroupName(req.body?.name);
-      const existing = sqlite.prepare("SELECT id, name, retired FROM lab_groups WHERE lab_id = ?").all(labId) as any[];
-      const retiredMatch = existing.find((g) => g.retired && g.name.toLowerCase() === name.toLowerCase());
-      if (retiredMatch) {
-        sqlite.prepare("UPDATE lab_groups SET retired = 0, updated_at = datetime('now') WHERE id = ?").run(retiredMatch.id);
-        groupAudit(req, "group_restored", retiredMatch.name);
-        return res.json(labGroupsPayload(sqlite, labId, true));
-      }
-      const problem = groupNameProblem(name, existing.map((g) => g.name));
-      if (problem) return res.status(400).json({ error: problem });
-      sqlite.prepare("INSERT INTO lab_groups (lab_id, name, created_by) VALUES (?, ?, ?)").run(labId, name, req.user?.userId ?? null);
-      groupAudit(req, "group_added", name);
-      res.json(labGroupsPayload(sqlite, labId, true));
-    });
-
-    // Rename and/or retire a group. Tasks point at the group's id, so a rename moves nothing.
-    app.put("/api/labs/:labId/veritatrack/groups/:id", ...groupGuards, (req: any, res: any) => {
-      const labId = req.scope.labId, group = req.labGroup;
-      const wantName = req.body?.name === undefined ? group.name : cleanGroupName(req.body.name);
-      const wantRetired = req.body?.retired === undefined ? !!group.retired : !!req.body.retired;
-      if (wantName !== group.name) {
-        const others = (sqlite.prepare("SELECT name FROM lab_groups WHERE lab_id = ? AND id <> ?").all(labId, group.id) as any[]).map((g) => g.name);
-        const problem = groupNameProblem(wantName, others);
-        if (problem) return res.status(400).json({ error: problem });
-      }
-      sqlite.prepare("UPDATE lab_groups SET name = ?, retired = ?, updated_at = datetime('now') WHERE id = ?").run(wantName, wantRetired ? 1 : 0, group.id);
-      if (wantName !== group.name) groupAudit(req, "group_renamed", `${group.name} -> ${wantName}`);
-      if (wantRetired !== !!group.retired) groupAudit(req, wantRetired ? "group_retired" : "group_restored", wantName);
-      res.json(labGroupsPayload(sqlite, labId, true));
-    });
-
-    // Add someone: a roster person, with an address when they have no login, or a typed address on its own.
-    app.post("/api/labs/:labId/veritatrack/groups/:id/members", ...groupGuards, (req: any, res: any) => {
-      const labId = req.scope.labId, group = req.labGroup;
-      const email = String(req.body?.email ?? "").trim();
-      if (email && !EMAIL_RE.test(email)) return res.status(400).json({ error: "Enter a valid email address." });
-      const current = labGroupMembers(sqlite, labId, group.id);
-      const by = req.user?.userId ?? null;
-      if (req.body?.employee_id != null) {
-        const employeeId = Number(req.body.employee_id);
-        const emp = sqlite.prepare("SELECT id, first_name, last_name FROM staff_employees WHERE id = ? AND tier2_lab_id = ? AND status = 'active'").get(employeeId, labId) as any;
-        if (!emp) return res.status(400).json({ error: "That person is not on this lab's active roster." });
-        if (current.some((m) => m.employee_id === employeeId)) return res.status(400).json({ error: "That person is already in this group." });
-        // An address typed for this person in another group carries over, so it is only typed once.
-        const typedBefore = sqlite.prepare("SELECT email FROM lab_group_members WHERE lab_id = ? AND employee_id = ? AND email IS NOT NULL LIMIT 1").get(labId, employeeId) as any;
-        const address = email || typedBefore?.email || null;
-        const name = `${emp.first_name || ""} ${emp.last_name || ""}`.trim();
-        sqlite.prepare("INSERT INTO lab_group_members (group_id, lab_id, employee_id, email, name, added_by) VALUES (?, ?, ?, ?, ?, ?)").run(group.id, labId, employeeId, address, name, by);
-        groupAudit(req, "group_member_added", `${group.name}: ${name}`);
-      } else {
-        if (!email) return res.status(400).json({ error: "Pick someone from the roster or enter an email address." });
-        if (current.some((m) => m.email?.toLowerCase() === email.toLowerCase())) return res.status(400).json({ error: "That address is already in this group." });
-        const name = String(req.body?.name ?? "").trim() || null;
-        sqlite.prepare("INSERT INTO lab_group_members (group_id, lab_id, email, name, added_by) VALUES (?, ?, ?, ?, ?)").run(group.id, labId, email, name, by);
-        groupAudit(req, "group_member_added", `${group.name}: ${name || email}`);
-      }
-      res.json(labGroupsPayload(sqlite, labId, true));
-    });
-
-    // Fill in or correct a typed address. For a roster person it applies wherever they are in a group.
-    app.put("/api/labs/:labId/veritatrack/groups/:id/members/:memberId", ...groupGuards, (req: any, res: any) => {
-      const labId = req.scope.labId, group = req.labGroup;
-      const member = sqlite.prepare("SELECT id, employee_id, name, email FROM lab_group_members WHERE id = ? AND group_id = ? AND lab_id = ?").get(Number(req.params.memberId), group.id, labId) as any;
-      if (!member) return res.status(404).json({ error: "That person is not in this group." });
-      const email = String(req.body?.email ?? "").trim();
-      if (!EMAIL_RE.test(email)) return res.status(400).json({ error: "Enter a valid email address." });
-      if (member.employee_id != null) sqlite.prepare("UPDATE lab_group_members SET email = ? WHERE lab_id = ? AND employee_id = ?").run(email, labId, member.employee_id);
-      else sqlite.prepare("UPDATE lab_group_members SET email = ? WHERE id = ?").run(email, member.id);
-      groupAudit(req, "group_member_updated", `${group.name}: ${member.name || email}`);
-      res.json(labGroupsPayload(sqlite, labId, true));
-    });
-
-    // Take someone out of a group. The audit row keeps who it was.
-    app.delete("/api/labs/:labId/veritatrack/groups/:id/members/:memberId", ...groupGuards, (req: any, res: any) => {
-      const labId = req.scope.labId, group = req.labGroup;
-      const member = sqlite.prepare("SELECT id, name, email FROM lab_group_members WHERE id = ? AND group_id = ? AND lab_id = ?").get(Number(req.params.memberId), group.id, labId) as any;
-      if (!member) return res.status(404).json({ error: "That person is not in this group." });
-      sqlite.prepare("DELETE FROM lab_group_members WHERE id = ?").run(member.id);
-      groupAudit(req, "group_member_removed", `${group.name}: ${member.name || member.email}`);
-      res.json(labGroupsPayload(sqlite, labId, true));
+    // The lab's groups (Michael 2026-11-04; server/labGroups.ts).
+    const trackGroupAccess = (req: any, res: any, next: any) =>
+      hasTrackAccess(req.user, trackLab(req)) ? next() : res.status(403).json({ error: "VeritaTrack™ subscription required" });
+    registerLabGroupRoutes(app, {
+      sqlite,
+      prefix: "/api/labs/:labId/veritatrack",
+      readGuards: [authMiddleware, labScopeMiddleware, trackGroupAccess],
+      editGuards: [authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritatrack'), trackGroupAccess],
+      audit: (req, event, detail) => trackAudit({ labId: req.scope.labId, taskId: null, event, detail, byUserId: req.user?.userId ?? null }),
     });
 
     app.get("/api/labs/:labId/veritatrack/tasks", authMiddleware, labScopeMiddleware, (req: any, res) => {
