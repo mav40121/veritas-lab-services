@@ -124,7 +124,7 @@ function MethodHistoryImport({ labId, onDone }: { labId: number; onDone: () => v
     if (!file) return null;
     const form = new FormData();
     form.append("file", file);
-    const r = await fetch(`${base}/${path}`, { method: "POST", headers: authHeaders(), body: form });
+    const r = await fetch(path === "preview" ? `${base}/preview` : `${base}/commit`, { method: "POST", headers: authHeaders(), body: form });
     return { ok: r.ok, status: r.status, json: await r.json().catch(() => ({})) };
   }
 

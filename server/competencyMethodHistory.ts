@@ -317,7 +317,6 @@ export function registerCompetencyMethodHistoryRoutes(app: Express, deps: { auth
   if (!labScopeMiddleware) throw new Error("registerCompetencyMethodHistoryRoutes: labScopeMiddleware not registered");
   const { authMiddleware, requireWriteAccess, requireModuleEdit, hasCompetencyAccess } = deps;
   const sqlite = () => (db as any).$client;
-  const P = "/api/labs/:labId/competency/method-history";
   const gate = (req: any, res: any, next: any) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
     next();
@@ -333,12 +332,12 @@ export function registerCompetencyMethodHistoryRoutes(app: Express, deps: { auth
   };
 
   // Who the template will list, for the import window.
-  app.get(`${P}/summary`, authMiddleware, labScopeMiddleware, gate, (req: any, res: any) => {
+  app.get("/api/labs/:labId/competency/method-history/summary", authMiddleware, labScopeMiddleware, gate, (req: any, res: any) => {
     const d = templateData(sqlite(), req.scope.labId, labToday());
     res.json({ people: d.people, methods: d.rows.length, peopleListed: new Set(d.rows.map((r) => r.staffEmployeeId)).size, peopleWithoutMethods: d.peopleWithoutMethods });
   });
 
-  app.get(`${P}/template.xlsx`, authMiddleware, labScopeMiddleware, gate, async (req: any, res: any) => {
+  app.get("/api/labs/:labId/competency/method-history/template.xlsx", authMiddleware, labScopeMiddleware, gate, async (req: any, res: any) => {
     try {
       const today = labToday();
       const lab = sqlite().prepare("SELECT lab_name, clia_number FROM labs WHERE id = ?").get(req.scope.labId) as any;
@@ -362,7 +361,7 @@ export function registerCompetencyMethodHistoryRoutes(app: Express, deps: { auth
     error: rows.filter((r) => r.status === "error").length, skip: rows.filter((r) => r.status === "skip").length, blank,
   });
 
-  app.post(`${P}/preview`, authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritacomp"), gate, upload, async (req: any, res: any) => {
+  app.post("/api/labs/:labId/competency/method-history/preview", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritacomp"), gate, upload, async (req: any, res: any) => {
     try {
       const today = labToday();
       const read = await readUpload(req, today);
@@ -376,7 +375,7 @@ export function registerCompetencyMethodHistoryRoutes(app: Express, deps: { auth
     }
   });
 
-  app.post(`${P}/commit`, authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritacomp"), gate, upload, async (req: any, res: any) => {
+  app.post("/api/labs/:labId/competency/method-history/commit", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritacomp"), gate, upload, async (req: any, res: any) => {
     try {
       const today = labToday();
       const labId = req.scope.labId;
@@ -409,7 +408,7 @@ export function registerCompetencyMethodHistoryRoutes(app: Express, deps: { auth
   });
 
   // Take back a date loaded by mistake. The row is kept and marked removed, so the record of what was loaded stays.
-  app.delete(`${P}/:id`, authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritacomp"), gate, (req: any, res: any) => {
+  app.delete("/api/labs/:labId/competency/method-history/:id", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritacomp"), gate, (req: any, res: any) => {
     const id = Number(req.params.id);
     const row = sqlite().prepare("SELECT * FROM competency_method_history WHERE id = ? AND lab_id = ? AND removed_at IS NULL").get(id, req.scope.labId) as any;
     if (!row) return res.status(404).json({ error: "Not found" });
