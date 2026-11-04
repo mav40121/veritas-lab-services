@@ -105,7 +105,12 @@ const CATEGORY_ORDER = [
   "ESR",
   "Fecal Testing",
   "Manual Procedures",
+  "Histology",
 ];
+
+// 2026-11-04 (Victor Zota, Q161): departments with no instruments in the library. Picking one goes straight to the
+// custom instrument fields with the department already filled in, so nobody has to type it under "Other".
+const NO_LIBRARY_DEPARTMENTS = ["Histology"];
 
 // 2026-10-09 (Michael): electrolytes are part of General Chemistry again; the
 // separate "Electrolytes" group (2026-03-29) caused more problems than it solved.
@@ -141,6 +146,7 @@ const CUSTOM_TEST_SPECIALTIES = [
   "Endocrinology",
   "Toxicology",
   "Molecular",
+  "Histopathology",
   "Other",
 ];
 
@@ -334,13 +340,15 @@ function AddCustomTestDialog({
   open,
   onOpenChange,
   onAdd,
+  defaultSpecialty = "General Chemistry",
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onAdd: (test: TestToggle) => void;
+  defaultSpecialty?: string;
 }) {
   const [testName, setTestName] = useState("");
-  const [specialty, setSpecialty] = useState("General Chemistry");
+  const [specialty, setSpecialty] = useState(defaultSpecialty);
   // BUG-071 (2026-10-27): complexity is lab-stated only and never defaulted (CLAUDE.md VeritaMap rules; the 7/16
   // CLINITEK incident). The dialog used to start on MODERATE, so saving without choosing recorded MODERATE.
   const [complexity, setComplexity] = useState<Complexity | "">("");
@@ -355,7 +363,7 @@ function AddCustomTestDialog({
       isCustom: true,
     });
     setTestName("");
-    setSpecialty("General Chemistry");
+    setSpecialty(defaultSpecialty);
     setComplexity("");
     onOpenChange(false);
   }
@@ -926,6 +934,7 @@ function InstrumentTestSection({
         open={customTestOpen}
         onOpenChange={setCustomTestOpen}
         onAdd={onAddCustomTest}
+        defaultSpecialty={instrument.category === "Histology" ? "Histopathology" : undefined}
       />
     </Card>
   );
@@ -1567,7 +1576,7 @@ export default function VeritaMapBuildPage() {
     const existing = Object.keys(cascade);
     const ordered = CATEGORY_ORDER.filter((c) => existing.includes(c));
     const extra = existing.filter((c) => !CATEGORY_ORDER.includes(c)).sort();
-    return [...ordered, ...extra];
+    return [...ordered, ...extra, ...NO_LIBRARY_DEPARTMENTS.filter((c) => !existing.includes(c))];
   }, [cascade]);
 
   // Vendors filtered by selected department
@@ -1657,6 +1666,11 @@ export default function VeritaMapBuildPage() {
     setCustomVendor("");
     setCustomInstrument("");
 
+    if (NO_LIBRARY_DEPARTMENTS.includes(v) && !cascade[v]) {
+      setSelectedDepartment(OTHER_DEPARTMENT_VALUE);
+      setCustomDepartment(v);
+      return;
+    }
     if (v === OTHER_DEPARTMENT_VALUE) {
       // "Other" department — skip to free-text
       return;
@@ -1880,6 +1894,12 @@ export default function VeritaMapBuildPage() {
                     </Select>
                   </div>
                 </div>
+                {customDepartment.trim().toLowerCase() === "histology" && (
+                  <p className="text-[11px] text-muted-foreground flex items-start gap-1.5" data-testid="histology-hint">
+                    <Info size={12} className="shrink-0 mt-0.5" />
+                    Histology: list what you report here, such as H&amp;E, special stains and frozen sections, at the complexity on your CLIA certificate. Equipment with no reported result of its own, such as tissue processors, cryostats and microscopes, belongs in VeritaMaintain™.
+                  </p>
+                )}
                 <p className="text-[11px] text-muted-foreground flex items-start gap-1.5">
                   <Info size={12} className="shrink-0 mt-0.5" />
                   Heads up: a custom instrument starts with an empty test menu. Most standard analyzers are already in the library, so try the search at the top first. Use this only for EUA tests, laboratory-developed tests (LDTs), or instruments not yet in our database.

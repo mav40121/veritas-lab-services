@@ -22483,7 +22483,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   }
   // "troubleshooting" (2026-10-14, St. Charles REQ-070): a problem / action / outcome record. It does not
   // complete scheduled maintenance, so it never advances the PM next-due date.
-  const EQUIP_EVENT_TYPES = ["calibration", "preventive_maintenance", "service", "repair", "function_check", "troubleshooting"];
+  // "solution_change" (2026-11-04, Q161; CAP ANP.21360): a stainer's solutions changed, filtered or added to, and by whom. It is
+  // not maintenance either, so it never moves the PM next-due date, even if a date is sent.
+  const EQUIP_EVENT_TYPES = ["calibration", "preventive_maintenance", "service", "repair", "function_check", "troubleshooting", "solution_change"];
 
   app.get("/api/labs/:labId/equipment", authMiddleware, labScopeMiddleware, (req: any, res) => {
     if (!hasEquipmentAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "Equipment maintenance requires a suite subscription" });
@@ -22604,10 +22606,13 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const { event_type, event_date, performed_by, next_due_date, notes } = req.body || {};
     if (!EQUIP_EVENT_TYPES.includes(event_type)) return res.status(400).json({ error: "event_type must be one of " + EQUIP_EVENT_TYPES.join(", ") });
     if (!event_date) return res.status(400).json({ error: "event_date required" });
+    if (event_type === "solution_change" && (!String(performed_by || "").trim() || !String(notes || "").trim())) {
+      return res.status(400).json({ error: "A solution change needs who did it and which solutions" });
+    }
     const now = new Date().toISOString();
     // next_due: explicit value wins; else event_date + the instrument's PM interval.
-    let nextDue: string | null = next_due_date || null;
-    if (!nextDue && ex.pm_interval_days && event_type !== "troubleshooting") {
+    let nextDue: string | null = event_type === "solution_change" ? null : next_due_date || null;
+    if (!nextDue && ex.pm_interval_days && event_type !== "troubleshooting" && event_type !== "solution_change") {
       const d = new Date(event_date + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + Number(ex.pm_interval_days));
       nextDue = d.toISOString().slice(0, 10);
     }

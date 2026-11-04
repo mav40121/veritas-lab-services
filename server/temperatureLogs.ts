@@ -15,7 +15,9 @@ import { db } from "./db";
 import { labLocalDate } from "./dateLocal";
 import { exportAllPlanBypass } from "./exportAllContext";
 
-export const TEMP_UNIT_TYPES = ["refrigerator", "freezer", "incubator", "room", "water_bath", "heat_block", "platelet_incubator", "other"] as const;
+// Humidity (2026-11-04, Q161; CAP COM.30580) shares the same log: a "humidity" unit reads in percent relative humidity (scale RH)
+// instead of degrees, and only a humidity unit may use that scale.
+export const TEMP_UNIT_TYPES = ["refrigerator", "freezer", "incubator", "room", "water_bath", "heat_block", "platelet_incubator", "humidity", "other"] as const;
 
 // Same explicit plan allowlist as VeritaMaintain equipment (routes.ts hasEquipmentAccess).
 function hasTempLogAccess(user: any, lab?: any): boolean {
@@ -65,12 +67,15 @@ export function registerTemperatureLogRoutes(
       if (String(b.name).length > 120) return "name must be 120 characters or fewer";
     }
     if (b.unit_type !== undefined && !(TEMP_UNIT_TYPES as readonly string[]).includes(b.unit_type)) return `unit_type must be one of ${TEMP_UNIT_TYPES.join(", ")}`;
-    if (b.scale !== undefined && !["C", "F"].includes(b.scale)) return "scale must be C or F";
+    if (b.scale !== undefined && !["C", "F", "RH"].includes(b.scale)) return "scale must be C, F or RH";
+    const humidity = b.unit_type === "humidity";
+    if (b.scale !== undefined && (b.scale === "RH") !== humidity) return humidity ? "A humidity unit reads in percent relative humidity (scale RH)" : "Only a humidity unit can use scale RH";
     if (b.readings_per_day !== undefined && ![1, 2, 3].includes(Number(b.readings_per_day))) return "readings_per_day must be 1, 2 or 3";
     const min = b.min_value !== undefined ? num(b.min_value) : undefined;
     const max = b.max_value !== undefined ? num(b.max_value) : undefined;
     if (!partial && (min === null || max === null || min === undefined || max === undefined)) return "min_value and max_value are required (the acceptable range from the manufacturer or your procedure)";
     if (min !== undefined && max !== undefined && min !== null && max !== null && min >= max) return "min_value must be below max_value";
+    if (humidity && ((min !== undefined && min !== null && min < 0) || (max !== undefined && max !== null && max > 100))) return "Humidity limits must be between 0 and 100 percent";
     return null;
   };
 
@@ -103,7 +108,8 @@ export function registerTemperatureLogRoutes(
   app.post("/api/labs/:labId/temp-logs/units", ...setup, (req: any, res: any) => {
     if (!gate(req, res)) return;
     const b = req.body || {};
-    const err = validateUnit(b, false);
+    // A unit saved with no type or scale is a Celsius refrigerator (the insert below), so check it as one.
+    const err = validateUnit({ ...b, unit_type: b.unit_type || "refrigerator", scale: b.scale || "C" }, false);
     if (err) return res.status(400).json({ error: err });
     const now = new Date().toISOString();
     const info = sqlite().prepare(
@@ -120,7 +126,8 @@ export function registerTemperatureLogRoutes(
     const u = sqlite().prepare("SELECT * FROM temp_log_units WHERE id = ? AND lab_id = ?").get(id, req.scope.labId) as any;
     if (!u) return res.status(404).json({ error: "Storage unit not found in this lab" });
     const b = req.body || {};
-    const err = validateUnit({ ...b, min_value: b.min_value ?? u.min_value, max_value: b.max_value ?? u.max_value }, true);
+    // Checked against what the row becomes, so changing only the type or only the scale can't leave a mismatch.
+    const err = validateUnit({ ...b, unit_type: b.unit_type ?? u.unit_type, scale: b.scale ?? u.scale, min_value: b.min_value ?? u.min_value, max_value: b.max_value ?? u.max_value }, true);
     if (err) return res.status(400).json({ error: err });
     sqlite().prepare(
       `UPDATE temp_log_units SET name = ?, unit_type = ?, location = ?, min_value = ?, max_value = ?, scale = ?, readings_per_day = ?, active = ?, updated_at = ? WHERE id = ?`
@@ -146,7 +153,7 @@ export function registerTemperatureLogRoutes(
     const time = b.reading_time ? String(b.reading_time) : null;
     if (time && !isHhMm(time)) return res.status(400).json({ error: "reading_time must be HH:MM" });
     const value = num(b.value);
-    if (value === null) return res.status(400).json({ error: "value (the temperature read) is required" });
+    if (value === null) return res.status(400).json({ error: "value (the reading) is required" });
     const initials = String(b.initials || "").trim();
     if (!initials) return res.status(400).json({ error: "initials required" });
     if (initials.length > 8) return res.status(400).json({ error: "initials must be 8 characters or fewer" });
