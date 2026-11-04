@@ -105,6 +105,10 @@ jobs:
         # Michael 2026-11-04 (Q161 = 1): a stainer solution change names who and what and never moves the PM date; a humidity
         # unit reads in percent, only a humidity unit can, and a change can't leave a type and scale that don't match.
         run: npm run test:histology-maintain-entries
+      - name: Run VeritaDC signature status integration test
+        # Michael 2026-11-04 (Q161 = 1): the roster shows who signed by either path; a Staff login signature closes their assignment,
+        # but not a required quiz or a newer version; the bell lists what is left; the Excel report carries the roster.
+        run: npm run test:veritadc-signature-status
       - name: Run structure-only database copy integration test
         # GET /api/admin/schema-db (Lifepoint questionnaire: customer data is not used for testing): secret-gated, every
         # table, index, view and trigger rebuilt with the same columns, no rows, nothing from the source in the file, audited.

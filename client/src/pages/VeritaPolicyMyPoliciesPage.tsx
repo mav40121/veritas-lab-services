@@ -25,6 +25,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ApprovalRoutesDialog } from "@/components/ApprovalRoutesDialog";
+import { DocumentSignatureRoster } from "@/components/DocumentSignatureRoster";
 import {
   Dialog,
   DialogContent,
@@ -3198,12 +3199,13 @@ export default function VeritaPolicyMyPoliciesPage() {
             <DialogTitle>Attestation tracker</DialogTitle>
           </DialogHeader>
           {trackerDoc && (
-            <div className="space-y-4">
+            <div className="space-y-4 min-w-0">
               <p className="text-sm text-muted-foreground">
                 Who was assigned{" "}
                 <span className="font-medium">{trackerDoc.title}</span>, who has
                 opened it, and who has attested they read and understood it.
               </p>
+              {activeLabId && <DocumentSignatureRoster labId={activeLabId} documentId={trackerDoc.id} />}
               {trackerLoading ? (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Loader2 className="animate-spin" size={14} /> Loading roster...
@@ -3240,7 +3242,7 @@ export default function VeritaPolicyMyPoliciesPage() {
                       </span>
                     )}
                   </div>
-                  <div className="border rounded max-h-80 overflow-y-auto">
+                  <div className="border rounded max-h-80 overflow-auto">
                     <table className="w-full text-sm">
                       <thead className="sticky top-0 bg-background border-b text-left text-xs text-muted-foreground">
                         <tr>

@@ -85,6 +85,7 @@ export async function generatePolicySignatureReportExcel(
     signoffs: Array<{ user_name?: string | null; action?: string | null; step_name?: string | null; signed_at?: string | null; comment?: string | null }>;
     attestations: any[];
     staffSignatures: any[];
+    roster?: Array<{ name: string; title: string | null; has_login: boolean; status: string; signed_at: string | null; version_label: string | null; how: string | null }>;
   },
   identity: { labName: string; cliaNumber: string },
 ): Promise<Buffer> {
@@ -134,7 +135,7 @@ export async function generatePolicySignatureReportExcel(
   body(`This report is the combined signature record for a single policy: ${data.doc.title}${data.doc.policy_number ? ` (${data.doc.policy_number})` : ""}. It shows the director or designee approval and the full roster of everyone assigned to attest, who has signed, who is still pending, and the bench staff who read and signed at the kiosk. It is a point-in-time proof a surveyor can review in one place.`);
   blank();
   section("How to read it");
-  body("The Director Approval block lists each approval sign-off on the current version. The Signature Roster lists every assigned writer attestation and every staff signature, pending first so open items are obvious. 'Signed an earlier version' flags a signature captured before the current version, which usually needs a fresh attestation.");
+  body("The Director Approval block lists each approval sign-off on the current version. The Signature Roster lists every assigned writer attestation and every staff signature, pending first so open items are obvious. 'Signed an earlier version' flags a signature captured before the current version, which usually needs a fresh attestation. The Everyone on the Roster sheet lists every active person on the VeritaStaff roster, including people nobody assigned this document to, with the date each one signed the current version or a plain Not signed.");
   blank();
   section("Disclaimer");
   body("This is a snapshot, not the authoritative record. The live VeritaAssure record is audit-grade. The laboratory director or designee is responsible for resolving any pending signature and for keeping the underlying data current.");
@@ -222,6 +223,37 @@ export async function generatePolicySignatureReportExcel(
     rr += 1;
   } else {
     sheet.autoFilter = { from: { row: headRowNum, column: 1 }, to: { row: headRowNum, column: 7 } };
+  }
+
+  // ── Everyone on the roster (2026-11-04, Q161; CAP GEN.75400 evidence: a roster with dates of participation) ──
+  if (data.roster) {
+    const rosterSheet = wb.addWorksheet("Everyone on the Roster", {
+      headerFooter: { oddHeader: `&R${labName}    CLIA: ${cliaNumber}`, oddFooter: `&L${labName}    CLIA: ${cliaNumber}` },
+      views: [{ state: "frozen", xSplit: 1, ySplit: 1 }],
+    });
+    const widths = [30, 30, 12, 24, 14, 10, 14];
+    widths.forEach((w, i) => { rosterSheet.getColumn(i + 1).width = w; });
+    const head2 = rosterSheet.getRow(1);
+    head2.values = ["Name", "Title", "Login", "Status", "Signed", "Version", "How signed"];
+    head2.height = 20;
+    head2.eachCell((c) => {
+      c.font = { name: "Calibri", bold: true, size: 11, color: { argb: "FFFFFFFF" } };
+      c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: teal } };
+      c.alignment = { vertical: "middle", horizontal: "left", indent: 1 };
+    });
+    const STATUS_TEXT: Record<string, string> = { signed: "Signed", older_version: "Signed an earlier version", not_signed: "Not signed" };
+    data.roster.forEach((p, i) => {
+      const row = rosterSheet.getRow(i + 2);
+      row.values = [p.name, p.title || "", p.has_login ? "Yes" : "No", STATUS_TEXT[p.status] || p.status, ymd(p.signed_at), p.version_label || "", p.how || ""];
+      row.eachCell({ includeEmpty: true }, (c) => {
+        c.font = { name: "Calibri", size: 10, color: { argb: ink } };
+        c.alignment = { vertical: "middle", wrapText: true };
+        c.border = { top: { style: "thin", color: { argb: "FFD0D0D0" } }, bottom: { style: "thin", color: { argb: "FFD0D0D0" } }, left: { style: "thin", color: { argb: "FFD0D0D0" } }, right: { style: "thin", color: { argb: "FFD0D0D0" } } };
+        if (i % 2) c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: alt } };
+      });
+      row.getCell(4).font = { name: "Calibri", size: 10, bold: true, color: { argb: p.status === "signed" ? "FF437A22" : "FF964219" } };
+    });
+    rosterSheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: 7 } };
   }
 
   const buf = await wb.xlsx.writeBuffer();
