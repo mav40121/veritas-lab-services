@@ -417,6 +417,8 @@ interface PortalPolicy {
   signed: boolean;
   signed_at: string | null;
   typed_signature: string | null;
+  carried_forward?: boolean;
+  signed_version_label?: string | null;
 }
 
 interface PortalPolicyRender {
@@ -631,10 +633,18 @@ function StaffPortalPoliciesView({
 
           {active.signed ? (
             <div className="border border-green-200 bg-green-50 rounded-lg p-4" data-testid="sp-policies-already-signed">
-              <div className="text-sm font-medium text-green-900">
-                You already signed this version
-                {active.signed_at && <> on {new Date(active.signed_at).toLocaleString()}</>}.
-              </div>
+              {active.carried_forward ? (
+                // Minor revisions (Q154): the signature is on an earlier version; say which, and that this is a minor change.
+                <div className="text-sm font-medium text-green-900" data-testid="sp-policies-carried">
+                  You signed version {active.signed_version_label}
+                  {active.signed_at && <> on {new Date(active.signed_at).toLocaleString()}</>}. Version {active.version_label} is a minor revision of it, so no new signature is needed.
+                </div>
+              ) : (
+                <div className="text-sm font-medium text-green-900">
+                  You already signed this version
+                  {active.signed_at && <> on {new Date(active.signed_at).toLocaleString()}</>}.
+                </div>
+              )}
               {active.typed_signature && (
                 <div className="text-xs text-green-800 mt-1">Signature on file: {active.typed_signature}</div>
               )}
@@ -725,6 +735,12 @@ function StaffPortalPoliciesView({
                       {p.version_number != null && <>Version {p.version_label ?? p.version_number}{" "}</>}
                       {p.effective_date && <>&middot; Effective {p.effective_date}</>}
                     </div>
+                    {/* Minor revisions (Q154): the lab carries signatures forward, and staff are told the document changed. */}
+                    {p.carried_forward && (
+                      <div className="text-xs text-amber-800 dark:text-amber-400" data-testid="sp-policies-row-updated">
+                        Updated since you signed version {p.signed_version_label}. This is a minor revision, so no new signature is needed. Open it to see the current version.
+                      </div>
+                    )}
                   </div>
                   {p.signed ? (
                     <span className="text-xs px-2 py-1 rounded bg-green-100 text-green-900" data-testid="sp-policies-row-signed">

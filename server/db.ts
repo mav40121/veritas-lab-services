@@ -2404,6 +2404,10 @@ try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_lab_members_token ON la
   const ensure = (col: string, sql: string) => {
     if (!labCols.includes(col)) { try { sqlite.exec(sql); labCols.push(col); } catch {} }
   };
+  // VeritaDC minor revisions (Michael 2026-11-03, Q154 = 1): 1 = a staff signature or completed attestation on a version
+  // still counts after a MINOR revision of it (same major number), and staff are told of the change; NULL/0 = everyone
+  // signs again on every new version (the behavior before this setting, and the default). Never across a major revision.
+  ensure("dc_minor_revision_carry_forward", "ALTER TABLE labs ADD COLUMN dc_minor_revision_carry_forward INTEGER");
   // Corrective-action due window override (days from the anchor date). NULL =
   // the accreditor default in dueDateForFinding (CAP 30, TJC 60, CMS 10, AABB
   // 45, COLA 30). Set per lab, or per organization (organizations.finding_due_days)

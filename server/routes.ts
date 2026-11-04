@@ -228,6 +228,7 @@ import { TERMS_VERSION } from "../shared/termsOfUse";
 import { orderManualTree, manualMoveProblem, MAX_MANUAL_DEPTH } from "../shared/manualTree";
 import { versionLabel, nextVersionParts, cleanDocNumber, docNumberKey, DOC_NUMBER_MAX } from "../shared/policyVersion";
 import { isPolicyDocType, docTypeRules, DOC_TYPE_REVIEW_MONTHS } from "../shared/policyDocTypes";
+import { labCarriesMinorRevisions, signatureStillCurrent, carriedStaffSignature } from "./policyMinorRevision";
 import { assessmentTypeLabel, assessmentTypeProblem, isEvaluationProgram, normalizeRecordKind } from "@shared/competencyEvaluation";
 import { normalizeSpecimen, normalizeReportableField, specimenLabel } from "@shared/veritamapSpecimen";
 import { buildCompetencyRegisterRows, generateCompetencyRegisterExcel } from "./competencyRegisterExcel";
@@ -8175,20 +8176,27 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       ).all(employeeId, labId) as any[];
 
       res.json({
-        policies: policies.map((p: any) => ({
-          document_id: p.document_id,
-          title: p.title,
-          description: p.description,
-          version_id: p.current_version_id,
-          version_number: p.version_number,
-          version_label: versionLabel(p),
-          doc_number: p.doc_number ?? null,
-          effective_date: p.effective_date,
-          next_review_date: p.next_review_date,
-          signed: p.signature_id != null,
-          signed_at: p.signed_at,
-          typed_signature: p.typed_signature,
-        })),
+        policies: policies.map((p: any) => {
+          // Minor revisions (Q154): in a lab that carries them forward, a signature on an earlier version with the same
+          // major number still counts, and the list says the document changed since (server/policyMinorRevision.ts).
+          const carried = p.signature_id == null ? carriedStaffSignature(sqlite, labId, p.document_id, employeeId, p.current_version_id) : null;
+          return {
+            document_id: p.document_id,
+            title: p.title,
+            description: p.description,
+            version_id: p.current_version_id,
+            version_number: p.version_number,
+            version_label: versionLabel(p),
+            doc_number: p.doc_number ?? null,
+            effective_date: p.effective_date,
+            next_review_date: p.next_review_date,
+            signed: p.signature_id != null || !!carried,
+            signed_at: carried ? carried.signed_at : p.signed_at,
+            typed_signature: carried ? carried.typed_signature : p.typed_signature,
+            carried_forward: !!carried,
+            signed_version_label: carried ? carried.signed_version_label : null,
+          };
+        }),
       });
     } catch (err: any) {
       console.error("[staff-portal-session/policies GET] error:", err);
@@ -39441,6 +39449,38 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     }
   );
 
+  // Minor revisions (Michael 2026-11-03, Q154 = 1; server/policyMinorRevision.ts): this lab's choice between staff signing
+  // again on every new version (the default) and signatures carrying forward across minor revisions.
+  app.get("/api/labs/:labId/veritapolicy/settings/minor-revisions", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    const sqlite = (db as any).$client;
+    res.json({ carryForward: labCarriesMinorRevisions(sqlite, req.scope.labId) });
+  });
+  app.put(
+    "/api/labs/:labId/veritapolicy/settings/minor-revisions",
+    authMiddleware,
+    labScopeMiddleware,
+    requireWriteAccess,
+    requireModuleEdit("veritapolicy"),
+    (req: any, res) => {
+      const { carryForward } = req.body || {};
+      if (typeof carryForward !== "boolean") return res.status(400).json({ error: "carryForward must be true or false", code: "BAD_VALUE" });
+      const sqlite = (db as any).$client;
+      const before = labCarriesMinorRevisions(sqlite, req.scope.labId);
+      sqlite.prepare("UPDATE labs SET dc_minor_revision_carry_forward = ? WHERE id = ?").run(carryForward ? 1 : 0, req.scope.labId);
+      if (before !== carryForward) {
+        writeAuditLog(sqlite, {
+          labId: req.scope.labId,
+          userId: req.userId,
+          action: "minor_revision_rule_changed",
+          details: { from: before ? "carry_forward" : "re_sign", to: carryForward ? "carry_forward" : "re_sign" },
+          ipAddress: req.ip,
+          userAgent: req.headers["user-agent"] as string | undefined,
+        });
+      }
+      res.json({ ok: true, carryForward });
+    }
+  );
+
   // GET /api/labs/:labId/veritapolicy/manuals — list lab manuals (tree order, with parent_id, depth and path).
   // Seeds the 10 default manuals on first call so labs do not start empty.
   app.get(
@@ -43387,7 +43427,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const enriched = rows.map((r) => {
         const last_opened_at = openMap.get(r.assigned_to_user_id) ?? null;
         const is_stale_version =
-          doc.current_version_id != null && r.version_id !== doc.current_version_id;
+          // Minor revisions (Q154): stale unless signed on this version, or on an earlier minor one in a lab that carries them forward.
+          doc.current_version_id != null && !signatureStillCurrent(sqlite, req.scope.labId, r.version_id, doc.current_version_id);
         const status = deriveAttestationStatus({
           completedAt: r.completed_at,
           dueDate: r.due_date,
@@ -43472,7 +43513,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         .all(id) as any[];
       const attestations = attRows.map((r) => ({
         ...r,
-        is_stale_version: doc.current_version_id != null && r.version_id !== doc.current_version_id,
+        is_stale_version: doc.current_version_id != null && !signatureStillCurrent(sqlite, req.scope.labId, r.version_id, doc.current_version_id),
       }));
 
       // Staff Portal (kiosk) read-and-sign signatures.
@@ -43567,7 +43608,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         .all(req.userId, req.scope.labId) as any[];
       const enriched = withManualTree(sqlite, req.scope.labId, rows).map((r) => ({
         ...r,
-        is_stale_version: r.current_version_id != null && r.version_id !== r.current_version_id,
+        is_stale_version: r.current_version_id != null && !signatureStillCurrent(sqlite, req.scope.labId, r.version_id, r.current_version_id),
       }));
       res.json({ pending: enriched });
     }
