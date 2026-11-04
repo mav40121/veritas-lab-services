@@ -661,13 +661,13 @@ Receipts: an integration test for the derivation (linked, unlinked fallback, una
 The federal rule (21 CFR 1271.290, eCFR as of 2026-10-01) requires a tracking system that "enables the tracking of all HCT/Ps from: (i) The donor to the consignee or final disposition; and (ii) The consignee or final disposition to the donor", keyed on the supplier's "distinct identification code". The hospital is the consignee in that chain.
 
 Open questions for the scope:
-- Patient identifiers. The form records the recipient's name and medical record number, and VeritaAssure stores no PHI. Options: record only the tissue ID and an encounter or case reference the hospital resolves in its own EHR, or put the account under a BAA. This must be settled before any build.
+- Patient identifiers. SETTLED 2026-11-03 (Michael, Q152 = 1): no PHI. VeritaAssure never stores the recipient's name or medical record number. Each unit records the supplier's tissue ID, the implant date and the surgeon, and the hospital's chart holds the patient link; a recall runs tissue ID, then our record, then the chart. Victor was told and asked whether the tissue ID is recorded in the patient's chart (2026-11-04 01:00Z).
 - The TJC transplant safety standard numbers and the record retention period to carry, sourced from the current standard before the build.
 - Storage monitoring: freezer and refrigerator temperatures for stored tissue, and whether that ties to VeritaMaintain or VeritaStock.
 - Whether the supplier usage card prints from the record.
 
 **Source:** Michael 2026-10-23: "put in parking lot: Tissue storage module with full tracking", then "use this as the core of the tissue module. It can be a sub module within veritastock", with Heywood's BB FORM.xlsm (copy at VLS Leads\Heywood Healthcare\Heywood_BB_Tissue_Form_from_Michael_2026-10-23.xlsm).
-**Status:** Open. Parked, not scoped. The first draft of this entry read "tissue" as anatomic pathology slides and blocks; corrected the same day from the form.
+**Status:** Open. Scoped 2026-11-03 and queued right after Heywood's VeritaDC document load (parity plan steps A to F). The scope (Lab\Verita Products\Product Specs\VeritaStock_tissue_submodule_scope_2026-11-03.md) found that VeritaStock tracks lots as quantities only, so the sub-module adds one row per graft keyed on the supplier's ID. It reuses the catalog, suppliers, recall matching and the VeritaMaintain temperature logs, and adds a server-side PHI refusal on its free text. The first draft of this entry read "tissue" as anatomic pathology slides and blocks; corrected the same day from the form.
 
 ---
 
