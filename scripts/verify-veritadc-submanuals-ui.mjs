@@ -39,6 +39,9 @@ const micro = await mk("Heywood Microbiology", hh);
 const idnow = await mk("HH Abbott ID NOW", micro);
 const athol = await mk("Athol Hospital");
 const equip = await mk("Equipment", athol);
+// A long name, like Heywood's "HH Microbiology Infection control/Epidemiology": production 11/4 showed a long name pushing
+// the Manuals dialog's rows past its edge.
+await mk("HH Microbiology Infection control/Epidemiology and Outbreak Response Procedures", micro);
 const doc = (manualId, title) => sql(
   "INSERT INTO policy_documents (lab_id, manual_id, title, status, owner_user_id, review_interval_months, created_at, updated_at) VALUES (?, ?, ?, 'draft', ?, 24, datetime('now'), datetime('now'))",
   labId, manualId, title, userId);
@@ -86,6 +89,14 @@ check("U2. the Manuals dialog shows the whole tree, indented (empty manuals incl
   rowInfo.length >= 15 && r("HH Abbott ID NOW")?.pad === "44px" && r("Heywood Microbiology")?.pad === "26px" && r("Chemistry")?.pad === "8px",
   JSON.stringify({ n: rowInfo.length, idnow: r("HH Abbott ID NOW"), micro: r("Heywood Microbiology") }));
 await page.waitForTimeout(800);
+const fit = await page.evaluate(() => {
+  const dlg = document.querySelector('[role="dialog"]')?.getBoundingClientRect();
+  const rows = [...document.querySelectorAll('[data-testid="manuals-row"]')].map((e) => e.getBoundingClientRect().right);
+  const close = [...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent.trim() === "Close")?.getBoundingClientRect();
+  return { dlgRight: dlg?.right, maxRow: Math.max(...rows), closeRight: close?.right };
+});
+check("U2. a long manual name stays inside the dialog (rows and Close fit; the name truncates)",
+  fit.maxRow <= fit.dlgRight && fit.closeRight <= fit.dlgRight, JSON.stringify(fit));
 await page.screenshot({ path: `${OUT}/submanuals-dialog.png` });
 
 // U3: options for Heywood Microbiology exclude its own sub-manual; then move Equipment under Heywood Microbiology
