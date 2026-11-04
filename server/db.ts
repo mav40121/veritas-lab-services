@@ -4545,7 +4545,42 @@ sqlite.exec(`
   CREATE INDEX IF NOT EXISTS idx_temp_units_lab ON temp_log_units(lab_id, active);
   CREATE INDEX IF NOT EXISTS idx_temp_readings_unit ON temp_log_readings(unit_id, reading_date);
   CREATE INDEX IF NOT EXISTS idx_temp_readings_lab ON temp_log_readings(lab_id, reading_date);
+
+  -- Monthly review of VeritaMaintain records (Michael 2026-11-04, Q161 = 1; server/maintainRecordReview.ts). One signed row per
+  -- instrument or temperature unit per month. It keeps what the reviewer saw, so a later entry can't quietly change what was signed.
+  CREATE TABLE IF NOT EXISTS maintain_record_reviews (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    period TEXT NOT NULL,
+    item_type TEXT NOT NULL,
+    item_id INTEGER NOT NULL,
+    item_name TEXT NOT NULL,
+    summary_json TEXT NOT NULL DEFAULT '{}',
+    problems_json TEXT NOT NULL DEFAULT '[]',
+    corrective_action TEXT,
+    reviewed_by_user_id INTEGER NOT NULL,
+    typed_signature TEXT NOT NULL,
+    capacity TEXT NOT NULL,
+    capacity_label TEXT NOT NULL,
+    delegation_id INTEGER,
+    ip_address TEXT,
+    user_agent TEXT,
+    signed_at TEXT NOT NULL,
+    UNIQUE(lab_id, period, item_type, item_id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_maintain_reviews_lab ON maintain_record_reviews(lab_id, period);
 `);
+{
+  // NEW DB TABLE RULE: an older live copy gets any missing columns.
+  try {
+    const cols = (sqlite.prepare("PRAGMA table_info(maintain_record_reviews)").all() as { name: string }[]).map((c) => c.name);
+    for (const [c, t] of [["lab_id", "INTEGER"], ["period", "TEXT"], ["item_type", "TEXT"], ["item_id", "INTEGER"], ["item_name", "TEXT"], ["summary_json", "TEXT"],
+      ["problems_json", "TEXT"], ["corrective_action", "TEXT"], ["reviewed_by_user_id", "INTEGER"], ["typed_signature", "TEXT"], ["capacity", "TEXT"], ["capacity_label", "TEXT"],
+      ["delegation_id", "INTEGER"], ["ip_address", "TEXT"], ["user_agent", "TEXT"], ["signed_at", "TEXT"]] as const) {
+      if (!cols.includes(c)) { try { sqlite.exec(`ALTER TABLE maintain_record_reviews ADD COLUMN ${c} ${t}`); } catch {} }
+    }
+  } catch {}
+}
 {
   // NEW DB TABLE RULE: an older live copy gets any missing columns.
   try {

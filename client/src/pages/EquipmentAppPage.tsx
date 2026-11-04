@@ -23,6 +23,7 @@ import {
 import { Wrench, Lock, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { TemperatureLogsPanel } from "@/components/TemperatureLogsPanel";
+import { MonthlyRecordReviewPanel } from "@/components/MonthlyRecordReviewPanel";
 
 interface Equipment {
   id: number;
@@ -420,6 +421,7 @@ export default function EquipmentAppPage() {
 
       {/* Temperature logs (St. Charles REQ-068): storage units, readings, out-of-range corrective action. */}
       <TemperatureLogsPanel labId={Number(activeLabId)} />
+      <MonthlyRecordReviewPanel labId={Number(activeLabId)} />
 
       {/* Add / edit equipment */}
       <Dialog open={eqOpen} onOpenChange={(o) => { if (!o) resetEqForm(); setEqOpen(o); }}>

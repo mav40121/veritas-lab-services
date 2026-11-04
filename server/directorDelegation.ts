@@ -19,7 +19,7 @@ export type DelegationPosition =
   | "general_supervisor";
 
 export type DelegationComplexity = "moderate" | "high";
-export type DelegationGate = "qc_period_cosign" | "finding_closure";
+export type DelegationGate = "qc_period_cosign" | "finding_closure" | "equipment_record_review";
 
 export interface DelegationItem {
   key: string;
@@ -51,6 +51,8 @@ export const DELEGATION_CATALOG: DelegationItem[] = [
     label: "Establish and maintain acceptable analytical performance for each test system." },
   { key: "finding_closure", group: "General laboratory testing", positions: ["technical_consultant", "technical_supervisor", "general_supervisor"], gate: "finding_closure",
     label: "Review and close corrective actions and inspection findings (remedial action; results reported only when the system functions)." },
+  { key: "equipment_record_review", group: "General laboratory testing", positions: ["technical_consultant", "technical_supervisor", "general_supervisor"], gate: "equipment_record_review",
+    label: "Review instrument, equipment and temperature records at least monthly and record corrective action." },
 
   // Technical Consultant / Technical Supervisor - proficiency testing
   { key: "pt_program", group: "Proficiency testing", positions: TC_TS,
