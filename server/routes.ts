@@ -39319,6 +39319,25 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         )
         .all(labId) as any[]
     );
+  // Display lists name each row's manual by its full path (manual_path, manual_depth) so they read like the documents
+  // page. With `reorder`, rows also follow the tree (stable within a manual); rows whose manual is no longer listed keep
+  // their own name and come after the tree, and rows with no manual come last.
+  const withManualTree = <T extends { manual_id?: number | null; manual_name?: string | null }>(
+    sqlite: any, labId: number, rows: T[], reorder = false
+  ) => {
+    const tree = labManualTree(sqlite, labId);
+    const at = new Map(tree.map((m, i) => [m.id, { i, path: m.path, depth: m.depth }]));
+    const out = rows.map((r, n) => {
+      const t = r.manual_id != null ? at.get(r.manual_id) : undefined;
+      return {
+        row: { ...r, manual_path: t ? t.path : r.manual_name ?? null, manual_depth: t ? t.depth : 0 },
+        key: t ? t.i : r.manual_id != null ? tree.length : tree.length + 1,
+        n,
+      };
+    });
+    if (reorder) out.sort((a, b) => a.key - b.key || a.n - b.n);
+    return out.map((x) => x.row);
+  };
   const parentIdFromBody = (v: any): number | null | "bad" => {
     if (v === null || v === undefined || v === "") return null;
     const n = Number(v);
@@ -40101,7 +40120,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
             ORDER BY version_number DESC`
         )
         .all(id);
-      res.json({ document: row, versions });
+      res.json({ document: withManualTree(sqlite, req.scope.labId, [row])[0], versions });
     }
   );
 
@@ -41586,15 +41605,16 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       .prepare(
         `SELECT d.id, d.title, d.description, d.effective_date, d.next_review_date,
                 d.review_interval_months, v.version_number AS current_version_number,
-                v.file_format AS current_file_format, m.name AS manual_name
+                v.file_format AS current_file_format, d.manual_id, m.name AS manual_name
            FROM policy_documents d
            LEFT JOIN policy_versions v ON v.id = d.current_version_id
            LEFT JOIN policy_manuals m ON m.id = d.manual_id
           WHERE d.lab_id = ? AND d.status = 'approved' AND d.archived_at IS NULL
           ORDER BY m.display_order ASC, m.name ASC, d.title ASC`
       )
-      .all(r.labId);
-    res.json({ lab, documents: docs });
+      .all(r.labId) as any[];
+    // Sub-manuals: the inspector sees the lab's manual tree, each document under its manual's full path.
+    res.json({ lab, documents: withManualTree(sqlite, r.labId, docs, true) });
   });
 
   // GET /api/surveyor/:token/policies/:id/render — render approved policy
@@ -41896,7 +41916,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
             LIMIT 50`
         )
         .all(req.scope.labId, pattern, pattern);
-      res.json({ results: rows });
+      res.json({ results: withManualTree(sqlite, req.scope.labId, rows as any[]) });
     }
   );
 
@@ -42189,10 +42209,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const sqlite = (db as any).$client;
       const labId = req.scope.labId;
 
-      // Per-manual counts: total documents + by-status counts.
-      const perManual = sqlite
+      // Per-manual counts: total documents + by-status counts. In tree order, each manual named by its full path. A
+      // manual that was archived while it still held documents keeps a row (marked), so the rows add up to the headline.
+      const perManualRows = sqlite
         .prepare(
-          `SELECT m.id AS manual_id, m.name AS manual_name,
+          `SELECT m.id AS manual_id,
+                  CASE WHEN m.archived_at IS NULL THEN m.name ELSE m.name || ' (archived manual)' END AS manual_name,
                   COUNT(d.id) AS total,
                   SUM(CASE WHEN d.status = 'approved' THEN 1 ELSE 0 END) AS approved,
                   SUM(CASE WHEN d.status = 'in_review' THEN 1 ELSE 0 END) AS in_review,
@@ -42210,11 +42232,14 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
              FROM policy_manuals m
              LEFT JOIN policy_documents d
                ON d.manual_id = m.id AND d.archived_at IS NULL
-            WHERE m.lab_id = ? AND m.archived_at IS NULL
+            WHERE m.lab_id = ?
+              AND (m.archived_at IS NULL
+                   OR EXISTS (SELECT 1 FROM policy_documents x WHERE x.manual_id = m.id AND x.archived_at IS NULL))
             GROUP BY m.id
             ORDER BY m.display_order ASC, m.name ASC`
         )
-        .all(labId, { today: labToday() });
+        .all(labId, { today: labToday() }) as any[];
+      const perManual = withManualTree(sqlite, labId, perManualRows, true);
 
       // Add an "Unassigned" pseudo-row for docs without a manual.
       const unassigned = sqlite
@@ -42296,7 +42321,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       // Pending review by step: which docs are sitting in_review at which step.
       const pendingReviewList = sqlite
         .prepare(
-          `SELECT d.id, d.title, d.workflow_id, d.updated_at,
+          `SELECT d.id, d.title, d.workflow_id, d.updated_at, d.manual_id,
                   m.name AS manual_name
              FROM policy_documents d
              LEFT JOIN policy_manuals m ON m.id = d.manual_id
@@ -42306,7 +42331,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         )
         .all(labId) as any[];
       // Attach pending step info using the same helper as GET /documents.
-      const pendingReviewEnriched = pendingReviewList.map((d) => {
+      const pendingReviewEnriched = withManualTree(sqlite, labId, pendingReviewList).map((d) => {
         const pending = getCurrentPendingStep(sqlite, d.id);
         return {
           ...d,
@@ -42373,8 +42398,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
             due_soon: unassigned?.due_soon ?? 0,
           },
         ].filter((m: any) => m.total > 0),
-        overdueList,
-        dueSoonList,
+        overdueList: withManualTree(sqlite, labId, overdueList as any[]),
+        dueSoonList: withManualTree(sqlite, labId, dueSoonList as any[]),
         perUserAttest,
         perStaffAttest,
         pendingReviewList: pendingReviewEnriched,
@@ -42396,8 +42421,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const sqlite = (db as any).$client;
       const labId = req.scope.labId;
 
-      const perManual = sqlite.prepare(`
-        SELECT m.id AS manual_id, m.name AS manual_name,
+      // Same rows as the dashboard: tree order, full paths, archived manuals that still hold documents kept and marked.
+      const perManualRows = sqlite.prepare(`
+        SELECT m.id AS manual_id,
+               CASE WHEN m.archived_at IS NULL THEN m.name ELSE m.name || ' (archived manual)' END AS manual_name,
                COUNT(d.id) AS total,
                SUM(CASE WHEN d.status = 'approved' THEN 1 ELSE 0 END) AS approved,
                SUM(CASE WHEN d.status = 'in_review' THEN 1 ELSE 0 END) AS in_review,
@@ -42414,13 +42441,16 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
                         THEN 1 ELSE 0 END) AS due_soon
           FROM policy_manuals m
           LEFT JOIN policy_documents d ON d.manual_id = m.id AND d.archived_at IS NULL
-         WHERE m.lab_id = ? AND m.archived_at IS NULL
+         WHERE m.lab_id = ?
+           AND (m.archived_at IS NULL
+                OR EXISTS (SELECT 1 FROM policy_documents x WHERE x.manual_id = m.id AND x.archived_at IS NULL))
          GROUP BY m.id
          ORDER BY m.display_order ASC, m.name ASC
       `).all(labId, { today: labToday() }) as any[];
+      const perManual = withManualTree(sqlite, labId, perManualRows, true);
 
-      const overdueList = sqlite.prepare(`
-        SELECT d.id, d.title, d.next_review_date, m.name AS manual_name
+      const overdueList = withManualTree(sqlite, labId, sqlite.prepare(`
+        SELECT d.id, d.title, d.next_review_date, d.manual_id, m.name AS manual_name
           FROM policy_documents d
           LEFT JOIN policy_manuals m ON m.id = d.manual_id
          WHERE d.lab_id = ? AND d.archived_at IS NULL
@@ -42428,10 +42458,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
            AND d.next_review_date IS NOT NULL
            AND date(d.next_review_date) < date(@today)
          ORDER BY d.next_review_date ASC
-      `).all(labId, { today: labToday() }) as any[];
+      `).all(labId, { today: labToday() }) as any[]);
 
-      const dueSoonList = sqlite.prepare(`
-        SELECT d.id, d.title, d.next_review_date, m.name AS manual_name
+      const dueSoonList = withManualTree(sqlite, labId, sqlite.prepare(`
+        SELECT d.id, d.title, d.next_review_date, d.manual_id, m.name AS manual_name
           FROM policy_documents d
           LEFT JOIN policy_manuals m ON m.id = d.manual_id
          WHERE d.lab_id = ? AND d.archived_at IS NULL
@@ -42440,7 +42470,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
            AND date(d.next_review_date) >= date(@today)
            AND date(d.next_review_date) <= date(@today, '+30 days')
          ORDER BY d.next_review_date ASC
-      `).all(labId, { today: labToday() }) as any[];
+      `).all(labId, { today: labToday() }) as any[]);
 
       // Same rollup as the dashboard (BUG-034): this lab's current policies only.
       const perUserAttest = sqlite.prepare(`
@@ -42570,7 +42600,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       styleHeaderRow(perManualSheet, ["Manual", "Total", "Approved", "In Review", "Draft", "Expired", "Overdue", "Due Soon"]);
       for (const m of perManual) {
         perManualSheet.addRow([
-          m.manual_name || "Unassigned",
+          m.manual_path || m.manual_name || "Unassigned",
           Number(m.total || 0),
           Number(m.approved || 0),
           Number(m.in_review || 0),
@@ -42580,7 +42610,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           Number(m.due_soon || 0),
         ]);
       }
-      perManualSheet.getColumn(1).width = 32;
+      perManualSheet.getColumn(1).width = 56; // full sub-manual paths
       for (let c = 2; c <= 8; c++) perManualSheet.getColumn(c).width = 12;
 
       // Overdue Documents
@@ -42594,10 +42624,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         return Math.floor((today.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
       };
       for (const d of overdueList) {
-        overdueSheet.addRow([d.title || "", d.manual_name || "Unassigned", d.next_review_date || "", fmtDays(d.next_review_date)]);
+        overdueSheet.addRow([d.title || "", d.manual_path || d.manual_name || "Unassigned", d.next_review_date || "", fmtDays(d.next_review_date)]);
       }
       overdueSheet.getColumn(1).width = 40;
-      overdueSheet.getColumn(2).width = 26;
+      overdueSheet.getColumn(2).width = 44;
       overdueSheet.getColumn(3).width = 18;
       overdueSheet.getColumn(4).width = 14;
 
@@ -42611,10 +42641,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         return Math.floor((d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
       };
       for (const d of dueSoonList) {
-        dueSoonSheet.addRow([d.title || "", d.manual_name || "Unassigned", d.next_review_date || "", fmtDaysRem(d.next_review_date)]);
+        dueSoonSheet.addRow([d.title || "", d.manual_path || d.manual_name || "Unassigned", d.next_review_date || "", fmtDaysRem(d.next_review_date)]);
       }
       dueSoonSheet.getColumn(1).width = 40;
-      dueSoonSheet.getColumn(2).width = 26;
+      dueSoonSheet.getColumn(2).width = 44;
       dueSoonSheet.getColumn(3).width = 18;
       dueSoonSheet.getColumn(4).width = 16;
 
@@ -43348,7 +43378,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
             ORDER BY (a.due_date IS NULL), a.due_date ASC, a.assigned_at ASC`
         )
         .all(req.userId, req.scope.labId) as any[];
-      const enriched = rows.map((r) => ({
+      const enriched = withManualTree(sqlite, req.scope.labId, rows).map((r) => ({
         ...r,
         is_stale_version: r.current_version_id != null && r.version_id !== r.current_version_id,
       }));

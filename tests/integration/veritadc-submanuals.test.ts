@@ -167,6 +167,57 @@ async function main() {
     check("8. the delegation picker lists manuals by full path in tree order",
       names.includes("Heywood Hospital › Heywood Microbiology Dept › HH Abbott ID NOW") && names.indexOf("Heywood Hospital") < names.indexOf("Heywood Hospital › Heywood Microbiology Dept"),
       `${names.length} manuals`);
+
+    // 9. Compliance dashboard: tree order, paths, and an archived manual that still holds a document keeps its row
+    const docMicro = Number(insDoc.run(A.labId, micro, "Made-up gram stain procedure", A.userId).lastInsertRowid);
+    const docHh = Number(insDoc.run(A.labId, hh, "Made-up critical results policy", A.userId).lastInsertRowid);
+    const comp = (await call("GET", `/api/labs/${A.labId}/veritapolicy/compliance`, undefined, A.token)).body;
+    const pm = (comp.perManual || []) as any[];
+    const rowOf = (id: number) => pm.find((m) => m.manual_id === id);
+    const pmAt = (id: number) => pm.findIndex((m) => m.manual_id === id);
+    check("9. the compliance rollup comes in tree order with full paths and depth",
+      pmAt(hh) >= 0 && pmAt(hh) < pmAt(micro) && pmAt(micro) < pmAt(idnow) && rowOf(idnow)?.manual_path === "Heywood Hospital › Heywood Microbiology Dept › HH Abbott ID NOW" && rowOf(idnow)?.manual_depth === 2,
+      pm.map((m) => `${m.manual_path}:${m.total}`).join(" | "));
+    const total = pm.reduce((s, m) => s + Number(m.total || 0), 0);
+    check("9. a manual archived while holding a document keeps a marked row, so the rows add up to the headline",
+      rowOf(eqA)?.manual_name === "Equipment (archived manual)" && rowOf(eqA)?.total === 1 && total === Number(comp.headline?.doc_total),
+      `rows ${total} headline ${comp.headline?.doc_total} :: ${JSON.stringify(rowOf(eqA))}`);
+
+    // 10. The compliance workbook names manuals by path in the same order
+    const xr = await fetch(`${base}/api/labs/${A.labId}/veritapolicy/compliance/xlsx`, { headers: { Authorization: `Bearer ${A.token}` } });
+    const ExcelJS = (await import("exceljs")).default;
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(await xr.arrayBuffer()) as any);
+    const sheet = wb.getWorksheet("Per Manual");
+    const col1: string[] = [];
+    sheet?.getColumn(1).eachCell((c, n) => { if (n > 1) col1.push(String(c.value ?? "")); });
+    const xi = (p: string) => col1.indexOf(p);
+    check("10. the workbook's Per Manual sheet lists full paths in tree order",
+      xr.status === 200 && xi("Heywood Hospital") >= 0 && xi("Heywood Hospital") < xi("Heywood Hospital › Heywood Microbiology Dept") &&
+        xi("Heywood Hospital › Heywood Microbiology Dept") < xi("Heywood Hospital › Heywood Microbiology Dept › HH Abbott ID NOW"),
+      `${xr.status} :: ${col1.slice(0, 8).join(" | ")}`);
+
+    // 11. Inspector link: approved documents in tree order under full paths
+    sqlite.prepare("UPDATE policy_documents SET status = 'approved' WHERE id IN (?, ?, ?)").run(docIdNow, docMicro, docHh);
+    const link = await call("POST", `/api/labs/${A.labId}/veritapolicy/surveyor-links`, { label: "Made-up inspection", expiresInDays: 1 }, A.token);
+    const sv = (await call("GET", `/api/surveyor/${link.body.token}/policies`)).body.documents as any[];
+    const svIds = (sv || []).map((d) => d.id);
+    check("11. the inspector link lists documents in tree order with full paths",
+      link.status === 201 && svIds.indexOf(docHh) < svIds.indexOf(docMicro) && svIds.indexOf(docMicro) < svIds.indexOf(docIdNow) &&
+        sv.find((d) => d.id === docIdNow)?.manual_path === "Heywood Hospital › Heywood Microbiology Dept › HH Abbott ID NOW",
+      `${link.status} :: ${(sv || []).map((d) => d.manual_path).join(" | ")}`);
+
+    // 12. Pending attestations and search carry the path
+    const vId = Number(sqlite.prepare("INSERT INTO policy_versions (document_id, version_number, file_path, file_format, file_size_bytes, file_hash_sha256, uploaded_by, uploaded_at) VALUES (?, 1, 'made-up.docx', 'docx', 1, 'x', ?, datetime('now'))").run(docIdNow, A.userId).lastInsertRowid);
+    sqlite.prepare("UPDATE policy_documents SET current_version_id = ? WHERE id = ?").run(vId, docIdNow);
+    sqlite.prepare("INSERT INTO policy_attestations (document_id, version_id, assigned_to_user_id, assigned_by, assigned_at) VALUES (?, ?, ?, ?, datetime('now'))").run(docIdNow, vId, A.userId, A.userId);
+    const pend = (await call("GET", `/api/labs/${A.labId}/veritapolicy/pending-attestations`, undefined, A.token)).body.pending as any[];
+    const srch = (await call("GET", `/api/labs/${A.labId}/veritapolicy/search?q=ID%20NOW`, undefined, A.token)).body.results as any[];
+    const one = (await call("GET", `/api/labs/${A.labId}/veritapolicy/documents/${docIdNow}`, undefined, A.token)).body.document;
+    const P = "Heywood Hospital › Heywood Microbiology Dept › HH Abbott ID NOW";
+    check("12. pending attestations, search and the document view name the manual by full path",
+      pend?.find((p) => p.document_id === docIdNow)?.manual_path === P && srch?.find((s) => s.id === docIdNow)?.manual_path === P && one?.manual_path === P,
+      JSON.stringify({ pend: pend?.find((p) => p.document_id === docIdNow)?.manual_path, srch: srch?.find((s) => s.id === docIdNow)?.manual_path, one: one?.manual_path }));
   } finally {
     server.close();
   }

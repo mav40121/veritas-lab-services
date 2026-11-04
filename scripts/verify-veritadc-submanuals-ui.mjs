@@ -123,6 +123,31 @@ await dark.waitForTimeout(800); // let the dialog finish fading in
 await dark.screenshot({ path: `${OUT}/submanuals-dialog-dark.png` });
 check("U5. the dialog renders in dark mode", (await dark.getByTestId("manuals-row").count()) >= 15);
 
+// U6: the compliance dashboard's per-manual table follows the tree, indented, sub-manuals named by their own name
+const comp = await open();
+await comp.goto(`${BASE}/labs/${labId}/veritapolicy-app/compliance`, { waitUntil: "networkidle" });
+await comp.getByTestId("compliance-manual-cell").first().waitFor({ timeout: 20000 }).catch(() => {});
+const cells = await comp.getByTestId("compliance-manual-cell").evaluateAll((els) => els.map((e) => ({ text: e.textContent.trim(), pad: e.style.paddingLeft, title: e.title })));
+const cell = (t) => cells.findIndex((c) => c.text === t);
+check("U6. the compliance table lists manuals in tree order, sub-manuals indented with the full path on hover",
+  cell("Heywood Hospital") >= 0 && cell("Heywood Hospital") < cell("Heywood Microbiology") && cell("Heywood Microbiology") < cell("HH Abbott ID NOW") &&
+    cells[cell("HH Abbott ID NOW")]?.pad === "32px" && cells[cell("HH Abbott ID NOW")]?.title === "Heywood Hospital › Heywood Microbiology › HH Abbott ID NOW",
+  JSON.stringify(cells.slice(0, 6)));
+await comp.screenshot({ path: `${OUT}/submanuals-compliance.png`, fullPage: true });
+
+// U7: the inspector's read-only view groups approved documents by full path, in tree order
+sql("UPDATE policy_documents SET status = 'approved' WHERE lab_id = ?", labId);
+const link = await call("POST", `/api/labs/${labId}/veritapolicy/surveyor-links`, { label: "Made-up inspection", expiresInDays: 1 }, token);
+const insp = await (await browser.newContext({ viewport: { width: 1300, height: 950 } })).newPage();
+await insp.goto(`${BASE}/surveyor/${link.body.token}`, { waitUntil: "networkidle" });
+await insp.getByText("HH Abbott ID NOW").first().waitFor({ timeout: 20000 }).catch(() => {});
+const inspText = await insp.evaluate(() => document.body.innerText);
+const ia = (t) => inspText.indexOf(t);
+check("U7. the inspector view groups documents under full paths in tree order",
+  link.status === 201 && ia("Heywood Hospital › Heywood Microbiology › HH Abbott ID NOW") > ia("Heywood Hospital › Heywood Microbiology") && ia("Heywood Hospital › Heywood Microbiology") > 0,
+  `${link.status} ${ia("Heywood Hospital › Heywood Microbiology")} ${ia("Heywood Hospital › Heywood Microbiology › HH Abbott ID NOW")}`);
+await insp.screenshot({ path: `${OUT}/submanuals-inspector.png`, fullPage: true });
+
 await browser.close();
 console.log(failures ? `${failures} FAIL` : "ALL PASS");
 process.exit(failures ? 1 : 0);

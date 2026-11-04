@@ -215,6 +215,7 @@ interface PendingAttestation {
   current_version_id: number | null;
   manual_id: number | null;
   manual_name: string | null;
+  manual_path?: string | null;
   is_stale_version: boolean;
 }
 
@@ -1607,7 +1608,7 @@ export default function VeritaPolicyMyPoliciesPage() {
                     <span className="font-medium">{p.title}</span>
                     {p.manual_name && (
                       <span className="ml-2 text-xs text-muted-foreground">
-                        in {p.manual_name}
+                        in {p.manual_path || p.manual_name}
                       </span>
                     )}
                     <div className="text-xs text-muted-foreground">

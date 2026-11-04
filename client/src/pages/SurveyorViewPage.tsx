@@ -24,6 +24,9 @@ interface SurveyorDoc {
   current_version_number: number | null;
   current_file_format: string | null;
   manual_name: string | null;
+  // Sub-manuals: the server sends documents in tree order with each manual's full path and depth.
+  manual_path?: string | null;
+  manual_depth?: number;
 }
 
 interface SurveyorListResponse {
@@ -164,7 +167,7 @@ export default function SurveyorViewPage() {
   const { lab, documents } = data;
   const byManual = new Map<string, SurveyorDoc[]>();
   documents.forEach((d) => {
-    const key = d.manual_name || "Unassigned";
+    const key = d.manual_path || d.manual_name || "Unassigned";
     if (!byManual.has(key)) byManual.set(key, []);
     byManual.get(key)!.push(d);
   });
@@ -194,7 +197,7 @@ export default function SurveyorViewPage() {
         </Card>
       ) : (
         Array.from(byManual.entries()).map(([manualName, docs]) => (
-          <Card key={manualName}>
+          <Card key={manualName} style={{ marginLeft: Math.min(docs[0]?.manual_depth || 0, 6) * 16 }}>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">
                 {manualName}
