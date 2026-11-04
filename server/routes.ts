@@ -229,6 +229,7 @@ import { orderManualTree, manualMoveProblem, MAX_MANUAL_DEPTH } from "../shared/
 import { versionLabel, nextVersionParts, cleanDocNumber, docNumberKey, DOC_NUMBER_MAX } from "../shared/policyVersion";
 import { isPolicyDocType, docTypeRules, DOC_TYPE_REVIEW_MONTHS } from "../shared/policyDocTypes";
 import { labCarriesMinorRevisions, signatureStillCurrent, carriedStaffSignature } from "./policyMinorRevision";
+import { attestationStillCurrent, closeAttestationsCoveredByStaffSignatures, documentSignatureStatus, unsignedDocumentsForStaff } from "./policySignatureStatus";
 import { assessmentTypeLabel, assessmentTypeProblem, isEvaluationProgram, normalizeRecordKind } from "@shared/competencyEvaluation";
 import { normalizeSpecimen, normalizeReportableField, specimenLabel } from "@shared/veritamapSpecimen";
 import { buildCompetencyRegisterRows, generateCompetencyRegisterExcel } from "./competencyRegisterExcel";
@@ -8180,6 +8181,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           // Minor revisions (Q154): in a lab that carries them forward, a signature on an earlier version with the same
           // major number still counts, and the list says the document changed since (server/policyMinorRevision.ts).
           const carried = p.signature_id == null ? carriedStaffSignature(sqlite, labId, p.document_id, employeeId, p.current_version_id) : null;
+          // Someone who already attested to this version in VeritaDC doesn't sign it again here (2026-11-04, Q161).
+          const attested = p.signature_id == null && !carried ? attestationStillCurrent(sqlite, labId, p.document_id, req.staffPortalUserId, p.current_version_id) : null;
           return {
             document_id: p.document_id,
             title: p.title,
@@ -8190,9 +8193,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
             doc_number: p.doc_number ?? null,
             effective_date: p.effective_date,
             next_review_date: p.next_review_date,
-            signed: p.signature_id != null || !!carried,
-            signed_at: carried ? carried.signed_at : p.signed_at,
-            typed_signature: carried ? carried.typed_signature : p.typed_signature,
+            signed: p.signature_id != null || !!carried || !!attested,
+            signed_at: attested ? attested.completed_at : carried ? carried.signed_at : p.signed_at,
+            typed_signature: attested ? attested.typed_signature : carried ? carried.typed_signature : p.typed_signature,
             carried_forward: !!carried,
             signed_version_label: carried ? carried.signed_version_label : null,
           };
@@ -8361,6 +8364,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
          WHERE document_id = ? AND version_id = ? AND staff_employee_id = ?`
       ).get(documentId, versionId, employeeId) as any;
       if (existing) {
+        closeAttestationsCoveredByStaffSignatures(sqlite, labId, { documentId, userId: req.staffPortalUserId });
         return res.json({ id: existing.id, signed_at: existing.signed_at, already_signed: true });
       }
 
@@ -8369,6 +8373,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
          (lab_id, document_id, version_id, staff_employee_id, signed_document_hash, typed_signature, ip_address, user_agent)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
       ).run(labId, documentId, versionId, employeeId, hashOrNull, typed, ip, ua);
+      // If this document was assigned to them, this signature answers it (2026-11-04, Q161).
+      closeAttestationsCoveredByStaffSignatures(sqlite, labId, { documentId, userId: req.staffPortalUserId });
 
       const row = sqlite.prepare(
         `SELECT id, signed_at FROM staff_portal_policy_signatures WHERE id = ?`
@@ -11354,26 +11360,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
        ORDER BY qa.due_date ASC, qa.assigned_at DESC`
     ).all(...empIds) as any[];
 
-    // Pending policies: lab_documents that haven't been signed by
-    // this staff member yet. Mirrors the GET
-    // /api/staff-portal-session/policies pattern but inlined for one
-    // signer.
-    let policies: any[] = [];
-    try {
-      const policyPlaceholders = empIds.map(() => "?").join(",");
-      policies = sqlite.prepare(
-        `SELECT DISTINCT ld.id AS document_id, ld.title, ld.effective_date
-         FROM lab_documents ld
-         WHERE ld.lab_id IN (${labIds.map(() => "?").join(",")})
-           AND ld.status = 'approved'
-           AND NOT EXISTS (
-             SELECT 1 FROM policy_signoffs ps
-             WHERE ps.document_id = ld.id
-               AND ps.staff_employee_id IN (${policyPlaceholders})
-           )
-         LIMIT 100`
-      ).all(...labIds, ...empIds) as any[];
-    } catch { /* policies table shape may differ on older deploys */ }
+    // Pending policies: the same list and rules as the person's My sign-offs tile (2026-11-04, Q161). This read an older table
+    // and a column that doesn't exist, so the bell never listed a document to sign.
+    const policies: any[] = empRows.flatMap((r) => unsignedDocumentsForStaff(sqlite, r.tier2_lab_id, r.id, req.userId));
 
     // Pending competencies: assessments where employee_acknowledged = 0
     // for this staff member's competency_employees bridge.
@@ -43486,6 +43475,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           userAgent: req.headers["user-agent"] as string | undefined,
         });
       }
+      // Someone who already signed this version under My sign-offs has nothing left to do on it (2026-11-04, Q161).
+      closeAttestationsCoveredByStaffSignatures(sqlite, req.scope.labId, { documentId: id });
       res.status(201).json({ assigned: insertedIds.length, ids: insertedIds });
     }
   );
@@ -43504,6 +43495,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         .get(id) as any;
       if (!doc) return res.status(404).json({ error: "Not found" });
       if (doc.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
+      closeAttestationsCoveredByStaffSignatures(sqlite, req.scope.labId, { documentId: id });
       const rows = sqlite
         .prepare(
           `SELECT a.id, a.document_id, a.version_id, a.assigned_to_user_id,
@@ -43572,6 +43564,30 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     }
   );
 
+  // GET /documents/:id/signature-status: everyone on the VeritaStaff roster and whether they have signed this document's current
+  // version, by either path, including the people nobody assigned it to (2026-11-04, Q161; server/policySignatureStatus.ts).
+  const documentRosterStatus = (sqlite: any, labId: number, doc: any) => {
+    const owner = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(labId) as any;
+    const staffLab = owner ? staffLabByLabId(labId, owner.owner_user_id) : null;
+    closeAttestationsCoveredByStaffSignatures(sqlite, labId, { documentId: doc.id });
+    return documentSignatureStatus(sqlite, labId, doc, staffLab?.id ?? null);
+  };
+  app.get(
+    "/api/labs/:labId/veritapolicy/documents/:id/signature-status",
+    authMiddleware,
+    labScopeMiddleware,
+    (req: any, res) => {
+      const id = Number(req.params.id);
+      if (!Number.isFinite(id)) return res.status(400).json({ error: "Bad id" });
+      const sqlite = (db as any).$client;
+      const doc = sqlite.prepare("SELECT id, lab_id, status, doc_type, current_version_id FROM policy_documents WHERE id = ?").get(id) as any;
+      if (!doc) return res.status(404).json({ error: "Not found" });
+      if (doc.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
+      const rule = doc.doc_type ? labDocTypeRules(sqlite, doc.lab_id).find((r) => r.doc_type === doc.doc_type) : null;
+      res.json({ ...documentRosterStatus(sqlite, req.scope.labId, doc), read_and_sign_required: !(rule && !rule.requires_read_and_sign), approved: doc.status === "approved" });
+    }
+  );
+
   // GET /documents/:id/signature-report.xlsx — LHF-7 combined signature report.
   // Fuses the director/approver sign-offs, the writer attestation roster (with
   // stale-version flags), and the Staff Portal kiosk signatures for ONE policy
@@ -43614,6 +43630,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         )
         .all(id) as any[];
 
+      // Everyone on the roster and where they stand, read first because it closes any assignment a signature already answers.
+      const roster = documentRosterStatus(sqlite, req.scope.labId, doc);
+
       // Writer attestation roster with the same stale-version flag the UI shows.
       const attRows = sqlite
         .prepare(
@@ -43646,6 +43665,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           signoffs,
           attestations,
           staffSignatures,
+          roster: roster.people,
         },
         { labName: labRow?.lab_name || "Laboratory", cliaNumber: labRow?.clia_number || "Not on file" }
       );
@@ -43704,6 +43724,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     labScopeMiddleware,
     (req: any, res) => {
       const sqlite = (db as any).$client;
+      closeAttestationsCoveredByStaffSignatures(sqlite, req.scope.labId, { userId: req.userId });
       const rows = sqlite
         .prepare(
           `SELECT a.id AS attestation_id, a.document_id, a.version_id,
