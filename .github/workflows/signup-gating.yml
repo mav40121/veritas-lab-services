@@ -113,6 +113,10 @@ jobs:
         # Michael 2026-11-04 (Q164 = 1): the bulk import template comes filled in per person and method, the date sets the due date with no program,
         # a live sign-off wins, another lab's file is refused, and a loaded date can be taken back.
         run: npm run test:competency-method-history
+      - name: Run VeritaComp waived specimens integration test
+        # Cathy Thornton (RFGH) 2026-11-04: waived blind specimen testing takes several specimens and passes only when every one did; a non-technical
+        # assessment can be a 6-Month or an Annual.
+        run: npm run test:competency-waived-specimens
       - name: Run instrument staff bulk assign integration test
         # Michael 2026-11-04: tick several instruments and the staff picked go on every one. Only adds; another lab's instrument or person
         # refuses the whole request; a new pairing past the setup session flags a reassessment.

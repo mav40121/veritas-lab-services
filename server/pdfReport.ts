@@ -17,6 +17,7 @@ import { PT_CHECKLIST, parseTypeDetails, ptScorePercent, PATIENT_IMPACT, FDA_DIS
 import { rootCauseLabel } from "@shared/ptFailure";
 import { assessmentTypeLabel, evaluationDueDate } from "@shared/competencyEvaluation";
 import { el5SamplesFromRow } from "@shared/competencyEl5Samples";
+import { waivedEvidenceText } from "@shared/competencyWaivedSpecimens";
 import { existsSync as _teaExistsSync, readFileSync as _teaReadFileSync } from "fs";
 import { resolve as _teaResolve } from "path";
 import {
@@ -5767,7 +5768,7 @@ export function buildCompetencyHTML(input: CompetencyPDFInput): string {
         html += `<tr>
           <td>${WAIVED_METHODS[Number(item.waived_method_number) - 1] || `Method ${item.waived_method_number}`}</td>
           <td>${esc(item.waived_instrument || item.method_group_name || "")}</td>
-          <td>${esc(item.waived_evidence || "")}</td>
+          <td>${esc(waivedEvidenceText(item))}</td>
           <td>${esc(item.waived_date || "")}</td>
           <td>${esc(item.waived_initials || "")}</td>
           ${compItemVerdictCell(item)}
@@ -5803,7 +5804,7 @@ export function buildCompetencyHTML(input: CompetencyPDFInput): string {
         html += `<tr>
           <td>${methodLabel}</td>
           <td>${esc(item.waived_instrument || "")} ${esc(item.waived_test || "")}</td>
-          <td>${esc(item.waived_evidence || item.evidence || "")}</td>
+          <td>${esc(waivedEvidenceText(item))}</td>
           <td>${esc(item.waived_date || item.date_met || "")}</td>
           <td>${esc(item.waived_initials || item.supervisor_initials || "")}</td>
           ${compItemVerdictCell(item)}
