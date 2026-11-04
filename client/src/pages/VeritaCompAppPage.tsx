@@ -93,6 +93,8 @@ import { PTSamplePickerDialog, type PTSample } from "@/components/PTSamplePicker
 import { AuditTrailDialog } from "@/components/AuditTrailDialog";
 import { PermissionTooltip, PERMISSION_REASONS } from "@/components/PermissionTooltip";
 import { CompetencyBulkImportDialog } from "@/components/CompetencyBulkImportDialog";
+import { WaivedSpecimenRows } from "@/components/WaivedSpecimenRows";
+import { cleanWaivedSpecimens, waivedSpecimenColumns, waivedSpecimensFromRow, WAIVED_BLIND_METHOD, type WaivedSpecimen } from "@shared/competencyWaivedSpecimens";
 import { CompetencyCohortSignoffDialog } from "@/components/CompetencyCohortSignoffDialog";
 import { aggregateElementStatus, incompleteElementCells, type ElStatus } from "@shared/competencyStatus";
 
@@ -3694,6 +3696,7 @@ interface WaivedItemData {
   date: string;
   initials: string;
   passed: boolean;
+  specimens?: WaivedSpecimen[];
 }
 
 interface NonTechItemData {
@@ -3947,7 +3950,7 @@ function NewAssessmentDialog({
       for (const it of items) {
         const mn = it.waived_method_number ?? it.method_number;
         if (mn == null) continue;
-        map[mn] = { methodNumber: mn, evidence: it.waived_evidence || "", date: it.waived_date || "", initials: it.waived_initials || "", passed: !!it.passed } as WaivedItemData;
+        map[mn] = { methodNumber: mn, evidence: it.waived_evidence || "", date: it.waived_date || "", initials: it.waived_initials || "", passed: !!it.passed, specimens: mn === WAIVED_BLIND_METHOD ? waivedSpecimensFromRow(it) : undefined } as WaivedItemData;
         methods.push(mn);
       }
       setWaivedItems(map);
@@ -4204,13 +4207,19 @@ function NewAssessmentDialog({
     } else if (program.type === "waived") {
       for (const methodNum of waivedMethods) {
         const cell = waivedItems[methodNum] || { methodNumber: methodNum, evidence: "", date: "", initials: "", passed: false };
+        // Blind specimen testing lists its specimens; the record's date and initials fill any left blank on a row someone worked on.
+        const specimens = methodNum === WAIVED_BLIND_METHOD
+          ? cleanWaivedSpecimens(cell.specimens ?? [cell]).map((s) => ({ ...s, date: s.date || assessmentDate, initials: s.initials || evaluatorInitials }))
+          : null;
+        const first = specimens ? waivedSpecimenColumns(specimens) : null;
         items.push({
           methodNumber: methodNum,
           waivedMethodNumber: methodNum,
-          waivedEvidence: cell.evidence,
-          waivedDate: cell.date || assessmentDate,
-          waivedInitials: cell.initials || evaluatorInitials,
-          passed: cell.passed,
+          waivedEvidence: first ? first.evidence : cell.evidence,
+          waivedDate: first ? first.date : cell.date || assessmentDate,
+          waivedInitials: first ? first.initials : cell.initials || evaluatorInitials,
+          passed: first ? first.passed : cell.passed,
+          waivedSpecimens: specimens ?? undefined,
         });
       }
     } else {
@@ -4377,6 +4386,8 @@ function NewAssessmentDialog({
                       ) : (
                         <>
                           <SelectItem value="orientation">Orientation</SelectItem>
+                          <SelectItem value="6month">6-Month</SelectItem>
+                          <SelectItem value="annual">Annual</SelectItem>
                           <SelectItem value="reassessment">2-Year Reassessment</SelectItem>
                           <SelectItem value="duty_change">Duty Change</SelectItem>
                         </>
@@ -4965,7 +4976,12 @@ function NewAssessmentDialog({
                         />
                         <div className="flex-1">
                           <div className="text-xs font-medium">{num}. {method}</div>
-                          {selected && (
+                          {selected && num === WAIVED_BLIND_METHOD && (
+                            <div className="mt-2">
+                              <WaivedSpecimenRows rows={cell.specimens ?? [{ evidence: cell.evidence, date: cell.date, initials: cell.initials, passed: cell.passed }]} onChange={(rows) => setWaivedItems(prev => ({ ...prev, [num]: { ...cell, specimens: rows } }))} testId="waived-form" />
+                            </div>
+                          )}
+                          {selected && num !== WAIVED_BLIND_METHOD && (
                             <div className="mt-2 space-y-1.5">
                               <div className="flex gap-2">
                                 <Input className="text-xs h-7 flex-1" placeholder="Evidence..." value={cell.evidence} onChange={e => setWaivedItems(prev => ({ ...prev, [num]: { ...cell, evidence: e.target.value } }))} />

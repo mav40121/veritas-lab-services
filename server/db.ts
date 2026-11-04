@@ -1482,6 +1482,7 @@ const newCompItemCols: [string, string][] = [
   ["waived_evidence", "TEXT"],
   ["waived_date", "TEXT"],
   ["waived_initials", "TEXT"],
+  ["waived_specimens_json", "TEXT"],
   ["nt_item_label", "TEXT"],
   ["nt_item_description", "TEXT"],
   ["nt_date_met", "TEXT"],

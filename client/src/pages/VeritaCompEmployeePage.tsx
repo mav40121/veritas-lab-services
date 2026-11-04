@@ -30,6 +30,8 @@ import type { El5Sample } from "@shared/competencyEl5Samples";
 import MethodSignOffPanel, { signoffSummary, type MethodSignState } from "@/components/MethodSignOffPanel";
 import { MILESTONE_LABEL } from "@shared/competencySignoff";
 import { ObserverInitialsField, type QualifiedObserver } from "@/components/ObserverInitialsField";
+import { WaivedSpecimenRows } from "@/components/WaivedSpecimenRows";
+import { WAIVED_BLIND_METHOD, type WaivedSpecimen } from "@shared/competencyWaivedSpecimens";
 import { ELEMENT_NAMES, ELEMENT_FIELDS } from "@/lib/competencyElements";
 
 interface ElementData { num: number; status: string; passed?: boolean; na?: boolean; naJustification?: string; [k: string]: any; }
@@ -39,7 +41,7 @@ const BLANK_SAMPLE: El5Sample = { sampleType: "", sampleId: "", acceptable: null
 const samplesOf = (f: any): El5Sample[] =>
   Array.isArray(f?.samples) && f.samples.length ? f.samples
     : [{ sampleType: f?.sampleType ?? "", sampleId: f?.sampleId ?? "", acceptable: f?.acceptable ?? null }];
-interface WaivedMethod { num: number; name: string; evidence: string; date: string; initials: string; passed: boolean; status: string; }
+interface WaivedMethod { num: number; name: string; evidence: string; date: string; initials: string; passed: boolean; status: string; specimens?: WaivedSpecimen[]; }
 interface TestSystem extends MethodSignState {
   department: string | null; analyteCount: number; covered: boolean; elements: ElementData[];
   waived?: boolean; waivedRequired?: number; waivedPassed?: number; waivedMethods?: WaivedMethod[];
@@ -127,7 +129,7 @@ export default function VeritaCompEmployeePage() {
     }
     setForm(seed);
     const wseed: Record<number, any> = {};
-    for (const m of current.waivedMethods || []) wseed[m.num] = { evidence: m.evidence, date: m.date, initials: m.initials, passed: m.passed };
+    for (const m of current.waivedMethods || []) wseed[m.num] = { evidence: m.evidence, date: m.date, initials: m.initials, passed: m.passed, specimens: m.specimens };
     setWform(wseed);
   }, [current?.instrumentId, data]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -288,13 +290,18 @@ export default function VeritaCompEmployeePage() {
                                   <div className="flex items-center justify-between gap-2 mb-2">
                                     <div className="text-xs font-semibold">Method {m.num}: {m.name}</div>
                                     <div className="flex items-center gap-3 shrink-0">
+                                      {m.num !== WAIVED_BLIND_METHOD && (
                                       <label className="flex items-center gap-1 text-[11px] cursor-pointer">
                                         <input type="checkbox" className="w-3.5 h-3.5" disabled={readOnly} checked={!!w.passed}
                                           onChange={(e) => setWField(m.num, "passed", e.target.checked)} data-testid={`waived-method-${m.num}-passed`} /> Pass
                                       </label>
+                                      )}
                                       {waivedBadge(m.status)}
                                     </div>
                                   </div>
+                                  {m.num === WAIVED_BLIND_METHOD ? (
+                                    <WaivedSpecimenRows rows={w.specimens ?? [{ evidence: w.evidence ?? "", date: w.date ?? "", initials: w.initials ?? "", passed: !!w.passed }]} onChange={(rows) => setWField(m.num, "specimens", rows)} disabled={readOnly} testId={`waived-method-${m.num}`} />
+                                  ) : (
                                   <div className="flex flex-wrap gap-2">
                                     <div className="flex-[2] min-w-[160px]">
                                       <label className="text-[10px] text-muted-foreground">Evidence</label>
@@ -312,6 +319,7 @@ export default function VeritaCompEmployeePage() {
                                         onChange={(e) => setWField(m.num, "initials", e.target.value)} data-testid={`waived-method-${m.num}-initials`} />
                                     </div>
                                   </div>
+                                  )}
                                 </div>
                               );
                             })}

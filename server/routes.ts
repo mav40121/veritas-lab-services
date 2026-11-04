@@ -85,6 +85,7 @@ import { competencyDueColumns, competencySeedAtCreate, nextCompetencyDue } from 
 import { methodSignerOptions, nextMilestoneAfter, milestonesForComplexity, MILESTONE_LABEL, alignAnnualToMonth, MONTH_NAMES, type SignerCandidate, type MethodMilestone } from "@shared/competencySignoff";
 import { isManualMethod, groupProblem, suggestGroups, groupKey } from "@shared/competencyGrouping";
 import { cleanEl5Samples, el5Columns, el5SamplesFromRow } from "@shared/competencyEl5Samples";
+import { cleanWaivedSpecimens, waivedSpecimenColumns, waivedSpecimensFromRow, waivedEvidenceText, WAIVED_BLIND_METHOD } from "@shared/competencyWaivedSpecimens";
 import { oneRowKey, sameTestNameOnMap, preferredSameTestName } from "@shared/presetAnalytes";
 import { quizImageProblem } from "@shared/quizImages";
 import { certificateExtras } from "./veritalabRegistry";
@@ -24865,6 +24866,21 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     return Number(r?.id ?? 0);
   }
 
+  // Waived method 1 can list several specimens (shared/competencyWaivedSpecimens.ts). The row's own fields come from the list, so a method
+  // passes only when every specimen did, whatever the request said. The list itself goes on after the row is written.
+  const withWaivedSpecimenColumns = (items: any[]): any[] => items.map((item) => {
+    if (Number(item?.waivedMethodNumber) !== WAIVED_BLIND_METHOD || !Array.isArray(item?.waivedSpecimens)) return item;
+    const c = waivedSpecimenColumns(cleanWaivedSpecimens(item.waivedSpecimens));
+    return { ...item, waivedEvidence: c.evidence, waivedDate: c.date, waivedInitials: c.initials, passed: c.passed };
+  });
+  const saveWaivedSpecimens = (assessmentId: number | string, items: any[]) => {
+    const stmt = (db as any).$client.prepare("UPDATE competency_assessment_items SET waived_specimens_json = ? WHERE assessment_id = ? AND waived_method_number = ?");
+    for (const item of items) {
+      if (Number(item?.waivedMethodNumber) !== WAIVED_BLIND_METHOD || !Array.isArray(item?.waivedSpecimens)) continue;
+      stmt.run(waivedSpecimenColumns(cleanWaivedSpecimens(item.waivedSpecimens)).json, assessmentId, WAIVED_BLIND_METHOD);
+    }
+  };
+
   app.post("/api/competency/assessments", authMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     // Phase B3 lite (2026-06-06): deprecation log line. New assessments
@@ -24925,7 +24941,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           nt_item_label, nt_item_description, nt_date_met, nt_employee_initials, nt_supervisor_initials
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       );
-      for (const item of items) {
+      for (const item of withWaivedSpecimenColumns(items)) {
         stmt.run(
           assessmentId,
           item.methodNumber ?? null, item.methodGroupId ?? null,
@@ -24958,6 +24974,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           item.ntDateMet ?? null, item.ntEmployeeInitials ?? null, item.ntSupervisorInitials ?? null
         );
       }
+      saveWaivedSpecimens(assessmentId, items);
       snapshotChecklistItemImages((db as any).$client, assessmentId);
     }
 
@@ -25051,7 +25068,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       );
       (db as any).$client.transaction(() => { // BUG-094 sweep: the delete and the re-insert commit together or not at all
         (db as any).$client.prepare("DELETE FROM competency_assessment_items WHERE assessment_id = ?").run(req.params.id);
-        for (const item of items) {
+        for (const item of withWaivedSpecimenColumns(items)) {
           stmt.run(
             req.params.id,
             item.methodNumber ?? null, item.methodGroupId ?? null,
@@ -25081,6 +25098,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           );
         }
       })();
+      saveWaivedSpecimens(req.params.id, items);
       snapshotChecklistItemImages((db as any).$client, req.params.id);
     }
     res.json({ ok: true });
@@ -25339,7 +25357,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           nt_item_label, nt_item_description, nt_date_met, nt_employee_initials, nt_supervisor_initials
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       );
-      for (const item of items) {
+      for (const item of withWaivedSpecimenColumns(items)) {
         stmt.run(
           assessmentId,
           item.methodNumber ?? null, item.methodGroupId ?? null,
@@ -25372,6 +25390,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           item.ntDateMet ?? null, item.ntEmployeeInitials ?? null, item.ntSupervisorInitials ?? null
         );
       }
+      saveWaivedSpecimens(assessmentId, items);
       snapshotChecklistItemImages((db as any).$client, assessmentId);
     }
     (db as any).$client.prepare("UPDATE competency_programs SET updated_at = ? WHERE id = ?").run(now, programId);
@@ -25452,7 +25471,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       );
       sqlite.transaction(() => { // BUG-094 sweep: the delete and the re-insert commit together or not at all
         sqlite.prepare("DELETE FROM competency_assessment_items WHERE assessment_id = ?").run(req.params.id);
-        for (const item of items) {
+        for (const item of withWaivedSpecimenColumns(items)) {
           stmt.run(
             req.params.id,
             item.methodNumber ?? null, item.methodGroupId ?? null,
@@ -25486,6 +25505,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           );
         }
       })();
+      saveWaivedSpecimens(req.params.id, items);
       snapshotChecklistItemImages(sqlite, req.params.id);
     }
     const after = sqlite.prepare("SELECT * FROM competency_assessments WHERE id = ?").get(req.params.id);
@@ -29403,7 +29423,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const waivedSummary = (rows: any[]) => rows.filter((r: any) => r.waived_method_number != null).map((r: any) => ({
       num: Number(r.waived_method_number), name: WAIVED_METHOD_NAMES[Number(r.waived_method_number) - 1] || "",
       date: r.waived_date || "", status: waivedMethodPassed(r) ? "pass" : r.passed ? "incomplete" : "fail",
-      evidence: r.waived_evidence || "", initials: r.waived_initials || "", passed: !!r.passed,
+      evidence: waivedEvidenceText(r), initials: r.waived_initials || "", passed: !!r.passed,
     }));
     // Element 1 / 4 observers resolved to the VeritaStaff person, so a signed set reads "MV (Veri, Michael)".
     const qualifiedObservers = loadQualifiedObservers(sqlite, labId);
@@ -29525,6 +29545,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           return {
             num: i + 1, name,
             evidence: row?.waived_evidence || "", date: row?.waived_date || "", initials: row?.waived_initials || "", passed: !!row?.passed,
+            specimens: row && i + 1 === WAIVED_BLIND_METHOD ? waivedSpecimensFromRow(row) : undefined,
             status: !hasData ? "unused" : waivedMethodPassed(row) ? "pass" : row.passed ? "incomplete" : "fail",
           };
         });
@@ -29776,10 +29797,17 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (isWaivedSystem && !Array.isArray(req.body?.waivedMethods)) {
       return res.status(400).json({ error: `${inst.instrument_name} is a waived test system: record two of the four waived methods.` });
     }
-    const waivedRows: Array<{ num: number; evidence: string | null; date: string | null; initials: string | null; passed: boolean }> = [];
+    const waivedRows: Array<{ num: number; evidence: string | null; date: string | null; initials: string | null; passed: boolean; specimensJson?: string | null }> = [];
     for (const m of waivedIn) {
       const num = Number(m?.num);
       if (!Number.isInteger(num) || num < 1 || num > WAIVED_METHOD_NAMES.length) return res.status(400).json({ error: `Unknown waived method ${m?.num}.` });
+      if (num === WAIVED_BLIND_METHOD && Array.isArray(m?.specimens)) {
+        const specimens = cleanWaivedSpecimens(m.specimens);
+        if (specimens.some((s) => s.passed && !s.date)) return res.status(400).json({ error: `${WAIVED_METHOD_NAMES[num - 1]}: enter the date each passed specimen was performed.` });
+        const c = waivedSpecimenColumns(specimens);
+        if (specimens.length) waivedRows.push({ num, evidence: c.evidence, date: c.date, initials: c.initials, passed: c.passed, specimensJson: c.json });
+        continue;
+      }
       const evidence = String(m?.evidence || "").trim() || null;
       const date = String(m?.date || "").trim() || null;
       const initials = String(m?.initials || "").trim() || null;
@@ -29850,11 +29878,11 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         // Element and method numbers stay NULL so no element logic counts these rows.
         const wStmt = sqlite.prepare(
           `INSERT INTO competency_assessment_items (assessment_id, instrument_id, method_number, element_number, item_label, method_group_name,
-             waived_instrument, waived_method_number, waived_evidence, waived_date, waived_initials, passed)
-           VALUES (?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?)`
+             waived_instrument, waived_method_number, waived_evidence, waived_date, waived_initials, passed, waived_specimens_json)
+           VALUES (?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         );
         for (const w of waivedRows) {
-          wStmt.run(assessment.id, storeId, WAIVED_METHOD_NAMES[w.num - 1], inst.instrument_name, inst.instrument_name, w.num, w.evidence, w.date, w.initials, w.passed ? 1 : 0);
+          wStmt.run(assessment.id, storeId, WAIVED_METHOD_NAMES[w.num - 1], inst.instrument_name, inst.instrument_name, w.num, w.evidence, w.date, w.initials, w.passed ? 1 : 0, w.specimensJson ?? null);
         }
         return assessment.id;
       }
