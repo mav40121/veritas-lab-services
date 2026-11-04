@@ -44,6 +44,9 @@ import {
 interface ManualRow {
   manual_id: number | null;
   manual_name: string;
+  // Sub-manuals: full path ("Parent › Child") and depth, from the server.
+  manual_path?: string | null;
+  manual_depth?: number;
   total: number;
   approved: number;
   in_review: number;
@@ -58,6 +61,7 @@ interface OverdueRow {
   title: string;
   next_review_date: string | null;
   manual_name: string | null;
+  manual_path?: string | null;
 }
 
 interface UserAttestRow {
@@ -73,6 +77,7 @@ interface PendingReviewRow {
   id: number;
   title: string;
   manual_name: string | null;
+  manual_path?: string | null;
   updated_at: string;
   pending_step_name: string | null;
   pending_step_role: string | null;
@@ -336,7 +341,7 @@ export default function VeritaPolicyCompliancePage() {
                 <li key={d.id} className="flex justify-between gap-3">
                   <span className="font-medium">{d.title}</span>
                   <span className="text-xs text-red-700">
-                    {d.manual_name && <span className="mr-2 text-muted-foreground">{d.manual_name}</span>}
+                    {d.manual_name && <span className="mr-2 text-muted-foreground">{d.manual_path || d.manual_name}</span>}
                     next review {fmtDate(d.next_review_date)}
                   </span>
                 </li>
@@ -361,7 +366,7 @@ export default function VeritaPolicyCompliancePage() {
                 <li key={d.id} className="flex justify-between gap-3">
                   <span className="font-medium">{d.title}</span>
                   <span className="text-xs text-amber-700">
-                    {d.manual_name && <span className="mr-2 text-muted-foreground">{d.manual_name}</span>}
+                    {d.manual_name && <span className="mr-2 text-muted-foreground">{d.manual_path || d.manual_name}</span>}
                     next review {fmtDate(d.next_review_date)}
                   </span>
                 </li>
@@ -408,7 +413,15 @@ export default function VeritaPolicyCompliancePage() {
                 <tbody>
                   {perManual.map((m) => (
                     <tr key={`${m.manual_id ?? "none"}`} className="border-b last:border-b-0">
-                      <td className="py-2 pr-3 font-medium">{m.manual_name}</td>
+                      {/* Sub-manuals: indented by depth, full path on hover. */}
+                      <td
+                        className="py-2 pr-3 font-medium"
+                        style={{ paddingLeft: Math.min(m.manual_depth || 0, 6) * 16 }}
+                        title={m.manual_path || m.manual_name}
+                        data-testid="compliance-manual-cell"
+                      >
+                        {m.manual_depth ? m.manual_name : m.manual_path || m.manual_name}
+                      </td>
                       <td className="py-2 pr-3 text-right">{m.total}</td>
                       <td className="py-2 pr-3 text-right text-emerald-700">{m.approved}</td>
                       <td className="py-2 pr-3 text-right text-amber-700">{m.in_review}</td>
@@ -453,7 +466,7 @@ export default function VeritaPolicyCompliancePage() {
                     <span className="font-medium">{d.title}</span>
                     {d.manual_name && (
                       <span className="ml-2 text-xs text-muted-foreground">
-                        in {d.manual_name}
+                        in {d.manual_path || d.manual_name}
                       </span>
                     )}
                   </div>
