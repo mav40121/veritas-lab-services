@@ -81,6 +81,10 @@ jobs:
       - name: Run VeritaPolicy staff attestation integration test
         # BUG-079: staff complete their own assigned attestation (record work); setup stays owner/admin/edit.
         run: npm run test:policy-attest-staff
+      - name: Run VeritaDC sub-manuals integration test
+        # Q151 = 1 (2026-11-03): manuals nest to any depth (policy_manuals.parent_id); tree order and full paths; no
+        # cycles, no cross-lab parents, depth limit; a parent with sub-manuals can't be archived; moves are audited.
+        run: npm run test:veritadc-submanuals
       - name: Run structure-only database copy integration test
         # GET /api/admin/schema-db (Lifepoint questionnaire: customer data is not used for testing): secret-gated, every
         # table, index, view and trigger rebuilt with the same columns, no rows, nothing from the source in the file, audited.

@@ -7552,7 +7552,9 @@ sqlite.exec(`
     display_order INTEGER NOT NULL DEFAULT 0,
     archived_at TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    -- Sub-manuals: the manual this one sits inside (same lab), NULL = top level.
+    parent_id INTEGER
   )
 `);
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_manuals_lab ON policy_manuals(lab_id)`); } catch {}
@@ -7966,7 +7968,10 @@ try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_surveyor_links_token ON
 // Per CLAUDE.md feedback: NO writes, NO derived-state cascades.
 {
   const manualsCols = (sqlite.prepare("PRAGMA table_info(policy_manuals)").all() as { name: string }[]).map((c) => c.name);
-  void manualsCols;
+  // Sub-manuals (2026-11-03, Q151 = 1): a manual may sit inside another manual of the same lab, to any depth
+  // (shared/manualTree.ts). NULL = top level, which is every manual that existed before this column.
+  if (!manualsCols.includes("parent_id")) sqlite.exec("ALTER TABLE policy_manuals ADD COLUMN parent_id INTEGER");
+  try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_manuals_parent ON policy_manuals(parent_id)`); } catch {}
   const docsCols = (sqlite.prepare("PRAGMA table_info(policy_documents)").all() as { name: string }[]).map((c) => c.name);
   // MediaLab parity #39 item 2 (gate): the lab decides whether a passing quiz
   // score is required to complete an attestation, and sets the threshold. No
