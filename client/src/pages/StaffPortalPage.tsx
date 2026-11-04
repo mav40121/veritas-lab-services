@@ -24,6 +24,7 @@ import { labTodayIso } from "@/lib/labDate";
 import { useLocation } from "wouter";
 import DOMPurify from "dompurify";
 import { QuizQuestionImage } from "@/components/QuizQuestionImage";
+import { StaffApprovalsView } from "@/components/StaffApprovalsView";
 import { clearAuth } from "@/lib/auth";
 import { useAuth } from "@/components/AuthContext";
 import { useLabRoute } from "@/hooks/useLabRoute";
@@ -78,7 +79,7 @@ export default function StaffPortalPage() {
   // "not on roster" message.
   const [session, setSession] = useState<StaffPortalSession | null>(null);
   const [activeEmployee, setActiveEmployee] = useState<PortalEmployee | null>(null);
-  const [activeModule, setActiveModule] = useState<"policies" | "audit" | "competency" | "quizzes" | null>(null);
+  const [activeModule, setActiveModule] = useState<"policies" | "audit" | "competency" | "quizzes" | "approvals" | null>(null);
   const [bootstrapState, setBootstrapState] = useState<"loading" | "no-roster" | "no-auth" | "ready">("loading");
   const { user: signedInUser } = useAuth();
   const labRoute = useLabRoute();
@@ -241,6 +242,17 @@ export default function StaffPortalPage() {
       />
     );
   }
+  if (activeModule === "approvals") {
+    return (
+      <StaffApprovalsView
+        token={session.token}
+        employee={activeEmployee}
+        labName={session.lab.name}
+        onBack={() => setActiveModule(null)}
+        onSignOut={signOut}
+      />
+    );
+  }
 
   // 2026-06-09 Bugfix: techs land on the tile screen with no signal
   // that one tile has pending work. Fetch the three list endpoints once
@@ -264,11 +276,11 @@ function TileScreenWithPendingCounts({
 }: {
   session: StaffPortalSession;
   employee: PortalEmployee;
-  onPick: (m: "policies" | "competency" | "quizzes" | "audit") => void;
+  onPick: (m: "policies" | "competency" | "quizzes" | "audit" | "approvals") => void;
   onSignOut: () => void;
 }) {
   const [, navigate] = useLocation();
-  const [pending, setPending] = useState<{ quizzes: number; policies: number; competencies: number } | null>(null);
+  const [pending, setPending] = useState<{ quizzes: number; policies: number; competencies: number; approvals: number; canApprove: boolean } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -280,15 +292,17 @@ function TileScreenWithPendingCounts({
         .then(async (r) => r.ok ? r.json() : { policies: [] }).catch(() => ({ policies: [] })),
       fetch(`/api/staff-portal-session/competencies?employee_id=${employee.id}`, { headers: h })
         .then(async (r) => r.ok ? r.json() : { competencies: [] }).catch(() => ({ competencies: [] })),
-    ]).then(([q, p, c]) => {
+      fetch(`/api/staff-portal-session/approvals`, { headers: h })
+        .then(async (r) => r.ok ? r.json() : { approvals: [], can_approve: false }).catch(() => ({ approvals: [], can_approve: false })),
+    ]).then(([q, p, c, a]) => {
       if (cancelled) return;
       const quizzes = (q.quizzes || []).filter((x: any) => x.status === "assigned").length;
       const policies = (p.policies || []).filter((x: any) => !x.signed).length;
       const competencies = (c.competencies || []).filter((x: any) => !x.signed).length;
-      setPending({ quizzes, policies, competencies });
+      setPending({ quizzes, policies, competencies, approvals: (a.approvals || []).length, canApprove: !!a.can_approve });
     }).catch(() => {
       if (cancelled) return;
-      setPending({ quizzes: 0, policies: 0, competencies: 0 });
+      setPending({ quizzes: 0, policies: 0, competencies: 0, approvals: 0, canApprove: false });
     });
     return () => { cancelled = true; };
   }, [employee.id, session.token]);
@@ -302,13 +316,15 @@ function TileScreenWithPendingCounts({
   const tiles: Array<{ key: string; label: string; available: boolean; pending: number | null; go: () => void; hint?: string; offHint?: string }> = [
     { key: "policies",   label: "Sign Policies",     available: true, pending: pending?.policies ?? null,     go: () => onPick("policies") },
     { key: "competency", label: "Sign Competencies", available: true, pending: pending?.competencies ?? null, go: () => onPick("competency") },
-    { key: "quizzes",    label: "Take a Quiz",        available: true, pending: pending?.quizzes ?? null,      go: () => onPick("quizzes") },
+    // Only for someone the lab has named on an approval route, directly or through a group.
+    ...(pending?.canApprove ? [{ key: "approvals", label: "Approve Documents", available: true, pending: pending.approvals, go: () => onPick("approvals") }] : []),
+    { key: "quizzes",    label: "Take a Quiz",       available: true, pending: pending?.quizzes ?? null,      go: () => onPick("quizzes") },
     { key: "qc",         label: "Record QC",          available: true, pending: null, go: () => navigate(`${labHome}/veritaqc-app`), hint: "Opens VeritaQC." },
     { key: "inventory",  label: "Count Inventory",    available: !!employee.can_adjust_inventory, pending: null, go: () => navigate(`${labHome}/veritastock`), hint: "Opens VeritaStock.",
       offHint: 'Ask your lab director to turn on "Can adjust inventory" for you in VeritaStaff.' },
     { key: "audit",      label: "My Activity",        available: !!employee.can_view_audit, pending: null, go: () => onPick("audit") },
   ];
-  const totalPending = (pending?.quizzes ?? 0) + (pending?.policies ?? 0) + (pending?.competencies ?? 0);
+  const totalPending = (pending?.quizzes ?? 0) + (pending?.policies ?? 0) + (pending?.competencies ?? 0) + (pending?.approvals ?? 0);
 
   return (
     <div className="min-h-screen bg-background p-6">

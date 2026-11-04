@@ -121,6 +121,10 @@ jobs:
         # Michael 2026-11-04 (Q161 = 1): the roster shows who signed by either path; a Staff login signature closes their assignment,
         # but not a required quiz or a newer version; the bell lists what is left; the Excel report carries the roster.
         run: npm run test:veritadc-signature-status
+      - name: Run VeritaDC staff approvals integration test
+        # Michael 2026-11-04 (Q155 = 1): a staff login named on a route step or in its group reads and signs with typed name and password, using
+        # no editing seat. Nobody else can open it, a changed document is refused, and the editor's approve and reject paths are unchanged.
+        run: npm run test:veritadc-staff-approvals
       - name: Run structure-only database copy integration test
         # GET /api/admin/schema-db (Lifepoint questionnaire: customer data is not used for testing): secret-gated, every
         # table, index, view and trigger rebuilt with the same columns, no rows, nothing from the source in the file, audited.

@@ -39,6 +39,7 @@ interface PendingItems {
   quizzes: Array<{ assignment_id: number; quiz_id: number; title: string; due_date: string | null }>;
   policies: Array<{ document_id: number; title: string; effective_date: string | null }>;
   competencies: Array<{ assessment_id: number; program_name: string; assessment_date: string | null; assessment_type: string | null }>;
+  approvals: Array<{ document_id: number; title: string; step_name: string | null }>;
 }
 
 const POLL_INTERVAL_MS = 60 * 1000;
@@ -61,18 +62,19 @@ export function PendingStaffPortalBell() {
       .then(async (r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (!data) {
-          setItems({ quizzes: [], policies: [], competencies: [] });
+          setItems({ quizzes: [], policies: [], competencies: [], approvals: [] });
           return;
         }
         setItems({
           quizzes: data.quizzes || [],
           policies: data.policies || [],
           competencies: data.competencies || [],
+          approvals: data.approvals || [],
         });
       })
       .catch(() => {
         // Network errors are quiet; the bell just hides itself.
-        setItems({ quizzes: [], policies: [], competencies: [] });
+        setItems({ quizzes: [], policies: [], competencies: [], approvals: [] });
       });
   }, [isLoggedIn, activeLabId]);
 
@@ -89,7 +91,7 @@ export function PendingStaffPortalBell() {
   }, [fetchItems, isLoggedIn]);
 
   if (!isLoggedIn || !items) return null;
-  const total = items.quizzes.length + items.policies.length + items.competencies.length;
+  const total = items.quizzes.length + items.policies.length + items.competencies.length + items.approvals.length;
   if (total === 0) return null;
 
   return (
@@ -174,6 +176,27 @@ export function PendingStaffPortalBell() {
                 <div className="text-xs font-medium truncate w-full">{c.program_name}</div>
                 {c.assessment_date && (
                   <div className="text-[10px] text-muted-foreground">{c.assessment_date}</div>
+                )}
+              </DropdownMenuItem>
+            ))}
+          </>
+        )}
+        {items.approvals.length > 0 && (
+          <>
+            {(items.quizzes.length > 0 || items.policies.length > 0 || items.competencies.length > 0) && <DropdownMenuSeparator />}
+            <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              Documents to approve ({items.approvals.length})
+            </DropdownMenuLabel>
+            {items.approvals.slice(0, 5).map((a) => (
+              <DropdownMenuItem
+                key={a.document_id}
+                onClick={() => navigate("/staff-access")}
+                className="cursor-pointer flex-col items-start"
+                data-testid={`pending-approval-${a.document_id}`}
+              >
+                <div className="text-xs font-medium truncate w-full">{a.title}</div>
+                {a.step_name && (
+                  <div className="text-[10px] text-muted-foreground">{a.step_name}</div>
                 )}
               </DropdownMenuItem>
             ))}

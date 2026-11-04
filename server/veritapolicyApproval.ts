@@ -696,6 +696,57 @@ export function stepHasSignatures(sqlite: any, stepId: number): boolean {
   return !!sqlite.prepare("SELECT 1 FROM policy_signoffs WHERE workflow_step_id = ? LIMIT 1").get(stepId);
 }
 
+// Everything waiting for this person to sign in a lab: documents in review whose pending step they can sign today.
+export function approvalQueueFor(sqlite: any, labId: number, userId: number, todayStr: string) {
+  const docs = sqlite.prepare(
+    `SELECT id, title, doc_number, owner_user_id, manual_id, current_version_id, updated_at
+       FROM policy_documents
+      WHERE lab_id = ? AND status = 'in_review' AND archived_at IS NULL`
+  ).all(labId) as any[];
+  const queue: any[] = [];
+  for (const d of docs) {
+    const p = getCurrentPendingStep(sqlite, d.id);
+    if (!p.step) continue;
+    const isMajorRevision = isVersionMajorRevision(sqlite, d.current_version_id);
+    const check = canUserApproveStepDelegated(sqlite, {
+      userId,
+      labId,
+      documentOwnerId: d.owner_user_id,
+      stepRow: p.step,
+      isMajorRevision,
+      manualId: d.manual_id ?? null,
+    }, todayStr);
+    if (!check.ok) continue;
+    queue.push({
+      document_id: d.id,
+      title: d.title,
+      doc_number: d.doc_number ?? null,
+      manual_id: d.manual_id,
+      version_id: d.current_version_id,
+      is_major_revision: isMajorRevision,
+      updated_at: d.updated_at,
+      step_id: p.step.id,
+      step_name: p.step.step_name,
+      step_order: p.step.step_order,
+      total_steps: p.totalSteps,
+    });
+  }
+  return queue;
+}
+
+// Does a live route in this lab name this person, directly or through a group? The staff login shows its approvals tile only then.
+export function isNamedOnRoute(sqlite: any, labId: number, userId: number): boolean {
+  const steps = sqlite.prepare(
+    `SELECT s.required_role, s.specific_user_id, s.approver_group_id
+       FROM policy_approval_steps s JOIN policy_approval_workflows w ON w.id = s.workflow_id
+      WHERE w.lab_id = ? AND w.archived_at IS NULL AND s.archived_at IS NULL
+        AND s.required_role IN ('specific_user', 'group')`
+  ).all(labId) as any[];
+  return steps.some((s) => s.required_role === "specific_user"
+    ? s.specific_user_id === userId
+    : s.approver_group_id != null && labGroupSignerIds(sqlite, labId, s.approver_group_id).includes(userId));
+}
+
 // Resolve the current pending step for a document. Returns the step row
 // or null if no step pending (document not in_review, or all steps
 // already approved).
