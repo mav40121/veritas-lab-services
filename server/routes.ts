@@ -43912,6 +43912,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // VeritaMaintain temperature logs (/api/labs/:labId/temp-logs/*; St. Charles REQ-068)
   const { registerTemperatureLogRoutes } = await import('./temperatureLogs');
   registerTemperatureLogRoutes(app, authMiddleware, requireWriteAccess, requireModuleEdit);
+  const { registerMaintainRecordReviewRoutes } = await import('./maintainRecordReview');
+  registerMaintainRecordReviewRoutes(app, authMiddleware, requireWriteAccess);
 
   // VeritaLab CLIA site registry (/api/labs/:labId/veritalab/registry/*, /api/veritalab/sites-overview; St. Charles REQ-072)
   const { registerVeritaLabRegistryRoutes } = await import('./veritalabRegistry');

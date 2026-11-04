@@ -207,6 +207,7 @@ export const EXPORT_TABLES: Record<string, ExportTable> = {
   equipment_reminder_log: lab("VeritaMaintain"),
   temp_log_units: lab("VeritaMaintain"),
   temp_log_readings: lab("VeritaMaintain"),
+  maintain_record_reviews: lab("VeritaMaintain"),
 
   // VeritaStock
   inventory_items: labOrOwner("VeritaStock", "account_id"),

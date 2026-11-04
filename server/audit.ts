@@ -19,6 +19,7 @@ export type AuditModule =
   | "veritapt"
   | "veritastock"
   | "veritaqc"
+  | "veritamaintain"
   | "account"
   | "admin"; // ADMIN_SECRET-gated operator actions (no signed-in user), e.g. account deletion
 
