@@ -73,6 +73,115 @@ function findMatch(pool: { id: number; first_name: string; last_name: string }[]
   return hit ? { employeeId: hit.id, name: `${hit.last_name}, ${hit.first_name}` } : null;
 }
 
+/**
+ * The active roster row a Staff invite typed by name refers to (Michael 2026-11-04, Redington). An invite from Lab Members always made a
+ * new roster row, so everyone already on the roster got a second one. One match is that person. Two people with the same name are told
+ * apart by who has no login yet; if that doesn't settle it, the director invites from the person's row in VeritaStaff.
+ */
+export function rosterRowForInvite(sqlite: any, labId: number, firstName: string, lastName: string): { employeeId: number } | { ambiguous: true } | null {
+  const last = norm(lastName), first = norm(firstName), firstToken = first.split(/\s+/)[0];
+  if (!last || !first) return null;
+  const same = (sqlite.prepare("SELECT id, first_name, last_name FROM staff_employees WHERE tier2_lab_id = ? AND status = 'active'").all(labId) as { id: number; first_name: string; last_name: string }[])
+    .filter((e) => {
+      if (norm(e.last_name) !== last) return false;
+      const ef = norm(e.first_name);
+      return ef === first || ef.split(/\s+/)[0] === firstToken;
+    });
+  if (same.length === 0) return null;
+  if (same.length === 1) return { employeeId: same[0].id };
+  const free = new Set(unlinkedEmployees(sqlite, labId).map((e) => e.id));
+  const open = same.filter((e) => free.has(e.id));
+  return open.length === 1 ? { employeeId: open[0].id } : { ambiguous: true };
+}
+
+/**
+ * A pending Staff invite tied to a roster row that's no longer active (the duplicate someone cleaned up) can't work when it's accepted.
+ * Re-attach it when exactly one active row has the same name. Safe to repeat. Returns how many moved.
+ */
+export function reattachOrphanStaffInvites(sqlite: any, labId: number): number {
+  const orphans = sqlite.prepare(
+    `SELECT us.id, se.first_name, se.last_name FROM user_seats us
+       JOIN staff_employees se ON se.id = us.staff_employee_id
+      WHERE us.lab_id = ? AND us.seat_type = 'staff_portal' AND us.status = 'pending' AND se.status != 'active'`
+  ).all(labId) as { id: number; first_name: string; last_name: string }[];
+  let moved = 0;
+  for (const o of orphans) {
+    const hit = rosterRowForInvite(sqlite, labId, o.first_name, o.last_name);
+    if (!hit || "ambiguous" in hit) continue;
+    const taken = sqlite.prepare("SELECT 1 FROM user_seats WHERE staff_employee_id = ? AND seat_type = 'staff_portal' AND status != 'deactivated' LIMIT 1").get(hit.employeeId);
+    if (taken) continue;
+    moved += Number(sqlite.prepare("UPDATE user_seats SET staff_employee_id = ? WHERE id = ? AND status = 'pending'").run(hit.employeeId, o.id).changes || 0);
+  }
+  return moved;
+}
+
+// Anything here means a row holds real work, so it's never folded into another row automatically.
+const ROW_HOLDS_WORK = [
+  ["staff_roles", "employee_id"], ["staff_employee_instruments", "employee_id"], ["competency_employees", "staff_employee_id"], ["competency_method_signoffs", "staff_employee_id"],
+  ["competency_quiz_assignments", "staff_employee_id"], ["schedule_assignments", "staff_employee_id"], ["lab_group_members", "employee_id"],
+];
+
+/**
+ * Fold the second card an invite made into the person's real card (Michael 2026-11-04: "at time of invite, can we link it to the staff
+ * card?"; Redington's two Austin cards). Only a row an invite made and that holds no work: no testing, hire date, login, roles, instruments,
+ * competencies, quizzes or groups. Only when exactly one other active row has the same name and it has no login yet. The seat and any
+ * signatures move to the real card; the extra row is set aside, never deleted. Safe to repeat. Returns how many were folded.
+ */
+export function foldInviteDuplicates(sqlite: any, labId: number): { employeeId: number; into: number }[] {
+  const seats = sqlite.prepare(
+    `SELECT us.id AS seat_id, se.id AS row_id, se.first_name, se.last_name FROM user_seats us
+       JOIN staff_employees se ON se.id = us.staff_employee_id
+      WHERE us.lab_id = ? AND us.seat_type = 'staff_portal' AND us.status != 'deactivated' AND se.status = 'active'
+        AND COALESCE(se.performs_testing, 0) = 0 AND se.hire_date IS NULL AND se.login_user_id IS NULL`
+  ).all(labId) as { seat_id: number; row_id: number; first_name: string; last_name: string }[];
+  const folded: { employeeId: number; into: number }[] = [];
+  for (const s of seats) {
+    const holdsWork = ROW_HOLDS_WORK.some(([table, col]) => {
+      try { return !!sqlite.prepare(`SELECT 1 FROM ${table} WHERE ${col} = ? LIMIT 1`).get(s.row_id); } catch { return true; }
+    });
+    if (holdsWork) continue;
+    const last = norm(s.last_name), first = norm(s.first_name), firstToken = first.split(/\s+/)[0];
+    const others = (sqlite.prepare("SELECT id, first_name, last_name, login_user_id FROM staff_employees WHERE tier2_lab_id = ? AND status = 'active' AND id != ?").all(labId, s.row_id) as any[])
+      .filter((e) => norm(e.last_name) === last && (norm(e.first_name) === first || norm(e.first_name).split(/\s+/)[0] === firstToken));
+    if (others.length !== 1 || others[0].login_user_id != null) continue;
+    const target = others[0].id as number;
+    if (sqlite.prepare("SELECT 1 FROM user_seats WHERE staff_employee_id = ? AND seat_type = 'staff_portal' AND status != 'deactivated' LIMIT 1").get(target)) continue;
+    const now = new Date().toISOString();
+    sqlite.transaction(() => {
+      sqlite.prepare("UPDATE user_seats SET staff_employee_id = ? WHERE id = ?").run(target, s.seat_id);
+      for (const table of ["staff_portal_policy_signatures", "staff_portal_competency_signatures"]) {
+        try { sqlite.prepare(`UPDATE OR IGNORE ${table} SET staff_employee_id = ? WHERE staff_employee_id = ?`).run(target, s.row_id); } catch { /* table absent on a very old database */ }
+      }
+      sqlite.prepare("UPDATE staff_employees SET status = 'merged_duplicate', updated_at = ? WHERE id = ?").run(now, s.row_id);
+    })();
+    folded.push({ employeeId: s.row_id, into: target });
+  }
+  return folded;
+}
+
+export type RosterStaffRow = { employeeId: number; name: string; title: string | null; status: "login" | "invited" | "not_invited"; email: string | null };
+
+/** Everyone on the VeritaStaff roster as a staff member of the lab: whether they can sign in, are invited, or haven't been invited yet. */
+export function rosterStaffStatus(sqlite: any, labId: number): { people: RosterStaffRow[]; counts: { total: number; login: number; invited: number; not_invited: number } } {
+  reattachOrphanStaffInvites(sqlite, labId);
+  foldInviteDuplicates(sqlite, labId);
+  const rows = sqlite.prepare(
+    "SELECT id, first_name, last_name, middle_initial, title, login_user_id FROM staff_employees WHERE tier2_lab_id = ? AND status = 'active' ORDER BY last_name, first_name"
+  ).all(labId) as any[];
+  const seats = sqlite.prepare(
+    "SELECT staff_employee_id, status, accepted_at, seat_email FROM user_seats WHERE lab_id = ? AND seat_type = 'staff_portal' AND status != 'deactivated' AND staff_employee_id IS NOT NULL"
+  ).all(labId) as any[];
+  const seatBy = new Map<number, any>(seats.map((s) => [s.staff_employee_id, s]));
+  const people: RosterStaffRow[] = rows.map((e) => {
+    const seat = seatBy.get(e.id);
+    const status = e.login_user_id != null || seat?.accepted_at ? "login" : seat ? "invited" : "not_invited";
+    const name = [e.last_name, e.first_name].filter(Boolean).join(", ") + (e.middle_initial ? ` ${e.middle_initial}.` : "");
+    return { employeeId: e.id, name, title: e.title ?? null, status, email: seat?.seat_email ?? null };
+  });
+  const count = (s: string) => people.filter((p) => p.status === s).length;
+  return { people, counts: { total: people.length, login: count("login"), invited: count("invited"), not_invited: count("not_invited") } };
+}
+
 /** The prompt: active members not on the roster, split into shown and hidden. */
 export function membersNotOnRoster(sqlite: any, labId: number): { members: RosterMember[]; hidden: RosterMember[] } {
   const rows = sqlite.prepare(

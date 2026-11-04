@@ -11,7 +11,7 @@ import { blockNonOperatorSeat } from "./seatAccess";
 import { isDelegationPosition, isDelegationComplexity, sanitizeResponsibilities, DELEGATION_CATALOG, DELEGATION_POSITIONS, DELEGATION_COMPLEXITIES } from "./directorDelegation";
 import { mayAttestAsDirectorOrDesignee, complexityForAnalyte, labHighestComplexity, isLabOwnerUser } from "./delegationGate";
 import { vlsContext, isVlsSupportUser, labAllowsVlsSupport, vlsSupportBlocked, recordVlsActivity } from "./vlsSupport";
-import { membersNotOnRoster, rosterLinkProblem } from "./rosterMembers";
+import { foldInviteDuplicates, membersNotOnRoster, reattachOrphanStaffInvites, rosterLinkProblem, rosterRowForInvite, rosterStaffStatus } from "./rosterMembers";
 import { staffInventoryBlocked, inventoryNotAllowedBody } from "./inventoryPermission";
 import { deriveAttestationStatus } from "./policyAttestationStatus";
 import { DEFAULT_TEMPLATES, REMINDER_TYPES, REMINDER_MERGE_FIELDS, type ReminderType } from "./policyReminderTemplate";
@@ -11463,6 +11463,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const { staff_employee_id, email, deliverEmail, firstName, lastName, title } = req.body || {};
     if (!email || !String(email).includes("@")) return res.status(400).json({ error: "Valid email required" });
     const normalizedEmail = String(email).toLowerCase().trim();
+    let linkedToCard = false;
 
     const sqlite = (db as any).$client;
     const lab = sqlite.prepare("SELECT id, owner_user_id, lab_name, clia_number FROM labs WHERE id = ?").get(req.scope.labId) as any;
@@ -11473,12 +11474,22 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
     let staffEmpId = parseInt(String(staff_employee_id ?? ""), 10);
     if (!Number.isFinite(staffEmpId) || staffEmpId <= 0) {
-      // No roster row chosen: create a read-and-sign stub from the invited name.
       const fn = String(firstName ?? "").trim();
       const ln = String(lastName ?? "").trim();
       if (!fn || !ln) {
         return res.status(400).json({ error: "Provide staff_employee_id, or firstName and lastName to add a new read-and-sign staff member" });
       }
+      // Someone already on the roster keeps their row (2026-11-04, Redington: every typed invite made them a second one).
+      const onRoster = rosterRowForInvite(sqlite, req.scope.labId, fn, ln);
+      if (onRoster && "ambiguous" in onRoster) {
+        return res.status(409).json({ error: `More than one person named ${fn} ${ln} is on the roster. Invite from that person's row in VeritaStaff.`, code: "ROSTER_NAME_AMBIGUOUS" });
+      }
+      if (onRoster) { staffEmpId = onRoster.employeeId; linkedToCard = true; }
+    }
+    if (!Number.isFinite(staffEmpId) || staffEmpId <= 0) {
+      // Not on the roster yet: create a read-and-sign stub from the invited name.
+      const fn = String(firstName ?? "").trim();
+      const ln = String(lastName ?? "").trim();
       let staffLab = sqlite.prepare("SELECT * FROM staff_labs WHERE tier2_lab_id = ?").get(req.scope.labId) as any;
       if (!staffLab) {
         staffLab = seedStaffLabFromAccount(sqlite, { tier2LabId: req.scope.labId, userId: labOwnerId, labName: lab.lab_name, cliaNumber: lab.clia_number });
@@ -11512,6 +11523,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     ).get(staffEmpId) as any;
     if (acceptedSeat) {
       return res.status(409).json({ error: "This employee already has a staff login" });
+    }
+    const pendingSeat = sqlite.prepare(
+      "SELECT seat_email FROM user_seats WHERE staff_employee_id = ? AND seat_type = 'staff_portal' AND status = 'pending' LIMIT 1"
+    ).get(staffEmpId) as any;
+    if (pendingSeat && String(pendingSeat.seat_email).toLowerCase() !== normalizedEmail) {
+      return res.status(409).json({ error: "This employee already has an invite waiting at another address. Cancel it first, then invite the new one.", code: "INVITE_PENDING" });
     }
 
     // Duplicate-invite guard.
@@ -11601,15 +11618,25 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     }
 
     const inviteUrl = `${FRONTEND_URL || "https://www.veritaslabservices.com"}/join?token=${inviteToken}`;
-    res.json({ ok: true, emailSent, inviteToken, inviteUrl, staffEmployeeId: staffEmpId });
+    res.json({ ok: true, emailSent, inviteToken, inviteUrl, staffEmployeeId: staffEmpId, linkedToCard, linkedName: linkedToCard ? `${staffEmp.last_name}, ${staffEmp.first_name}` : null });
   });
 
   // GET /api/labs/:labId/staff-portal-invites
   //   Lists all Staff Portal invites + accounts for this lab.
   //   Director's status surface: who's invited (pending), who's set up
   //   (active), who hasn't been invited yet.
+  // GET /api/labs/:labId/staff-roster-status: everyone on the VeritaStaff roster as a staff member of the lab, with whether they
+  // have a login, an invite, or nothing yet (Michael 2026-11-04: "When staff are added to veritastaff it should also be adding them
+  // as a staff member"). The roster holds no email, so nobody is contacted until the director gives an address.
+  app.get("/api/labs/:labId/staff-roster-status", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!canManageLabMembers(req.scope)) return res.status(403).json({ error: "Owner or admin required" });
+    res.json(rosterStaffStatus((db as any).$client, req.scope.labId));
+  });
+
   app.get("/api/labs/:labId/staff-portal-invites", authMiddleware, labScopeMiddleware, (req: any, res) => {
     const sqlite = (db as any).$client;
+    reattachOrphanStaffInvites(sqlite, req.scope.labId);
+    foldInviteDuplicates(sqlite, req.scope.labId);
     const rows = sqlite.prepare(
       `SELECT us.id, us.seat_email, us.status, us.invited_at, us.accepted_at,
               us.staff_employee_id,
@@ -27311,6 +27338,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   });
   app.get("/api/labs/:labId/staff/employees", authMiddleware, labScopeMiddleware, (req: any, res) => {
     if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
+    foldInviteDuplicates((db as any).$client, req.scope.labId); // the second card an invite made goes before anyone sees the list
     const employees = (db as any).$client.prepare(
       "SELECT * FROM staff_employees WHERE tier2_lab_id = ? AND status = 'active' ORDER BY last_name, first_name"
     ).all(req.scope.labId) as any[];

@@ -105,6 +105,10 @@ jobs:
         # Michael 2026-11-04 (Q161 = 1): a stainer solution change names who and what and never moves the PM date; a humidity
         # unit reads in percent, only a humidity unit can, and a change can't leave a type and scale that don't match.
         run: npm run test:histology-maintain-entries
+      - name: Run staff roster one-list integration test
+        # Michael 2026-11-04 (Redington): a typed Staff invite links to the existing roster row; everyone on the roster shows on Lab
+        # Members; a second card an invite already made folds into the real one unless it holds real work.
+        run: npm run test:staff-roster-one-list
       - name: Run VeritaMaintain monthly review integration test
         # Michael 2026-11-04 (Q161 = 1): the medical director or a named designee signs each record for a month; a problem needs a
         # corrective action; what was signed is kept, and a later entry shows as added after the review.
