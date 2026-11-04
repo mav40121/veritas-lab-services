@@ -29482,7 +29482,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           .filter((r) => { if (seenRec.has(r.assessmentId)) return false; seenRec.add(r.assessmentId); return true; });
         for (const r of imported) {
           signoffs.push({
-            id: null, legacy: false, imported: true, importedFrom: r.programName, milestone: r.milestone, signedDate: r.signedDate,
+            id: null, legacy: false, imported: true, importedFrom: r.programName, historyId: r.historyId ?? null, milestone: r.milestone, signedDate: r.signedDate,
             signerName: r.evaluatorName, signerRole: r.evaluatorTitle, signerInitials: r.evaluatorInitials, documentation: null,
             determination: "pass", remediationPlan: null, remediationTargetDate: null,
             elements: Array.from({ length: elementCount }, (_, i) => ({ num: i + 1, status: compAggregateElementStatus([], i + 1) })), hasEntries: false,
@@ -43984,6 +43984,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   registerTemperatureLogRoutes(app, authMiddleware, requireWriteAccess, requireModuleEdit);
   const { registerMaintainRecordReviewRoutes } = await import('./maintainRecordReview');
   registerMaintainRecordReviewRoutes(app, authMiddleware, requireWriteAccess);
+
+  // VeritaComp bulk import: past competency dates per person and method (Q164 = 1)
+  const { registerCompetencyMethodHistoryRoutes } = await import('./competencyMethodHistory');
+  registerCompetencyMethodHistoryRoutes(app, { authMiddleware, requireWriteAccess, requireModuleEdit, hasCompetencyAccess });
 
   // VeritaLab CLIA site registry (/api/labs/:labId/veritalab/registry/*, /api/veritalab/sites-overview; St. Charles REQ-072)
   const { registerVeritaLabRegistryRoutes } = await import('./veritalabRegistry');

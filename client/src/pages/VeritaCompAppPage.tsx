@@ -1159,7 +1159,7 @@ function ProgramListView() {
               variant="outline"
               onClick={() => setBulkImportOpen(true)}
               disabled={readOnly}
-              title="Upload historical paper-record assessments from an xlsx"
+              title="Load past competency dates from a template filled in with your people and methods"
             >
               <Upload className="h-4 w-4 mr-1.5" />
               Bulk Import

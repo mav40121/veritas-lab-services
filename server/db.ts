@@ -1650,6 +1650,35 @@ sqlite.exec(`CREATE TABLE IF NOT EXISTS competency_method_signoffs (
   cmsGuard("remediation_target_date", "remediation_target_date TEXT");
   try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_cms_lab_emp_inst ON competency_method_signoffs(lab_id, staff_employee_id, instrument_id)"); } catch {}
 }
+// Past competency dates loaded from a lab's own records (Michael 2026-11-04, Q164 = 1): a person, a method, a date and who evaluated it.
+// Read as imported history (loadImportedHistory): a live per-method sign-off always wins. One row per analyzer in a method group; the others
+// point at the first through group_history_id. Removed rows are kept and marked, so the record of what was loaded stays.
+sqlite.exec(`CREATE TABLE IF NOT EXISTS competency_method_history (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  lab_id INTEGER NOT NULL,
+  staff_employee_id INTEGER NOT NULL,
+  instrument_id INTEGER NOT NULL,
+  milestone TEXT NOT NULL,
+  completed_date TEXT NOT NULL,
+  evaluator_name TEXT,
+  source TEXT NOT NULL DEFAULT 'bulk_import',
+  group_history_id INTEGER,
+  created_by_user_id INTEGER,
+  created_at TEXT NOT NULL,
+  removed_at TEXT,
+  removed_by_user_id INTEGER
+)`);
+{
+  const cmhCols = (sqlite.prepare("PRAGMA table_info(competency_method_history)").all() as any[]).map((c: any) => c.name);
+  const cmhGuard = (name: string, decl: string) => { if (!cmhCols.includes(name)) { try { sqlite.exec(`ALTER TABLE competency_method_history ADD COLUMN ${decl}`); } catch { /* already there */ } } };
+  cmhGuard("evaluator_name", "evaluator_name TEXT");
+  cmhGuard("source", "source TEXT NOT NULL DEFAULT 'bulk_import'");
+  cmhGuard("group_history_id", "group_history_id INTEGER");
+  cmhGuard("created_by_user_id", "created_by_user_id INTEGER");
+  cmhGuard("removed_at", "removed_at TEXT");
+  cmhGuard("removed_by_user_id", "removed_by_user_id INTEGER");
+  try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_cmh_lab_emp_inst ON competency_method_history(lab_id, staff_employee_id, instrument_id)"); } catch { /* already there */ }
+}
 // Lab-chosen method grouping (2026-10-14, Michael Q166/Q168 = 1): analyzers the lab says need no new or unique skills
 // share one competency and one sign-off. An analyzer is in at most one group (UNIQUE lab_id, instrument_id). A group
 // sign-off writes one competency_method_signoffs row per analyzer: the lead row (lowest instrument id) holds the frozen

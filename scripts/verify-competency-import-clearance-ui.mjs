@@ -75,6 +75,7 @@ for (const mode of ["light", "dark"]) {
   await page.goto(`${BASE}/labs/${labId}/veritacomp-app`, { waitUntil: "networkidle" });
   if (mode === "dark") await page.evaluate(() => document.documentElement.classList.add("dark"));
   await page.getByRole("button", { name: "Bulk Import" }).click();
+  await page.getByTestId("bulk-import-tab-programs").click();
   await page.locator('[role="dialog"] input[type="file"]').setInputFiles(xlsx);
   await page.getByRole("button", { name: "Preview" }).click();
   const panel = page.getByTestId("bulk-import-clearance");
