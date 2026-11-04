@@ -411,6 +411,7 @@ interface PortalPolicy {
   description: string | null;
   version_id: number;
   version_number: number | null;
+  version_label?: string | null;
   effective_date: string | null;
   next_review_date: string | null;
   signed: boolean;
@@ -426,6 +427,7 @@ interface PortalPolicyRender {
   next_review_date: string | null;
   version_id: number;
   version_number: number | null;
+  version_label?: string | null;
   file_format: "docx" | "pdf" | "html" | "xlsx" | "xls" | "png" | "jpg" | "txt";
   file_hash: string;
 }
@@ -581,7 +583,7 @@ function StaffPortalPoliciesView({
               <div className="text-sm text-muted-foreground mt-1">{active.description}</div>
             )}
             <div className="text-xs text-muted-foreground mt-2">
-              {meta?.version_number != null && <>Version {meta.version_number}{" "}</>}
+              {meta?.version_number != null && <>Version {meta.version_label ?? meta.version_number}{" "}</>}
               {meta?.effective_date && <>&middot; Effective {meta.effective_date}{" "}</>}
               {meta?.next_review_date && <>&middot; Review due {meta.next_review_date}</>}
             </div>
@@ -720,7 +722,7 @@ function StaffPortalPoliciesView({
                   <div className="flex-1">
                     <div className="text-sm font-medium" data-testid="sp-policies-row-title">{p.title}</div>
                     <div className="text-xs text-muted-foreground">
-                      {p.version_number != null && <>Version {p.version_number}{" "}</>}
+                      {p.version_number != null && <>Version {p.version_label ?? p.version_number}{" "}</>}
                       {p.effective_date && <>&middot; Effective {p.effective_date}</>}
                     </div>
                   </div>

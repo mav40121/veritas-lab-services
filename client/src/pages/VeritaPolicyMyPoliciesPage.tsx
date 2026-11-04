@@ -99,6 +99,7 @@ interface TrackerStaffSig {
   signer_title: string | null;
   signed_at: string | null;
   version_number: number | null;
+  version_label?: string | null;
 }
 interface TrackerResponse {
   attestations: TrackerRow[];
@@ -187,6 +188,9 @@ interface PolicyDocument {
   workflow_id: number | null;
   current_version_id: number | null;
   current_version_number: number | null;
+  // major.minor (shared/policyVersion.ts) and the lab's own document number.
+  current_version_label?: string | null;
+  doc_number?: string | null;
   current_file_format: string | null;
   current_uploaded_at: string | null;
   manual_name: string | null;
@@ -404,6 +408,7 @@ export default function VeritaPolicyMyPoliciesPage() {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadTitle, setUploadTitle] = useState("");
+  const [uploadDocNumber, setUploadDocNumber] = useState("");
   const [uploadDescription, setUploadDescription] = useState("");
   const [uploadManualId, setUploadManualId] = useState<string>("");
   const [uploadReviewMonths, setUploadReviewMonths] = useState<string>("24");
@@ -421,6 +426,7 @@ export default function VeritaPolicyMyPoliciesPage() {
   const resetUpload = () => {
     setUploadFile(null);
     setUploadTitle("");
+    setUploadDocNumber("");
     setUploadDescription("");
     setUploadManualId("");
     setUploadReviewMonths(activeDefaultReviewMonths);
@@ -437,6 +443,7 @@ export default function VeritaPolicyMyPoliciesPage() {
       const fd = new FormData();
       fd.append("file", uploadFile);
       if (uploadTitle.trim()) fd.append("title", uploadTitle.trim());
+      if (uploadDocNumber.trim()) fd.append("doc_number", uploadDocNumber.trim());
       if (uploadDescription.trim()) fd.append("description", uploadDescription.trim());
       if (uploadManualId) fd.append("manual_id", uploadManualId);
       if (uploadReviewMonths) fd.append("review_interval_months", uploadReviewMonths);
@@ -617,10 +624,12 @@ export default function VeritaPolicyMyPoliciesPage() {
   const [renameTitle, setRenameTitle] = useState("");
   const [renameDescription, setRenameDescription] = useState("");
   const [renameManualId, setRenameManualId] = useState<string>("");
+  const [renameDocNumber, setRenameDocNumber] = useState("");
 
   const openRename = (doc: PolicyDocument) => {
     setRenameDoc(doc);
     setRenameTitle(doc.title);
+    setRenameDocNumber(doc.doc_number || "");
     setRenameDescription(doc.description || "");
     setRenameManualId(doc.manual_id ? String(doc.manual_id) : "");
   };
@@ -680,7 +689,7 @@ export default function VeritaPolicyMyPoliciesPage() {
       if (!res.ok) throw new Error(body?.error || "Upload failed");
       toast({
         title: "New version uploaded",
-        description: `Version ${body?.version_number} now current; status reset to draft.`,
+        description: `Version ${body?.version_label ?? body?.version_number} now current; status reset to draft.`,
       });
       if (body?.phiWarning) toast({ title: "Possible patient information in this file", description: body.phiWarning, variant: "destructive", duration: 20000 });
       setNewVersionDoc(null);
@@ -1126,6 +1135,7 @@ export default function VeritaPolicyMyPoliciesPage() {
           title: renameTitle.trim(),
           description: renameDescription.trim() || null,
           manualId: renameManualId ? Number(renameManualId) : null,
+          docNumber: renameDocNumber.trim(), // blank clears it
         }
       );
       return res.json();
@@ -1424,7 +1434,8 @@ export default function VeritaPolicyMyPoliciesPage() {
       return (
         d.title.toLowerCase().includes(q) ||
         (d.description || "").toLowerCase().includes(q) ||
-        (d.manual_path || d.manual_name || "").toLowerCase().includes(q)
+        (d.manual_path || d.manual_name || "").toLowerCase().includes(q) ||
+        (d.doc_number || "").toLowerCase().includes(q)
       );
     });
   }, [documents, searchQ]);
@@ -1538,7 +1549,7 @@ export default function VeritaPolicyMyPoliciesPage() {
       {documents.length > 0 && (
         <div>
           <Input
-            placeholder="Search policies by title, description, or manual..."
+            placeholder="Search policies by title, number, description, or manual..."
             value={searchQ}
             onChange={(e) => setSearchQ(e.target.value)}
             className="max-w-md"
@@ -1761,7 +1772,12 @@ export default function VeritaPolicyMyPoliciesPage() {
                         className="border-b last:border-b-0"
                       >
                         <td className="py-2 pr-3">
-                          <div className="font-medium">{doc.title}</div>
+                          <div className="font-medium">
+                            {doc.doc_number && (
+                              <span className="mr-2 font-mono text-xs text-muted-foreground" data-testid="doc-number">{doc.doc_number}</span>
+                            )}
+                            {doc.title}
+                          </div>
                           {doc.description && (
                             <div className="text-xs text-muted-foreground">
                               {doc.description}
@@ -1798,7 +1814,7 @@ export default function VeritaPolicyMyPoliciesPage() {
                           {doc.current_file_format || "-"}
                           {doc.current_version_number != null && (
                             <span className="ml-1 text-[10px]">
-                              v{doc.current_version_number}
+                              v{doc.current_version_label ?? doc.current_version_number}
                             </span>
                           )}
                         </td>
@@ -2007,6 +2023,15 @@ export default function VeritaPolicyMyPoliciesPage() {
                 value={uploadTitle}
                 onChange={(e) => setUploadTitle(e.target.value)}
                 placeholder="e.g., Specimen Rejection Criteria"
+              />
+            </div>
+            <div>
+              <Label className="text-xs">Document number (optional, your lab's own, e.g. HH122)</Label>
+              <Input
+                value={uploadDocNumber}
+                onChange={(e) => setUploadDocNumber(e.target.value)}
+                maxLength={60}
+                data-testid="upload-doc-number"
               />
             </div>
             <div>
@@ -2231,7 +2256,7 @@ export default function VeritaPolicyMyPoliciesPage() {
                 {viewVersions.map((v: any) => (
                   <li key={v.id} className="flex items-center justify-between gap-2">
                     <span>
-                      <span className="font-medium">v{v.version_number}</span>
+                      <span className="font-medium">v{v.version_label ?? v.version_number}</span>
                       <span className="ml-2 text-muted-foreground">
                         {v.file_format?.toUpperCase()}
                       </span>
@@ -3160,7 +3185,7 @@ export default function VeritaPolicyMyPoliciesPage() {
                             </span>
                             <span className="text-xs text-muted-foreground">
                               {s.signed_at ? fmtDate(s.signed_at) : ""}
-                              {s.version_number != null ? ` v${s.version_number}` : ""}
+                              {s.version_number != null ? ` v${s.version_label ?? s.version_number}` : ""}
                             </span>
                           </div>
                         ))}
@@ -3616,6 +3641,15 @@ export default function VeritaPolicyMyPoliciesPage() {
               <Input
                 value={renameTitle}
                 onChange={(e) => setRenameTitle(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label className="text-xs">Document number (your lab's own, unique in this lab)</Label>
+              <Input
+                value={renameDocNumber}
+                onChange={(e) => setRenameDocNumber(e.target.value)}
+                maxLength={60}
+                data-testid="edit-doc-number"
               />
             </div>
             <div>

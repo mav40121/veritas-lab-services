@@ -7982,6 +7982,13 @@ try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_surveyor_links_token ON
   if (!docsCols.includes("quiz_pass_threshold")) sqlite.exec("ALTER TABLE policy_documents ADD COLUMN quiz_pass_threshold INTEGER");
   const versionsCols = (sqlite.prepare("PRAGMA table_info(policy_versions)").all() as { name: string }[]).map((c) => c.name);
   if (!versionsCols.includes("is_major_revision")) sqlite.exec("ALTER TABLE policy_versions ADD COLUMN is_major_revision INTEGER NOT NULL DEFAULT 0");
+  // Document numbers and major.minor versions (2026-11-03, Q154; shared/policyVersion.ts). All nullable: a document
+  // without a number shows none, and a version saved before these columns reads as "<version_number>.0". Nothing is
+  // back-filled here (no derived writes at boot).
+  if (!docsCols.includes("doc_number")) sqlite.exec("ALTER TABLE policy_documents ADD COLUMN doc_number TEXT");
+  try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_documents_doc_number ON policy_documents(lab_id, doc_number)`); } catch {}
+  if (!versionsCols.includes("version_major")) sqlite.exec("ALTER TABLE policy_versions ADD COLUMN version_major INTEGER");
+  if (!versionsCols.includes("version_minor")) sqlite.exec("ALTER TABLE policy_versions ADD COLUMN version_minor INTEGER");
   const workflowsCols = (sqlite.prepare("PRAGMA table_info(policy_approval_workflows)").all() as { name: string }[]).map((c) => c.name);
   void workflowsCols;
   const stepsCols = (sqlite.prepare("PRAGMA table_info(policy_approval_steps)").all() as { name: string }[]).map((c) => c.name);
