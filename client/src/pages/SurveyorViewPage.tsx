@@ -22,6 +22,8 @@ interface SurveyorDoc {
   next_review_date: string | null;
   review_interval_months: number;
   current_version_number: number | null;
+  current_version_label?: string | null;
+  doc_number?: string | null;
   current_file_format: string | null;
   manual_name: string | null;
   // Sub-manuals: the server sends documents in tree order with each manual's full path and depth.
@@ -216,7 +218,7 @@ export default function SurveyorViewPage() {
                         <div className="text-xs text-muted-foreground">{d.description}</div>
                       )}
                       <div className="text-[10px] text-muted-foreground">
-                        v{d.current_version_number} {d.current_file_format?.toUpperCase()} ·
+                        {d.doc_number ? `${d.doc_number} · ` : ""}v{d.current_version_label ?? d.current_version_number} {d.current_file_format?.toUpperCase()} ·
                         effective {fmtDate(d.effective_date)} · next review {fmtDate(d.next_review_date)}
                       </div>
                     </div>
@@ -312,7 +314,7 @@ export default function SurveyorViewPage() {
                           <span className="text-muted-foreground"> ({s.signer_title})</span>
                         )}
                         {s.version_number != null && (
-                          <span className="text-muted-foreground"> on v{s.version_number}</span>
+                          <span className="text-muted-foreground"> on v{s.version_label ?? s.version_number}</span>
                         )}
                         <span className="text-muted-foreground"> at {fmtDate(s.signed_at)}</span>
                       </span>

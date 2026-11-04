@@ -226,6 +226,7 @@ import { noPhiAcknowledgmentStatus, recordNoPhiAcknowledgment } from "./noPhiAck
 import { termsGateMiddleware, termsStatus, acceptTerms, activateTerms, deactivateTerms, acceptanceCounts, activeTermsVersion } from "./termsOfUse";
 import { TERMS_VERSION } from "../shared/termsOfUse";
 import { orderManualTree, manualMoveProblem, MAX_MANUAL_DEPTH } from "../shared/manualTree";
+import { versionLabel, nextVersionParts, cleanDocNumber, docNumberKey, DOC_NUMBER_MAX } from "../shared/policyVersion";
 import { assessmentTypeLabel, assessmentTypeProblem, isEvaluationProgram, normalizeRecordKind } from "@shared/competencyEvaluation";
 import { normalizeSpecimen, normalizeReportableField, specimenLabel } from "@shared/veritamapSpecimen";
 import { buildCompetencyRegisterRows, generateCompetencyRegisterExcel } from "./competencyRegisterExcel";
@@ -8153,7 +8154,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
                 d.current_version_id,
                 d.effective_date,
                 d.next_review_date,
-                pv.version_number,
+                pv.version_number, pv.version_major, pv.version_minor, d.doc_number,
                 sps.id AS signature_id,
                 sps.signed_at,
                 sps.typed_signature
@@ -8176,6 +8177,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           description: p.description,
           version_id: p.current_version_id,
           version_number: p.version_number,
+          version_label: versionLabel(p),
+          doc_number: p.doc_number ?? null,
           effective_date: p.effective_date,
           next_review_date: p.next_review_date,
           signed: p.signature_id != null,
@@ -10142,7 +10145,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const policySigs = sqlite.prepare(
         `SELECT sps.id, sps.signed_at AS at, sps.typed_signature,
                 pd.title AS policy_title, pd.id AS document_id,
-                sps.version_id, pv.version_number
+                sps.version_id, pv.version_number, pv.version_major, pv.version_minor
          FROM staff_portal_policy_signatures sps
          JOIN policy_documents pd ON pd.id = sps.document_id
          LEFT JOIN policy_versions pv ON pv.id = sps.version_id
@@ -10171,7 +10174,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           kind: "policy_signature" as const,
           at: s.at,
           label: s.policy_title,
-          detail: `Signed as "${s.typed_signature || ""}"${s.version_number != null ? ` (v${s.version_number})` : ""}`,
+          detail: `Signed as "${s.typed_signature || ""}"${s.version_number != null ? ` (v${versionLabel(s)})` : ""}`,
           document_id: s.document_id,
         })),
         ...inventoryAdjustments.map((a: any) => {
@@ -39338,6 +39341,21 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (reorder) out.sort((a, b) => a.key - b.key || a.n - b.n);
     return out.map((x) => x.row);
   };
+  // major.minor label for rows that carry the current version's number and parts (shared/policyVersion.ts).
+  const withVersionLabel = <T extends Record<string, any>>(rows: T[]) =>
+    rows.map((r) => ({
+      ...r,
+      current_version_label:
+        r.current_version_number != null
+          ? versionLabel({ version_number: r.current_version_number, version_major: r.current_version_major, version_minor: r.current_version_minor })
+          : null,
+    }));
+  // Document numbers are unique among a lab's active (not archived) documents, compared case-insensitively.
+  const docNumberTaken = (sqlite: any, labId: number, num: string, exceptId: number | null) =>
+    (sqlite
+      .prepare("SELECT doc_number FROM policy_documents WHERE lab_id = ? AND archived_at IS NULL AND doc_number IS NOT NULL AND id != ?")
+      .all(labId, exceptId ?? -1) as { doc_number: string }[])
+      .some((r) => docNumberKey(r.doc_number) === docNumberKey(num));
   const parentIdFromBody = (v: any): number | null | "bad" => {
     if (v === null || v === undefined || v === "") return null;
     const n = Number(v);
@@ -39912,7 +39930,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
                   d.owner_user_id, d.effective_date, d.next_review_date,
                   d.review_interval_months, d.workflow_id, d.current_version_id,
                   d.created_at, d.updated_at,
-                  v.version_number AS current_version_number,
+                  v.version_number AS current_version_number, v.version_major AS current_version_major, v.version_minor AS current_version_minor, d.doc_number,
                   v.file_format AS current_file_format,
                   v.uploaded_at AS current_uploaded_at,
                   m.name AS manual_name,
@@ -39941,7 +39959,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           pending_total_steps: pending.totalSteps,
         };
       });
-      res.json({ documents: enriched });
+      res.json({ documents: withVersionLabel(enriched) });
     }
   );
 
@@ -40008,14 +40026,21 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         }
       }
 
+      // Optional document number (the lab's own, e.g. "AH 12"): unique among the lab's active documents.
+      const docNumber = cleanDocNumber(req.body?.doc_number);
+      if (docNumber === "bad") return res.status(400).json({ error: `Document number is too long (${DOC_NUMBER_MAX} characters at most).`, code: "DOC_NUMBER_TOO_LONG" });
+      if (docNumber && docNumberTaken(sqlite, labId, docNumber, null)) {
+        return res.status(409).json({ error: `Document number ${docNumber} is already used in this lab.`, code: "DOC_NUMBER_TAKEN" });
+      }
+
       // Two-phase insert: document row first (without current_version_id),
       // then version row pointing back, then UPDATE document with version id.
       const docInsert = sqlite
         .prepare(
           `INSERT INTO policy_documents
              (lab_id, manual_id, title, description, status, owner_user_id,
-              review_interval_months, workflow_id, created_at, updated_at)
-           VALUES (?, ?, ?, ?, 'draft', ?, ?, NULL, datetime('now'), datetime('now'))`
+              review_interval_months, workflow_id, doc_number, created_at, updated_at)
+           VALUES (?, ?, ?, ?, 'draft', ?, ?, NULL, ?, datetime('now'), datetime('now'))`
         )
         .run(
           labId,
@@ -40023,7 +40048,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           title,
           description,
           req.userId,
-          Number.isFinite(reviewIntervalMonths) ? reviewIntervalMonths : stateDefaultInterval
+          Number.isFinite(reviewIntervalMonths) ? reviewIntervalMonths : stateDefaultInterval,
+          docNumber
         );
       const documentId = Number(docInsert.lastInsertRowid);
       const versionNumber = 1;
@@ -40045,8 +40071,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         .prepare(
           `INSERT INTO policy_versions
              (document_id, version_number, file_path, file_format, file_size_bytes,
-              file_hash_sha256, change_summary, is_major_revision, uploaded_by, uploaded_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
+              file_hash_sha256, change_summary, is_major_revision, uploaded_by, uploaded_at,
+              version_major, version_minor)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), 1, 0)`
         )
         .run(
           documentId,
@@ -40074,6 +40101,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         action: "uploaded",
         details: {
           version_number: versionNumber,
+          version_label: "1.0",
+          doc_number: docNumber,
           file_format: format,
           file_size_bytes: req.file.size,
           file_hash_sha256: fileHash,
@@ -40097,7 +40126,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const sqlite = (db as any).$client;
       const row = sqlite
         .prepare(
-          `SELECT d.*, v.version_number AS current_version_number,
+          `SELECT d.*, v.version_number AS current_version_number, v.version_major AS current_version_major, v.version_minor AS current_version_minor,
                   v.file_format AS current_file_format,
                   v.file_size_bytes AS current_file_size_bytes,
                   v.file_hash_sha256 AS current_file_hash_sha256,
@@ -40113,14 +40142,17 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       if (row.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
       const versions = sqlite
         .prepare(
-          `SELECT id, version_number, file_format, file_size_bytes,
+          `SELECT id, version_number, version_major, version_minor, file_format, file_size_bytes,
                   file_hash_sha256, change_summary, uploaded_by, uploaded_at
              FROM policy_versions
             WHERE document_id = ?
             ORDER BY version_number DESC`
         )
         .all(id);
-      res.json({ document: withManualTree(sqlite, req.scope.labId, [row])[0], versions });
+      res.json({
+        document: withVersionLabel(withManualTree(sqlite, req.scope.labId, [row]))[0],
+        versions: (versions as any[]).map((v) => ({ ...v, version_label: versionLabel(v) })),
+      });
     }
   );
 
@@ -40744,6 +40776,22 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       if (doc.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
       if (isPolicyExpired(sqlite, id)) return res.status(409).json(POLICY_EXPIRED_RESPONSE);
       const { title, description, manualId, reviewIntervalMonths } = req.body || {};
+      // A move must land in one of this lab's active manuals (before 11/3 any manual id was accepted, another lab's
+      // included, and its name then showed in this lab's list).
+      if (manualId !== undefined && manualId !== null) {
+        const m = sqlite.prepare("SELECT lab_id, archived_at FROM policy_manuals WHERE id = ?").get(Number(manualId)) as any;
+        if (!m || m.lab_id !== req.scope.labId || m.archived_at) {
+          return res.status(400).json({ error: "That manual isn't available in this lab.", code: "BAD_MANUAL" });
+        }
+      }
+      // Document number: present in the body = set it (blank clears it); absent = leave it.
+      const settingNumber = req.body && Object.prototype.hasOwnProperty.call(req.body, "docNumber");
+      const docNumber = settingNumber ? cleanDocNumber(req.body.docNumber) : null;
+      if (docNumber === "bad") return res.status(400).json({ error: `Document number is too long (${DOC_NUMBER_MAX} characters at most).`, code: "DOC_NUMBER_TOO_LONG" });
+      if (settingNumber && docNumber && docNumberTaken(sqlite, req.scope.labId, docNumber, id)) {
+        return res.status(409).json({ error: `Document number ${docNumber} is already used in this lab.`, code: "DOC_NUMBER_TAKEN" });
+      }
+      const priorNumber = (sqlite.prepare("SELECT doc_number FROM policy_documents WHERE id = ?").get(id) as any)?.doc_number ?? null;
       sqlite
         .prepare(
           `UPDATE policy_documents
@@ -40751,6 +40799,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
                  description = COALESCE(?, description),
                  manual_id = CASE WHEN ? = 1 THEN ? ELSE manual_id END,
                  review_interval_months = COALESCE(?, review_interval_months),
+                 doc_number = CASE WHEN ? = 1 THEN ? ELSE doc_number END,
                  updated_at = datetime('now')
            WHERE id = ?`
         )
@@ -40763,6 +40812,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           manualId !== undefined ? 1 : 0,
           manualId !== undefined ? (manualId === null ? null : Number(manualId)) : null,
           reviewIntervalMonths !== undefined ? Number(reviewIntervalMonths) : null,
+          settingNumber ? 1 : 0,
+          settingNumber ? docNumber : null,
           id
         );
       writeAuditLog(sqlite, {
@@ -40770,7 +40821,11 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         documentId: id,
         userId: req.userId,
         action: "edited",
-        details: { title: title ?? null, description: description ?? null },
+        details: {
+          title: title ?? null,
+          description: description ?? null,
+          ...(settingNumber && priorNumber !== docNumber ? { doc_number_from: priorNumber, doc_number_to: docNumber } : {}),
+        },
         ipAddress: req.ip,
         userAgent: req.headers["user-agent"] as string | undefined,
       });
@@ -41604,7 +41659,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const docs = sqlite
       .prepare(
         `SELECT d.id, d.title, d.description, d.effective_date, d.next_review_date,
-                d.review_interval_months, v.version_number AS current_version_number,
+                d.review_interval_months, v.version_number AS current_version_number, v.version_major AS current_version_major, v.version_minor AS current_version_minor, d.doc_number,
                 v.file_format AS current_file_format, d.manual_id, m.name AS manual_name
            FROM policy_documents d
            LEFT JOIN policy_versions v ON v.id = d.current_version_id
@@ -41614,7 +41669,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       )
       .all(r.labId) as any[];
     // Sub-manuals: the inspector sees the lab's manual tree, each document under its manual's full path.
-    res.json({ lab, documents: withManualTree(sqlite, r.labId, docs, true) });
+    res.json({ lab, documents: withManualTree(sqlite, r.labId, withVersionLabel(docs), true) });
   });
 
   // GET /api/surveyor/:token/policies/:id/render — render approved policy
@@ -41683,7 +41738,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       `SELECT sps.id, sps.document_id, sps.version_id, sps.signed_at,
               sps.typed_signature, sps.ip_address, sps.user_agent,
               se.first_name, se.last_name, se.middle_initial, se.title,
-              pv.version_number
+              pv.version_number, pv.version_major, pv.version_minor
          FROM staff_portal_policy_signatures sps
          LEFT JOIN staff_employees se ON se.id = sps.staff_employee_id
          LEFT JOIN policy_versions pv ON pv.id = sps.version_id
@@ -41697,6 +41752,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         document_id: r.document_id,
         version_id: r.version_id,
         version_number: r.version_number,
+        version_label: versionLabel(r),
         signed_at: r.signed_at,
         typed_signature: r.typed_signature,
         ip_address: r.ip_address,
@@ -41785,13 +41841,20 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const isMajorRev = ["1", "true", "yes", "on"].includes(
         String(req.body?.is_major_revision ?? "").toLowerCase().trim()
       ) ? 1 : 0;
+      // major.minor (shared/policyVersion.ts): a major revision is the next whole number, any other version adds .1.
+      // version_number stays the internal order key (file path above).
+      const prior = sqlite
+        .prepare("SELECT version_number, version_major, version_minor FROM policy_versions WHERE document_id = ?")
+        .all(id) as any[];
+      const parts = nextVersionParts(prior, isMajorRev === 1);
+      const label = `${parts.major}.${parts.minor}`;
       const verInsert = sqlite
         .prepare(
           `INSERT INTO policy_versions
              (document_id, version_number, file_path, file_format,
               file_size_bytes, file_hash_sha256, change_summary,
-              is_major_revision, uploaded_by, uploaded_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
+              is_major_revision, uploaded_by, uploaded_at, version_major, version_minor)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, ?)`
         )
         .run(
           id,
@@ -41800,9 +41863,11 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           format,
           req.file.size,
           fileHash,
-          (req.body?.change_summary as string | undefined) || `Version ${nextVer}`,
+          (req.body?.change_summary as string | undefined) || `Version ${label}`,
           isMajorRev,
-          req.userId
+          req.userId,
+          parts.major,
+          parts.minor
         );
       const versionId = Number(verInsert.lastInsertRowid);
       // Flip current_version_id to the new one and reset status to draft.
@@ -41822,6 +41887,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         action: "version_uploaded",
         details: {
           version_number: nextVer,
+          version_label: label,
+          is_major_revision: isMajorRev === 1,
           file_format: format,
           file_size_bytes: req.file.size,
           file_hash_sha256: fileHash,
@@ -41829,7 +41896,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         ipAddress: req.ip,
         userAgent: req.headers["user-agent"] as string | undefined,
       });
-      res.status(201).json({ version_id: versionId, version_number: nextVer, phiWarning: phiCheck?.message ?? null });
+      res.status(201).json({ version_id: versionId, version_number: nextVer, version_label: label, phiWarning: phiCheck?.message ?? null });
     }
   );
 
@@ -41906,16 +41973,16 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const pattern = `%${q}%`;
       const rows = sqlite
         .prepare(
-          `SELECT d.id, d.title, d.description, d.status, d.manual_id,
+          `SELECT d.id, d.title, d.description, d.status, d.manual_id, d.doc_number,
                   m.name AS manual_name
              FROM policy_documents d
              LEFT JOIN policy_manuals m ON m.id = d.manual_id
             WHERE d.lab_id = ? AND d.archived_at IS NULL
-              AND (d.title LIKE ? OR COALESCE(d.description, '') LIKE ?)
+              AND (d.title LIKE ? OR COALESCE(d.description, '') LIKE ? OR COALESCE(d.doc_number, '') LIKE ?)
             ORDER BY d.updated_at DESC
             LIMIT 50`
         )
-        .all(req.scope.labId, pattern, pattern);
+        .all(req.scope.labId, pattern, pattern, pattern);
       res.json({ results: withManualTree(sqlite, req.scope.labId, rows as any[]) });
     }
   );
@@ -43254,7 +43321,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       // document. (policy_documents has no policy_number column — that field is
       // on the separate master-list tracker, so it is intentionally omitted.)
       const ver = doc.current_version_id
-        ? (sqlite.prepare("SELECT version_number FROM policy_versions WHERE id = ?").get(doc.current_version_id) as any)
+        ? (sqlite.prepare("SELECT version_number, version_major, version_minor FROM policy_versions WHERE id = ?").get(doc.current_version_id) as any)
         : null;
       const effRow = sqlite.prepare("SELECT effective_date FROM policy_documents WHERE id = ?").get(id) as any;
 
@@ -43299,7 +43366,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const buf = await generatePolicySignatureReportExcel(
         {
           doc: { title: doc.title, policy_number: null, status: doc.status },
-          versionNumber: ver?.version_number ?? null,
+          versionNumber: ver ? versionLabel(ver) : null, // major.minor (shared/policyVersion.ts)
           effectiveDate: effRow?.effective_date ?? null,
           signoffs,
           attestations,
