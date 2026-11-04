@@ -225,6 +225,7 @@ import { notApplicableRows, notApplicableIds, notApplicableProblem, NOT_APPLICAB
 import { noPhiAcknowledgmentStatus, recordNoPhiAcknowledgment } from "./noPhiAcknowledgment";
 import { termsGateMiddleware, termsStatus, acceptTerms, activateTerms, deactivateTerms, acceptanceCounts, activeTermsVersion } from "./termsOfUse";
 import { TERMS_VERSION } from "../shared/termsOfUse";
+import { orderManualTree, manualMoveProblem, MAX_MANUAL_DEPTH } from "../shared/manualTree";
 import { assessmentTypeLabel, assessmentTypeProblem, isEvaluationProgram, normalizeRecordKind } from "@shared/competencyEvaluation";
 import { normalizeSpecimen, normalizeReportableField, specimenLabel } from "@shared/veritamapSpecimen";
 import { buildCompetencyRegisterRows, generateCompetencyRegisterExcel } from "./competencyRegisterExcel";
@@ -39306,7 +39307,25 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     limits: { fileSize: 25 * 1024 * 1024 },
   });
 
-  // GET /api/labs/:labId/veritapolicy/manuals — list lab manuals.
+  // Sub-manuals (2026-11-03, Q151 = 1): the lab's active manuals in tree order, each with its depth and full path
+  // ("Heywood Hospital › Heywood Microbiology › HH Abbott ID NOW"). shared/manualTree.ts holds the rules.
+  const labManualTree = (sqlite: any, labId: number) =>
+    orderManualTree(
+      sqlite
+        .prepare(
+          `SELECT id, lab_id, name, description, display_order, parent_id, created_at, updated_at
+             FROM policy_manuals
+            WHERE lab_id = ? AND archived_at IS NULL`
+        )
+        .all(labId) as any[]
+    );
+  const parentIdFromBody = (v: any): number | null | "bad" => {
+    if (v === null || v === undefined || v === "") return null;
+    const n = Number(v);
+    return Number.isInteger(n) && n > 0 ? n : "bad";
+  };
+
+  // GET /api/labs/:labId/veritapolicy/manuals — list lab manuals (tree order, with parent_id, depth and path).
   // Seeds the 10 default manuals on first call so labs do not start empty.
   app.get(
     "/api/labs/:labId/veritapolicy/manuals",
@@ -39316,15 +39335,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const sqlite = (db as any).$client;
       const labId = req.scope.labId;
       seedDefaultManualsIfEmpty(sqlite, labId);
-      const rows = sqlite
-        .prepare(
-          `SELECT id, lab_id, name, description, display_order, created_at, updated_at
-             FROM policy_manuals
-            WHERE lab_id = ? AND archived_at IS NULL
-            ORDER BY display_order ASC, name ASC`
-        )
-        .all(labId);
-      res.json({ manuals: rows });
+      res.json({ manuals: labManualTree(sqlite, labId) });
     }
   );
 
@@ -39341,17 +39352,27 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         return res.status(400).json({ error: "Name is required" });
       }
       const sqlite = (db as any).$client;
+      // Optional parentId: create it as a sub-manual of another active manual in this lab.
+      const parentId = parentIdFromBody(req.body?.parentId);
+      if (parentId === "bad") return res.status(400).json({ error: "Bad parent manual", code: "BAD_PARENT" });
+      if (parentId !== null) {
+        const parent = labManualTree(sqlite, req.scope.labId).find((m) => m.id === parentId);
+        if (!parent) return res.status(400).json({ error: "That manual isn't available in this lab.", code: "BAD_PARENT" });
+        if (parent.depth + 1 >= MAX_MANUAL_DEPTH) {
+          return res.status(400).json({ error: `Manuals can nest up to ${MAX_MANUAL_DEPTH} levels.`, code: "TOO_DEEP" });
+        }
+      }
       const result = sqlite
         .prepare(
-          `INSERT INTO policy_manuals (lab_id, name, description, display_order)
-           VALUES (?, ?, ?, ?)`
+          `INSERT INTO policy_manuals (lab_id, name, description, display_order, parent_id)
+           VALUES (?, ?, ?, ?, ?)`
         )
-        .run(req.scope.labId, name.trim(), description || null, Number(displayOrder ?? 0));
+        .run(req.scope.labId, name.trim(), description || null, Number(displayOrder ?? 0), parentId);
       writeAuditLog(sqlite, {
         labId: req.scope.labId,
         userId: req.userId,
         action: "manual_created",
-        details: { manual_id: Number(result.lastInsertRowid), name: name.trim() },
+        details: { manual_id: Number(result.lastInsertRowid), name: name.trim(), parent_id: parentId },
         ipAddress: req.ip,
         userAgent: req.headers["user-agent"] as string | undefined,
       });
@@ -39376,6 +39397,21 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         .get(id) as { lab_id: number } | undefined;
       if (!row) return res.status(404).json({ error: "Manual not found" });
       if (row.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
+      // Moving it: parentId present in the body (null = back to the top level). Checked before anything is written.
+      const moving = req.body && Object.prototype.hasOwnProperty.call(req.body, "parentId");
+      let fromParent: number | null = null;
+      let toParent: number | null = null;
+      if (moving) {
+        const parsed = parentIdFromBody(req.body.parentId);
+        if (parsed === "bad") return res.status(400).json({ error: "Bad parent manual", code: "BAD_PARENT" });
+        const tree = labManualTree(sqlite, req.scope.labId);
+        const self = tree.find((m) => m.id === id);
+        if (!self) return res.status(400).json({ error: "An archived manual can't be moved.", code: "MANUAL_ARCHIVED" });
+        const problem = manualMoveProblem(tree, id, parsed);
+        if (problem) return res.status(400).json({ error: problem, code: "BAD_MOVE" });
+        fromParent = self.parent_id ?? null;
+        toParent = parsed;
+      }
       sqlite
         .prepare(
           `UPDATE policy_manuals
@@ -39391,6 +39427,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           displayOrder !== undefined ? Number(displayOrder) : null,
           id
         );
+      if (moving && fromParent !== toParent) {
+        sqlite.prepare("UPDATE policy_manuals SET parent_id = ?, updated_at = datetime('now') WHERE id = ?").run(toParent, id);
+      }
       writeAuditLog(sqlite, {
         labId: req.scope.labId,
         userId: req.userId,
@@ -39399,6 +39438,16 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         ipAddress: req.ip,
         userAgent: req.headers["user-agent"] as string | undefined,
       });
+      if (moving && fromParent !== toParent) {
+        writeAuditLog(sqlite, {
+          labId: req.scope.labId,
+          userId: req.userId,
+          action: "manual_moved",
+          details: { manual_id: id, from_parent_id: fromParent, to_parent_id: toParent },
+          ipAddress: req.ip,
+          userAgent: req.headers["user-agent"] as string | undefined,
+        });
+      }
       res.json({ ok: true });
     }
   );
@@ -39419,6 +39468,18 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         .get(id) as { lab_id: number } | undefined;
       if (!row) return res.status(404).json({ error: "Manual not found" });
       if (row.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
+      // A manual with active sub-manuals stays: archiving it would lift them to the top level without anyone choosing
+      // that. Move or archive the sub-manuals first.
+      const kids = Number(
+        (sqlite.prepare("SELECT COUNT(*) AS n FROM policy_manuals WHERE lab_id = ? AND parent_id = ? AND archived_at IS NULL")
+          .get(req.scope.labId, id) as any).n || 0
+      );
+      if (kids > 0) {
+        return res.status(409).json({
+          error: `This manual has ${kids} sub-manual${kids === 1 ? "" : "s"}. Move or archive them first.`,
+          code: "MANUAL_HAS_SUBMANUALS",
+        });
+      }
       // Soft archive. Existing documents keep their manual_id pointer but
       // the manual disappears from the picker.
       sqlite
@@ -39429,6 +39490,14 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
            WHERE id = ?`
         )
         .run(id);
+      writeAuditLog(sqlite, {
+        labId: req.scope.labId,
+        userId: req.userId,
+        action: "manual_archived",
+        details: { manual_id: id },
+        ipAddress: req.ip,
+        userAgent: req.headers["user-agent"] as string | undefined,
+      });
       res.json({ ok: true });
     }
   );
@@ -39569,9 +39638,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
            FROM lab_members lm JOIN users u ON u.id = lm.user_id
           WHERE lm.lab_id = ? AND lm.status = 'active' ORDER BY u.name`
       ).all(req.scope.labId);
-      const manuals = sqlite.prepare(
-        `SELECT id, name FROM policy_manuals WHERE lab_id = ? ORDER BY name`
-      ).all(req.scope.labId);
+      // Tree order, named by full path, so a sub-manual reads "Parent › Child" in the delegation picker.
+      const manuals = labManualTree(sqlite, req.scope.labId).map((m) => ({ id: m.id, name: m.path }));
       const me = sqlite.prepare(
         "SELECT role FROM lab_members WHERE user_id = ? AND lab_id = ? AND status = 'active' LIMIT 1"
       ).get(req.userId, req.scope.labId) as any;
@@ -39838,7 +39906,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
             ORDER BY d.updated_at DESC`
         )
         .all(req.scope.labId) as any[];
-      const enriched = rows.map((doc) => {
+      // Sub-manuals: manual_path names the manual by its full path ("Parent › Child"); manual_name stays the leaf name.
+      const manualPath = new Map(labManualTree(sqlite, req.scope.labId).map((m) => [m.id, m.path]));
+      const enriched = rows.map((row) => {
+        const doc = { ...row, manual_path: row.manual_id != null ? manualPath.get(row.manual_id) ?? row.manual_name ?? null : null };
         if (doc.status !== "in_review") return doc;
         const pending = getCurrentPendingStep(sqlite, doc.id);
         if (!pending.step) return doc;

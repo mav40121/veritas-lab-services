@@ -16,6 +16,7 @@ import { useMemberships } from "@/hooks/useMemberships";
 import { VeritaPolicyTabs } from "@/components/VeritaPolicyTabs";
 import { apiRequest, queryClient, getQueryFn } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { MANUAL_PATH_SEPARATOR, descendantIds } from "@shared/manualTree";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -119,6 +120,10 @@ interface Manual {
   name: string;
   description: string | null;
   display_order: number;
+  // Sub-manuals (shared/manualTree.ts): the server lists manuals in tree order with these.
+  parent_id: number | null;
+  depth: number;
+  path: string;
 }
 
 interface WorkflowStep {
@@ -185,6 +190,8 @@ interface PolicyDocument {
   current_file_format: string | null;
   current_uploaded_at: string | null;
   manual_name: string | null;
+  // Full path of the manual ("Parent › Child"); same as manual_name for a top-level manual.
+  manual_path?: string | null;
   // Count of non-deleted discussion notes, for the row's Notes badge.
   note_count?: number;
   created_at: string;
@@ -468,13 +475,24 @@ export default function VeritaPolicyMyPoliciesPage() {
   const [newManualOpen, setNewManualOpen] = useState(false);
   const [newManualName, setNewManualName] = useState("");
   const [newManualDescription, setNewManualDescription] = useState("");
+  // Sub-manuals: the manual the new one sits inside (TOP_LEVEL = a top-level manual).
+  const TOP_LEVEL = "__top__";
+  const [newManualParent, setNewManualParent] = useState<string>(TOP_LEVEL);
+  const openNewManual = (parentId?: number) => {
+    setNewManualParent(parentId ? String(parentId) : TOP_LEVEL);
+    setNewManualOpen(true);
+  };
 
   const createManualMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest(
         "POST",
         `/api/labs/${activeLabId}/veritapolicy/manuals`,
-        { name: newManualName.trim(), description: newManualDescription.trim() }
+        {
+          name: newManualName.trim(),
+          description: newManualDescription.trim(),
+          parentId: newManualParent === TOP_LEVEL ? null : Number(newManualParent),
+        }
       );
       return res.json();
     },
@@ -483,10 +501,26 @@ export default function VeritaPolicyMyPoliciesPage() {
       setNewManualOpen(false);
       setNewManualName("");
       setNewManualDescription("");
+      setNewManualParent(TOP_LEVEL);
       invalidateAll();
     },
     onError: (err: any) =>
       toast({ title: "Create failed", description: String(err?.message || err), variant: "destructive" }),
+  });
+
+  // ── Manuals dialog: the whole tree, add a sub-manual, move a manual ───────
+  const [manualsOpen, setManualsOpen] = useState(false);
+  const moveManualMutation = useMutation({
+    mutationFn: async ({ id, parentId }: { id: number; parentId: number | null }) => {
+      const res = await apiRequest("PUT", `/api/labs/${activeLabId}/veritapolicy/manuals/${id}`, { parentId });
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Manual moved" });
+      invalidateAll();
+    },
+    onError: (err: any) =>
+      toast({ title: "Move failed", description: String(err?.message || err), variant: "destructive" }),
   });
 
   // ── Phase 2: submit / approve / reject / rename ────────────────────────
@@ -1389,24 +1423,34 @@ export default function VeritaPolicyMyPoliciesPage() {
       return (
         d.title.toLowerCase().includes(q) ||
         (d.description || "").toLowerCase().includes(q) ||
-        (d.manual_name || "").toLowerCase().includes(q)
+        (d.manual_path || d.manual_name || "").toLowerCase().includes(q)
       );
     });
   }, [documents, searchQ]);
 
+  // Grouped by manual id in tree order, each group named by its full path. Keyed by id, not name: two
+  // sub-manuals can share a name ("Equipment" under two departments). A document whose manual is no
+  // longer listed (archived) still shows, under that manual's name after the tree, never hidden.
   const grouped = useMemo(() => {
     const byManual = new Map<string, PolicyDocument[]>();
     filteredDocs.forEach((doc) => {
-      const key = doc.manual_name || "Unassigned";
+      const key = doc.manual_id != null ? String(doc.manual_id) : "unassigned";
       if (!byManual.has(key)) byManual.set(key, []);
       byManual.get(key)!.push(doc);
     });
-    const ordered = manuals.map((m) => m.name);
-    if (byManual.has("Unassigned")) ordered.push("Unassigned");
-    return ordered.filter((name) => byManual.has(name)).map((name) => ({
-      manualName: name,
-      docs: byManual.get(name)!,
-    }));
+    const groups: { key: string; manualName: string; depth: number; docs: PolicyDocument[] }[] = [];
+    for (const m of manuals) {
+      const docs = byManual.get(String(m.id));
+      if (docs) groups.push({ key: String(m.id), manualName: m.path || m.name, depth: m.depth || 0, docs });
+      byManual.delete(String(m.id));
+    }
+    const unassigned = byManual.get("unassigned");
+    byManual.delete("unassigned");
+    for (const [key, docs] of byManual) {
+      groups.push({ key, manualName: docs[0].manual_path || docs[0].manual_name || "Manual", depth: 0, docs });
+    }
+    if (unassigned) groups.push({ key: "unassigned", manualName: "Unassigned", depth: 0, docs: unassigned });
+    return groups;
     // Depend on filteredDocs (which itself tracks documents + searchQ) so the
     // grouped table re-filters as the user types; [documents, manuals] alone
     // left `grouped` stale and the search box did nothing.
@@ -1427,7 +1471,8 @@ export default function VeritaPolicyMyPoliciesPage() {
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-6">
       <VeritaPolicyTabs active="my-policies" />
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-start sm:justify-between gap-3">
+      {/* Title above the actions: the row of eight buttons no longer fits beside the title at desktop widths. */}
+      <div className="flex flex-col gap-3">
         <div>
           <h1 className="text-2xl font-bold">My Documents</h1>
           <p className="text-sm text-muted-foreground">
@@ -1436,9 +1481,18 @@ export default function VeritaPolicyMyPoliciesPage() {
             signature, and assign read-and-sign to your staff.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2 sm:shrink-0">
-          <Button hidden={isReadOnly} variant="outline" onClick={() => setNewManualOpen(true)}>
+        <div className="flex flex-wrap gap-2">
+          <Button hidden={isReadOnly} variant="outline" onClick={() => openNewManual()}>
             <FolderPlus size={14} className="mr-1.5" /> New Manual
+          </Button>
+          <Button hidden={isReadOnly}
+            variant="outline"
+            disabled={manuals.length === 0}
+            onClick={() => setManualsOpen(true)}
+            title="See every manual and sub-manual, add a sub-manual, or move a manual"
+            data-testid="manuals-open"
+          >
+            <FolderInput size={14} className="mr-1.5" /> Manuals
           </Button>
           <Button hidden={isReadOnly}
             variant="outline"
@@ -1510,7 +1564,7 @@ export default function VeritaPolicyMyPoliciesPage() {
                       <span className="font-medium">{d.title}</span>
                       {d.manual_name && (
                         <span className="ml-2 text-xs text-muted-foreground">
-                          in {d.manual_name}
+                          in {d.manual_path || d.manual_name}
                         </span>
                       )}
                       <div className="text-xs">
@@ -1667,11 +1721,21 @@ export default function VeritaPolicyMyPoliciesPage() {
           </CardContent>
         </Card>
       ) : (
-        grouped.map(({ manualName, docs }) => (
-          <Card key={manualName}>
+        grouped.map(({ key, manualName, depth, docs }) => (
+          <Card key={key} data-testid="manual-group" style={{ marginLeft: Math.min(depth, 6) * 16 }}>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">
-                {manualName}
+                {/* Sub-manuals show their parents first, muted: "Parent › Child". */}
+                {manualName.includes(MANUAL_PATH_SEPARATOR) ? (
+                  <>
+                    <span className="font-normal text-muted-foreground">
+                      {manualName.slice(0, manualName.lastIndexOf(MANUAL_PATH_SEPARATOR) + MANUAL_PATH_SEPARATOR.length)}
+                    </span>
+                    {manualName.slice(manualName.lastIndexOf(MANUAL_PATH_SEPARATOR) + MANUAL_PATH_SEPARATOR.length)}
+                  </>
+                ) : (
+                  manualName
+                )}
                 <span className="ml-2 text-xs font-normal text-muted-foreground">
                   ({docs.length} {docs.length === 1 ? "policy" : "policies"})
                 </span>
@@ -1963,7 +2027,7 @@ export default function VeritaPolicyMyPoliciesPage() {
                   <SelectContent>
                     {manuals.map((m) => (
                       <SelectItem key={m.id} value={String(m.id)}>
-                        {m.name}
+                        {m.path || m.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -2035,6 +2099,22 @@ export default function VeritaPolicyMyPoliciesPage() {
                 rows={2}
               />
             </div>
+            <div>
+              <Label className="text-xs">Sub-manual of</Label>
+              <Select value={newManualParent} onValueChange={setNewManualParent}>
+                <SelectTrigger data-testid="new-manual-parent">
+                  <SelectValue placeholder="Top level" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={TOP_LEVEL}>Top level (not inside another manual)</SelectItem>
+                  {manuals.map((m) => (
+                    <SelectItem key={m.id} value={String(m.id)}>
+                      {m.path || m.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setNewManualOpen(false)}>
@@ -2050,6 +2130,68 @@ export default function VeritaPolicyMyPoliciesPage() {
                 <Loader2 className="animate-spin mr-1" size={14} />
               )}
               Create
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Manuals: the tree, add a sub-manual, move a manual ─────────── */}
+      <Dialog open={manualsOpen} onOpenChange={setManualsOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Manuals</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground">
+            A manual can sit inside another manual. To move one, pick where it goes; its sub-manuals and
+            documents move with it.
+          </p>
+          <div className="divide-y border rounded-md" data-testid="manuals-tree">
+            {manuals.map((m) => {
+              const blocked = descendantIds(manuals, m.id);
+              return (
+                <div key={m.id} className="flex items-center gap-2 py-1.5 pr-2" data-testid="manuals-row" style={{ paddingLeft: 8 + Math.min(m.depth || 0, 8) * 18 }}>
+                  <span className="flex-1 min-w-0 truncate text-sm" title={m.path}>
+                    {m.name}
+                  </span>
+                  <Select
+                    value={m.parent_id ? String(m.parent_id) : TOP_LEVEL}
+                    onValueChange={(v) => moveManualMutation.mutate({ id: m.id, parentId: v === TOP_LEVEL ? null : Number(v) })}
+                    disabled={isReadOnly || moveManualMutation.isPending}
+                  >
+                    <SelectTrigger className="h-8 w-56 text-xs" aria-label={`Where ${m.name} sits`} data-testid={`manual-parent-${m.id}`}>
+                      {/* The trigger names just the parent; the list shows full paths. */}
+                      <SelectValue>
+                        {m.parent_id ? `Inside ${manuals.find((o) => o.id === m.parent_id)?.name ?? "another manual"}` : "Top level"}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={TOP_LEVEL}>Top level</SelectItem>
+                      {manuals
+                        .filter((o) => o.id !== m.id && !blocked.has(o.id))
+                        .map((o) => (
+                          <SelectItem key={o.id} value={String(o.id)}>
+                            Inside {o.path || o.name}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    hidden={isReadOnly}
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 text-xs"
+                    onClick={() => { setManualsOpen(false); openNewManual(m.id); }}
+                    title={`Add a sub-manual inside ${m.name}`}
+                  >
+                    <FolderPlus size={13} className="mr-1" /> Sub-manual
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setManualsOpen(false)}>
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -3113,7 +3255,7 @@ export default function VeritaPolicyMyPoliciesPage() {
                 </SelectTrigger>
                 <SelectContent>
                   {manuals.map((m) => (
-                    <SelectItem key={m.id} value={String(m.id)}>{m.name}</SelectItem>
+                    <SelectItem key={m.id} value={String(m.id)}>{m.path || m.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -3490,7 +3632,7 @@ export default function VeritaPolicyMyPoliciesPage() {
                 <SelectContent>
                   {manuals.map((m) => (
                     <SelectItem key={m.id} value={String(m.id)}>
-                      {m.name}
+                      {m.path || m.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -3539,7 +3681,7 @@ export default function VeritaPolicyMyPoliciesPage() {
                   <SelectItem value={MOVE_UNASSIGNED}>Unassigned</SelectItem>
                   {manuals.map((m) => (
                     <SelectItem key={m.id} value={String(m.id)}>
-                      {m.name}
+                      {m.path || m.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
