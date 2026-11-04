@@ -294,6 +294,12 @@ const _SAME_TEST: Array<[string, string[]]> = [
   ["stfr", ["soluble transferrin receptor", "transferrin receptor"]],
   ["igg subclasses", ["igg subclasses 1 2 3 4", "immunoglobulins igg subclasses", "igg subclasses"]],
   ["platelet estimate", ["platelet estimate", "plt estimate"]],
+  // Troponin spellings in the FDA library and on lab maps (Redington PATHFAST, 2026-11-04). High-sensitivity and contemporary stay
+  // apart until Michael decides whether they are the same test for 42 CFR 493.1281.
+  ["troponin i", ["troponin i", "cardiac troponin i", "ctni", "tni"]],
+  ["troponin t", ["troponin t", "cardiac troponin t", "ctnt", "tnt"]],
+  ["hs troponin i", ["hs troponin i", "high sensitivity troponin i", "high sensitive troponin i", "hs ctni", "hsctni", "hs tni", "hstni"]],
+  ["hs troponin t", ["hs troponin t", "high sensitivity troponin t", "high sensitive troponin t", "hs ctnt", "hsctnt", "hs tnt", "hstnt"]],
 ];
 
 function _wordKey(s: string): string {
