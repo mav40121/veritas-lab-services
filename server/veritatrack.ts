@@ -11,6 +11,7 @@ import { attachSopLinks } from "./veritamapSopLink";
 import { DEFAULT_TRACK_CATEGORIES, cleanCategoryName, isDefaultTrackCategory, categoryNameProblem } from "@shared/veritatrackCategories";
 import { labWideCorrelation } from "./labWideCorrelation";
 import { exportAllPlanBypass } from "./exportAllContext";
+import { EMAIL_RE, cleanGroupName, groupNameProblem, labGroupMembers, labGroupsPayload } from "./labGroups";
 
 function trackLicenseCtx(req: any): LicenseContext {
   const u = req?.user || null;
@@ -166,13 +167,48 @@ export function registerVeritaTrackRoutes(
       lead_days: row ? row.lead_days : 14,
       overdue_cadence_days: row ? row.overdue_cadence_days : 2,
       recipients,
+      recipient_group_ids: row ? parseGroupIds(row.recipient_group_ids_json) : [],
       owner_only: row ? !!row.owner_only : false,
       configured: !!row,
     };
   }
 
+  function parseGroupIds(raw: unknown): number[] {
+    try {
+      const ids = JSON.parse(String(raw ?? "[]"));
+      return Array.isArray(ids) ? ids.map(Number).filter(Number.isInteger) : [];
+    } catch { return []; }
+  }
+
+  // Whole groups on the lab's recipient list. Only this lab's active groups are kept; a caller that sends none keeps what
+  // is saved, so an older client or script never clears them.
+  function reminderGroupIdsToSave(labId: number, raw: unknown): number[] {
+    if (raw === undefined) {
+      const row = sqlite.prepare("SELECT recipient_group_ids_json FROM veritatrack_reminder_config WHERE lab_id = ?").get(labId) as any;
+      return parseGroupIds(row?.recipient_group_ids_json);
+    }
+    const wanted = new Set(Array.isArray(raw) ? raw.map(Number) : []);
+    return (sqlite.prepare("SELECT id FROM lab_groups WHERE lab_id = ? AND retired = 0").all(labId) as any[])
+      .map((g) => Number(g.id)).filter((id) => wanted.has(id));
+  }
+
+  // The group a task's reminders go to. undefined keeps what the task has, so a routine edit never clears it; a group from
+  // another lab or a retired one is refused, except that a task keeps a group retired after it was set.
+  function taskGroupToSave(labId: number | null | undefined, raw: unknown, current: number | null = null): { id: number | null; problem?: string } {
+    if (raw === undefined) return { id: current };
+    if (raw === null || raw === "") return { id: null };
+    const id = Number(raw);
+    if (id === current) return { id };
+    const g = labId && Number.isInteger(id) ? sqlite.prepare("SELECT retired FROM lab_groups WHERE id = ? AND lab_id = ?").get(id, labId) as any : null;
+    if (!g) return { id: null, problem: "That group is not one of this lab's groups." };
+    if (g.retired) return { id: null, problem: "That group has been retired. Pick another one." };
+    return { id };
+  }
+
   function writeReminderConfig(labId: number, body: any) {
-    const { enabled, lead_days, overdue_cadence_days, recipients, owner_only } = body || {};
+    const { enabled, lead_days, overdue_cadence_days, recipients, owner_only, recipient_group_ids } = body || {};
+    const groupIds = reminderGroupIdsToSave(labId, recipient_group_ids);
+    const groupIdsJson = JSON.stringify(groupIds);
     const enabledInt = enabled ? 1 : 0;
     const ownerOnlyInt = owner_only ? 1 : 0;
     const lead = Math.max(1, Math.min(60, Number.isFinite(+lead_days) ? Math.round(+lead_days) : 14));
@@ -189,16 +225,16 @@ export function registerVeritaTrackRoutes(
     const existing = sqlite.prepare("SELECT id FROM veritatrack_reminder_config WHERE lab_id = ?").get(labId) as any;
     if (existing) {
       sqlite.prepare(
-        "UPDATE veritatrack_reminder_config SET enabled=?, lead_days=?, overdue_cadence_days=?, recipients_json=?, owner_only=?, updated_at=? WHERE lab_id=?"
-      ).run(enabledInt, lead, cadence, recipientsJson, ownerOnlyInt, now, labId);
+        "UPDATE veritatrack_reminder_config SET enabled=?, lead_days=?, overdue_cadence_days=?, recipients_json=?, recipient_group_ids_json=?, owner_only=?, updated_at=? WHERE lab_id=?"
+      ).run(enabledInt, lead, cadence, recipientsJson, groupIdsJson, ownerOnlyInt, now, labId);
     } else {
       sqlite.prepare(
-        "INSERT INTO veritatrack_reminder_config (lab_id, enabled, lead_days, overdue_cadence_days, recipients_json, owner_only, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)"
-      ).run(labId, enabledInt, lead, cadence, recipientsJson, ownerOnlyInt, now, now);
+        "INSERT INTO veritatrack_reminder_config (lab_id, enabled, lead_days, overdue_cadence_days, recipients_json, recipient_group_ids_json, owner_only, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)"
+      ).run(labId, enabledInt, lead, cadence, recipientsJson, groupIdsJson, ownerOnlyInt, now, now);
     }
     return {
-      config: { lab_id: labId, enabled: !!enabledInt, lead_days: lead, overdue_cadence_days: cadence, recipients: recips, owner_only: !!ownerOnlyInt, configured: true },
-      detail: `enabled=${enabledInt} lead=${lead} cadence=${cadence} recips=${recips.length} ownerOnly=${ownerOnlyInt}`,
+      config: { lab_id: labId, enabled: !!enabledInt, lead_days: lead, overdue_cadence_days: cadence, recipients: recips, recipient_group_ids: groupIds, owner_only: !!ownerOnlyInt, configured: true },
+      detail: `enabled=${enabledInt} lead=${lead} cadence=${cadence} recips=${recips.length} groups=${groupIds.length} ownerOnly=${ownerOnlyInt}`,
     };
   }
 
@@ -544,7 +580,7 @@ export function registerVeritaTrackRoutes(
   app.post("/api/veritatrack/tasks", authMiddleware, requireWriteAccess, requireModuleEdit('veritatrack'), (req: any, res) => {
     if (!hasTrackAccess(req.user, trackLab(req))) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
     const userId = req.ownerUserId ?? req.user.userId;
-    const { name, category, instrument, owner, owner_employee_id, owner_email, frequency, frequency_months, map_analyte, map_field, notes } = req.body;
+    const { name, category, instrument, owner, owner_employee_id, owner_email, reminder_group_id, frequency, frequency_months, map_analyte, map_field, notes } = req.body;
     if (!name) return res.status(400).json({ error: "name required" });
     const cleanOwnerEmail = (owner_email && String(owner_email).includes("@")) ? String(owner_email).trim() : null;
     const freqMonths = frequency === "Weekly" ? 0 : (frequency_months || frequencyToMonths(frequency || "Monthly"));
@@ -555,6 +591,8 @@ export function registerVeritaTrackRoutes(
     const newLabId = resolveLegacyLabId(sqlite, req) ?? null;
     const catProblem = taskCategoryProblem(newLabId, category);
     if (catProblem) return res.status(400).json({ error: catProblem });
+    const group = taskGroupToSave(newLabId, reminder_group_id);
+    if (group.problem) return res.status(400).json({ error: group.problem });
     // Auto-link to the VeritaMap when the caller OMITTED the linkage (both fields
     // undefined) but the category is map-tracked and the analyte matches a live map
     // row. Closes the gap that let bulk-imported Precision Verification tasks land
@@ -566,8 +604,8 @@ export function registerVeritaTrackRoutes(
       if (derived) { ma = derived.map_analyte; mf = derived.map_field; }
     }
     const r = sqlite.prepare(
-      "INSERT INTO veritatrack_tasks (user_id,name,category,instrument,owner,owner_employee_id,owner_email,frequency,frequency_months,frequency_days,map_analyte,map_field,notes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
-    ).run(userId, name, category || "Other", instrument || null, owner || null, owner_employee_id || null, cleanOwnerEmail, frequency || "Monthly", freqMonths, frequencyToDays(frequency || "Monthly"), ma || null, mf || null, notes || null, now, now);
+      "INSERT INTO veritatrack_tasks (user_id,name,category,instrument,owner,owner_employee_id,owner_email,reminder_group_id,frequency,frequency_months,frequency_days,map_analyte,map_field,notes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+    ).run(userId, name, category || "Other", instrument || null, owner || null, owner_employee_id || null, cleanOwnerEmail, group.id, frequency || "Monthly", freqMonths, frequencyToDays(frequency || "Monthly"), ma || null, mf || null, notes || null, now, now);
     try {
       sqlite.prepare("UPDATE veritatrack_tasks SET lab_id = ? WHERE id = ?").run(newLabId, r.lastInsertRowid);
     } catch {}
@@ -588,9 +626,12 @@ export function registerVeritaTrackRoutes(
       if (status === 403) return res.status(403).json({ error: "You don't have access to this task's lab" });
       return res.status(404).json({ error: "Task not found" });
     }
-    const { name, category, instrument, owner, owner_employee_id, owner_email, frequency, frequency_months, notes, active } = req.body;
+    const { name, category, instrument, owner, owner_employee_id, owner_email, reminder_group_id, frequency, frequency_months, notes, active } = req.body;
     const catProblem = taskCategoryProblem((existing as any).lab_id, category, (existing as any).category);
     if (catProblem) return res.status(400).json({ error: catProblem });
+    const priorGroupId = (existing as any).reminder_group_id ?? null;
+    const group = taskGroupToSave((existing as any).lab_id, reminder_group_id, priorGroupId);
+    if (group.problem) return res.status(400).json({ error: group.problem });
     const freqMonths = frequency === "Weekly" ? 0 : (frequency_months || frequencyToMonths(frequency || "Monthly"));
     // Keep the VeritaMap linkage when the edit form omits map_analyte/map_field,
     // so a routine edit never silently unlinks an imported task from the map.
@@ -602,8 +643,8 @@ export function registerVeritaTrackRoutes(
       ? ((existing as any).owner_email ?? null)
       : ((owner_email && String(owner_email).includes("@")) ? String(owner_email).trim() : null);
     sqlite.prepare(
-      "UPDATE veritatrack_tasks SET name=?,category=?,instrument=?,owner=?,owner_employee_id=?,owner_email=?,frequency=?,frequency_months=?,frequency_days=?,map_analyte=?,map_field=?,notes=?,active=?,updated_at=datetime('now') WHERE id=?"
-    ).run(name, category || "Other", instrument || null, owner || null, ownerEmpId, ownerEmailVal, frequency || "Monthly", freqMonths, frequencyToDays(frequency || "Monthly"), link.map_analyte, link.map_field, notes || null, active !== false ? 1 : 0, taskId);
+      "UPDATE veritatrack_tasks SET name=?,category=?,instrument=?,owner=?,owner_employee_id=?,owner_email=?,reminder_group_id=?,frequency=?,frequency_months=?,frequency_days=?,map_analyte=?,map_field=?,notes=?,active=?,updated_at=datetime('now') WHERE id=?"
+    ).run(name, category || "Other", instrument || null, owner || null, ownerEmpId, ownerEmailVal, group.id, frequency || "Monthly", freqMonths, frequencyToDays(frequency || "Monthly"), link.map_analyte, link.map_field, notes || null, active !== false ? 1 : 0, taskId);
     const wasDeactivated = (existing as any).active === 1 && active === false;
     trackAudit({
       labId: (existing as any).lab_id ?? null, taskId,
@@ -611,6 +652,10 @@ export function registerVeritaTrackRoutes(
       detail: wasDeactivated ? `${name} deactivated` : `${name} (${frequency || "Monthly"})`,
       byUserId: req.user?.userId ?? null,
     });
+    if (group.id !== priorGroupId) {
+      const groupName = group.id ? (sqlite.prepare("SELECT name FROM lab_groups WHERE id = ?").get(group.id) as any)?.name : null;
+      trackAudit({ labId: (existing as any).lab_id ?? null, taskId, event: "task_updated", detail: groupName ? `Reminder group set to ${groupName}` : "Reminder group removed", byUserId: req.user?.userId ?? null });
+    }
     res.json(sqlite.prepare("SELECT * FROM veritatrack_tasks WHERE id = ?").get(taskId));
   });
 
@@ -1150,6 +1195,13 @@ export function registerVeritaTrackRoutes(
     res.json(categoriesPayload(resolveLegacyLabId(sqlite, req), false));
   });
 
+  // The lab's groups (server/labGroups.ts), read only on the legacy path, the same as categories.
+  app.get("/api/veritatrack/groups", authMiddleware, (req: any, res) => {
+    if (blockNonOperatorSeat(req, res)) return;
+    if (!hasTrackAccess(req.user, trackLab(req))) return res.status(403).json({ error: "VeritaTrack™ subscription required" });
+    res.json(labGroupsPayload(sqlite, resolveLegacyLabId(sqlite, req), false));
+  });
+
   // ── MULTI-LAB Tier 2 — Phase 3.7b: lab-scoped VeritaTrack entry endpoints ──
   const labScopeMiddleware = (app as any).locals?.labScopeMiddleware;
   if (labScopeMiddleware) {
@@ -1211,6 +1263,113 @@ export function registerVeritaTrackRoutes(
       res.json(categoriesPayload(labId, true));
     });
 
+    // ── The lab's groups (Michael 2026-11-04; server/labGroups.ts) ──
+    // Everyone who can see VeritaTrack reads the group names for the task form; owners and admins, the same people who
+    // change categories, build the groups and see who is in them. There is no group delete, also like categories: a
+    // retired group stays on the tasks that name it and their reminders fall back to the lab's list.
+    app.get("/api/labs/:labId/veritatrack/groups", authMiddleware, labScopeMiddleware, (req: any, res) => {
+      if (!hasTrackAccess(req.user, trackLab(req))) return res.status(403).json({ error: "VeritaTrack™ subscription required" });
+      res.json(labGroupsPayload(sqlite, req.scope.labId, isOwnerOrAdmin(req)));
+    });
+
+    // Runs in front of each route below that changes a group: the access checks, and the group when the path names one.
+    const groupEditor = (req: any, res: any, next: any) => {
+      if (!hasTrackAccess(req.user, trackLab(req))) return res.status(403).json({ error: "VeritaTrack™ subscription required" });
+      if (!isOwnerOrAdmin(req)) return res.status(403).json({ error: "Only a lab owner or admin can change groups." });
+      if (req.params.id !== undefined) {
+        req.labGroup = sqlite.prepare("SELECT id, name, retired FROM lab_groups WHERE id = ? AND lab_id = ?").get(Number(req.params.id), req.scope.labId);
+        if (!req.labGroup) return res.status(404).json({ error: "Group not found" });
+      }
+      next();
+    };
+    const groupGuards = [authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritatrack'), groupEditor];
+    const groupAudit = (req: any, event: string, detail: string) => trackAudit({ labId: req.scope.labId, taskId: null, event, detail, byUserId: req.user?.userId ?? null });
+
+    // Add a group. Adding a name the lab retired brings it back.
+    app.post("/api/labs/:labId/veritatrack/groups", ...groupGuards, (req: any, res: any) => {
+      const labId = req.scope.labId;
+      const name = cleanGroupName(req.body?.name);
+      const existing = sqlite.prepare("SELECT id, name, retired FROM lab_groups WHERE lab_id = ?").all(labId) as any[];
+      const retiredMatch = existing.find((g) => g.retired && g.name.toLowerCase() === name.toLowerCase());
+      if (retiredMatch) {
+        sqlite.prepare("UPDATE lab_groups SET retired = 0, updated_at = datetime('now') WHERE id = ?").run(retiredMatch.id);
+        groupAudit(req, "group_restored", retiredMatch.name);
+        return res.json(labGroupsPayload(sqlite, labId, true));
+      }
+      const problem = groupNameProblem(name, existing.map((g) => g.name));
+      if (problem) return res.status(400).json({ error: problem });
+      sqlite.prepare("INSERT INTO lab_groups (lab_id, name, created_by) VALUES (?, ?, ?)").run(labId, name, req.user?.userId ?? null);
+      groupAudit(req, "group_added", name);
+      res.json(labGroupsPayload(sqlite, labId, true));
+    });
+
+    // Rename and/or retire a group. Tasks point at the group's id, so a rename moves nothing.
+    app.put("/api/labs/:labId/veritatrack/groups/:id", ...groupGuards, (req: any, res: any) => {
+      const labId = req.scope.labId, group = req.labGroup;
+      const wantName = req.body?.name === undefined ? group.name : cleanGroupName(req.body.name);
+      const wantRetired = req.body?.retired === undefined ? !!group.retired : !!req.body.retired;
+      if (wantName !== group.name) {
+        const others = (sqlite.prepare("SELECT name FROM lab_groups WHERE lab_id = ? AND id <> ?").all(labId, group.id) as any[]).map((g) => g.name);
+        const problem = groupNameProblem(wantName, others);
+        if (problem) return res.status(400).json({ error: problem });
+      }
+      sqlite.prepare("UPDATE lab_groups SET name = ?, retired = ?, updated_at = datetime('now') WHERE id = ?").run(wantName, wantRetired ? 1 : 0, group.id);
+      if (wantName !== group.name) groupAudit(req, "group_renamed", `${group.name} -> ${wantName}`);
+      if (wantRetired !== !!group.retired) groupAudit(req, wantRetired ? "group_retired" : "group_restored", wantName);
+      res.json(labGroupsPayload(sqlite, labId, true));
+    });
+
+    // Add someone: a roster person, with an address when they have no login, or a typed address on its own.
+    app.post("/api/labs/:labId/veritatrack/groups/:id/members", ...groupGuards, (req: any, res: any) => {
+      const labId = req.scope.labId, group = req.labGroup;
+      const email = String(req.body?.email ?? "").trim();
+      if (email && !EMAIL_RE.test(email)) return res.status(400).json({ error: "Enter a valid email address." });
+      const current = labGroupMembers(sqlite, labId, group.id);
+      const by = req.user?.userId ?? null;
+      if (req.body?.employee_id != null) {
+        const employeeId = Number(req.body.employee_id);
+        const emp = sqlite.prepare("SELECT id, first_name, last_name FROM staff_employees WHERE id = ? AND tier2_lab_id = ? AND status = 'active'").get(employeeId, labId) as any;
+        if (!emp) return res.status(400).json({ error: "That person is not on this lab's active roster." });
+        if (current.some((m) => m.employee_id === employeeId)) return res.status(400).json({ error: "That person is already in this group." });
+        // An address typed for this person in another group carries over, so it is only typed once.
+        const typedBefore = sqlite.prepare("SELECT email FROM lab_group_members WHERE lab_id = ? AND employee_id = ? AND email IS NOT NULL LIMIT 1").get(labId, employeeId) as any;
+        const address = email || typedBefore?.email || null;
+        const name = `${emp.first_name || ""} ${emp.last_name || ""}`.trim();
+        sqlite.prepare("INSERT INTO lab_group_members (group_id, lab_id, employee_id, email, name, added_by) VALUES (?, ?, ?, ?, ?, ?)").run(group.id, labId, employeeId, address, name, by);
+        groupAudit(req, "group_member_added", `${group.name}: ${name}`);
+      } else {
+        if (!email) return res.status(400).json({ error: "Pick someone from the roster or enter an email address." });
+        if (current.some((m) => m.email?.toLowerCase() === email.toLowerCase())) return res.status(400).json({ error: "That address is already in this group." });
+        const name = String(req.body?.name ?? "").trim() || null;
+        sqlite.prepare("INSERT INTO lab_group_members (group_id, lab_id, email, name, added_by) VALUES (?, ?, ?, ?, ?)").run(group.id, labId, email, name, by);
+        groupAudit(req, "group_member_added", `${group.name}: ${name || email}`);
+      }
+      res.json(labGroupsPayload(sqlite, labId, true));
+    });
+
+    // Fill in or correct a typed address. For a roster person it applies wherever they are in a group.
+    app.put("/api/labs/:labId/veritatrack/groups/:id/members/:memberId", ...groupGuards, (req: any, res: any) => {
+      const labId = req.scope.labId, group = req.labGroup;
+      const member = sqlite.prepare("SELECT id, employee_id, name, email FROM lab_group_members WHERE id = ? AND group_id = ? AND lab_id = ?").get(Number(req.params.memberId), group.id, labId) as any;
+      if (!member) return res.status(404).json({ error: "That person is not in this group." });
+      const email = String(req.body?.email ?? "").trim();
+      if (!EMAIL_RE.test(email)) return res.status(400).json({ error: "Enter a valid email address." });
+      if (member.employee_id != null) sqlite.prepare("UPDATE lab_group_members SET email = ? WHERE lab_id = ? AND employee_id = ?").run(email, labId, member.employee_id);
+      else sqlite.prepare("UPDATE lab_group_members SET email = ? WHERE id = ?").run(email, member.id);
+      groupAudit(req, "group_member_updated", `${group.name}: ${member.name || email}`);
+      res.json(labGroupsPayload(sqlite, labId, true));
+    });
+
+    // Take someone out of a group. The audit row keeps who it was.
+    app.delete("/api/labs/:labId/veritatrack/groups/:id/members/:memberId", ...groupGuards, (req: any, res: any) => {
+      const labId = req.scope.labId, group = req.labGroup;
+      const member = sqlite.prepare("SELECT id, name, email FROM lab_group_members WHERE id = ? AND group_id = ? AND lab_id = ?").get(Number(req.params.memberId), group.id, labId) as any;
+      if (!member) return res.status(404).json({ error: "That person is not in this group." });
+      sqlite.prepare("DELETE FROM lab_group_members WHERE id = ?").run(member.id);
+      groupAudit(req, "group_member_removed", `${group.name}: ${member.name || member.email}`);
+      res.json(labGroupsPayload(sqlite, labId, true));
+    });
+
     app.get("/api/labs/:labId/veritatrack/tasks", authMiddleware, labScopeMiddleware, (req: any, res) => {
       if (!hasTrackAccess(req.user, trackLab(req))) return res.status(403).json({ error: "VeritaTrack™ subscription required" });
       const tasks = sqlite.prepare(
@@ -1229,10 +1388,15 @@ export function registerVeritaTrackRoutes(
 
     app.post("/api/labs/:labId/veritatrack/tasks", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritatrack'), (req: any, res) => {
       if (!hasTrackAccess(req.user, trackLab(req))) return res.status(403).json({ error: "VeritaTrack™ subscription required" });
-      const { name, category, instrument, owner, frequency, frequency_months, map_analyte, map_field, notes } = req.body || {};
+      const { name, category, instrument, owner, owner_employee_id, owner_email, reminder_group_id, frequency, frequency_months, map_analyte, map_field, notes } = req.body || {};
       if (!name?.trim()) return res.status(400).json({ error: "name required" });
       const catProblem = taskCategoryProblem(req.scope.labId, category);
       if (catProblem) return res.status(400).json({ error: catProblem });
+      const group = taskGroupToSave(req.scope.labId, reminder_group_id);
+      if (group.problem) return res.status(400).json({ error: group.problem });
+      // This route dropped the owner's roster link and email (the task form sends both), so a task made here reached its
+      // owner's reminders only after someone edited it. The legacy create above always kept them.
+      const cleanOwnerEmail = (owner_email && String(owner_email).includes("@")) ? String(owner_email).trim() : null;
       // #54: the client sends only the `frequency` STRING (e.g. "Quarterly"),
       // not frequency_months. Deriving months from the string (as the legacy
       // create + the edit path already do) keeps the two columns consistent;
@@ -1252,8 +1416,8 @@ export function registerVeritaTrackRoutes(
         if (derived) { ma = derived.map_analyte; mf = derived.map_field; }
       }
       const r = sqlite.prepare(
-        "INSERT INTO veritatrack_tasks (user_id,lab_id,name,category,instrument,owner,frequency,frequency_months,frequency_days,map_analyte,map_field,notes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
-      ).run(userIdForRow, req.scope.labId, name, category || "Other", instrument || null, owner || null, frequency || "Monthly", freqMonths, frequencyToDays(frequency || "Monthly"), ma || null, mf || null, notes || null, now, now);
+        "INSERT INTO veritatrack_tasks (user_id,lab_id,name,category,instrument,owner,owner_employee_id,owner_email,reminder_group_id,frequency,frequency_months,frequency_days,map_analyte,map_field,notes,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+      ).run(userIdForRow, req.scope.labId, name, category || "Other", instrument || null, owner || null, owner_employee_id || null, cleanOwnerEmail, group.id, frequency || "Monthly", freqMonths, frequencyToDays(frequency || "Monthly"), ma || null, mf || null, notes || null, now, now);
       trackAudit({ labId: req.scope.labId, taskId: Number(r.lastInsertRowid), event: "task_created", detail: `${name} (${frequency || "Monthly"})`, byUserId: req.user?.userId ?? null });
       res.json(sqlite.prepare("SELECT * FROM veritatrack_tasks WHERE id = ?").get(r.lastInsertRowid));
     });

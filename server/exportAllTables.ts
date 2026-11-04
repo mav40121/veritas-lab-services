@@ -189,6 +189,8 @@ export const EXPORT_TABLES: Record<string, ExportTable> = {
   veritatrack_reminder_config: lab("VeritaTrack"),
   veritatrack_reminder_log: lab("VeritaTrack"),
   veritatrack_categories: lab("VeritaTrack"), // #110: the lab's own task categories
+  lab_groups: lab("VeritaTrack"), // the lab's named groups of people (server/labGroups.ts)
+  lab_group_members: lab("VeritaTrack"),
 
   // VeritaResponse
   findings: labOrOwner("VeritaResponse"),
