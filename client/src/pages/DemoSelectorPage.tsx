@@ -20,18 +20,18 @@ const modules = [
     features: [
       "VeritaCheck\u00AE Method Verification",
       "VeritaScan\u00AE Inspection Readiness",
-      "VeritaMap\u00AE Reportable Range Mapping",
+      "VeritaMap\u00AE Test Menu Regulatory Mapping",
       "VeritaComp\u2122 Competency Tracking",
       "VeritaQC\u2122 Westgard + Monthly Attestation (Phase 1 preview)",
     ],
     description:
-      "Method verification, inspection readiness scoring, reportable range mapping, competency management, and daily QC with Westgard rule evaluation and monthly attestation.",
+      "Method verification, inspection readiness scoring, test menu regulatory mapping, competency management, and daily QC with Westgard rule evaluation and monthly attestation.",
     cta: "Explore Compliance Suite",
   },
   {
     key: "operations",
     label: "Operations Demo",
-    brand: "VeritaBench\u2122 + VeritaOps\u2122",
+    brand: "VeritaAssure\u00ae Operations",
     path: "/demo/operations",
     color: "#01696F",
     icon: (
@@ -49,7 +49,7 @@ const modules = [
       "Monthly Productivity Tracking",
       "By-Hour Staffing Analysis",
       "Inventory Management",
-      "VeritaOps™ Cost Per Reportable Test (4-layer CLSI GP11-A)",
+      "VeritaOps™ Cost Per Reportable Test (four layers, built on CLSI GP11-A principles)",
     ],
     description:
       "Staffing efficiency benchmarks, monthly productivity tracking, by-hour scheduling, and the four-layer Cost-Per-Reportable-Test calculator built on the conceptual model in CLSI GP11-A.",
@@ -296,7 +296,7 @@ export default function DemoSelectorPage() {
         <div style={{ height: "1px", background: "linear-gradient(to right, transparent, #01696F30, transparent)", marginBottom: "40px" }} />
         <SampleReportsSection
           heading="VeritaCheck® Sample Reports"
-          subheading="Download a real, generated PDF for each EP study type. Demo lab identity is Riverside Regional Medical Center (CLIA 22D0999999), a fixture for demonstration only."
+          subheading="Download a real, generated PDF for seven common study types. Demo lab identity is Riverside Regional Medical Center (CLIA 22D0999999), a fixture for demonstration only."
         />
       </div>
 

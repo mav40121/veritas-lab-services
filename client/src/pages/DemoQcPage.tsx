@@ -168,7 +168,7 @@ export default function DemoQcPage() {
   useSEO({
     title: "VeritaQC™ Demo: Westgard QC + Monthly Attestation",
     description:
-      "Live walkthrough of VeritaQC: daily QC entry, Westgard rule evaluation, corrective action capture, and monthly review attestation. Phase 1 preview.",
+      "Walkthrough of VeritaQC™: daily QC entry, Westgard rule evaluation, corrective action capture, and monthly review attestation. Phase 1 preview.",
   });
 
   const totalRej = RUNS.filter(r => r.rule?.severity === "rejection").length;
@@ -184,7 +184,7 @@ export default function DemoQcPage() {
           padding: "6px 16px", fontSize: 13, fontWeight: 600, color: "#fff",
           letterSpacing: "0.5px", marginBottom: 18, textTransform: "uppercase",
         }}>
-          Live Demo · VeritaQC&trade; · Phase 1 preview
+          Demo · VeritaQC&trade; · Phase 1 preview
         </div>
         <h1 style={{ color: "#fff", fontSize: "clamp(28px, 5vw, 44px)", fontWeight: 700, margin: "0 0 12px", lineHeight: 1.15 }}>
           Westgard QC + monthly attestation
@@ -350,7 +350,7 @@ export default function DemoQcPage() {
           <ul style={{ listStyle: "none", padding: 0, margin: 0, fontSize: 14, color: "hsl(var(--foreground))", lineHeight: 1.7 }}>
             <li>Tech-facing entry page: pick a control lot, log the result, see the Westgard rule decision in real time, file the required corrective action if a rejection fires.</li>
             <li>Daily review feed across all lots in the lab, with status filters: any, with-violation, missing-corrective-action.</li>
-            <li>Per-lab Westgard rule configuration: CLSI C24 supports lab-set bias_consecutive_count and trend_consecutive_count, defaulted to 10 and 7.</li>
+            <li>Per-lab Westgard rule configuration: CLSI C24 supports lab-set bias and trend run lengths, defaulted to 10 and 7.</li>
             <li>Monthly review PDF generator, with on-page-1 signature attestation block and inline Levey-Jennings chart.</li>
             <li>Baseline-excludes-candidate evaluator: outliers do not self-dampen their own SDI.</li>
           </ul>
@@ -362,7 +362,7 @@ export default function DemoQcPage() {
             Try VeritaQC&trade; with your own analytes
           </h3>
           <p style={{ fontSize: 14, opacity: 0.9, margin: "0 0 16px", lineHeight: 1.5 }}>
-            VeritaQC is in Phase 1 preview, included with every paid VeritaAssure plan. Set up your
+            VeritaQC&trade; is in Phase 1 preview, included with Clinic, Community, Hospital, and System plans. Set up your
             first control lot, log a run, and see the Westgard math live.
           </p>
           <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>

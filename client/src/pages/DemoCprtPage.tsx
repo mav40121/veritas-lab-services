@@ -222,8 +222,9 @@ export default function DemoCprtPage() {
 
           <p style={{ fontSize: 12, color: "hsl(var(--muted-foreground))", marginTop: 16, lineHeight: 1.55 }}>
             Pull the volume slider down to 180 and look at L2 vs the reference lab. At that volume the
-            decision to insource looks negative even before equipment is in the math. Slide up to 5,000
-            and the same test crosses over to favoring in-house at both L2 and L3.
+            decision to insource looks negative even before equipment is in the math. Slide up to about 2,700
+            and L2 crosses below the send-out price. L3 does not cross until about 8,500 tests per year,
+            which is why the layers answer different questions.
           </p>
         </div>
 
@@ -266,11 +267,11 @@ export default function DemoCprtPage() {
             What you get inside VeritaOps&trade;
           </h3>
           <ul style={{ listStyle: "none", padding: 0, margin: 0, fontSize: 14, color: "hsl(var(--foreground))", lineHeight: 1.7 }}>
-            <li>Per-test CPRT studies in this four-layer GP11-A structure, saved per lab, retired and revised on a documented cycle.</li>
+            <li>Per-test CPRT studies in this four-layer structure, built on the cost accounting principles in CLSI GP11-A, saved per lab.</li>
             <li>Side-by-side comparison of two studies (vendor A vs vendor B, before vs after a process change, insource vs send-out).</li>
             <li>One-page internal PDF your finance team can actually read, with the layer values, the assumptions, and the calculation date.</li>
-            <li>Starting-point archetypes (high-volume chemistry, low-volume send-out, POCT, manual coag) so you are not starting from a blank form.</li>
-            <li>Re-run the calculation any time volume changes; old versions retained for audit.</li>
+            <li>Starting-point templates (high-volume chemistry, hematology CBC, manual differential, send-out) so you are not starting from a blank form.</li>
+            <li>Re-run the calculation any time volume changes. A study holds its latest values, so export the PDF first if you want a record of the earlier numbers.</li>
           </ul>
         </div>
 
@@ -283,8 +284,8 @@ export default function DemoCprtPage() {
             Try this with your own test menu
           </h3>
           <p style={{ fontSize: 14, opacity: 0.9, margin: "0 0 16px", lineHeight: 1.5 }}>
-            VeritaOps&trade; is included with every paid VeritaAssure plan. Start a free trial and run
-            your first CPRT study on the tests that matter most.
+            VeritaOps&trade; is included with Clinic, Community, Hospital, and System plans. Clinic, Community,
+            and Hospital include a 14-day free trial, so you can run your first CPRT study on the tests that matter most.
           </p>
           <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
             <Link

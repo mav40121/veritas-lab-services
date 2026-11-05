@@ -148,6 +148,13 @@ function pmProductivePct(pm: ProductivityMonth): number | null {
   return (pm.productive_hours / (pm.productive_hours + pm.non_productive_hours)) * 100;
 }
 
+// Paid FTEs worked out from the hours on the same row, so the table agrees with
+// itself: one paid FTE is 2080 / 12 = 173.3 hours a month.
+function pmPaidFtes(pm: ProductivityMonth): number | null {
+  if (!pm.productive_hours || pm.non_productive_hours == null) return null;
+  return (pm.productive_hours + pm.non_productive_hours) / (2080 / 12);
+}
+
 // ── Staffing helpers ──────────────────────────────────────────────────────────
 
 function hourLabel(h: number): string {
@@ -221,10 +228,10 @@ function CalculatorSection() {
     const band = benchmark.low && benchmark.high ? getBand(ratio, benchmark.low, benchmark.high) : null;
     const targetHours = midpoint ? midpoint * tests : null;
     const hoursDiff = targetHours ? effectiveHours - targetHours : null;
-    const fteDiff = hoursDiff ? hoursDiff / (2080 / 12 * 0.85) : null;
+    const fteDiff = hoursDiff ? hoursDiff / (2080 / 12 * ((estimateFromFTE ? productivePct : 85) / 100)) : null;
     const isOutperforming = hoursDiff != null && hoursDiff < 0;
     return { ratio, band, midpoint, targetHours, hoursDiff, fteDiff, isOutperforming };
-  }, [effectiveHours, tests, facilityType]);
+  }, [effectiveHours, tests, facilityType, estimateFromFTE, productivePct]);
 
   return (
     <div className="grid md:grid-cols-2 gap-6">
@@ -530,7 +537,7 @@ function TrackerSection() {
                   <th className="text-right px-3 py-2 font-medium">Ratio</th>
                   <th className="text-right px-3 py-2 font-medium hidden sm:table-cell">OT %</th>
                   <th className="text-right px-3 py-2 font-medium hidden sm:table-cell">Prod. %</th>
-                  <th className="text-right px-3 py-2 font-medium hidden md:table-cell">FTEs</th>
+                  <th className="text-right px-3 py-2 font-medium hidden md:table-cell">Paid FTEs</th>
                 </tr>
               </thead>
               <tbody>
@@ -538,6 +545,7 @@ function TrackerSection() {
                   const r = pmRatio(pm);
                   const ot = pmOtPct(pm);
                   const pp = pmProductivePct(pm);
+                  const paidFtes = pmPaidFtes(pm);
                   return (
                     <tr key={pm.id} className={`border-b ${i % 2 === 0 ? "" : "bg-muted/10"}`}>
                       <td className="px-3 py-2 font-medium">{FULL_MONTHS[pm.month]} {pm.year}</td>
@@ -546,13 +554,16 @@ function TrackerSection() {
                       <td className="px-3 py-2 text-right font-mono font-bold" style={{ color: "#01696F" }}>{r != null ? r.toFixed(4) : "-"}</td>
                       <td className="px-3 py-2 text-right font-mono hidden sm:table-cell">{ot != null ? ot.toFixed(1) + "%" : "-"}</td>
                       <td className="px-3 py-2 text-right font-mono hidden sm:table-cell">{pp != null ? pp.toFixed(1) + "%" : "-"}</td>
-                      <td className="px-3 py-2 text-right font-mono hidden md:table-cell">{pm.total_ftes ?? "-"}</td>
+                      <td className="px-3 py-2 text-right font-mono hidden md:table-cell">{paidFtes != null ? paidFtes.toFixed(1) : "-"}</td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
           </div>
+          <p className="text-xs text-muted-foreground mt-3 hidden md:block">
+            Paid FTEs = (productive + non-productive hours) / 173.3 hours per FTE per month.
+          </p>
         </CardContent>
       </Card>
     </div>
@@ -562,6 +573,8 @@ function TrackerSection() {
 // ══════════════════════════════════════════════════════════════════════════════
 // SECTION 3: Staffing Analyzer (read-only, Riverside data)
 // ══════════════════════════════════════════════════════════════════════════════
+
+const DEMO_THROUGHPUT_PER_TECH = 20;
 
 function StaffingSection() {
   const [study, setStudy] = useState<StaffingStudy | null>(null);
@@ -633,21 +646,13 @@ function StaffingSection() {
     return { totalWeekly, peakHour, lowHour, peakDay, avgDaily };
   }, [avgReceived]);
 
-  const recommended = useMemo(() => {
-    let bestRatio = Infinity;
-    for (let h = 0; h < 24; h++) {
-      for (let d = 0; d < 7; d++) {
-        const staff = staffGrid[h][d];
-        const verified = avgVerified[h][d];
-        if (staff > 0 && verified > 0) {
-          const r = verified / staff;
-          if (r > 0 && r < bestRatio) bestRatio = r;
-        }
-      }
-    }
-    const target = bestRatio < Infinity ? bestRatio : 15;
-    return avgReceived.map(row => row.map(val => val > 0 ? Math.ceil(val / target) : 0));
-  }, [avgReceived, avgVerified, staffGrid]);
+  // Same formula as the product (VeritaShiftPage fteGrid): volume / throughput
+  // rate, floor of 1. The previous version divided by the lowest throughput seen
+  // anywhere in the grid (0.5 per tech per hour), which recommended 129 techs.
+  const recommended = useMemo(
+    () => avgReceived.map(row => row.map(val => Math.max(1, Math.ceil(val / DEMO_THROUGHPUT_PER_TECH)))),
+    [avgReceived]
+  );
 
   if (loading) {
     return <div className="text-center py-12 text-muted-foreground">Loading staffing data...</div>;
@@ -743,7 +748,10 @@ function StaffingSection() {
 
       {/* Recommended Staffing */}
       <div>
-        <h4 className="text-sm font-semibold mb-2">Recommended Staffing Grid</h4>
+        <h4 className="text-sm font-semibold mb-1">Recommended Staffing Grid</h4>
+        <p className="text-xs text-muted-foreground mb-2">
+          At {DEMO_THROUGHPUT_PER_TECH} specimens per tech per hour, with at least 1 tech on duty. Your lab sets its own throughput rate.
+        </p>
         <div className="overflow-x-auto">
           <table className="text-xs border-collapse w-full">
             <thead>
@@ -1043,7 +1051,7 @@ export default function DemoPage() {
             Interactive Live Demo
           </div>
           <h1 className="font-serif text-3xl sm:text-5xl font-bold text-white mb-4">
-            See VeritaBench{"\u2122"} + VeritaOps{"\u2122"} in Action
+            See the VeritaAssure{"\u00ae"} Operations Modules in Action
           </h1>
           <p className="text-lg sm:text-xl text-white/80 max-w-2xl mx-auto mb-8">
             Built by a lab operations consultant. Designed for labs like yours.
@@ -1156,7 +1164,7 @@ export default function DemoPage() {
             </div>
             <h2 className="font-serif text-2xl sm:text-3xl font-bold mb-3">Track Productivity Over Time</h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
-              Real demo data from Riverside Regional Medical Center showing 15 months of improvement, from 0.191 down to 0.144.
+              Sample data for our demonstration lab, Riverside Regional Medical Center: 15 months of productive hours per billable test, holding near 0.19 through 2025 and dropping to about 0.145 in early 2026.
             </p>
           </div>
           <TrackerSection />
@@ -1206,13 +1214,13 @@ export default function DemoPage() {
           not /login, so a warm viewer lands on signup, not a sign-in wall. */}
       <section className="py-12 sm:py-16 px-4">
         <div className="max-w-3xl mx-auto text-center">
-          <h2 className="font-serif text-2xl sm:text-3xl font-bold mb-3">See it on your own numbers</h2>
+          <h2 className="font-serif text-2xl sm:text-3xl font-bold mb-3">Try it on your own numbers</h2>
           <p className="text-muted-foreground mb-6">
-            Create a free account and start with two studies on us. No card required, no lab data leaves your hands until you decide to keep going.
+            VeritaBench{"™"} is free with no account. Create a free account to run two VeritaCheck{"®"} studies on us. No card required, no lab data leaves your hands until you decide to keep going. The other operations modules come with Clinic, Community, Hospital, and System plans; Clinic, Community, and Hospital include a 14-day free trial.
           </p>
           <div className="flex flex-wrap gap-3 justify-center">
             <Link href="/register" className="inline-flex items-center justify-center rounded-md px-5 py-2.5 text-sm font-semibold text-white" style={{ backgroundColor: "#01696F" }} data-testid="ops-demo-start-trial">
-              Start Free Trial <ArrowRight size={14} className="ml-1" />
+              Create Free Account <ArrowRight size={14} className="ml-1" />
             </Link>
             <Link href="/pricing" className="inline-flex items-center justify-center rounded-md px-5 py-2.5 text-sm font-semibold border border-border hover:bg-muted/50">
               See plans and pricing
