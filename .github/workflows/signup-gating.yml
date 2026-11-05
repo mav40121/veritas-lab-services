@@ -122,6 +122,10 @@ jobs:
         # Element 4 stay as stored whatever is sent; another person, another lab, a signed item and a locked record are out of reach; a lapsed lab takes no
         # entry; the implicit container is never asked to be acknowledged.
         run: npm run test:staff-own-competency-data
+      - name: Run competency Needs review integration test
+        # Michael 2026-11-05, Q179 = 1: an unsigned entry with data and no Pass reads Needs review, never FAIL. A Pass sign-off needs every element marked
+        # Pass or N/A on every route that writes one; Fail and Remediation Required stay allowed. Signed records keep their real result.
+        run: npm run test:competency-needs-review
       - name: VeritaCheck recognizes every regulated analyte
         # Every row of the Subpart I table, direct, fallback and negative name cases, a lab's own criterion, and the frozen self-heal list.
         run: DB_PATH=.tmp-verify-reg.db npx tsx scripts/verify-regulated-analyte-labels.ts

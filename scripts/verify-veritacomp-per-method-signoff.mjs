@@ -209,6 +209,7 @@ for (const [scheme, width] of [["light", 1400], ["dark", 1400], ["light", 390]])
   await page.screenshot({ path: `${OUT}/pms_person_form_${scheme}_${width}.png`, fullPage: true });
   if (first) {
     first = false;
+    await page.getByTestId("determination-select").selectOption("pass"); // Michael Q179 = 1: the form never opens on a determination
     await page.getByTestId("sign-method").click(); await page.waitForTimeout(1200);
     const banner = await page.getByTestId("method-signed").innerText().catch(() => "");
     const due = await page.getByTestId("method-next-due").innerText().catch(() => "");
@@ -222,6 +223,7 @@ for (const [scheme, width] of [["light", 1400], ["dark", 1400], ["light", 390]])
     await page.goto(`${BASE}/labs/${labId}/veritacomp-app/instrument/${XN}`, { waitUntil: "networkidle" }); await page.waitForTimeout(900);
     await page.getByTestId("person-tab").filter({ hasText: "Kim Bravo" }).click(); await page.waitForTimeout(400);
     await page.screenshot({ path: `${OUT}/pms_instrument_form_${scheme}_${width}.png`, fullPage: true });
+    await page.getByTestId("determination-select").selectOption("pass");
     await page.getByTestId("sign-method").click(); await page.waitForTimeout(1200);
     const kimAfter = await view(kim);
     const summary = await page.getByTestId("instrument-summary").innerText();

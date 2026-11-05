@@ -179,7 +179,7 @@ await tab(page, "Made-up Analyzer").click();
 await page.getByTestId("element-1").waitFor({ timeout: 15000 });
 check("reloaded: the specimen ID persisted", (await page.getByTestId("element-1-specimenId").inputValue()) === "SPEC-777", await page.getByTestId("element-1-specimenId").inputValue());
 check("reloaded: both samples persisted", (await page.getByTestId("element-5-sampleId-0").inputValue()) === "PT-1" && (await page.getByTestId("element-5-sampleId-1").inputValue()) === "BL-2");
-check("their own entry reads Waiting for evaluator, never FAIL", (await page.getByTestId("element-1").getByTestId("waiting-for-evaluator").count()) === 1 && !/\bFAIL\b/.test(await page.getByTestId("element-1").innerText()));
+check("their own entry reads Needs review, never FAIL (Michael Q179 = 1)", (await page.getByTestId("element-1").getByTestId("needs-review-chip").count()) === 1 && !/\bFAIL\b/.test(await page.getByTestId("element-1").innerText()));
 const stored = (() => { const d = openDb(); const r = d.prepare(`SELECT i.* FROM competency_assessment_items i JOIN competency_assessments a ON a.id = i.assessment_id JOIN competency_employees ce ON ce.id = a.employee_id WHERE ce.staff_employee_id = ? AND i.instrument_id = ?`).all(annId, ANALYZER); d.close(); return r; })();
 const elRow = (n) => stored.find((r) => Number(r.element_number) === n);
 check("in the database: their data on the rows, the evaluator's marks unmoved", elRow(1)?.el1_specimen_id === "SPEC-777" && !elRow(1)?.passed && !elRow(1)?.el1_observer_initials && elRow(4)?.el4_observer_initials === "CT" && elRow(4)?.passed === 1 && elRow(4)?.el4_date_observed === day);
@@ -208,7 +208,7 @@ await tab(page, "Made-up Meter").click();
 await page.getByTestId("waived-panel").waitFor({ timeout: 15000 });
 check("reloaded: both specimens and the method persisted", (await page.getByTestId(`${M}-specimen-1-evidence`).inputValue()) === "BS-2 glucose 180" && (await page.getByTestId("waived-method-3-evidence").inputValue()) === "QC reviewed");
 check("0 of 2 passed: entering evidence doesn't pass anything", /0 of 2 required methods passed/.test(await page.getByTestId("waived-count").innerText()));
-check("their entries read Waiting for evaluator, not Not passed", (await page.getByTestId("waived-method-3").getByTestId("waiting-for-evaluator").count()) === 1 && !/Not passed/.test(await page.getByTestId("waived-panel").innerText()));
+check("their entries read Needs review, not Not passed", (await page.getByTestId("waived-method-3").getByTestId("needs-review-chip").count()) === 1 && !/Not passed/.test(await page.getByTestId("waived-panel").innerText()));
 await shot(page, "own-waived-saved");
 
 // ── Someone else's record ────────────────────────────────────────────────────
@@ -231,7 +231,7 @@ await ownerPage.getByTestId("test-system-list").waitFor({ timeout: 20000 });
 await tab(ownerPage, "Made-up Analyzer").click();
 await ownerPage.getByTestId("element-1").waitFor({ timeout: 15000 });
 check("owner: no self-entry note; Pass, N/A and observer open; the person's data is there", (await ownerPage.getByTestId("self-entry-note").count()) === 0 && await ownerPage.getByTestId("element-1-pass").isEnabled() && await ownerPage.getByTestId("element-1-na").isEnabled() && await ownerPage.getByTestId("element-4-dateObserved").isEnabled() && await ownerPage.getByTestId("element-5-acceptable-0").isEnabled() && (await ownerPage.getByTestId("element-1-specimenId").inputValue()) === "SPEC-777");
-check("owner: the screen still reads as it did, FAIL until they mark Pass", /\bFAIL\b/.test(await ownerPage.getByTestId("element-1").innerText()) && (await ownerPage.getByTestId("waiting-for-evaluator").count()) === 0);
+check("owner: the same entry reads Needs review for the evaluator too, until they mark Pass", (await ownerPage.getByTestId("element-1").getByTestId("needs-review-chip").count()) === 1 && !/\bFAIL\b/.test(await ownerPage.getByTestId("element-1").innerText()));
 await shot(ownerPage, "owner-view");
 await ownerPage.getByTestId("element-1-pass").check();
 await ownerPage.getByTestId("save-test-system").click();
@@ -285,12 +285,12 @@ await tab(phone, "Made-up Analyzer").click();
 await phone.getByTestId("element-1").waitFor({ timeout: 15000 });
 check("phone: own record has no sideways scroll", await noSideways(phone));
 check("phone: the specimen field can be used", await phone.getByTestId("element-1-specimenId").isEnabled());
-// The "Waiting for evaluator" chip is longer than the others; it must stay inside its card.
-const chipsInside = await phone.evaluate(() => Array.from(document.querySelectorAll('[data-testid="waiting-for-evaluator"]')).every((chip) => {
+// The "Needs review" chip is longer than the others; it must stay inside its card.
+const chipsInside = await phone.evaluate(() => Array.from(document.querySelectorAll('[data-testid="needs-review-chip"]')).every((chip) => {
   const card = chip.closest('[data-testid^="element-"], [data-testid^="waived-method-"]');
   return card && chip.getBoundingClientRect().right <= card.getBoundingClientRect().right;
 }));
-check("phone: every Waiting for evaluator chip stays inside its card", chipsInside);
+check("phone: every Needs review chip stays inside its card", chipsInside);
 await shot(phone, "own-phone");
 await tab(phone, "Made-up Meter").click();
 await phone.getByTestId("waived-panel").waitFor({ timeout: 15000 });
