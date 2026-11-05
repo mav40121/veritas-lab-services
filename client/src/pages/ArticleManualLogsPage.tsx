@@ -10,7 +10,7 @@ export default function ArticleManualLogsPage() {
   useSEO({
     title: "Manual Logs: Why We Used Them, and Why Most Labs Should Stop | Veritas Lab Services",
     description:
-      "Manual logs were invented to solve a memory problem in labs that had one or two computers. In 2026, the log is the source of the error that 24-hour review was designed to catch. Here is when to retire it.",
+      "Manual logs were invented to solve a memory problem in labs that had one or two computers. In 2026, the log is the source of the error that transcribed-result review was designed to catch. Here is when to retire it.",
   });
 
   return (
@@ -50,8 +50,8 @@ export default function ArticleManualLogsPage() {
               {[
                 "Manual logs exist to solve a memory problem from an era when computers were scarce in the lab",
                 "Every time a result moves from the bench to a log to the computer, a new error mode is introduced: the transcription event",
-                "The 24-hour transcribed-result review requirement exists specifically to catch the errors the log itself creates",
-                "In a modern lab with a computer on every counter, direct entry from the analyzer to the LIS eliminates both the memory risk and the transcription risk",
+                "Review of transcribed results, which some laboratories set at 24 hours by policy, exists specifically to catch the errors the log itself creates",
+                "In a modern lab with a computer on every counter, direct entry from the analyzer to the LIS removes both the walk that created the memory risk and the copy from log to computer",
                 "Removing the log removes the administrative review burden that comes with it",
               ].map((t) => (
                 <li key={t} className="flex items-start gap-2 text-sm">
@@ -95,11 +95,11 @@ export default function ArticleManualLogsPage() {
           </p>
 
           <p>
-            This is not a theoretical concern. It is the reason CAP, TJC, and CLIA all require documented review of manually transcribed results within 24 hours. That requirement does not exist to fix bench error. It exists to catch the error the log itself introduces.
+            This is not a theoretical concern. CLIA requires an adequate system to ensure results move accurately from the point of data entry, whether interfaced or entered manually, to the final report (42 CFR §493.1291(a)), CAP has manual and automated result entries verified before they are reported (GEN.43825), and a surveyor can ask how transcribed results were checked. Neither sets a 24-hour clock for this; some laboratories set a 24-hour review by policy. That review does not exist to fix bench error. It exists to catch the error the log itself introduces.
           </p>
 
           <p>
-            When you take a hard look at the regulation, you see it for what it is. The 24-hour review is the laboratory paying back, in administrative work, the convenience the log provided at the bench. Every manual log carries a hidden tax in the form of mandatory secondary review.
+            When you take a hard look at the requirement, you see it for what it is. The review is the laboratory paying back, in administrative work, the convenience the log provided at the bench. Every manual log carries a hidden tax in the form of secondary review.
           </p>
 
           <h2 className="font-serif text-2xl font-bold mt-10 mb-3">What changed</h2>
@@ -119,11 +119,11 @@ export default function ArticleManualLogsPage() {
           </p>
 
           <p>
-            You eliminate the transcription event. There is no second copy of the result for someone to mis-copy. There is the analyzer reading, and there is the LIS value, and they are produced by the same act of entry.
+            You eliminate the copy from log to computer. There is the analyzer reading, and there is the LIS value. Where the analyzer is interfaced, no one retypes the result at all.
           </p>
 
           <p>
-            You eliminate the regulatory requirement under CAP, TJC, and CLIA to perform 24-hour review of transcribed results, because there are no transcribed results to review. The administrative time that requirement consumed is now available for other work.
+            You remove the copy from log to computer and the review your policy attached to it. The administrative time that review consumed is now available for other work.
           </p>
 
           <p>
@@ -131,7 +131,7 @@ export default function ArticleManualLogsPage() {
           </p>
 
           <p>
-            The misread error from the analyzer is still there. It will always be there, because it is a human perception risk that no system can engineer out. But it is the only error mode left.
+            The misread error from the analyzer is still there when a result is keyed by hand, because it is a human perception risk no log can fix, and CAP still has manual and automated result entries verified before they are reported. But the log's own error mode is gone.
           </p>
 
           <h2 className="font-serif text-2xl font-bold mt-10 mb-3">When the log still earns its place</h2>
@@ -145,15 +145,15 @@ export default function ArticleManualLogsPage() {
           </p>
 
           <p>
-            If the latter, retire it. The log is not free. It costs you a 24-hour review cycle, an additional opportunity for error on every result, and the staff hours required to perform both. Every result that bypasses the log is a result that the surveyor cannot ask you to demonstrate review on, because there was nothing to review.
+            If the latter, retire it. The log is not free. It costs you a review cycle, an additional opportunity for error on every result, and the staff hours required to perform both. Results entered directly still have to be verified before final acceptance, but there is one less copy to check.
           </p>
 
           <p>
-            In the modern laboratory, the safer method is the one with fewer hands on the data. Most of the time, that is direct entry, no log, no transcription, no administrative review. A win on quality, a win on speed, a win on staff time.
+            In the modern laboratory, the safer method is the one with fewer hands on the data. Most of the time, that is direct entry, no log, no copy from log to computer, and no review cycle attached to that copy. A win on quality, a win on speed, a win on staff time.
           </p>
 
           <p className="italic text-muted-foreground text-center pt-4">
-            Learn more at <Link href="/" className="text-primary hover:underline">veritaslabservices.com</Link>, your partner in clinical compliance.
+            Learn more at <Link href="/" className="text-primary hover:underline">www.veritaslabservices.com</Link>, your partner in clinical compliance.
           </p>
 
           <h2 className="font-serif text-2xl font-bold mt-10 mb-3">Frequently Asked Questions</h2>
