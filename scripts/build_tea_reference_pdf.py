@@ -34,7 +34,7 @@ def main():
     ss = getSampleStyleSheet()
     h1 = ParagraphStyle("h1", parent=ss["Normal"], fontName="Helvetica-Bold", fontSize=17, textColor=TEAL, leading=20)
     sub = ParagraphStyle("sub", parent=ss["Normal"], fontName="Helvetica", fontSize=9, textColor=GRAY, leading=13)
-    sech = ParagraphStyle("sech", parent=ss["Normal"], fontName="Helvetica-Bold", fontSize=10.5, textColor=DARK, leading=13, spaceBefore=10, spaceAfter=3)
+    sech = ParagraphStyle("sech", parent=ss["Normal"], fontName="Helvetica-Bold", fontSize=10.5, textColor=DARK, leading=13, spaceBefore=10, spaceAfter=3, keepWithNext=1)
     cell = ParagraphStyle("cell", parent=ss["Normal"], fontName="Helvetica", fontSize=8.5, textColor=TEXT, leading=11)
     cellb = ParagraphStyle("cellb", parent=cell, fontName="Helvetica-Bold")
     hd = ParagraphStyle("hd", parent=ss["Normal"], fontName="Helvetica-Bold", fontSize=8.5, textColor=colors.white, leading=11)
@@ -42,8 +42,8 @@ def main():
 
     story = [
         Paragraph(f"2026 CLIA Allowable Total Error (TEa) Reference Table", h1),
-        Paragraph("Analytic quality requirements under 42 CFR Part 493, Subpart I (CLIA PT final rule CMS-3355-F, effective January 1, 2025). "
-                  "The lab director or designee sets the internal quality goal; this table is the CLIA minimum.", sub),
+        Paragraph("Proficiency testing acceptance limits under 42 CFR Part 493, Subpart I (CLIA PT final rule CMS-3355-F, published July 11, 2022, "
+                  "effective July 11, 2024). These limits grade proficiency testing.", sub),
         Spacer(1, 4),
         HRFlowable(width="100%", thickness=1.2, color=TEAL, spaceAfter=8),
     ]
@@ -77,7 +77,7 @@ def main():
 
     story += [Spacer(1, 10), HRFlowable(width="100%", thickness=0.75, color=BORDER, spaceAfter=6),
               Paragraph(f"Source: 42 CFR Part 493, Subpart I. Provided by VeritaAssure{REG} | Veritas Lab Services. "
-                        "Verify current requirements against the eCFR. Live lookup: veritaslabservices.com/resources/clia-tea-lookup.", small)]
+                        "Verify current requirements against the eCFR. Live lookup: www.veritaslabservices.com/resources/clia-tea-lookup.", small)]
     doc.build(story)
     print("wrote", out, "|", len(data), "analytes,", len(order), "specialties")
 

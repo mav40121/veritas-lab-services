@@ -1,7 +1,10 @@
 // CLIA Allowable Error (TEa) Database
 // Source: 42 CFR Part 493, Subpart I - effective July 11, 2024 (CLIA PT final rule CMS-3355-F, implemented January 1, 2025)
 // Sections: §493.927 (Immunology), §493.931 (Chemistry), §493.933 (Endocrinology),
-//           §493.937 (Toxicology), §493.941 (Hematology), §493.959 (Coagulation/Immunohematology)
+//           §493.937 (Toxicology), §493.941 (Hematology and coagulation), §493.959 (Immunohematology)
+// Every row and value below is pinned to the eCFR tables by scripts/verify-citations-tea-cap.py.
+// Analytes that are not listed in Subpart I do not belong in this table: hasCanonicalTea() labels
+// anything here "CLIA TEa".
 
 export type TeaSpecialty =
   | "Routine Chemistry"
@@ -10,9 +13,7 @@ export type TeaSpecialty =
   | "Toxicology"
   | "Hematology"
   | "Coagulation"
-  | "Immunohematology"
-  | "Urinalysis"
-  | "Microbiology";
+  | "Immunohematology";
 
 export interface TeaAnalyte {
   analyte: string;
@@ -65,8 +66,8 @@ export const teaData: TeaAnalyte[] = [
   { analyte: "Uric Acid", criteria: "±10%", specialty: "Routine Chemistry", cfr: "§493.931" },
 
   // ─── GENERAL IMMUNOLOGY §493.927 ──────────────────────────────────────────
-  { analyte: "Alpha-1 Antitrypsin", criteria: "±20% or positive or negative", specialty: "General Immunology", cfr: "§493.927" },
-  { analyte: "Alpha-Fetoprotein (AFP, tumor marker)", criteria: "±20% or positive or negative", specialty: "General Immunology", cfr: "§493.927" },
+  { analyte: "Alpha-1 Antitrypsin", criteria: "±20%", specialty: "General Immunology", cfr: "§493.927" },
+  { analyte: "Alpha-Fetoprotein (AFP, tumor marker)", criteria: "±20%", specialty: "General Immunology", cfr: "§493.927" },
   { analyte: "Antinuclear Antibody (ANA)", criteria: "±2 dilutions or positive or negative", specialty: "General Immunology", cfr: "§493.927" },
   { analyte: "Antistreptolysin O (ASO)", criteria: "±2 dilutions or positive or negative", specialty: "General Immunology", cfr: "§493.927" },
   { analyte: "Anti-HIV", criteria: "Reactive (positive) or nonreactive (negative)", specialty: "General Immunology", cfr: "§493.927", qualitative: true },
@@ -118,38 +119,31 @@ export const teaData: TeaAnalyte[] = [
   { analyte: "Phenytoin (Dilantin)", criteria: "±15% or ±2 mcg/mL (greater)", specialty: "Toxicology", cfr: "§493.937" },
   { analyte: "Salicylate", criteria: "±15% or ±2 mcg/mL (greater)", specialty: "Toxicology", cfr: "§493.937" },
   { analyte: "Theophylline", criteria: "±20%", specialty: "Toxicology", cfr: "§493.937" },
+  { analyte: "Tobramycin", criteria: "±20%", specialty: "Toxicology", cfr: "§493.937" },
+  { analyte: "Valproic Acid, Total", criteria: "±20%", specialty: "Toxicology", cfr: "§493.937" },
+  { analyte: "Vancomycin", criteria: "±15% or ±2 mcg/mL (greater)", specialty: "Toxicology", cfr: "§493.937" },
 
   // ─── HEMATOLOGY §493.941 ──────────────────────────────────────────────────
   { analyte: "CBC - WBC (White Blood Cell Count)", criteria: "±10%", specialty: "Hematology", cfr: "§493.941" },
   { analyte: "CBC - RBC (Red Blood Cell Count)", criteria: "±4%", specialty: "Hematology", cfr: "§493.941" },
   { analyte: "CBC - Hemoglobin", criteria: "±4%", specialty: "Hematology", cfr: "§493.941" },
   { analyte: "CBC - Hematocrit", criteria: "±4%", specialty: "Hematology", cfr: "§493.941", notes: "Excluding spun hematocrit (per the §493.941 Table 2 criterion)." },
-  { analyte: "CBC - MCV (Mean Corpuscular Volume)", criteria: "±7%", specialty: "Hematology", cfr: "§493.941" },
-  { analyte: "CBC - MCHC (Mean Corpuscular Hemoglobin Conc.)", criteria: "±8%", specialty: "Hematology", cfr: "§493.941" },
   { analyte: "CBC - Platelet Count", criteria: "±25%", specialty: "Hematology", cfr: "§493.941" },
-  { analyte: "Differential - Neutrophils (Granulocytes)", criteria: "±3 percentage points or ±14% (greater)", specialty: "Hematology", cfr: "§493.941", notes: "Absolute count ±30%" },
-  { analyte: "Differential - Lymphocytes", criteria: "±3 percentage points or ±14% (greater)", specialty: "Hematology", cfr: "§493.941", notes: "Absolute count ±30%" },
-  { analyte: "Differential - Monocytes", criteria: "±3 percentage points or ±14% (greater)", specialty: "Hematology", cfr: "§493.941" },
-  { analyte: "Differential - Eosinophils", criteria: "±3 percentage points or ±14% (greater)", specialty: "Hematology", cfr: "§493.941" },
-  { analyte: "Differential - Basophils", criteria: "±3 percentage points or ±14% (greater)", specialty: "Hematology", cfr: "§493.941" },
+  { analyte: "White Blood Cell Differential", criteria: "±3 SD based on the percentage of different types of white blood cells in the samples", specialty: "Hematology", cfr: "§493.941" },
+  { analyte: "Cell Identification", criteria: "80% or greater consensus on identification", specialty: "Hematology", cfr: "§493.941", qualitative: true },
   { analyte: "Fibrinogen", criteria: "±20%", specialty: "Hematology", cfr: "§493.941" },
-  { analyte: "Reticulocyte Count", criteria: "±3 percentage points or ±30% (greater)", specialty: "Hematology", cfr: "§493.941" },
 
   // ─── COAGULATION ──────────────────────────────────────────────────────────
-  { analyte: "Prothrombin Time (PT)", criteria: "±15%", specialty: "Coagulation", cfr: "§493.941", notes: "INR is the preferred reporting format; PT seconds ±15% of target value" },
+  { analyte: "Prothrombin Time (PT)", criteria: "±15%", specialty: "Coagulation", cfr: "§493.941", notes: "If a laboratory reports a prothrombin time in both INR and seconds, the INR should be reported to the PT provider program." },
   { analyte: "INR (International Normalized Ratio)", criteria: "±15%", specialty: "Coagulation", cfr: "§493.941" },
-  { analyte: "Partial Thromboplastin Time (PTT/aPTT)", criteria: "±15%", specialty: "Coagulation", cfr: "§493.941", notes: "Some sources cite ±10 sec or 25% for values >40 sec per RCPA/WSLH" },
-  { analyte: "D-Dimer", criteria: "Positive or negative; no fixed CLIA % TEa", specialty: "Coagulation", cfr: "§493.941", notes: "CLIA does not specify a quantitative TEa for D-Dimer. Labs should use manufacturer-stated allowable difference or established biological variation goals." },
+  { analyte: "Partial Thromboplastin Time (PTT/aPTT)", criteria: "±15%", specialty: "Coagulation", cfr: "§493.941" },
 
   // ─── IMMUNOHEMATOLOGY (BLOOD BANK) ────────────────────────────────────────
   { analyte: "ABO Group", criteria: "100% accuracy", specialty: "Immunohematology", cfr: "§493.959", qualitative: true },
   { analyte: "Rh Group (D typing)", criteria: "100% accuracy", specialty: "Immunohematology", cfr: "§493.959", qualitative: true },
   { analyte: "Antibody Detection (Unexpected Antibodies)", criteria: "100% accuracy", specialty: "Immunohematology", cfr: "§493.959", qualitative: true },
-  { analyte: "Antibody Identification", criteria: "100% accuracy", specialty: "Immunohematology", cfr: "§493.959", qualitative: true },
+  { analyte: "Antibody Identification", criteria: "80%+ accuracy", specialty: "Immunohematology", cfr: "§493.959", qualitative: true },
   { analyte: "Compatibility Testing (Crossmatch)", criteria: "100% accuracy", specialty: "Immunohematology", cfr: "§493.959", qualitative: true },
-
-  // ─── URINALYSIS ───────────────────────────────────────────────────────────
-  { analyte: "Urinalysis - Qualitative (dipstick)", criteria: "Positive or negative; ±1 graduation (semi-quantitative)", specialty: "Urinalysis", cfr: "§493.931", notes: "For glucose, protein, etc. Semi-quantitative results must be within 1 reagent strip grade of target" },
 ];
 
 export const specialties: TeaSpecialty[] = [
@@ -160,7 +154,6 @@ export const specialties: TeaSpecialty[] = [
   "Hematology",
   "Coagulation",
   "Immunohematology",
-  "Urinalysis",
 ];
 
 /**

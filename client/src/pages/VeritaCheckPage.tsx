@@ -45,7 +45,7 @@ const API_BASE = ""; // same-origin: works on the lab site and the separate Veri
 // Retained for potential future use; VeritaCheck picker no longer renders this catalog.
 const FDA_MODEL_NAMES = Object.keys(fdaData).sort();
 
-// CLIA 2025 Proficiency Testing Acceptance Limits (42 CFR Part 493 Subpart K)
+// CLIA Proficiency Testing Acceptance Limits (42 CFR Part 493 Subpart I)
 const CLIA_PRESETS = [
   // ── Routine Chemistry §493.931 ──────────────────────────────────────────
   { label: "ALT/SGPT (±15% or ±6 U/L)",              value: 0.15,  absoluteFloor: 6, absoluteUnit: "U/L", cfr: "42 CFR §493.931" },
@@ -95,7 +95,7 @@ const CLIA_PRESETS = [
   { label: "Uric Acid (±10%)",                         value: 0.10,  cfr: "42 CFR §493.931" },
   // ── Endocrinology §493.933 ───────────────────────────────────────────────
   { label: "CA-125 (±20%)",                            value: 0.20,  cfr: "42 CFR §493.933" },
-  { label: "CEA (±15% or ±1 ng/dL)",                  value: 0.15,  absoluteFloor: 1, absoluteUnit: "ng/dL", cfr: "42 CFR §493.933" },
+  { label: "CEA (±15% or ±1 ng/mL)",                  value: 0.15,  absoluteFloor: 1, absoluteUnit: "ng/mL", cfr: "42 CFR §493.933" },
   { label: "Cortisol (±20%)",                          value: 0.20,  cfr: "42 CFR §493.933" },
   { label: "Estradiol (±30%)",                         value: 0.30,  cfr: "42 CFR §493.933" },
   { label: "Folate, Serum (±30% or ±1 ng/mL)",        value: 0.30,  absoluteFloor: 1, absoluteUnit: "ng/mL", cfr: "42 CFR §493.933" },
@@ -124,6 +124,9 @@ const CLIA_PRESETS = [
   { label: "Phenytoin (±15% or ±2 mcg/mL)",           value: 0.15,  absoluteFloor: 2, absoluteUnit: "mcg/mL", cfr: "42 CFR §493.937" },
   { label: "Salicylate (±15% or ±2 mcg/mL)",          value: 0.15,  absoluteFloor: 2, absoluteUnit: "mcg/mL", cfr: "42 CFR §493.937" },
   { label: "Theophylline (±20%)",                      value: 0.20,  cfr: "42 CFR §493.937" },
+  { label: "Tobramycin (±20%)",                        value: 0.20,  cfr: "42 CFR §493.937" },
+  { label: "Valproic Acid, Total (±20%)",              value: 0.20,  cfr: "42 CFR §493.937" },
+  { label: "Vancomycin (±15% or ±2 mcg/mL)",           value: 0.15,  absoluteFloor: 2, absoluteUnit: "mcg/mL", cfr: "42 CFR §493.937" },
   // ── Hematology §493.941 ──────────────────────────────────────────────────
   { label: "Erythrocyte Count / RBC (±4%)",            value: 0.04,  cfr: "42 CFR §493.941" },
   { label: "Fibrinogen (±20%)",                        value: 0.20,  cfr: "42 CFR §493.941" },
@@ -3148,19 +3151,19 @@ return (
                               <SelectItem key={8} value={String(8)}>{CLIA_PRESETS[8].label}</SelectItem>
                               <SelectSeparator />
                               <SelectItem key={9} value={String(9)}>{CLIA_PRESETS[9].label}</SelectItem>
-                              {CLIA_PRESETS.slice(10, 37).map((p, i) => <SelectItem key={10+i} value={String(10+i)}>{p.label}</SelectItem>)}
+                              {CLIA_PRESETS.slice(10, 38).map((p, i) => <SelectItem key={10+i} value={String(10+i)}>{p.label}</SelectItem>)}
                             </SelectGroup>
                             <SelectGroup><SelectLabel className="text-xs text-muted-foreground">Endocrinology §493.933</SelectLabel>
-                              {CLIA_PRESETS.slice(37, 55).map((p, i) => <SelectItem key={37+i} value={String(37+i)}>{p.label}</SelectItem>)}
+                              {CLIA_PRESETS.slice(38, 56).map((p, i) => <SelectItem key={38+i} value={String(38+i)}>{p.label}</SelectItem>)}
                             </SelectGroup>
                             <SelectGroup><SelectLabel className="text-xs text-muted-foreground">Toxicology §493.937</SelectLabel>
-                              {CLIA_PRESETS.slice(55, 66).map((p, i) => <SelectItem key={55+i} value={String(55+i)}>{p.label}</SelectItem>)}
+                              {CLIA_PRESETS.slice(56, 70).map((p, i) => <SelectItem key={56+i} value={String(56+i)}>{p.label}</SelectItem>)}
                             </SelectGroup>
                             <SelectGroup><SelectLabel className="text-xs text-muted-foreground">Hematology §493.941</SelectLabel>
-                              {CLIA_PRESETS.slice(66, 74).map((p, i) => <SelectItem key={66+i} value={String(66+i)}>{p.label}</SelectItem>)}
+                              {CLIA_PRESETS.slice(70, 78).map((p, i) => <SelectItem key={70+i} value={String(70+i)}>{p.label}</SelectItem>)}
                             </SelectGroup>
                             <SelectGroup><SelectLabel className="text-xs text-muted-foreground">Lab-Set Internal Goal (no CLIA TEa)</SelectLabel>
-                              {CLIA_PRESETS.slice(75, 81).map((p, i) => <SelectItem key={75+i} value={String(75+i)}>{p.label}</SelectItem>)}
+                              {CLIA_PRESETS.slice(78, 84).map((p, i) => <SelectItem key={78+i} value={String(78+i)}>{p.label}</SelectItem>)}
                             </SelectGroup>
                           </SelectContent>
                         </Select>

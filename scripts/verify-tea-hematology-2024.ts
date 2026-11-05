@@ -26,8 +26,8 @@ check("CBC - Platelet Count unchanged = ±25%", crit("CBC - Platelet Count") ===
 check("Fibrinogen unchanged = ±20%", crit("Fibrinogen") === "±20%", String(crit("Fibrinogen")));
 check("INR unchanged = ±15%", crit("INR (International Normalized Ratio)") === "±15%", String(crit("INR (International Normalized Ratio)")));
 
-// ── Flagged-for-Michael items left UNCHANGED (not in §493.941 Table 2) ──
-check("CBC - MCV left unchanged (flagged, not auto-edited) = ±7%", crit("CBC - MCV (Mean Corpuscular Volume)") === "±7%", String(crit("CBC - MCV (Mean Corpuscular Volume)")));
+// ── Removed 2026-11-05: not listed in §493.941 Table 2, so not a CLIA TEa row ──
+check("CBC - MCV is not in the table", crit("CBC - MCV (Mean Corpuscular Volume)") === undefined, String(crit("CBC - MCV (Mean Corpuscular Volume)")));
 
 // ── Regression: exact-match canonical lookup still works ────────────────
 check("hasCanonicalTea('CBC - Hemoglobin') still true", hasCanonicalTea("CBC - Hemoglobin") === true);
