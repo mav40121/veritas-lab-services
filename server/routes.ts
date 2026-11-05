@@ -6582,9 +6582,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         return res.status(400).json({ error: "Invalid AP email address." });
       }
 
-      const validTiers = ["clinic", "community", "hospital", "enterprise"];
+      // Keep in step with TIER_OPTIONS on client/src/pages/RequestInvoicePage.tsx and tierLabels below.
+      const validTiers = ["veritacheck", "clinic", "community", "hospital", "enterprise"];
       if (!validTiers.includes(tier)) {
-        return res.status(400).json({ error: "Invalid tier. Must be one of: clinic, community, hospital, enterprise." });
+        return res.status(400).json({ error: "Invalid tier. Must be one of: veritacheck, clinic, community, hospital, enterprise." });
       }
 
       const seatCount = parseInt(seats, 10);
@@ -6666,7 +6667,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           const tierLabels: Record<string, string> = {
             clinic: "Clinic ($999/yr)", community: "Community ($2,125/yr)",
             hospital: "Hospital ($4,995/yr)", enterprise: "System (custom quote)",
-            veritacheck: "VeritaCheck\u00AE Unlimited ($299/yr)"
+            veritacheck: "VeritaCheck\u00AE Unlimited ($299 first year, $499/yr after)"
           };
           const promoLine = promo_applied
             ? `<p style="margin: 0 0 12px;"><strong>Promo code:</strong> ${promo_code} (${discount_pct}% off${trial_days ? `, ${trial_days}-day trial` : ""})</p>`

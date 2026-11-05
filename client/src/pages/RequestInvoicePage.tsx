@@ -11,7 +11,7 @@ import { CheckCircle2, FileText, ShieldCheck, CreditCard } from "lucide-react";
 import { trackEvent } from "@/lib/analytics";
 
 const TIER_OPTIONS = [
-  { value: "veritacheck", label: "VeritaCheck\u00AE Unlimited ($299/yr)" },
+  { value: "veritacheck", label: "VeritaCheck\u00AE Unlimited ($299 first year, $499/yr after)" },
   { value: "clinic", label: "Clinic - $999/yr" },
   { value: "community", label: "Community - $2,125/yr" },
   { value: "hospital", label: "Hospital - $4,995/yr" },
@@ -258,7 +258,7 @@ export default function RequestInvoicePage() {
                 onChange={e => setField("promo_code", e.target.value)}
               />
               <p className="text-xs text-muted-foreground mt-1">
-                COLA2026 members: use code COLA2026 for 60 day trial plus 10% off first year.
+                COLA members: use code COLA2026 by December 31, 2026 for a 60-day trial plus 10% off first year.
               </p>
             </div>
 
