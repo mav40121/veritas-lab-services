@@ -53,19 +53,19 @@ export const CHOOSE_SOFTWARE_FAQ: FaqQA[] = [
 export const TEA_ARTICLE_FAQ: FaqQA[] = [
             {
               q: "Does CLIA require labs to use CLIA TEa for calibration verification, or can we use manufacturer criteria?",
-              a: "No. CLIA requires (42 CFR §493.1253 and §493.1255) that calibration verification be performed and documented and that the lab establish acceptance criteria, but it does not specify numeric criteria. Many labs adopt the §493 PT acceptable performance criterion for the same analyte as their cal ver acceptance criterion, with medical director or designee approval. This is a recommendation, not a CLIA requirement. We recommend it because the value is federally published, well documented, and simpler to defend than a manufacturer claim or an unwritten internal policy."
+              a: "No. CLIA requires calibration verification to be performed and documented and leaves the acceptable limits to the laboratory (42 CFR §493.1253(b)(3) and §493.1255(b)(2)); it does not specify numeric criteria. A medical director or designee may adopt the §493 PT limit for the same analyte as the criterion and should document why it fits the clinical need. CMS said in the preamble to CMS-3355-F (87 FR 41194, July 11, 2022), which is not regulation text, that PT limits were written to grade proficiency testing and were not intended as performance goals, and that goals for accuracy and precision should rest on clinical needs and the manufacturer's labeling. §493.1255(b)(1) also has the laboratory follow the manufacturer's calibration verification instructions."
             },
             {
               q: "What's the difference between TEa used for proficiency testing and TEa used for calibration verification?",
-              a: "It's the same table: the TEa values in 42 CFR Part 493 apply to both. For proficiency testing, they define whether your PT results are graded as acceptable. For calibration verification, they define whether your instrument's performance at each calibration level is acceptable. The regulatory authority is the same; the application differs."
+              a: "The table in 42 CFR Part 493, Subpart I applies to proficiency testing: it defines whether your PT results are graded as acceptable. For calibration verification, §493.1255(b)(2) has the laboratory set its own acceptable limits. A medical director or designee may adopt a PT limit as that criterion and should document why it fits the clinical need, but the CFR does not give that choice the force of the PT table."
             },
             {
               q: "Our analyte isn't in the CLIA TEa table. What do we use?",
-              a: "If an analyte isn't regulated under CLIA proficiency testing requirements, there is no federally mandated TEa. In that case, labs should use manufacturer-stated allowable error, biological variation-based goals (from EFLM or RCPA tables), or medical decision-based criteria established by the laboratory director or designee. Document the rationale for whatever criteria you choose."
+              a: "If an analyte isn't regulated under CLIA proficiency testing requirements, Subpart I publishes no PT limit for it. In that case, labs should use manufacturer-stated allowable error, biological variation-based goals (from EFLM or RCPA tables), or medical decision-based criteria established by the laboratory director or designee. Document the rationale for whatever criteria you choose."
             },
             {
               q: "How often does CLIA TEa change?",
-              a: "Infrequently, but the CLIA proficiency testing final rule (CMS-3355-F) was the first major update in decades for many analytes. Before that, some values dated to 1992. The criteria became effective July 11, 2024 and were implemented for laboratories on January 1, 2025, making this the largest single update to CLIA acceptable performance criteria in the modern era. Check the current eCFR rather than relying on reference cards or QC software that may not have been updated."
+              a: "Infrequently, but the CLIA proficiency testing final rule (CMS-3355-F, published July 11, 2022) was the first major update in decades for many analytes. Before that, some values dated to 1992. The Subpart I criteria took effect July 11, 2024 and were implemented for laboratories on January 1, 2025, making this the largest single update to CLIA acceptable performance criteria in the modern era. Check the current eCFR rather than relying on reference cards or QC software that may not have been updated."
             },
             {
               q: "What does 'target value ±X% or ±Y units, whichever is greater' mean in practice?",
@@ -77,27 +77,27 @@ export const TEA_ARTICLE_FAQ: FaqQA[] = [
 export const CALVER_ARTICLE_FAQ: FaqQA[] = [
             {
               q: "Does calibration verification apply to waived tests like point-of-care glucose meters?",
-              a: "No. Waived tests are explicitly exempt from calibration verification requirements under CLIA. If your lab is performing these studies on waived instruments, you are conducting unnecessary quality control. Redirect those resources."
+              a: "No, unless the manufacturer's instructions require it. CMS's CLIA brochure says calibration verification is not a requirement for waived test systems unless required in the manufacturer's instructions, and 42 CFR §493.15(e)(1) has waived laboratories follow those instructions. If your lab is performing these studies on waived instruments for no such reason, you are conducting unnecessary quality control. Redirect those resources."
             },
             {
               q: "What if our analyzer is factory-calibrated and cannot be adjusted by the lab?",
-              a: "Calibration verification is not required. CLIA's position is clear: you cannot verify something you cannot perform. If the instrument's calibration is locked by the manufacturer and cannot be adjusted by laboratory personnel, the requirement does not apply."
+              a: "Calibration verification is not required. CMS's CLIA brochure on calibration and calibration verification lists instruments that are factory or manufacturer calibrated among the exceptions, and the current TJC standard limits that exception to instruments that cannot be calibrated after implementation. 42 CFR §493.1255 does not spell this out, so keep the manufacturer's documentation on file and document the exemption. State and accreditor requirements may be stricter."
             },
             {
               q: "How many specimens do we need for a correlation / method comparison study?",
-              a: "The Joint Commission does not specify a minimum. The laboratory defines both the number of data points and the acceptability criteria. However, most accrediting bodies look for at least 20 patient specimens spanning the analytical range, which is the EP9 protocol standard."
+              a: "CLIA and The Joint Commission do not specify a minimum. The medical director or designee decides the number of data points and the acceptability criteria. CLSI EP09 suggests about 40 patient specimens spanning the analytical range."
             },
             {
               q: "Can we use QC material or calibrators instead of commercial verification kits?",
-              a: "Yes. Any material with a documented, known true value qualifies as a calibration verification data point. This includes calibrators, manufacturer-assigned QC material, stable proficiency testing samples, and previously validated patient specimens. Commercial kits are a convenience, not a requirement."
+              a: "Yes. Any material with a documented, known true value qualifies as a calibration verification data point. This includes calibrators, manufacturer-assigned QC material, stable proficiency testing samples, and previously tested patient specimens with established values. Commercial kits are a convenience, not a requirement."
             },
             {
               q: "What is the exact deadline for our next calibration verification study?",
-              a: "Six months plus twenty days from the date your medical director or designee signed off on the last study. Not from when data was collected. Not from the date the report was generated. The sign-off date is what counts. Document it explicitly in your tracking system."
+              a: "Under the current TJC standard, up to six months plus twenty days from the date your medical director or designee signed off on the last study. Not from when data was collected. Not from the date the report was generated. That allowance is TJC's: 42 CFR §493.1255(b)(3) says at least once every 6 months, so a laboratory under another accreditor should follow its own written procedure. Document the date explicitly in your tracking system."
             },
             {
               q: "Where do I find the CLIA allowable error (TEa) for a specific analyte?",
-              a: "In the Code of Federal Regulations Title 42, Part 493, Subpart I. The four sections cited by VeritaCheck® are §493.927 (general immunology), §493.931 (routine chemistry), §493.937 (toxicology), and §493.941 (hematology). Search for 'acceptable performance' within each section to find the specific criteria."
+              a: "In the Code of Federal Regulations Title 42, Part 493, Subpart I. The six sections cited by VeritaCheck® are §493.927 (general immunology), §493.931 (routine chemistry), §493.933 (endocrinology), §493.937 (toxicology), §493.941 (hematology), and §493.959 (immunohematology). Search for 'acceptable performance' within each section to find the specific criteria."
             },
           ];
 
@@ -105,7 +105,7 @@ export const CALVER_ARTICLE_FAQ: FaqQA[] = [
 export const EP26_ARTICLE_FAQ: FaqQA[] = [
   {
     q: "Is reagent lot verification required by CLIA?",
-    a: "Yes. CLIA requires laboratories to verify that a new reagent lot performs acceptably before reporting patient results from it, and to define and document the acceptance criteria (42 CFR §493.1255(b)(3)(i) and §493.1256). The regulation requires the verification and the documented criteria; it does not prescribe the exact protocol or sample count, which the laboratory establishes with medical director or designee approval.",
+    a: "CLIA does not name a lot-to-lot patient comparison, but it requires the pieces that make one the usual practice. 42 CFR §493.1255(b)(3)(i) requires calibration verification when a complete change of reagents is introduced, unless the laboratory can demonstrate that changing reagent lot numbers does not affect the reportable range and control values, and §493.1256(d)(6) requires control testing before resuming patient testing. A documented lot comparison is how a laboratory makes that demonstration. CAP's All Common checklist requires new lots and shipments to be checked (COM.30450). The regulation does not prescribe the exact protocol or sample count, which the laboratory establishes with medical director or designee approval.",
   },
   {
     q: "How many samples does EP26 require?",
@@ -117,7 +117,7 @@ export const EP26_ARTICLE_FAQ: FaqQA[] = [
   },
   {
     q: "How do I set the acceptance criterion for a lot change?",
-    a: "Anchor it to the analyte's total allowable error (TEa). A common, defensible rule is to accept when the mean absolute percent difference between the two lots is within TEa and at least 90 percent of paired patient specimens are within TEa, with the criterion approved by the medical director or designee.",
+    a: "The medical director or designee sets it, based on clinical need and the manufacturer's labeling, and documents why it fits. VeritaCheck® applies one rule to the total allowable error (TEa) the laboratory adopts: the study passes when the mean absolute percent difference between the two lots is within TEa and at least 90 percent of paired patient specimens are within TEa.",
   },
   {
     q: "What do I do if a new reagent lot fails verification?",
@@ -125,7 +125,7 @@ export const EP26_ARTICLE_FAQ: FaqQA[] = [
   },
   {
     q: "How often must I verify reagent lots?",
-    a: "Each time a new reagent lot is put into service for patient testing, before results from that lot are reported. It is event-driven, triggered by every new lot, not a fixed calendar interval.",
+    a: "CLIA's trigger is a complete change of reagents, unless the laboratory can demonstrate that changing lots has no effect (42 CFR §493.1255(b)(3)(i)). CAP has new lots and shipments checked before or concurrently with being placed in service (COM.30450), and a laboratory can require a check of every new lot by policy. It is event-driven, not a fixed calendar interval.",
   },
 ];
 
@@ -133,7 +133,7 @@ export const EP26_ARTICLE_FAQ: FaqQA[] = [
 export const QC_ARTICLE_FAQ: FaqQA[] = [
   {
     q: "What should you do when a quality control result is out of range?",
-    a: "Hold patient results from the affected run, then investigate for an assignable cause: control material integrity and expiration, reagent lot and expiration, calibration status, instrument maintenance and function, operator technique, and environmental conditions. If you find and correct one, document the cause and the corrective action and rerun controls to confirm the system is back in control before resuming patient testing. If no assignable cause is found, the result stands as a real signal, and the next steps are broader troubleshooting, recalibration, or manufacturer support. Final review rests with the medical director or designee.",
+    a: "Hold patient results from the affected run, then investigate for an assignable cause: control material integrity and expiration, reagent lot and expiration, calibration status, instrument maintenance and function, operator technique, and environmental conditions. Evaluate all patient results obtained in the unacceptable run and since the last acceptable run to determine whether they were adversely affected (42 CFR §493.1282(b)(2)). If you find and correct one, document the cause and the corrective action and rerun controls to confirm the system is back in control before resuming patient testing. If no assignable cause is found, the result stands as a real signal, and the next steps are broader troubleshooting, recalibration, or manufacturer support. Final review rests with the medical director or designee.",
   },
   {
     q: "Is it acceptable to repeat a control until it passes?",
@@ -141,7 +141,7 @@ export const QC_ARTICLE_FAQ: FaqQA[] = [
   },
   {
     q: "Should control limits come from the package insert or your own data?",
-    a: "From your own data. The insert range covers many laboratories, instruments, and reagent lots, so it is wider than any single laboratory's true imprecision and too wide to catch real shifts. Set limits from your own instrument's mean and standard deviation over a baseline period. CLSI C24 takes this position.",
+    a: "From your own data, as good practice. 42 CFR §493.1256(d)(10)(ii) permits a verified stated value, but the insert range covers many laboratories, instruments, and reagent lots, so it is wider than any single laboratory's true imprecision and too wide to catch real shifts. Set limits from your own instrument's mean and standard deviation over a baseline period. CLSI C24 takes this position.",
   },
   {
     q: "What is testing into compliance in a clinical laboratory?",
@@ -169,11 +169,11 @@ export const TEA_LOOKUP_FAQ: FaqQA[] = [
   },
   {
     q: "Where do these TEa values come from?",
-    a: "The CLIA PT acceptance limits in 42 CFR §493.927 through §493.959, updated by the CLIA PT final rule (CMS-3355-F, effective July 11, 2024, implemented January 1, 2025).",
+    a: "The CLIA PT acceptance limits in 42 CFR §493.927 through §493.959, updated by the CLIA PT final rule (CMS-3355-F, published July 11, 2022, effective July 11, 2024, implemented January 1, 2025).",
   },
   {
     q: "Can I use CLIA TEa as my calibration verification acceptance criterion?",
-    a: "Many laboratories do, with medical director or designee approval, because it is a federally published, defensible threshold rather than a manufacturer claim.",
+    a: "You can. CLIA leaves the criterion to the laboratory (42 CFR §493.1255(b)(2)), so a medical director or designee may adopt a PT limit and should document why it fits the clinical need. CMS said in the preamble to CMS-3355-F (87 FR 41194, July 11, 2022), which is not regulation text, that PT limits were written to grade proficiency testing and were not intended as performance goals, and that goals for accuracy and precision should rest on clinical needs and the manufacturer's labeling.",
   },
   {
     q: "What is the ADLM half-TEa recommendation?",
@@ -189,15 +189,15 @@ export const TEA_LOOKUP_FAQ: FaqQA[] = [
 export const CALVER_REQ_FAQ: FaqQA[] = [
   {
     q: "How often is calibration verification required under CLIA?",
-    a: "At least every six months for each non-waived quantitative test system, under 42 CFR §493.1255.",
+    a: "At least once every 6 months for each applicable non-waived quantitative test system, under 42 CFR §493.1255(b)(3).",
   },
   {
     q: "What events trigger it outside the six-month cycle?",
-    a: "A reagent lot change when the manufacturer specifies it, major instrument maintenance or repair that could affect performance, and QC results suggesting the calibration may have shifted. Document the trigger with the results.",
+    a: "A complete change of reagents, unless the laboratory can demonstrate that changing lot numbers does not affect the reportable range and control values are not adversely affected; major preventive maintenance or replacement of critical parts that may influence performance; control results showing an unusual trend or shift, or outside acceptable limits, when other means of assessing and correcting them fail; and any more frequent schedule the laboratory sets (42 CFR §493.1255(b)(3)). Document the trigger with the results.",
   },
   {
     q: "Which tests require it?",
-    a: "All quantitative non-waived tests reported to patients: chemistry panels, hematology indices with a reportable range, coagulation, and quantitative immunoassays.",
+    a: "Non-waived quantitative test systems, with exceptions CMS lists in its CLIA brochure on calibration: instruments that are factory or manufacturer calibrated; tests measured in units of time, such as PT and ACT; automated cell counters run per the manufacturer's instructions with two levels of control each day of testing; automated chemistry analyzers that meet CMS's three-level, traceable control conditions; and test systems calibrated at least every six months with three or more levels including low, mid, and high. State and accreditor requirements may be stricter.",
   },
   {
     q: "What must the record include?",
@@ -213,11 +213,11 @@ export const CALVER_REQ_FAQ: FaqQA[] = [
 export const METHODCOMP_FAQ: FaqQA[] = [
   {
     q: "When is a method comparison study required?",
-    a: "When placing a new analyzer into service, adding a new reagent system for an existing test, or demonstrating two instruments running the same analyte produce equivalent results.",
+    a: "CLIA requires a laboratory running the same test on different instruments or methods, or at multiple sites, to evaluate the relationship between them twice a year (42 CFR §493.1281(a)). A comparison is also a common way to verify accuracy when a new analyzer or method goes into service (§493.1253(b)(1)(i)(A)).",
   },
   {
     q: "How many specimens does it need?",
-    a: "A minimum of 40 patient specimens spanning the full analytical measurement range, deliberately collected at low, mid, and high concentrations.",
+    a: "CLIA and TJC set no minimum; the medical director or designee decides. CLSI EP09 suggests about 40 patient specimens spanning the full analytical measurement range, deliberately collected at low, mid, and high concentrations.",
   },
   {
     q: "Why patient specimens instead of QC material?",
@@ -229,7 +229,7 @@ export const METHODCOMP_FAQ: FaqQA[] = [
   },
   {
     q: "How do you set pass or fail?",
-    a: "The laboratory or manufacturer sets acceptable limits for slope, intercept, and bias, defined before running the study, with bias at decision points within total allowable error. CLSI EP09-A3 is the reference protocol.",
+    a: "The laboratory or manufacturer sets acceptable limits for slope, intercept, and bias, defined before running the study, with bias at decision points within total allowable error. CLSI EP09 is the reference protocol.",
   },
 ];
 
@@ -237,7 +237,7 @@ export const METHODCOMP_FAQ: FaqQA[] = [
 export const PRECISION_FAQ: FaqQA[] = [
   {
     q: "Why is precision verification required?",
-    a: "42 CFR §493.1253 requires laboratories to verify performance specifications, including precision, before reporting patient results and after changes that could affect performance.",
+    a: "42 CFR §493.1253(b)(1) requires a laboratory introducing an unmodified, FDA-cleared or approved test system to demonstrate, before reporting patient results, that it can obtain precision comparable to the manufacturer's. A modified system must have its precision established under §493.1253(b)(2).",
   },
   {
     q: "What do mean, SD, and CV mean on the report?",
@@ -245,7 +245,7 @@ export const PRECISION_FAQ: FaqQA[] = [
   },
   {
     q: "How many replicates does it need?",
-    a: "CLSI EP15-A3 recommends at least 20 replicates for within-run precision and a 5-day by 5-replicate design for full within-laboratory precision. Fewer than 20 widens the confidence interval and weakens the estimate.",
+    a: "CLSI EP15-A3 uses a 5-day by 5-replicate design at two or more concentrations. With fewer replicates, the confidence interval around SD widens and the estimate is less trustworthy.",
   },
   {
     q: "What do Pass, Fail, and Uncertain mean?",
@@ -253,7 +253,7 @@ export const PRECISION_FAQ: FaqQA[] = [
   },
   {
     q: "What acceptance criterion should I use?",
-    a: "A fraction of the CLIA TEa is common, often the ADLM half-TEa convention, or the manufacturer's published within-run SD. Final acceptance rests with the medical director or designee.",
+    a: "For precision, the regulation's comparison is the manufacturer's claim: 42 CFR §493.1253(b)(1)(i) has the laboratory show precision comparable to the manufacturer's, so the manufacturer's published within-run SD is the starting point. A medical director or designee may adopt another criterion, such as a fraction of a CLIA PT limit (the ADLM half-TEa convention is one example), and should document why it fits the clinical need. Final acceptance rests with the medical director or designee.",
   },
 ];
 
@@ -261,7 +261,7 @@ export const PRECISION_FAQ: FaqQA[] = [
 export const TJC_INSPECTION_FAQ: FaqQA[] = [
   {
     q: "How does a TJC laboratory survey work?",
-    a: "It follows a tracer: the surveyor starts at a patient result and works backward through who ordered it, which analyzer ran it, its verification records, who performed it, their competency, and the proficiency testing record for that analyte.",
+    a: "It opens with a conference and a tour, and its defining activity is the tracer: the surveyor starts at a patient result and works backward through who ordered it, which analyzer ran it, its verification records, who performed it, their competency, and the proficiency testing record for that analyte.",
   },
   {
     q: "What do surveyors trace most consistently?",
@@ -305,7 +305,7 @@ export const CPRT_FAQ: FaqQA[] = [
   },
   {
     q: "Does CLIA require CPRT?",
-    a: "No, but 42 CFR §493.1407 and §493.1445 make the laboratory director responsible for defending the laboratory's resource decisions.",
+    a: "No. 42 CFR §493.1407 and §493.1445 make the laboratory director responsible for the overall operation and administration of the laboratory, including employing competent personnel and assuring compliance. Neither mentions cost, but CPRT is how a director explains resource decisions to the institution.",
   },
 ];
 
@@ -320,12 +320,12 @@ export const MANUAL_LOGS_FAQ: FaqQA[] = [
     a: "It introduces a transcription error mode, a result miscopied from the log into the LIS, an error that cannot occur without the log.",
   },
   {
-    q: "Why is documented review of transcribed results required?",
-    a: "That review exists to catch the transcription error the log itself introduces; it is the administrative cost of the log's bench convenience.",
+    q: "Why do laboratories review transcribed results?",
+    a: "CLIA requires an adequate system to ensure results move accurately from the point of data entry, whether interfaced or entered manually, to the final report (42 CFR §493.1291(a)), and it sets no review interval. The review of transcribed results exists to catch the transcription error the log itself introduces; it is the administrative cost of the log's bench convenience.",
   },
   {
     q: "What does direct entry from analyzer to LIS eliminate?",
-    a: "The transcription event and the associated review burden, and it shortens time to result availability.",
+    a: "The copy from log to LIS and the review attached to it, and it shortens time to result availability. CAP still has manual and automated result entries verified before they are reported.",
   },
   {
     q: "When is a manual log still appropriate?",
@@ -673,7 +673,7 @@ export const REFINT_ARTICLE_FAQ: FaqQA[] = [
   },
   {
     q: "How many samples does it take to verify a reference interval?",
-    a: "Commonly twenty. The laboratory tests a small group of its own reference individuals against the interval it intends to adopt, and if no more than a small proportion, conventionally two of the twenty, fall outside the proposed interval, the interval is considered verified for that laboratory's population. If three or more of the twenty fall outside, the verification has not passed, and the CLSI EP28-A3c procedure is to test a second group of twenty. Establishing an interval from scratch is a different tier: the CLSI guideline recommends a minimum of 120 qualified reference individuals per partition, which is why very few clinical laboratories do it.",
+    a: "Commonly twenty. The laboratory tests a small group of its own reference individuals against the interval it intends to adopt, and if no more than a small proportion, conventionally two of the twenty, fall outside the proposed interval, the interval is considered verified for that laboratory's population. If three or four of the twenty fall outside the proposed interval, the CLSI EP28-A3c procedure is to test a second group of twenty; if more fall outside, re-examine the interval before you adopt it. Establishing an interval from scratch is a different tier: the CLSI guideline recommends a minimum of 120 qualified reference individuals per partition, which is why very few clinical laboratories do it.",
   },
   {
     q: "What do you do if your laboratory cannot recruit twenty reference individuals?",
