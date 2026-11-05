@@ -55,7 +55,7 @@ const STEPS = [
     key: "study_created" as const,
     number: 3,
     title: "Run your first EP Study",
-    description: "Run a method comparison or calibration verification. Both are required every 6 months for every non-waived test.",
+    description: "Run a Correlation / Method Comparison or a Calibration Verification / Linearity study. 42 CFR 493.1255(b)(3) sets calibration verification at least once every 6 months, and 42 CFR 493.1281(a) requires a twice-yearly comparison when the same test runs on more than one method, instrument, or site.",
     time: "10 minutes",
     buttonLabel: "Run a Study",
     route: "/veritacheck",
@@ -64,9 +64,9 @@ const STEPS = [
   {
     key: "scan_started" as const,
     number: 4,
-    title: "Complete VeritaScan®",
-    description: "Walk through 168 TJC and CAP inspection standards. Know exactly where you stand before a surveyor arrives.",
-    time: "30 minutes",
+    title: "Start VeritaScan®",
+    description: "Begin walking through 173 TJC and CAP inspection items and see where you stand before a surveyor arrives.",
+    time: "30 minutes to start",
     buttonLabel: "Open VeritaScan®",
     route: "/veritascan-app",
     icon: ClipboardCheck,
@@ -75,7 +75,7 @@ const STEPS = [
     key: "comp_created" as const,
     number: 5,
     title: "Set up VeritaComp™",
-    description: "Create a competency program using your VeritaMap® instruments. All three CLIA competency types in one place.",
+    description: "Create a competency program using your VeritaMap® instruments. Technical, waived, and non-technical competency in one place.",
     time: "15 minutes",
     buttonLabel: "Open VeritaComp™",
     route: "/veritacomp-app",
@@ -95,7 +95,7 @@ const STEPS = [
     key: "cert_entered" as const,
     number: 7,
     title: "Confirm your CLIA certificate expiration date",
-    description: "Your CLIA certificate was auto-populated from your account setup. Open VeritaLab™ to enter the expiration date and activate renewal reminders at 9 months, 6 months, 3 months, and 30 days.",
+    description: "Your CLIA certificate is added automatically from the CLIA number on your lab. Open VeritaLab™ to enter the expiration date and activate renewal reminders at 9 months, 6 months, 3 months, and 30 days.",
     time: "2 minutes",
     buttonLabel: "Open VeritaLab™",
     route: "/veritalab-app",
@@ -159,7 +159,7 @@ export default function GettingStartedPage() {
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
         <div className="text-center mb-8">
           <h1 className="text-2xl font-bold mb-2">Getting Started with VeritaAssure&#174;</h1>
-          <p className="text-muted-foreground">Seven steps to a fully configured lab. Most labs complete setup in under an hour.</p>
+          <p className="text-muted-foreground">Seven steps to set up your lab. The time estimates below add up to about 90 minutes.</p>
         </div>
 
         <div className="relative">
@@ -213,7 +213,7 @@ export default function GettingStartedPage() {
       <div className="mb-8">
         <h1 className="text-2xl font-bold">Getting Started with VeritaAssure&#174;</h1>
         <p className="text-muted-foreground mt-1">
-          Follow these steps to set up your lab. Most labs are fully configured in under an hour.
+          Follow these steps to set up your lab. The time estimates below add up to about 90 minutes.
         </p>
 
         {/* Progress bar */}
@@ -305,32 +305,16 @@ export default function GettingStartedPage() {
       <div className="mt-8 rounded-xl border border-primary/20 bg-card p-6">
         <div className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3">Free Downloads</div>
         <p className="text-sm text-muted-foreground mb-4">
-          Download these two documents to validate and deploy VeritaCheck&#174; for compliance documentation. No login required.
+          Download this template to document your laboratory's review of VeritaCheck&#174; before placing it into service. No login required.
         </p>
         <div className="grid sm:grid-cols-2 gap-3">
-          <div className="rounded-lg border border-border bg-muted/30 p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <Shield size={15} className="text-primary shrink-0" />
-              <span className="font-semibold text-sm">CLSI Compliance Matrix</span>
-            </div>
-            <p className="text-xs text-muted-foreground leading-relaxed mb-3">
-              One-page reference mapping the core VeritaCheck&#174; verification study types to CLSI, CLIA, CAP, and TJC standards.
-            </p>
-            <a
-              href="/api/downloads/clsi-compliance-matrix"
-              download="VeritaCheck_CLSI_Compliance_Matrix.pdf"
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:text-primary/80 transition-colors"
-            >
-              <Download size={13} /> Download PDF
-            </a>
-          </div>
           <div className="rounded-lg border border-border bg-muted/30 p-4">
             <div className="flex items-center gap-2 mb-2">
               <CheckCircle2 size={15} className="text-primary shrink-0" />
               <span className="font-semibold text-sm">Software Validation Template</span>
             </div>
             <p className="text-xs text-muted-foreground leading-relaxed mb-3">
-              Validate VeritaCheck&#174; for compliance documentation before placing it into service. Satisfies CAP GEN.20316 and CLIA 493.1251.
+              Fillable template to document your laboratory's review and director approval of VeritaCheck&#174; before placing it into service.
             </p>
             <a
               href="/api/downloads/software-validation-template"

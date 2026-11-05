@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { ChevronRight, Clock, FlaskConical, User, Search, Download, Shield, CheckCircle2, Tag } from "lucide-react";
+import { ChevronRight, Clock, FlaskConical, User, Search, Download, CheckCircle2, Tag } from "lucide-react";
 import { NewsletterSignup } from "@/components/NewsletterSignup";
 import { teaData } from "@/lib/cliaTeaData";
 
@@ -44,7 +44,7 @@ const articles = [
   {
     slug: "veritacheck-vs-ep-evaluator",
     title: "VeritaCheck® vs EP Evaluator: CLIA Verification Compared",
-    summary: "An honest side-by-side of VeritaCheck and EP Evaluator for CLIA performance verification: statistical study coverage, whole-menu coverage, the 42 CFR-cited and director-signed report, delivery, and pricing, including where EP Evaluator is stronger.",
+    summary: "An honest side-by-side of VeritaCheck and EP Evaluator for CLIA performance verification: statistical study coverage, whole-menu coverage, the 42 CFR-cited report with its director signature block, delivery, and pricing, including where EP Evaluator is stronger.",
     category: "Comparison",
     readTime: "7 min read",
     author: "Michael Veri",
@@ -55,7 +55,7 @@ const articles = [
   {
     slug: "post-analytical-critical-values-corrected-reports",
     title: "The Last Mile: Why a Correct Result Still Reaches the Patient Wrong",
-    summary: "A former Joint Commission surveyor on the post-analytical phase: the critical value list your medical staff must own, the read-back that confirms a call was actually received, the corrected report CLIA requires you to phone in under 42 CFR 493.1291(k), and the autoverification rules quietly releasing results no one reads.",
+    summary: "A former Joint Commission surveyor on the post-analytical phase: the critical value list your medical staff should own, the read-back that confirms a call was actually received, the prompt notification CLIA requires for a corrected report under 42 CFR 493.1291(k), and the autoverification rules quietly releasing results no one reads.",
     category: "Post-Analytical",
     readTime: "9 min read",
     author: "Michael Veri",
@@ -121,7 +121,7 @@ const articles = [
   {
     slug: "why-veritacheck-vs-legacy-verification",
     title: "Why VeritaCheck® vs. Legacy Verification Software",
-    summary: "Side-by-side comparison authored for lab directors evaluating a tool change. Four dimensions: cost ($299 vs. typical $800-$3,000 per seat), time-to-first-study, integration breadth across the VeritaAssure platform, and compliance defensibility under 42 CFR Part 493.",
+    summary: "Side-by-side comparison authored for lab directors evaluating a tool change. Four dimensions: cost (a published $299 first year, $499/yr after, vs. per-seat licensing with unpublished pricing), time-to-first-study, integration breadth across the VeritaAssure platform, and compliance defensibility under 42 CFR Part 493.",
     category: "Product Positioning",
     readTime: "5 min read",
     author: "Veritas Lab Services",
@@ -132,12 +132,12 @@ const articles = [
   {
     slug: "manual-logs-why-most-labs-should-stop",
     title: "Manual Logs: Why We Used Them, and Why Most Labs Should Stop",
-    summary: "Manual logs were invented to solve a memory problem in labs that had one or two computers. In 2026, the log is the source of the error that 24-hour review was designed to catch. Here is when to retire it.",
+    summary: "Manual logs were invented to solve a memory problem in labs that had one or two computers. In 2026, the log is the source of the error that transcribed-result review was designed to catch. Here is when to retire it.",
     category: "Lab Operations",
     readTime: "6 min read",
     author: "Michael Veri",
     date: "May 2026",
-    tags: ["Manual Logs", "LIS", "Direct Entry", "Transcription Error", "24-Hour Review"],
+    tags: ["Manual Logs", "LIS", "Direct Entry", "Transcription Error", "Transcription Review"],
     featured: false,
   },
   {
@@ -154,7 +154,7 @@ const articles = [
   {
     slug: "clia-calibration-verification-method-comparison",
     title: "CLIA Calibration Verification and Method Comparison: What Lab Managers Actually Need to Know",
-    summary: "Calibration verification is an accuracy study. Correlation is a precision study. Most labs are doing both wrong. Spending money on kits they don't need and missing the 6-month-plus-20-day compliance window that would eliminate the stress entirely.",
+    summary: "Calibration verification is an accuracy study. Correlation is a precision study. Most labs are doing both wrong. Spending money on kits they don't need and missing the TJC 6-month-plus-20-day compliance window that would eliminate the stress entirely.",
     category: "Regulatory Compliance",
     readTime: "12 min read",
     author: "Michael Veri",
@@ -214,7 +214,18 @@ const articles = [
     readTime: "8 min read",
     author: "Michael Veri",
     date: "April 2026",
-    tags: ["Software Validation", "IQ/OQ/PQ", "CLIA 493.1251", "CAP"],
+    tags: ["Software Validation", "IQ/OQ/PQ"],
+    featured: false,
+  },
+  {
+    slug: "precision-verification-report-interpretation-guide",
+    title: "Precision Verification Report Interpretation Guide",
+    summary: "How to read every field, table, and chart on a VeritaCheck® precision verification report, and how each one maps to 42 CFR §493 and CLSI EP15-A3.",
+    category: "VeritaCheck® Reports",
+    readTime: "8 min read",
+    author: "Michael Veri",
+    date: "May 2026",
+    tags: ["Precision Verification", "CLSI EP15-A3", "VeritaCheck®"],
     featured: false,
   },
   {
@@ -258,7 +269,6 @@ const comingSoon = [
   { title: "EP15 Precision Verification: A Step-by-Step Guide for Clinical Labs", category: "EP Studies" },
   { title: "How to Run a CLIA-Compliant Method Comparison Without Commercial Kits", category: "Cost Savings" },
   { title: "The 10 Most Cited CLIA Deficiencies: and How to Fix Them Before Your Survey", category: "Inspection Readiness" },
-  { title: "Understanding CLIA Allowable Error (TEa): A Practical Reference for Lab Directors", category: "Regulatory Compliance" },
 ];
 
 export default function ResourcesPage() {
@@ -325,15 +335,8 @@ return (
           <div className="grid sm:grid-cols-2 gap-3">
             {[
               {
-                title: "VeritaCheck® CLSI Compliance Matrix",
-                desc: "One-page landscape reference mapping the core VeritaCheck® verification study types to CLSI, CLIA (42 CFR), CAP, and TJC standards. Use this with inspectors to demonstrate regulatory alignment.",
-                url: "/api/downloads/clsi-compliance-matrix",
-                filename: "VeritaCheck_CLSI_Compliance_Matrix.pdf",
-                icon: Shield,
-              },
-              {
                 title: "VeritaCheck® Software Validation Template",
-                desc: "4-page fillable template to validate VeritaCheck® for compliance documentation before placing it into service. Satisfies CAP GEN.20316, TJC QSA.15.01.01 EP1, and CLIA 42 CFR 493.1251.",
+                desc: "4-page fillable template to document your laboratory's review and director approval of VeritaCheck® before placing it into service.",
                 url: "/api/downloads/software-validation-template",
                 filename: "VeritaCheck_Software_Validation_Template.pdf",
                 icon: CheckCircle2,
@@ -441,7 +444,7 @@ return (
           <FlaskConical size={28} className="mx-auto mb-3 opacity-80" />
           <h2 className="font-serif text-xl font-bold mb-2">Put the knowledge to work.</h2>
           <p className="text-primary-foreground/80 text-sm max-w-md mx-auto mb-5">
-            VeritaCheck® runs the studies described in these articles automatically: calibration verification, method comparison, and EP15 precision verification, with CLIA-compliant PDF reports.
+            VeritaCheck® runs the studies described in these articles automatically: calibration verification, method comparison, and EP15 precision verification, with CFR-cited PDF reports.
           </p>
           <Button asChild size="lg" className="bg-white text-primary hover:bg-white/90 font-semibold">
             <Link href="/veritacheck">Run a Free Study <ChevronRight size={15} className="ml-1" /></Link>

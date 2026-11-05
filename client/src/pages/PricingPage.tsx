@@ -1,50 +1,10 @@
 import { useSEO } from "@/hooks/useSEO";
 import { Link } from "wouter";
-import { useState, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { CheckCircle2, ChevronRight, Building2, CreditCard, FileText, ShieldCheck, Lock, Quote, Minus, Check, ArrowRight, X, Users } from "lucide-react";
+import { CheckCircle2, ChevronRight, Building2, CreditCard, FileText, ShieldCheck, Lock, Quote, Minus, Check, ArrowRight, Users } from "lucide-react";
 import { trackEvent } from "@/lib/analytics";
-
-// COLA Nashville banner: auto-hides on May 9, 2026 onward
-function ColaBanner() {
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    const today = new Date();
-    const hideOn = new Date("2026-05-09T00:00:00");
-    const dismissed = sessionStorage.getItem("colaBanner_dismissed") === "true";
-    if (today < hideOn && !dismissed) {
-      setVisible(true);
-    }
-  }, []);
-
-  const dismiss = () => {
-    sessionStorage.setItem("colaBanner_dismissed", "true");
-    setVisible(false);
-  };
-
-  if (!visible) return null;
-
-  return (
-    <div className="bg-primary text-primary-foreground">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-2.5 flex items-center justify-between gap-3">
-        <p className="text-sm sm:text-base text-center sm:text-left flex-1 leading-snug">
-          We will be at COLA Lab Enrichment Forum in Nashville, May 6-8. Use code{" "}
-          <span className="font-bold">COLA2026</span> for 60-day trial plus 10% off.
-        </p>
-        <button
-          onClick={dismiss}
-          aria-label="Dismiss COLA banner"
-          className="shrink-0 p-1 hover:bg-white/10 rounded transition-colors"
-        >
-          <X size={16} />
-        </button>
-      </div>
-    </div>
-  );
-}
 
 // 2026-05-26 pricing-page redesign per Lisa Veri's feedback. The prior
 // 6-tile grid placed System ("Custom quote") at the bottom-right, which
@@ -161,11 +121,9 @@ const SUITE_PLANS = [
 ];
 
 export default function PricingPage() {
-    useSEO({ title: "Pricing | VeritaAssure® Lab Compliance Software", description: "Simple annual pricing for clinical laboratory compliance software. Plans for individual labs, community hospitals, regional hospitals, and enterprise health systems." });
+    useSEO({ title: "Pricing | VeritaAssure® Lab Compliance Software", description: "Simple annual pricing for clinical laboratory compliance software. Plans for individual labs, community hospitals, regional hospitals, and multi-lab health systems." });
 return (
     <div className="min-h-screen bg-background">
-
-      <ColaBanner />
 
       {/* Hero */}
       <section className="border-b border-border bg-gradient-to-br from-primary/10 via-primary/4 to-transparent">
@@ -180,7 +138,7 @@ return (
             Simple, Transparent Pricing
           </h1>
           <p className="text-xl text-primary font-semibold mb-3">
-            Simple annual pricing based on your lab type. No hidden fees. No long-term contracts.
+            Simple annual pricing. No hidden fees. No long-term contracts.
           </p>
           <p className="text-muted-foreground text-base max-w-2xl mx-auto leading-relaxed">
             Choose the plan that fits your lab's size and complexity. Suite plans are set up with our team on a short call.
@@ -386,7 +344,7 @@ return (
 
         {/* Seat note */}
         <p className="text-xs text-center text-muted-foreground">
-          Active seats include the account owner. Additional active seats above the tier-included count are priced at the tier's per-seat rate. Every lab includes one free medical director seat for its named director, which does not count against your active seats. Other reviewers, such as the technical consultant and technical supervisor, use active seats. Read-and-sign access for staff who only acknowledge policies, sign competency, or run inventory scans is handled by the staff seats add-on below, not per seat.
+          Active seats include the account owner. Additional active seats above the tier-included count are priced at the tier's per-seat rate. Every lab includes one free medical director seat for its named director, which does not count against your active seats. Other reviewers, such as the technical consultant and technical supervisor, use active seats. Read-and-sign access for staff who acknowledge policies, sign competency, record QC, or count inventory is handled by the staff seats add-on below, not per seat.
         </p>
 
         {/* Founding Lab Program (charter offer) shown BELOW the plan tiles so a
@@ -452,8 +410,8 @@ return (
             </h3>
             <p className="text-sm text-muted-foreground max-w-2xl mx-auto leading-relaxed">
               Individual email and password sign-in for staff who only need read-and-sign access:
-              policy acknowledgements, competency self-attestation, inventory adjustments,
-              credential view. Per-event signature capture cross-referenced to your VeritaStaff&trade; roster.
+              policy acknowledgements, competency sign-offs, quizzes, QC entry, and
+              inventory counts. Per-event signature capture cross-referenced to your VeritaStaff&trade; roster.
               Surveyor-defensible audit trail. Flat band by lab size, not per user.
             </p>
           </div>
@@ -514,7 +472,7 @@ return (
         {/* Guest Study CTA */}
         <div className="bg-muted/30 border border-border rounded-lg p-5 text-center">
           <p className="text-sm text-muted-foreground">
-            Not ready to commit? Run a single VeritaCheck&#174; study for $25, no account required.{" "}
+            Not ready to commit? Create a free account: two studies are included, and a single VeritaCheck&#174; study is $25 after that.{" "}
             <Link href="/veritacheck" className="text-primary font-medium hover:underline inline-flex items-center gap-1">
               Try it now <ArrowRight size={13} />
             </Link>
@@ -581,7 +539,7 @@ return (
             All plans include 2 years of read-only data access after cancellation.
           </p>
           <p className="text-xs text-muted-foreground max-w-2xl mx-auto">
-            Your tier is based on your lab size and complexity. Certificate of Waiver labs are always placed in the Clinic tier. Not sure which tier fits your lab? Contact us at info@veritaslabservices.com.
+            Choose the tier that fits the number of active seats you need. Not sure which tier fits your lab? Contact us at info@veritaslabservices.com.
           </p>
         </div>
 

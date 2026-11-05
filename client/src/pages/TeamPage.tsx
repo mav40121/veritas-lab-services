@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { ExternalLink, Award, BookOpen, Shield, Star, Newspaper, Handshake, PenLine } from "lucide-react";
 
 const publications = [
+  { title: "A Practical Guide to Accuracy and Precision Studies", url: "https://www.medlabmag.com/article/2328", journal: "Medical Lab Management" },
   { title: "Co-Own Blood Administration Among Lab, Nursing and Providers", url: "https://www.medlabmag.com/article/2195", journal: "Medical Lab Management" },
   { title: "Laboratory Leadership's View of Accreditation", url: "https://www.medlabmag.com/article/1766", journal: "Medical Lab Management" },
   { title: "Forming a Blood Utilization and Management Program", url: "https://www.medlabmag.com/article/1732", journal: "Medical Lab Management" },

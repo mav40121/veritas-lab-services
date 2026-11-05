@@ -39,7 +39,7 @@ function NotifyForm() {
       <div className="text-2xl mb-2">📬</div>
       <div className="font-bold text-lg mb-1">Notify me when it's available</div>
       <p className="text-sm text-muted-foreground mb-4">
-        The book is in final production. Leave your email and we'll reach out the moment it's ready to ship.
+        The book is in final production. Leave your email and we'll reach out the moment it's ready to ship. You'll also receive The Lab Director's Briefing newsletter. Unsubscribe anytime.
       </p>
       <form
         onSubmit={e => {
@@ -180,7 +180,7 @@ return (
                 The productivity chapters give directors the formula, the benchmarks, and the language to make capital arguments to administration. The staffing chapter walks through what CLIA actually permits, and what it doesn't, when workforce shortages force qualification decisions that sit in regulatory gray zones. The QC chapter doesn't just explain Westgard rules; it shows you how to read what your QC data is actually telling you before an accreditor reads it for you.
               </p>
               <p className="text-muted-foreground leading-relaxed">
-                Woven throughout every chapter are <strong>Surveyor Callout boxes</strong>, drawn from real inspections at real facilities. These are not hypotheticals. They are direct observations from the other side of the table: what was found, what it looked like from the inspector's vantage point, and what happened next. No other laboratory management resource offers this perspective.
+                Woven throughout every chapter are <strong>Surveyor Callout boxes</strong>, drawn from real inspections at real facilities. These are not hypotheticals. They are direct observations from the other side of the table: what was found, what it looked like from the inspector's vantage point, and what happened next.
               </p>
               <p className="text-muted-foreground leading-relaxed">
                 The final chapters cover the emerging pressures: laboratory outreach as a revenue strategy, the transfusion committee politics that determine whether blood management becomes a quality win or a liability, and the practical questions AI is already forcing laboratory leaders to answer whether they feel ready or not.
@@ -223,7 +223,7 @@ return (
                   <div className="text-[9px] text-white/60 mt-0.5">MS, MBA, MLS(ASCP), CPHQ</div>
                 </div>
                 <div className="font-semibold text-sm mb-1">Lab Management 101</div>
-                <p className="text-xs text-muted-foreground">The regulatory landscape, C-suite relationships, and career development framework that no MLS or MBA program offers.</p>
+                <p className="text-xs text-muted-foreground">The regulatory landscape, C-suite relationships, and career development framework of laboratory leadership.</p>
               </CardContent>
             </Card>
             {/* Right: VeritaAssure suite */}
@@ -275,7 +275,7 @@ return (
               { title: "Administrative Directors", desc: "You run the operation. This book gives you the regulatory fluency to lead your medical director or designee conversation from a position of authority." },
               { title: "Laboratory Managers Moving Up", desc: "You're managing people and processes. This book prepares you for the director-level responsibilities you'll be taking on." },
               { title: "Medical Directors New to Clinical Labs", desc: "You trained in pathology. This book explains the clinical laboratory regulatory environment you now personally own." },
-              { title: "Students and Emerging Leaders", desc: "You want to understand the job before you're in it. This is the curriculum that no MLS or MBA program offers." },
+              { title: "Students and Emerging Leaders", desc: "You want to understand the job before you're in it. This is the curriculum for it." },
             ].map((item, i) => (
               <div key={i} className="bg-card border border-border rounded-xl p-4">
                 <div className="font-semibold text-sm mb-1.5">{item.title}</div>
@@ -426,7 +426,7 @@ return (
                 <div className="font-semibold">VeritaCheck® handles it all</div>
                 {[
                   ["Calibration Verification / Linearity", "42 CFR §493.1255(b)(3)"],
-                  ["Correlation / Method Comparison", "42 CFR §493.1253(b)(2)"],
+                  ["Correlation / Method Comparison", "42 CFR §493.1281(a)"],
                   ["Precision Verification (EP15)", "42 CFR §493.1253(b)(1)(i)"],
                 ].map(([study, cfr]) => (
 
@@ -459,7 +459,7 @@ return (
         <div className="max-w-xl mx-auto px-4 sm:px-6 text-center">
           <h2 className="font-serif text-2xl font-bold mb-3">Be the first to know</h2>
           <p className="text-muted-foreground mb-6">
-            The book is in final production. Enter your email and we'll notify you the moment it's available. No spam, just one email when it ships.
+            The book is in final production. Enter your email and we'll notify you when it's available. You'll also receive The Lab Director's Briefing newsletter. Unsubscribe anytime.
           </p>
           <NotifyForm />
         </div>
