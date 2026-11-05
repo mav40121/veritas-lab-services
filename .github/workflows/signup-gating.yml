@@ -117,6 +117,10 @@ jobs:
         # Cathy Thornton (RFGH) 2026-11-04: waived blind specimen testing takes several specimens and passes only when every one did; a non-technical
         # assessment can be a 6-Month or an Annual.
         run: npm run test:competency-waived-specimens
+      - name: Run invite token visibility integration test
+        # 2026-11-04: an invite token claims its seat, an admin seat included, so only people who manage members get it. Surveyor link
+        # tokens go to VeritaDC editors only. The invite link and the surveyor link still work.
+        run: npm run test:invite-token-visibility
       - name: Run instrument staff bulk assign integration test
         # Michael 2026-11-04: tick several instruments and the staff picked go on every one. Only adds; another lab's instrument or person
         # refuses the whole request; a new pairing past the setup session flags a reassessment.
