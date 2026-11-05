@@ -10960,6 +10960,11 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       console.error("[labs/:labId/members GET seatLimits] query failed:", err.message);
     }
 
+    // An invite token is the link itself: whoever holds it can claim the seat, an admin
+    // seat included. Only someone who manages members gets it; everyone else still sees
+    // who is invited. The page's Copy link button is already theirs alone.
+    if (!canManageLabMembers(req.scope)) pendingInvites = pendingInvites.map((inv) => ({ ...inv, invite_token: null }));
+
     res.json({ members: rows, pendingInvites, seatLimits, seatCounts, staffPortal, medicalDirector });
   });
 
@@ -41950,11 +41955,14 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     }
   );
 
-  // GET /surveyor-links — list active + recent revoked / expired.
+  // GET /surveyor-links — list active + recent revoked / expired. Each row carries the
+  // token, which opens the documents without a login, so it takes the same edit check
+  // as creating a link.
   app.get(
     "/api/labs/:labId/veritapolicy/surveyor-links",
     authMiddleware,
     labScopeMiddleware,
+    requireModuleEdit("veritapolicy"),
     (req: any, res) => {
       const sqlite = (db as any).$client;
       const rows = sqlite
