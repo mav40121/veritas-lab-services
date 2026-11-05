@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { useAuth } from "@/components/AuthContext";
-import { apiRequest } from "@/lib/queryClient";
+import { apiErrorMessage, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { FlaskConical, AlertTriangle } from "lucide-react";
 import { trackEvent } from "@/lib/analytics";
@@ -86,10 +86,6 @@ export default function JoinPage() {
         inviteToken: token,
       });
       const data = await res.json();
-      if (!res.ok) {
-        toast({ title: data.error || "Registration failed", variant: "destructive" });
-        return;
-      }
       trackEvent('sign_up', { method: 'email' });
       if (data.mfa_setup_required) { setMfaStep(data); return; }
       if (data.session_token) {
@@ -97,8 +93,8 @@ export default function JoinPage() {
       }
       login(data.token, data.user);
       navigate(labRoute("/dashboard"));
-    } catch {
-      toast({ title: "Registration failed", variant: "destructive" });
+    } catch (err) {
+      toast({ title: apiErrorMessage(err, "Registration failed"), variant: "destructive" });
     } finally {
       setLoading(false);
     }
