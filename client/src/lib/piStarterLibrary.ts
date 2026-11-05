@@ -650,7 +650,7 @@ export const PI_STARTER_LIBRARY: StarterMetric[] = [
     unit: "Ratio",
     direction: "lower_is_better",
     benchmark: "CAP range: 0.4-5.1; target: <2:1 to 3:1",
-    source: "CAP LAP CYP.07400",
+    source: "CAP LAP CYP.07600",
   },
   {
     department: "Cytology",
@@ -713,7 +713,7 @@ export const PI_STARTER_LIBRARY: StarterMetric[] = [
     unit: "Calendar days from receipt to signed report",
     direction: "lower_is_better",
     benchmark: "CAP goal: 90% within 2 working days",
-    source: "CAP LAP CYP.06532; CAP Q-Probes 2001",
+    source: "CAP Q-Probes 2001",
   },
   {
     department: "Cytology",
@@ -1488,7 +1488,7 @@ export const PI_STARTER_LIBRARY: StarterMetric[] = [
     unit: "% of required comparisons completed per schedule",
     direction: "higher_is_better",
     benchmark: "Goal: 100% per COLA (at least twice/year)",
-    source: "COLA QA; 42 CFR 493.1289; CLSI EP9",
+    source: "COLA QA; 42 CFR 493.1289; CLSI EP09",
   },
   {
     department: "General / Cross-Department",

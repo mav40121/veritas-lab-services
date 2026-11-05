@@ -32,7 +32,7 @@ const SUBPART_I = {
 const EXPECTED = {
   "General Chemistry": "§493.931", "Routine Chemistry": "§493.931", Chemistry: "§493.931",
   Electrolytes: "§493.931", Cardiac: "§493.931", "Point of Care": "§493.931",
-  Urinalysis: "§493.931", "Blood Gas": "§493.931",
+  Urinalysis: "", "Blood Gas": "§493.931",
   Endocrinology: "§493.933", Toxicology: "§493.937",
   Hematology: "§493.941", Coagulation: "§493.941", Hemostasis: "§493.941",
   "General Immunology": "§493.927", Immunology: "§493.927", "Syphilis Serology": "§493.923",

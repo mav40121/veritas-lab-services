@@ -86,11 +86,11 @@ function buildQCLotSample() {
     analyst: "S. Patel, MLS(ASCP)",
     date: "2026-04-26",
     studyType: "qc_range",
-    cliaAllowableError: 0.10,
+    cliaAllowableError: 0.08,
     teaIsPercentage: 1,
     teaUnit: "%",
-    cliaAbsoluteFloor: null,
-    cliaAbsoluteUnit: null,
+    cliaAbsoluteFloor: 6,
+    cliaAbsoluteUnit: "mg/dL",
     dataPoints: JSON.stringify({
       dataPoints, analytes, analyzers, levels, dateRange,
       oldLotData: {},
@@ -139,7 +139,7 @@ function buildReagentLotSample() {
     { specimenId: "A010", currentLot: 3.4, newLot: 3.42, cohort: "Abnormal" as const },
   ];
   const allSpecimens: LotToLotDataPoint[] = [...normalSpecimens, ...abnormalSpecimens];
-  const tea = 0.10; // 10% TEa for Albumin (CLIA)
+  const tea = 0.08; // ±8% for Albumin (42 CFR §493.931)
 
   const results = calculateLotToLot(allSpecimens, tea, "both");
 
@@ -194,7 +194,7 @@ function buildPTINRSample() {
 
   const results = calculatePTCoag(
     [{ name: "Stago STA-R Max3", ptValues: normalPTs, isi, ptRI, inrRI }],
-    { xValues: m2x, yValues: m2y, specimenIds: m2Ids, tea: 0.20 },
+    { xValues: m2x, yValues: m2y, specimenIds: m2Ids, tea: 0.15 },
     null,
   );
 
@@ -205,7 +205,7 @@ function buildPTINRSample() {
     analyst: "M. Veri, MLS(ASCP)",
     date: "2026-04-18",
     studyType: "pt_coag",
-    cliaAllowableError: 0.20,
+    cliaAllowableError: 0.15,
     teaIsPercentage: 1,
     teaUnit: "%",
     cliaAbsoluteFloor: null,
@@ -214,7 +214,7 @@ function buildPTINRSample() {
       module1: { ptValues: normalPTs, isi, ptRI, inrRI },
       module2: {
         data: m2Ids.map((id, i) => ({ id, x: m2x[i], y: m2y[i] })),
-        tea: 0.20,
+        tea: 0.15,
         inst1: "Stago STA-R Max3 (Prior PT Lot)",
         inst2: "Stago STA-R Max3 (New PT Lot)",
       },
@@ -236,12 +236,12 @@ function buildPTINRSample() {
 // ─── Sample 4: Simple Precision Verification (Sodium, EP15-A3) ──────────────
 
 function buildSimplePrecisionSample() {
-  // Creatinine, 15% TEa per §493.931. Single level (Normal QC ~1.0 mg/dL),
-  // 20 replicates. CV well under the 15% adopted criterion. Demonstrates
+  // Creatinine, ±10% or ±0.2 mg/dL (greater) per §493.931. Single level (Normal QC
+  // ~1.0 mg/dL), 20 replicates. CV well under the 10% adopted criterion. Demonstrates
   // the EP15-A3 simple aggregate path.
   //
   // Why Creatinine and not Sodium: calculatePrecision treats its TEa input
-  // as a fraction (0.15 = 15%) and computes allowableCV = TEa × 100, so an
+  // as a fraction (0.10 = 10%) and computes allowableCV = TEa × 100, so an
   // absolute-only analyte like Sodium (±4 mmol/L) would render an allowable
   // CV of 400 percent on the PDF, which is meaningless. Picking a
   // percentage-TEa analyte avoids that pre-existing rendering quirk for
@@ -253,7 +253,7 @@ function buildSimplePrecisionSample() {
   const dataPoints: PrecisionDataPoint[] = [
     { level: 1, levelName: "Normal QC", values: creatValues } as PrecisionDataPoint,
   ];
-  const tea = 0.15; // 15% TEa per §493.931 for Creatinine
+  const tea = 0.10; // ±10% per §493.931 for Creatinine (floor ±0.2 mg/dL)
 
   const results = calculatePrecision(dataPoints, tea, "simple");
 
@@ -267,8 +267,8 @@ function buildSimplePrecisionSample() {
     cliaAllowableError: tea,
     teaIsPercentage: 1,
     teaUnit: "%",
-    cliaAbsoluteFloor: null,
-    cliaAbsoluteUnit: null,
+    cliaAbsoluteFloor: 0.2,
+    cliaAbsoluteUnit: "mg/dL",
     dataPoints: JSON.stringify(dataPoints),
     instruments: JSON.stringify(["Roche Cobas 8000"]),
     status: results.overallPass ? "pass" : "fail",
@@ -364,7 +364,7 @@ function buildSensitivitySample() {
 // ─── Sample 6: Calibration Verification / Linearity (Glucose, CLSI EP06) ────
 
 function buildCalVerSample() {
-  // Glucose, 5 levels across the reportable range. TEa 10% or 6 mg/dL, whichever
+  // Glucose, 5 levels across the reportable range. TEa 8% or 6 mg/dL, whichever
   // is greater (§493.931). Clean PASS with high R-squared, establishing the AMR.
   const dataPoints: DataPoint[] = [
     { level: 1, expectedValue: 52,  instrumentValues: { "Roche Cobas 8000": 53 } },
@@ -373,7 +373,7 @@ function buildCalVerSample() {
     { level: 4, expectedValue: 402, instrumentValues: { "Roche Cobas 8000": 396 } },
     { level: 5, expectedValue: 548, instrumentValues: { "Roche Cobas 8000": 557 } },
   ];
-  const results = calculateCalVer(dataPoints, ["Roche Cobas 8000"], 0.10, true, 6);
+  const results = calculateCalVer(dataPoints, ["Roche Cobas 8000"], 0.08, true, 6);
 
   const study = {
     id: -6, userId: -1, createdByUserId: -1,
@@ -382,7 +382,7 @@ function buildCalVerSample() {
     analyst: "J. Hall, MLS(ASCP)",
     date: "2026-09-15",
     studyType: "cal_ver",
-    cliaAllowableError: 0.10, teaIsPercentage: 1, teaUnit: "%",
+    cliaAllowableError: 0.08, teaIsPercentage: 1, teaUnit: "%",
     cliaAbsoluteFloor: 6, cliaAbsoluteUnit: "mg/dL",
     dataPoints: JSON.stringify(dataPoints),
     instruments: JSON.stringify(["Roche Cobas 8000"]),
@@ -399,7 +399,7 @@ function buildCalVerSample() {
 function buildMethodComparisonSample() {
   // Glucose: candidate method (Roche Cobas 8000) vs the established reference
   // method (Abbott Alinity c), 40 paired patient samples. Deming regression +
-  // Bland-Altman + per-specimen TEa pass rule (10% or 6 mg/dL). Clean PASS.
+  // Bland-Altman + per-specimen TEa pass rule (8% or 6 mg/dL). Clean PASS.
   const PRIMARY = "Abbott Alinity c";   // established / reference method (x)
   const COMP = "Roche Cobas 8000";      // candidate / new method (y)
   const prng = (seed: number) => { let s = seed; return () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return (s / 0x7fffffff) * 2 - 1; }; };
@@ -409,7 +409,7 @@ function buildMethodComparisonSample() {
     level: i + 1, expectedValue: x,
     instrumentValues: { [COMP]: Math.round((x * 0.99 + 2 + rnd() * 2) * 10) / 10 },
   }));
-  const results = calculateMethodComparison(dataPoints, [COMP], 0.10, true, 6);
+  const results = calculateMethodComparison(dataPoints, [COMP], 0.08, true, 6);
 
   const study = {
     id: -7, userId: -1, createdByUserId: -1,
@@ -418,7 +418,7 @@ function buildMethodComparisonSample() {
     analyst: "J. Hall, MLS(ASCP)",
     date: "2026-09-16",
     studyType: "method_comparison",
-    cliaAllowableError: 0.10, teaIsPercentage: 1, teaUnit: "%",
+    cliaAllowableError: 0.08, teaIsPercentage: 1, teaUnit: "%",
     cliaAbsoluteFloor: 6, cliaAbsoluteUnit: "mg/dL",
     dataPoints: JSON.stringify(dataPoints),
     instruments: JSON.stringify([PRIMARY, COMP]),
@@ -448,7 +448,7 @@ export const DEMO_SAMPLES: DemoSample[] = [
     label: "Correlation / Method Comparison",
     blurb: "Paired patient-sample comparison of a candidate method against the established method, with Deming regression, Bland-Altman, and a per-specimen total-allowable-error pass rule.",
     clsi: "CLSI EP09",
-    cfr: "42 CFR §493.1253(b)(2)",
+    cfr: "42 CFR §493.1281(a); §493.1253(b)(1)(i)(A)",
     filename: "VeritaCheck_Sample_Correlation_Method_Comparison.pdf",
     build: buildMethodComparisonSample,
   },
@@ -475,7 +475,7 @@ export const DEMO_SAMPLES: DemoSample[] = [
     label: "Reagent Lot Verification",
     blurb: "Patient-sample comparison between current and new reagent lots. Two-part TEa pass rule: mean absolute percent difference within TEa AND at least 90 percent of paired specimens within TEa.",
     clsi: "CLSI EP26",
-    cfr: "42 CFR §493.1253(b)(3), §493.1255",
+    cfr: "42 CFR §493.1255(b)(3)(i); §493.1256(d)(6)",
     filename: "VeritaCheck_Sample_Reagent_Lot_Verification.pdf",
     build: buildReagentLotSample,
   },
@@ -484,7 +484,7 @@ export const DEMO_SAMPLES: DemoSample[] = [
     label: "PT/INR Geometric Mean Calculator",
     blurb: "Re-establishes the Mean Normal PT from a healthy normal cohort when the PT reagent lot changes, then verifies the new INR equation against the prior lot on patient samples.",
     clsi: "CLSI H47",
-    cfr: "21 CFR 864.7340 (PT reagent labeling)",
+    cfr: "42 CFR §493.1255(b)(3)(i); §493.1256(d)(6)",
     filename: "VeritaCheck_Sample_PT_INR_Geometric_Mean.pdf",
     build: buildPTINRSample,
   },
@@ -493,7 +493,7 @@ export const DEMO_SAMPLES: DemoSample[] = [
     label: "Simple Precision Verification",
     blurb: "Aggregate within-day precision (CV) per level. Verifies the manufacturer's precision claim for an FDA-cleared, unmodified assay.",
     clsi: "CLSI EP15-A3",
-    cfr: "42 CFR §493.1253(b)(1)(ii)",
+    cfr: "42 CFR §493.1253(b)(1)(i)(B)",
     filename: "VeritaCheck_Sample_Simple_Precision.pdf",
     build: buildSimplePrecisionSample,
   },
@@ -502,7 +502,7 @@ export const DEMO_SAMPLES: DemoSample[] = [
     label: "Sensitivity Verification (EP17-A2)",
     blurb: "Verification of the manufacturer's LoB, LoD, and LoQ claims. Includes per-reagent-lot LoB breakdown when lot labels are tagged.",
     clsi: "CLSI EP17-A2",
-    cfr: "42 CFR §493.1253(b)(1)",
+    cfr: "42 CFR §493.1253(b)(2)(iii)",
     filename: "VeritaCheck_Sample_Sensitivity_Verification.pdf",
     build: buildSensitivitySample,
   },

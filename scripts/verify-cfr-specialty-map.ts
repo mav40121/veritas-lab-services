@@ -34,7 +34,7 @@ eq("Coagulation", "§493.941");
 eq("General Immunology", "§493.927"); // NOT used for Hematology
 eq("Immunohematology", "§493.959");
 eq("Microbiology", "§493.945");
-eq("Urinalysis", "§493.931");
+eq("Urinalysis", "");
 eq("Blood Gas", "§493.931");
 
 console.log(`\nTOTAL: ${pass} passed, ${fail} failed`);

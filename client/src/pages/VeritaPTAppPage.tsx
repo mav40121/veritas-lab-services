@@ -439,7 +439,7 @@ export default function VeritaPTAppPage() {
               PT submission deadlines: {overdue.length} overdue, {soon.length} due within 14 days
             </div>
             <div className="text-xs text-muted-foreground mt-1">
-              A missed PT submission is an unsuccessful participation under 42 CFR 493.803. Submit results to your program before the due date.
+              A missed PT submission scores 0 and is unsatisfactory performance for that event. Two consecutive, or two of three, is unsuccessful participation (42 CFR §493.2). Submit results to your program before the due date.
             </div>
             <ul className="mt-2 space-y-1 text-xs">
               {overdue.map(e => {
@@ -468,7 +468,7 @@ export default function VeritaPTAppPage() {
                 PT Trend Status: {trends.counts.AT_RISK > 0 ? "AT-RISK analyte(s) detected" : "WATCH analyte(s) detected"}
               </div>
               <div className="text-xs text-muted-foreground mt-1">
-                Per 42 CFR §493.803, two failures out of three consecutive PT events triggers unsuccessful participation. Banner pre-warns at one fail (WATCH) and at two (AT-RISK).
+                Per 42 CFR §493.2, unsatisfactory performance in two consecutive or two out of three testing events is unsuccessful participation. Banner pre-warns at one fail (WATCH) and at two (AT-RISK).
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -704,7 +704,7 @@ export default function VeritaPTAppPage() {
           <div className="flex items-start gap-3 rounded-lg border border-teal-200 bg-teal-50 dark:bg-teal-900/10 dark:border-teal-800 p-3 text-sm text-teal-900 dark:text-teal-200">
             <Info size={16} className="mt-0.5 shrink-0" />
             <div>
-              For analytes without an approved PT program, CMS 42 CFR §493.1236(c)(1) requires twice-yearly verification of accuracy by an alternative method. CAP GEN.41770 mirrors. Add a record per analyte; coverage analysis above will credit it.
+              For analytes without an approved PT program, CMS 42 CFR §493.1236(c)(1) requires twice-yearly verification of accuracy by an alternative method. CAP COM.01500 is the matching requirement. Add a record per analyte; coverage analysis above will credit it.
             </div>
           </div>
 
@@ -882,7 +882,7 @@ export default function VeritaPTAppPage() {
           <div className="flex items-start gap-3 rounded-lg border border-teal-200 bg-teal-50 dark:bg-teal-900/10 dark:border-teal-800 p-3 text-sm text-teal-900 dark:text-teal-200">
             <Info size={16} className="mt-0.5 shrink-0" />
             <div>
-              Record the per-event result for the lab. Per 42 CFR §493.1236(c)(2), the analyst who runs the PT sample must rotate through testing personnel; capturing tested_by here builds the surveyor-defensible record.
+              Record the per-event result for the lab. CMS advises rotating PT samples among testing personnel, and 42 CFR §493.801(b)(1) requires testing by personnel who routinely perform the test. Capturing tested_by here builds the record.
             </div>
           </div>
 
