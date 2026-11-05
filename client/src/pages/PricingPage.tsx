@@ -141,7 +141,7 @@ return (
             Simple annual pricing. No hidden fees. No long-term contracts.
           </p>
           <p className="text-muted-foreground text-base max-w-2xl mx-auto leading-relaxed">
-            Choose the plan that fits your lab's size and complexity. Suite plans are set up with our team on a short call.
+            Choose the plan that fits your lab. Suite plans are set up with our team on a short call.
           </p>
         </div>
       </section>
