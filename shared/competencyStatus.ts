@@ -41,6 +41,74 @@ export function itemElementStatus(item: any, el: number): ElStatus {
 }
 
 /**
+ * Unmarked entries (Michael 2026-11-05, Q179 = 1). A stored row has no "failed" mark: passed = 0 is every row's default, so
+ * an element with data and no Pass is "fail" above only because nobody has marked it. On a SIGNED row that is its real
+ * result and stays. On an unsigned row it reads Needs review, for everyone who sees it. No stored value changes.
+ */
+export const NEEDS_REVIEW = "needs_review";
+export type WorkingStatus = ElStatus | typeof NEEDS_REVIEW;
+export const NEEDS_REVIEW_LABEL = "Needs review";
+
+/** An unsigned element's status as people read it. Only for working rows, never a signed set. */
+export function workingElementStatus(st: ElStatus | "none"): WorkingStatus {
+  if (st === "none") return "incomplete";
+  return st === "fail" ? NEEDS_REVIEW : st;
+}
+
+/** Elements not yet marked Pass or N/A: what stands between a method and a Pass sign-off. */
+export function unmarkedElements(elements: Array<{ num: number; status: string }>): number[] {
+  return (elements || []).filter((e) => e.status !== "pass" && e.status !== "na").map((e) => Number(e.num));
+}
+
+const elementList = (nums: number[]): string =>
+  nums.length === 1 ? `Element ${nums[0]} is` : `Elements ${nums.slice(0, -1).join(", ")} and ${nums[nums.length - 1]} are`;
+
+/**
+ * Why a method can't be signed as a Pass, or null when it can. The server refuses with this text and the sign form shows the
+ * same text before anyone tries. Fail and Remediation Required are still allowed: that is how an evaluator records someone
+ * who didn't pass.
+ */
+export function methodPassProblem(methodName: string, elements: Array<{ num: number; status: string }>): string | null {
+  const open = unmarkedElements(elements);
+  if (!open.length) return null;
+  return `${methodName} can't be signed as a Pass yet: ${elementList(open)} not marked Pass or N/A. Mark ${open.length === 1 ? "it" : "them"} and save, or choose Fail or Remediation Required.`;
+}
+
+/**
+ * The same rule for the whole-record Sign & Complete on a program record, whose overall status was chosen on its form.
+ * Technical: every unsigned element row marked Pass or N/A. Waived: the required methods passed and dated. Non-technical
+ * records have no element marks, so this doesn't apply to them. A record signed on paper and entered with no rows at all
+ * (paperNoEntries) has no entries to review.
+ */
+export function recordPassProblem(programType: string | null | undefined, items: any[], opts: { paperNoEntries?: boolean } = {}): string | null {
+  const rows = items || [];
+  if (opts.paperNoEntries && rows.length === 0) return null;
+  const fix = "Mark them and save, or change the overall determination to Fail or Remediation Required.";
+  if (programType === "waived") {
+    const passed = new Set(rows.filter((r) => waivedMethodPassed(r)).map((r) => Number(r.waived_method_number ?? r.method_number))).size;
+    if (passed >= WAIVED_METHODS_REQUIRED) return null;
+    return `This record can't be signed as a Pass yet: ${passed} of ${WAIVED_METHODS_REQUIRED} required waived methods are passed and dated. ${fix}`;
+  }
+  if (programType !== "technical") return null;
+  const open = new Map<string, number[]>();
+  for (const r of rows) {
+    if (r.signoff_id != null || r.waived_method_number != null) continue;
+    const el = Number(r.element_number ?? r.method_number);
+    if (!Number.isInteger(el) || el < 1 || el > 8) continue;
+    const st = itemElementStatus(r, el);
+    if (st === "pass" || st === "na") continue;
+    const name = String(r.method_group_name || r.item_label || "Test");
+    open.set(name, [...(open.get(name) || []), el]);
+  }
+  if (!open.size) return null;
+  const shown = Array.from(open.entries()).map(([name, nums]) => {
+    const sorted = nums.slice().sort((a, b) => a - b);
+    return `${name} (Element${sorted.length === 1 ? "" : "s"} ${sorted.length === 1 ? sorted[0] : `${sorted.slice(0, -1).join(", ")} and ${sorted[sorted.length - 1]}`})`;
+  }).join("; ");
+  return `This record can't be signed as a Pass yet, because these aren't marked Pass or N/A: ${shown}. ${fix}`;
+}
+
+/**
  * Aggregate an element across every method-group row for that element number
  * (the summary shows one row per element across all tests). Incomplete wins:
  * if any test's cell for this element lacks data (and is not N/A), the element
