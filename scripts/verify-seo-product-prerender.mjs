@@ -50,23 +50,18 @@ const PRODUCTS = [
 // the batch-1 era (renderProductivityCalculatorContent). /veritabench is a legacy
 // slug that renders VeritaPace: its h1, useSEO title and hero all say VeritaPace.
 // A "VeritaBench is..." block there would publish a product identity the page
-// itself contradicts. OperationsPage.tsx MODULES is the authoritative route map.
+// itself contradicts. VeritaAssurePage.tsx OPERATIONS_MODULES is the authoritative route map.
 // Case 4b below pins BOTH halves: the absence at /veritabench and the presence
 // at /calculator, so this cannot be re-misread as an open TODO.
 
-// The two hub pages. Neither is a PRODUCTS row, for reasons the shapes differ:
-//   /veritaassure IS the suite. Its node is the "+1" in the Case 3 count, and it
-//     correctly carries NO isPartOf (the other ten are isPartOf IT). Adding it to
-//     PRODUCTS would both break that count and assert an isPartOf that must not
-//     exist.
-//   /operations has NO node at all. It is a hub, not a product, and every node
-//     added to the suite graph is a node the stock host has to filter. Prerender
-//     only. A PRODUCTS row would assert a node and fail.
+// The suite page is not a PRODUCTS row. /veritaassure IS the suite. Its node is
+// the "+1" in the Case 3 count, and it correctly carries NO isPartOf (the other
+// ten are isPartOf IT). Adding it to PRODUCTS would both break that count and
+// assert an isPartOf that must not exist.
 const SUITE = { route: "/veritaassure", fn: "renderVeritaAssureContent", id: "#veritaassure", mark: "VeritaAssure", features: 10 };
-const HUB = { route: "/operations", fn: "renderOperationsContent", mark: "VeritaAssure" };
 
 // Batch 7. The two pages that sell the consultant, not the software. No schema
-// node: same reasoning as HUB, they are not products. They are listed separately
+// node, because they are not products. They are listed separately
 // from PRODUCTS because a PRODUCTS row asserts a SoftwareApplication node.
 //
 // These exist because batches 3 and 4 made every product page crawlable while
@@ -79,7 +74,7 @@ const CONSULTING = [
 ];
 
 console.log("\nCase 1: every product page has a prerender function AND is wired into injectSeoTags");
-for (const p of [...PRODUCTS, SUITE, HUB, ...CONSULTING]) {
+for (const p of [...PRODUCTS, SUITE, ...CONSULTING]) {
   check(`${p.route}: ${p.fn}() is defined`, new RegExp(`function ${p.fn}\\(\\)`).test(staticSrc));
   // The wiring is what actually puts it in the response. A defined-but-unwired
   // function is the silent failure this catches: the page stays a ~520-char shell.
@@ -146,10 +141,14 @@ console.log("\nCase 3b: the suite node itself (#veritaassure), which is the '+1'
   }
 }
 
-console.log("\nCase 3c: /operations is prerender-only and stays out of the graph");
+console.log("\nCase 3c: /operations 301s to /veritaassure, so it has no prerender, no metadata and no node");
 {
-  // Deliberate. Asserted so a later batch does not "complete the pattern" by
-  // adding a node for a page that is a hub, not a product.
+  const serverIndex = readFileSync(new URL("../server/index.ts", import.meta.url), "utf8");
+  const seoMeta = readFileSync(new URL("../server/seo-metadata.ts", import.meta.url), "utf8");
+  check("/operations: 301 to /veritaassure is in server/index.ts",
+    /app\.get\('\/operations'[^\n]*redirect\(301, '\/veritaassure'\)/.test(serverIndex));
+  check("/operations: no prerender wired", !/routePath === "\/operations"/.test(staticSrc));
+  check("/operations: no SEO metadata entry", !/^\s*"\/operations":\s*\{/m.test(seoMeta));
   check("/operations: no #operations node in the graph",
     !graph.some((n) => typeof n["@id"] === "string" && n["@id"].endsWith("#operations")));
 }
@@ -167,10 +166,9 @@ console.log("\nCase 4: copy guardrails on EVERY product block and featureList");
   // this is the narrow version for the copy these blocks add.
   const DATED = /\b(TJC|CAP|AABB|COLA)\b[^.]{0,40}\b(20\d\d|19\d\d)\b|\b(20\d\d|19\d\d)\s+(edition|manual)\b/i;
 
-  // Includes SUITE and HUB: the guardrails apply to every block that ships, not
-  // just the ten product ones. HUB has no id, so its featureList lookup is a
-  // no-op and only the block half of the guardrails applies to it.
-  for (const p of [...PRODUCTS, SUITE, HUB, ...CONSULTING]) {
+  // Includes SUITE: the guardrails apply to every block that ships, not just the
+  // ten product ones.
+  for (const p of [...PRODUCTS, SUITE, ...CONSULTING]) {
     const block = bodyOf(p.fn);
     const node = p.id ? graph.find((n) => n["@id"]?.endsWith(p.id)) : undefined;
     const fl = JSON.stringify(node?.featureList || []);
@@ -190,7 +188,7 @@ console.log("\nCase 4: copy guardrails on EVERY product block and featureList");
   // Cross-product marks appearing inside another product's copy.
   check("/veritastaff block marks VeritaMap", /VeritaMap&#174;/.test(bodyOf("renderVeritaStaffContent")));
   check("/veritatrack block marks VeritaMap", /VeritaMap&#174;/.test(bodyOf("renderVeritaTrackContent")));
-  check("/veritapt block marks VeritaScan", /VeritaScan&#174;/.test(bodyOf("renderVeritaPTContent")));
+  check("/veritapt block marks VeritaMap", /VeritaMap&#174;/.test(bodyOf("renderVeritaPTContent")));
 }
 
 console.log("\nCase 4c: the consulting pages state the credential faithfully");
@@ -239,7 +237,7 @@ console.log("\nCase 4b: VeritaBench lives at /calculator; /veritabench is a lega
   // (App.tsx: `<Route path="/veritabench" component={VeritaPacePage} />`). Read the
   // page that actually serves the slug, not the old filename.
   const pace = readFileSync(new URL("../client/src/pages/VeritaPacePage.tsx", import.meta.url), "utf8");
-  const ops = readFileSync(new URL("../client/src/pages/OperationsPage.tsx", import.meta.url), "utf8");
+  const ops = readFileSync(new URL("../client/src/pages/VeritaAssurePage.tsx", import.meta.url), "utf8");
 
   // The route map, straight from the page that owns it.
   const routeOf = (label) => {
@@ -247,8 +245,8 @@ console.log("\nCase 4b: VeritaBench lives at /calculator; /veritabench is a lega
     const before = ops.slice(0, i);
     return (before.match(/href: "([^"]+)"/g) || []).pop()?.match(/"([^"]+)"/)?.[1];
   };
-  check("OperationsPage maps VeritaBench to /calculator", routeOf("VeritaBench") === "/calculator", `got ${routeOf("VeritaBench")}`);
-  check("OperationsPage maps VeritaPace to /veritabench", routeOf("VeritaPace") === "/veritabench", `got ${routeOf("VeritaPace")}`);
+  check("VeritaAssurePage maps VeritaBench to /calculator", routeOf("VeritaBench") === "/calculator", `got ${routeOf("VeritaBench")}`);
+  check("VeritaAssurePage maps VeritaPace to /veritabench", routeOf("VeritaPace") === "/veritabench", `got ${routeOf("VeritaPace")}`);
 
   // Presence: VeritaBench's real page ships a block.
   check("VeritaBench's page (/calculator) IS prerendered", /routePath === "\/calculator"[\s\S]{0,80}renderProductivityCalculatorContent\(\)/.test(staticSrc));
