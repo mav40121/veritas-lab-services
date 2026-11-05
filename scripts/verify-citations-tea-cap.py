@@ -31,9 +31,7 @@ HELD = "ANP|CHM|COM|CYP|DRA|GEN|HEM|IMM|MIC|POC|TRM|URN"
 ID_RE = re.compile(r"\b((?:" + HELD + r")\.\d{5})\b")
 
 # Numbers still in the repo that belong to another fix group's file. Printed as OPEN, not failed, and named in the report.
-KNOWN_OPEN = {
-    "GEN.54500": "client/src/pages/VeritaCompPage.tsx:47, non-technical competency badge; no CAP item names non-technical competency",
-}
+KNOWN_OPEN = {}
 
 CHEM, IMMU, ENDO, TOX, HEME, IH = "§493.931", "§493.927", "§493.933", "§493.937", "§493.941", "§493.959"
 PN = "±2 dilutions or positive or negative"

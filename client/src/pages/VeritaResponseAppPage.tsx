@@ -292,10 +292,10 @@ export default function VeritaResponseAppPage() {
         <ClipboardList size={48} className="mx-auto mb-4 text-[#006064]" />
         <h2 className="text-2xl font-bold mb-2">VeritaResponse&trade;</h2>
         <p className="text-muted-foreground mb-6">
-          Post-survey deficiency response is available on all paid plans. Upgrade to manage findings, due-date clocks, and corrective-action drafting.
+          Post-survey deficiency response is included in Clinic ($999/yr) and above. Upgrade to manage findings, due-date clocks, and corrective-action drafting.
         </p>
         <Button asChild className="bg-[#006064] hover:bg-[#004d50] text-white">
-          <Link href={labRoute("/account/settings")}>Upgrade Plan</Link>
+          <Link href={user ? labRoute("/account/settings") : "/pricing"}>{user ? "Upgrade Plan" : "See plans"}</Link>
         </Button>
       </div>
     );

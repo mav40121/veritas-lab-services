@@ -22,7 +22,7 @@ const check = (name, cond, detail = "") => { console.log(`${cond ? "PASS" : "FAI
 
 // Plan wall marker per page (what a non-entitled user sees).
 const PAGES = [
-  ["VeritaPT", "veritapt/app", "PT coverage analysis is available on all paid plans"],
+  ["VeritaPT", "veritapt/app", "PT coverage analysis is included in Clinic"],
   ["VeritaScan", "veritascan-app", "VeritaScan® Access Required"],
   ["VeritaResponse", "veritaresponse", "Upgrade Plan"],
   ["VeritaComp", "veritacomp-app", "VeritaComp™ Access Required"],

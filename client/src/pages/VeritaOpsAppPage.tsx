@@ -4,6 +4,7 @@
 // server calculation already support them so they can be exposed without
 // data migration when v2 lands.
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { Link } from "wouter";
 import { useAuth } from "@/components/AuthContext";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { useSEO } from "@/hooks/useSEO";
@@ -753,7 +754,11 @@ export default function VeritaOpsAppPage() {
       <div className="container mx-auto py-20 px-4 text-center">
         <Lock size={40} className="text-muted-foreground mx-auto mb-4" />
         <h2 className="font-serif text-2xl font-bold mb-2">Sign in to use VeritaOps</h2>
-        <p className="text-muted-foreground">Cost-per-reportable-test studies for your lab menu.</p>
+        <p className="text-muted-foreground mb-6">Cost-per-reportable-test studies for your lab menu.</p>
+        <div className="flex flex-wrap gap-3 justify-center">
+          <Button asChild><Link href="/login">Sign in</Link></Button>
+          <Button asChild variant="outline"><Link href="/demo/cprt">See the CPRT demo</Link></Button>
+        </div>
       </div>
     );
   }
@@ -761,7 +766,7 @@ export default function VeritaOpsAppPage() {
     return (
       <div className="container mx-auto py-20 px-4 text-center">
         <Lock size={40} className="text-muted-foreground mx-auto mb-4" />
-        <h2 className="font-serif text-2xl font-bold mb-2">VeritaOps requires a paid plan</h2>
+        <h2 className="font-serif text-2xl font-bold mb-2">VeritaOps requires a Clinic plan or above</h2>
         <p className="text-muted-foreground">Upgrade your subscription to use cost-per-test analysis.</p>
       </div>
     );
@@ -805,9 +810,9 @@ export default function VeritaOpsAppPage() {
       <ModuleHowToCard
         moduleKey="veritaops"
         moduleName="VeritaOps™"
-        whatItDoes="VeritaOps runs Cost-Per-Reportable-Test (CPRT) studies in the four-layer GP11-A structure. L1 reagents and supplies, L2 + direct labor, L3 + equipment depreciation, L4 + indirect overhead. Each layer answers a different finance question: L2 is insource versus send-out, L3 is capital justification, L4 is charge-master pricing. Side-by-side comparison and a one-page PDF your finance team can read without translation."
+        whatItDoes="VeritaOps runs Cost-Per-Reportable-Test (CPRT) studies in a four-layer structure built on the cost accounting principles in CLSI GP11-A. L1 reagents and supplies, L2 + direct labor, L3 + equipment depreciation, L4 + indirect overhead. Each layer answers a different finance question: L2 is insource versus send-out, L3 is capital justification, L4 is charge-master pricing. Side-by-side comparison and a one-page PDF your finance team can read without translation."
         howToUse={[
-          "Click New CPRT Study and pick an archetype (high-volume chemistry, low-volume send-out, POCT, manual coag) or start blank.",
+          "Click New CPRT Study and pick a template (high-volume chemistry, hematology CBC, manual differential, send-out) or start blank.",
           "Enter your reagent cost, calibrator and QC cadence, labor minutes and loaded hourly rate, equipment cost and useful life, and overhead.",
           "Toggle which layers to enable; L1 through L4 recompute live as you type.",
           "Select two studies and click Compare to see them side-by-side. Match layer enablement on both sides for an honest comparison.",
@@ -912,11 +917,6 @@ export default function VeritaOpsAppPage() {
           )}
         </CardContent>
       </Card>
-
-      {/* What's coming next */}
-      <div className="mt-4 text-xs text-muted-foreground">
-        <strong>v1 feature-complete:</strong> all four CPRT layers, PDF export, side-by-side comparison, and starter templates are live. Verify script and additional polish ship in subsequent updates.
-      </div>
 
       <StudyDialog
         open={showForm}

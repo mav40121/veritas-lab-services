@@ -343,7 +343,7 @@ export default function VeritaStaffAppPage() {
     return (
       <div className="container-default py-20 text-center">
         <Lock size={40} className="text-muted-foreground mx-auto mb-4" />
-        <h2 className="font-serif text-2xl font-bold mb-2">VeritaStaff{"™"} requires a Professional plan or above</h2>
+        <h2 className="font-serif text-2xl font-bold mb-2">VeritaStaff{"™"} requires a Clinic plan or above</h2>
         <p className="text-muted-foreground mb-6">Upgrade your subscription to access personnel management features.</p>
         <Button asChild><Link href="/veritastaff">Learn More</Link></Button>
       </div>
@@ -488,7 +488,7 @@ export default function VeritaStaffAppPage() {
       <ModuleHowToCard
         moduleKey="veritastaff"
         moduleName="VeritaStaff™"
-        whatItDoes="VeritaStaff is the personnel roster with CLIA role assignments (Laboratory Director, Technical Consultant, Technical Supervisor, General Supervisor, Testing Personnel) and specialty tracking. Auto-generates the CMS 209 Laboratory Personnel Report."
+        whatItDoes="VeritaStaff is the personnel roster with CLIA role assignments (Laboratory Director, Clinical Consultant, Technical Consultant, Technical Supervisor, General Supervisor, Testing Personnel) and specialty tracking. Auto-generates the CMS 209 Laboratory Personnel Report."
         howToUse={[
           "Add each staff member with their CLIA role, qualifications, and assigned specialties.",
           "Update credentials, license expirations, and training records as they change.",

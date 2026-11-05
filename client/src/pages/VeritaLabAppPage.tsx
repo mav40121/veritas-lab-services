@@ -409,7 +409,7 @@ export default function VeritaLabAppPage() {
       <div className="min-h-[60vh] flex flex-col items-center justify-center text-center px-4">
         <Users size={40} className="text-muted-foreground mb-4" />
         <h2 className="font-serif text-2xl font-bold mb-2">Upgrade to access VeritaLab{"™"}</h2>
-        <p className="text-muted-foreground mb-6 max-w-md">VeritaLab™ is included in all VeritaAssure® plans. Subscribe to get started.</p>
+        <p className="text-muted-foreground mb-6 max-w-md">VeritaLab™ is included in Clinic ($999/yr) and above. Subscribe to get started.</p>
         <Button asChild size="lg" className="bg-primary hover:bg-primary/90">
           <Link href="/veritacheck">View Plans</Link>
         </Button>
@@ -436,7 +436,7 @@ export default function VeritaLabAppPage() {
         <ModuleHowToCard
           moduleKey="veritalab"
           moduleName="VeritaLab™"
-          whatItDoes="VeritaLab tracks every laboratory certificate and accreditation: CLIA, CAP, TJC, COLA, state laboratory licenses, lab director credentials. Automated email reminders fire at 9 months, 6 months, 3 months, 30 days, and at expiration. Document archive holds the certificate PDF for every cert on the roster."
+          whatItDoes="VeritaLab tracks every laboratory certificate and accreditation: CLIA, CAP, TJC, ISO 15189, state laboratory licenses, lab director licenses, and vendor agreements, with COLA and others under Other. Automated email reminders fire at 9 months, 6 months, 3 months, 30 days, and at expiration. Document archive holds the certificate PDF for every cert on the roster."
           howToUse={[
             "Add each certificate with its issuing body, certificate number, issue date, and expiration date.",
             "Upload the certificate PDF to the document archive against the cert.",

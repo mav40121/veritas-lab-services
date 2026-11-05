@@ -109,7 +109,7 @@ export function computeStudyResults(study: Study): StudyResults {
     const { specimens, refLow, refHigh, analyte, units } = rawDataPoints;
     results = calculateRefInterval(specimens, refLow, refHigh, analyte || study.testName, units || "");
   } else if (study.studyType === "carryover") {
-    // CLSI EP10-A3 carryover: walk specimens in test order, classify each
+    // CLSI EP10 carryover: walk specimens in test order, classify each
     // Low specimen by predecessor type, compute mean/SD for LL and LH
     // pools, return the same results shape the server's buildCarryoverHTML
     // expects (added in PR #477). The shape is the authoritative reference
