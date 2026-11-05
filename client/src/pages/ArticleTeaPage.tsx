@@ -290,7 +290,7 @@ return (
               <div className="font-semibold text-sm">Michael Veri</div>
               <div className="text-xs text-muted-foreground mb-1">Owner, Veritas Lab Services, LLC · Former Joint Commission Laboratory Surveyor · CPHQ</div>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                Michael Veri is a US Army veteran with 22 years of military leadership, former Joint Commission Laboratory Surveyor with 200+ facility inspections, and CPHQ-certified healthcare quality professional. He is the developer of VeritaCheck®, VeritaScan®, and VeritaMap®, available at veritaslabservices.com.
+                Michael Veri is a US Army veteran with 23 years of Army Reserve service, former Joint Commission Laboratory Surveyor with 200+ facility inspections, and CPHQ-certified healthcare quality professional. He is the developer of VeritaCheck®, VeritaScan®, and VeritaMap®, available at veritaslabservices.com.
               </p>
             </div>
           </div>

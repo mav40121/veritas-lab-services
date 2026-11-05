@@ -20,7 +20,7 @@ const stats = [
   { value: "200+", label: "Facilities surveyed" },
   { value: "18", label: "Software Modules" }, // eighteen: 12 compliance + 6 operations (CLAUDE.md copy rules)
   { value: "173", label: "Compliance items tracked" },
-  { value: "22 yrs", label: "Industry experience" },
+  { value: "23 yrs", label: "Industry experience" },
 ];
 
 export default function HomePage() {

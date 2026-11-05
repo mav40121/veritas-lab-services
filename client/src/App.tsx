@@ -225,7 +225,7 @@ function SiteFooter() {
                 <li><a href="/veritastaff" className="hover:text-primary transition-colors">VeritaStaff™: Personnel Management</a></li>
                 <li><a href="/veritalab" className="hover:text-primary transition-colors">VeritaLab™: Certificate Tracking</a></li>
                 <li><a href="/veritadc" className="hover:text-primary transition-colors">VeritaDC™: Policy and Document Control</a></li>
-                <li><a href="/book" className="hover:text-primary transition-colors">Lab Management 101: New Book</a></li>
+                <li><a href="/book" className="hover:text-primary transition-colors">Lab Management 101: Forthcoming Book</a></li>
                 <li><a href="/study-guide" className="hover:text-primary transition-colors">Study Guide: Which study do I need?</a></li>
                 <li><a href="https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">CLIA Regulations (eCFR)</a></li>
                 <li><a href="https://www.cms.gov/medicare/quality/clinical-laboratory-improvement-amendments/brochures" target="_blank" rel="noopener noreferrer" className="hover:text-primary transition-colors">CLIA Brochures (CMS)</a></li>

@@ -73,7 +73,7 @@ const serviceGroups = [
           "Identification of inefficiencies from staffing gaps, outdated processes, or resource misallocation",
           "Customized analysis reports with clear, actionable recommendations",
           "C-suite communication support: data-driven staffing rationales",
-          "Authored by Michael Veri, MS, MBA, MLS(ASCP), CPHQ, author of Lab Management 101: A Guide to Laboratory Leadership",
+          "Authored by Michael Veri, MS, MBA, MLS(ASCP), CPHQ, author of the forthcoming Lab Management 101: A Guide to Laboratory Leadership",
         ],
         cta: "Start a productivity analysis",
       },
@@ -184,8 +184,8 @@ export default function ServicesPage() {
           <p className="text-muted-foreground text-lg max-w-2xl leading-relaxed mb-4">
             Led by Michael Veri, MS, MBA, MLS(ASCP), CPHQ. Former TJC Laboratory
             Surveyor with over 200 surveys conducted nationally, former
-            clinical laboratory director of 12 years, and author of Lab
-            Management 101.
+            clinical laboratory director of 12 years, and author of the
+            forthcoming Lab Management 101.
           </p>
           <p className="text-muted-foreground text-base max-w-2xl leading-relaxed">
             Compliance is not a once-a-year event. It is the daily discipline
@@ -240,11 +240,12 @@ export default function ServicesPage() {
             </div>
             <div className="sm:col-span-2 space-y-4">
               <p className="text-muted-foreground leading-relaxed">
-                Michael Veri spent 12 years as a clinical laboratory director
-                before becoming a TJC Laboratory Surveyor, where he conducted
-                over 200 surveys at hospitals, reference laboratories, and
-                outpatient centers across the country. He is a US Army retiree.
-                He holds an MS, an MBA, MLS(ASCP) certification, and the
+                Michael Veri has been a lab tech since 2003, and still is. Twelve
+                of those years were as a clinical laboratory director and four as
+                a TJC Laboratory Surveyor, where he conducted over 200 surveys at
+                hospitals, reference laboratories, and outpatient centers across
+                the country. He retired from the US Army Reserve after 23 years of
+                service. He holds an MS, an MBA, MLS(ASCP) certification, and the
                 Certified Professional in Healthcare Quality credential.
               </p>
               <p className="text-muted-foreground leading-relaxed">
@@ -253,9 +254,9 @@ export default function ServicesPage() {
                 brand. Whether the work is a mock TJC inspection ahead of your
                 next visit, a productivity analysis that has to defend its
                 staffing rationale to your CFO, or interim director coverage
-                while you search, you have direct access to a peer who has run
-                the bench, sat in the director's chair, and asked the
-                surveyor's questions for a living.
+                while you search, you have direct access to a peer who has been a
+                lab tech since 2003, has sat in the director's chair, and has
+                asked the surveyor's questions for a living.
               </p>
               <div className="grid sm:grid-cols-2 gap-3 pt-2">
                 <div className="flex items-center gap-2">
@@ -274,12 +275,12 @@ export default function ServicesPage() {
                   <BookOpen size={16} className="text-primary shrink-0" />
                   <span className="text-sm">
                     Author, Lab Management 101: A Guide to Laboratory
-                    Leadership
+                    Leadership (forthcoming)
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Shield size={16} className="text-primary shrink-0" />
-                  <span className="text-sm">US Army retiree</span>
+                  <span className="text-sm">US Army Reserve retiree, 23 years of service</span>
                 </div>
               </div>
             </div>
