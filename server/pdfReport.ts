@@ -2793,7 +2793,7 @@ function errorIndexSVG(
 
 // ─── Difference Plot SVG (for Lot-to-Lot) ────────────────────────────────────
 function differencePlotSVG(
-  specimens: number[], pctDiffs: number[], tea: number, w = 320, h = 220
+  specimens: number[], pctDiffs: number[], tea: number, w = 320, h = 220, title = "Difference Plot"
 ): string {
   if (!specimens.length) return `<svg width="${w}" height="${h}"></svg>`;
   const ml = 48, mr = 16, mt = 28, mb = 36;
@@ -2815,7 +2815,7 @@ function differencePlotSVG(
   }).join("");
 
   return `<svg width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg" style="background:#f8fafc;border:1px solid #cdd1d6;border-radius:4px">
-  <text x="${w / 2}" y="16" text-anchor="middle" font-size="10" font-weight="600" fill="#14141e">Difference Plot</text>
+  <text x="${w / 2}" y="16" text-anchor="middle" font-size="10" font-weight="600" fill="#14141e">${title}</text>
   <rect x="${ml}" y="${mt}" width="${pw}" height="${ph}" fill="white" stroke="#cdd1d6" stroke-width="0.5"/>
   ${grid}${zeroLine}${upper}${lower}${dots}
   <text x="${ml + pw / 2}" y="${h - 4}" text-anchor="middle" font-size="9" fill="#646e78">Specimen Number</text>
@@ -3783,16 +3783,18 @@ function buildSensitivityHTML(study: Study, results: any): string {
   </body></html>`;
 }
 
-function buildLotToLotHTML(study: Study, results: any): string {
+export function buildLotToLotHTML(study: Study, results: any): string {
   const instrumentNames: string[] = safeJsonParse(study.instruments) || [];
   const rawData = safeJsonParse(study.dataPoints) || {};
   const teaPct = (study.cliaAllowableError * 100).toFixed(1);
 
   // Split cohort sections: page 1 gets charts + compact summary, page 2 gets full data tables
-  // Compress chart heights when there are 2 cohorts so director sign-off block fits on page 1
+  // Compress the charts when there are 2 cohorts so the director review block stays on page 1 (CLAUDE.md §5). The rows
+  // lose their "Normal Cohort" headings too, and the chart titles carry the cohort. scripts/verify-multi-analyzer-signature-page1.ts guards this.
   const cohortCount = (results.cohorts || []).length;
-  const chartW = cohortCount >= 2 ? 280 : 320;
-  const chartH = cohortCount >= 2 ? 150 : 220;
+  const twoCohorts = cohortCount >= 2;
+  const chartW = twoCohorts ? 340 : 320;
+  const chartH = twoCohorts ? 120 : 220;
   let cohortChartSections = "";
   let cohortDataSections = "";
   for (const cohort of (results.cohorts || [])) {
@@ -3803,7 +3805,7 @@ function buildLotToLotHTML(study: Study, results: any): string {
     const specimenNums = specimens.map((_: any, i: number) => i + 1);
 
     const scatter = scatterSVG(currentVals, newVals, "Current Lot", "New Lot", `${cohort.cohort} - Scatter`, true, chartW, chartH);
-    const diffPlot = differencePlotSVG(specimenNums, pctDiffs, study.cliaAllowableError, chartW, chartH);
+    const diffPlot = differencePlotSVG(specimenNums, pctDiffs, study.cliaAllowableError, chartW, chartH, twoCohorts ? `${cohort.cohort} - Difference Plot` : undefined);
 
     const dataRows = specimens.map((s: any, i: number) => {
       const pfClass = s.passFail === "Pass" ? "pass" : "fail";
@@ -3818,7 +3820,7 @@ function buildLotToLotHTML(study: Study, results: any): string {
 
     // Page 1: charts only
     cohortChartSections += `
-      <div class="section-label">${cohort.cohort} Cohort</div>
+      ${twoCohorts ? "" : `<div class="section-label">${cohort.cohort} Cohort</div>`}
       <div class="charts">${scatter}${diffPlot}</div>
     `;
 
