@@ -25,7 +25,9 @@ import {
   licenseAugmentedFooterTemplate,
   type LicenseContext,
 } from "./licenseStamp";
-import { hasCanonicalTea, cfrSectionForTestName } from "./backfillAbsoluteFloor";
+import { cfrSectionForTestName } from "./backfillAbsoluteFloor";
+import { criterionStanding, teaLabelFor } from "@shared/regulatedAnalytes";
+import { CLIA_TEA_TABLE_ECFR_DATE } from "../client/src/lib/cliaTeaData";
 import { evaluateManualDiff } from "./rumke";
 import { evaluateHeparinRange, normalizeHeparinInput, heparinRangeNarrative, heparinRangeChartSVG } from "@shared/heparinRange";
 import { setPdfContent } from "./pdfContent";
@@ -45,26 +47,38 @@ function escapeHtml(s: string): string {
 }
 
 // ─── Acceptance-criterion wording helpers (parking-lot #1) ───────────────────
-// For analytes with a canonical 42 CFR §493 Subpart I PT criterion, narratives
-// say "adopted ... CLIA TEa" and cite §493. For analytes without one (Lipase,
-// Vitamin D 25-OH, Bilirubin Direct/Unbound, Iron Sat, Procalcitonin, and any
-// other test not in the canonical teaData list), the acceptance criterion is
-// laboratory-defined per the lab director or designee, and citing a §493 PT
-// number that does not exist is a real compliance error. These helpers keep
-// the two phrasings co-located.
-function criterionLabel(testName: string): string {
-  return hasCanonicalTea(testName) ? "CLIA TEa" : "Lab-Set Internal Goal";
+// shared/regulatedAnalytes.ts decides what a study's criterion is; these keep
+// the phrasings co-located. A study that holds a Subpart I analyte's criterion
+// says "adopted ... CLIA TEa" and cites §493. Anything else is laboratory-defined
+// per the lab director or designee, and citing a §493 PT number that does not
+// apply is a real compliance error. Saying "no criterion exists" of an analyte
+// that has one is the same error, so each of the three lab-set cases says only
+// what is true of it:
+//   - a Subpart I analyte holding another number: names the CLIA criterion
+//   - an analyte known to have none (Lipase, Vitamin D, Procalcitonin): says so
+//   - a name that matched nothing: says it was not matched, and no more
+type StudyCriterion = Parameters<typeof criterionStanding>[1];
+function criterionLabel(testName: string, study: StudyCriterion): string {
+  return teaLabelFor(testName, study);
 }
-function criterionAdjective(testName: string): string {
-  return hasCanonicalTea(testName) ? "adopted" : "laboratory-defined";
+function criterionAdjective(testName: string, study: StudyCriterion): string {
+  return criterionStanding(testName, study).kind === "clia_tea" ? "adopted" : "laboratory-defined";
 }
-function criterionSourcePhrase(testName: string, cfrAdoptedUnder: string): string {
-  return hasCanonicalTea(testName)
-    ? `§493 PT TEa for this analyte; adopted under ${cfrAdoptedUnder}`
-    : `Lab-Set Internal Goal per laboratory director or designee policy; no canonical CLIA PT criterion exists for this analyte under 42 CFR §493 Subpart I`;
+function criterionSourcePhrase(testName: string, cfrAdoptedUnder: string, study: StudyCriterion): string {
+  const standing = criterionStanding(testName, study);
+  switch (standing.kind) {
+    case "clia_tea":
+      return `§493 PT TEa for this analyte; adopted under ${cfrAdoptedUnder}`;
+    case "lab_set_regulated":
+      return `Lab-Set Internal Goal per laboratory director or designee policy; the CLIA PT criterion for this analyte is ${standing.row.criteria} under ${standing.section}`;
+    case "lab_set_not_regulated":
+      return `Lab-Set Internal Goal per laboratory director or designee policy; no canonical CLIA PT criterion exists for this analyte under 42 CFR §493 Subpart I`;
+    case "lab_set_not_matched":
+      return `Lab-Set Internal Goal per laboratory director or designee policy; this test name was not matched to a CLIA PT criterion in 42 CFR §493 Subpart I`;
+  }
 }
-function criterionAuthorityPhrase(testName: string, cfrSection: string): string {
-  return hasCanonicalTea(testName)
+function criterionAuthorityPhrase(testName: string, cfrSection: string, study: StudyCriterion): string {
+  return criterionStanding(testName, study).kind === "clia_tea"
     ? `per ${cfrSection}`
     : `per laboratory director or designee policy`;
 }
@@ -917,16 +931,23 @@ function supportingPageHTML(study: Study, instrumentNames: string[], agreement?:
   const cfr = (study as any).cfr || cfrSectionForTestName(study.testName);
   const cfrUrl = CFR_URLS[cfr] || "https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-I/section-493.931";
 
-  const isCanonical = hasCanonicalTea(study.testName);
+  const standing = criterionStanding(study.testName, study as any);
+  const isCanonical = standing.kind === "clia_tea";
   const criterionRowLabel = isCanonical
     ? "Adopted Acceptance Criterion (TEa)"
-    : "Lab-Set Internal Goal (no CLIA TEa)";
+    : standing.kind === "lab_set_not_regulated"
+    ? "Lab-Set Internal Goal (no CLIA TEa)"
+    : "Lab-Set Internal Goal";
   const cfrReferenceLabel = isCanonical
     ? "CFR Reference (PT TEa, adopted)"
     : "Source";
   const cfrReferenceValue = isCanonical
     ? `<a href="${cfrUrl}" class="teal-link">${cfr}</a>`
-    : "Laboratory-defined per director or designee policy. No CLIA PT criterion exists for this analyte under 42 CFR §493 Subpart I.";
+    : standing.kind === "lab_set_regulated"
+    ? `Laboratory-defined per director or designee policy. CLIA PT criterion for this analyte: ${standing.row.criteria} (<a href="${CFR_URLS[standing.section] || cfrUrl}" class="teal-link">${standing.section}</a>).`
+    : standing.kind === "lab_set_not_regulated"
+    ? "Laboratory-defined per director or designee policy. No CLIA PT criterion exists for this analyte under 42 CFR §493 Subpart I."
+    : "Laboratory-defined per director or designee policy. This test name was not matched to a CLIA PT criterion in 42 CFR §493 Subpart I.";
   // Append the picked CLIA preset name to the criterion row so a preset
   // crosswire (e.g. picking pCO2 8% / 5 mm Hg thinking it was Carbon Dioxide
   // 20%) is visible at report-review time. Customer report 2026-06-04.
@@ -1306,39 +1327,14 @@ const REGULATORY_REFS: Record<StudyTypeKey, RegulatoryRefs> = {
 // in the regulatory box, which is correct for a CLIA-only lab.
 const DEFAULT_PREFERRED_STANDARDS: AccreditationBody[] = [];
 
-// ─── TEa audit freshness loader ──────────────────────────────────────────────
-// Reads the artifact written by script/teaCanonicalRenderAudit.ts at build
-// time. Falls back to the bundle build date if the artifact is unavailable.
-let _teaAuditCache: { verifiedAt: string | null; loaded: boolean } = { verifiedAt: null, loaded: false };
-function getTeaAuditVerifiedAt(): string | null {
-  if (_teaAuditCache.loaded) return _teaAuditCache.verifiedAt;
-  _teaAuditCache.loaded = true;
-  const candidates = [
-    _teaResolve(process.cwd(), "dist", "data", "tea_audit.json"),
-    _teaResolve(process.cwd(), "server", "data", "tea_audit.json"),
-  ];
-  for (const p of candidates) {
-    try {
-      if (_teaExistsSync(p)) {
-        const raw = _teaReadFileSync(p, "utf-8");
-        const j = JSON.parse(raw);
-        if (j && j.verifiedAt) {
-          _teaAuditCache.verifiedAt = String(j.verifiedAt);
-          return _teaAuditCache.verifiedAt;
-        }
-      }
-    } catch {
-      /* keep trying */
-    }
-  }
-  return null;
-}
+// ─── TEa list freshness line ─────────────────────────────────────────────────
+// The list every PDF label now reads is the full Subpart I table in
+// client/src/lib/cliaTeaData.ts, and this is the day that table was compared
+// with the eCFR. It used to print a date from tea_audit.json, which the build
+// stamped when the short list's row count changed; that audit compares the
+// renderer with the list and never read the CFR.
 function teaAuditFreshnessLine(): string {
-  const ts = getTeaAuditVerifiedAt();
-  if (!ts) return "";
-  // Format YYYY-MM-DD from ISO timestamp.
-  const date = ts.slice(0, 10);
-  return `<div style="margin-top:6px;padding-top:4px;border-top:1px dashed #D4D1CA;font-size:6.5pt;color:#888;">Canonical TEa list verified against 42 CFR \u00A7493 on ${date}.</div>`;
+  return `<div style="margin-top:6px;padding-top:4px;border-top:1px dashed #D4D1CA;font-size:6.5pt;color:#888;">Canonical TEa list verified against 42 CFR \u00A7493 on ${CLIA_TEA_TABLE_ECFR_DATE}.</div>`;
 }
 
 function regulatoryComplianceBoxHTML(studyType: string, preferredStandards?: AccreditationBody[] | null): string {
@@ -1443,10 +1439,10 @@ function narrativeHTML(
     // BUG-058: two or more analyzers. Count the levels once (totalCount is levels x analyzers) and describe each analyzer
     // instead of the mean of all analyzers, which can hide one analyzer's error behind another's.
     const unit = ((study as any)?.teaUnit || (study as any)?.tea_unit || "").trim();
-    const calAdj = criterionAdjective(analyteName);
-    const calSource = criterionSourcePhrase(analyteName, "42 CFR §493.1255(b)(3) and §493.1253(b)(2)");
-    const calAuthority = criterionAuthorityPhrase(analyteName, cfrSection);
-    const calLabel = criterionLabel(analyteName);
+    const calAdj = criterionAdjective(analyteName, study);
+    const calSource = criterionSourcePhrase(analyteName, "42 CFR §493.1255(b)(3) and §493.1253(b)(2)", study);
+    const calAuthority = criterionAuthorityPhrase(analyteName, cfrSection, study);
+    const calLabel = criterionLabel(analyteName, study);
     const nLevels = (results.levelResults || []).length;
     const failing: string[] = [];
     let worstPct = -1, worstName = "";
@@ -1488,10 +1484,10 @@ function narrativeHTML(
         ? `a small positive constant offset of ${sf(Math.abs(interceptVal), 3)} units at low concentrations`
         : `a small negative constant offset of ${sf(Math.abs(interceptVal), 3)} units at low concentrations`;
 
-    const calAdj = criterionAdjective(analyteName);
-    const calSource = criterionSourcePhrase(analyteName, "42 CFR §493.1255(b)(3) and §493.1253(b)(2)");
-    const calAuthority = criterionAuthorityPhrase(analyteName, cfrSection);
-    const calLabel = criterionLabel(analyteName);
+    const calAdj = criterionAdjective(analyteName, study);
+    const calSource = criterionSourcePhrase(analyteName, "42 CFR §493.1255(b)(3) and §493.1253(b)(2)", study);
+    const calAuthority = criterionAuthorityPhrase(analyteName, cfrSection, study);
+    const calLabel = criterionLabel(analyteName, study);
     if (results.overallPass) {
       narrative = `All ${results.totalCount} calibration levels for ${analyteName} fell within the ${calAdj} calibration verification acceptance criterion of ${teaStr} (${calSource}). `;
       // ADLM "half of CLIA TEa" goal is a percentage concept; omit it for absolute-TEa
@@ -1517,10 +1513,10 @@ function narrativeHTML(
     // BUG-056: two or more comparison analyzers. Describe each against the primary instead of only the first.
     const comps = Object.keys(results.levelResults[0].instruments);
     const unit = (study as any)?.teaUnit || (study as any)?.tea_unit || "";
-    const mcAdj = criterionAdjective(analyteName);
-    const mcSource = criterionSourcePhrase(analyteName, "42 CFR §493.1253(b)(2)");
-    const mcAuthority = criterionAuthorityPhrase(analyteName, cfrSection);
-    const mcLabel = criterionLabel(analyteName);
+    const mcAdj = criterionAdjective(analyteName, study);
+    const mcSource = criterionSourcePhrase(analyteName, "42 CFR §493.1253(b)(2)", study);
+    const mcAuthority = criterionAuthorityPhrase(analyteName, cfrSection, study);
+    const mcLabel = criterionLabel(analyteName, study);
     const failing: string[] = [];
     let nPairs = 0;
     const lines = comps.map((n) => {
@@ -1563,10 +1559,10 @@ function narrativeHTML(
     const biasDescr = isAbsolute
       ? `${meanBiasAbs >= 0 ? "+" : ""}${sf(meanBiasAbs, 2)} ${(study as any)?.teaUnit || (study as any)?.tea_unit || ''}`
       : `${meanBiasPct >= 0 ? "+" : ""}${sf(meanBiasPct, 1)}%`;
-    const mcAdj = criterionAdjective(analyteName);
-    const mcSource = criterionSourcePhrase(analyteName, "42 CFR §493.1253(b)(2)");
-    const mcAuthority = criterionAuthorityPhrase(analyteName, cfrSection);
-    const mcLabel = criterionLabel(analyteName);
+    const mcAdj = criterionAdjective(analyteName, study);
+    const mcSource = criterionSourcePhrase(analyteName, "42 CFR §493.1253(b)(2)", study);
+    const mcAuthority = criterionAuthorityPhrase(analyteName, cfrSection, study);
+    const mcLabel = criterionLabel(analyteName, study);
 
     const biasInterp = isAbsolute
       ? (Math.abs(meanBiasAbs) <= cliaError
@@ -1601,10 +1597,10 @@ function narrativeHTML(
     const meetsAdlm = maxCV <= cliaError * 50;
     const isAdvanced = results.mode === "advanced";
 
-    const prAdj = criterionAdjective(analyteName);
-    const prSource = criterionSourcePhrase(analyteName, "42 CFR §493.1253(b)(2)(ii)");
-    const prAuthority = criterionAuthorityPhrase(analyteName, cfrSection);
-    const prLabel = criterionLabel(analyteName);
+    const prAdj = criterionAdjective(analyteName, study);
+    const prSource = criterionSourcePhrase(analyteName, "42 CFR §493.1253(b)(2)(ii)", study);
+    const prAuthority = criterionAuthorityPhrase(analyteName, cfrSection, study);
+    const prLabel = criterionLabel(analyteName, study);
     // Methodology note prepended to both pass and fail narratives so the
     // printed report names the path (Simple aggregate CV vs Advanced EP15
     // ANOVA) and surfaces the CV formula. Cites CLSI EP15-A3 alongside
@@ -1873,9 +1869,9 @@ export function buildCalVerCorrelationHTML(study: Study, results: CalVerCorrelat
 
   // Narrative: accuracy per analyzer, agreement per comparison, two determinations, the material, final approval.
   const cfrSection = (study as any)?.cfr || cfrSectionForTestName((study as any)?.testName);
-  const adj = criterionAdjective(analyte);
-  const label = criterionLabel(analyte);
-  const authority = criterionAuthorityPhrase(analyte, cfrSection);
+  const adj = criterionAdjective(analyte, study);
+  const label = criterionLabel(analyte, study);
+  const authority = criterionAuthorityPhrase(analyte, cfrSection, study);
   let narrative = `${levels.length} known-value samples for ${analyte} were run on ${names.length} analyzers. `;
   if (!absolute) {
     // ADLM "half of CLIA TEa" goal is a percentage concept; omitted for absolute-TEa analytes.
@@ -2972,7 +2968,7 @@ function buildAccuracyBiasHTML(study: Study, results: any): string {
       <div class="stat-item"><div class="stat-label">Levels</div><div class="stat-value">${levels.length}</div></div>
       <div class="stat-item"><div class="stat-label">Max % Recovery</div><div class="stat-value">${sf(maxRecovery, 2)}%</div></div>
       <div class="stat-item"><div class="stat-label">Min % Recovery</div><div class="stat-value">${sf(minRecovery, 2)}%</div></div>
-      <div class="stat-item"><div class="stat-label">CLIA TEa</div><div class="stat-value">${teaPctTxt}${(study as any).cliaPresetLabel ? ` (${(study as any).cliaPresetLabel})` : ""}</div></div>
+      <div class="stat-item"><div class="stat-label">${criterionLabel(study.testName, study)}</div><div class="stat-value">${teaPctTxt}${(study as any).cliaPresetLabel ? ` (${(study as any).cliaPresetLabel})` : ""}</div></div>
       <div class="stat-item"><div class="stat-label">Result</div><div class="stat-value ${passClass}">${verdictText}</div></div>
     </div>`;
 
@@ -3422,7 +3418,7 @@ function buildLinearityHTML(study: Study, results: any): string {
       <div class="stat-item"><div class="stat-label">Intercept</div><div class="stat-value">${sf(intercept, 3)}</div></div>
       <div class="stat-item"><div class="stat-label">r²</div><div class="stat-value">${sf(r2, 4)}</div></div>
       <div class="stat-item"><div class="stat-label">|Slope - 1|</div><div class="stat-value">${sf(slopeBiasPct, 2)}%</div></div>
-      <div class="stat-item"><div class="stat-label">CLIA TEa</div><div class="stat-value">±${teaPctTxt}${(study as any).cliaPresetLabel ? ` (${(study as any).cliaPresetLabel})` : ""}</div></div>
+      <div class="stat-item"><div class="stat-label">${criterionLabel(study.testName, study)}</div><div class="stat-value">±${teaPctTxt}${(study as any).cliaPresetLabel ? ` (${(study as any).cliaPresetLabel})` : ""}</div></div>
       <div class="stat-item"><div class="stat-label">Result</div><div class="stat-value ${passClass}">${verdictText}</div></div>
     </div>`;
 
@@ -3553,7 +3549,7 @@ function buildReportableRangeHTML(study: Study, results: any): string {
       <div class="stat-item"><div class="stat-label">Analyte</div><div class="stat-value">${analyte}${units ? " (" + units + ")" : ""}</div></div>
       <div class="stat-item"><div class="stat-label">Claimed Reportable Range</div><div class="stat-value">${claimedRangeTxt}</div></div>
       <div class="stat-item"><div class="stat-label">Levels Tested</div><div class="stat-value">${levels.length}</div></div>
-      <div class="stat-item"><div class="stat-label">CLIA TEa</div><div class="stat-value">${teaPctTxt}${(study as any).cliaPresetLabel ? ` (${(study as any).cliaPresetLabel})` : ""}</div></div>
+      <div class="stat-item"><div class="stat-label">${criterionLabel(study.testName, study)}</div><div class="stat-value">${teaPctTxt}${(study as any).cliaPresetLabel ? ` (${(study as any).cliaPresetLabel})` : ""}</div></div>
       <div class="stat-item"><div class="stat-label">Result</div><div class="stat-value ${passClass}">${verdictText}</div></div>
     </div>`;
 
@@ -3844,10 +3840,10 @@ export function buildLotToLotHTML(study: Study, results: any): string {
 
   const l2lTeaStr = teaDisplayStr(study);
   const l2lCfr = (study as any).cfr || cfrSectionForTestName(study.testName);
-  const l2lAdj = criterionAdjective(study.testName);
-  const l2lLabel = criterionLabel(study.testName);
-  const l2lAuthority = criterionAuthorityPhrase(study.testName, l2lCfr);
-  const l2lSource = criterionSourcePhrase(study.testName, "42 CFR §493.1253(b)(2)");
+  const l2lAdj = criterionAdjective(study.testName, study);
+  const l2lLabel = criterionLabel(study.testName, study);
+  const l2lAuthority = criterionAuthorityPhrase(study.testName, l2lCfr, study);
+  const l2lSource = criterionSourcePhrase(study.testName, "42 CFR §493.1253(b)(2)", study);
   // The lot-to-lot pass rule (calculations.ts:821) requires both: mean absolute
   // percent difference within TEa AND at least 90% of paired specimens within
   // TEa. The narrative must describe the actual rule; a prior wording said "All
@@ -4091,10 +4087,10 @@ function buildPTCoagHTML(study: Study, results: any): string {
   const narrativeText = results.summary;
   const ptCoagTeaStr = teaDisplayStr(study);
   const ptCoagCfr = (study as any).cfr || "42 CFR \u00A7493.941";
-  const ptCoagAdj = criterionAdjective(study.testName);
-  const ptCoagLabel = criterionLabel(study.testName);
-  const ptCoagAuthority = criterionAuthorityPhrase(study.testName, ptCoagCfr);
-  const ptCoagSource = criterionSourcePhrase(study.testName, "42 CFR §493.1253(b)(2)");
+  const ptCoagAdj = criterionAdjective(study.testName, study);
+  const ptCoagLabel = criterionLabel(study.testName, study);
+  const ptCoagAuthority = criterionAuthorityPhrase(study.testName, ptCoagCfr, study);
+  const ptCoagSource = criterionSourcePhrase(study.testName, "42 CFR §493.1253(b)(2)", study);
   const ptCoagCliaStatement = results.overallPass
     ? `<b>Each module was individually evaluated against the ${ptCoagAdj} acceptance criterion (${ptCoagLabel}) of ${ptCoagTeaStr} ${ptCoagAuthority} (${ptCoagSource}). All modules satisfied this criterion.</b> Final approval and clinical determination must be made by the laboratory director or designee.`
     : `<b>Each module was individually evaluated against the ${ptCoagAdj} acceptance criterion (${ptCoagLabel}) of ${ptCoagTeaStr} ${ptCoagAuthority} (${ptCoagSource}). One or more modules did not satisfy this criterion; see the module results for details.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;

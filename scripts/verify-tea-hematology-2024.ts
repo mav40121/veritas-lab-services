@@ -4,7 +4,8 @@
 // UNCHANGED ones stayed put.
 //
 // Run: node_modules/.bin/tsx scripts/verify-tea-hematology-2024.ts
-import { teaData, hasCanonicalTea } from "../client/src/lib/cliaTeaData";
+import { teaData } from "../client/src/lib/cliaTeaData";
+import { hasCanonicalTea } from "../shared/regulatedAnalytes";
 
 let fail = 0;
 function check(name: string, cond: boolean, detail?: string) {
