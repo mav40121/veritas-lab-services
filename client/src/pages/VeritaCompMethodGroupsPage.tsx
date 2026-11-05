@@ -2,8 +2,9 @@
 //
 // VeritaComp settings: method groups (2026-10-14, Michael Q166/Q168 = 1; mock approved). The lab's one list of which
 // analyzers share a competency. Every analyzer is its own method until the lab groups it; VeritaComp only suggests
-// (same make and model family on VeritaMap) and never groups on its own. A group needs one complexity and no manual
-// methods (shared/competencyGrouping.ts, re-checked on the server). Splitting a group keeps each analyzer's sign-offs.
+// (same make and model family on VeritaMap) and never groups on its own. A group needs one complexity, and manual methods
+// group only with other manual methods (shared/competencyGrouping.ts, re-checked on the server). Splitting a group keeps
+// each analyzer's sign-offs.
 //   GET/POST /api/labs/:labId/competency/method-groups, PUT/DELETE .../:groupId, POST .../keep-separate
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
@@ -65,9 +66,10 @@ export default function VeritaCompMethodGroupsPage() {
     } finally { setBusy(null); }
   };
 
-  const free = (data?.instruments || []).filter((i) => i.groupId == null && !i.manual);
+  const free = (data?.instruments || []).filter((i) => i.groupId == null);
   const pickedInsts = free.filter((i) => picked.includes(i.id));
   const pickProblem = useMemo(() => (pickedInsts.length ? groupProblem(pickedInsts) : null), [pickedInsts]);
+  const pickedAllManual = pickedInsts.length >= 2 && pickedInsts.every((i) => i.manual);
   const depts = Array.from(new Set(free.map((i) => i.category || "Other")));
   const labRoute = (p: string) => (activeLabId ? `/labs/${activeLabId}${p}` : p);
 
@@ -79,7 +81,7 @@ export default function VeritaCompMethodGroupsPage() {
       <div>
         <h1 className="text-2xl font-bold">Method groups</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Each analyzer is its own method until you group it. Group analyzers only when staff need no new or unique skills to move between them; one competency and one sign-off then cover the whole group.
+          Each analyzer and manual test is its own method until you group it. Group them only when staff need no new or unique skills to move between them; one competency and one sign-off then cover the whole group.
         </p>
       </div>
       {isLoading && <div className="text-sm text-muted-foreground py-8 text-center">Loading...</div>}
@@ -112,12 +114,13 @@ export default function VeritaCompMethodGroupsPage() {
 
           <Card data-testid="lab-groups"><CardContent className="p-4 space-y-2">
             <span className="font-semibold text-sm">Your groups ({data.groups.length})</span>
-            {data.groups.length === 0 && <p className="text-xs text-muted-foreground">No groups yet. Every analyzer is its own method.</p>}
+            {data.groups.length === 0 && <p className="text-xs text-muted-foreground">No groups yet. Every analyzer and manual test is its own method.</p>}
             {data.groups.map((g) => (
               <div key={g.id} className="rounded-md border p-2.5 flex items-center justify-between gap-3 flex-wrap" data-testid="lab-group">
                 <div>
                   <div className="text-sm font-medium flex items-center gap-2">{g.name} <Badge className="text-[10px] bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300">GROUP</Badge></div>
                   <div className="text-[11px] text-muted-foreground">{g.members.map((m) => m.name).join(", ")} &middot; {g.members[0]?.category || "Other"} &middot; {cx(g.members[0]?.complexity || "")} &middot; {g.people} {g.people === 1 ? "person" : "people"}{g.createdBy ? ` · grouped ${labLocaleDate(g.createdAt)} by ${g.createdBy}` : ""}</div>
+                  {g.members.length > 0 && g.members.every((m) => m.manual) && <div className="text-[11px] text-muted-foreground" data-testid="manual-group-statement">Manual tests: the medical director or designee decided these involve no new or unique skills.</div>}
                 </div>
                 {!readOnly && (
                   <div className="flex items-center gap-2">
@@ -148,18 +151,23 @@ export default function VeritaCompMethodGroupsPage() {
                       <label key={i.id} className="flex items-center gap-2 text-xs cursor-pointer">
                         <input type="checkbox" className="w-3.5 h-3.5" checked={picked.includes(i.id)} data-testid="pick-instrument"
                           onChange={(e) => setPicked((p) => (e.target.checked ? [...p, i.id] : p.filter((x) => x !== i.id)))} />
-                        <span>{i.name}</span><span className="text-muted-foreground">{cx(i.complexity)}</span>
+                        <span>{i.name}</span><span className="text-muted-foreground">{i.manual ? "Manual, " : ""}{cx(i.complexity)}</span>
                       </label>
                     ))}
                   </div>
                 </div>
               ))}
               {pickProblem && pickedInsts.length >= 2 && <p className="text-xs text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded px-2 py-1.5" data-testid="group-problem">Can't group: {pickProblem}</p>}
+              {pickedAllManual && !pickProblem && (
+                <p className="text-xs bg-muted rounded px-2 py-1.5" data-testid="manual-group-note">
+                  You are grouping manual tests. One competency and one sign-off will cover all of them. By grouping them, the medical director or designee is deciding that they involve no new or unique skills.
+                </p>
+              )}
               <div className="flex items-center gap-2 flex-wrap">
-                <Input className="h-8 text-xs w-56" placeholder="Group name, e.g. the analyzer model" value={newName} onChange={(e) => setNewName(e.target.value)} data-testid="new-group-name" />
+                <Input className="h-8 text-xs w-56" placeholder="Group name, e.g. Rapid kits" value={newName} onChange={(e) => setNewName(e.target.value)} data-testid="new-group-name" />
                 <Button size="sm" disabled={busy != null || pickedInsts.length < 2 || !!pickProblem || !newName.trim()} data-testid="create-group"
                   onClick={async () => { if (await call("new", "POST", "", { name: newName, instrumentIds: picked }, `Grouped ${newName}`)) { setPicked([]); setNewName(""); } }}>Create group</Button>
-                <span className="text-[11px] text-muted-foreground">Manual methods (manual differential, tube method, microscopy) are not listed: they keep their own competency.</span>
+                <span className="text-[11px] text-muted-foreground">Manual tests can only be grouped with other manual tests, never with an analyzer.</span>
               </div>
             </CardContent></Card>
           )}

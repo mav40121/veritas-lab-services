@@ -7,7 +7,10 @@
 // groups (same make and model family); it never groups anything on its own. Two limits come from the unique-skills
 // rule (reference: "a different platform or a manual method brings unique skills"; BUG-043):
 //   - analyzers in a group share the same complexity (a waived device keeps its own competency);
-//   - a manual method (manual differential, tube method, microscopy, smears, stains) never joins a group.
+//   - a manual method (manual differential, tube method, microscopy, smears, stains, rapid kits) never joins an analyzer's
+//     group. It can be grouped with other manual methods (Michael 2026-11-04): that is the lab's medical director or
+//     designee deciding they involve no new or unique skills, and the screen says so. No analyzer's sign-off ever credits
+//     a manual method (BUG-043), and manual methods are never suggested.
 
 export interface GroupableInstrument { id: number; name: string; category: string | null; complexity: string }
 
@@ -47,16 +50,17 @@ export function sameFamily(a: string, b: string): boolean {
 
 // Why a set of analyzers cannot be grouped, or null when it can.
 export function groupProblem(members: GroupableInstrument[]): string | null {
-  if (members.length < 2) return "A group needs at least two analyzers.";
+  if (members.length < 2) return "A group needs at least two methods.";
   const manual = members.find((m) => isManualMethod(m.name, m.category));
-  if (manual) return `${manual.name} is a manual method; a manual method keeps its own competency.`;
+  const analyzer = members.find((m) => !isManualMethod(m.name, m.category));
+  if (manual && analyzer) return `${manual.name} is a manual method and ${analyzer.name} is an analyzer; a manual method can only be grouped with other manual methods.`;
   const cx = new Set(members.map((m) => String(m.complexity || "").toUpperCase()));
   if (cx.size > 1) {
     const waived = members.find((m) => String(m.complexity).toUpperCase() === "WAIVED");
-    if (waived) return `${waived.name} is waived and the others are not; a waived device keeps its own competency.`;
-    return "These analyzers have different complexity; a group needs one complexity.";
+    if (waived) return `${waived.name} is waived and the others are not; a waived device or test keeps its own competency.`;
+    return "These have different complexity; a group needs one complexity.";
   }
-  if (cx.has("UNSPECIFIED")) return "Set each analyzer's complexity in VeritaMap before grouping.";
+  if (cx.has("UNSPECIFIED")) return "Set each method's complexity in VeritaMap before grouping.";
   return null;
 }
 
