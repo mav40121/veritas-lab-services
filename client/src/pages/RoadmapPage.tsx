@@ -56,7 +56,7 @@ const completedItems: RoadmapItem[] = [
   {
     title: "VeritaDC™ - Policy and Document Control",
     description:
-      "A document control system for the lab: manage policies, procedures, and forms with version history, director approval, and periodic reviews. Tracks the policies required under CLIA (42 CFR 493) and crosswalks each one to your accrediting body: CAP, COLA, TJC, or AABB. Service line toggles auto-apply N/A, and one document satisfies multiple requirements. Readiness score with an inspector-ready PDF report.",
+      "A document control system for the lab: manage policies, procedures, and forms with version history, director approval, and periodic reviews. Tracks the policies required under CLIA (42 CFR 493) and crosswalks each one to your accrediting body: CAP, COLA, TJC, or AABB. Mark any requirement N/A, and enter the same policy name against every requirement it covers. Readiness score with an inspector-ready PDF report.",
   },
   {
     title: "VeritaComp™ - Competency Assessment Management",
