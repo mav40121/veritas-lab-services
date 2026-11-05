@@ -28,9 +28,9 @@ test.describe("Collateral drift Batch A: corrected copy on public pages", () => 
     expect(t).not.toContain("190+");
   });
 
-  test("study guide advertises fourteen study types", async ({ page }) => {
+  test("study guide names the main study types", async ({ page }) => {
     const t = await bodyText(page, "/study-guide");
-    expect(t).toContain("fourteen study types");
+    expect(t).toContain("main study types");
     expect(t).not.toContain("eleven study types");
   });
 
