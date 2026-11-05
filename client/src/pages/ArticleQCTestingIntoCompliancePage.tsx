@@ -80,7 +80,7 @@ export default function ArticleQCTestingIntoCompliancePage() {
               <ul className="space-y-2 text-sm leading-relaxed list-disc pl-5">
                 <li>A control is a sensor, not a hurdle. An out-of-range result is information the laboratory asked for.</li>
                 <li>Repeating a control until it passes, with no documented investigation, is testing into compliance. United States v. Barr Laboratories settled that line in 1993.</li>
-                <li>Set control limits from your own instrument's mean and standard deviation, never the package insert range. CLSI C24 is explicit on this.</li>
+                <li>Set control limits from your own instrument's mean and standard deviation rather than the package insert range. CLIA permits a verified stated value, but CLSI C24 recommends your own data.</li>
                 <li>Match the quality control to each method's sigma. One rule set across the menu over-controls strong methods and under-controls weak ones.</li>
                 <li>Under CLIA, hold patient results until controls pass (42 CFR §493.1256) and document the corrective action (42 CFR §493.1282). The record, not the clean chart, protects the laboratory.</li>
               </ul>
@@ -126,7 +126,7 @@ export default function ArticleQCTestingIntoCompliancePage() {
             </p>
             <p>
               CLIA frames this as a requirement, not a courtesy. Under 42 CFR §493.1256, the laboratory must run control procedures that monitor
-              the accuracy and precision of the complete analytic process, must establish its own criteria for acceptable control performance,
+              the accuracy and precision of the complete analytic process, must establish or verify the criteria for acceptable control performance,
               and must not report patient results from a run until the controls meet those criteria. The companion standard, 42 CFR §493.1282,
               then requires the laboratory to take and document corrective action whenever control materials fail to meet that criteria. Read
               together, the regulations do not say repeat the control until it agrees with you. They say hold the patient results, investigate,
@@ -167,12 +167,13 @@ export default function ArticleQCTestingIntoCompliancePage() {
               </li>
               <li>
                 If an assignable cause is found and corrected, document the cause and the corrective action, then rerun controls to confirm the
-                system is back in control before resuming patient testing.
+                system is back in control before resuming patient testing. Evaluate all patient results obtained in the unacceptable run and since
+                the last acceptable run to determine whether they were adversely affected (42 CFR §493.1282(b)(2)).
               </li>
               <li>
                 If no assignable cause is found, the result stands as a real signal. The laboratory cannot keep repeating until a passing value
-                appears. The next steps are broader troubleshooting, recalibration, or manufacturer support, and patient results from the affected
-                period may need review.
+                appears. The next steps are broader troubleshooting, recalibration, or manufacturer support. The evaluation of patient results in step 3
+                applies here too.
               </li>
             </ol>
             <p>
@@ -239,8 +240,8 @@ export default function ArticleQCTestingIntoCompliancePage() {
             <p>
               A number makes the stakes concrete, as an illustration rather than a universal rule. Take an assay with a ten percent total allowable
               error. At two percent bias and two percent imprecision its sigma is four, a method that a single control rule and two levels can keep
-              safe. Let the imprecision drift to three percent and the sigma falls to roughly two and a half, into the territory where one rule no
-              longer protects the patient and the laboratory needs a multirule design, the Westgard rules, with more controls and tighter review.
+              safe. Let the imprecision drift to three percent and the sigma falls to about 2.7, below the point where QC alone keeps it safe, and the
+              laboratory needs a multirule design, the Westgard rules, with more controls, tighter review, and a hard look at the method itself.
               Same allowable error, same instrument, a completely different quality control requirement, driven entirely by how the method actually
               performs. Those three inputs, the allowable error, the bias, and the imprecision, are the same figures a verification study produces,
               the ones VeritaCheck® derives from precision and comparison studies, which is what lets a laboratory set its quality control to the
