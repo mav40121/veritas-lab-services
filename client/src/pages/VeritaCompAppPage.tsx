@@ -96,7 +96,7 @@ import { CompetencyBulkImportDialog } from "@/components/CompetencyBulkImportDia
 import { WaivedSpecimenRows } from "@/components/WaivedSpecimenRows";
 import { cleanWaivedSpecimens, waivedSpecimenColumns, waivedSpecimensFromRow, WAIVED_BLIND_METHOD, type WaivedSpecimen } from "@shared/competencyWaivedSpecimens";
 import { CompetencyCohortSignoffDialog } from "@/components/CompetencyCohortSignoffDialog";
-import { aggregateElementStatus, incompleteElementCells, type ElStatus } from "@shared/competencyStatus";
+import { aggregateElementStatus, incompleteElementCells, recordPassProblem, type ElStatus } from "@shared/competencyStatus";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -701,7 +701,7 @@ function complexityChipClass(c: string): string {
 // One row of GET /api/labs/:labId/competency/by-instrument (same shape VeritaCompByInstrumentPage reads).
 interface RosterInstrument {
   instrumentId: number; instrumentName: string; department: string | null; complexity: string | null;
-  people: number; signed: number; ready: number; overdue: number;
+  people: number; signed: number; ready: number; needsReview?: number; overdue: number;
   groupId?: number | null; groupMembers?: Array<{ id: number; name: string }> | null;
 }
 
@@ -775,6 +775,7 @@ function EmployeeRosterSection() {
                       <span className="text-[11px] text-muted-foreground">{r.people} {r.people === 1 ? "person" : "people"}</span>
                       <span className={`text-[11px] ${done ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400"}`}>{r.signed} of {r.people} signed</span>
                       {r.ready > 0 && <span className="text-[11px] text-teal-700 dark:text-teal-400">{r.ready} ready to sign</span>}
+                      {(r.needsReview ?? 0) > 0 && <span className="text-[11px] text-amber-700 dark:text-amber-400">{r.needsReview} {r.needsReview === 1 ? "needs" : "need"} review</span>}
                       {r.overdue > 0 && <span className="text-[11px] text-rose-700 dark:text-rose-400">{r.overdue} overdue</span>}
                     </>
                   )}
@@ -2858,11 +2859,15 @@ function AssessmentsTab({ program, onNewAssessment, onEdit }: { program: Program
       (program.type === "technical" && (aItems.length === 0 || incompleteElementCells(aItems, coveredGroups, compElementCount).length > 0)) ||
       (program.type === "nontechnical" && (aItems.length === 0 || aItems.some((i) => !i.passed)))
     );
-    const passColor = inProgress ? "text-amber-700 bg-amber-500/10 border-amber-500/30" :
+    // Michael Q179 = 1: the overall status on an unsigned record is what its form says; entries nobody has marked read Needs review
+    // and block a Pass sign-off (the server's own rule and text, recordPassProblem).
+    const passBlock = !locked && !inProgress && a.status === "pass" ? recordPassProblem(program.type, aItems) : null;
+    const passColor = inProgress || passBlock ? "text-amber-700 bg-amber-500/10 border-amber-500/30" :
       a.status === "pass" ? "text-emerald-600 bg-emerald-500/10 border-emerald-500/20" :
       a.status === "fail" ? "text-red-600 bg-red-500/10 border-red-500/20" :
       "text-amber-600 bg-amber-500/10 border-amber-500/20";
     const passLabel = inProgress ? "In progress"
+      : passBlock ? "Needs review"
       : program.record_kind === "evaluation" ? (a.status === "pass" ? "Satisfactory" : a.status === "fail" ? "Unsatisfactory" : "Improvement plan")
       : a.status === "pass" ? "Pass" : a.status === "fail" ? "Fail" : "Remediation";
     return (
@@ -2891,6 +2896,9 @@ function AssessmentsTab({ program, onNewAssessment, onEdit }: { program: Program
                   {a.remediation_plan && (
                     <div className="text-xs text-amber-600 mt-1">Remediation: {a.remediation_plan}</div>
                   )}
+                  {passBlock && !isReadOnly && (
+                    <div className="text-xs text-amber-800 dark:text-amber-300 mt-1" data-testid="record-pass-blocked">{passBlock}</div>
+                  )}
                 </div>
                 <div className="flex flex-wrap items-center gap-1 sm:shrink-0" data-testid="assessment-card-actions">
                   {(a as any).locked !== 1 && !isReadOnly && (
@@ -2914,6 +2922,10 @@ function AssessmentsTab({ program, onNewAssessment, onEdit }: { program: Program
                             description: `Every element for every test needs data or N/A first. Still open: ${missing}`,
                             variant: "destructive",
                           });
+                          return;
+                        }
+                        if (passBlock) {
+                          toast({ title: "Cannot sign as a Pass", description: passBlock, variant: "destructive" });
                           return;
                         }
                         setSignTarget({ id: a.id, employeeName: a.employee_name, assessmentDate: a.assessment_date });
@@ -3058,13 +3070,14 @@ function AssessmentsTab({ program, onNewAssessment, onEdit }: { program: Program
                                 : (scoredItems.every((i: AssessmentItem) => i.passed) ? "PASS" : "FAIL");
                           } else {
                             const st: ElStatus | "none" = aggregateElementStatus(a.items || [], el.num);
-                            statusLabel = st === "pass" ? "PASS" : st === "fail" ? "FAIL" : st === "na" ? "N/A" : "Incomplete";
+                            // Michael Q179 = 1: this record isn't signed, so data with no Pass hasn't failed; nobody has marked it.
+                            statusLabel = st === "pass" ? "PASS" : st === "fail" ? "Needs review" : st === "na" ? "N/A" : "Incomplete";
                           }
                           const badgeClass = statusLabel === "PASS"
                             ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px]"
                             : statusLabel === "FAIL"
                               ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 text-[10px]"
-                              : statusLabel === "Incomplete"
+                              : statusLabel === "Incomplete" || statusLabel === "Needs review"
                                 ? "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 text-[10px]"
                                 : "bg-muted text-muted-foreground text-[10px]";
                           return (
@@ -4117,9 +4130,6 @@ function NewAssessmentDialog({
     }
   }
 
-  // Check if any element fails (exclude N/A elements)
-  const anyFails = Object.values(techData).some(d => !d.passed && !d.el1_na && !d.el2_na && !d.el3_na && !d.el4_na && !d.el5_na && !d.el6_na && !d.el7_na && !d.el8_na && (d.el1_specimen_id || d.el2_evidence || d.el3_qc_date || d.el4_date_observed || d.el5_sample_id || d.el6_quiz_id || d.el7_date_observed || d.el8_function_assessed));
-
   // Check if any N/A element is missing justification
   function getMissingNaJustifications(): string[] {
     const missing: string[] = [];
@@ -5063,8 +5073,9 @@ function NewAssessmentDialog({
             </div>
           )}
 
-          {/* ── Remediation (show only if any element fails) ── */}
-          {(status === "fail" || status === "remediation" || anyFails) && (
+          {/* ── Remediation: only when the evaluator chose it. An entry with no Pass yet isn't a failure (Michael Q179 = 1), and the plan
+              was only ever saved for a Remediation status, so this box was asking for something it threw away. ── */}
+          {(status === "fail" || status === "remediation") && (
             <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
               <p className="text-xs text-amber-700 dark:text-amber-400 font-medium mb-2">
                 This employee requires additional training and may not perform patient testing unsupervised until remediation is complete.

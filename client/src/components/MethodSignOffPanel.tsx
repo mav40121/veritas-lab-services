@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader2, CheckCircle2, AlertTriangle, ChevronDown, ChevronUp } from "lucide-react";
 import { MILESTONE_LABEL, MONTH_NAMES, initialsOf, milestonesForComplexity, type MethodMilestone, type SignerOption } from "@shared/competencySignoff";
+import { NEEDS_REVIEW } from "@shared/competencyStatus";
 import SignedEntries from "@/components/SignedEntries";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 
@@ -41,9 +42,14 @@ export interface MethodSignoff {
 }
 export interface MethodSignState {
   instrumentId: number; instrumentName: string; complexity: string; waived?: boolean;
-  signable: boolean; complete: boolean; hasData: boolean; fromLegacyProgram?: boolean;
+  // signable: a sign-off of some kind can be recorded (Fail and Remediation Required allow unmarked entries). readyToSign: it can be
+  // signed as a Pass. needsReview: complete but with entries nobody has marked. passBlockMessage: why a Pass is refused, the
+  // server's own text (Michael Q179 = 1).
+  signable: boolean; readyToSign?: boolean; needsReview?: boolean; passBlockMessage?: string | null;
+  complete: boolean; hasData: boolean; fromLegacyProgram?: boolean;
   signoffs: MethodSignoff[]; lastSignoff: MethodSignoff | null; needsRemediation?: boolean;
-  elements?: Array<{ num: number; status: string }>;
+  elements?: Array<{ num: number; status: string; samples?: Array<{ acceptable: boolean | null }> }>;
+  waivedMethods?: Array<{ num: number; name: string; status: string }>;
   nextMilestone: MethodMilestone; nextDue: { targetDate: string | null; latest: string | null; naturalTargetDate?: string | null; annualMonth?: number | null } | null;
   overdue: boolean; signedCurrent: boolean; signers: SignerOption[];
   groupId?: number | null; groupMembers?: Array<{ id: number; name: string }> | null;
@@ -71,6 +77,7 @@ export function signoffSummary(ts: MethodSignState): { label: string; tone: "gre
     return last.determination === "fail" ? { label: `${what} failed`, tone: "red" } : { label: `${what}: remediation required`, tone: "amber" };
   }
   if (last && ts.overdue) return { label: `${ts.nextMilestone ? MILESTONE_LABEL[ts.nextMilestone] : "Next"} overdue`, tone: "red" };
+  if (ts.needsReview) return { label: `${MILESTONE_LABEL[ts.nextMilestone]} needs review`, tone: "amber" };
   if (ts.signable) return { label: `${MILESTONE_LABEL[ts.nextMilestone]} ready to sign`, tone: "teal" };
   if (last) return { label: last.legacy ? `Signed ${fmt(last.signedDate)}` : `${MILESTONE_LABEL[last.milestone as MethodMilestone]} signed ${fmt(last.signedDate)}`, tone: "green" };
   if (ts.hasData) return { label: `${MILESTONE_LABEL[ts.nextMilestone]} in progress`, tone: "amber" };
@@ -93,9 +100,9 @@ export default function MethodSignOffPanel({ labId, employeeId, employeeName, ts
   const [signedDate, setSignedDate] = useState(localToday());
   const [milestone, setMilestone] = useState<MethodMilestone>(ts.nextMilestone);
   const [documentation, setDocumentation] = useState("");
-  // An element entered as failed suggests Remediation Required (the old form opened its remediation box the same way).
-  const anyFail = !!ts.elements?.some((e) => e.status === "fail");
-  const [determination, setDetermination] = useState<Determination>(anyFail ? "remediation" : "pass");
+  // Michael Q179 = 1: the evaluator chooses, every time. Nothing stored tells a failure from an entry nobody has marked (passed = 0 is
+  // every row's default), so unmarked entries no longer open this on Remediation Required, and it never opens on Pass either.
+  const [determination, setDetermination] = useState<Determination | "">("");
   const [remediationPlan, setRemediationPlan] = useState("");
   const [remediationTargetDate, setRemediationTargetDate] = useState("");
   const allowed = milestonesForComplexity(ts.complexity);
@@ -107,14 +114,19 @@ export default function MethodSignOffPanel({ labId, employeeId, employeeName, ts
     setSignedDate(localToday());
     setMilestone(ts.nextMilestone);
     setDocumentation("");
-    setDetermination(anyFail ? "remediation" : "pass");
+    setDetermination("");
     setRemediationPlan("");
     setRemediationTargetDate("");
-  }, [ts.instrumentId, employeeId, ts.nextMilestone, eligible.length, anyFail]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [ts.instrumentId, employeeId, ts.nextMilestone, eligible.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const signer = ts.signers.find((o) => optKey(o) === signerKey) || null;
   const backdated = signedDate !== localToday();
-  const notPass = determination !== "pass";
+  const notPass = determination === "fail" || determination === "remediation";
+  const passBlocked = determination === "pass" && !!ts.passBlockMessage;
+  // The one stored negative mark: a sample someone marked not acceptable. It is stated as a fact beside the choice, not chosen for them.
+  const sampleNotAcceptable = !!ts.elements?.some((e) => e.num === 5 && (e.samples || []).some((s) => s.acceptable === false));
+  // A waived method with entries but no Pass: the required-methods rule decides the Pass, so it doesn't block, but it's frozen as signed.
+  const waivedUnmarked = (ts.waivedMethods || []).filter((m) => m.status === NEEDS_REVIEW);
   const base = `${API_BASE}/api/labs/${labId}/competency/employee/${employeeId}/test-system/${ts.instrumentId}`;
 
   const sign = useMutation({
@@ -132,7 +144,7 @@ export default function MethodSignOffPanel({ labId, employeeId, employeeName, ts
       if (!r.ok) throw new Error(d?.incomplete?.length ? `${d.error} ${d.incomplete.join("; ")}` : (d.error || `HTTP ${r.status}`));
       return d;
     },
-    onSuccess: () => { toast({ title: "Signed", description: `${ts.instrumentName} ${MILESTONE_LABEL[milestone]} signed for ${firstName}: ${DETERMINATION_LABEL[determination]}.` }); onChanged(); },
+    onSuccess: () => { toast({ title: "Signed", description: `${ts.instrumentName} ${MILESTONE_LABEL[milestone]} signed for ${firstName}: ${determination ? DETERMINATION_LABEL[determination] : ""}.` }); onChanged(); },
     onError: (e: any) => toast({ title: "Could not sign", description: String(e?.message || e), variant: "destructive" }),
   });
   const unlock = useMutation({
@@ -283,12 +295,26 @@ export default function MethodSignOffPanel({ labId, employeeId, employeeName, ts
             </div>
             <div>
               <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Overall determination</label>
-              <select className={`w-full h-8 text-xs rounded-md border px-2 ${determination === "pass" ? "bg-background" : determination === "fail" ? "bg-red-50 dark:bg-red-950/30 border-red-300 dark:border-red-800" : "bg-amber-50 dark:bg-amber-950/30 border-amber-300 dark:border-amber-800"}`}
+              <select className={`w-full h-8 text-xs rounded-md border px-2 ${determination === "pass" || determination === "" ? "bg-background" : determination === "fail" ? "bg-red-50 dark:bg-red-950/30 border-red-300 dark:border-red-800" : "bg-amber-50 dark:bg-amber-950/30 border-amber-300 dark:border-amber-800"}`}
                 value={determination} data-testid="determination-select" onChange={(e) => setDetermination(e.target.value as Determination)}>
+                <option value="" disabled>Choose one</option>
                 {(["pass", "fail", "remediation"] as const).map((d) => <option key={d} value={d}>{DETERMINATION_LABEL[d]}</option>)}
               </select>
             </div>
           </div>
+          {ts.passBlockMessage && !notPass && (
+            <p className={`text-xs rounded-md border p-2 ${passBlocked ? "font-medium text-red-700 dark:text-red-300 border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/30" : "text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20"}`} data-testid="pass-blocked">
+              {ts.passBlockMessage}
+            </p>
+          )}
+          {sampleNotAcceptable && (
+            <p className="text-xs text-amber-800 dark:text-amber-300" data-testid="sample-not-acceptable">Element 5 has a sample marked not acceptable.</p>
+          )}
+          {waivedUnmarked.length > 0 && (
+            <p className="text-xs text-amber-800 dark:text-amber-300" data-testid="waived-unmarked-note">
+              {waivedUnmarked.map((m) => `Method ${m.num}`).join(" and ")} {waivedUnmarked.length === 1 ? "has an entry" : "have entries"} with no Pass. {waivedUnmarked.length === 1 ? "It doesn't" : "They don't"} count toward the required methods and will be kept on the signed record as not passed.
+            </p>
+          )}
           {notPass && (
             <div className="rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 p-2.5 space-y-2" data-testid="remediation-box">
               <p className="text-xs text-amber-700 dark:text-amber-400 font-medium">
@@ -311,8 +337,8 @@ export default function MethodSignOffPanel({ labId, employeeId, employeeName, ts
             </div>
           )}
           <div className="flex items-center gap-3 flex-wrap">
-            <Button size="sm" className="whitespace-normal h-auto min-h-8 py-1.5 text-left" onClick={() => sign.mutate()} disabled={sign.isPending || !signer?.eligible || (backdated && !documentation.trim()) || (notPass && !remediationPlan.trim())} data-testid="sign-method">
-              {sign.isPending && <Loader2 className="animate-spin mr-1" size={12} />} Sign {ts.instrumentName} {MILESTONE_LABEL[milestone].toLowerCase()} for {firstName}{notPass ? `: ${DETERMINATION_LABEL[determination]}` : ""}
+            <Button size="sm" className="whitespace-normal h-auto min-h-8 py-1.5 text-left" onClick={() => sign.mutate()} disabled={sign.isPending || !determination || passBlocked || !signer?.eligible || (backdated && !documentation.trim()) || (notPass && !remediationPlan.trim())} data-testid="sign-method">
+              {sign.isPending && <Loader2 className="animate-spin mr-1" size={12} />} Sign {ts.instrumentName} {MILESTONE_LABEL[milestone].toLowerCase()} for {firstName}{determination ? `: ${DETERMINATION_LABEL[determination]}` : ""}
             </Button>
             <span className="text-[11px] text-muted-foreground" data-testid="sign-covers">{ts.groupMembers?.length ? `Covers ${ts.groupMembers.map((m) => m.name).join(" and ")}. ` : ""}Locks this method only. {firstName}'s other methods stay open.</span>
           </div>
@@ -323,8 +349,10 @@ export default function MethodSignOffPanel({ labId, employeeId, employeeName, ts
       )}
       {showSign && !readOnly && !ts.signable && !ts.fromLegacyProgram && (
         <p className="text-[11px] text-muted-foreground" data-testid="method-not-signable">
-          {last ? `Enter the ${MILESTONE_LABEL[ts.nextMilestone].toLowerCase()} competency below when it is done; it can be signed once every element has data or N/A.`
-            : "Every element needs data or N/A (two passed methods for waived) before this method can be signed."}
+          {ts.waived
+            ? `${last ? `Enter the ${MILESTONE_LABEL[ts.nextMilestone].toLowerCase()} competency below when it is done. ` : ""}Two methods need to be marked Pass, with their dates, before this method can be signed.`
+            : last ? `Enter the ${MILESTONE_LABEL[ts.nextMilestone].toLowerCase()} competency below when it is done; it can be signed once every element has data or N/A. A Pass needs every element marked Pass or N/A.`
+            : "Every element needs data or N/A before this method can be signed. A Pass needs every element marked Pass or N/A."}
         </p>
       )}
     </div>

@@ -19,6 +19,7 @@ import { ChevronLeft, ExternalLink } from "lucide-react";
 import MethodSignOffPanel, { signoffSummary, type MethodSignState, type MethodSignoff } from "@/components/MethodSignOffPanel";
 import { MILESTONE_LABEL, type MethodMilestone } from "@shared/competencySignoff";
 import { ELEMENT_NAMES } from "@/lib/competencyElements";
+import { NEEDS_REVIEW, NEEDS_REVIEW_LABEL } from "@shared/competencyStatus";
 
 // The one or two fields worth showing at a glance per element (read-only summary).
 const ELEMENT_SUMMARY: Record<number, Array<[string, string]>> = {
@@ -55,8 +56,9 @@ function statusBadge(status: string) {
     : status === "fail" ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
     : status === "na" || status === "unused" ? "bg-muted text-muted-foreground"
     : "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300";
+  // Michael Q179 = 1: "fail" here is only ever a signed set's real result; a working row with data and no Pass is Needs review.
   const label = status === "pass" ? "PASS" : status === "fail" ? "FAIL" : status === "na" ? "N/A" : status === "unused" ? "Not used"
-    : status === "incomplete" || status === "none" ? "Incomplete" : status;
+    : status === NEEDS_REVIEW ? NEEDS_REVIEW_LABEL : status === "incomplete" || status === "none" ? "Incomplete" : status;
   return <Badge className={`text-[10px] ${cls}`} data-testid="element-status">{label}</Badge>;
 }
 
@@ -82,7 +84,8 @@ export default function VeritaCompInstrumentPage() {
   const current = activeEmp != null ? people.find((p) => p.employee.id === activeEmp) : people[0];
   const ts = current?.testSystem;
   const signedCount = people.filter((p) => p.testSystem.signedCurrent).length;
-  const readyCount = people.filter((p) => p.testSystem.signable).length;
+  const readyCount = people.filter((p) => p.testSystem.readyToSign).length;
+  const reviewCount = people.filter((p) => p.testSystem.needsReview).length;
   const refresh = () => { if (url) qc.invalidateQueries({ queryKey: [url] }); };
   // A signed person with nothing entered yet for the next competency shows the set they were signed on.
   const showSigned = !!ts?.lastSignoff && !ts.hasData && !ts.lastSignoff.legacy;
@@ -107,7 +110,7 @@ export default function VeritaCompInstrumentPage() {
             {data.instrument.groupMembers?.length ? <p className="text-xs text-muted-foreground" data-testid="group-members">{data.instrument.groupMembers.map((m) => m.name).join(", ")}: one competency covers {data.instrument.groupMembers.length === 2 ? "both" : "all of them"}.</p> : null}
             <p className="text-sm text-muted-foreground mt-1" data-testid="instrument-summary">
               {people.length === 0 ? "No one is assigned to this instrument yet."
-                : `${signedCount} of ${people.length} assigned ${people.length === 1 ? "person" : "people"} signed${readyCount ? `, ${readyCount} ready to sign` : ""}.`}
+                : `${signedCount} of ${people.length} assigned ${people.length === 1 ? "person" : "people"} signed${readyCount ? `, ${readyCount} ready to sign` : ""}${reviewCount ? `, ${reviewCount} ${reviewCount === 1 ? "needs" : "need"} review` : ""}.`}
             </p>
           </div>
 
@@ -144,7 +147,7 @@ export default function VeritaCompInstrumentPage() {
                         <div className="font-semibold">{current.employee.name}{shownMilestone ? ` · ${MILESTONE_LABEL[shownMilestone]}` : ""}</div>
                         <div className="text-xs text-muted-foreground">
                           {ts.waived ? `Waived testing: ${(showSigned ? ts.lastSignoff!.waivedPassed : ts.waivedPassed) ?? 0} of ${ts.waivedRequired ?? 2} methods passed`
-                            : showSigned ? "Signed set" : ts.complete ? "All elements complete" : "Elements still open"}
+                            : showSigned ? "Signed set" : ts.needsReview ? "Entries need review" : ts.complete ? "All elements complete" : "Elements still open"}
                         </div>
                       </div>
                       <Link href={labRoute(`/veritacomp-app/employee/${current.employee.id}`)} data-testid="open-person-record"
