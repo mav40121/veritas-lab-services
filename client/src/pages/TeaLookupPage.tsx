@@ -34,7 +34,7 @@ export default function TeaLookupPage() {
     bySpecialty: specialties.map(s => ({ specialty: s, count: teaData.filter(a => a.specialty === s).length })),
   }), []);
 
-  useSEO({ title: "CLIA TEa Lookup Tool | Total Allowable Error by Analyte | Veritas Lab Services", description: "Look up total allowable error (TEa) limits by analyte for CLIA compliance. Reference values from CLIA proficiency testing criteria and RCPA quality specifications." });
+  useSEO({ title: "CLIA TEa Lookup Tool | Total Allowable Error by Analyte | Veritas Lab Services", description: "Look up CLIA proficiency testing acceptance limits by analyte, from 42 CFR Part 493, Subpart I." });
 
   return (
     <div className="min-h-screen bg-background">
@@ -54,10 +54,10 @@ export default function TeaLookupPage() {
             CLIA Allowable Error (TEa) Lookup
           </h1>
           <p className="text-muted-foreground text-lg max-w-2xl leading-relaxed mb-4">
-            The complete 2025 CLIA acceptable performance criteria for {stats.total} analytes, directly from 42 CFR Part 493. Search any analyte and get the exact regulatory standard in seconds.
+            The CLIA proficiency testing acceptance limits for {stats.total} analytes from 42 CFR Part 493, Subpart I. Search any analyte and see the published limit in seconds.
           </p>
           <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1"><CheckCircle2 size={12} className="text-primary" /> Updated July 2024 (CLIA PT final rule CMS-3355-F, implemented Jan 2025)</span>
+            <span className="flex items-center gap-1"><CheckCircle2 size={12} className="text-primary" /> Current through CLIA PT final rule CMS-3355-F (published July 11, 2022, effective July 11, 2024)</span>
             <span className="flex items-center gap-1"><CheckCircle2 size={12} className="text-primary" /> Public domain: 42 CFR Part 493</span>
             <span className="flex items-center gap-1"><CheckCircle2 size={12} className="text-primary" /> No login required</span>
           </div>
@@ -72,14 +72,14 @@ export default function TeaLookupPage() {
           assetUrl="/clia-tea-reference-2026.pdf"
           assetName="2026-CLIA-TEa-Reference-Table.pdf"
           title="Prefer the whole table as a PDF?"
-          description="Download every CLIA allowable total error value in one printable reference, grouped by specialty with the CFR section. Free."
+          description="Download the CLIA proficiency testing acceptance limits in one printable reference, grouped by specialty with the CFR section. Free."
         />
 
         {/* Important notice */}
         <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-900 p-4 mb-6 flex gap-3 text-sm">
           <AlertTriangle size={16} className="text-amber-600 shrink-0 mt-0.5" />
           <div className="text-amber-800 dark:text-amber-300">
-            <strong>Important:</strong> CLIA TEa values are federally published as the PT acceptable performance criterion. Most labs (with medical director or designee approval under §493.1253(b)(2) and §493.1255(b)(3)) adopt the same value as the calibration verification acceptance criterion. Your lab may adopt tighter internal criteria (ADLM recommends half of CLIA PT TEa for enhanced quality). Always verify against the current{" "}
+            <strong>Important:</strong> CLIA TEa values are federally published as the PT acceptable performance criterion. For calibration verification, CLIA leaves the criterion to the laboratory (§493.1253(b)(3) and §493.1255(b)(2)). Some laboratories use manufacturer-stated limits and some adopt the CLIA PT limit; a medical director or designee who adopts one should document why it fits the clinical need. CMS said in the preamble to CMS-3355-F that PT limits were written to grade proficiency testing and weren't intended as performance goals. Your lab may adopt tighter internal criteria (ADLM recommends half of CLIA PT TEa for enhanced quality). Always verify against the current{" "}
             <a href="https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493" target="_blank" rel="noopener noreferrer" className="underline hover:text-amber-900">eCFR</a> before use in compliance decisions. If you are choosing a platform to apply these limits automatically, here is how to choose <Link href="/resources/how-to-choose-lab-compliance-software" className="underline font-medium hover:text-amber-900">lab compliance software</Link>.
           </div>
         </div>
@@ -132,9 +132,9 @@ export default function TeaLookupPage() {
               <div className="flex items-start gap-2.5">
                 <FlaskConical size={16} className="text-primary shrink-0 mt-0.5" />
                 <div>
-                  <div className="font-semibold text-sm mb-1">VeritaCheck® applies these automatically</div>
+                  <div className="font-semibold text-sm mb-1">VeritaCheck® can apply these for you</div>
                   <p className="text-xs text-muted-foreground mb-3 leading-relaxed">
-                    Every CLIA TEa value in this table is built into VeritaCheck®. Select your analyte, enter your data, and the pass/fail evaluation is done for you, with the CFR citation in the report.
+                    VeritaCheck® pre-loads the CLIA PT limits for routine chemistry, endocrinology, toxicology, and hematology, for labs that use them. Select your analyte, enter your data, and the pass/fail evaluation is done for you, with the CFR citation in the report.
                   </p>
                   <Button asChild size="sm" className="w-full bg-primary text-primary-foreground text-xs">
                     <Link href="/veritacheck">Run a Free Study <ChevronRight size={11} className="ml-1" /></Link>
@@ -212,7 +212,7 @@ export default function TeaLookupPage() {
                             </div>
                             <div className="bg-muted/40 rounded p-2">
                               <div className="text-muted-foreground mb-0.5">Effective</div>
-                              <div className="font-semibold">July 11, 2024 (2025 Final Rule)</div>
+                              <div className="font-semibold">July 11, 2024 (CMS-3355-F)</div>
                             </div>
                           </div>
                           {analyte.notes && (
@@ -248,13 +248,13 @@ export default function TeaLookupPage() {
           <div>
             <div className="font-semibold mb-2">What is CLIA TEa?</div>
             <p className="text-muted-foreground text-xs leading-relaxed">
-              CLIA Total Allowable Error (TEa) is the maximum permissible difference between a laboratory's result and the target value for each analyte, as defined for proficiency testing acceptable performance in 42 CFR Part 493, Subpart I. It directly governs PT grading. We recommend it as the calibration verification acceptance criterion because it is federally published and well documented; under §493.1253(b)(2) and §493.1255(b)(3) the lab adopts this through medical director or designee approval.
+              CLIA Total Allowable Error (TEa) is the maximum permissible difference between a laboratory's result and the target value for each analyte, as defined for proficiency testing acceptable performance in 42 CFR Part 493, Subpart I. It directly governs PT grading. For calibration verification, §493.1253(b)(3) and §493.1255(b)(2) leave the criterion to the laboratory, and a medical director or designee may adopt the PT limit.
             </p>
           </div>
           <div>
-            <div className="font-semibold mb-2">Why use CLIA TEa for cal ver?</div>
+            <div className="font-semibold mb-2">Can a lab use CLIA TEa for cal ver?</div>
             <p className="text-muted-foreground text-xs leading-relaxed">
-              Many labs use manufacturer-stated allowable error for calibration verification instead of CLIA PT TEa. CLIA PT TEa is the federally published value for PT acceptable performance; adopting the same value (with medical director or designee approval) gives your cal ver acceptance criterion a published, defensible anchor. Manufacturer claims may be more or less stringent depending on the analyte.
+              Yes, if the medical director or designee adopts it and documents why it fits the clinical need. CMS said in the preamble to CMS-3355-F (87 FR 41194, July 11, 2022) that PT limits were written to grade proficiency testing and weren't intended as performance goals, and that goals for accuracy and precision should rest on clinical needs and the manufacturer's labeling. That is preamble text, not regulation text. Manufacturer limits vary by analyte: some are tighter than the CLIA PT limit and some are wider.
             </p>
           </div>
           <div>
@@ -286,7 +286,7 @@ export default function TeaLookupPage() {
         <div className="mt-8 rounded-xl bg-primary text-primary-foreground p-6 text-center">
           <h2 className="font-serif text-xl font-bold mb-2">Want to understand how TEa applies to your studies?</h2>
           <p className="text-primary-foreground/80 text-sm max-w-lg mx-auto mb-4">
-            Read our in-depth guide on CLIA calibration verification requirements, including how TEa is applied, what your lab is probably doing wrong, and how to fix it.
+            Read our guide to CLIA TEa, including what it was written to do, how a lab can apply it to calibration verification, and what to document.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Button asChild size="sm" className="bg-white text-primary hover:bg-white/90 font-semibold">
@@ -300,7 +300,7 @@ export default function TeaLookupPage() {
 
         {/* Source attribution */}
         <p className="text-xs text-muted-foreground text-center mt-6">
-          Source: <a href="https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493" target="_blank" rel="noopener noreferrer" className="hover:text-primary underline">42 CFR Part 493, Subpart I</a>. U.S. Government publication, public domain. Last updated per the CLIA proficiency testing final rule (CMS-3355-F, effective July 11, 2024, implemented January 1, 2025). Always verify against the current eCFR before use in compliance decisions.
+          Source: <a href="https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493" target="_blank" rel="noopener noreferrer" className="hover:text-primary underline">42 CFR Part 493, Subpart I</a>. U.S. Government publication, public domain. Last updated per the CLIA proficiency testing final rule (CMS-3355-F, published July 11, 2022, effective July 11, 2024). Always verify against the current eCFR before use in compliance decisions.
         </p>
       </div>
     </div>
