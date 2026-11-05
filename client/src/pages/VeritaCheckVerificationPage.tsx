@@ -114,8 +114,8 @@ const ALL_ELEMENTS = [
     key: "precision",
     label: "Precision",
     protocol: "CLSI EP15-A3",
-    samples: "20 within-run replicates; 5 days x 4 replicates for between-run",
-    rationale: "CLSI EP15-A3 recommends 20 within-run replicates to estimate repeatability and at least 5 days of 4 replicates each to estimate intermediate precision.",
+    samples: "5 days x 5 replicates at two or more concentrations",
+    rationale: "CLSI EP15-A3 uses a design of 5 days with 5 replicates per day at two or more concentrations to estimate repeatability and within-laboratory precision.",
   },
   {
     key: "reportable_range",
@@ -134,16 +134,16 @@ const ALL_ELEMENTS = [
   {
     key: "method_comparison",
     label: "Method Comparison",
-    protocol: "CLSI EP09-A3",
-    samples: "20 paired patient specimens spanning the reportable range",
-    rationale: "CLSI EP09-A3 recommends a minimum of 20 paired patient specimens compared between the new method and an established or reference method. Specimens should span the clinically relevant range to evaluate slope, intercept, and correlation.",
+    protocol: "CLSI EP09c",
+    samples: "About 40 paired patient specimens spanning the measuring range; the laboratory director or designee decides",
+    rationale: "CLIA and TJC set no minimum; the laboratory director decides. CLSI EP09c suggests about 40 patient specimens compared between the new method and an established or reference method. Specimens should span the measuring range to evaluate slope, intercept, and correlation.",
   },
   {
     key: "carryover",
     label: "Carryover",
     protocol: "CLSI EP10-A3",
     samples: "21 alternating Low/High specimens in a defined sequence (e.g. L,L,H,H,L,L,H,L,H,H,L,L,L,L,H,H,L,L,H,L,L)",
-    rationale: "CLSI EP10-A3 evaluates carryover by running Low and High specimens in a defined alternating pattern. Pass criterion is Low-after-High SD does not exceed 3x the Low-after-Low SD (the Error Limit). Most modern closed-tube analyzers achieve this without intervention; many labs document Carryover as Not Performed with reference to the manufacturer's carryover claim when the analyzer is new and unmodified.",
+    rationale: "CLSI EP10-A3 evaluates carryover by running Low and High specimens in a defined alternating pattern. Pass criterion is that Mean(Low-after-High) minus Mean(Low-after-Low) does not exceed 3x the Low-after-Low SD (the Error Limit). Most modern closed-tube analyzers achieve this without intervention; many labs document Carryover as Not Performed with reference to the manufacturer's carryover claim when the analyzer is new and unmodified.",
   },
 ];
 

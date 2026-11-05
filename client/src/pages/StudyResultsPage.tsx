@@ -139,7 +139,7 @@ function StudyHeader({ study, results }: { study: Study; results: StudyResults }
         <h1 className="text-xl font-bold">{study.testName}</h1>
         <div className="flex items-center gap-3 mt-1 flex-wrap">
           <Badge variant="outline" className="text-xs">
-            {study.studyType === "cal_ver" ? "Calibration Verification (CLSI EP06)" : study.studyType === "cal_ver_correlation" ? "Calibration Verification + Correlation (CLSI EP06 + EP09)" : study.studyType === "precision" ? "Precision Verification (EP15)" : study.studyType === "lot_to_lot" ? "Reagent Lot Verification (EP26)" : study.studyType === "pt_coag" ? "PT/INR Geometric Mean Calculator (H47)" : study.studyType === "qc_range" ? "QC Lot Verification (C24-Ed4)" : study.studyType === "multi_analyte_coag" ? "Multi-Analyte Lot Comparison (Coag)" : study.studyType === "ref_interval" ? "Reference Range Verification" : study.studyType === "sensitivity" ? "Analytical Sensitivity (EP17-A2)" : study.studyType === "carryover" ? "Carryover Verification (EP10-A3)" : study.studyType === "accuracy_bias" ? "Accuracy / Bias: Single Instrument vs Target (EP15-A3)" : study.studyType === "linearity" ? "Linearity (EP06)" : study.studyType === "reportable_range" ? "Reportable Range (CLIA §493.1255)" : "Method Comparison: Multi-Instrument Correlation (EP09 + EP15-A3)"}
+            {study.studyType === "cal_ver" ? "Calibration Verification (CLSI EP06)" : study.studyType === "cal_ver_correlation" ? "Calibration Verification + Correlation (CLSI EP06 + EP09)" : study.studyType === "precision" ? "Precision Verification (EP15)" : study.studyType === "lot_to_lot" ? "Reagent Lot Verification (EP26)" : study.studyType === "pt_coag" ? "PT/INR Geometric Mean Calculator (H47)" : study.studyType === "qc_range" ? "QC Lot Verification (C24-Ed4)" : study.studyType === "multi_analyte_coag" ? "Multi-Analyte Lot Comparison (Coag)" : study.studyType === "ref_interval" ? "Reference Range Verification" : study.studyType === "sensitivity" ? "Analytical Sensitivity (EP17-A2)" : study.studyType === "carryover" ? "Carryover Verification (EP10-A3)" : study.studyType === "accuracy_bias" ? "Accuracy / Bias: Single Instrument vs Target (EP15-A3)" : study.studyType === "linearity" ? "Linearity (EP06)" : study.studyType === "reportable_range" ? "Reportable Range (CLIA §493.1253(b)(1)(i)(C))" : "Method Comparison: Multi-Instrument Correlation (EP09 + EP15-A3)"}
           </Badge>
           <span className="text-sm text-muted-foreground">{study.instrument}</span>
           <span className="text-sm text-muted-foreground">·</span>
@@ -237,14 +237,14 @@ function generateNarrative(results: StudyResults, study: Study): string {
         ? `a small positive constant offset of ${Math.abs(interceptVal).toFixed(3)} units at low concentrations`
         : `a small negative constant offset of ${Math.abs(interceptVal).toFixed(3)} units at low concentrations`;
     if (cv.overallPass) {
-      narrative = `All ${cv.totalCount} calibration levels for ${study.testName} fell within the adopted calibration verification acceptance criterion of ±${cliaPct}% (§493 PT TEa for this analyte; adopted under 42 CFR §493.1255(b)(3) and §493.1253(b)(2)). `;
+      narrative = `All ${cv.totalCount} calibration levels for ${study.testName} fell within the adopted calibration verification acceptance criterion of ±${cliaPct}% (§493 PT TEa for this analyte; adopted under 42 CFR §493.1255(b)(2) and §493.1253(b)(3)). `;
       narrative += meetsAdlm
         ? `The maximum observed error of ${maxErr.toFixed(1)}% also meets the ADLM-recommended internal goal of ±${adlmPct}%, indicating performance well above the adopted acceptance criterion. `
         : `The maximum observed error of ${maxErr.toFixed(1)}% meets the adopted acceptance criterion; the ADLM recommends an internal goal of ±${adlmPct}% for enhanced quality assurance. `;
       narrative += `The regression slope of ${slopeVal.toFixed(3)} (ideal: 1.000) and intercept of ${interceptVal.toFixed(3)} (ideal: 0) indicate ${slopeInterp} and ${interceptInterp}. This instrument is performing within the adopted limits across its reportable range.`;
     } else {
       const failCount = cv.totalCount - cv.passCount;
-      narrative = `${failCount} of ${cv.totalCount} calibration level${failCount > 1 ? "s" : ""} for ${study.testName} exceeded the adopted calibration verification acceptance criterion of ±${cliaPct}% (§493 PT TEa for this analyte; adopted under 42 CFR §493.1255(b)(3) and §493.1253(b)(2)). The regression slope of ${slopeVal.toFixed(3)} and intercept of ${interceptVal.toFixed(3)} suggest ${slopeInterp} and ${interceptInterp}. Review calibration, reagent lot, and instrument maintenance records. Final approval and clinical determination must be made by the laboratory director or designee.`;
+      narrative = `${failCount} of ${cv.totalCount} calibration level${failCount > 1 ? "s" : ""} for ${study.testName} exceeded the adopted calibration verification acceptance criterion of ±${cliaPct}% (§493 PT TEa for this analyte; adopted under 42 CFR §493.1255(b)(2) and §493.1253(b)(3)). The regression slope of ${slopeVal.toFixed(3)} and intercept of ${interceptVal.toFixed(3)} suggest ${slopeInterp} and ${interceptInterp}. Review calibration, reagent lot, and instrument maintenance records. Final approval and clinical determination must be made by the laboratory director or designee.`;
     }
   } else if (isQualitative(results)) {
     const qr = results as QualitativeResults;
@@ -292,7 +292,7 @@ function generateNarrative(results: StudyResults, study: Study): string {
     if (mc.overallPass) {
       narrative = `The Pearson correlation coefficient of ${rVal.toFixed(3)} indicates ${correlationInterp} agreement between the two methods for ${study.testName}. The Deming regression slope of ${slopeVal.toFixed(3)} (ideal: 1.000) indicates ${slopeInterp}. The mean bias of ${meanBiasPct >= 0 ? "+" : ""}${meanBiasPct.toFixed(1)}% is ${biasInterp}. The Bland-Altman analysis confirms no clinically significant systematic difference between methods. Final approval and clinical determination must be made by the laboratory director or designee.`;
     } else {
-      narrative = `The method comparison for ${study.testName} did not meet the adopted acceptance criterion. The correlation of ${rVal.toFixed(3)} and a mean bias of ${meanBiasPct >= 0 ? "+" : ""}${meanBiasPct.toFixed(1)}% (adopted limit: \u00B1${cliaPct}%; §493 PT TEa for this analyte; adopted under 42 CFR §493.1253(b)(2)) indicate unacceptable agreement between methods. Final approval and clinical determination must be made by the laboratory director or designee.`;
+      narrative = `The method comparison for ${study.testName} did not meet the adopted acceptance criterion. The correlation of ${rVal.toFixed(3)} and a mean bias of ${meanBiasPct >= 0 ? "+" : ""}${meanBiasPct.toFixed(1)}% (adopted limit: \u00B1${cliaPct}%; §493 PT TEa for this analyte; adopted under 42 CFR §493.1281(a)) indicate unacceptable agreement between methods. Final approval and clinical determination must be made by the laboratory director or designee.`;
     }
   } else if (isPrecision(results)) {
     const pr = results as PrecisionResults;
@@ -308,7 +308,7 @@ function generateNarrative(results: StudyResults, study: Study): string {
       : `Methodology: CLSI EP15-A3 Simple (aggregate precision). For each level, mean and standard deviation (n-1) are computed across all replicates, and the coefficient of variation (CV) is calculated as SD divided by mean, expressed as a percent. `;
     if (pr.overallPass) {
       narrative = methodologyNote;
-      narrative += `The precision study for ${study.testName} demonstrated a maximum observed CV of ${maxCV.toFixed(2)}%, which is within the adopted precision acceptance criterion of ±${cliaPct}% (§493 PT TEa for this analyte; adopted under 42 CFR §493.1253(b)(1)(ii)). `;
+      narrative += `The precision study for ${study.testName} demonstrated a maximum observed CV of ${maxCV.toFixed(2)}%, which is within the adopted precision acceptance criterion of ±${cliaPct}% (§493 PT TEa for this analyte; adopted under 42 CFR §493.1253(b)(1)(i)(B)). `;
       narrative += meetsAdlm
         ? `The result also meets the ADLM-recommended internal precision goal of ±${adlmPct}%, indicating performance well above the adopted acceptance criterion. `
         : `The ADLM recommends an internal precision goal of ±${adlmPct}% for enhanced quality assurance. `;
@@ -320,13 +320,13 @@ function generateNarrative(results: StudyResults, study: Study): string {
       narrative += `Manufacturer precision claims are verified. This instrument is performing with acceptable reproducibility.`;
     } else {
       narrative = methodologyNote;
-      narrative += `The precision study for ${study.testName} did not meet the adopted acceptance criterion. The maximum observed CV of ${maxCV.toFixed(2)}% exceeds the adopted precision acceptance criterion of ±${cliaPct}% (§493 PT TEa for this analyte; adopted under 42 CFR §493.1253(b)(1)(ii)). Review reagent lot, instrument maintenance, and QC trends for contributing factors. Final approval and clinical determination must be made by the laboratory director or designee.`;
+      narrative += `The precision study for ${study.testName} did not meet the adopted acceptance criterion. The maximum observed CV of ${maxCV.toFixed(2)}% exceeds the adopted precision acceptance criterion of ±${cliaPct}% (§493 PT TEa for this analyte; adopted under 42 CFR §493.1253(b)(1)(i)(B)). Review reagent lot, instrument maintenance, and QC trends for contributing factors. Final approval and clinical determination must be made by the laboratory director or designee.`;
     }
   }
   // Append dual-criterion methodology note when applicable
   const absFloor = (study as any).cliaAbsoluteFloor;
   if (absFloor != null && narrative) {
-    narrative += " TEa pass/fail uses the 42 CFR S493 dual-criterion rule: pass when the absolute difference is within the greater of the percent or absolute term.";
+    narrative += " TEa pass/fail uses the 42 CFR §493 dual-criterion rule: pass when the absolute difference is within the greater of the percent or absolute term.";
   }
   return narrative;
 }
@@ -471,7 +471,7 @@ function QCRangeReport({ study, results }: { study: Study; results: QCRangeResul
                       </tbody>
                     </table>
                   </div>
-                  <p className="text-xs text-muted-foreground italic mt-2">SDI = (lab mean − vendor mean) / vendor SD. Westgard thresholds: |SDI| &lt; 1 excellent, &lt; 2 acceptable, &lt; 3 investigate, ≥ 3 unacceptable. Vendor SD is reference only; the lab uses its own calculated SD on the Levey-Jennings chart per CLIA §493.1256.</p>
+                  <p className="text-xs text-muted-foreground italic mt-2">SDI = (lab mean − vendor mean) / vendor SD. Westgard thresholds: |SDI| &lt; 1 excellent, &lt; 2 acceptable, &lt; 3 investigate, ≥ 3 unacceptable. Vendor SD is reference only in this study; the lab uses its own calculated SD on the Levey-Jennings chart. CLIA permits a verified stated value (§493.1256(d)(10)(ii)).</p>
                 </div>
               )}
             </CardContent>
@@ -480,7 +480,7 @@ function QCRangeReport({ study, results }: { study: Study; results: QCRangeResul
       })}
       <div className="rounded-md bg-muted/50 border p-3">
         <p className="text-xs text-muted-foreground italic">
-          Per 42 CFR §493.1256, the laboratory must determine its own mean and SD for the QC materials it uses. The lab's calculated values from this study become the operating mean and SD on the Levey-Jennings chart.
+          CLIA lets a laboratory use the stated value of a commercially assayed control when it matches the method and instrument and the laboratory has verified it (42 CFR §493.1256(d)(10)(ii)). TJC expects the laboratory to determine its own statistics for each lot, and CLSI C24 recommends limits from the laboratory's own data. This study produces those values. The lab's calculated values from this study become the operating mean and SD on the Levey-Jennings chart.
           {anyBiasCheck && " The crossover bias check verifies analytical performance remained stable during the lot changeover and follows the CLSI C24-Ed4 parallel-testing pattern."}
           {anyVendor && " Vendor (package-insert) values are informational only."}
         </p>
@@ -538,7 +538,7 @@ function MultiAnalyteCoagReport({ study, results }: { study: Study; results: Mul
       {/* ISI validation */}
       {results.ptINRValidation && (
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm">PT/INR - ISI Validation</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-sm">PT/INR - ISI Verification</CardTitle></CardHeader>
           <CardContent>
             <div className="grid grid-cols-3 gap-4 text-sm">
               <div><span className="text-muted-foreground">Mean New INR:</span> <span className="font-mono font-semibold">{results.ptINRValidation.meanNewINR.toFixed(2)}</span></div>
@@ -657,7 +657,7 @@ function UserSpecs({ study, instrumentNames }: { study: Study; instrumentNames: 
       <CardContent>
         <div className="grid sm:grid-cols-2 gap-x-8 gap-y-2 text-xs">
           {[
-            ["Study Type", study.studyType === "cal_ver" ? "Calibration Verification (CLSI EP06)" : study.studyType === "cal_ver_correlation" ? "Calibration Verification + Correlation (CLSI EP06 + EP09)" : study.studyType === "precision" ? "Precision Verification (EP15)" : study.studyType === "lot_to_lot" ? "Reagent Lot Verification (EP26)" : study.studyType === "pt_coag" ? "PT/INR Geometric Mean Calculator (H47)" : study.studyType === "qc_range" ? "QC Lot Verification (C24-Ed4)" : study.studyType === "multi_analyte_coag" ? "Multi-Analyte Lot Comparison (Coag)" : study.studyType === "ref_interval" ? "Reference Range Verification" : study.studyType === "sensitivity" ? "Analytical Sensitivity (EP17-A2)" : study.studyType === "carryover" ? "Carryover Verification (EP10-A3)" : study.studyType === "accuracy_bias" ? "Accuracy / Bias: Single Instrument vs Target (EP15-A3)" : study.studyType === "linearity" ? "Linearity (EP06)" : study.studyType === "reportable_range" ? "Reportable Range (CLIA §493.1255)" : "Method Comparison: Multi-Instrument Correlation (EP09 + EP15-A3)"],
+            ["Study Type", study.studyType === "cal_ver" ? "Calibration Verification (CLSI EP06)" : study.studyType === "cal_ver_correlation" ? "Calibration Verification + Correlation (CLSI EP06 + EP09)" : study.studyType === "precision" ? "Precision Verification (EP15)" : study.studyType === "lot_to_lot" ? "Reagent Lot Verification (EP26)" : study.studyType === "pt_coag" ? "PT/INR Geometric Mean Calculator (H47)" : study.studyType === "qc_range" ? "QC Lot Verification (C24-Ed4)" : study.studyType === "multi_analyte_coag" ? "Multi-Analyte Lot Comparison (Coag)" : study.studyType === "ref_interval" ? "Reference Range Verification" : study.studyType === "sensitivity" ? "Analytical Sensitivity (EP17-A2)" : study.studyType === "carryover" ? "Carryover Verification (EP10-A3)" : study.studyType === "accuracy_bias" ? "Accuracy / Bias: Single Instrument vs Target (EP15-A3)" : study.studyType === "linearity" ? "Linearity (EP06)" : study.studyType === "reportable_range" ? "Reportable Range (CLIA §493.1253(b)(1)(i)(C))" : "Method Comparison: Multi-Instrument Correlation (EP09 + EP15-A3)"],
             [study.studyType === "precision" ? "Adopted Precision Acceptance Criterion (CV%)" : "Adopted Acceptance Criterion (TEa)", teaDisplayWithPreset],
             ["Analyst", study.analyst],
             ["Date", study.date],
