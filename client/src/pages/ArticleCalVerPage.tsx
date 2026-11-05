@@ -52,7 +52,7 @@ return (
             CLIA Calibration Verification and Method Comparison: What Lab Managers Actually Need to Know
           </h1>
           <p className="text-muted-foreground text-lg leading-relaxed mb-6">
-            Most labs are spending money on kits they don't need, performing studies on instruments that don't require them, and missing a built-in 20-day compliance window that would eliminate deadline stress entirely. Here's how to fix all three.
+            Most labs are spending money on kits they don't need, performing studies on instruments that don't require them, and missing the 20-day window the TJC standard allows on its six-month interval, which takes much of the stress out of the deadline. Here's how to fix all three.
           </p>
           <div className="flex items-center gap-5 text-xs text-muted-foreground border-t border-border pt-4">
             <span className="flex items-center gap-1.5"><User size={12} /> Michael Veri, Former Joint Commission Surveyor, CPHQ</span>
@@ -73,9 +73,9 @@ return (
               {[
                 "Calibration verification is an accuracy study: it measures correctness, not consistency",
                 "Correlation/method comparison studies are precision studies: they measure reproducibility across methods",
-                "Waived tests and factory-calibrated instruments do NOT require calibration verification",
+                "Waived tests (unless the manufacturer's instructions require it) and factory-calibrated instruments do NOT require calibration verification",
                 "Both requirements can often be satisfied simultaneously using the same specimens",
-                "The compliance window is six months PLUS twenty days from the director sign-off date, not the data collection date",
+                "For a TJC-accredited lab, the window is six months PLUS twenty days. I count it from the director sign-off date, not the data collection date; that is my reading, not wording in the standard",
               ].map(t => (
                 <li key={t} className="flex items-start gap-2 text-sm">
                   <CheckCircle2 size={13} className="text-primary shrink-0 mt-0.5" />
@@ -120,20 +120,22 @@ return (
             Here's what most lab managers don't know: <strong>calibration verification is an accuracy study.</strong> When the industry uses "calibration verification" and "linearity study" interchangeably, it's describing the same process: comparing instrument results to known true values across a range.
           </p>
           <p>
-            The <a href="https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1255" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">CLIA regulation at §493.1255</a> and the Joint Commission standard both require calibration verification for nonwaived tests that can be adjusted by the laboratory. Three conditions must all be true:
+            The <a href="https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493/subpart-K/section-493.1255" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">CLIA regulation at §493.1255</a> and the Joint Commission standard both require calibration verification for nonwaived tests that can be adjusted by the laboratory. Two conditions decide whether it applies:
           </p>
           <ul className="list-disc list-inside space-y-1 pl-2">
             <li>The test must be <strong>nonwaived</strong> under CLIA</li>
             <li>The instrument must allow <strong>calibration adjustment</strong> by the laboratory</li>
-            <li>A minimum of <strong>three data points</strong> with known true values must be tested, including a low and high value</li>
           </ul>
+          <p>
+            When both are true, at least <strong>three values</strong> with known true values must be tested: a minimal (or zero) value, a mid-point value, and a maximum value near the upper limit of the reportable range (§493.1255(b)(2)(ii)).
+          </p>
 
           <h3 className="font-semibold text-lg mt-8 mb-2">Two Major Exceptions: Where Labs Waste the Most Resources</h3>
-          <p><strong>1. Waived testing.</strong> Point-of-care glucose meters, rapid strep tests, urine dipsticks, and other waived methodologies are exempt from calibration verification requirements. If your lab is running calibration verification on waived instruments, stop. It's not required.</p>
-          <p><strong>2. Factory-calibrated instruments.</strong> Many modern analyzers have factory-locked calibrations that cannot be adjusted by the laboratory. The CLIA principle is direct: you cannot verify something you cannot perform. If the instrument doesn't allow calibration adjustment, calibration verification is not required.</p>
+          <p><strong>1. Waived testing.</strong> Point-of-care glucose meters, rapid strep tests, urine dipsticks, and other waived methodologies are exempt from calibration verification requirements unless the manufacturer's instructions require it. If your lab is running calibration verification on waived instruments and the instructions don't call for it, stop. It's not required.</p>
+          <p><strong>2. Factory-calibrated instruments.</strong> Many modern analyzers have factory-locked calibrations that cannot be adjusted by the laboratory. CMS states that instruments that are factory or manufacturer calibrated do not require calibration verification, and TJC limits that exception to instruments that cannot be calibrated after implementation.</p>
 
           <Callout type="warning">
-            <strong>Audit this now:</strong> Pull your current calibration verification schedule and mark every waived test and every instrument with factory-locked calibration. Those studies can be eliminated immediately, redirecting both staff time and materials.
+            <strong>Audit this now:</strong> Pull your current calibration verification schedule and mark every waived test and every instrument with factory-locked calibration. Once you confirm the manufacturer's instructions don't call for them, those studies can come off the schedule, redirecting both staff time and materials.
           </Callout>
 
           <h3 className="font-semibold text-lg mt-8 mb-2">You Don't Need Commercial Kits</h3>
@@ -145,7 +147,7 @@ return (
             <li>Diluent (true value is zero or a known concentration)</li>
             <li>Proficiency testing samples (if stable after reconstitution)</li>
             <li>Quality control material with manufacturer-assigned values</li>
-            <li>Previously validated patient specimens with established values</li>
+            <li>Previously tested patient specimens with established values</li>
           </ul>
           <p>Commercial kits offer convenience, not regulatory necessity. The only requirement is documentation of the true value.</p>
 
@@ -161,7 +163,7 @@ return (
           </p>
 
           <Callout type="info">
-            <strong>Critical distinction:</strong> Correlation has nothing to do with accuracy. A correlation study confirms that two instruments give the same answer, not that either answer is correct. Both studies are required; neither substitutes for the other.
+            <strong>Critical distinction:</strong> A correlation study between two instruments confirms that they give the same answer, not that either answer is correct. It shows accuracy only when one of them is an established comparative method. Where both apply, both studies are required; neither substitutes for the other.
           </Callout>
 
           <h2 className="font-serif text-2xl font-bold mt-10 mb-3">The Efficiency Play: Run Both Studies Simultaneously</h2>
@@ -172,8 +174,8 @@ return (
           <ul className="list-disc list-inside space-y-1 pl-2">
             <li>Expected (true) value for each specimen</li>
             <li>Observed result from each method/instrument</li>
-            <li>Calculated % error per method (observed − expected ÷ expected × 100)</li>
-            <li>Pass/fail against CLIA allowable error (TEa) for that analyte</li>
+            <li>Calculated % error per method ((observed − expected) ÷ expected × 100)</li>
+            <li>Pass/fail against your laboratory's adopted criterion for that analyte</li>
             <li>Slope (m), intercept (b), and Pearson r across instruments</li>
           </ul>
 
@@ -184,7 +186,7 @@ return (
               <div>
                 <div className="font-semibold text-sm mb-1">VeritaCheck® automates all of this</div>
                 <p className="text-sm text-muted-foreground mb-3">
-                  Enter your data and VeritaCheck® handles every calculation: % error, Pearson r, slope, intercept, PASS/FAIL against CLIA TEa. It generates a signed, CLIA-compliant PDF report. No Excel, no manual math, no formatting. Your first study is free.
+                  Enter your data and VeritaCheck® handles every calculation: % error, Pearson r, slope, intercept, PASS/FAIL against your adopted criterion, including a CLIA PT limit if your lab uses one. It generates a CFR-cited PDF report ready for director or designee signature. No Excel, no manual math, no formatting. Your first two studies are free.
                 </p>
                 <Button asChild size="sm" className="bg-primary text-primary-foreground">
                   <Link href="/veritacheck">Run a Free Study <ChevronRight size={13} className="ml-1" /></Link>
@@ -198,43 +200,44 @@ return (
           <p><strong>The intercept (b)</strong> should be as close to zero as possible. A significant intercept indicates constant systematic error: the instrument consistently adds or subtracts a fixed amount regardless of the true value.</p>
           <p><strong>The slope (m)</strong> reveals proportional bias. A slope significantly different from 1.0 indicates that error increases proportionally with concentration, a sign of calibration drift across the analytical range.</p>
           <p>
-            The <a href="https://www.adlm.org" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Association for Diagnostics & Laboratory Medicine (ADLM)</a> recommends performance goals at half of the CLIA minimum allowable error, providing a safety margin for labs seeking excellence rather than minimum compliance.
+            The <a href="https://www.adlm.org" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Association for Diagnostics & Laboratory Medicine (ADLM)</a> recommends performance goals at half of the CLIA allowable error, providing a safety margin.
           </p>
 
-          <h2 className="font-serif text-2xl font-bold mt-10 mb-3">The Six-Month-Plus-Twenty-Day Rule: The Most Underused Compliance Tool</h2>
+          <h2 className="font-serif text-2xl font-bold mt-10 mb-3">The TJC Six-Month-Plus-Twenty-Day Window: The Most Underused Compliance Tool</h2>
           <p>
-            Every lab professional knows calibration verification must be performed initially before reporting patient results and then every six months thereafter. What most don't know is the flexibility built into that timeline.
+            Every lab professional knows calibration verification must be performed initially before reporting patient results and then every six months thereafter. What most don't know is the flexibility the TJC standard builds into that timeline.
           </p>
           <p>
-            The Joint Commission interpretive guidelines provide a critical clarification: <strong>laboratories have six months plus twenty days from the last completion date to finish the next study.</strong>
+            The current TJC standard allows <strong>up to six months plus twenty days from the last event to finish the next study.</strong> That allowance is TJC's. The CFR says at least once every 6 months, and CAP states no equivalent tolerance, so a laboratory outside TJC should define its own limit in writing and not assume the twenty days.
           </p>
 
           <h3 className="font-semibold text-lg mt-8 mb-2">Completion = Sign-Off Date, Not Data Collection Date</h3>
           <p>
-            This is the key most labs miss. Completion is not the date data was collected. It's the date of final approval or sign-off by the medical director or designated authority.
+            This is how I count it: completion is not the date data was collected. It's the date of final approval or sign-off by the medical director or designated authority. That is my reading, not wording in the TJC standard or the CFR, so keep both the run date and the sign-off date on the record.
           </p>
-          <p>A fully compliant example timeline:</p>
+          <p>An example timeline on that reading:</p>
           <div className="bg-muted/40 rounded-lg border border-border p-4 text-sm font-mono space-y-1 my-4">
             <div><span className="text-muted-foreground">Jan 15:</span> Last study signed off (completion date)</div>
             <div><span className="text-muted-foreground">Apr 10:</span> Collect data during slow period</div>
             <div><span className="text-muted-foreground">May 5:</span> Generate report and analysis</div>
             <div><span className="text-muted-foreground">Jul 15:</span> Medical director or designee reviews and signs off</div>
-            <div className="pt-1 text-primary font-semibold">Next deadline: Aug 4 (6 months + 20 days from Jul 15)</div>
+            <div className="pt-1 text-primary font-semibold">Deadline for this cycle: Aug 4 (6 months + 20 days from Jan 15)</div>
+            <div className="text-primary font-semibold">Next deadline: Feb 4 (6 months + 20 days from Jul 15)</div>
           </div>
 
           <Callout type="warning">
-            <strong>One critical boundary:</strong> The grace period is measured from the completion (sign-off) date, not from when you planned to complete it. Consistently signing off early simply moves the next deadline forward; you cannot compress cycles to buy extra time.
+            <strong>One critical boundary:</strong> On that reading, the grace period is measured from the completion (sign-off) date, not from when you planned to complete it. Consistently signing off early simply moves the next deadline forward; you cannot compress cycles to buy extra time.
           </Callout>
 
           <h2 className="font-serif text-2xl font-bold mt-10 mb-3">Designing an Efficient Compliance Program</h2>
           <p>Armed with these principles, here's how to restructure your QC program:</p>
           <ol className="list-decimal list-inside space-y-2 pl-2">
-            <li><strong>Audit which tests actually require calibration verification.</strong> Remove waived tests and factory-calibrated instruments from the schedule.</li>
+            <li><strong>Audit which tests actually require calibration verification.</strong> Remove waived tests and factory-calibrated instruments from the schedule, unless the manufacturer's instructions call for the study.</li>
             <li><strong>Inventory existing materials with known true values.</strong> Calibrators, QC material, stable PT samples. You likely already have everything you need.</li>
             <li><strong>Combine calibration verification and correlation.</strong> Run the same specimens across all instruments in a single session to satisfy both requirements simultaneously.</li>
             <li><strong>Collect data strategically.</strong> Schedule data collection during slower periods; batch medical director or designee review sessions for efficiency.</li>
-            <li><strong>Track completion dates, not collection dates.</strong> Your next deadline is calculated from the sign-off date. Document it clearly.</li>
-            <li><strong>Reference current CLIA TEa criteria.</strong> These values update periodically. Always use the current <a href="https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Code of Federal Regulations</a>, not outdated reference cards.</li>
+            <li><strong>Track sign-off dates as well as collection dates.</strong> On my reading, your next TJC deadline is calculated from the sign-off date. Document both clearly.</li>
+            <li><strong>If your lab adopted CLIA TEa criteria, keep them current.</strong> These values update periodically. Always use the current <a href="https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Code of Federal Regulations</a>, not outdated reference cards.</li>
           </ol>
 
           <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 text-sm leading-relaxed my-6">
@@ -253,7 +256,7 @@ return (
 
           <h2 className="font-serif text-2xl font-bold mt-10 mb-3">Conclusion</h2>
           <p>
-            Calibration verification and correlation studies are not inherently complex, but terminology confusion and incomplete regulatory knowledge turn them into sources of unnecessary cost and stress. Once you understand that calibration verification is an accuracy study, correlation is a precision study, both can often be run simultaneously, and the compliance window is six months plus twenty days from sign-off, these requirements become manageable parts of a well-designed QC program.
+            Calibration verification and correlation studies are not inherently complex, but terminology confusion and incomplete regulatory knowledge turn them into sources of unnecessary cost and stress. Once you understand that calibration verification is an accuracy study, correlation is a precision study, both can often be run simultaneously, and the TJC window is six months plus twenty days, which I count from sign-off, these requirements become manageable parts of a well-designed QC program.
           </p>
           <p>
             The goal isn't just compliance. It's intelligent compliance that enhances quality without unnecessary burden.
@@ -267,7 +270,7 @@ return (
             <FlaskConical size={28} className="mx-auto mb-3 opacity-80" />
             <h3 className="font-serif text-xl font-bold mb-2">Ready to run your next study?</h3>
             <p className="text-primary-foreground/80 text-sm max-w-md mx-auto mb-5">
-              VeritaCheck® handles calibration verification, method comparison, and EP15 precision verification, with automated CLIA TEa lookup, all statistics calculated, and a signed PDF report generated in minutes.
+              VeritaCheck® handles calibration verification, method comparison, and EP15 precision verification, with automated CLIA TEa lookup, all statistics calculated, and a PDF report ready for director or designee signature, generated in minutes.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Button asChild size="lg" className="bg-white text-primary hover:bg-white/90 font-semibold">
@@ -283,9 +286,8 @@ return (
           <div className="mt-10 pt-6 border-t border-border">
             <div className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3">References</div>
             <ol className="space-y-1.5 text-xs text-muted-foreground list-decimal list-inside">
-              <li>The Joint Commission. (2024). Laboratory Services Standards. Laboratory Accreditation Program.</li>
+              <li>The Joint Commission. TJC standard for laboratory accreditation.</li>
               <li>Centers for Medicare & Medicaid Services. (2006). Calibration and Calibration Verification: CLIA Brochure. <a href="https://www.cms.gov/files/document/clia-brochure-calibration-and-calibration-verification-april-2006.pdf" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">cms.gov</a></li>
-              <li>The Joint Commission. (2024). Performance Evaluation Standards for Laboratory Services. Hospital Accreditation Program.</li>
               <li>Code of Federal Regulations. (2024). Title 42, Part 493: Laboratory Requirements. <a href="https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">ecfr.gov</a></li>
               <li>Association for Diagnostics & Laboratory Medicine. (2024). Quality Management Guidelines for Clinical Laboratories. <a href="https://www.adlm.org" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">adlm.org</a></li>
             </ol>
