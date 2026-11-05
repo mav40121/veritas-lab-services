@@ -26,7 +26,7 @@ function Callout({ children, type = "info" }: { children: React.ReactNode; type?
 }
 
 export default function ArticleValidateVeritaCheckPage() {
-    useSEO({ title: "How to Validate VeritaCheck® for CLIA Compliance | Veritas Lab Services", description: "Software validation documentation for VeritaCheck® under CLIA requirements. How to validate laboratory information systems and comply with 42 CFR 493.1252." });
+    useSEO({ title: "How to Validate VeritaCheck® in Your Laboratory | Veritas Lab Services", description: "Software validation documentation for VeritaCheck®: how to document that the tool performs as intended in your laboratory with an IQ/OQ/PQ record." });
 return (
     <div className="min-h-screen bg-background">
 
@@ -62,10 +62,10 @@ return (
             <div className="font-semibold text-sm text-primary mb-3">Key Takeaways</div>
             <ul className="space-y-2">
               {[
-                "Software validation is required under CLIA 42 CFR 493.1253 and CAP checklist item COM.01300",
+                "42 CFR Part 493 does not name software validation. Your accreditor may ask for it: CAP GEN.43022 covers testing laboratory computer programs at installation and after changes, with director or designee approval. Your laboratory director or designee decides the scope.",
                 "The appropriate framework is IQ/OQ/PQ: Installation Qualification, Operational Qualification, Performance Qualification",
                 "Most labs complete the full process in under two hours",
-                "A free Software Validation Record template is available at veritaslabservices.com",
+                "A free Software Validation Record template is available at www.veritaslabservices.com",
               ].map(t => (
                 <li key={t} className="flex items-start gap-2 text-sm">
                   <CheckCircle2 size={13} className="text-primary shrink-0 mt-0.5" />
@@ -80,12 +80,12 @@ return (
         <div className="prose prose-slate dark:prose-invert max-w-none space-y-6 text-[15px] leading-relaxed">
 
           <p>
-            If you are preparing to use VeritaCheck® in your clinical laboratory, your first question should be: do we have a validation record on file? For most regulated labs, the answer needs to be yes before you run a single study through any software tool. The good news is that validating VeritaCheck® is straightforward, and most labs can complete it in under two hours.
+            If you are preparing to use VeritaCheck® in your clinical laboratory, your first question should be: do we have a validation record on file? For a lab whose accreditor or quality system expects one, the answer needs to be yes before you run a single study through any software tool. The good news is that validating VeritaCheck® is straightforward, and most labs can complete it in under two hours.
           </p>
 
-          <h2 className="font-serif text-2xl font-bold mt-10 mb-3">Why Software Validation Is Required</h2>
+          <h2 className="font-serif text-2xl font-bold mt-10 mb-3">Why Document Software Validation</h2>
           <p>
-            CLIA regulations under 42 CFR 493.1253 require laboratories to establish and verify the performance of all methods and procedures used in the testing process, including software involved in reporting. CAP checklist item COM.01300 addresses software validation directly. These requirements exist because software errors in a regulated environment carry the same risk as method errors. Documenting your validation demonstrates that the tool performs as intended in your specific setting.
+            42 CFR Part 493 does not mention software. CLIA's closest anchors are §493.1253(c), which requires documenting performance specification activities for test systems, and §493.1291(a), which requires an adequate system to move results accurately from entry to final report. CAP requires laboratory computer programs to be tested when first installed and after changes, with director or designee approval (GEN.43022), a requirement written for the LIS. VeritaCheck® is not an LIS and does not report patient results, but documenting that it works as intended gives the medical director or designee the same assurance.
           </p>
 
           <h2 className="font-serif text-2xl font-bold mt-10 mb-3">What Validating VeritaCheck® Actually Means</h2>
@@ -116,7 +116,7 @@ return (
 
           <h2 className="font-serif text-2xl font-bold mt-10 mb-3">The Software Validation Template</h2>
           <p>
-            Veritas Lab Services, LLC provides a free Software Validation Record template designed specifically for VeritaCheck®. The template walks through each IQ, OQ, and PQ step with fillable fields for actual results, observations, and a signature block for the medical director or designee. You do not need to build a form from scratch. The template is available at veritaslabservices.com.
+            Veritas Lab Services, LLC provides a free Software Validation Record template designed specifically for VeritaCheck®. The template walks through each IQ, OQ, and PQ step with fillable fields for actual results, observations, and a signature block for the medical director or designee. You do not need to build a form from scratch. The template is available at www.veritaslabservices.com.
           </p>
 
           <Callout type="info">
@@ -140,7 +140,7 @@ return (
               <div>
                 <div className="font-semibold text-sm mb-1">Ready to get started?</div>
                 <p className="text-sm text-muted-foreground mb-3">
-                  VeritaCheck® is part of the VeritaAssure® suite of compliance tools available at veritaslabservices.com. Download the free Software Validation Record template, complete your IQ/OQ/PQ, and have your documentation in place before your next study cycle.
+                  VeritaCheck® is part of the VeritaAssure® suite of compliance tools available at www.veritaslabservices.com. Download the free Software Validation Record template, complete your IQ/OQ/PQ, and have your documentation in place before your next study cycle.
                 </p>
                 <Button asChild size="sm" className="bg-primary text-primary-foreground">
                   <Link href="/veritacheck">Open VeritaCheck® <ChevronRight size={13} className="ml-1" /></Link>
@@ -159,7 +159,7 @@ return (
           {/* Final CTA */}
           <div className="rounded-xl bg-primary text-primary-foreground p-7 mt-10 text-center">
             <FlaskConical size={28} className="mx-auto mb-3 opacity-80" />
-            <h3 className="font-serif text-xl font-bold mb-2">A clean validation record is one less finding to worry about.</h3>
+            <h3 className="font-serif text-xl font-bold mb-2">A clean validation record is one less question to worry about.</h3>
             <p className="text-primary-foreground/80 text-sm max-w-md mx-auto mb-5">
               Download the free template, complete your IQ/OQ/PQ, and start running studies with confidence.
             </p>
@@ -177,8 +177,8 @@ return (
           <div className="mt-10 pt-6 border-t border-border">
             <div className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3">References</div>
             <ol className="space-y-1.5 text-xs text-muted-foreground list-decimal list-inside">
-              <li>Code of Federal Regulations. (2024). 42 CFR 493.1253 - Establishment and Verification of Performance Specifications. <a href="https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">ecfr.gov</a></li>
-              <li>College of American Pathologists. (2024). COM.01300 - Software Validation. CAP Accreditation Checklists.</li>
+              <li>Code of Federal Regulations. 42 CFR 493.1253 - Establishment and Verification of Performance Specifications. <a href="https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">ecfr.gov</a></li>
+              <li>College of American Pathologists. Laboratory General Checklist, GEN.43022 (LIS Testing).</li>
               <li>FDA. (2002). General Principles of Software Validation; Final Guidance for Industry and FDA Staff.</li>
             </ol>
           </div>
