@@ -24,9 +24,9 @@ export interface FaqCategory {
 // /resources/veritacheck-vs-ep-evaluator  (visible "Frequently Asked Questions")
 export const EPEVAL_COMPARE_FAQ: FaqQA[] = [
   { q: "What is EP Evaluator?", a: "EP Evaluator, from Data Innovations, is a long-established statistical software used for clinical laboratory method verification. It runs CLSI-based studies such as precision, linearity, and method comparison, and evaluates results against total allowable error and CLIA proficiency testing limits." },
-  { q: "Is VeritaCheck an alternative to EP Evaluator?", a: "Yes, for CLIA performance verification. VeritaCheck runs the CLSI verification studies most CLIA laboratories use (14 study types) and adds a whole-lab coverage view and a 42 CFR-cited, director-signed report. EP Evaluator offers a broader pure-statistics library; VeritaCheck ties each study to the test menu and the regulation." },
-  { q: "Does VeritaCheck run the same studies as EP Evaluator?", a: "VeritaCheck covers the verification study types most CLIA labs need, including calibration verification and linearity, precision, method comparison, reportable range, reference range, and reagent lot verification. EP Evaluator has a larger overall statistical library and goes deeper on advanced statistics; VeritaCheck does not implement every statistical protocol EP Evaluator offers." },
-  { q: "How is VeritaCheck priced compared with EP Evaluator?", a: "VeritaCheck is included in every VeritaAssure plan at published annual prices with no per-user or per-study upcharge. EP Evaluator is licensed per user with annual maintenance and does not publish pricing." },
+  { q: "Is VeritaCheck® an alternative to EP Evaluator?", a: "Yes, for CLIA performance verification. VeritaCheck® runs the CLSI verification studies most CLIA laboratories use (14 study types) and adds a whole-lab coverage view and a 42 CFR-cited report with a director signature block. EP Evaluator offers a broader pure-statistics library; VeritaCheck® ties each study to the test menu and the regulation." },
+  { q: "Does VeritaCheck® run the same studies as EP Evaluator?", a: "VeritaCheck® covers the verification study types most CLIA labs need, including calibration verification and linearity, precision, method comparison, reportable range, reference range, and reagent lot verification. EP Evaluator has a larger overall statistical library and goes deeper on advanced statistics; VeritaCheck® does not implement every statistical protocol EP Evaluator offers." },
+  { q: "How is VeritaCheck® priced compared with EP Evaluator?", a: "VeritaCheck® is included in the Clinic, Community, and Hospital plans at published annual prices, with no per-study charge. Those plans include a set number of active seats, and additional seats are priced per seat. It is also sold alone as VeritaCheck® Unlimited (single user) or at $25 per study. System plans are quoted. EP Evaluator is sold by subscription through Data Innovations, and its product page lists no price." },
 ];
 
 // /resources/how-to-choose-lab-compliance-software  (visible "Frequently Asked Questions")
@@ -41,7 +41,7 @@ export const CHOOSE_SOFTWARE_FAQ: FaqQA[] = [
   },
   {
     q: "Is a laboratory information system (LIS) the same as compliance software?",
-    a: "No. A laboratory information system runs and reports testing; compliance is a secondary feature at best. Compliance software is purpose-built to document performance verification, proficiency testing, quality control, competency, policy, and inspection readiness in a form a surveyor accepts. Many laboratories run both."
+    a: "No. A laboratory information system runs and reports testing; compliance is a secondary feature at best. Compliance software is purpose-built to document performance verification, proficiency testing, quality control, competency, policy, and inspection readiness in a form built for a surveyor's review. Many laboratories run both."
   },
   {
     q: "Does lab compliance software need to store patient data?",
@@ -368,7 +368,7 @@ export const FAQ_CATEGORIES: FaqCategory[] = [
     items: [
       {
         q: "What is VeritaAssure\u00AE?",
-        a: "VeritaAssure\u00AE is a SaaS compliance and operations platform built specifically for clinical laboratories. The suite includes eighteen modules organized into two streams: twelve compliance modules (performance verification, inspection readiness, competency, policy management, test menu mapping, personnel records, certificate tracking, proficiency testing, regulatory calendar, post-survey deficiency response, daily QC sign-off, and equipment maintenance) and six operations modules (billable-tests-per-hour benchmarking, monthly productivity tracking, by-hour staffing analysis, quality indicators, inventory, and cost-per-reportable-test studies). See What's included in the VeritaAssure\u00AE suite below for each module by name. Every report includes regulatory citations and a laboratory director or designee review block.",
+        a: "VeritaAssure\u00AE is a SaaS compliance and operations platform built specifically for clinical laboratories. The suite includes eighteen modules organized into two streams: twelve compliance modules (performance verification, inspection readiness, competency, policy management, test menu mapping, personnel records, certificate tracking, proficiency testing, regulatory calendar, post-survey deficiency response, daily QC sign-off, and equipment maintenance) and six operations modules (productive-hours-per-billable-test benchmarking, monthly productivity tracking, by-hour staffing analysis, quality indicators, inventory, and cost-per-reportable-test studies). See What's included in the VeritaAssure\u00AE suite below for each module by name. Study and competency reports include regulatory citations and a laboratory director or designee review block.",
       },
       {
         q: "Who built VeritaAssure\u00AE?",
@@ -380,7 +380,7 @@ export const FAQ_CATEGORIES: FaqCategory[] = [
       },
       {
         q: "Does VeritaAssure\u00AE replace my laboratory director or designee?",
-        a: "No. Every report and study generated by VeritaAssure\u00AE includes a laboratory director or designee review block. Final approval and clinical determination must be made by the laboratory director or designee. VeritaAssure\u00AE supports compliance documentation - it does not replace professional judgment.",
+        a: "No. VeritaCheck\u00AE studies and VeritaComp\u2122 competency records include a laboratory director or designee review block. Final approval and clinical determination must be made by the laboratory director or designee. VeritaAssure\u00AE supports compliance documentation - it does not replace professional judgment.",
       },
     ],
   },
@@ -389,19 +389,19 @@ export const FAQ_CATEGORIES: FaqCategory[] = [
     items: [
       {
         q: "What's included in the VeritaAssure\u00AE suite?",
-        a: "The suite includes eighteen production modules across two streams. Compliance (twelve): VeritaCheck\u00AE (performance verification, calibration verification, EP15 precision), VeritaMap\u00AE (test menu regulatory mapping), VeritaScan\u00AE (inspection readiness self-assessment with the AAA sub-block for unregulated analytes), VeritaComp\u2122 (competency assessment), VeritaPolicy\u2122 (TJC policy compliance), VeritaStaff\u2122 (personnel credentialing), VeritaLab\u2122 (CLIA certificate and accreditation tracking), VeritaPT\u2122 (proficiency testing tracker covering CAP, API, and WSLH plus alternative assessment records), VeritaTrack\u2122 (regulatory calendar and milestone tracker), VeritaResponse\u2122 (post-survey deficiency response with the federal CMS-2567 renderer and a cross-link to your VeritaCheck history), VeritaQC\u2122 (daily QC sign-off with Westgard evaluation), and VeritaMaintain\u2122 (instrument maintenance and function-check log with due reminders). Operations (six): VeritaBench\u2122 (free billable-tests-per-hour calculator), VeritaPace\u2122 (monthly productivity tracker with year-over-year trend), VeritaShift\u2122 (by-hour staffing analyzer), VeritaQA\u2122 (quality indicators dashboard), VeritaStock\u2122 (reagent and inventory management with barcode and Order PDF), and VeritaOps\u2122 (cost-per-reportable-test studies). See the roadmap for what's coming next.",
+        a: "The suite includes eighteen production modules across two streams. Compliance (twelve): VeritaCheck\u00AE (performance verification, calibration verification, EP15 precision), VeritaMap\u00AE (test menu regulatory mapping), VeritaScan\u00AE (inspection readiness self-assessment with the AAA sub-block for unregulated analytes), VeritaComp\u2122 (competency assessment), VeritaDC\u2122 (policy and document control), VeritaStaff\u2122 (personnel credentialing), VeritaLab\u2122 (CLIA certificate and accreditation tracking), VeritaPT\u2122 (proficiency testing tracker covering CAP, API, and WSLH plus alternative assessment records), VeritaTrack\u2122 (regulatory calendar and milestone tracker), VeritaResponse\u2122 (post-survey deficiency response with the federal CMS-2567 renderer and a cross-link to your VeritaCheck history), VeritaQC\u2122 (daily QC sign-off with Westgard evaluation), and VeritaMaintain\u2122 (instrument maintenance and function-check log with due reminders). Operations (six): VeritaBench\u2122 (free productivity scorecard: productive hours per billable test), VeritaPace\u2122 (monthly productivity tracker with year-over-year trend), VeritaShift\u2122 (by-hour staffing analyzer), VeritaQA\u2122 (quality indicators dashboard), VeritaStock\u2122 (reagent and inventory management with barcode and Order PDF), and VeritaOps\u2122 (cost-per-reportable-test studies). See the roadmap for what's coming next.",
       },
       {
         q: "What is VeritaCheck\u00AE?",
-        a: "VeritaCheck\u00AE is the performance verification and calibration verification module. It supports CLIA TEa-based pass/fail with automated lookup, EP15 precision, EP9 method comparison, and reportable range studies. Every report includes regulatory citations, statistics, and a director review block, exported as a signed PDF.",
+        a: "VeritaCheck\u00AE is the performance verification and calibration verification module. It can evaluate results against a CLIA PT limit with automated lookup, or against a criterion your medical director or designee adopts, and it runs EP15 precision, EP09 method comparison, reportable range, and other studies. Every report includes regulatory citations, statistics, and a director review block on page 1, exported as a PDF for the laboratory director or designee to sign.",
       },
       {
         q: "What is VeritaScan\u00AE?",
-        a: "VeritaScan\u00AE is a 173-item inspection readiness self-assessment across 10 compliance domains, triple-mapped to The Joint Commission standards, CAP checklists, and 42 CFR Part 493. Studies completed in VeritaCheck\u00AE automatically check off corresponding items, so your inspection readiness is always current. Built by a former TJC laboratory surveyor with 200+ facility inspections. Includes an executive summary export.",
+        a: "VeritaScan\u00AE is a 173-item inspection readiness self-assessment across 10 compliance domains, with TJC, CAP, COLA, AABB, and 42 CFR references where one applies. Saving a calibration verification, correlation, precision, reagent lot, or PT/INR study in VeritaCheck\u00AE marks the matching VeritaScan\u00AE items complete and links the study, unless the lab has already answered them. Built by a former TJC laboratory surveyor with 200+ facility inspections. Includes an executive summary export.",
       },
       {
         q: "What is VeritaTrack\u2122?",
-        a: "VeritaTrack\u2122 is a QC task tracking and sign-off module for daily, weekly, and monthly compliance tasks. Assign tasks to staff, capture electronic sign-offs with timestamps, and produce an audit-ready log for inspections.",
+        a: "VeritaTrack\u2122 is the regulatory compliance calendar: timed tasks such as calibration verification, correlations, competency, equipment calibration, and QC review, with sign-off logging, import of your VeritaMap\u00AE test menu, and Excel export.",
       },
       {
         q: "What is VeritaStock\u2122?",
@@ -409,31 +409,31 @@ export const FAQ_CATEGORIES: FaqCategory[] = [
       },
       {
         q: "What is VeritaBench\u2122?",
-        a: "VeritaBench\u2122 is the productivity and staffing analytics suite for laboratory operations. It includes VeritaBench\u2122 (free billable-tests-per-hour calculator at /calculator), VeritaPace\u2122 (monthly productivity tracker with year-over-year trend analysis at /veritabench), VeritaShift\u2122 (by-hour staffing analyzer at /veritabench/staffing), and VeritaQA\u2122 (quality indicators dashboard at /veritabench/pi). Built for hospital and enterprise labs that need to defend headcount and budget decisions.",
+        a: "VeritaBench\u2122 is the free productivity scorecard at /calculator: productive hours per billable test against a facility-type range, with no sign-in. It sits alongside VeritaPace\u2122 (monthly productivity tracker with year-over-year trend analysis at /veritabench), VeritaShift\u2122 (by-hour staffing analyzer at /veritabench/staffing), and VeritaQA\u2122 (quality indicators dashboard at /veritabench/pi), built for hospital and health-system labs that need to defend headcount and budget decisions.",
       },
       {
         q: "What is VeritaMap\u00AE?",
-        a: "VeritaMap\u00AE is the test menu regulatory mapping module. One row per test, one column per regulatory obligation (CLIA complexity, PT enrollment, competency assignment, linearity and correlation requirements, QC obligations, reference range source, SOP location). Every cell maps to the exact 42 CFR section and TJC standard that mandates it, so your obligations are visible and auditable across the entire test menu.",
+        a: "VeritaMap\u00AE is the test menu regulatory mapping module. One row per test, with its instruments, specialty, CLIA complexity, the 42 CFR Part 493 section for that specialty, whether a correlation is required, and the last calibration verification, method comparison, precision, and SOP review dates. Reference ranges, critical values, and AMR are entered by the laboratory, never pre-filled.",
       },
       {
         q: "What is VeritaComp\u2122?",
-        a: "VeritaComp\u2122 manages staff competency assessments across the six CLIA-required methods, the 2-of-4 waived testing requirements, and non-technical duties. Integrates with VeritaMap\u00AE for automatic instrument and method group setup. Generates the documentation framework surveyors expect across TJC, CAP, COLA, and CLIA-only accreditation.",
+        a: "VeritaComp\u2122 manages staff competency assessments across the six CLIA-required methods, the 2-of-4 waived testing requirements, and non-technical duties. Reads your VeritaMap\u00AE instruments and suggests method groups; the laboratory decides the groups. Generates the documentation framework surveyors expect across TJC, CAP, COLA, and CLIA-only accreditation.",
       },
       {
         q: "Where do the Element 6 problem-solving quiz questions come from?",
-        a: "Directors author Element 6 quizzes themselves, in-app. The Quizzes tab on every competency program lets you write questions row by row (question, four options, correct answer, explanation), upload a JSON file you wrote elsewhere, edit any existing quiz, and attach a quiz to any method group in the program. Each quiz requires a 100% score to pass; the full quiz and graded answers append to the competency PDF. Director authorship is intentional: Element 6 is the director's signoff on what their staff need to know, and surveyors expect that ownership to be visible. A planned future enhancement (parked, no timeline yet) is a shared, opt-in question library where directors who want to contribute can publish their questions for other labs with the same instruments to browse and upvote.",
+        a: "Directors author Element 6 quizzes themselves, in-app. The Quizzes tab on every competency program lets you write questions row by row (question, four options, correct answer, explanation), upload a JSON file you wrote elsewhere, edit any existing quiz, and attach a quiz to any method group in the program. Each quiz requires a 100% score to pass; the full quiz and graded answers append to the competency PDF. Director authorship is intentional: Element 6 is the director's signoff on what their staff need to know, and surveyors expect that ownership to be visible. A planned future enhancement (on the roadmap, no date yet) is a shared, opt-in question library where directors who want to contribute can publish their questions for other labs with the same instruments to browse and upvote.",
       },
       {
         q: "What is VeritaLab\u2122?",
         a: "VeritaLab\u2122 tracks your laboratory's certificates and accreditations: CLIA certificates, state licenses, accreditation status, and lab director credentials. Reminder alerts fire well before anything expires, and the actual certificate documents are stored so you can retrieve them in seconds during a survey.",
       },
       {
-        q: "What is VeritaPolicy\u2122?",
-        a: "VeritaPolicy\u2122 is a policy and procedure tracker for TJC, CAP, COLA, and CMS-required policies. Pre-loaded with the requirements for each accreditor, with per-requirement N/A controls so you can mark policies that don't apply to your lab. Build your policy library, link documents to requirements, and generate an inspector-ready compliance report.",
+        q: "What is VeritaDC\u2122?",
+        a: "VeritaDC\u2122 is the laboratory's policy and document control module: load policies, procedures, and forms, keep version history, capture director approval, and document periodic reviews. It tracks the policies required under CLIA (42 CFR 493) and crosswalks each one to your accrediting body (CAP, COLA, TJC, or AABB), with N/A controls for requirements that don't apply to your lab, and it generates an inspection-ready compliance report.",
       },
       {
         q: "What is VeritaStaff\u2122?",
-        a: "VeritaStaff\u2122 manages laboratory personnel records: staff roster, CLIA role assignments, qualifications, hire-date onboarding, competency milestone tracking, and CMS 209 report generation.",
+        a: "VeritaStaff\u2122 manages laboratory personnel records: staff roster, CLIA role assignments, qualifications, hire dates, competency milestone tracking, continuing education tracking, and CMS 209 report generation.",
       },
       {
         q: "What is VeritaPT\u2122?",
@@ -441,11 +441,11 @@ export const FAQ_CATEGORIES: FaqCategory[] = [
       },
       {
         q: "What is VeritaResponse\u2122?",
-        a: "VeritaResponse\u2122 manages post-survey deficiency response. When you get cited, VeritaResponse\u2122 turns Word documents and email threads into one tracked finding with a due-date clock per accreditor (CAP 30 days, TJC 60 days, CMS-2567 10 days, AABB event-driven). Renders the federal CMS-2567 Plan of Correction PDF with all 5 POC elements labeled, plus dedicated CAP, TJC ESC, COLA, and AABB renderers. Cross-links to your most recent VeritaCheck\u00AE study for the cited standard so you can show the surveyor what you had already done.",
+        a: "VeritaResponse\u2122 manages post-survey deficiency response. When you get cited, VeritaResponse\u2122 replaces Word documents and email threads with one tracked finding and a due-date clock per accreditor (CAP 30 days, TJC 60 days, CMS-2567 10 days, COLA and AABB as soft targets). Renders the federal CMS-2567 Plan of Correction PDF with all 5 POC elements labeled, plus dedicated CAP, TJC ESC, COLA, and AABB renderers. Cross-links to your most recent VeritaCheck\u00AE study for the cited standard so you can show the surveyor what you had already done.",
       },
       {
         q: "Do modules work together, or are they separate?",
-        a: "They're integrated. Studies in VeritaCheck\u00AE automatically check off VeritaScan\u00AE items. Instruments registered in VeritaMap\u00AE feed VeritaCheck\u00AE instrument selection and VeritaComp\u2122 competency programs. Personnel in VeritaStaff\u2122 tie into VeritaComp\u2122 assessments. One subscription, one login, shared data.",
+        a: "They're integrated. Calibration verification, correlation, precision, and reagent lot studies in VeritaCheck\u00AE mark matching VeritaScan\u00AE items complete. Instruments registered in VeritaMap\u00AE feed VeritaCheck\u00AE instrument selection and VeritaComp\u2122 competency programs. Personnel in VeritaStaff\u2122 tie into VeritaComp\u2122 assessments. One subscription, one login, shared data.",
       },
     ],
   },
@@ -453,12 +453,12 @@ export const FAQ_CATEGORIES: FaqCategory[] = [
     category: "Teams and Seats",
     items: [
       {
-        q: "Can my team share an account?",
-        a: "Yes. Every paid plan includes seats for additional staff members. The owner invites teammates by email; each gets their own login and customizable permissions. Studies, instruments, and inspection records are shared across the team.",
+        q: "Can my team work in the same lab account?",
+        a: "Yes, on the suite plans (Clinic, Community, Hospital, and System), each person with their own login. The owner invites teammates by email and sets their permissions. Studies, instruments, and inspection records are shared across the team. Logins themselves cannot be shared, and VeritaCheck® Unlimited is a single-user plan.",
       },
       {
         q: "How are seat permissions configured?",
-        a: "The account owner sets permissions per seat: read-only, study-author, instrument-admin, billing-admin, and others. You can scope a seat to specific modules - for example, an inventory manager who only sees VeritaStock\u2122.",
+        a: "The account owner sets each seat to Edit all, View all, or Custom, which sets view or edit module by module. For example, an inventory manager can have edit access in VeritaStock\u2122 and view access everywhere else.",
       },
       {
         q: "How many seats are included in each plan?",
@@ -466,7 +466,7 @@ export const FAQ_CATEGORIES: FaqCategory[] = [
       },
       {
         q: "Can I add more seats later?",
-        a: "Each plan tier includes a fixed number of seats. To get more seats, upgrade to the next tier (Clinic to Community, Community to Hospital, or Hospital to System) from your Account Settings. Tier upgrades are prorated against your current billing period.",
+        a: "Yes. Additional active seats are priced per seat at your tier's rate: $500 on Clinic, $425 on Community, and $333 on Hospital. For a lower per-seat rate, you can move up a tier (Clinic to Community, Community to Hospital, or Hospital to System). Email info@veritaslabservices.com to change seats or tiers. Staff who only read and sign use staff logins from the Staff Seats add-on, not active seats.",
       },
       {
         q: "Can I belong to multiple labs?",
@@ -479,23 +479,23 @@ export const FAQ_CATEGORIES: FaqCategory[] = [
     items: [
       {
         q: "Which accreditation programs does VeritaAssure\u00AE support?",
-        a: "VeritaAssure\u00AE aligns with The Joint Commission (TJC), CAP (College of American Pathologists), COLA, and CMS/CLIA requirements. VeritaScan\u00AE items are triple-mapped to TJC standards, CAP checklists, and 42 CFR Part 493. Reports cite the specific regulation each finding addresses.",
+        a: "VeritaAssure\u00AE aligns with The Joint Commission (TJC), CAP (College of American Pathologists), COLA, and CMS/CLIA requirements. VeritaScan\u00AE items carry TJC, CAP, COLA, AABB, and 42 CFR references where one applies. Reports cite the specific regulation each finding addresses.",
       },
       {
         q: "How does VeritaAssure\u00AE handle the CLIA TEa standard?",
-        a: "VeritaCheck\u00AE pre-populates the \u00a7493 proficiency-testing TEa for each analyte (from \u00a7493.927, \u00a7493.931, \u00a7493.937, and \u00a7493.941) as the default calibration verification acceptance criterion. Under \u00a7493.1253(b)(2) and \u00a7493.1255(b)(3), CLIA requires the lab to establish and document acceptance criteria but does not specify the numeric value. Adopting the \u00a7493 PT TEa is a recommendation, made and approved by your medical director or designee. The TEa lookup tool is available at /resources/clia-tea-lookup.",
+        a: "VeritaCheck\u00AE pre-populates the \u00a7493 proficiency-testing limit for each analyte (from \u00a7493.927, \u00a7493.931, \u00a7493.933, \u00a7493.937, \u00a7493.941, and \u00a7493.959) as the default calibration verification acceptance criterion, and the laboratory can enter its own goal instead. Under \u00a7493.1253(b)(3) and \u00a7493.1255(b)(2), CLIA requires the lab to establish and document acceptance criteria but does not specify the numeric value. A medical director or designee may adopt a PT limit and should document why it fits the clinical need. CMS said in the preamble to CMS-3355-F (87 FR 41194, July 11, 2022), which is not regulation text, that PT limits were written to grade proficiency testing and were not intended as performance goals, and that goals for accuracy and precision should rest on clinical needs and the manufacturer's labeling. The TEa lookup tool is available at /resources/clia-tea-lookup.",
       },
       {
         q: "Does VeritaAssure\u00AE work for waived-only labs?",
-        a: "Yes. Certificate of Waiver labs are placed in the Clinic tier automatically. Even waived-only labs benefit from VeritaScan\u00AE's inspection readiness self-assessment, VeritaStock\u2122 inventory management, and personnel and certificate tracking.",
+        a: "Yes. Clinic is the usual tier for Certificate of Waiver labs. Even waived-only labs benefit from VeritaScan\u00AE's inspection readiness self-assessment, VeritaStock\u2122 inventory management, and personnel and certificate tracking.",
       },
       {
         q: "Can a non-laboratorian use VeritaAssure\u00AE?",
-        a: "Yes, but every report still requires a laboratory director or designee review block. VeritaAssure\u00AE is built so a quality manager, lab supervisor, or technologist can complete the work, while the director retains final approval responsibility.",
+        a: "Yes, but VeritaCheck\u00AE studies and competency records still require laboratory director or designee review. VeritaAssure\u00AE is built so a quality manager, lab supervisor, or technologist can complete the work, while the director retains final approval responsibility.",
       },
       {
         q: "How often is the regulatory data updated?",
-        a: "The 42 CFR Part 493 TEa values are sourced from the CLIA proficiency testing final rule (CMS-3355-F), effective July 11, 2024 and implemented January 1, 2025, and are updated when CMS publishes a Federal Register notice that changes them. TJC, CAP, COLA, AABB, and CMS checklists are mapped to the current published standards; updates are pushed to the platform without action on your part. See /resources/clia-tea-lookup for the live TEa reference tool.",
+        a: "The 42 CFR Part 493 TEa values are sourced from the CLIA proficiency testing final rule (CMS-3355-F), published July 11, 2022, effective July 11, 2024, and implemented January 1, 2025, and are updated when CMS publishes a Federal Register notice that changes them. TJC, CAP, COLA, AABB, and CMS references are checked against the published standards, and updates reach the platform without action on your part. See /resources/clia-tea-lookup for the live TEa reference tool.",
       },
     ],
   },
@@ -554,27 +554,27 @@ export const FAQ_CATEGORIES: FaqCategory[] = [
     items: [
       {
         q: "What plans are available?",
-        a: "VeritaAssure\u00AE offers plans for labs of all sizes, from a single per-study purchase to enterprise subscriptions for large health systems. Plans include seats for your team and the full VeritaAssure\u00AE module suite. Certificate of Waiver labs are always placed in the lowest tier. For current pricing, visit the pricing page.",
+        a: "VeritaAssure\u00AE offers options for labs of all sizes: a single per-study purchase, VeritaCheck\u00AE Unlimited, three Full Suite tiers (Clinic, Community, Hospital), and custom System quotes for health systems. Full Suite and System plans include seats for your team and the full VeritaAssure\u00AE module suite. For current pricing, visit the pricing page.",
       },
       {
         q: "How does pricing scale with lab size?",
-        a: "Plans are tiered by lab type, not by per-instrument or per-test volume. Clinic ($999/yr) is for single-CLIA practices. Community ($2,125/yr) for community hospitals and reference networks. Hospital ($4,995/yr) for full-service hospital labs. System (custom quote) for health systems with multiple sites. All plans include the full module suite.",
+        a: "Full Suite tiers differ by the number of active seats included, not by per-instrument or per-test volume. Clinic ($999/yr, 2 active seats) is for Certificate of Waiver labs and small clinics. Community ($2,125/yr, 5 active seats) for community hospitals and independent labs. Hospital ($4,995/yr, 15 active seats) for regional and acute care hospital labs. System (custom quote) for health systems with multiple CLIA labs. All Full Suite plans include the full module suite.",
       },
       {
         q: "How is my plan tier determined?",
-        a: "During checkout you can enter your CLIA number and we will look it up against CMS data to suggest a plan based on your certificate type and facility size. You can always select a different tier. Certificate of Waiver labs are placed in the Clinic tier.",
+        a: "You choose the tier that fits the number of active seats you need, and suite plans are set up with our team on a short call. If you register yourself, you can search for your hospital by name and we suggest a plan from its licensed bed count. You can always select a different tier.",
       },
       {
         q: "Do you offer a free trial?",
-        a: "Yes, on our multi-seat suite plans (Clinic, Community, Hospital). Our team sets up your lab on a short call, and those subscriptions include a 14-day free trial: you can use the full platform during the trial and are only charged when it ends. VeritaCheck® Unlimited does not include a trial; it bills at its discounted first-year price at checkout. You can also run individual VeritaCheck® studies on a per-study basis with no subscription.",
+        a: "Yes, on our multi-seat suite plans (Clinic, Community, Hospital). Our team sets up your lab on a short call, and those subscriptions include a 14-day free trial: you can use the full platform during the trial and are only charged when it ends. VeritaCheck® Unlimited does not include a trial; it bills at its discounted first-year price at checkout. You can also run individual VeritaCheck® studies on a per-study basis with no subscription. Every new account also includes two free VeritaCheck® studies, no card required.",
       },
       {
         q: "Can I try VeritaAssure\u00AE before subscribing?",
-        a: "Yes. A fully interactive live demo is available at veritaslabservices.com/demo with no login required. Our multi-seat suite plans are set up with our team on a short call and include a 14-day free trial, so you can use the full platform before being billed. VeritaCheck\u00AE Unlimited bills at its discounted first-year price at checkout, and you can also run individual VeritaCheck\u00AE studies on a per-study basis without a subscription.",
+        a: "Yes. A live demo with sample data is available at www.veritaslabservices.com/demo with no login required. Our multi-seat suite plans are set up with our team on a short call and include a 14-day free trial, so you can use the full platform before being billed. VeritaCheck\u00AE Unlimited bills at its discounted first-year price at checkout, and you can also run individual VeritaCheck\u00AE studies on a per-study basis without a subscription.",
       },
       {
         q: "What's the difference between the per-study price and the unlimited subscription?",
-        a: "Per Study is $25 per validation study, paid one-time, no subscription. It's ideal for labs that run only a handful of studies a year. VeritaCheck\u00AE Unlimited at $299 the first year ($499 per year after) breaks even after just 12 studies and includes all VeritaCheck\u00AE functionality. For full-suite access (VeritaTrack\u2122, VeritaStock\u2122, VeritaBench\u2122, and others), choose Clinic, Community, Hospital, or System.",
+        a: "Per Study is $25 per verification study, paid one-time, no subscription. It's ideal for labs that run only a handful of studies a year. VeritaCheck\u00AE Unlimited at $299 the first year ($499 per year after) is for a single user, breaks even at 12 studies in the first year and 20 a year after that, and includes all VeritaCheck\u00AE functionality. For full-suite access (VeritaTrack\u2122, VeritaStock\u2122, VeritaPace\u2122, and others), choose Clinic, Community, Hospital, or System.",
       },
       {
         q: "Do you offer a money-back guarantee?",
@@ -644,11 +644,11 @@ export const FAQ_CATEGORIES: FaqCategory[] = [
       },
       {
         q: "Do you offer consulting services beyond software?",
-        a: "Yes. Veritas Lab Services offers laboratory consulting at /services, including mock inspections, performance verification strategy, quality management system buildouts, and CLIA application support. Consulting and software are sold separately.",
+        a: "Yes. Veritas Lab Services offers laboratory consulting at /services, including regulatory readiness reviews and mock inspections, productivity and workflow analysis, leadership coaching and education, and CLIA laboratory director services. Consulting and software are sold separately.",
       },
       {
         q: "How do I schedule a live walkthrough?",
-        a: "Visit /book to schedule a 30-minute call with Michael Veri. We'll walk through your specific accreditation situation and the modules most relevant to your lab.",
+        a: "Visit /contact to set up a short call with our team, or /book/scoping-call to schedule a 50-minute consulting scoping call with Michael Veri. We'll walk through your specific accreditation situation and the modules most relevant to your lab.",
       },
       {
         q: "How do I get support?",
@@ -656,7 +656,7 @@ export const FAQ_CATEGORIES: FaqCategory[] = [
       },
       {
         q: "Is training available?",
-        a: "Clinic and Community plans include a complimentary 1-hour onboarding session via Zoom or Teams with a VeritaAssure\u00AE specialist. Hospital plans include a 2-hour session. Enterprise plans include custom onboarding tailored to your organization. Additional training sessions can be arranged on request.",
+        a: "Clinic and Community plans include a complimentary 1-hour onboarding session via Zoom or Teams with a VeritaAssure\u00AE specialist. Hospital plans include a 2-hour session. System plans include custom onboarding tailored to your organization. Additional training sessions can be arranged on request.",
       },
     ],
   },
