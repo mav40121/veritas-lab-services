@@ -694,7 +694,7 @@ function StaffPortalPoliciesView({
                 {signing ? "Signing..." : "I have read this policy. Sign."}
               </button>
               <p className="text-xs text-muted-foreground mt-2">
-                Your typed name, IP address, and the policy's content hash are recorded as your acknowledgement. Signatures are surveyor-defensible per 42 CFR §493.1251.
+                Your typed name, IP address, and the policy's content hash are recorded as your acknowledgement.
               </p>
             </div>
           )}

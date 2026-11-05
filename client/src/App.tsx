@@ -202,13 +202,13 @@ function SiteFooter() {
         <div className="grid sm:grid-cols-3 gap-8 mb-8">
           <div>
             <div className="font-serif font-bold text-base mb-2">Veritas Lab Services, LLC</div>
-            <p className="text-sm text-muted-foreground leading-relaxed">Expert clinical laboratory consulting: leadership coaching, regulatory readiness, productivity analysis, and VeritaCheck® study analysis.</p>
+            <p className="text-sm text-muted-foreground leading-relaxed">Clinical laboratory compliance software and consulting: the VeritaAssure® suite, leadership coaching, regulatory readiness, and productivity analysis.</p>
             <a href="/team" className="inline-block mt-3 text-sm text-primary hover:underline" data-testid="footer-team-link">Meet our team</a>
           </div>
           <div>
             <div className="font-semibold text-sm mb-3">Services</div>
             <ul className="space-y-1.5 text-sm text-muted-foreground">
-              {["Leadership Coaching","Inspection Readiness","Productivity Analysis","Regulatory Preparedness","VeritaCheck® Study Analysis"].map(s => <li key={s}>{s}</li>)}
+              {["Leadership Coaching","Inspection Readiness","Productivity Analysis","Regulatory Preparedness"].map(s => <li key={s}>{s}</li>)}
             </ul>
           </div>
           <div>

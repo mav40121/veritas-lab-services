@@ -209,8 +209,8 @@ export default function ServicesPage() {
                     Current Availability
                   </h2>
                   <p className="text-sm text-muted-foreground leading-relaxed">
-                    Currently engaged through September 2026. Now accepting
-                    inquiries for onsite engagements beginning October 2026.
+                    Now accepting inquiries for onsite engagements. Contact us
+                    for current availability.
                   </p>
                 </div>
               </div>
@@ -297,7 +297,7 @@ export default function ServicesPage() {
             </h2>
             <p className="text-sm text-muted-foreground max-w-2xl leading-relaxed">
               Pricing ranges shown reflect typical engagement sizes. Final
-              scope is set during a no-cost 30-minute scoping call.
+              scope is set during a no-cost 50-minute scoping call.
             </p>
           </div>
           {serviceGroups.map(({ heading, leadIn, services: groupServices }) => (
@@ -407,7 +407,7 @@ export default function ServicesPage() {
                   No-cost scoping call
                 </h3>
                 <p className="text-sm text-muted-foreground leading-relaxed">
-                  Thirty minutes by phone or video. We confirm whether the
+                  Fifty minutes by phone or video. We confirm whether the
                   engagement fits, identify the right scope, and give you a
                   clear price before any paper changes hands.
                 </p>
@@ -420,9 +420,10 @@ export default function ServicesPage() {
                   Written scope and fixed price
                 </h3>
                 <p className="text-sm text-muted-foreground leading-relaxed">
-                  Every engagement has a signed scope document with deliverables
-                  and a fixed price, so your purchasing team is not waiting on
-                  hourly invoices. No scope creep, no surprises.
+                  Every project engagement has a signed scope document with
+                  deliverables and a fixed price, so your purchasing team is not
+                  waiting on hourly invoices. Coaching and director coverage are
+                  billed at the stated rate.
                 </p>
               </CardContent>
             </Card>
@@ -433,10 +434,8 @@ export default function ServicesPage() {
                   Availability
                 </h3>
                 <p className="text-sm text-muted-foreground leading-relaxed">
-                  Currently engaged through September 2026, with onsite
-                  engagement capacity opening mid-October 2026. Inquiries for
-                  the queue are open now. Remote oversight roles considered
-                  case by case.
+                  Now accepting inquiries for onsite engagements. Remote
+                  oversight roles considered case by case.
                 </p>
               </CardContent>
             </Card>
@@ -483,7 +482,7 @@ export default function ServicesPage() {
                       "Calibration Verification / Linearity, Correlation / Method Comparison, Precision Verification, Reagent Lot Verification",
                       "Slope, intercept, R², proportional bias, CLIA TEa presets for major analytes",
                       "Director-signable PDFs with the CFR citation in the narrative",
-                      "Cloud-hosted, no install, no IT review required",
+                      "Cloud-hosted, no install",
                       "Studies retained for the life of the account plus two years",
                     ].map((d) => (
                       <li
@@ -550,7 +549,7 @@ export default function ServicesPage() {
       <section className="section-padding border-t border-border bg-secondary/20">
         <div className="container-default text-center max-w-3xl">
           <h2 className="font-serif text-3xl font-bold mb-4">
-            Start with a 30-minute scoping call
+            Start with a 50-minute scoping call
           </h2>
           <p className="text-muted-foreground leading-relaxed">
             No-cost, no obligation. We confirm whether the engagement is the

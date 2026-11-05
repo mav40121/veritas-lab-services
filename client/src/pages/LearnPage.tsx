@@ -81,7 +81,7 @@ export default function LearnPage() {
   useSEO({
     title: "Learn VeritaAssure® | Getting-Started Video Library",
     description:
-      "Short getting-started videos for every VeritaAssure® module: performance verification, test menu mapping, inspection readiness, QC, staffing, and cost per reportable test. Built by a former Joint Commission laboratory surveyor.",
+      "Short getting-started videos across the VeritaAssure® suite: performance verification, test menu mapping, inspection readiness, QC, staffing, and cost per reportable test. Built by a former Joint Commission laboratory surveyor.",
   });
 
   return (
@@ -96,7 +96,7 @@ export default function LearnPage() {
             Learn VeritaAssure&#174;
           </h1>
           <p className="text-xl text-primary font-semibold mb-3">
-            See every module in about thirty seconds.
+            See the modules in about thirty seconds each.
           </p>
           <p className="text-muted-foreground text-lg max-w-2xl leading-relaxed mb-8">
             Short getting-started videos across the VeritaAssure&#174; suite. No sign-in, no sales call.
