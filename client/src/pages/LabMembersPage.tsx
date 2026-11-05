@@ -440,7 +440,7 @@ export default function LabMembersPage() {
                 )}
             </div>
             <p className="text-xs text-muted-foreground">
-              Three kinds of access. Admin / active seats are your writers: they create studies, upload policies, and enter or review data, and they count against your tier's active-seat cap. Staff seats are read and sign: bench staff who read and sign policies, record QC, and take inventory. They draw from your staff seat band, not your active seats, so adding them does not use an active seat. Medical Director is one free seat and is the person VeritaPolicy approvals and QC co-sign route to. The owner can also set or change the Medical Director on any existing member in the table below, the owner included.
+              Three kinds of access. Admin / active seats are your writers: they create studies, upload policies, and enter or review data, and they count against your tier's active-seat cap. Staff seats are read and sign: bench staff who read and sign policies, record QC, and take inventory. They draw from your staff seat band, not your active seats, so adding them does not use an active seat. Medical Director is one free seat and is the person VeritaDC approvals and QC co-sign route to. The owner can also set or change the Medical Director on any existing member in the table below, the owner included.
             </p>
           </CardContent>
         </Card>
@@ -1093,7 +1093,7 @@ const VLS_THINGS: Array<[RegExp, string]> = [
   [/^\/equipment/, "VeritaMaintain"],
   [/^\/veritatrack/, "VeritaTrack"],
   [/^\/veritastock/, "VeritaStock"],
-  [/^\/veritapolicy/, "VeritaPolicy"],
+  [/^\/veritapolicy/, "VeritaDC"],
   [/^\/studies|^\/veritacheck/, "VeritaCheck"],
   [/^\/findings/, "VeritaResponse"],
   [/^\/iqcp/, "the IQCP"],

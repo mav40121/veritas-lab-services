@@ -211,10 +211,10 @@ export default function VeritaMapAppPage() {
       <ModuleHowToCard
         moduleKey="veritamap"
         moduleName="VeritaMap®"
-        whatItDoes="VeritaMap is where you build your facility's test menu. Pick the instruments your lab runs, toggle the tests you actually perform on each, and the menu becomes the source of truth that feeds VeritaCheck (study setup), VeritaComp (competency programs), VeritaPT (PT coverage), and VeritaTrack (regulatory calendar). The menu also captures CLIA complexity, specialty, FDA classification, and fields for the critical values, reference intervals, and AMR your lab will verify and enter per 42 CFR 493.1253."
+        whatItDoes="VeritaMap is where you build your facility's test menu. Pick the instruments your lab runs, toggle the tests you actually perform on each, and the menu becomes the source of truth that feeds VeritaCheck (study setup), VeritaComp (competency programs), VeritaPT (PT coverage), and VeritaTrack (regulatory calendar). The menu also captures CLIA complexity and specialty, plus fields for the critical values, reference intervals, and AMR your lab will verify and enter per 42 CFR 493.1253."
         howToUse={[
-          "Add the instruments your lab runs from the database of 269 FDA-cleared analyzers.",
-          "Toggle the tests you actually perform on each instrument; CLIA complexity, specialty, and FDA classification populate automatically.",
+          "Add the instruments your lab runs from the library of 279 analyzers and 34 manual procedures.",
+          "Toggle the tests you actually perform on each instrument; CLIA complexity and specialty populate automatically.",
           "Record your facility's MEC-adopted critical values for each analyte, if your lab chooses to track them here.",
           "Enter your verified reference intervals and AMR per 42 CFR 493.1253.",
           "Other Verita modules read from this menu automatically; update here whenever you add or retire a test."
@@ -324,7 +324,7 @@ export default function VeritaMapAppPage() {
       {!hasPlanAccess && (
         <div className="mb-6 p-3.5 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 flex items-center justify-between gap-3">
           <div className="text-sm text-amber-800 dark:text-amber-200">
-            <span className="font-semibold">Free plan:</span> up to 4 instruments and 10 analytes per map.{" "}
+            <span className="font-semibold">Free plan:</span> up to 4 instruments and 10 analytes lab-wide.{" "}
             <Link href="/veritamap" className="underline hover:no-underline font-medium">Upgrade for unlimited</Link>
           </div>
         </div>

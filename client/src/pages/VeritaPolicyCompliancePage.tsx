@@ -273,7 +273,7 @@ export default function VeritaPolicyCompliancePage() {
               const url = URL.createObjectURL(blob);
               const a = document.createElement("a");
               a.href = url;
-              a.download = `VeritaPolicy_Compliance_${labTodayIso()}.xlsx`;
+              a.download = `VeritaDC_Compliance_${labTodayIso()}.xlsx`;
               a.click();
               URL.revokeObjectURL(url);
             }}
