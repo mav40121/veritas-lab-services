@@ -1352,7 +1352,7 @@ export default function VeritaTrackAppPage() {
           </div>
 
           {/* Wave B2 (move-3): cross-module seam list. Surfaces VeritaLab
-              cert renewals (90-day horizon) + VeritaPolicy overdue
+              cert renewals (90-day horizon) + VeritaDC overdue
               reviews (30-day horizon) so they appear next to formal
               VeritaTrack tasks. Read-only links; conversion to a real
               task happens in the source module. */}

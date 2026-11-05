@@ -30,7 +30,7 @@ const MODULES: Array<[RegExp, string]> = [
   [/^veritamap/, "VeritaMap"],
   [/^(competency|veritacomp)/, "VeritaComp"],
   [/^(staff|veritastaff|ceu)/, "VeritaStaff"],
-  [/^(veritapolicy|policies|policy|documents|iqcp)/, "VeritaPolicy"],
+  [/^(veritapolicy|policies|policy|documents|iqcp)/, "VeritaDC"],
   [/^(qc|veritaqc)/, "VeritaQC"],
   [/^(veritascan|scan)/, "VeritaScan"],
   [/^(equipment|veritamaintain|maintenance|temperature)/, "VeritaMaintain"],
