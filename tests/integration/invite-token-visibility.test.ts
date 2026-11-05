@@ -6,7 +6,8 @@
 //   3. A pending invite is claimed only with its own link, inside 30 days. Typing the invited address is refused, since sign-up doesn't verify email. The link still works, and an admin invite still makes an admin.
 //   4. Surveyor link tokens go to people with VeritaDC edit only. A Staff login and a view-only seat are refused.
 //   5. The surveyor link itself still opens with no login.
-//   6. The request log masks anything that carries a token.
+//   6. The request log holds no response bodies, and masks a token in the path.
+//   7. A domain that requires single sign-on can't make a password account by signing up, but an invitation's link still works.
 //
 // Boots the REAL routes against a throwaway SQLite DB (made-up rows only). Run: npm run test:invite-token-visibility
 
@@ -15,7 +16,8 @@ import express from "express";
 import { createRequire } from "node:module";
 import { registerRoutes } from "../../server/routes";
 import { db } from "../../server/db";
-import { redactPath, redactSensitive } from "../../server/logRedact";
+import { readFileSync } from "node:fs";
+import { redactPath, requestLogLine } from "../../server/logRedact";
 
 (globalThis as any).require ??= createRequire(import.meta.url);
 
@@ -112,6 +114,13 @@ async function main() {
     const outsider = await call("POST", "/api/auth/register", { email: mail("outsider"), password: PW, name: "Plain Signup", hipaa_acknowledged: true });
     check("3. Someone with no invite still signs up normally", outsider.status < 300 && !!outsider.body.token, `HTTP ${outsider.status}`);
 
+    // An active seat whose address has no account is the same hole.
+    const orphanEmail = mail("orphanseat");
+    sqlite.prepare("INSERT INTO user_seats (owner_user_id, seat_email, status, permissions, invited_at, accepted_at, lab_id, seat_type) VALUES ((SELECT owner_user_id FROM labs WHERE id = ?), ?, 'active', '{\"mode\":\"edit_all\"}', ?, ?, ?, 'active')").run(labId, orphanEmail, new Date().toISOString(), new Date().toISOString(), labId);
+    const orphan = await call("POST", "/api/auth/register", { email: orphanEmail, password: PW, name: "Someone Else", hipaa_acknowledged: true });
+    check("3. Signing up with an active seat's address is refused", orphan.status === 409 && orphan.body.code === "INVITE_LINK_REQUIRED", `HTTP ${orphan.status} ${orphan.body.code ?? ""}`);
+    check("3. It leaves no account and doesn't link the seat", !sqlite.prepare("SELECT 1 FROM users WHERE lower(email) = ?").get(orphanEmail) && (sqlite.prepare("SELECT seat_user_id FROM user_seats WHERE seat_email = ?").get(orphanEmail) as any)?.seat_user_id == null);
+
     // An expired link is dead on the server too, not only on the join page.
     const oldEmail = mail("oldinvite");
     const oldToken = await invite("oldinvite", "admin");
@@ -146,20 +155,31 @@ async function main() {
     const opened = await call("GET", `/api/surveyor/${surveyorToken}/policies`);
     check("5. The surveyor link still opens with no login", opened.status === 200, `HTTP ${opened.status}`);
 
-    // 6. The request logger writes every response body, through this replacer
-    const logged = JSON.stringify({ pendingInvites: [{ seat_email: "a@example.com", invite_token: "TOK-1", invite_role: "admin" }], inviteToken: "TOK-2", joinUrl: "https://x/join?token=TOK-3", token: "TOK-4", session_token: "TOK-5", sessionToken: "TOK-6", secret: "TOK-7", ["pass" + "word"]: "TOK-8", token_count: 5 }, redactSensitive);
-    check("6. No token, secret or password reaches the log", !/TOK-\d/.test(logged), logged.match(/TOK-\d/)?.[0] ?? "");
-    check("6. Everything else is still logged", logged.includes('"seat_email":"a@example.com"') && logged.includes('"invite_role":"admin"') && logged.includes('"token_count":5'));
-    const seatsRow = JSON.stringify(sqlite.prepare("SELECT * FROM user_seats WHERE invite_token IS NOT NULL LIMIT 1").get() ?? {}, redactSensitive);
-    check("6. A whole seat row logs with its token masked", seatsRow.includes('"invite_token":"[REDACTED]"'));
-    const linkFields = JSON.stringify({ url: "https://x/join?token=TOK-1", resetUrl: "https://x/reset-password?token=TOK-2", inviteUrl: "https://x/join?token=TOK-3", onboardingUrl: "https://x/reset-password?token=TOK-4", surveyor: "https://x/surveyor/TOK-5-long-enough", checkout: "https://checkout.stripe.com/c/pay/cs_live_abc" }, redactSensitive);
-    check("6. A link that carries a token is masked, whatever its key", !/TOK-\d/.test(linkFields), linkFields.match(/TOK-\d/)?.[0] ?? "");
-    check("6. An ordinary link is still logged", linkFields.includes("checkout.stripe.com"));
+    // 6. The request log
+    const indexSource = readFileSync("server/index.ts", "utf8");
+    check("6. The logger no longer captures response bodies", !/capturedJsonResponse|res\.json = function/.test(indexSource));
+    check("6. The logger writes through requestLogLine", /log\(requestLogLine\(/.test(indexSource));
+    check("6. A log line is the method, path, status and time, and nothing else", requestLogLine("GET", `/api/labs/${labId}/members`, 200, 12) === `GET /api/labs/${labId}/members 200 in 12ms`);
+
     for (const p of ["/api/surveyor/TOK-6/policies", "/api/surveyor/TOK-6/policies/4/render", "/api/seats/invite/TOK-6", "/api/pdf/TOK-6", "/api/zip/TOK-6", "/api/export-all/file/TOK-6", "/api/scheduling/booking/TOK-6/cancel"]) {
       check(`6. The path ${p.replace("TOK-6", ":token")} is masked`, !redactPath(p).includes("TOK-6"), redactPath(p));
     }
     check("6. The rest of a masked path stays", redactPath("/api/surveyor/TOK-6/policies/4/render") === "/api/surveyor/[REDACTED]/policies/4/render");
     check("6. Other paths are unchanged", redactPath(`/api/labs/${labId}/members`) === `/api/labs/${labId}/members`);
+
+    // 7. Single sign-on domains
+    const ssoDomain = `sso-${stamp}.example.com`;
+    sqlite.prepare("INSERT INTO sso_configs (name, issuer, client_id, email_domains, required, enabled) VALUES ('Made-up', 'https://idp.example.com', 'made-up', ?, 1, 1)").run(JSON.stringify([ssoDomain]));
+    const ssoCount = () => (sqlite.prepare("SELECT COUNT(*) AS n FROM users WHERE lower(email) LIKE ?").get(`%@${ssoDomain}`) as any).n as number;
+    const ssoTyped = await call("POST", "/api/auth/register", { email: `walkin@${ssoDomain}`, password: PW, name: "Walk In", hipaa_acknowledged: true });
+    check("7. Signing up on a domain that requires single sign-on is refused", ssoTyped.status === 403 && ssoTyped.body.code === "SSO_REQUIRED", `HTTP ${ssoTyped.status} ${ssoTyped.body.code ?? ""}`);
+    check("7. It makes no account and returns no session", ssoCount() === 0 && !ssoTyped.body.token);
+    const ssoInvite = await call("POST", `${L}/members`, { email: `invited@${ssoDomain}`, role: "staff", firstName: "Made", lastName: "Invited" }, owner);
+    const ssoJoined = await call("POST", "/api/auth/register", { email: `invited@${ssoDomain}`, password: PW, name: "Made Invited", hipaa_acknowledged: true, inviteToken: seatToken(`invited@${ssoDomain}`) });
+    check("7. An invitation's own link still works there", ssoInvite.status === 200 && ssoJoined.status < 300 && ssoCount() === 1, `HTTP ${ssoJoined.status} ${ssoJoined.body.code ?? ""}`);
+    sqlite.prepare("UPDATE sso_configs SET required = 0 WHERE email_domains = ?").run(JSON.stringify([ssoDomain]));
+    const ssoOptional = await call("POST", "/api/auth/register", { email: `optional@${ssoDomain}`, password: PW, name: "Optional", hipaa_acknowledged: true });
+    check("7. Where single sign-on is optional, sign-up still works", ssoOptional.status < 300, `HTTP ${ssoOptional.status}`);
   } finally {
     server.close();
   }
