@@ -526,7 +526,7 @@ function AnalysisView({ data, studyName }: { data: HourlyDataItem[]; studyName: 
 // ── Wave D3: staffing-adequacy determination ───────────────────────────────
 // The hour-by-hour analysis shows where capacity meets demand; this panel
 // captures the laboratory director (or designee) determination that staffing
-// is adequate for the volume and complexity, per 42 CFR 493.1445(e)(5). A gap
+// is adequate for the volume and complexity, per 42 CFR 493.1445(e)(11). A gap
 // determination requires a documented plan to close it.
 function AdequacyPanel({ study, readOnly, onAttested }: {
   study: StaffingStudy; readOnly: boolean; onAttested: (updated: StaffingStudy) => void;
@@ -571,7 +571,7 @@ function AdequacyPanel({ study, readOnly, onAttested }: {
       </CardHeader>
       <CardContent className="p-4 space-y-3">
         <p className="text-xs text-muted-foreground">
-          The workload analysis above is the evidence. A surveyor wants the laboratory director or designee determination that staffing is adequate for the volume and complexity of testing, per 42 CFR 493.1445(e)(5). Record it here.
+          The workload analysis above is the evidence. A surveyor wants the laboratory director or designee determination that staffing is adequate for the volume and complexity of testing, per 42 CFR 493.1445(e)(11) (moderate complexity: 493.1407(e)(10)). Record it here.
         </p>
         {attested && (
           <div className={`rounded-md border p-3 text-sm ${study.adequacy_determination === "adequate" ? "border-emerald-300 bg-emerald-50 dark:bg-emerald-950/20" : "border-amber-300 bg-amber-50 dark:bg-amber-950/20"}`}>
@@ -784,7 +784,10 @@ export default function VeritaShiftPage() {
       <div className="min-h-[60vh] flex flex-col items-center justify-center text-center px-4">
         <Lock size={40} className="text-muted-foreground mb-4" />
         <h2 className="font-serif text-2xl font-bold mb-2">Sign in to access VeritaShift™</h2>
-        <Button asChild><Link href="/login">Sign in</Link></Button>
+        <div className="flex flex-wrap gap-3 justify-center">
+          <Button asChild><Link href="/login">Sign in</Link></Button>
+          <Button asChild variant="outline"><Link href="/demo/operations">See the operations demo</Link></Button>
+        </div>
       </div>
     );
   }

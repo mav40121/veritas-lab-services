@@ -20,7 +20,7 @@ const COMPETENCY_TYPES = [
       "Direct observation of routine patient test performance",
       "Monitoring recording and reporting of test results",
       "Review of QC, PT, and maintenance records",
-      "Direct observation of instrument maintenance and calibration",
+      "Direct observation of instrument maintenance and function checks",
       "Test performance (blind specimens, PT samples)",
       "Evaluation of problem-solving skills",
     ],
@@ -28,11 +28,11 @@ const COMPETENCY_TYPES = [
   {
     title: "Waived Testing Competency",
     standard: "WT.03.01.01 EP 5",
-    cfr: "42 CFR \u00A7493.15",
-    cap: "CAP GEN.55500",
+    cfr: "Not a CLIA requirement",
+    cap: "CAP GEN.55499",
     icon: Stethoscope,
     color: "text-emerald-600 bg-emerald-500/10 border-emerald-500/20",
-    desc: "Staff performing waived tests. 2 of 4 methods required per test. Assessed at orientation and annually thereafter.",
+    desc: "Staff performing waived tests. 2 of 4 methods per test, the TJC rule. Assessed at orientation and annually thereafter.",
     methods: [
       "Blind specimen testing",
       "Periodic observation by supervisor",
@@ -44,10 +44,10 @@ const COMPETENCY_TYPES = [
     title: "Non-Technical Competency",
     standard: "HR.01.06.01 EP 5/6",
     cfr: "42 CFR \u00A7493.1235",
-    cap: "CAP GEN.54500",
+    cap: "",
     icon: BookOpen,
     color: "text-amber-600 bg-amber-500/10 border-amber-500/20",
-    desc: "Phlebotomy, specimen processing, LIS, maintenance, and other non-testing duties. Free-format checklist defined by the lab director. Assessed at orientation and every 2 years.",
+    desc: "Phlebotomy, specimen processing, LIS, maintenance, and other non-testing duties. Free-format checklist defined by the lab director. Assessed at orientation and on your lab's schedule (TJC: every 2 years).",
     methods: [],
   },
 ];
@@ -55,12 +55,11 @@ const COMPETENCY_TYPES = [
 const FEATURES = [
   "Three competency types in one system: technical, waived, and non-technical",
   "6-method \u00D7 method-group matrix for technical competency (EP 18)",
-  "VeritaMap\u00AE integration: auto-import instruments and suggest method groups",
+  "VeritaMap\u00AE integration: import instruments and suggest method groups",
   "Employee roster with hire date, LIS initials, and status tracking",
   "Pre-populated department checklists (Chemistry, Phlebotomy, Hematology, Microbiology)",
-  "Assessment history per employee with due-date tracking",
+  "Assessment history per employee, with due-date tracking for testing competency",
   "PDF reports with signature on page 1, matrix/checklist at end, Pass/Fail verdict",
-  "VeritaScan\u00AE integration: completed assessments auto-check Domain IX items",
   "Remediation tracking with action plans and timelines",
   "Written by a former TJC laboratory surveyor with 200+ facility inspections",
 ];
@@ -78,7 +77,6 @@ return (
             <div>
               <div className="flex items-center gap-2 mb-4">
                 <Users size={20} className="text-primary" />
-                <Badge className="bg-primary/10 text-primary border-0">New Product</Badge>
                 <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 border">Now Live</Badge>
               </div>
               <h1 className="font-serif text-5xl font-bold mb-3 leading-tight">VeritaComp{"™"}</h1>
@@ -87,12 +85,12 @@ return (
               </p>
               <div className="border-l-4 border-primary pl-4 mb-6">
                 <p className="text-base leading-relaxed italic text-foreground/90">
-                  "Manage all three competency types, technical, waived, and non-technical, in one system, linked directly to your test menu."
+                  "Manage technical, waived, and non-technical competency in one system, with technical and waived programs able to link to your test menu."
                 </p>
               </div>
               <p className="text-muted-foreground leading-relaxed mb-6">
-                Every non-waived laboratory must demonstrate staff competency using the 6 CLIA-required methods. Every facility performing waived testing must document 2-of-4 methods per test. And every lab must assess non-technical duties at orientation and biennially.
-                Whether your lab is accredited by TJC, CAP, COLA, or operates under CLIA only, VeritaComp{"™"} provides the documentation framework your surveyors expect, with direct integration to VeritaMap{"®"} for automatic instrument and method group setup. Built by a former TJC laboratory surveyor with 200+ facility inspections.
+                Every non-waived laboratory must demonstrate staff competency using the 6 CLIA-required methods. Facilities accredited for waived testing document competency per test under their accreditor's rules: TJC asks for 2 of 4 methods, and CAP asks for competency at least annually. Non-technical duties are assessed at orientation and on the schedule your lab sets. TJC requires every 2 years.
+                Whether your lab is accredited by TJC, CAP, COLA, or operates under CLIA only, VeritaComp{"™"} provides the documentation framework your surveyors expect, with direct integration to VeritaMap{"®"} for instrument import and suggested method groups. Built by a former TJC laboratory surveyor with 200+ facility inspections.
               </p>
 
               {/* Pricing - public visitors only */}
@@ -161,7 +159,7 @@ return (
                   <div className="flex items-center gap-2 mb-2 flex-wrap">
                     <Badge variant="outline" className="text-[10px]">{ct.standard}</Badge>
                     <Badge variant="outline" className="text-[10px]">{ct.cfr}</Badge>
-                    <Badge variant="outline" className="text-[10px] bg-violet-500/10 text-violet-600 border-violet-500/20">{ct.cap}</Badge>
+                    {ct.cap && <Badge variant="outline" className="text-[10px] bg-violet-500/10 text-violet-600 border-violet-500/20">{ct.cap}</Badge>}
                   </div>
                   <p className="text-xs text-muted-foreground leading-relaxed mb-3">{ct.desc}</p>
                   {ct.methods.length > 0 && (
@@ -201,10 +199,10 @@ return (
                 Competency assessment is one of the most frequently cited deficiencies during TJC and CAP laboratory surveys. The requirement is deceptively simple: demonstrate that every person who touches a patient specimen is competent to do so. The reality is that most labs manage this with a filing cabinet full of paper forms, inconsistent documentation, and no systematic way to know who is due.
               </p>
               <p className="text-muted-foreground leading-relaxed">
-                VeritaComp{"™"} replaces the filing cabinet. It reads your test menu directly from VeritaMap{"®"}, automatically groups instruments into method groups (because competency is assessed per workflow, not per analyte), and generates the correct assessment form for each staff member: 6-method technical matrix, 2-of-4 waived form, or departmental checklist.
+                VeritaComp{"™"} replaces the filing cabinet. It reads your test menu from VeritaMap{"®"}, treats every analyzer as its own method, and suggests same make-and-model groups for your lab to accept, then generates the correct assessment form for each staff member: 6-method technical matrix, 2-of-4 waived form, or departmental checklist.
               </p>
               <p className="text-muted-foreground leading-relaxed">
-                When an assessment is completed, the system generates a signed PDF report and auto-completes the relevant VeritaScan{"®"} Domain IX items. No dual entry. No missed deadlines. No citations.
+                When an assessment is completed, the system generates a signed PDF report. One record per assessment, with testing competency due dates in one place.
               </p>
             </div>
             <div className="space-y-3">
@@ -230,7 +228,7 @@ return (
               { step: "1", title: "Create Program", desc: "Name your program, choose the department, select the competency type, and optionally link to a VeritaMap\u00AE." },
               { step: "2", title: "Define Groups", desc: "For technical: define method groups from your instruments. For non-technical: customize the departmental checklist." },
               { step: "3", title: "Add Employees", desc: "Build your employee roster with name, title, hire date, and LIS initials. Reuse across programs." },
-              { step: "4", title: "Assess & Sign", desc: "Complete the assessment form, mark Pass/Fail, generate a signed PDF, and auto-update VeritaScan\u00AE." },
+              { step: "4", title: "Assess & Sign", desc: "Complete the assessment form, mark Pass/Fail, and generate a signed PDF." },
             ].map((s, i) => (
               <div key={i} className="border border-border rounded-xl p-4 bg-card">
                 <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center mb-3">
@@ -249,7 +247,7 @@ return (
       <section className="section-padding border-b border-border bg-muted/20">
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
           <h2 className="font-serif text-3xl font-bold mb-2">Pricing</h2>
-          <p className="text-muted-foreground mb-8">One plan. Everything included. Far less than a single consultant day.</p>
+          <p className="text-muted-foreground mb-8">Included in Clinic and above. See every plan on the pricing page.</p>
           <div className="max-w-md">
             <Card className="border-2 border-primary bg-primary/5 relative">
               <div className="absolute -top-3 left-1/2 -translate-x-1/2">
@@ -261,15 +259,14 @@ return (
                   <span className="text-4xl font-bold">Included</span>
                 </div>
                 <p className="text-sm text-muted-foreground mb-5">
-                  Included in all VeritaAssure&#174; plans (starting at $999/yr). Full access to all three competency types with PDF generation, employee management, and VeritaScan&#174; integration.
+                  Included in Clinic ($999/yr) and above. Full access to all three competency types with PDF generation and employee management.
                 </p>
                 <ul className="space-y-2 mb-6">
                   {[
                     "Technical, Waived, and Non-Technical competency types",
-                    "VeritaMap\u00AE integration for method group auto-setup",
+                    "VeritaMap\u00AE integration for instrument import and suggested method groups",
                     "Employee roster management across programs",
                     "PDF reports with signatures and compliance data",
-                    "VeritaScan\u00AE Domain IX auto-completion",
                     "Pre-populated department checklists",
                     "Remediation tracking with action plans",
                   ].map(f => (
@@ -295,7 +292,7 @@ return (
                   <Badge className="ml-2 bg-primary/10 text-primary border-0 text-xs">Best Value</Badge>
                 </div>
                 <p className="text-sm text-muted-foreground mb-2">
-                  VeritaCheck{"®"} + VeritaScan{"®"} + VeritaMap{"®"} + VeritaComp{"™"}: the complete clinical laboratory regulatory compliance platform. One subscription, full access.
+                  The VeritaAssure{"®"} compliance suite, including VeritaCheck{"®"}, VeritaScan{"®"}, VeritaMap{"®"}, and VeritaComp{"™"}, in one plan.
                 </p>
                 <Link href="/pricing" className="inline-flex items-center gap-1 text-sm text-primary hover:underline font-medium">
                   View all plans <ChevronRight size={13} />
@@ -319,7 +316,7 @@ return (
               { title: "Quality Managers", desc: "Track competency across the lab. Generate reports for accreditation surveys. No filing cabinet required." },
               { title: "Education Coordinators", desc: "Manage orientation competency checklists for new hires across every department." },
               { title: "POCT Coordinators", desc: "Waived testing competency for every nurse, RT, and CNA performing point-of-care tests." },
-              { title: "Lab Compliance Consultants", desc: "Standard competency framework across client sites. Consistent, documented, citation-proof." },
+              { title: "Lab Compliance Consultants", desc: "Standard competency framework across client sites. Consistent, documented, citation-mapped." },
             ].map((item, i) => (
               <div key={i} className="bg-card border border-border rounded-xl p-4">
                 <div className="font-semibold text-sm mb-1.5">{item.title}</div>

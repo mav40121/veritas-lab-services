@@ -238,42 +238,6 @@ function resizeDataPoints(prev: EntryDataPoint[], instruments: string[], newCoun
   return prev.slice(0, newCount).map((dp, i) => ({ ...dp, level: i + 1 }));
 }
 
-const featureTooltips: Record<string, string> = {
-  // Per Study
-  "Single study run": "Run one calibration verification, method comparison, or other EP study. Generates a complete signed PDF report.",
-  "Full PDF report": "Audit-ready PDF with scatter plots, statistical analysis, pass/fail verdict, narrative summary, and lab director signature on page 1.",
-  "All study types included": "Covers calibration verification/linearity, correlation/method comparison, accuracy & precision, and lot-to-lot verification study types.",
-  "CLIA pass/fail evaluation": "Each study is automatically evaluated against CLIA allowable total error (TEa) and returns a clear Pass or Fail result.",
-  // Starter
-  "Unlimited studies": "Run as many EP studies as your lab needs - no per-study charges.",
-  "All VeritaCheck® study types": "Access to all available study types: calibration verification, method comparison, accuracy & precision, lot-to-lot verification, and more.",
-  "Full PDF reports": "Every study generates a signed, audit-ready PDF report suitable for surveyor review.",
-  "Study history dashboard": "View, search, and re-download all past studies from your personal dashboard.",
-  // Professional
-  "Everything in Starter": "Includes all features from the Starter plan.",
-  "VeritaMap® regulatory mapping": "Build your complete test menu map. The intelligence engine identifies every correlation study and calibration verification your instruments require under 42 CFR Part 493.",
-  "VeritaScan® self-inspection audit": "173-item inspection readiness tracker across 10 compliance domains. Studies completed in VeritaCheck® automatically check off corresponding items.",
-  "Priority support": "Dedicated email support with same-day responses during business hours.",
-  // Lab
-  "Everything in Professional": "Includes all features from the Professional plan.",
-  "Up to 10 analyst accounts": "Share one account with up to 10 staff members across your department.",
-  "Shared study dashboard": "All team members see the same studies, maps, scans, and competency records in a shared workspace.",
-  "Lab branding on PDF reports": "Add your laboratory name and logo to all generated PDF reports.",
-  // VeritaAssure Complete
-  "Everything in Lab": "Includes all features from the Lab plan.",
-  "Consulting access": "Direct access to Michael Veri for compliance questions - the same expertise behind 200+ facility inspections as a Joint Commission Surveyor.",
-  "Lab Management 101 book included": "Digital copy of Lab Management 101 by Michael Veri included with your subscription.",
-};
-
-const plans = [
-  { priceType: "perStudy",        name: "Per Study",              price: "$25",    unit: "one-time",  description: "Pay as you go. No subscription required.",                                                                               features: ["Single study run", "Full PDF report", "All study types included", "CLIA pass/fail evaluation"],                                                                                  cta: "Buy a Study",    highlight: false, badge: null },
-  { priceType: "veritacheck_only", name: "VeritaCheck® Unlimited", price: "$299",   unit: "per year",  description: "Single user. Performance verification suite only. No CLIA number required.",                                                    features: ["Unlimited studies", "All VeritaCheck study types", "Full PDF reports", "Study history dashboard"],                                                                                                    cta: "Subscribe",      highlight: false, badge: null },
-  { priceType: "clinic",          name: "Clinic",                 price: "$499",   unit: "per year",  description: "Certificate of Waiver labs and small clinics.",                                                                           features: ["2 seats included", "Full VeritaAssure® suite, all modules", "VeritaMap® regulatory mapping", "VeritaScan® self-inspection audit", "VeritaComp™ competency management", "CLIA number on all reports", "Complimentary 1-hour onboarding session via Zoom or Teams with a VeritaAssure® specialist"],                                                                                                 cta: "Subscribe",      highlight: false, badge: null },
-  { priceType: "community",       name: "Community",              price: "$999",   unit: "per year",  description: "Community hospitals and independent labs.",                                                                              features: ["5 seats included", "Full VeritaAssure® suite, all modules", "VeritaStaff™ personnel management", "CLIA number on all reports", "Complimentary 1-hour onboarding session via Zoom or Teams with a VeritaAssure® specialist"],                                                                   cta: "Subscribe",      highlight: true,  badge: "Most Popular" },
-  { priceType: "hospital",        name: "Hospital",               price: "$1,999", unit: "per year",  description: "Regional and acute care hospital labs.",                                                                                 features: ["15 seats included", "Everything in Community", "Priority support", "Complimentary 2-hour onboarding session via Zoom or Teams with a VeritaAssure® specialist"],                                                                                                                             cta: "Subscribe",      highlight: false, badge: null },
-  { priceType: "enterprise",      name: "Enterprise",             price: "$2,999", unit: "per year",  description: "Large hospitals, health systems, and reference labs.",                                                                   features: ["25 seats included", "Everything in Hospital", "Priority support", "Consulting access", "Custom onboarding included"],                                                                                                          cta: "Subscribe",      highlight: false, badge: null },
-];
-
 export default function VeritaCheckPage() {
   // #84 Phase 3: running a study is VeritaCheck setup; a view-only login
   // (e.g. a Staff login) can open the page but not save or run.
@@ -2624,7 +2588,6 @@ return (
                 <div>
                   <div className="flex items-center gap-2 mb-4">
                     <FlaskConical size={20} className="text-primary" />
-                    <Badge className="bg-primary/10 text-primary border-0">New Product</Badge>
                     <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 border">Now Live</Badge>
                   </div>
                   <h1 className="font-serif text-5xl font-bold mb-3 leading-tight">VeritaCheck{"®"}</h1>
@@ -2637,10 +2600,10 @@ return (
                     </p>
                   </div>
                   <p className="text-muted-foreground leading-relaxed mb-4">
-                    VeritaCheck{"\u00AE"} automates calibration verification, method comparison, accuracy and precision, lot-to-lot verification, and PT/coag new lot validation. Every study generates a signed, audit-ready PDF report with scatter plots, statistical analysis, and pass/fail evaluation, mapped to 42 CFR Part 493, TJC standards, and CAP checklists.
+                    VeritaCheck{"\u00AE"} automates Calibration Verification / Linearity, Correlation / Method Comparison, accuracy and precision, reagent lot verification, and PT/INR and coagulation new lot verification. Every study generates an audit-ready PDF with statistical analysis, charts where the study calls for them, a pass/fail evaluation, CFR citations, and a laboratory director or designee signature block on page 1.
                   </p>
                   <p className="text-muted-foreground leading-relaxed mb-6">
-                    Built by a former TJC laboratory surveyor with 200+ inspections. VeritaCheck{"\u00AE"} produces exactly what your surveyors want to see, because it was designed by someone who reviewed these reports for years.
+                    Built by a former TJC laboratory surveyor with 200+ inspections. VeritaCheck{"\u00AE"} produces the report surveyors look for, because it was designed by someone who reviewed these reports for years.
                   </p>
 
                   {/* Pricing */}
@@ -2650,8 +2613,8 @@ return (
                       <div className="text-xs text-muted-foreground">Per Study - Pay only when you need it</div>
                     </div>
                     <div className="bg-card border border-border rounded-lg px-4 py-2.5 text-center">
-                      <div className="text-2xl font-bold text-primary">$299/yr</div>
-                      <div className="text-xs text-muted-foreground">VeritaCheck&#174; Unlimited (single user)</div>
+                      <div className="text-2xl font-bold text-primary">$299</div>
+                      <div className="text-xs text-muted-foreground">VeritaCheck&#174; Unlimited (single user): first year, then $499/yr</div>
                     </div>
                     <div className="bg-card border border-border rounded-lg px-4 py-2.5 text-center">
                       <div className="text-2xl font-bold text-primary">From $999/yr</div>

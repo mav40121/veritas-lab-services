@@ -32,15 +32,18 @@ const DOMAIN_CARDS = SCAN_DOMAINS.map((label, i) => ({
   desc: DOMAIN_DESC[label] ?? "",
 }));
 
+// Counted from the data so the claim moves with the checklist.
+const TJC_CITED = SCAN_ITEMS.filter((it) => it.tjc && it.tjc !== "N/A").length;
+
 const STANDARDS = [
-  { name: "TJC Standards", desc: "Every question maps to the exact QSA Standard and Element of Performance" },
+  { name: "TJC Standards", desc: `TJC standard and Element of Performance cited for ${TJC_CITED} of ${TOTAL_ITEMS} items` },
   { name: "CAP Checklists",  desc: "CAP checklist requirement numbers cited for each item" },
-  { name: "42 CFR Part 493", desc: "Specific CFR section for every federal regulatory requirement" },
+  { name: "42 CFR Part 493", desc: "CFR section cited where a federal regulation applies" },
 ];
 
 const FEATURES = [
   `${TOTAL_ITEMS} compliance questions across ${SCAN_DOMAINS.length} laboratory domains`,
-  "Triple-mapped to TJC standards, CAP checklists, and 42 CFR §493",
+  "Cross-referenced to TJC standards, CAP checklists, and the CFR where one applies",
   "Live compliance dashboard with real-time scores by domain",
   "Status tracking: Compliant / Needs Attention / Immediate Action / N/A",
   "Finding documentation fields with owner assignment and due dates",
@@ -64,7 +67,6 @@ return (
             <div>
               <div className="flex items-center gap-2 mb-4">
                 <Shield size={20} className="text-primary" />
-                <Badge className="bg-primary/10 text-primary border-0">New Product</Badge>
                 <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 border">Now Live</Badge>
               </div>
               <h1 className="font-serif text-5xl font-bold mb-3 leading-tight">VeritaScan®</h1>
@@ -77,7 +79,7 @@ return (
                 </p>
               </div>
               <p className="text-muted-foreground leading-relaxed mb-6">
-                {TOTAL_ITEMS} compliance questions. Triple-mapped to TJC standards, CAP checklists, and 42 CFR Part 493. Built by a former TJC laboratory surveyor who has conducted inspections at more than 200 facilities.
+                {TOTAL_ITEMS} compliance questions. Cross-referenced to TJC standards, CAP checklists, and the CFR where one applies. Built by a former TJC laboratory surveyor who has conducted inspections at more than 200 facilities.
               </p>
 
               {/* Pricing - public visitors only */}
@@ -130,10 +132,10 @@ return (
                 Every non-waived laboratory in the United States operates under the same fundamental anxiety: the survey is coming. Whether it arrives from The Joint Commission, the College of American Pathologists, or CMS directly, the inspector will walk through your laboratory domain by domain, standard by standard, and they will find what you haven't looked for.
               </p>
               <p className="text-muted-foreground leading-relaxed">
-                VeritaScan® gives laboratory directors, quality managers, and compliance consultants the same structured lens a surveyor uses, before the surveyor arrives. Each of the {TOTAL_ITEMS} compliance questions is mapped to the specific TJC Standard and Element of Performance, the corresponding CAP checklist requirement number, and the applicable 42 CFR Part 493 regulation. This makes VeritaScan® more than a checklist. It is a roadmap for understanding why each item is required and exactly where to look when you need to verify it.
+                VeritaScan® gives laboratory directors, quality managers, and compliance consultants the same structured lens a surveyor uses, before the surveyor arrives. Each of the {TOTAL_ITEMS} compliance questions is cross-referenced to TJC standards, CAP checklist requirements, and the CFR where one applies. This makes VeritaScan® more than a checklist. It is a roadmap for understanding why each item is required and exactly where to look when you need to verify it.
               </p>
               <p className="text-muted-foreground leading-relaxed">
-                The compliance dashboard updates in real time as you complete your assessment. IMMEDIATE ACTION findings are flagged separately so the highest-priority gaps are never buried in a list of lower-risk items. The result is a document you can take to your medical director or designee, your CNO, or your accreditation body as evidence of proactive self-assessment.
+                The compliance dashboard updates in real time as you complete your assessment. IMMEDIATE ACTION findings are flagged separately so the highest-priority gaps are never buried in a list of lower-risk items. The result is an internal document you can take to your medical director or designee or your CNO.
               </p>
               <p className="text-base font-semibold text-foreground">
                 Written by a former TJC laboratory surveyor. Used from the same vantage point as an inspection, because it was built from one.
@@ -164,7 +166,7 @@ return (
       <section className="section-padding border-b border-border bg-muted/20">
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
           <h2 className="font-serif text-3xl font-bold mb-2">What's Included</h2>
-          <p className="text-muted-foreground mb-8">Everything in one workbook. No assembly required.</p>
+          <p className="text-muted-foreground mb-8">Everything in one place. No assembly required.</p>
           <div className="grid sm:grid-cols-2 gap-3">
             {FEATURES.map((f, i) => (
               <div key={i} className="flex items-start gap-2.5 text-sm">
@@ -180,7 +182,7 @@ return (
       <section className="section-padding border-b border-border">
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
           <h2 className="font-serif text-3xl font-bold mb-2">{SCAN_DOMAINS.length} Domains, {TOTAL_ITEMS} Items</h2>
-          <p className="text-muted-foreground mb-8">Every domain a surveyor will inspect. No gaps.</p>
+          <p className="text-muted-foreground mb-8">Ten domains drawn from what surveyors inspect.</p>
           <div className="grid sm:grid-cols-2 gap-4">
             {DOMAIN_CARDS.map((d, i) => (
               <div key={i} className="border border-border rounded-xl p-4 bg-card hover:bg-muted/20 transition-colors">
@@ -230,7 +232,7 @@ return (
       <section className="section-padding border-b border-border">
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
           <h2 className="font-serif text-3xl font-bold mb-2">Pricing</h2>
-          <p className="text-muted-foreground mb-8">One plan. Everything included. Far less than a single consultant day.</p>
+          <p className="text-muted-foreground mb-8">Included in Clinic and above. See every plan on the pricing page.</p>
           <div className="max-w-md">
             <Card className="border-2 border-primary bg-primary/5 relative">
               <div className="absolute -top-3 left-1/2 -translate-x-1/2">
@@ -242,7 +244,7 @@ return (
                   <span className="text-4xl font-bold">Included</span>
                 </div>
                 <p className="text-sm text-muted-foreground mb-5">
-                  Included in all VeritaAssure&#174; plans (starting at $999/yr). Full web access to all {TOTAL_ITEMS} checklist items across {SCAN_DOMAINS.length} domains, with Excel export included.
+                  Included in Clinic ($999/yr) and above. Full web access to all {TOTAL_ITEMS} checklist items across {SCAN_DOMAINS.length} domains, with Excel export included.
                 </p>
                 <ul className="space-y-2 mb-6">
                   {[
@@ -251,7 +253,6 @@ return (
                     "Auto-save progress",
                     "PDF reports (executive summary + full detail)",
                     "Excel export included: download your full scan at any time",
-                    "Always current standards",
                     "Integrates with VeritaCheck®",
                   ].map(f => (
                     <li key={f} className="flex items-center gap-2 text-sm">
@@ -276,7 +277,7 @@ return (
                   <Badge className="ml-2 bg-primary/10 text-primary border-0 text-xs">Best Value</Badge>
                 </div>
                 <p className="text-sm text-muted-foreground mb-2">
-                  VeritaCheck® + VeritaScan® + VeritaMap®: the complete clinical laboratory regulatory compliance platform. One subscription, full access.
+                  The VeritaAssure® compliance suite, including VeritaCheck®, VeritaScan®, and VeritaMap®, in one plan.
                 </p>
                 <Link href="/pricing" className="inline-flex items-center gap-1 text-sm text-primary hover:underline font-medium">
                   View all plans <ChevronRight size={13} />

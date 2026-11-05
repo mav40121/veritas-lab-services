@@ -25,7 +25,7 @@ const ACCREDITOR_PROFILES: Record<string, AccreditorProfile> = {
     short: "TJC",
     full: "The Joint Commission",
     count: 88,
-    chapters: "APR, DC, EC, EM, HR, IC, IM, LD, PI, QSA, SE, TS, WT",
+    chapters: "APR, DC, EC, EM, HR, IC, IM, LD, PI, QSA, TS, WT",
     surveyTerm: "TJC survey",
   },
   CAP: {
@@ -53,7 +53,7 @@ const ACCREDITOR_PROFILES: Record<string, AccreditorProfile> = {
     short: "CLIA",
     full: "Clinical Laboratory Improvement Amendments",
     count: 286,
-    chapters: "42 CFR 493 Subparts H, J, K, M",
+    chapters: "42 CFR Part 493 and related federal rules (21 CFR, 29 CFR, 45 CFR, and 42 CFR 482 and 483)",
     surveyTerm: "CLIA survey",
   },
 };
@@ -81,43 +81,42 @@ export default function VeritaPolicyPage() {
   const FEATURE_CARDS = [
     {
       icon: FileText,
-      title: `${profile.count} ${profile.short} Requirements Pre-Loaded`,
-      desc: `Every policy required by ${profile.full} for laboratory accreditation, organized by chapter. Mapped to the current ${profile.short} standard for laboratory accreditation.`,
+      title: "58 Policies Pre-Loaded",
+      desc: "A master list of 58 laboratory policies, organized by section, each listed with its 42 CFR Part 493 citations and related citations for your accreditor.",
       color: "text-teal-600 bg-teal-500/10 border-teal-500/20",
     },
     {
       icon: ToggleLeft,
       title: "Per-Requirement N/A Control",
-      desc: "Not all policies apply to every lab. Mark individual requirements or entire categories as N/A with one click. Bulk actions make it fast to configure your lab's scope.",
+      desc: "Not all policies apply to every lab. Mark individual requirements or a whole section as N/A. Bulk actions make it fast to configure your lab's scope.",
       color: "text-blue-600 bg-blue-500/10 border-blue-500/20",
     },
     {
       icon: BookOpen,
       title: "Policy Library",
-      desc: `Build your lab's policy library. One policy can satisfy multiple ${profile.short} requirements. Track owner, status, review dates, and upload the actual policy document.`,
+      desc: "Build your lab's policy library. Track owner, status, and review dates, and upload the actual policy document. Enter the same policy name against every requirement it covers.",
       color: "text-purple-600 bg-purple-500/10 border-purple-500/20",
-      comingSoon: true,
     },
     {
       icon: BarChart2,
       title: "Readiness Score",
-      desc: `See your inspection readiness at a glance. Track completion across all ${profile.short} chapters. Generate an inspector-ready compliance report with one click.`,
+      desc: "See your readiness at a glance. Track completion across every section of the master list, and download a PDF readiness report.",
       color: "text-amber-600 bg-amber-500/10 border-amber-500/20",
     },
   ];
 
   const FEATURES = [
-    `All ${profile.count} ${profile.short}-required laboratory policies pre-loaded and organized by chapter`,
-    "Bulk N/A actions: mark an entire category as N/A with one click, or mark individual requirements",
+    "58 laboratory policies pre-loaded and organized by section",
+    "Bulk N/A actions: mark a whole section as N/A, or mark individual requirements",
     "Status tracking per requirement: Not Started, In Progress, Complete, N/A",
-    `Link one policy document to multiple ${profile.short} requirements`,
+    "Enter the same policy name against every requirement it covers",
     "Policy library with owner, policy number, review dates, and document upload",
-    "Automated review date warnings: 90 days out (amber) and overdue (red)",
+    "Automated review date warnings: 30 days out (amber) and overdue (red)",
     "Readiness score showing % of applicable requirements complete",
     "PDF inspection report: summary on page 1, requirements by chapter, policy index",
     "Laboratory Director or Designee review signature block on all reports",
-    "CLIA number on every report, auto-populated from your account",
-    `Covers ${profile.short} chapters: ${profile.chapters}`,
+    "CLIA number on the report, filled in from your account",
+    `Reference set of ${profile.count} citations: ${profile.chapters}`,
     "Built by a credentialed MLS(ASCP), CPHQ with direct laboratory accreditation experience",
   ];
 
@@ -131,7 +130,7 @@ export default function VeritaPolicyPage() {
               <div className="flex items-center gap-2 mb-4">
                 <Shield size={20} className="text-primary" />
                 <Badge variant="outline" className="text-primary border-primary/30 bg-primary/5">
-                  New
+                  Now Live
                 </Badge>
               </div>
               <h1 className="text-4xl font-bold text-foreground mb-4">
@@ -142,9 +141,9 @@ export default function VeritaPolicyPage() {
               </p>
               <p className="text-muted-foreground mb-8 leading-relaxed">
                 Document control for the lab: manage policies, procedures, and forms with version history,
-                director approval, and periodic reviews. Every policy required by {profile.full} comes
-                pre-loaded and crosswalked to the accreditor, so you build your library, link documents to
-                requirements, and generate an inspector-ready report with one click. Built by a former TJC
+                director approval, and periodic reviews. A master list of 58 laboratory policies comes
+                pre-loaded with related {profile.full} citations listed, so you build your library, enter your
+                policy against each requirement, and download a readiness report. Built by a former TJC
                 laboratory surveyor with 200+ facility inspections.
               </p>
               <div className="flex flex-wrap gap-3">
@@ -166,15 +165,15 @@ export default function VeritaPolicyPage() {
               <div className="bg-card border border-border rounded-xl p-6 space-y-4">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm font-semibold text-foreground">Readiness Score</span>
-                  <span className="text-2xl font-bold text-primary">68%</span>
+                  <span className="text-2xl font-bold text-primary">69%</span>
                 </div>
                 <div className="w-full bg-muted rounded-full h-3">
-                  <div className="bg-primary h-3 rounded-full" style={{ width: "68%" }} />
+                  <div className="bg-primary h-3 rounded-full" style={{ width: "69%" }} />
                 </div>
                 <div className="grid grid-cols-3 gap-3 pt-2">
                   {[
-                    { label: "Complete", value: "42", color: "text-green-600" },
-                    { label: "In Progress", value: "18", color: "text-amber-600" },
+                    { label: "Complete", value: "40", color: "text-green-600" },
+                    { label: "In Progress", value: "16", color: "text-amber-600" },
                     { label: "Not Started", value: "2", color: "text-muted-foreground" },
                   ].map((s) => (
                     <div key={s.label} className="text-center p-2 bg-muted/40 rounded-lg">
@@ -209,7 +208,7 @@ export default function VeritaPolicyPage() {
           <div className="text-center mb-12">
             <h2 className="text-2xl font-bold text-foreground mb-3">Built for {profile.short}-Accredited Labs</h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
-              Every requirement from the current {profile.short} standard for laboratory and point-of-care testing,
+              Policies drawn from the current {profile.short} standard for laboratory and point-of-care testing,
               organized and ready to track.
             </p>
           </div>
@@ -222,9 +221,6 @@ export default function VeritaPolicyPage() {
                   </div>
                   <div className="flex items-center gap-2 mb-2">
                     <h3 className="font-semibold text-foreground">{card.title}</h3>
-                    {card.comingSoon && (
-                      <Badge variant="outline" className="text-[10px] uppercase tracking-wide border-amber-500/40 text-amber-600 bg-amber-500/10">Coming Soon</Badge>
-                    )}
                   </div>
                   <p className="text-sm text-muted-foreground leading-relaxed">{card.desc}</p>
                 </CardContent>
@@ -256,7 +252,7 @@ export default function VeritaPolicyPage() {
         <div className="container-default text-center">
           <h2 className="text-2xl font-bold text-foreground mb-4">Ready for your next {profile.surveyTerm}?</h2>
           <p className="text-muted-foreground mb-8 max-w-xl mx-auto">
-            VeritaDC&#8482; is included with all paid VeritaAssure&#174; plans. No additional cost.
+            VeritaDC&#8482; is included in Clinic ($999/yr) and above. No additional cost.
           </p>
           <div className="flex flex-wrap gap-3 justify-center">
             <Link href={labRoute("/veritapolicy-app")}>

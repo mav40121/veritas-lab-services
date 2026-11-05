@@ -1133,7 +1133,10 @@ export default function VeritaQAPage() {
         <Lock size={40} className="text-muted-foreground mb-4" />
         <h2 className="font-serif text-2xl font-bold mb-2">Sign in to access VeritaQA{"\u2122"}</h2>
         <p className="text-muted-foreground mb-6 max-w-md">Track department quality metrics and performance improvement data.</p>
-        <Button asChild><Link href="/login">Sign in</Link></Button>
+        <div className="flex flex-wrap gap-3 justify-center">
+          <Button asChild><Link href="/login">Sign in</Link></Button>
+          <Button asChild variant="outline"><Link href="/veritaassure">See all modules</Link></Button>
+        </div>
       </div>
     );
   }
@@ -1197,7 +1200,7 @@ export default function VeritaQAPage() {
               PI Metric Starter Library
             </CardTitle>
             <p className="text-xs text-muted-foreground">
-              161 metrics across 11 departments, drawn from CAP Q-Probes/Q-Tracks, AABB, CLSI, CLIA, TJC, and ISO 15189.
+              160 metrics across 11 departments, drawn from CAP Q-Probes/Q-Tracks, AABB, CLSI, CLIA, TJC, and ISO 15189.
             </p>
           </CardHeader>
           <CardContent>

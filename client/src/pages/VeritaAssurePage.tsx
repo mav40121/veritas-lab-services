@@ -17,7 +17,7 @@ const COMPLIANCE_MODULES = [
     label: "VeritaCheck®",
     desc: "EP Study Analysis",
     detail:
-      "Calibration Verification / Linearity, Correlation / Method Comparison, Precision, Reagent Lot Verification (EP26), QC Lot Verification (C24-Ed4), and Coagulation New Lot studies. CLIA-compliant PDF reports with signature block on page 1.",
+      "Calibration Verification / Linearity, Correlation / Method Comparison, Precision, Reagent Lot Verification (EP26), QC Lot Verification (C24-Ed4), and Coagulation New Lot studies. CFR-cited PDF reports with signature block on page 1.",
     badge: "Live",
     badgeColor: "emerald",
     icon: FlaskConical,
@@ -28,7 +28,7 @@ const COMPLIANCE_MODULES = [
     label: "VeritaMap®",
     desc: "Test Menu Regulatory Mapping",
     detail:
-      "Map every instrument and analyte in your lab with CLIA complexity, specialty, and FDA classification. More than 260 instruments across 18 departments. Feeds VeritaCheck® instrument selection and VeritaComp™ competency programs.",
+      "Map every instrument and analyte in your lab with CLIA complexity and specialty. More than 300 instruments and manual procedures across 18 departments. Feeds VeritaCheck® instrument selection, VeritaComp™ competency programs, and VeritaPT™ coverage.",
     badge: "Live",
     badgeColor: "emerald",
     icon: Map,
@@ -50,7 +50,7 @@ const COMPLIANCE_MODULES = [
     label: "VeritaComp™",
     desc: "Competency Management",
     detail:
-      "Technical, waived, and non-technical competency programs using all 6 CLIA assessment elements. Competency timelines (Initial, 6-month, Annual). Quiz engine with addendum PDF.",
+      "Technical competency using all 6 CLIA assessment elements, plus waived and non-technical programs. Competency timelines (Initial, 6-month, Annual). Quiz engine with addendum PDF.",
     badge: "Live",
     badgeColor: "emerald",
     icon: Award,
@@ -61,7 +61,7 @@ const COMPLIANCE_MODULES = [
     label: "VeritaStaff™",
     desc: "Personnel Management",
     detail:
-      "Employee roster with CLIA role assignments (LD, TC, TS, GS, TP) and specialty tracking. CMS 209 Laboratory Personnel Report auto-generation. NYS additional requirements supported.",
+      "Employee roster with CLIA role assignments (LD, CC, TC, TS, GS, TP) and specialty tracking. CMS 209 Laboratory Personnel Report auto-generation. NYS additional requirements supported.",
     badge: "Live",
     badgeColor: "emerald",
     icon: Users,
@@ -72,7 +72,7 @@ const COMPLIANCE_MODULES = [
     label: "VeritaLab™",
     desc: "Certificate and Accreditation Tracking",
     detail:
-      "Track CLIA, CAP, TJC, COLA, state licenses, and lab director credentials. Advance email reminders at 9 months, 6 months, 3 months, 30 days, and at expiration. Document archive for certificate PDFs.",
+      "Track CLIA, CAP, TJC, ISO 15189, state licenses, lab director licenses, and vendor agreements, with COLA and others under Other. Advance email reminders at 9 months, 6 months, 3 months, 30 days, and at expiration. Document archive for certificate PDFs.",
     badge: "Live",
     badgeColor: "emerald",
     icon: FileText,
@@ -84,7 +84,7 @@ const COMPLIANCE_MODULES = [
     formerly: "Formerly VeritaPolicy",
     desc: "Policy and Document Control",
     detail:
-      "A document control system for the lab: load policies, procedures, and forms, keep version history, capture director approval, and document periodic reviews. Tracks the policies required under CLIA (42 CFR 493) and crosswalks each one to your accrediting body: CAP, COLA, TJC, or AABB. Service line toggles auto-apply N/A, and one document satisfies multiple requirements. Inspection-ready PDF report with a readiness score.",
+      "A document control system for the lab: load policies, procedures, and forms, keep version history, capture director approval, and document periodic reviews. Tracks the policies required under CLIA (42 CFR 493) and crosswalks each one to your accrediting body: CAP, COLA, TJC, or AABB. Mark any requirement or a whole section N/A, and enter the same policy name against every requirement it covers. Inspection-ready PDF report with a readiness score.",
     badge: "Live",
     badgeColor: "emerald",
     icon: Shield,
@@ -92,6 +92,7 @@ const COMPLIANCE_MODULES = [
   },
   {
     href: "/veritaqc-app",
+    publicHref: "/demo/qc",
     label: "VeritaQC™",
     desc: "Daily QC + Westgard Multi-Rule Evaluator",
     detail:
@@ -102,7 +103,7 @@ const COMPLIANCE_MODULES = [
     color: "text-green-600 bg-green-500/10 border-green-500/20",
   },
   {
-    href: "/veritatrack-app",
+    href: "/veritatrack",
     label: "VeritaTrack™",
     desc: "Regulatory Compliance Calendar",
     detail:
@@ -117,7 +118,7 @@ const COMPLIANCE_MODULES = [
     label: "VeritaPT™",
     desc: "Proficiency Testing Tracker",
     detail:
-      "Reads your VeritaMap® test menu, checks each analyte against CLIA PT requirements, and surfaces gaps, recommended programs, and current coverage. Tracks CAP, API, and WSLH enrollments. AAA-covered analytes count as coverage with 8 alternative assessment methods per 42 CFR 493.1236(c)(1).",
+      "Reads your VeritaMap® test menu, checks each analyte against CLIA PT requirements, and surfaces gaps, recommended programs, and current coverage. Tracks CAP, API, and WSLH enrollments. Analytes with no PT program count as coverage when you record twice-yearly accuracy verification under 42 CFR 493.1236(c), with 8 method options.",
     badge: "Live",
     badgeColor: "emerald",
     icon: TestTubes,
@@ -128,7 +129,7 @@ const COMPLIANCE_MODULES = [
     label: "VeritaResponse™",
     desc: "Post-Survey Deficiency Response",
     detail:
-      "When you get cited, VeritaResponse turns Word documents and email threads into one tracked finding with a due-date clock per accreditor (CAP 30 days, TJC 60 days, CMS-2567 10 days, AABB event-driven). Renders a CMS-2567-compatible Plan of Correction PDF with all 5 POC elements labeled. Surfaces your most recent VeritaCheck study when the finding cites a 42 CFR 493 standard, so you can show the surveyor what you had already done.",
+      "When you get cited, VeritaResponse™ replaces Word documents and email threads with one tracked finding and a due-date clock per accreditor (CMS-2567 10 days, CAP 30 days, TJC 60 days, COLA and AABB as soft targets, ISO 15189 as your accreditation body sets). Renders a CMS-2567-compatible Plan of Correction PDF with all 5 POC elements labeled. Surfaces your most recent VeritaCheck study when the finding cites a 42 CFR 493 standard, so you can show the surveyor what you had already done.",
     badge: "Live",
     badgeColor: "emerald",
     icon: ClipboardList,
@@ -139,7 +140,7 @@ const COMPLIANCE_MODULES = [
     label: "VeritaMaintain™",
     desc: "Equipment Maintenance",
     detail:
-      "Track every instrument's maintenance and function-check schedule, log each event with who performed it and when, and see what is overdue at a glance. Supports the maintenance and function-check records required under CLIA 42 CFR 493.1254, with automatic maintenance-due email reminders.",
+      "Track every instrument's maintenance and function-check schedule, log each event with who performed it and when, and see what is overdue at a glance. Supports the maintenance and function-check records required under CLIA 42 CFR 493.1254, with optional maintenance-due email reminders.",
     badge: "Live",
     badgeColor: "emerald",
     icon: Wrench,
@@ -153,7 +154,7 @@ const OPERATIONS_MODULES = [
     label: "VeritaBench™",
     desc: "Free quick benchmarking tool",
     detail:
-      "One-page benchmarking against published productivity targets. Free. No sign-in. A quick pulse check on whether your lab's billable tests per paid hour fall inside, above, or below the published benchmark.",
+      "One-page benchmarking against published productivity targets. Free. No sign-in. A quick pulse check on whether your lab's productive hours per billable test fall inside, above, or below the benchmark for your facility type.",
     badge: "Live",
     badgeColor: "emerald",
     icon: BarChart3,
@@ -164,7 +165,7 @@ const OPERATIONS_MODULES = [
     label: "VeritaPace™",
     desc: "Monthly data and trends",
     detail:
-      "Month-over-month productivity tracking with billable tests, paid hours, FTE, overtime, and trend lines. Built for lab managers who report up to the C-suite on operational performance.",
+      "Month-over-month productivity tracking with billable tests, productive hours, FTE, overtime, and trend lines. Built for lab managers who report up to the C-suite on operational performance.",
     badge: "Live",
     badgeColor: "emerald",
     icon: TrendingUp,
@@ -172,6 +173,7 @@ const OPERATIONS_MODULES = [
   },
   {
     href: "/veritabench/staffing",
+    publicHref: "/demo/operations",
     label: "VeritaShift™",
     desc: "By-hour demand analysis",
     detail:
@@ -186,7 +188,7 @@ const OPERATIONS_MODULES = [
     label: "VeritaQA™",
     desc: "Department quality metrics",
     detail:
-      "Performance Improvement dashboard for department-level quality indicators. Track metric trends, targets, and corrective actions. Designed to satisfy PI requirements without the spreadsheet burden.",
+      "Performance Improvement dashboard for department-level quality indicators. Track metric trends, targets, and corrective actions. Designed to support your PI program without the spreadsheet burden.",
     badge: "Live",
     badgeColor: "emerald",
     icon: Gauge,
@@ -205,6 +207,7 @@ const OPERATIONS_MODULES = [
   },
   {
     href: "/veritaops-app",
+    publicHref: "/demo/cprt",
     label: "VeritaOps™",
     desc: "Cost per reportable test (CPRT)",
     detail:
@@ -219,7 +222,7 @@ const OPERATIONS_MODULES = [
 const DOWNLOADS = [
   {
     title: "VeritaCheck® CLSI Compliance Matrix",
-    desc: "One-page landscape reference. Maps the core VeritaCheck® verification study types to applicable CLSI, CLIA (42 CFR), CAP checklist, and TJC standards. Use this to demonstrate regulatory alignment to inspectors.",
+    desc: "One-page landscape reference. Maps the core VeritaCheck® verification study types to the CLSI guidelines and 42 CFR Part 493 sections they support, with CAP and TJC references.",
     badge: "Free Download",
     url: "/api/downloads/clsi-compliance-matrix",
     filename: "VeritaCheck_CLSI_Compliance_Matrix.pdf",
@@ -227,7 +230,7 @@ const DOWNLOADS = [
   },
   {
     title: "VeritaCheck® Software Validation Template",
-    desc: "4-page fillable validation template. Structured workflow to validate VeritaCheck® for compliance documentation before placing it into service. Satisfies CAP GEN.20316, TJC QSA.15.01.01 EP1, and CLIA 42 CFR 493.1251.",
+    desc: "4-page fillable template. A structured workflow to document your lab's functional check of VeritaCheck® before placing it into service.",
     badge: "Free Download",
     url: "/api/downloads/software-validation-template",
     filename: "VeritaCheck_Software_Validation_Template.pdf",
@@ -250,10 +253,13 @@ function BadgePill({ label, color }: { label: string; color: string }) {
 }
 
 function ModuleGrid({ modules }: { modules: typeof COMPLIANCE_MODULES }) {
+  // A module with no public page has a publicHref: logged-out visitors go to its
+  // demo instead of landing on the app's sign-in gate.
+  const { isLoggedIn } = useAuth();
   return (
     <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-      {modules.map(({ href, label, desc, detail, badge, badgeColor, icon: Icon, color, formerly }: any) => (
-        <Link key={href} href={href}>
+      {modules.map(({ href, publicHref, label, desc, detail, badge, badgeColor, icon: Icon, color, formerly }: any) => (
+        <Link key={href} href={!isLoggedIn && publicHref ? publicHref : href}>
           <Card className="h-full hover:border-primary/40 hover:shadow-md transition-all cursor-pointer group">
             <CardContent className="p-5">
               <div className="flex items-start justify-between mb-3">
@@ -359,7 +365,7 @@ return (
             Free Downloads
           </div>
           <p className="text-sm text-muted-foreground mb-5 max-w-2xl">
-            Two documents to help your lab validate and deploy VeritaCheck&#174; for compliance documentation.
+            Two documents to help your lab review and deploy VeritaCheck&#174; for compliance documentation.
             No login required.
           </p>
           <div className="grid sm:grid-cols-2 gap-4">
@@ -402,7 +408,7 @@ return (
             </div>
             <p className="text-sm text-muted-foreground mb-5 max-w-2xl">
               Plans are available for labs of all sizes, from Certificate of Waiver clinics to large hospital systems.
-              Tier is suggested at signup based on your CLIA certificate. No setup fees. Cancel anytime.
+              You choose your tier by the number of active seats you need. No setup fees. Cancel anytime.
             </p>
             <div className="mt-2 text-center">
               <Button asChild variant="default" size="sm">
@@ -424,9 +430,9 @@ return (
               "Stronger quality systems with structured documentation at every step.",
               "Communicate clear, data-driven assurance to hospital leadership.",
               "Built by a former TJC laboratory surveyor with 200+ facility inspections.",
-              "3-5x less expensive than leading desktop validation tools.",
+              "3-5x less expensive than leading desktop verification tools.",
               "No installation, no desktop software: runs in any browser.",
-              "CLIA number on every PDF report header, every time.",
+              "CLIA number in the PDF report header, once it is on your account.",
             ].map((item) => (
               <div key={item} className="flex items-start gap-2">
                 <CheckCircle2 size={15} className="text-primary mt-0.5 shrink-0" />
@@ -443,7 +449,7 @@ return (
             Ready to see VeritaAssure&#174; in action?
           </h2>
           <p className="text-primary-foreground/80 text-sm max-w-md mx-auto mb-6">
-            The live demo runs the core compliance suite (VeritaCheck®, VeritaScan®, VeritaMap®, and VeritaComp™) with real data and generates actual PDF reports. No login required.
+            The live demo runs the core compliance suite (VeritaCheck®, VeritaScan®, VeritaMap®, and VeritaComp™) with sample data for a demonstration lab and generates actual PDF reports. No login required.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Button asChild size="lg" className="bg-white text-primary hover:bg-white/90 font-semibold">

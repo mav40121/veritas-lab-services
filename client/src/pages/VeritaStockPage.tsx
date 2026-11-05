@@ -1914,7 +1914,7 @@ export default function VeritaStockInventoryPage() {
   // surfaces (Incoming accept, Enterprise/All-Locations) so the page reads as one
   // site. Presentational only; see client/src/lib/host.ts.
   const singleSiteDemo = isSingleSiteDemo();
-  useSEO({ title: onStock ? "VeritaStock\u2122 | Multi-Location Inventory Management" : "VeritaStock\u2122 | Laboratory Inventory & Reagent Management", description: onStock ? "Multi-location supply inventory: burn-rate par levels, lead-time-aware reorder alerts, expiration tracking, valuation by location, and one-click vendor orders." : "Track reagent and supply inventory with burn-rate-aware par levels, lead-time-aware reorder alerts, and expiration tracking. Included with VeritaAssure\u00AE Suite plans." });
+  useSEO({ title: onStock ? "VeritaStock\u2122 | Multi-Location Inventory Management" : "VeritaStock\u2122 | Laboratory Inventory & Reagent Management", description: onStock ? "Multi-location supply inventory: burn-rate par levels, lead-time-aware reorder alerts, expiration tracking, valuation by location, and vendor-grouped order documents in PDF and Excel." : "Track reagent and supply inventory with burn-rate-aware par levels, lead-time-aware reorder alerts, and expiration tracking. Included with VeritaAssure\u00AE Suite plans." });
 
   if (!isLoggedIn) {
     return (
@@ -1944,7 +1944,7 @@ export default function VeritaStockInventoryPage() {
         whatItDoes="VeritaStock manages reagent and supply inventory. Lot and expiration tracking, reorder-point calculation by burn rate, vendor-grouped Order PDF and Excel for routine reorders, and Snap Order for emergency stockouts."
         howToUse={[
           "Add inventory items with vendor, catalog number, pack size, lead time, and safety stock days.",
-          "Receive shipments; on-hand quantity and average burn rate update automatically.",
+          "Receive shipments; on-hand quantity updates automatically, and the Learned Burn Advisor suggests a burn rate from your actual usage.",
           "The system computes reorder point as burn-rate times (lead time + safety stock); items at or below are flagged.",
           "Generate the Order PDF or Excel for each vendor at reorder time; the medical director or designee signs.",
           "For an unexpected stockout, use Snap Order: enter the catalog number and quantity, generate the PDF immediately."
@@ -1952,13 +1952,13 @@ export default function VeritaStockInventoryPage() {
       />
 
                 <p className="text-muted-foreground leading-relaxed mb-4">
-                  VeritaStock{"\u2122"} replaces the spreadsheet your lead tech maintains by hand. Track reagents, controls, calibrators, consumables, and supplies across every department with calculated burn rates, lead-time-aware reorder points, and expiration alerts that fire before you have a problem. Built by a former TJC laboratory surveyor with 200+ facility inspections.
+                  VeritaStock{"\u2122"} replaces the spreadsheet your lead tech maintains by hand. Track reagents, controls, calibrators, consumables, and supplies across every department with burn rates, lead-time-aware reorder points, and expiration alerts that fire before you have a problem. Built by a former TJC laboratory surveyor with 200+ facility inspections.
                 </p>
                 <ul className="space-y-2 mb-6 text-sm">
-                  <li className="flex items-start gap-2"><BellRing size={16} className="text-primary mt-0.5 shrink-0" /><span>Color-coded status: Reorder Now, Expiring Soon, OK, Standing Order</span></li>
+                  <li className="flex items-start gap-2"><BellRing size={16} className="text-primary mt-0.5 shrink-0" /><span>Color-coded status: Reorder Now, Expiring lot, OK, plus expiration and Standing Orders Due flags</span></li>
                   <li className="flex items-start gap-2"><CalendarClock size={16} className="text-primary mt-0.5 shrink-0" /><span>Burn-rate calculated days-on-hand and reorder points based on real lead times</span></li>
-                  <li className="flex items-start gap-2"><AlertCircle size={16} className="text-primary mt-0.5 shrink-0" /><span>Expiration tracking with configurable warning windows per item</span></li>
-                  <li className="flex items-start gap-2"><RefreshCw size={16} className="text-primary mt-0.5 shrink-0" /><span>Standing order management with quarterly review reminders</span></li>
+                  <li className="flex items-start gap-2"><AlertCircle size={16} className="text-primary mt-0.5 shrink-0" /><span>Expiration tracking with 30, 60, and 90 day flags on every item</span></li>
+                  <li className="flex items-start gap-2"><RefreshCw size={16} className="text-primary mt-0.5 shrink-0" /><span>Standing order tracking with a next-review date and a Standing Orders Due flag</span></li>
                 </ul>
 
                 {/* Pricing */}
@@ -1968,8 +1968,8 @@ export default function VeritaStockInventoryPage() {
                     <div className="text-xs text-muted-foreground">{onStock ? "Standalone inventory platform" : "Included with VeritaAssure\u00AE Suite"}</div>
                   </div>
                   <div className="bg-card border border-border rounded-lg px-4 py-2.5 text-center">
-                    <div className="text-2xl font-bold text-primary">All Plans</div>
-                    <div className="text-xs text-muted-foreground">Clinic, Community, Hospital, Enterprise</div>
+                    <div className="text-2xl font-bold text-primary">Suite Plans</div>
+                    <div className="text-xs text-muted-foreground">Clinic, Community, Hospital, System</div>
                   </div>
                 </div>
 
