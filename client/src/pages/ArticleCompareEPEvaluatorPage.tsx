@@ -10,15 +10,15 @@ import { EPEVAL_COMPARE_FAQ } from "@/lib/faqContent";
 const COMPARISON: [string, string, string][] = [
   ["CLSI verification studies", "14 study types", "About 30 statistical modules"],
   ["Breadth of pure statistics", "The study types most CLIA labs use", "Broader and deeper"],
-  ["Whole-lab coverage map", "Yes", "No (one experiment at a time)"],
-  ["CLIA complexity and 42 CFR auto-mapping", "Yes", "No (maps to TEa and CLIA PT limits)"],
-  ["Report style", "CFR-cited, director-signed, on the results page", "Statistical reports vs TEa and CLIA PT limits"],
-  ["Delivery", "Web, part of the VeritaAssure suite", "Per-user licensed software"],
-  ["Pricing", "Published, included in every tier", "No published price"],
+  ["Whole-lab coverage map", "Yes", "No menu-based coverage view in its public materials (experiments grouped in projects)"],
+  ["CLIA complexity and 42 CFR auto-mapping", "Yes", "None found in its public materials (maps to TEa and CLIA PT limits)"],
+  ["Report style", "CFR-cited, with the director signature block on the results page", "Statistical reports vs TEa and CLIA PT limits"],
+  ["Delivery", "Web, part of the VeritaAssure® suite", "Installed Windows software, single-user or networked"],
+  ["Pricing", "Published for Clinic, Community, and Hospital; System by quote", "Sold by subscription; no price on its product page"],
 ];
 
 export default function ArticleCompareEPEvaluatorPage() {
-  useSEO({ title: "VeritaCheck vs EP Evaluator: CLIA Verification Compared", description: "How VeritaCheck and EP Evaluator compare for CLIA performance verification: statistical study coverage, 42 CFR citation, whole-menu coverage, reporting, and pricing. An honest side-by-side from a former Joint Commission surveyor." });
+  useSEO({ title: "VeritaCheck® vs EP Evaluator: CLIA Verification Compared", description: "How VeritaCheck® and EP Evaluator compare for CLIA performance verification: statistical study coverage, 42 CFR citation, whole-menu coverage, reporting, and pricing. An honest side-by-side from a former Joint Commission surveyor." });
   return (
     <div className="min-h-screen bg-background">
       <section className="border-b border-border bg-gradient-to-br from-primary/5 via-transparent to-transparent">
@@ -30,7 +30,7 @@ export default function ArticleCompareEPEvaluatorPage() {
           </div>
           <Badge variant="outline" className="mb-4 text-primary border-primary/30 bg-primary/5">Comparison</Badge>
           <h1 className="font-serif text-3xl sm:text-4xl font-bold tracking-tight mb-4 leading-tight">
-            VeritaCheck vs EP Evaluator
+            VeritaCheck® vs EP Evaluator
           </h1>
           <p className="text-muted-foreground text-lg leading-relaxed mb-6">
             An honest comparison of two tools for CLIA performance verification, from the whole-lab coverage view to the CFR-cited report a surveyor reads.
@@ -50,10 +50,10 @@ export default function ArticleCompareEPEvaluatorPage() {
             <ul className="space-y-2">
               {[
                 "Both run the core CLSI verification studies and evaluate against total allowable error; the difference is what happens around the statistics.",
-                "EP Evaluator has the broader pure-statistics library (about 30 modules); VeritaCheck covers the 14 study types most CLIA labs use.",
-                "Only VeritaCheck ties each study to a whole-lab coverage map (every analyte and instrument), which EP Evaluator has no concept of.",
-                "VeritaCheck reports cite the exact 42 CFR section inline and carry a director signature on the results page; EP Evaluator maps to TEa and CLIA PT limits.",
-                "VeritaCheck is included in every VeritaAssure tier at published prices; EP Evaluator is a per-user license plus annual maintenance with no published price.",
+                "EP Evaluator has the broader pure-statistics library (about 30 modules); VeritaCheck® covers the 14 study types most CLIA labs use.",
+                "Only VeritaCheck® ties each study to a whole-lab coverage map (every analyte and instrument); EP Evaluator organizes experiments in projects, and its public materials show no test-menu coverage view.",
+                "VeritaCheck® reports cite the exact 42 CFR section inline and carry a director signature block on the results page; EP Evaluator maps to TEa and CLIA PT limits.",
+                "VeritaCheck® is included in the Clinic, Community, and Hospital plans at published prices; EP Evaluator is sold by subscription, and its product page lists no price.",
               ].map(t => (
                 <li key={t} className="flex items-start gap-2 text-sm">
                   <CheckCircle2 size={13} className="text-primary shrink-0 mt-0.5" />
@@ -71,14 +71,14 @@ export default function ArticleCompareEPEvaluatorPage() {
           <p>Both perform the core CLSI verification studies, calibration verification and linearity, precision, method comparison, and the rest, and both evaluate results against total allowable error and CLIA proficiency testing limits. If all you need is to run a single study and read the statistics, either tool does that.</p>
 
           <h2 className="font-serif text-2xl font-bold mt-10 mb-3">Where EP Evaluator is stronger</h2>
-          <p>Give it its due. EP Evaluator has a broader statistical library, roughly thirty modules, and goes deeper on pure statistics than VeritaCheck's fourteen study types. It is mature and widely used. If your work demands the widest range of statistical protocols, including advanced critical-difference math that VeritaCheck does not implement, EP Evaluator covers more ground on statistics alone.</p>
+          <p>Give it its due. EP Evaluator has a broader statistical library, roughly thirty modules, and goes deeper on pure statistics than VeritaCheck®'s fourteen study types. It is mature and widely used. If your work demands the widest range of statistical protocols, including interference, stability, and ROC studies that are not VeritaCheck® study types, EP Evaluator covers more ground on statistics alone.</p>
 
-          <h2 className="font-serif text-2xl font-bold mt-10 mb-3">Where VeritaCheck is different</h2>
-          <p>VeritaCheck is built around the survey, not only the statistics.</p>
+          <h2 className="font-serif text-2xl font-bold mt-10 mb-3">Where VeritaCheck® is different</h2>
+          <p>VeritaCheck® is built around the survey, not only the statistics.</p>
           <ul>
-            <li><strong>Whole-menu coverage.</strong> EP Evaluator's unit of work is one experiment: one analyte, one study, kept in project folders. It does not provide a whole-menu coverage view. VeritaCheck sits on the <Link href="/veritamap" className="text-primary hover:underline">VeritaMap&#174; whole-lab menu</Link> (every analyte on every instrument, with CLIA complexity from a curated dataset of 260-plus analyzers) and reports, per analyte and instrument, what is covered, what needs review, what is missing, and what is exempt, with proficiency testing enrollment gaps alongside.</li>
-            <li><strong>The report a surveyor reads.</strong> Each VeritaCheck study produces a report that states the regulatory determination, cites the exact 42 CFR section inline (493.927, 931, 933, 937, 941, 959), shows the ADLM goal next to the CLIA TEa, and carries a laboratory director or designee signature block on the page with the results. EP Evaluator maps results to TEa and CLIA PT limits; it does not auto-map to CLIA complexity or cite 42 CFR in the output.</li>
-            <li><strong>Pricing you can see.</strong> VeritaCheck is included in every VeritaAssure tier at <Link href="/pricing" className="text-primary hover:underline">published annual prices</Link>, with no per-user or per-study upcharge. EP Evaluator is a per-user license plus annual maintenance, with no published pricing.</li>
+            <li><strong>Whole-menu coverage.</strong> EP Evaluator's unit of work is one experiment: one analyte, one study, kept in project folders. It does not provide a whole-menu coverage view. VeritaCheck® sits on the <Link href="/veritamap" className="text-primary hover:underline">VeritaMap&#174; whole-lab menu</Link> (every analyte on every instrument, with CLIA complexity from a curated dataset of 260-plus analyzers) and reports, per analyte and instrument, what is covered, what needs review, what is missing, and what is exempt, with proficiency testing enrollment gaps alongside.</li>
+            <li><strong>The report a surveyor reads.</strong> Each VeritaCheck® study produces a report that states the regulatory determination, cites the exact 42 CFR section inline (493.927, 931, 933, 937, 941, 959), shows the ADLM goal next to the CLIA TEa, and carries a laboratory director or designee signature block on the page with the results. EP Evaluator maps results to TEa and CLIA PT limits; we found no CLIA complexity mapping or 42 CFR citation in its public materials.</li>
+            <li><strong>Pricing you can see.</strong> VeritaCheck® is included in the Clinic, Community, and Hospital plans at <Link href="/pricing" className="text-primary hover:underline">published annual prices</Link>, with no per-study charge; additional active seats are priced per seat. It is also sold alone as VeritaCheck® Unlimited (single user) or at $25 per study. EP Evaluator is sold by subscription, and its product page lists no price.</li>
           </ul>
 
           <h2 className="font-serif text-2xl font-bold mt-10 mb-3">Comparison</h2>
@@ -104,7 +104,7 @@ export default function ArticleCompareEPEvaluatorPage() {
           </div>
 
           <h2 className="font-serif text-2xl font-bold mt-10 mb-3">Which to choose</h2>
-          <p>If you want the deepest statistical library and nothing else, EP Evaluator has more modules. If you want verification that ties to your whole menu, produces a CFR-cited, director-signed report a surveyor accepts, and comes at a published price, that is what VeritaCheck is for. Many of the labs we talk to are not short on statistics. They are short on being able to show, on demand, that the whole menu is covered.</p>
+          <p>If you want the deepest statistical library and nothing else, EP Evaluator has more modules. If you want verification that ties to your whole menu, produces a CFR-cited report with the director's signature block on the results page, built for the surveyor's review, and comes at a published price, that is what VeritaCheck® is for. Many of the labs we talk to are not short on statistics. They are short on being able to show, on demand, that the whole menu is covered.</p>
 
           <p className="text-sm">Still deciding how to evaluate a platform in general? See our <Link href="/resources/how-to-choose-lab-compliance-software" className="text-primary hover:underline">buyer's guide to lab compliance software</Link>.</p>
 
@@ -124,7 +124,7 @@ export default function ArticleCompareEPEvaluatorPage() {
             <FlaskConical size={28} className="mx-auto mb-3 opacity-80" />
             <h3 className="font-serif text-xl font-bold mb-2">See VeritaCheck&#174; on your own studies</h3>
             <p className="text-primary-foreground/80 text-sm max-w-md mx-auto mb-5">
-              Run a study, read the CFR-cited report, and see the whole-lab coverage map, at published pricing with a free trial.
+              Run a study, read the CFR-cited report, and see the whole-lab coverage map. Pricing is published, every new account includes two free studies, and suite plans include a 14-day free trial.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Button asChild size="lg" className="bg-white text-primary hover:bg-white/90 font-semibold">
