@@ -103,7 +103,7 @@ export default function ArticleProficiencyTestingPage() {
 
           <Section id="list-changed" title="Start here: the list changed in 2024">
             <p>
-              If your understanding of which analytes require PT is more than a couple of years old, it is out of date. A CLIA final rule, effective July 11, 2024, delivered the first update to the regulated-analyte list since the program began in 1992. It added 29 regulated analytes and removed 5, and it moved most acceptable-performance limits from standard deviations to fixed percentage targets. The additions reach across chemistry, immunology, and other specialties that previously did not require proficiency testing. Analytes you correctly treated as exempt a few years ago may now be regulated. Before you trust any internal list, reconcile it against the current Subpart I list on the CMS CLIA website. This single reconciliation is the highest-value hour you will spend on PT this year.
+              If your understanding of which analytes require PT is more than a couple of years old, it is out of date. A CLIA final rule, effective July 11, 2024, delivered the first update to the regulated-analyte list since the program began in 1992. It added 29 regulated analytes and removed 5, and it replaced most of the remaining standard-deviation limits with fixed limits, tightened many others, and left the white blood cell differential as the one analyte still graded at three standard deviations. The additions reach across chemistry, immunology, and other specialties that previously did not require proficiency testing. Analytes you correctly treated as exempt a few years ago may now be regulated. Before you trust any internal list, reconcile it against the current Subpart I list on the CMS CLIA website. This single reconciliation is the highest-value hour you will spend on PT this year.
             </p>
           </Section>
 
@@ -134,7 +134,7 @@ export default function ArticleProficiencyTestingPage() {
 
           <Section id="enrollment" title="Enrollment rules that quietly cause findings">
             <ul className="list-disc pl-5 space-y-2">
-              <li><strong>One PT program per CLIA certificate.</strong> If you run nonwaived testing at more than one site under a single certificate through the multiple-site exception, you rotate PT events through the sites, one event at Site A, the next at Site B, and so on until all participate, then start again. You never order the same event for multiple sites or instruments, and you never share an event between sites, because that pattern looks like referral. If each site holds its own certificate, each enrolls separately, and it is worth using different programs per site to avoid even the appearance of referral.</li>
+              <li><strong>PT enrollment is per CLIA certificate.</strong> You may use more than one approved program, and you designate which one counts for each test. If you run nonwaived testing at more than one site under a single certificate through the multiple-site exception, you rotate PT events through the sites, one event at Site A, the next at Site B, and so on until all participate, then start again. You never order the same event for multiple sites or instruments, and you never share an event between sites, because that pattern looks like referral. If each site holds its own certificate, each enrolls separately, and it is worth using different programs per site to avoid even the appearance of referral.</li>
               <li><strong>You cannot switch programs in the first year.</strong> You must participate in an approved program for a full calendar year before changing, and you must notify CMS before any change.</li>
               <li><strong>New lab or new regulated analyte mid-year, enroll as soon as possible,</strong> then complete the program for the rest of the calendar year.</li>
             </ul>
@@ -142,7 +142,7 @@ export default function ArticleProficiencyTestingPage() {
 
           <Section id="grading" title="How PT is graded, and why a perfect run can still fail">
             <p>
-              Each event delivers five samples per analyte. For most analytes, satisfactory performance is <strong>80 percent</strong>, four of five correct. Immunohematology is the exception that catches people: <strong>ABO and Rh typing and compatibility testing require 100 percent</strong>, because a single error there can kill a patient. Some areas are graded at the <strong>subspecialty level rather than per analyte</strong>, including bacteriology, mycobacteriology, virology, parasitology, mycology, compatibility testing, and antibody detection and identification, which changes how a failure is counted for your microbiology and blood bank sections.
+              Each event delivers five samples per analyte. For most analytes, satisfactory performance is <strong>80 percent</strong>, four of five correct. Immunohematology is the exception that catches people: <strong>ABO and Rh typing, unexpected antibody detection, and compatibility testing require 100 percent</strong>, because a single error there can kill a patient. Some areas are graded at the <strong>subspecialty level rather than per analyte</strong>, including bacteriology, mycobacteriology, virology, parasitology, mycology, compatibility testing, and antibody detection and identification, which changes how a failure is counted for your microbiology and blood bank sections.
             </p>
             <p>
               And here is the failure mode nobody expects. <strong>A clerical or transcription error is graded as a wrong result.</strong> You can run the sample flawlessly, get the right number on the analyzer, write or key the wrong value onto the form, and fail. The bench work was perfect and the score is an 80. Treat the transcription of PT results with the same care as the testing, because CLIA grades the number you reported, not the number you produced.
@@ -202,7 +202,7 @@ export default function ArticleProficiencyTestingPage() {
               <li><strong>Unsuccessful participation:</strong> the broader category, including repeated unsatisfactory scores across events for the same analyte, specialty, or subspecialty.</li>
             </ul>
             <p>
-              A failing score requires documented remedial action: monitor the test system, review your quality control, contact the manufacturer if needed, and look back at the patient results produced during the affected window to identify anyone potentially impacted. Repeated failure can force you to cease testing that analyte until you complete reinstatement PT, two consecutive successful events after you have identified and corrected the cause, and a cease-testing sanction can suspend that testing and its reimbursement for six months.
+              A failing score requires documented remedial action: monitor the test system, review your quality control, contact the manufacturer if needed, and look back at the patient results produced during the affected window to identify anyone potentially impacted. Repeated failure can force you to cease testing that analyte until you complete reinstatement PT, two consecutive successful events after you have identified and corrected the cause, and a cease-testing sanction can suspend that testing and its reimbursement for at least six months.
             </p>
           </Section>
 
@@ -222,7 +222,7 @@ export default function ArticleProficiencyTestingPage() {
             <p className="text-sm"><strong>CMS Proficiency Testing and PT Referral brochure</strong> (revised October 2024). Centers for Medicare &amp; Medicaid Services.</p>
             <p className="text-sm"><strong>42 CFR Part 493, Subpart H and Subpart I.</strong> Participation in proficiency testing, and the regulated-analyte lists with acceptable performance criteria.</p>
             <p className="text-sm"><strong>42 CFR 493.1281.</strong> Standard: Comparison of test results.</p>
-            <p className="text-sm"><strong>CMS-3355-F.</strong> CLIA Proficiency Testing Regulations Related to Analytes and Acceptable Performance; effective July 11, 2024.</p>
+            <p className="text-sm"><strong>CMS-3355-F.</strong> CLIA Proficiency Testing Regulations Related to Analytes and Acceptable Performance; published July 11, 2022, effective July 11, 2024.</p>
           </Section>
 
           {/* Bottom CTA */}
@@ -230,9 +230,9 @@ export default function ArticleProficiencyTestingPage() {
             <CardContent className="p-6 sm:p-8 text-center">
               <h3 className="font-serif text-xl font-semibold mb-2">Find your PT gaps before a surveyor does with VeritaPT™</h3>
               <p className="text-sm text-muted-foreground max-w-xl mx-auto mb-4">
-                VeritaPT™ reads your test menu, checks every analyte against its current CLIA PT requirement, and surfaces the regulated
-                analytes with no enrollment and the unregulated ones with no documented alternative assessment. Or have a former Joint
-                Commission surveyor walk your menu and your PT referral procedures in a mock inspection. Included in every VeritaAssure® plan.
+                VeritaPT™, included in every VeritaAssure® plan, reads your test menu, checks every analyte against its current CLIA PT requirement,
+                and surfaces the regulated analytes with no enrollment and the unregulated ones with no documented alternative assessment. Or have
+                a former Joint Commission surveyor walk your menu and your PT referral procedures in a mock inspection, sold separately.
               </p>
               <div className="flex flex-wrap justify-center gap-3">
                 <Button asChild className="bg-primary hover:bg-primary/90">
@@ -247,7 +247,7 @@ export default function ArticleProficiencyTestingPage() {
 
           <p className="text-xs text-muted-foreground italic mt-8 leading-relaxed">
             Michael Veri, MS, MBA, MLS(ASCP), CPHQ, is the founder of Veritas Lab Services and a former Joint Commission laboratory
-            surveyor with more than 200 facility inspections. He is the author of Lab Management 101: A Guide to Laboratory Leadership.
+            surveyor with more than 200 facility inspections. He is the author of the forthcoming Lab Management 101: A Guide to Laboratory Leadership.
             This guide summarizes the CMS Proficiency Testing and PT Referral brochure and the CLIA regulations; it does not replace them.
           </p>
         </div>

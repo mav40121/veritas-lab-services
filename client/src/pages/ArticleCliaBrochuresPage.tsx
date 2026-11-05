@@ -117,7 +117,7 @@ export default function ArticleCliaBrochuresPage() {
               range, not just at the level your daily controls happen to sit. The brochure lays out when it is required, at least every
               six months, and also after a complete change of reagents, after major maintenance or repair, and when controls begin to
               reflect an unusual trend (42 CFR 493.1255), and it clears up the common confusion between calibration, calibration
-              verification, and the analytical measurement range. The failure I saw most often was not skipping it entirely, it was
+              verification, and the reportable range. The failure I saw most often was not skipping it entirely, it was
               running it at two levels when the method needed the full span, so the high and low ends of the reportable range were never
               actually confirmed. Our{" "}
               <IntLink href="/resources/calibration-verification-requirements-clia">calibration-verification article</IntLink>{" "}
@@ -145,11 +145,11 @@ export default function ArticleCliaBrochuresPage() {
           <Section id="competency" title="Assessing Personnel Competency">
             <p>
               This is the brochure I wish every laboratory director kept on the wall. It lays out the six procedures CLIA requires for
-              assessing competency (42 CFR 493.1235), direct observation of test performance, monitoring of the recording and reporting
+              assessing competency (42 CFR 493.1413(b)(8) and 493.1451(b)(8)), direct observation of test performance, monitoring of the recording and reporting
               of results, review of quality control and records, direct observation of maintenance and function checks, assessment of
               test performance through blind or previously analyzed samples, and assessment of problem-solving skills, and it makes clear
-              that all six apply where relevant, not the convenient two. Most competency programs I reviewed documented the two elements
-              you can satisfy from paperwork and quietly skipped the four that require watching the work. This brochure is the
+              that all six apply where relevant, not the convenient two. Most competency programs I reviewed documented the elements
+              you can satisfy from paperwork and quietly skipped the ones that require watching the work. This brochure is the
               plain-language answer to the question are we doing competency right, and for most laboratories the honest answer is not yet.
               <CmsLink href="https://www.cms.gov/regulations-and-guidance/legislation/clia/downloads/clia_compbrochure_508.pdf" label="Assessing Personnel Competency" />
             </p>
@@ -236,7 +236,7 @@ export default function ArticleCliaBrochuresPage() {
 
           <p className="text-xs text-muted-foreground italic mt-8 leading-relaxed">
             Michael Veri, MS, MBA, MLS(ASCP), CPHQ, is the founder of Veritas Lab Services and a former Joint Commission laboratory
-            surveyor with more than 200 facility inspections. He is the author of Lab Management 101: A Guide to Laboratory Leadership.
+            surveyor with more than 200 facility inspections. He is the author of the forthcoming Lab Management 101: A Guide to Laboratory Leadership.
             This guide points to the CMS CLIA brochures and summarizes them; it does not replace them.
           </p>
         </div>

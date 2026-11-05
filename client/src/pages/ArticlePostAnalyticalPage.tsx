@@ -45,7 +45,7 @@ export default function ArticlePostAnalyticalPage() {
   useSEO({
     title: "Critical Values and Corrected Reports: The Post-Analytical Last Mile",
     description:
-      "A former Joint Commission surveyor on the post-analytical last mile: the critical value list your medical staff must own, read-back that confirms delivery, and the corrected-report call CLIA requires under 42 CFR 493.1291(k).",
+      "A former Joint Commission surveyor on the post-analytical last mile: the critical value list your medical staff should own, read-back that confirms delivery, and the prompt notification CLIA requires for a corrected report under 42 CFR 493.1291(k).",
   });
   return (
     <div className="min-h-screen bg-background">
@@ -62,7 +62,7 @@ export default function ArticlePostAnalyticalPage() {
             The Last Mile: Why a Correct Result Still Reaches the Patient Wrong
           </h1>
           <p className="text-base text-muted-foreground leading-relaxed">
-            The critical value list your medical staff must own, the read-back that confirms delivery, the corrected report
+            The critical value list your medical staff should own, the read-back that confirms delivery, the corrected report
             that has to reach the clinician, and the autoverification rules quietly releasing results no one reads.
           </p>
           <div className="mt-4 text-xs text-muted-foreground">By Michael Veri, MS, MBA, MLS(ASCP), CPHQ · 9 min read · September 2026</div>
@@ -106,7 +106,7 @@ export default function ArticlePostAnalyticalPage() {
               drifts two ways at once. It over-calls values the physicians have learned to ignore, training them to treat the
               phone as noise, and it under-calls the ones your patients actually need. CLIA requires the laboratory to
               immediately alert the responsible clinician to results that indicate an imminently life-threatening condition, or
-              panic or alert values (42 CFR 493.1291(g)); it is your medical executive committee that must own what belongs on
+              panic or alert values (42 CFR 493.1291(g)); it is your medical executive committee that should own what belongs on
               the list.
             </p>
           </Section>
@@ -168,10 +168,10 @@ export default function ArticlePostAnalyticalPage() {
             <CardContent className="p-6 sm:p-8 text-center">
               <h3 className="font-serif text-xl font-semibold mb-2">Give the critical value list an owner with VeritaMap®</h3>
               <p className="text-sm text-muted-foreground max-w-xl mx-auto mb-4">
-                VeritaMap® is where a laboratory records the critical value thresholds its medical executive committee has
-                actually adopted, with the review documented, so the list stops belonging to no one. Or have a former Joint
-                Commission surveyor follow a real critical value, or a real corrected report, from the analyzer to the bedside
-                in a mock inspection and find where the loop breaks. Included in every VeritaAssure® plan.
+                VeritaMap®, included in every VeritaAssure® plan, is where a laboratory records the critical value thresholds its
+                medical executive committee has actually adopted, with the review documented, so the list stops belonging to no one.
+                Or have a former Joint Commission surveyor follow a real critical value, or a real corrected report, from the analyzer
+                to the bedside in a mock inspection, sold separately, and find where the loop breaks.
               </p>
               <div className="flex flex-wrap justify-center gap-3">
                 <Button asChild className="bg-primary hover:bg-primary/90">
@@ -186,7 +186,7 @@ export default function ArticlePostAnalyticalPage() {
 
           <p className="text-xs text-muted-foreground italic mt-8 leading-relaxed">
             Michael Veri, MS, MBA, MLS(ASCP), CPHQ, is the founder of Veritas Lab Services and a former Joint Commission laboratory
-            surveyor with more than 200 facility inspections. He is the author of Lab Management 101: A Guide to Laboratory Leadership.
+            surveyor with more than 200 facility inspections. He is the author of the forthcoming Lab Management 101: A Guide to Laboratory Leadership.
             This guide summarizes the CLIA regulations at 42 CFR 493.1291; it does not replace them.
           </p>
         </div>

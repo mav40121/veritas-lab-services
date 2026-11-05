@@ -81,7 +81,7 @@ return (
         <div className="prose prose-slate dark:prose-invert max-w-none space-y-6 text-[15px] leading-relaxed">
 
           <p>
-            A TJC laboratory survey does not begin with a checklist. It begins with a tracer, and the tracer starts at the patient. A surveyor follows a test result backward through your system: who ordered it, which analyzer ran it, what verification was on file for that analyzer, who performed the test, how their competency was documented, and where your proficiency testing record sits for that analyte. Every link in that chain either holds or does not.
+            A TJC laboratory survey does not run on a checklist. It opens with a conference and a tour, its defining activity is the tracer, and the tracer starts at the patient. A surveyor follows a test result backward through your system: who ordered it, which analyzer ran it, what verification was on file for that analyzer, who performed the test, how their competency was documented, and where your proficiency testing record sits for that analyte. Every link in that chain either holds or does not.
           </p>
 
           <h2 className="font-serif text-2xl font-bold mt-10 mb-3">The Five Areas Surveyors Trace Most Consistently</h2>
@@ -98,7 +98,7 @@ return (
 
           <h3 className="font-semibold text-lg mt-8 mb-2">Competency Assessments</h3>
           <p>
-            Every person who performs or reports tests must have documented competency for those specific tests. The competency must be tied to the test menu, not just the department. A surveyor who asks "show me the competency record for the person who ran this troponin" expects to see documentation for troponin specifically, using your troponin method.
+            Every person who performs or reports tests must have documented competency for those specific tests. The competency must be tied to the test menu, not just the department. A surveyor who asks "show me the competency record for the person who ran this troponin" expects to see documentation that covers troponin on that method, whether it was assessed on its own or in a method group with no new or unique skills.
           </p>
 
           <h3 className="font-semibold text-lg mt-8 mb-2">Test Menu and Instrument Documentation</h3>
@@ -120,7 +120,7 @@ return (
             VeritaMap® maintains your complete instrument and test menu inventory. When a surveyor asks which instruments perform a test and what their verification history looks like, you open VeritaMap® and show them.
           </p>
           <p>
-            VeritaCheck® stores every validation study with date, analyst, pass or fail determination, and medical director or designee signature. Generating any report for surveyor review takes under thirty seconds.
+            VeritaCheck® stores every verification study with date, analyst, pass or fail determination, and medical director or designee signature. Generating any report for surveyor review takes under thirty seconds.
           </p>
           <p>
             VeritaComp™ links competency assessments to specific method groups in your test menu. The gap between "we assessed competency" and "we assessed competency for this method, for this person, on this date" is exactly what surveyors are testing.
@@ -132,7 +132,7 @@ return (
           </p>
 
           <Callout type="tip">
-            <strong>Mock survey tip:</strong> Pick a random analyte, pull its complete documentation chain (validation, PT, competency, instrument record, procedure), and time how long it takes to produce every document. If it takes more than two minutes, your retrieval system needs work.
+            <strong>Mock survey tip:</strong> Pick a random analyte, pull its complete documentation chain (verification, PT, competency, instrument record, procedure), and time how long it takes to produce every document. If it takes more than two minutes, your retrieval system needs work.
           </Callout>
 
           {/* VeritaAssure CTA */}
@@ -171,7 +171,7 @@ return (
             <FlaskConical size={28} className="mx-auto mb-3 opacity-80" />
             <h3 className="font-serif text-xl font-bold mb-2">Ready to prepare for your next survey?</h3>
             <p className="text-primary-foreground/80 text-sm max-w-md mx-auto mb-5">
-              VeritaScan® provides a complete TJC compliance checklist mapped to every standard. Run your own mock survey and identify gaps before the surveyor does.
+              VeritaScan® provides a 173-item readiness self-assessment with TJC, CAP, and CFR references. Run your own mock survey and identify gaps before the surveyor does.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Button asChild size="lg" className="bg-white text-primary hover:bg-white/90 font-semibold">
@@ -187,8 +187,7 @@ return (
           <div className="mt-10 pt-6 border-t border-border">
             <div className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3">References</div>
             <ol className="space-y-1.5 text-xs text-muted-foreground list-decimal list-inside">
-              <li>The Joint Commission. (2024). Laboratory Services Standards. Laboratory Accreditation Program.</li>
-              <li>The Joint Commission. (2024). Performance Evaluation Standards for Laboratory Services. Hospital Accreditation Program.</li>
+              <li>The Joint Commission. TJC standard for laboratory accreditation.</li>
               <li>Code of Federal Regulations. (2024). Title 42, Part 493: Laboratory Requirements. <a href="https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">ecfr.gov</a></li>
             </ol>
           </div>

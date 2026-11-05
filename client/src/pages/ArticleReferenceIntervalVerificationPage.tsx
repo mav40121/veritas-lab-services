@@ -142,8 +142,8 @@ export default function ArticleReferenceIntervalVerificationPage() {
               complete.
             </p>
             <Callout type="tip">
-              If three or more of the twenty fall outside the proposed interval, the verification has not passed. The CLSI EP28-A3c procedure is
-              to test a second group of twenty. If the interval fails again, the laboratory has evidence that the published interval does not fit
+              If three or four of the twenty fall outside the proposed interval, the verification has not passed, and the CLSI EP28-A3c procedure is
+              to test a second group of twenty. If more fall outside, or the interval fails again, the laboratory has evidence that the published interval does not fit
               its population, and the correct response is to adopt a different published interval or, occasionally, to establish its own.
             </Callout>
             <p>
