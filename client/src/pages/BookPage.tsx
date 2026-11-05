@@ -108,7 +108,6 @@ return (
             <div>
               <div className="flex items-center gap-2 mb-4">
                 <BookOpen size={20} className="text-primary" />
-                <Badge className="bg-primary/10 text-primary border-0">New Book</Badge>
                 <Badge className="bg-amber-500/10 text-amber-600 border-amber-500/20 border">Coming Soon</Badge>
               </div>
               <h1 className="font-serif text-5xl font-bold mb-3 leading-tight">
@@ -294,7 +293,7 @@ return (
             <div className="lg:col-span-2">
               <h2 className="font-serif text-3xl font-bold mb-4">About the Author</h2>
               <p className="text-muted-foreground leading-relaxed mb-4">
-                Michael Veri brings more than a decade of director-level leadership in civilian healthcare and twenty-two years of service in the United States Army. He has served as a laboratory director, regional laboratory director, and for four years as a surveyor for The Joint Commission, conducting inspections at more than 200 healthcare facilities across the country.
+                Michael Veri brings more than a decade of director-level leadership in civilian healthcare and twenty-three years of service in the United States Army Reserve. He has served as a laboratory director, regional laboratory director, and for four years as a surveyor for The Joint Commission, conducting inspections at more than 200 healthcare facilities across the country.
               </p>
               <p className="text-muted-foreground leading-relaxed mb-6">
                 Recognizing that laboratory administrative leaders often have the least access to practical mentorship, Michael created a 30-episode free webinar series on laboratory management that has reached more than 1,500 downloads per episode. He founded Veritas Lab Services to extend that mission.
