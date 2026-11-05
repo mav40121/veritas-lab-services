@@ -3,9 +3,8 @@
 
 One-page landscape PDF covering the SIX core VeritaCheck verification study types,
 each mapped to its CLSI guideline(s), CLIA 42 CFR 493 section, CAP checklist item(s),
-and TJC standard. Every citation is carried over verbatim from the prior vetted
-leaflet (the two near-duplicate coagulation-new-lot rows are consolidated into one,
-taking the union of their citations). No citation is invented.
+and TJC standard. Every citation is checked by scripts/verify-citations-tea-cap.py.
+No citation is invented.
 
 Output base64 is embedded in server/downloadAssets.ts as CLSI_COMPLIANCE_MATRIX_B64
 and served at GET /api/downloads/clsi-compliance-matrix.
@@ -29,52 +28,59 @@ BORDER = colors.HexColor("#D0D0D0")
 
 # Column headers
 HEADERS = ["Study Type", "CLSI Guideline(s)", "CLIA (42 CFR 493)",
-           "CAP Checklist", "TJC Standard", "VeritaCheck Calculations", "Frequency Required"]
+           "CAP Checklist", "TJC Standard", "VeritaCheck Calculations", "When It Applies"]
 
-# The six core verification study types. Citations verbatim from the prior vetted leaflet.
+# The six core verification study types. Rebuilt 2026-11-05 from primary sources:
+#   CFR: eCFR 42 CFR Part 493 (2026-11-03). 493.1271 is the immunohematology standard and is not cited here.
+#   CAP: each requirement's text read in the 12/09/2025 MAS_*.xlsx checklists.
+#   TJC: standard text read in the newest full manual on file. EP numbers are left off until checked against the
+#        current edition.
+#   CLSI: clsi.org store pages (2026-11-05). Editions are named only where the current edition is the one the
+#        study follows; H47 and H21 have newer editions than the app was built on, so no edition is printed.
+#   Calculations: client/src/lib/calculations.ts.
 ROWS = [
     ["Calibration Verification / Linearity",
-     "EP06-Ed3 (Linearity Evaluation); EP15-A3 (User Verification)",
-     "493.1255(b)(3); 493.1271(b)",
-     "CHM.13700; CHM.13750; GEN.40830",
-     "QSA.15.01.01 EP2, EP3",
-     "Polynomial regression (linear, quadratic), R-squared, linearity assessment, recovery % at each calibrator level",
-     "Every 6 months or with reagent lot change"],
+     "EP06-Ed2 (Evaluation of Linearity)",
+     "493.1255(b); 493.1253(b)(1)(i)(C)",
+     "CHM.13400; CHM.13600; HEM.37365; HEM.37375; IMM.33670; IMM.33818",
+     "QSA.02.02.01; QSA.02.03.01",
+     "Recovery and difference at each level, OLS slope and intercept, R-squared, pass/fail per level against the adopted criterion",
+     "At least every 6 months and at the events listed in 493.1255(b)(3)"],
     ["Correlation / Method Comparison",
-     "EP09-A3 (Method Comparison); EP15-A3 (User Verification)",
-     "493.1255(b)(2); 493.1271(b)",
-     "CHM.13650; CHM.13700; GEN.40810",
-     "QSA.15.01.01 EP1, EP2",
-     "Deming regression, OLS regression, 95% CI, SEE, bias at medical decision points, Passing-Bablok",
-     "Every 6 months per analyzer / method"],
-    ["Precision (Repeatability and Reproducibility)",
-     "EP05-A3 (Evaluation of Precision); EP15-A3",
-     "493.1255(b)(1); 493.1271(a)",
-     "CHM.13600; GEN.40800",
-     "QSA.15.01.01 EP1",
-     "Within-run SD and %CV, between-run SD and %CV, total SD, repeatability vs. allowable imprecision",
-     "At instrument / reagent qualification or annually"],
+     "EP09c (Method Comparison and Bias Estimation)",
+     "493.1281(a); 493.1253(b)(1)(i)(A)",
+     "COM.04250; COM.04300; COM.40300",
+     "QSA.02.08.01; QSA.02.01.01",
+     "Deming regression, OLS regression, 95% CI, SEE, Bland-Altman, per-specimen pass rule against the adopted criterion",
+     "Twice a year when the same test runs on different methods, instruments, or sites; when replacing a test or instrument"],
+    ["Precision (Repeatability and Within-Laboratory)",
+     "EP15-A3 (User Verification of Precision)",
+     "493.1253(b)(1)(i)(B)",
+     "COM.40300",
+     "QSA.02.01.01",
+     "Mean, SD, and %CV per level; within-run, between-run, and total SD and %CV in the advanced path; comparison to the adopted criterion",
+     "Before reporting patient results on a new unmodified test system"],
     ["Lot-to-Lot Reagent Verification",
-     "EP07-A2 (Interference Testing); EP26-A",
-     "493.1255(b)(3); 493.1271(b)(3)",
-     "CHM.13800; GEN.40860",
-     "QSA.15.01.01 EP4",
-     "Paired t-test, percent difference from reference, bias vs. CLIA allowable error (TEa)",
-     "Each new reagent lot before patient use"],
+     "EP26-Ed2 (User Evaluation of a Reagent Lot Change)",
+     "493.1255(b)(3)(i); 493.1256(d)(6)",
+     "COM.30450",
+     "QSA.02.13.01",
+     "Percent difference per paired specimen, mean absolute percent difference, percent of specimens within the adopted criterion",
+     "Each new reagent lot or shipment, before or concurrent with placing it in service"],
     ["QC Range Establishment",
-     "EP23-A (Laboratory Quality Control); C24-A3",
-     "493.1256(d)(3); 493.1256(e)",
-     "COM.30450; GEN.40500",
-     "QSA.15.01.01 EP5",
-     "Mean, SD, %CV, proposed control ranges (2 SD and 3 SD), expected performance vs. CLIA TEa",
-     "New control lot or initial QC setup"],
+     "C24-Ed4 (Statistical Quality Control)",
+     "493.1256(d)(10)",
+     "CHM.14000; HEM.19380; IMM.34140",
+     "QSA.02.07.01",
+     "Mean, SD, %CV, proposed control ranges (2 SD and 3 SD), optional prior-lot and vendor comparison",
+     "Each new lot of control material"],
     ["Coagulation New Lot Verification (PT / aPTT / Fibrinogen)",
-     "H47-A2 (PT Monitoring); H21-A5 (aPTT); EP26-A",
-     "493.1255(b)(3); 493.1271(b)(3)",
-     "HEM.36160; HEM.36180; HEM.36200; GEN.40860",
-     "QSA.15.01.01 EP4, EP6",
-     "Per-analyte and multi-analyte paired comparison, bias, recovery %, TEa assessment for PT, aPTT, and fibrinogen",
-     "Each new reagent lot before patient use"],
+     "H47 (PT and APTT Testing); H21 (Coagulation Specimens); EP26-Ed2",
+     "493.1255(b)(3)(i); 493.1256(d)(6)",
+     "COM.30450; HEM.37830",
+     "QSA.02.13.01",
+     "Per-analyte paired comparison and regression, geometric mean normal PT, INR with the lot's ISI, comparison to the adopted criterion",
+     "Each new reagent lot or shipment, before or concurrent with placing it in service"],
 ]
 
 DISCLAIMER = ("Disclaimer: VeritaCheck is a statistical calculation tool. Results require interpretation by a "
@@ -113,7 +119,7 @@ def build(out_path: str):
 
     story = []
     story.append(Paragraph(f"VeritaAssure{reg}", h_brand))
-    story.append(Paragraph("Veritas Lab Services, LLC  |  veritaslabservices.com", h_sub))
+    story.append(Paragraph("Veritas Lab Services, LLC  |  www.veritaslabservices.com", h_sub))
     story.append(Paragraph(f"VeritaCheck{reg} Regulatory Standards Compliance Matrix", h_title))
     story.append(Paragraph(f"Maps the core VeritaCheck{reg} verification study types to applicable CLSI, "
                            "CLIA, CAP, and TJC standards", h_tag))
