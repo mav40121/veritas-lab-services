@@ -96,7 +96,7 @@ const ALLOWED_CONTEXTS = [
   "/api/demo/",                   // demo route declaration
   "/api/admin/",                  // admin endpoints
   "/api/onboarding/status",       // user-level onboarding tile
-  "autoCompleteCompetencyScanItems", // internal helper, userId pre-validated
+  "autoCompleteCompetencyScanItems", // internal helper in server/integrations.ts, userId pre-validated
   "deleteUser",                   // account termination cascade
   "POST /api/inventory",          // INSERT path sets account_id = current user (correct)
   "INSERT INTO",                  // any INSERT setting owner column

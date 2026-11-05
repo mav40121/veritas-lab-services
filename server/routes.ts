@@ -813,7 +813,7 @@ export function recomputeAllStudyStatuses(): { fixed: number; skipped: number } 
   }
   return { fixed, skipped };
 }
-import { autoCompleteVeritaScanItems } from "./integrations";
+import { autoCompleteVeritaScanItems, autoCompleteCompetencyScanItems, auditScanAutoCompletions } from "./integrations";
 import {
   UNITS_LOOKUP, REFERENCE_RANGES, AMR_LOOKUP,
   CFR_MAP as VERITAMAP_CFR_MAP, getComplianceStatus, lookupAnalyte, INSTRUCTIONS_CONTENT,
@@ -12660,6 +12660,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         testName: study.testName,
         studyType: study.studyType,
         instruments: study.instruments,
+        status: study.status,
       });
     } catch (err: any) {
       console.error("[integration] VeritaScan auto-complete error:", err.message);
@@ -12667,6 +12668,20 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
     res.status(201).json(study);
   });
+
+  // SCN-09 (site review 2026-11-05): a study marks its VeritaScan items when it passes. A saved draft marks nothing, so
+  // finishing one is where that happens. An edit of a study that had already passed marks nothing new.
+  function markScanItemsOnFirstPass(before: any, updated: any) {
+    if (before?.status === "pass" || updated?.status !== "pass") return;
+    try {
+      autoCompleteVeritaScanItems({
+        id: updated.id, userId: updated.user_id, labId: updated.lab_id ?? null, testName: updated.test_name,
+        studyType: updated.study_type, instruments: updated.instruments, status: updated.status,
+      });
+    } catch (err: any) {
+      console.warn("[veritascan-bridge] auto-complete failed:", err?.message);
+    }
+  }
 
   // PUT /api/studies/:id — update an existing study. Used by the edit-existing
   // flow (drafts and completed studies). Drafts skip strict validation; a
@@ -12752,6 +12767,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     }
     autoAttributeCoverageAnalyte(studyId, payload.cliaPresetLabel);
     const updated = (db as any).$client.prepare("SELECT * FROM studies WHERE id = ?").get(studyId) as any;
+    markScanItemsOnFirstPass(existing, updated);
     // Stamp the VeritaMap grid's date column from this study (advance-only); see
     // the POST create path. Keyed off the study's own lab_id so it works on both
     // the lab-scoped and legacy edit routes. Never blocks the save.
@@ -12986,7 +13002,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     try {
       autoCompleteVeritaScanItems({
         id: study.id, userId: ownerUserId, labId: req.scope.labId, testName: study.testName,
-        studyType: study.studyType, instruments: study.instruments,
+        studyType: study.studyType, instruments: study.instruments, status: study.status,
       });
     } catch (err: any) {
       console.warn('[veritascan-bridge] auto-complete failed:', err?.message);
@@ -13082,6 +13098,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     }
     autoAttributeCoverageAnalyte(studyId, payload.cliaPresetLabel);
     const updated = (db as any).$client.prepare("SELECT * FROM studies WHERE id = ?").get(studyId) as any;
+    markScanItemsOnFirstPass(existing, updated);
     // Stamp the VeritaMap grid's date column from this study (advance-only); see
     // the POST create path. Keyed off the study's own lab_id so it works on both
     // the lab-scoped and legacy edit routes. Never blocks the save.
@@ -24915,6 +24932,15 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     }
   };
 
+  // A scan mark that fails never fails the saved record.
+  const markScanItemsFromAssessment = (assessmentId: number | string) => {
+    try {
+      autoCompleteCompetencyScanItems(assessmentId);
+    } catch (err: any) {
+      console.warn("[veritascan-bridge] competency auto-complete failed:", err?.message);
+    }
+  };
+
   app.post("/api/competency/assessments", authMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     // Phase B3 lite (2026-06-06): deprecation log line. New assessments
@@ -25016,10 +25042,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     (db as any).$client.prepare("UPDATE competency_programs SET updated_at = ? WHERE id = ?").run(now, programId);
 
     // VeritaScan integration: auto-complete competency items
-    // A new-hire evaluation is not a competency, so it never marks VeritaScan competency items compliant.
-    if (status === "pass" && !isEvaluationProgram(program as any)) {
-      autoCompleteCompetencyScanItems(dataUserId, competencyType || "technical", (program as any)?.lab_id ?? null);
-    }
+    markScanItemsFromAssessment(assessmentId);
 
     res.json({ id: assessmentId, program_id: programId, employee_id: employeeId, status: status || "pass", created_at: now });
   });
@@ -25135,6 +25158,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       saveWaivedSpecimens(req.params.id, items);
       snapshotChecklistItemImages((db as any).$client, req.params.id);
     }
+    markScanItemsFromAssessment(req.params.id);
     res.json({ ok: true });
   });
 
@@ -25428,12 +25452,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       snapshotChecklistItemImages((db as any).$client, assessmentId);
     }
     (db as any).$client.prepare("UPDATE competency_programs SET updated_at = ? WHERE id = ?").run(now, programId);
-    // A new-hire evaluation is not a competency, so it never marks VeritaScan competency items compliant.
-    if (status === "pass" && !isEvaluationProgram(program)) {
-      const ownerRow = (db as any).$client.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(labId) as any;
-      const userIdForScan = ownerRow?.owner_user_id ?? req.userId;
-      autoCompleteCompetencyScanItems(userIdForScan, competencyType || "technical", labId);
-    }
+    markScanItemsFromAssessment(assessmentId);
     res.json({ id: assessmentId, program_id: programId, employee_id: employeeId, status: status || "pass", created_at: now });
   });
 
@@ -25546,6 +25565,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const afterItems = sqlite.prepare("SELECT * FROM competency_assessment_items WHERE assessment_id = ?").all(req.params.id);
     const emp = sqlite.prepare("SELECT name FROM competency_employees WHERE id = ?").get(before.employee_id) as any;
     logAudit({ userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritacomp", action: "update", entityType: "assessment", entityId: req.params.id, entityLabel: emp?.name || undefined, before: { assessment: before, items: beforeItems }, after: { assessment: after, items: afterItems }, ipAddress: req.ip });
+    markScanItemsFromAssessment(req.params.id);
     res.json({ ok: true });
   });
 
@@ -26920,56 +26940,6 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       res.status(500).json({ error: "PDF generation failed", detail: err.message });
     }
   });
-
-  // VeritaScan integration for competency
-  // BUG-074 (2026-10-27): scans of the assessment's lab only (the owner's account is the fallback for legacy rows with
-  // no lab), and a lab's own answer on an item is never overwritten.
-  function autoCompleteCompetencyScanItems(userId: number, competencyType: string, labId?: number | null) {
-    const scans = (labId
-      ? (db as any).$client.prepare("SELECT id FROM veritascan_scans WHERE lab_id = ?").all(labId)
-      : (db as any).$client.prepare("SELECT id FROM veritascan_scans WHERE user_id = ?").all(userId)) as { id: number }[];
-    if (scans.length === 0) return;
-
-    const now = new Date().toISOString();
-    // Domain IX (Personnel & Competency) items: 54-72
-    // Map competency type to specific items
-    const itemIds: number[] = [];
-    if (competencyType === "technical") {
-      itemIds.push(60, 61, 62, 63); // 6 CLIA methods, semiannual, annual, documentation
-    } else if (competencyType === "waived") {
-      itemIds.push(64, 65); // waived testing competency
-    } else if (competencyType === "nontechnical") {
-      itemIds.push(66, 67); // nontechnical competency
-    }
-    if (itemIds.length === 0) return;
-
-    const completionNote = `Auto-completed by VeritaComp\u2122: ${competencyType} assessment on ${now.split("T")[0]}`;
-    const upsertStmt = (db as any).$client.prepare(`
-      INSERT INTO veritascan_items (scan_id, item_id, status, notes, completion_source, completion_link, completion_note, updated_at)
-      VALUES (?, ?, 'Compliant', ?, 'veritacomp_auto', '/veritacomp-app', ?, ?)
-      ON CONFLICT(scan_id, item_id) DO UPDATE SET
-        status = 'Compliant',
-        completion_source = 'veritacomp_auto',
-        completion_link = '/veritacomp-app',
-        completion_note = excluded.completion_note,
-        updated_at = excluded.updated_at
-      WHERE veritascan_items.status IS NULL OR veritascan_items.status IN ('', 'Not Assessed')
-         OR veritascan_items.completion_source IN ('veritacheck_auto', 'veritacomp_auto')
-    `);
-
-    const bulkUpdate = (db as any).$client.transaction(() => {
-      for (const scan of scans) {
-        for (const itemId of itemIds) {
-          upsertStmt.run(scan.id, itemId, completionNote, completionNote, now);
-        }
-      }
-    });
-    bulkUpdate();
-
-    for (const scan of scans) {
-      (db as any).$client.prepare("UPDATE veritascan_scans SET updated_at = ? WHERE id = ?").run(now, scan.id);
-    }
-  }
 
   // CUMSUM PDF export
   app.post("/api/veritacheck/cumsum/trackers/:id/pdf", authMiddleware, async (req: any, res) => {
@@ -35065,6 +35035,13 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const secret = (req.headers["x-admin-secret"] || req.query.secret) as string | undefined;
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
     res.json(auditVeritamapConsistency((db as any).$client));
+  });
+
+  // GET /api/admin/veritascan/auto-completion-audit (site review 2026-11-05). Read-only, writes nothing, counts only and no
+  // names: the VeritaScan items VeritaComp and VeritaCheck have marked, by item id. Header x-admin-secret only.
+  app.get("/api/admin/veritascan/auto-completion-audit", (req, res) => {
+    if (req.headers["x-admin-secret"] !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    res.json(auditScanAutoCompletions((db as any).$client));
   });
 
   // GET /api/admin/competency/not-cleared-audit (Michael Q12 = 1, 2026-10-27). Read-only, writes nothing. Per lab,

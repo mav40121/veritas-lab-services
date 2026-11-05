@@ -7,6 +7,9 @@
 //   2. an item the lab marked Needs Attention keeps it (no overwrite); an N/A keeps it too
 //   3. an earlier auto-completion is still refreshed by a newer study
 //   4. a legacy study with no lab falls back to the owner's scans (unchanged behavior for old rows)
+//   5. only a study that passed marks anything (SCN-09, site review 2026-11-05); a draft, a failed study and a study with
+//      no verdict mark nothing. tests/integration/competency-scan-items.test.ts proves it through the real routes.
+//   6. an auto-marked item the lab changed on the screen keeps the lab's answer, though completion_source still reads auto
 //
 // Runs the real helper on a throwaway DB (made-up rows only). Run: npm run test:veritascan-autocomplete-lab
 import { createRequire } from "node:module";
@@ -31,7 +34,7 @@ async function main() {
   const items = (scanId: number) => sqlite.prepare("SELECT item_id, status, completion_source FROM veritascan_items WHERE scan_id = ? ORDER BY item_id").all(scanId) as any[];
 
   // 1. lab A study
-  autoCompleteVeritaScanItems({ id: 9001, userId, labId: labA, testName: "Sodium", studyType: "cal_ver" });
+  autoCompleteVeritaScanItems({ id: 9001, userId, labId: labA, testName: "Sodium", studyType: "cal_ver", status: "pass" });
   const a1 = items(scanA), b1 = items(scanB);
   check("1. a lab A study completes lab A's scan items only", a1.length > 0 && a1.every((r) => r.status === "Compliant" && r.completion_source === "veritacheck_auto") && b1.length === 0, `A=${a1.length} B=${b1.length}`);
 
@@ -39,7 +42,7 @@ async function main() {
   const [first, second] = a1;
   sqlite.prepare("UPDATE veritascan_items SET status = 'Needs Attention', completion_source = NULL WHERE scan_id = ? AND item_id = ?").run(scanA, first.item_id);
   if (second) sqlite.prepare("UPDATE veritascan_items SET status = 'N/A', completion_source = NULL WHERE scan_id = ? AND item_id = ?").run(scanA, second.item_id);
-  autoCompleteVeritaScanItems({ id: 9002, userId, labId: labA, testName: "Sodium", studyType: "cal_ver" });
+  autoCompleteVeritaScanItems({ id: 9002, userId, labId: labA, testName: "Sodium", studyType: "cal_ver", status: "pass" });
   const st = (id: number) => (sqlite.prepare("SELECT status FROM veritascan_items WHERE scan_id = ? AND item_id = ?").get(scanA, id) as any)?.status;
   check("2. the lab's own Needs Attention and N/A are not overwritten", st(first.item_id) === "Needs Attention" && (!second || st(second.item_id) === "N/A"), `${st(first.item_id)} / ${second ? st(second.item_id) : "-"}`);
 
@@ -50,8 +53,22 @@ async function main() {
 
   // 4. legacy fallback
   const legacy = mkScan(null, "Legacy scan (no lab)");
-  autoCompleteVeritaScanItems({ id: 9003, userId, labId: null, testName: "Sodium", studyType: "cal_ver" });
+  autoCompleteVeritaScanItems({ id: 9003, userId, labId: null, testName: "Sodium", studyType: "cal_ver", status: "pass" });
   check("4. a study with no lab falls back to the owner's scans", items(legacy).length > 0, `legacy=${items(legacy).length}`);
+
+  // 5. the verdict decides
+  const labC = Number(sqlite.prepare("INSERT INTO labs (lab_name, owner_user_id, plan, created_at, updated_at) VALUES ('Scan Lab C', ?, 'hospital', ?, ?)").run(userId, now, now).lastInsertRowid);
+  const scanC = mkScan(labC, "Lab C scan");
+  for (const status of ["draft", "fail", undefined, null]) autoCompleteVeritaScanItems({ id: 9004, userId, labId: labC, testName: "Sodium", studyType: "cal_ver", status });
+  check("5. a draft, a failed study and a study with no verdict mark nothing", items(scanC).length === 0, `C=${items(scanC).length}`);
+
+  // 6. the lab changed an auto-marked item on the screen, which leaves completion_source alone
+  autoCompleteVeritaScanItems({ id: 9005, userId, labId: labC, testName: "Sodium", studyType: "cal_ver", status: "pass" });
+  const [changed] = items(scanC);
+  sqlite.prepare("UPDATE veritascan_items SET status = 'Needs Attention' WHERE scan_id = ? AND item_id = ?").run(scanC, changed.item_id);
+  autoCompleteVeritaScanItems({ id: 9006, userId, labId: labC, testName: "Sodium", studyType: "cal_ver", status: "pass" });
+  const after = items(scanC).find((r) => r.item_id === changed.item_id);
+  check("6. the next passing study leaves the lab's Needs Attention", after?.status === "Needs Attention" && after?.completion_source === "veritacheck_auto", `${after?.status} / ${after?.completion_source}`);
 
   console.log(failures ? `${failures} FAIL` : "ALL PASS");
   process.exit(failures ? 1 : 0);
