@@ -27,7 +27,7 @@ return (
             Most lab directors learn compliance the hard way. VeritaAssure® changes that. Here is how the modules work as a leadership development curriculum.
           </p>
           <div className="flex items-center gap-5 text-xs text-muted-foreground border-t border-border pt-4">
-            <span className="flex items-center gap-1.5"><User size={12} /> Michael Veri, MBA, MS, CPHQ, MLS(ASCP)</span>
+            <span className="flex items-center gap-1.5"><User size={12} /> Michael Veri, MS, MBA, MLS(ASCP), CPHQ</span>
             <span className="flex items-center gap-1.5"><Clock size={12} /> 14 min read</span>
             <span>March 2026</span>
           </div>
@@ -46,7 +46,7 @@ return (
                 "Each VeritaAssure® module teaches the regulatory framework it operates within, not just how to fill out forms",
                 "New directors can build institutional knowledge in their first 90 days using a structured five-module path",
                 "Health systems can use VeritaAssure® as a shared training environment across multiple labs and supervisors",
-                "Lab Management 101 (the book) and VeritaAssure® (the software) form a complete leadership curriculum",
+                "Lab Management 101 (the book, coming soon) and VeritaAssure® (the software) are designed to work as one leadership curriculum",
                 "The documentation produced during training is real and audit-ready, not a separate exercise",
               ].map(t => (
                 <li key={t} className="flex items-start gap-2 text-sm">
@@ -98,11 +98,11 @@ return (
           </p>
 
           <p>
-            <strong>VeritaMap® teaches regulatory mapping.</strong> When a new director builds their first test menu map, they encounter something most bench scientists never do: every test their lab runs carries a specific federal regulatory obligation. The FDA database cross-referenced against 42 CFR Part 493 makes this concrete. When the intelligence engine flags that sodium and potassium on the Dimension EXL require a correlation study because two instruments are running the same analyte, the director learns a compliance requirement in context, not from a lecture. Using VeritaMap® is how a new director learns what CLIA requires of their specific lab, for their instruments, their analytes, their departments.
+            <strong>VeritaMap® teaches regulatory mapping.</strong> When a new director builds their first test menu map, they encounter something most bench scientists never do: every test their lab runs carries a specific federal regulatory obligation. A curated dataset of FDA-cleared test menus cross-referenced against 42 CFR Part 493 makes this concrete. When the intelligence engine flags that sodium and potassium on the Dimension EXL require a correlation study because two instruments are running the same analyte, the director learns a compliance requirement in context, not from a lecture. Using VeritaMap® is how a new director learns what CLIA requires of their specific lab, for their instruments, their analytes, their departments.
           </p>
 
           <p>
-            <strong>VeritaCheck® teaches EP methodology.</strong> A new supervisor who has never designed a calibration verification study learns it by doing one. The data entry fields teach them what specimens are needed. The pass/fail logic teaches them what total allowable error means and why it is the standard against which performance is measured. The PDF report teaches them what documentation a surveyor expects to see. There is no better way to understand method comparison than to run one in a guided environment where the structure enforces correct methodology.
+            <strong>VeritaCheck® teaches EP methodology.</strong> A new supervisor who has never designed a calibration verification study learns it by doing one. The data entry fields teach them what specimens are needed. The pass/fail logic teaches them what total allowable error means and why a laboratory has to set an acceptance criterion before it judges performance. The PDF report teaches them what documentation a surveyor expects to see. There is no better way to understand method comparison than to run one in a guided environment where the structure prompts correct methodology.
           </p>
 
           <p>
@@ -114,7 +114,7 @@ return (
           </p>
 
           <p>
-            <strong>VeritaStaff™ teaches personnel qualifications.</strong> Building the TC/TS/GS role assignments for a lab forces a new director to understand what CLIA requires of each supervisory role. Who can sign a high complexity competency? Why does moderate complexity testing require a Technical Consultant? What qualifications does a Technical Supervisor need for each specialty? VeritaStaff™ makes these questions concrete because they have to be answered correctly before the CMS 209 generates.
+            <strong>VeritaStaff™ teaches personnel qualifications.</strong> Building the TC/TS/GS role assignments for a lab forces a new director to understand what CLIA requires of each supervisory role. Who can sign a high complexity competency? Why does moderate complexity testing require a Technical Consultant? What qualifications does a Technical Supervisor need for each specialty? VeritaStaff™ makes these questions concrete because each role and specialty has to be assigned before it appears on the CMS 209, and the module flags role gaps.
           </p>
 
           {/* VeritaAssure CTA */}
@@ -124,7 +124,7 @@ return (
               <div>
                 <div className="font-semibold text-sm mb-1">See VeritaAssure® in action</div>
                 <p className="text-sm text-muted-foreground mb-3">
-                  Walk through the full compliance workflow with a real hospital lab. No login required.
+                  Walk through the full compliance workflow with a sample hospital lab. No login required.
                 </p>
                 <Button asChild size="sm" className="bg-primary text-primary-foreground">
                   <Link href="/demo">Launch Interactive Demo <ChevronRight size={13} className="ml-1" /></Link>
@@ -150,15 +150,15 @@ return (
           <h2 className="font-serif text-2xl font-bold mt-10 mb-3">Lab Management 101 and the Full Picture</h2>
 
           <p>
-            VeritaAssure® does not stand alone. The book, <em>Lab Management 101</em>, covers the leadership principles, the regulatory landscape, the C-suite relationships, and the career development framework that no software can substitute for. Understanding why a compliance program exists requires context that comes from reading, reflection, and experience.
+            VeritaAssure® does not stand alone. The upcoming book, <em>Lab Management 101</em>, covers the leadership principles, the regulatory landscape, the C-suite relationships, and the career development framework that no software can substitute for. Understanding why a compliance program exists requires context that comes from reading, reflection, and experience.
           </p>
 
           <p>
-            VeritaAssure® is where those principles become practice. Every concept addressed in the book has a corresponding workflow in the software. A new director who reads the book learns the regulatory landscape. A new director who uses the software builds the documentation habits that make that knowledge durable.
+            VeritaAssure® is where those principles become practice. The regulatory concepts in the book have corresponding workflows in the software. A new director who reads the book learns the regulatory landscape. A new director who uses the software builds the documentation habits that make that knowledge durable.
           </p>
 
           <p>
-            Together they form a curriculum that most directors piece together over years of hard experience. A new director who has both has a stronger foundation than many directors who have been in the role for a decade.
+            Together they form a curriculum that most directors piece together over years of hard experience.
           </p>
 
           <h2 className="font-serif text-2xl font-bold mt-10 mb-3">A Practical Development Path</h2>
@@ -209,7 +209,7 @@ return (
             <FlaskConical size={28} className="mx-auto mb-3 opacity-80" />
             <h3 className="font-serif text-xl font-bold mb-2">See the curriculum in action.</h3>
             <p className="text-primary-foreground/80 text-sm max-w-md mx-auto mb-5">
-              Walk through the full VeritaAssure® compliance workflow with a real hospital lab. No login required. No demo call. Just the product.
+              Walk through the full VeritaAssure® compliance workflow with a sample hospital lab. No login required. No demo call. Just the product.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Button asChild size="lg" className="bg-white text-primary hover:bg-white/90 font-semibold">
