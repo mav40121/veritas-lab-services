@@ -43,11 +43,10 @@ const PRODUCTS = [
   { route: "/veritastock",  id: "#veritastock",  name: "VeritaStock",  blockText: "burn-rate par levels, lead-time-aware reorder alerts" },
 ];
 
-// Batch 4. Two hub pages, neither of them a PRODUCTS row:
-//   /veritaassure IS the suite, so (a) its node correctly has no isPartOf and
-//     (b) its url is the site ROOT, not /veritaassure. A PRODUCTS row would
-//     assert url === ".../veritaassure" and fail on a correct page.
-//   /operations has no node at all: prerender only, hub not product.
+// Batch 4. The suite page is not a PRODUCTS row. /veritaassure IS the suite, so
+// (a) its node correctly has no isPartOf and (b) its url is the site ROOT, not
+// /veritaassure. A PRODUCTS row would assert url === ".../veritaassure" and fail
+// on a correct page. /operations 301s to it (veritaassure-all-17.spec.ts).
 const SUITE = {
   route: "/veritaassure",
   id: "#veritaassure",
@@ -55,11 +54,6 @@ const SUITE = {
   url: "https://www.veritaslabservices.com/",
   features: 10,
   blockText: "unites performance verification, inspection readiness, test menu mapping",
-};
-const HUB = {
-  route: "/operations",
-  name: "Operations",
-  blockText: "The operations stream of the VeritaAssure",
 };
 
 // /veritabench is absent on purpose, and NOT because VeritaBench is missing:
@@ -106,7 +100,7 @@ test.describe("SEO product pages: schema graph + server-rendered feature block",
   }
 });
 
-test.describe("SEO hub pages: the suite node and the operations hub", () => {
+test.describe("SEO hub page: the suite node", () => {
   test.beforeEach(() => {
     if (!process.env.PW_SEO_SCHEMA) test.skip(true, "Set PW_SEO_SCHEMA=1 to run against a deployed build.");
   });
@@ -152,18 +146,9 @@ test.describe("SEO hub pages: the suite node and the operations hub", () => {
     }
   });
 
-  for (const p of [SUITE, HUB]) {
-    test(`${p.route}: feature block is real text on the page`, async ({ page }) => {
-      await page.goto(`${BASE}${p.route}`, { waitUntil: "domcontentloaded" });
-      const body = await page.evaluate(() => document.body.innerText);
-      expect(body, `${p.route} body contains the block copy`).toContain(p.blockText);
-    });
-  }
-
-  test(`${HUB.route}: hub stays out of the graph (no #operations node)`, async ({ page }) => {
-    await page.goto(`${BASE}${HUB.route}`, { waitUntil: "domcontentloaded" });
-    const nodes = await parseGraph(page);
-    const hub = nodes.find((n: any) => typeof n["@id"] === "string" && n["@id"].endsWith("#operations"));
-    expect(hub, "/operations is a hub, not a product: prerender only").toBeUndefined();
+  test(`${SUITE.route}: feature block is real text on the page`, async ({ page }) => {
+    await page.goto(`${BASE}${SUITE.route}`, { waitUntil: "domcontentloaded" });
+    const body = await page.evaluate(() => document.body.innerText);
+    expect(body, `${SUITE.route} body contains the block copy`).toContain(SUITE.blockText);
   });
 });

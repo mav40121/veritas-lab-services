@@ -590,10 +590,6 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
     title: "Trust & Security | Veritas Lab Services",
     description: "How VeritaAssure\u00AE protects your laboratory data: hosting, encryption, multi-lab isolation, PHI-free design, subprocessors, and HIPAA BAA availability.",
   },
-  "/operations": {
-    title: "Operations | VeritaAssure\u00AE Lab Productivity & CPRT",
-    description: "The VeritaAssure\u00AE operations modules: cost-per-reportable-test analytics, productivity benchmarking, by-hour staffing, monthly tracking, and quality metrics.",
-  },
   "/book/scoping-call": {
     title: "Book a Scoping Call | Veritas Lab Services",
     description: "Schedule a no-cost 50-minute scoping call with Michael Veri to confirm engagement fit, scope, and price before any paper changes hands.",
