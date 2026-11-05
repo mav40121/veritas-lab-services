@@ -261,7 +261,7 @@ const CFR_MAP: Record<string, string> = {
   Endocrinology: "§493.933",
   Toxicology: "§493.937",
   Immunohematology: "§493.959",
-  Urinalysis: "§493.931",
+  Urinalysis: "",
   "Blood Gas": "§493.931",
   Microbiology: "§§493.911-493.919",
   // Catalog specialty names (kept in sync with server/veritamapData.ts CFR_MAP).

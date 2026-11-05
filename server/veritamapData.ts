@@ -107,7 +107,9 @@ export const CFR_MAP: Record<string, string> = {
   "Endocrinology": "§493.933",
   "Toxicology": "§493.937",
   "Immunohematology": "§493.959",
-  "Urinalysis": "§493.931",
+  // Subpart I lists no urinalysis analyte (§493.931 Table 1), so no PT section is cited.
+  // Accuracy is verified twice a year under §493.1236(c)(1).
+  "Urinalysis": "",
   "Blood Gas": "§493.931",
   // Microbiology is the specialty; its Subpart I PT sections are 493.911-493.919
   // (eCFR headings as of 2026-10-01). It was mapped to §493.945, which is
