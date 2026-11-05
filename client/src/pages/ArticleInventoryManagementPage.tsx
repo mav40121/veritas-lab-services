@@ -75,12 +75,12 @@ export default function ArticleInventoryManagementPage() {
             <div className="font-semibold text-sm text-primary mb-3">Key Takeaways</div>
             <ul className="space-y-2">
               {[
-                "The reorder point formula eliminates stockouts - it tells you exactly when to order, not when you feel like ordering",
+                "The reorder point formula is built to prevent stockouts - it tells you exactly when to order, not when you feel like ordering",
                 "Burn rate is not static - it must be reviewed monthly or your reorder points become meaningless",
                 "Standing orders are a tool, not a strategy - they need quarterly review or they silently drift out of alignment",
-                "Safety stock is calculated, not guessed - 3 to 5 days covers most situations",
+                "Safety stock is a deliberate cushion, not a guess - 3 days is a common starting point for routine items, 5 to 7 days for critical reagents or unreliable vendors",
                 "Overstocking is not safe - it ties up budget and creates expiration risk",
-                "TJC and CLIA surveyors expect documented inventory processes - gut feel is not a documented process",
+                "CLIA requires sufficient, in-date reagents and supplies - gut feel is hard to defend when a surveyor asks how you ensure it",
               ].map(t => (
                 <li key={t} className="flex items-start gap-2 text-sm">
                   <CheckCircle2 size={13} className="text-primary shrink-0 mt-0.5" />
@@ -97,7 +97,7 @@ export default function ArticleInventoryManagementPage() {
           A stockout of troponin reagent delays a chest pain workup. A stockout of blood culture bottles means a sepsis patient waits. These are not hypothetical scenarios - they happen in labs that manage inventory by feel instead of by system.
         </p>
         <p className="text-base leading-relaxed text-muted-foreground mb-4">
-          Inventory management sits at the intersection of patient care, budget discipline, and regulatory compliance. TJC and CLIA both expect labs to have documented processes for supply management. A surveyor who asks "how do you ensure you don't run out of critical reagents?" should get a specific, system-based answer - not "we check when things look low."
+          Inventory management sits at the intersection of patient care, budget discipline, and regulatory compliance. CLIA requires a laboratory to have appropriate and sufficient reagents and supplies for the type and volume of testing it performs (42 CFR §493.1101(b)) and bars using anything past its expiration date (42 CFR §493.1252(d)). It does not prescribe an inventory method. A surveyor who asks "how do you ensure you don't run out of critical reagents?" should still get a specific, system-based answer - not "we check when things look low."
         </p>
         <p className="text-base leading-relaxed text-muted-foreground mb-4">
           The good news is that the system is not complicated. It is built on a few core concepts and two formulas.
@@ -132,7 +132,7 @@ export default function ArticleInventoryManagementPage() {
 
         <h3 className="text-lg font-semibold mt-6 mb-2">Safety Stock</h3>
         <p className="text-base leading-relaxed text-muted-foreground mb-4">
-          Safety stock is a buffer of extra inventory kept on hand to absorb unexpected demand spikes or delivery delays. It is not a guess - it is a calculated cushion.
+          Safety stock is a buffer of extra inventory kept on hand to absorb unexpected demand spikes or delivery delays. It is not a guess - it is a deliberate cushion.
         </p>
         <p className="text-base leading-relaxed text-muted-foreground mb-4">
           A common starting point: 3 days of safety stock for routine items, 5 to 7 days for critical reagents or items with unreliable vendors. The safety stock days get added to your lead time in the reorder point formula.

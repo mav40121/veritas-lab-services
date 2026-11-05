@@ -94,7 +94,7 @@ export default function ArticleCostPerReportablePage() {
               <TocLink href="#worked-example">4. Worked example: sodium under two configurations</TocLink>
               <TocLink href="#this-quarter">5. What to do this quarter</TocLink>
               <TocLink href="#clia">6. The CLIA context</TocLink>
-              <TocLink href="#closing">7. Closing: VeritaOps and the next step</TocLink>
+              <TocLink href="#closing">7. Closing: VeritaOps™ and the next step</TocLink>
               <TocLink href="#references">References</TocLink>
             </CardContent>
           </Card>
@@ -265,7 +265,7 @@ export default function ArticleCostPerReportablePage() {
               The CLIA regulations do not prescribe a cost-per-reportable-test framework. The relevant standards for the laboratory director's responsibility in this domain are 42 CFR §493.1407 (moderate-complexity testing) or §493.1445 (high-complexity testing), which together hold the laboratory director responsible for the overall operation and administration of the laboratory, including the employment of qualified personnel and assuring compliance with applicable regulations.
             </p>
             <p>
-              The standard does not require CPRT. It does require that the director can defend the resource decisions made under their license. In practice, a director who cannot articulate the per-reportable-test economics of their test menu, their reagent vendor choices, and their capital posture is operating outside the spirit of that obligation even when fully inside the letter.
+              The standard does not require CPRT, and it says nothing about cost. In practice, a director responsible for the laboratory's overall operation has to be able to explain its resource decisions, and per-reportable-test economics are how that case gets made.
             </p>
             <Callout type="info">
               The four-layer framework is decision-grade discipline, not compliance theater. It exists to make the director's resource decisions explicable and defensible, both to the institution and to the director themselves.
@@ -285,11 +285,11 @@ export default function ArticleCostPerReportablePage() {
             <div className="my-4 flex flex-wrap gap-3">
               <Button asChild className="bg-primary hover:bg-primary/90">
                 <Link href="/demo/operations">
-                  Open the VeritaOps demo <ChevronRight size={14} className="ml-1" />
+                  Open the VeritaOps™ demo <ChevronRight size={14} className="ml-1" />
                 </Link>
               </Button>
               <Button asChild variant="outline">
-                <Link href="/operations">Learn about VeritaOps</Link>
+                <Link href="/operations">Learn about VeritaOps™</Link>
               </Button>
             </div>
             <p>
@@ -324,11 +324,11 @@ export default function ArticleCostPerReportablePage() {
             <CardContent className="p-6 sm:p-8 text-center">
               <h3 className="font-serif text-xl font-semibold mb-2">Build your first CPRT study in VeritaOps™</h3>
               <p className="text-sm text-muted-foreground max-w-xl mx-auto mb-4">
-                Four layers, side-by-side comparison, one-page PDF for finance. Included in every VeritaAssure® plan.
+                Four layers, side-by-side comparison, one-page PDF for finance. Included in every VeritaAssure® suite plan.
               </p>
               <div className="flex flex-wrap justify-center gap-3">
                 <Button asChild className="bg-primary hover:bg-primary/90">
-                  <Link href="/demo/operations">Open the VeritaOps demo</Link>
+                  <Link href="/demo/operations">Open the VeritaOps™ demo</Link>
                 </Button>
                 <Button asChild variant="outline">
                   <Link href="/pricing">View pricing</Link>
