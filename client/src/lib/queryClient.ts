@@ -26,6 +26,16 @@ async function throwIfResNotOk(res: Response) {
   }
 }
 
+// apiRequest throws "409: {json}". This is the server's own sentence, when it sent one.
+export function apiErrorMessage(err: unknown, fallback: string): string {
+  try {
+    const parsed = JSON.parse(err instanceof Error ? err.message.replace(/^\d{3}: /, "") : "");
+    return typeof parsed?.error === "string" && parsed.error ? parsed.error : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export async function apiRequest(
   method: string,
   url: string,
