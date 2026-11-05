@@ -86,6 +86,7 @@ import { competencyDueColumns, competencySeedAtCreate, nextCompetencyDue } from 
 import { methodSignerOptions, nextMilestoneAfter, milestonesForComplexity, MILESTONE_LABEL, alignAnnualToMonth, MONTH_NAMES, type SignerCandidate, type MethodMilestone } from "@shared/competencySignoff";
 import { isManualMethod, groupProblem, suggestGroups, groupKey } from "@shared/competencyGrouping";
 import { cleanEl5Samples, el5Columns, el5SamplesFromRow } from "@shared/competencyEl5Samples";
+import { applySelfOps, planSelfElements, planSelfRecordRows, planSelfWaivedMethods, selfOpsCount, staffSelfSeat } from "./competencySelfEntry";
 import { cleanWaivedSpecimens, waivedSpecimenColumns, waivedSpecimensFromRow, waivedEvidenceText, WAIVED_BLIND_METHOD } from "@shared/competencyWaivedSpecimens";
 import { oneRowKey, sameTestNameOnMap, preferredSameTestName } from "@shared/presetAnalytes";
 import { quizImageProblem } from "@shared/quizImages";
@@ -10314,9 +10315,21 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     ).get(staffEmployeeId, labId);
   }
 
+  // The person's own method-by-method record, for the My sign-offs row that opens it (2026-11-05). The per-lab implicit
+  // "Competency" record is only the container for that record: each method is signed on its own (CLAUDE.md VeritaComp),
+  // so asking someone to acknowledge the container, with its default PASS, said something untrue. Same count the record's
+  // own header shows.
+  const staffOwnRecordSummary = (sqlite: any, labId: number, staffEmployeeId: number) => {
+    const view = assembleEmployeeCompetencyView(sqlite, labId, staffEmployeeId);
+    const methods: any[] = view?.testSystems || [];
+    if (!methods.length) return null;
+    return { employee_id: staffEmployeeId, lab_id: labId, methods_total: methods.length, methods_signed: methods.filter((t: any) => t.signedCurrent).length };
+  };
+
   // GET /api/staff-portal-session/competencies?employee_id=N
   // Returns pending + recently-signed assessments for the active
-  // staff portal employee.
+  // staff portal employee. An implicit container nobody acknowledged is left out of the list (and so out of every
+  // pending count) and replaced by own_record; one already acknowledged stays as it is.
   app.get("/api/staff-portal-session/competencies", staffPortalAuthMiddleware, (req: any, res) => {
     try {
       const labId = req.staffPortalLabId;
@@ -10352,6 +10365,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           competencies: [],
           employee: { id: staffEmployee.id, name: `${staffEmployee.first_name} ${staffEmployee.last_name}` },
           bridge_status: "no_competency_record",
+          own_record: staffOwnRecordSummary(sqlite, labId, staffEmployee.id),
         });
       }
 
@@ -10369,11 +10383,13 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
          LEFT JOIN staff_portal_competency_signoffs spcs
            ON spcs.assessment_id = ca.id AND spcs.staff_employee_id = ?
          WHERE ca.employee_id = ?
+           AND (COALESCE(cp.is_implicit, 0) = 0 OR spcs.id IS NOT NULL)
          ORDER BY ca.employee_acknowledged ASC, ca.assessment_date DESC
          LIMIT 200`
       ).all(staffEmployee.id, compEmployee.id) as any[];
 
       res.json({
+        own_record: staffOwnRecordSummary(sqlite, labId, staffEmployee.id),
         competencies: assessments.map((a: any) => ({
           assessment_id: a.id,
           program_id: a.program_id,
@@ -10426,7 +10442,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       if (!compEmployee) return res.status(404).json({ error: "No competency record bridged to this staff member" });
 
       const assessment = sqlite.prepare(
-        `SELECT ca.*, cp.name AS program_name, cp.department
+        `SELECT ca.*, cp.name AS program_name, cp.department, cp.is_implicit
          FROM competency_assessments ca
          JOIN competency_programs cp ON cp.id = ca.program_id
          WHERE ca.id = ? AND ca.employee_id = ?`
@@ -10434,23 +10450,41 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       if (!assessment) return res.status(404).json({ error: "Assessment not found for this employee" });
 
       const hash = hashCompetencyAssessment(assessment);
+      const isImplicit = assessment.is_implicit === 1; // entered on the person's own record, not here
 
       // Editable-by-employee item rows: only the factual DATA fields the tech
       // supplies (specimen IDs, dates, evidence, sample refs, quiz refs). The
       // observer, Pass/Fail verdict, and N/A determinations are the evaluator's
-      // and are NOT returned as editable (kept read-only server-side too).
-      const items = (assessment.competency_type === "technical")
+      // and are NOT returned as editable (kept read-only server-side too). A row
+      // signed off per method is frozen and isn't offered.
+      const items = (assessment.competency_type === "technical" && !isImplicit)
         ? (sqlite.prepare(
             `SELECT id, method_number, method_group_id, method_group_name,
                     el1_specimen_id, el2_evidence, el2_date, el3_qc_date,
                     el5_sample_type, el5_sample_id, el6_quiz_id, el6_score, el6_date_taken,
                     el1_observer_initials, el4_observer_initials, passed
-             FROM competency_assessment_items WHERE assessment_id = ?
+             FROM competency_assessment_items WHERE assessment_id = ? AND signoff_id IS NULL AND waived_method_number IS NULL
              ORDER BY method_group_id, method_number`
           ).all(assessmentId) as any[])
         : [];
+      // A program-based waived record: one row per method the evaluator chose (2026-11-05). The person adds evidence and
+      // dates; Pass and the evaluator's initials are shown, not editable.
+      const waivedItems = isImplicit ? [] : (sqlite.prepare(
+        `SELECT * FROM competency_assessment_items WHERE assessment_id = ? AND signoff_id IS NULL AND waived_method_number IS NOT NULL ORDER BY waived_method_number`
+      ).all(assessmentId) as any[]).map((r: any) => ({
+        id: r.id,
+        method_number: Number(r.waived_method_number),
+        method_name: WAIVED_METHOD_NAMES[Number(r.waived_method_number) - 1] || "",
+        evidence: r.waived_evidence || "",
+        date: r.waived_date || "",
+        initials: r.waived_initials || "",
+        passed: !!r.passed,
+        specimens: Number(r.waived_method_number) === WAIVED_BLIND_METHOD ? waivedSpecimensFromRow(r) : undefined,
+      }));
 
       res.json({
+        is_implicit: isImplicit,
+        waived_items: waivedItems,
         assessment_id: assessment.id,
         program_id: assessment.program_id,
         program_name: assessment.program_name,
@@ -10508,7 +10542,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       if (!compEmployee) return res.status(404).json({ error: "No competency record bridged to this staff member" });
 
       const assessment = sqlite.prepare(
-        `SELECT * FROM competency_assessments WHERE id = ? AND employee_id = ?`
+        `SELECT ca.*, cp.is_implicit FROM competency_assessments ca JOIN competency_programs cp ON cp.id = ca.program_id WHERE ca.id = ? AND ca.employee_id = ?`
       ).get(assessmentId, compEmployee.id) as any;
       if (!assessment) return res.status(404).json({ error: "Assessment not found for this employee" });
 
@@ -10530,6 +10564,11 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       ).get(assessmentId, staffEmployee.id) as any;
       if (existing) {
         return res.json({ id: existing.id, signed_at: existing.signed_at, already_signed: true });
+      }
+      // The implicit "Competency" record is a container: each method is signed on its own, so there is no record-level
+      // result to acknowledge (2026-11-05).
+      if (assessment.is_implicit === 1) {
+        return res.status(409).json({ error: "Each method on your competency record is signed off on its own by your evaluator, so there is nothing to acknowledge here.", code: "IMPLICIT_RECORD" });
       }
 
       const tx = sqlite.transaction(() => {
@@ -10561,8 +10600,21 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // refs). The observer, Pass/Fail verdict, N/A determinations, and evaluator
   // are NOT editable here: those are the evaluator's assessment and approval.
   // Scoped to the AUTHENTICATED staff identity (never a client-supplied id),
-  // UPDATE-only on existing rows of this assessment, 409 once locked.
-  app.put("/api/staff-portal-session/competencies/:assessment_id", staffPortalAuthMiddleware, (req: any, res) => {
+  // UPDATE-only on existing rows of this assessment, 409 once locked. Program-based waived rows take evidence and dates
+  // the same way (2026-11-05); Pass and initials stay stored. server/competencySelfEntry.ts works out every change.
+  // The same lapsed-lab and subscription gates as the person page's route: this route has no labScopeMiddleware, so the
+  // lab is loaded here and requireWriteAccess runs on it.
+  const staffPortalWriteAccess = (req: any, res: any, next: any) => {
+    const sqlite = (db as any).$client;
+    const labId = req.staffPortalLabId;
+    const lab = sqlite.prepare("SELECT id, plan, subscription_expires_at FROM labs WHERE id = ?").get(labId) as any;
+    if (!lab) return res.status(404).json({ error: "Lab not found" });
+    req.userId = req.staffPortalUserId;
+    req.scope = { labId, lab: { ...lab, subscription_expires_at: laterExpiry(lab.subscription_expires_at, orgSubscriptionExpiryForLab(sqlite, labId)) } };
+    if (!hasCompetencyAccess(storage.getUserById(req.userId), req.scope.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    return requireWriteAccess(req, res, next);
+  };
+  app.put("/api/staff-portal-session/competencies/:assessment_id", staffPortalAuthMiddleware, staffPortalWriteAccess, (req: any, res) => {
     try {
       const labId = req.staffPortalLabId;
       const assessmentId = parseInt(req.params.assessment_id, 10);
@@ -10585,51 +10637,21 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const compEmployee = resolveCompEmployee(sqlite, staffEmployee.id, labId);
       if (!compEmployee) return res.status(404).json({ error: "No competency record bridged to this staff member" });
       const assessment = sqlite.prepare(
-        "SELECT * FROM competency_assessments WHERE id = ? AND employee_id = ?"
+        "SELECT ca.*, cp.is_implicit FROM competency_assessments ca JOIN competency_programs cp ON cp.id = ca.program_id WHERE ca.id = ? AND ca.employee_id = ?"
       ).get(assessmentId, compEmployee.id) as any;
       if (!assessment) return res.status(404).json({ error: "Assessment not found for this employee" });
       if (assessment.locked === 1) return res.status(409).json({ error: "This assessment is signed and locked. Ask your evaluator to unlock it to make changes." });
+      if (assessment.is_implicit === 1) return res.status(409).json({ error: "Enter this on your own competency record, method by method.", code: "IMPLICIT_RECORD" });
+      if (assessment.employee_acknowledged === 1) return res.status(409).json({ error: "You already acknowledged this assessment. Ask your evaluator to make any change." });
+      if (assessment.competency_type === "nontechnical") return res.status(409).json({ error: "This record has no details for you to add." });
 
-      const items: any[] = Array.isArray(req.body?.items) ? req.body.items : [];
-      // Whitelist of employee-editable DATA columns. Everything else on the row
-      // (observer initials, passed, N/A flags) is intentionally excluded so a
-      // crafted request cannot flip the verdict or the observer.
-      const DATA_COLS: Record<string, string> = {
-        el1SpecimenId: "el1_specimen_id",
-        el2Evidence: "el2_evidence",
-        el2Date: "el2_date",
-        el3QcDate: "el3_qc_date",
-        el5SampleType: "el5_sample_type",
-        el5SampleId: "el5_sample_id",
-        el6QuizId: "el6_quiz_id",
-        el6Score: "el6_score",
-        el6DateTaken: "el6_date_taken",
-      };
-      const beforeItems = sqlite.prepare("SELECT * FROM competency_assessment_items WHERE assessment_id = ?").all(assessmentId);
-      let updated = 0;
-      const tx = sqlite.transaction(() => {
-        for (const it of items) {
-          const itemId = Number(it?.id);
-          if (!Number.isFinite(itemId)) continue;
-          const row = sqlite.prepare("SELECT id FROM competency_assessment_items WHERE id = ? AND assessment_id = ?").get(itemId, assessmentId) as any;
-          if (!row) continue; // never touch rows outside this assessment
-          const sets: string[] = []; const vals: any[] = [];
-          for (const [k, col] of Object.entries(DATA_COLS)) {
-            if (k in it) {
-              let v: any = it[k];
-              if (k === "el6Score") v = (v === "" || v == null) ? null : Number(v);
-              else v = (v == null) ? null : String(v);
-              sets.push(`${col} = ?`); vals.push(v);
-            }
-          }
-          if (sets.length) {
-            vals.push(itemId);
-            sqlite.prepare(`UPDATE competency_assessment_items SET ${sets.join(", ")} WHERE id = ?`).run(...vals);
-            updated += 1;
-          }
-        }
-      });
-      tx();
+      const beforeItems = sqlite.prepare("SELECT * FROM competency_assessment_items WHERE assessment_id = ?").all(assessmentId) as any[];
+      // Whitelisted DATA columns only (server/competencySelfEntry.ts). A row off this record or already signed refuses the save.
+      const plan = planSelfRecordRows({ rows: beforeItems, items: req.body?.items, waivedItems: req.body?.waived_items });
+      if (plan.error) return res.status(plan.status || 400).json({ error: plan.error });
+      const updated = selfOpsCount(plan.ops!);
+      if (!updated) return res.json({ ok: true, updated: 0 });
+      sqlite.transaction(() => applySelfOps(sqlite, assessmentId, plan.ops!))();
       const afterItems = sqlite.prepare("SELECT * FROM competency_assessment_items WHERE assessment_id = ?").all(assessmentId);
       logAudit({ userId: req.staffPortalUserId, ownerUserId: ownerRow.owner_user_id, module: "veritacomp", action: "update", entityType: "assessment_self_edit", entityId: String(assessmentId), entityLabel: compEmployee.name || undefined, before: { items: beforeItems }, after: { items: afterItems }, ipAddress: req.ip });
       res.json({ ok: true, updated });
@@ -11423,6 +11445,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
            JOIN competency_programs cp ON cp.id = ca.program_id
            WHERE ca.employee_id IN (${bridgePlaceholders})
              AND COALESCE(ca.employee_acknowledged, 0) = 0
+             AND COALESCE(cp.is_implicit, 0) = 0
              AND ca.status = 'completed'
            ORDER BY ca.assessment_date DESC
            LIMIT 50`
@@ -29619,6 +29642,22 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     };
   };
 
+  // Staff self-entry on the person page (Michael's 2026-09-27 rule, opened here 2026-11-05 after RFGH staff could not
+  // enter their own specimen numbers). Decided here from the session, never from anything the page sends: a Staff login
+  // on their OWN record, in a lab that can still take writes, who doesn't already hold edit access through their seat.
+  // Owners, admins and editors keep the evaluator's route below, unchanged.
+  const staffMayEnterOwnData = (req: any, empId: number): boolean => {
+    const sqlite = (db as any).$client;
+    const seat = staffSelfSeat(sqlite, req.userId, req.scope.labId);
+    if (!seat || seat.staff_employee_id !== empId) return false;
+    if (req.scope.role === "owner" || req.scope.role === "admin") return false;
+    let perms: SeatPermissions = {} as SeatPermissions;
+    try { perms = JSON.parse(seat.permissions || "{}") as SeatPermissions; } catch { /* a malformed value reads as no edit access */ }
+    if (resolveSeatPermission(perms, "veritacomp") === "edit") return false;
+    const level = getAccessLevel(storage.getUserById(req.userId), req.scope.lab);
+    return level !== "read_only" && level !== "locked";
+  };
+
   app.get("/api/labs/:labId/competency/employee/:employeeId", authMiddleware, labScopeMiddleware, (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
     const labId = req.scope.labId;
@@ -29627,7 +29666,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (!Number.isFinite(empId)) return res.status(400).json({ error: "Bad employeeId" });
     const view = assembleEmployeeCompetencyView(sqlite, labId, empId);
     if (!view) return res.status(404).json({ error: "Employee not found" });
-    res.json(view);
+    res.json({ ...view, canEnterOwnData: staffMayEnterOwnData(req, empId) });
   });
 
   // "By instrument" (2026-10-13, Michael Q154 = 2): the mirror of the per-employee view. Read-only. Each person's block
@@ -29754,6 +29793,105 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     });
   });
 
+  // Get-or-create the employee's OPEN record in the per-lab implicit "Competency" program. Per-method sign-off (2026-10-13)
+  // signs and freezes one method's items at a time and never locks this record, so it stays the open container for every
+  // method's next competency. A record locked by the earlier whole-record sign-off is left as signed; new entries go to a
+  // new one. Runs inside the caller's transaction.
+  const openImplicitAssessment = (sqlite: any, labId: number, emp: any, ownerUserId: number, now: string): { id: number } => {
+    let implicit = sqlite.prepare("SELECT id FROM competency_programs WHERE lab_id = ? AND is_implicit = 1 LIMIT 1").get(labId) as any;
+    if (!implicit) {
+      const r = sqlite.prepare(
+        "INSERT INTO competency_programs (user_id, lab_id, name, department, type, is_implicit, created_at, updated_at) VALUES (?, ?, 'Competency', 'All departments', 'technical', 1, ?, ?)"
+      ).run(ownerUserId, labId, now, now);
+      implicit = { id: Number(r.lastInsertRowid) };
+    }
+    // Get-or-create the competency_employees bridge.
+    let compEmp = sqlite.prepare("SELECT id FROM competency_employees WHERE staff_employee_id = ? AND lab_id = ? LIMIT 1").get(emp.id, labId) as any;
+    if (!compEmp) {
+      const compName = `${emp.first_name || ""} ${emp.last_name || ""}`.trim();
+      const r = sqlite.prepare(
+        "INSERT INTO competency_employees (user_id, lab_id, name, title, hire_date, status, created_at, staff_employee_id) VALUES (?, ?, ?, '', ?, 'active', ?, ?)"
+      ).run(ownerUserId, labId, compName, emp.hire_date || null, now, emp.id);
+      compEmp = { id: Number(r.lastInsertRowid) };
+    }
+    let assessment = sqlite.prepare(
+      "SELECT id FROM competency_assessments WHERE program_id = ? AND employee_id = ? AND (locked IS NULL OR locked = 0) ORDER BY id DESC LIMIT 1"
+    ).get(implicit.id, compEmp.id) as any;
+    if (!assessment) {
+      const aDate = labLocalDate(now); // BUG-047: the lab's date, not UTC (an evening record was dated tomorrow)
+      const r = sqlite.prepare(
+        "INSERT INTO competency_assessments (program_id, employee_id, assessment_type, assessment_date, competency_type, status, created_at) VALUES (?, ?, 'initial', ?, 'technical', 'pass', ?)"
+      ).run(implicit.id, compEmp.id, aDate, now);
+      assessment = { id: Number(r.lastInsertRowid) };
+    }
+    return assessment;
+  };
+
+  // PUT /api/labs/:labId/competency/employee/:employeeId/test-system/:instrumentId/my-data
+  //
+  // A Staff login saving the factual data on their OWN record. A separate route from the evaluator's below, which keeps
+  // refusing Staff logins: this one reads only the data fields (shared/competencySelfEntry.ts), updates rows in place, and
+  // takes every evaluator-owned value from the stored row, so nothing the client sends can reach an observer, a verdict,
+  // an N/A or Element 4. Items frozen by a sign-off are never working rows. Membership and write access are the same as
+  // the other record-work routes (QC entry, inventory counts): requireWriteAccess keeps a lapsed lab from writing, with
+  // requireModuleEdit left off on purpose and the self check made here from the session.
+  // Body: { elements: [{ num, ...data fields }] } or, for an all-waived system, { waivedMethods: [{ num, evidence, date, specimens }] }.
+  app.put("/api/labs/:labId/competency/employee/:employeeId/test-system/:instrumentId/my-data", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const labId = req.scope.labId;
+    const sqlite = (db as any).$client;
+    const empId = Number(req.params.employeeId);
+    const instrumentId = Number(req.params.instrumentId);
+    if (!Number.isFinite(empId) || !Number.isFinite(instrumentId)) return res.status(400).json({ error: "Bad ids" });
+    const seat = staffSelfSeat(sqlite, req.userId, labId);
+    if (!seat || seat.staff_employee_id !== empId) return res.status(403).json({ error: "A staff login can only enter data on their own competency record.", code: "STAFF_NOT_SELF" });
+
+    const emp = sqlite.prepare("SELECT id, first_name, last_name, hire_date FROM staff_employees WHERE id = ? AND tier2_lab_id = ? AND status = 'active'").get(empId, labId) as any;
+    if (!emp) return res.status(404).json({ error: "Employee not found" });
+    // The view lists only the methods assigned to this person on this lab's maps, so it is the assignment check too.
+    const method = methodOf(loadInstrumentGroups(sqlite, labId), instrumentId);
+    const view = assembleEmployeeCompetencyView(sqlite, labId, empId);
+    const ts = view?.testSystems?.find((t: any) => t.instrumentId === method.leadId);
+    if (!ts) return res.status(404).json({ error: "Instrument not assigned to this employee" });
+
+    // This method's working rows, as the view picks them: the first analyzer holding any, on the newest open record.
+    const mph = method.memberIds.map(() => "?").join(",");
+    const working = sqlite.prepare(
+      `SELECT i.* FROM competency_assessment_items i
+       JOIN competency_assessments a ON a.id = i.assessment_id
+       JOIN competency_programs p ON p.id = a.program_id
+       JOIN competency_employees ce ON ce.id = a.employee_id
+       WHERE p.lab_id = ? AND p.is_implicit = 1 AND ce.staff_employee_id = ? AND (a.locked IS NULL OR a.locked = 0)
+         AND i.signoff_id IS NULL AND i.instrument_id IN (${mph})
+       ORDER BY a.assessment_date DESC, a.id DESC, i.id`
+    ).all(labId, empId, ...method.memberIds) as any[];
+    const onFirstMember = method.memberIds.map((id) => working.filter((r) => r.instrument_id === id)).find((list) => list.length) || [];
+    const existingAssessmentId: number | null = onFirstMember[0]?.assessment_id ?? null;
+    const rows = onFirstMember.filter((r) => r.assessment_id === existingAssessmentId);
+    const storeId = rows[0]?.instrument_id ?? method.leadId;
+
+    const plan = ts.waived
+      ? planSelfWaivedMethods({ rows, input: req.body?.waivedMethods, instrumentName: ts.instrumentName, instrumentId: storeId })
+      : planSelfElements({ rows, elements: ts.elements, elementCount: view.elementCount, input: req.body?.elements, instrumentName: ts.instrumentName, instrumentId: storeId });
+    if (plan.error) return res.status(400).json({ error: plan.error });
+    const updated = selfOpsCount(plan.ops!);
+    if (!updated) return res.json({ ok: true, updated: 0, instrumentId: method.leadId, assessmentId: existingAssessmentId });
+
+    const labRow = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(labId) as any;
+    const ownerUserId = labRow?.owner_user_id ?? req.userId;
+    const assessmentId: number = sqlite.transaction(() => {
+      const id = existingAssessmentId ?? openImplicitAssessment(sqlite, labId, emp, ownerUserId, new Date().toISOString()).id;
+      applySelfOps(sqlite, id, plan.ops!);
+      return id;
+    })();
+    const afterRows = sqlite.prepare(`SELECT * FROM competency_assessment_items WHERE assessment_id = ? AND signoff_id IS NULL AND instrument_id IN (${mph})`).all(assessmentId, ...method.memberIds);
+    logAudit({
+      userId: req.userId, ownerUserId, module: "veritacomp", action: "update", entityType: "assessment_self_edit", entityId: String(assessmentId),
+      entityLabel: `${emp.first_name || ""} ${emp.last_name || ""}`.trim() + " / " + ts.instrumentName, before: { items: rows }, after: { items: afterRows }, ipAddress: req.ip,
+    });
+    res.json({ ok: true, updated, instrumentId: method.leadId, assessmentId });
+  });
+
   // PUT /api/labs/:labId/competency/employee/:employeeId/test-system/:instrumentId
   //
   // Employee-centric data entry (2026-09-27, Phase 2). Saves the 6/8 element data
@@ -29847,36 +29985,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     }
 
     const tx = sqlite.transaction(() => {
-      // Get-or-create the per-lab implicit "Competency" program.
-      let implicit = sqlite.prepare("SELECT id FROM competency_programs WHERE lab_id = ? AND is_implicit = 1 LIMIT 1").get(labId) as any;
-      if (!implicit) {
-        const r = sqlite.prepare(
-          "INSERT INTO competency_programs (user_id, lab_id, name, department, type, is_implicit, created_at, updated_at) VALUES (?, ?, 'Competency', 'All departments', 'technical', 1, ?, ?)"
-        ).run(ownerUserId, labId, now, now);
-        implicit = { id: Number(r.lastInsertRowid) };
-      }
-      // Get-or-create the competency_employees bridge.
-      let compEmp = sqlite.prepare("SELECT id FROM competency_employees WHERE staff_employee_id = ? AND lab_id = ? LIMIT 1").get(empId, labId) as any;
-      if (!compEmp) {
-        const compName = `${emp.first_name || ""} ${emp.last_name || ""}`.trim();
-        const r = sqlite.prepare(
-          "INSERT INTO competency_employees (user_id, lab_id, name, title, hire_date, status, created_at, staff_employee_id) VALUES (?, ?, ?, '', ?, 'active', ?, ?)"
-        ).run(ownerUserId, labId, compName, emp.hire_date || null, now, empId);
-        compEmp = { id: Number(r.lastInsertRowid) };
-      }
-      // Get-or-create the employee's OPEN (unlocked) record. Per-method sign-off (2026-10-13) signs and freezes one
-      // method's items at a time and never locks this record, so it stays the open container for every method's next
-      // competency. A record locked by the earlier whole-record sign-off is left as signed; new entries go to a new one.
-      let assessment = sqlite.prepare(
-        "SELECT id FROM competency_assessments WHERE program_id = ? AND employee_id = ? AND (locked IS NULL OR locked = 0) ORDER BY id DESC LIMIT 1"
-      ).get(implicit.id, compEmp.id) as any;
-      if (!assessment) {
-        const aDate = labLocalDate(now); // BUG-047: the lab's date, not UTC (an evening record was dated tomorrow)
-        const r = sqlite.prepare(
-          "INSERT INTO competency_assessments (program_id, employee_id, assessment_type, assessment_date, competency_type, status, created_at) VALUES (?, ?, 'initial', ?, 'technical', 'pass', ?)"
-        ).run(implicit.id, compEmp.id, aDate, now);
-        assessment = { id: Number(r.lastInsertRowid) };
-      }
+      const assessment = openImplicitAssessment(sqlite, labId, emp, ownerUserId, now);
       // Replace this instrument's WORKING items only; items frozen by a sign-off are never touched.
       sqlite.prepare(`DELETE FROM competency_assessment_items WHERE assessment_id = ? AND instrument_id IN (${method.memberIds.map(() => "?").join(",")}) AND signoff_id IS NULL`).run(assessment.id, ...method.memberIds);
       if (isWaivedSystem) {
