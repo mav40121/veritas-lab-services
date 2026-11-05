@@ -13,7 +13,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
-interface Row { instrumentId: number; instrumentName: string; department: string | null; complexity: string | null; people: number; signed: number; ready: number; overdue: number; groupId?: number | null; groupMembers?: Array<{ id: number; name: string }> | null; }
+interface Row { instrumentId: number; instrumentName: string; department: string | null; complexity: string | null; people: number; signed: number; ready: number; needsReview?: number; overdue: number; groupId?: number | null; groupMembers?: Array<{ id: number; name: string }> | null; }
 
 export default function VeritaCompByInstrumentPage() {
   const activeLabId = useActiveLabId();
@@ -66,6 +66,7 @@ export default function VeritaCompByInstrumentPage() {
                     <>
                       {r.overdue > 0 && <Badge className="text-[10px] bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">{r.overdue} overdue</Badge>}
                       {r.ready > 0 && <Badge className="text-[10px] bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300" data-testid="instrument-ready">{r.ready} ready to sign</Badge>}
+                      {(r.needsReview ?? 0) > 0 && <Badge className="text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300" data-testid="instrument-needs-review">{r.needsReview} {r.needsReview === 1 ? "needs" : "need"} review</Badge>}
                       <Badge className={`text-[10px] ${done ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" : "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300"}`} data-testid="instrument-progress">
                         {r.signed} of {r.people} signed
                       </Badge>

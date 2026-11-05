@@ -17,7 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 
-type ElementStatus = "pass" | "fail" | "na" | "none";
+type ElementStatus = "pass" | "fail" | "na" | "none" | "needs_review";
 
 type PriorAssessment = {
   id: number;
@@ -49,6 +49,9 @@ function ElementCell({ status, observer }: { status: ElementStatus; observer: st
   }
   if (status === "fail") {
     return <Badge className="text-[10px] border bg-red-500/10 text-red-700 border-red-500/30">Fail{observer ? ` (${observer})` : ""}</Badge>;
+  }
+  if (status === "needs_review") {
+    return <Badge className="text-[10px] border bg-amber-500/10 text-amber-800 dark:text-amber-300 border-amber-500/30">Needs review</Badge>;
   }
   if (status === "na") {
     return <Badge variant="outline" className="text-[10px] text-muted-foreground">N/A</Badge>;

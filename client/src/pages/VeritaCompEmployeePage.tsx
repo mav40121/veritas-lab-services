@@ -37,6 +37,7 @@ import { WaivedSpecimenRows } from "@/components/WaivedSpecimenRows";
 import { WAIVED_BLIND_METHOD, type WaivedSpecimen } from "@shared/competencyWaivedSpecimens";
 import { ELEMENT_NAMES, ELEMENT_FIELDS } from "@/lib/competencyElements";
 import { SELF_ELEMENT_FIELDS, isSelfEntryField, selfSampleRemovable } from "@shared/competencySelfEntry";
+import { NEEDS_REVIEW, NEEDS_REVIEW_LABEL } from "@shared/competencyStatus";
 
 interface ElementData { num: number; status: string; passed?: boolean; na?: boolean; naJustification?: string; [k: string]: any; }
 // Element 5 can record more than one blind / PT sample for a test system (Michael Q71 = 1). The edit buffer keeps them
@@ -64,20 +65,20 @@ const TONE: Record<string, string> = {
   muted: "bg-muted text-muted-foreground",
 };
 
-// A person's own entry with no Pass yet reads as a failure to the record ("data, not passed"), but they just typed it:
-// on their own record it says what is actually happening.
-const WaitingBadge = () => <Badge className="text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300" data-testid="waiting-for-evaluator">Waiting for evaluator</Badge>;
+// Michael Q179 = 1: an unsigned entry with data and no Pass or N/A reads Needs review, for everyone who sees it. These are working
+// rows only; a signed set shows its real result in SignedEntries.
+const ReviewBadge = () => <Badge className="text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300" data-testid="needs-review-chip">{NEEDS_REVIEW_LABEL}</Badge>;
 
-function waivedBadge(status: string, selfEntry = false) {
+function waivedBadge(status: string) {
   if (status === "pass") return <Badge className="text-[10px] bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">PASS</Badge>;
-  if (status === "fail" && selfEntry) return <WaitingBadge />;
+  if (status === NEEDS_REVIEW) return <ReviewBadge />;
   if (status === "fail") return <Badge className="text-[10px] bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">Not passed</Badge>;
   if (status === "incomplete") return <Badge className="text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">Needs date</Badge>;
   return <Badge className="text-[10px] bg-muted text-muted-foreground">Not used</Badge>;
 }
 
-function statusBadge(status: string, selfEntry = false) {
-  if (status === "fail" && selfEntry) return <WaitingBadge />;
+function statusBadge(status: string) {
+  if (status === NEEDS_REVIEW) return <ReviewBadge />;
   const cls = status === "pass" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
     : status === "fail" ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
     : status === "na" ? "bg-muted text-muted-foreground"
@@ -128,7 +129,8 @@ export default function VeritaCompEmployeePage() {
   const testSystems = data?.testSystems || [];
   const current = (activeTs != null ? testSystems.find((t) => t.instrumentId === activeTs) : undefined) ?? testSystems[0];
   const signedCount = testSystems.filter((t) => t.signedCurrent).length;
-  const readyCount = testSystems.filter((t) => t.signable).length;
+  const readyCount = testSystems.filter((t) => t.readyToSign).length;
+  const reviewCount = testSystems.filter((t) => t.needsReview).length;
   const overdueCount = testSystems.filter((t) => t.overdue).length;
   const refresh = () => { if (url) qc.invalidateQueries({ queryKey: [url] }); };
   // Staff self-entry: evaluator-owned controls are locked and only the listed data fields open up. Everyone else: readOnly decides, as before.
@@ -246,6 +248,7 @@ export default function VeritaCompEmployeePage() {
             <div className="text-sm text-muted-foreground" data-testid="signoff-summary">
               <span className="font-medium text-foreground">{signedCount} of {testSystems.length} methods signed</span>
               {readyCount > 0 && <span> &middot; {readyCount} ready to sign</span>}
+              {reviewCount > 0 && <span data-testid="signoff-summary-review"> &middot; {reviewCount} {reviewCount === 1 ? "needs" : "need"} review</span>}
               {overdueCount > 0 && <span className="text-red-600"> &middot; {overdueCount} overdue</span>}
               <span> &middot; each method is signed off on its own.</span>
             </div>
@@ -322,7 +325,7 @@ export default function VeritaCompEmployeePage() {
                               const w = wform[m.num] || {};
                               return (
                                 <div key={m.num} className="border border-border rounded-lg p-3" data-testid={`waived-method-${m.num}`}>
-                                  <div className={`flex items-center justify-between gap-2 mb-2 ${selfEntry ? "flex-wrap sm:flex-nowrap" : ""}`}>
+                                  <div className="flex items-center justify-between gap-2 mb-2 flex-wrap sm:flex-nowrap">
                                     <div className="text-xs font-semibold">Method {m.num}: {m.name}</div>
                                     <div className="flex items-center gap-3 shrink-0">
                                       {m.num !== WAIVED_BLIND_METHOD && (
@@ -331,7 +334,7 @@ export default function VeritaCompEmployeePage() {
                                           onChange={(e) => setWField(m.num, "passed", e.target.checked)} data-testid={`waived-method-${m.num}-passed`} /> Pass
                                       </label>
                                       )}
-                                      {waivedBadge(m.status, selfEntry)}
+                                      {waivedBadge(m.status)}
                                     </div>
                                   </div>
                                   {m.num === WAIVED_BLIND_METHOD ? (
@@ -370,7 +373,7 @@ export default function VeritaCompEmployeePage() {
                           const fields = ELEMENT_FIELDS[el.num] || [];
                           return (
                             <div key={el.num} className="border border-border rounded-lg p-3" data-testid={`element-${el.num}`}>
-                              <div className={`flex items-center justify-between gap-2 mb-2 ${selfEntry ? "flex-wrap sm:flex-nowrap" : ""}`}>
+                              <div className="flex items-center justify-between gap-2 mb-2 flex-wrap sm:flex-nowrap">
                                 <div className="text-xs font-semibold">Element {el.num}: {ELEMENT_NAMES[el.num]}</div>
                                 <div className="flex items-center gap-3 shrink-0">
                                   <label className="flex items-center gap-1 text-[11px] cursor-pointer">
@@ -383,7 +386,7 @@ export default function VeritaCompEmployeePage() {
                                         onChange={(e) => setField(el.num, "passed", e.target.checked)} data-testid={`element-${el.num}-pass`} /> Pass
                                     </label>
                                   )}
-                                  {statusBadge(el.status, selfEntry)}
+                                  {statusBadge(el.status)}
                                 </div>
                               </div>
                               {f.na ? (
