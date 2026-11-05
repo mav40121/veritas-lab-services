@@ -6917,12 +6917,21 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (storage.getUserByEmail(email)) return res.status(409).json({ error: "Email already registered" });
     const pwProblem = passwordProblem(password);
     if (pwProblem) return res.status(400).json({ error: pwProblem, code: "PASSWORD_RULE" });
-    // System security settings: a person joining a lab whose owner requires a symbol gets that rule now.
     {
       const sq = (db as any).$client;
-      const pend = (req.body?.inviteToken
-        ? sq.prepare("SELECT owner_user_id, lab_id FROM user_seats WHERE invite_token = ? AND status = 'pending'").get(req.body.inviteToken)
-        : null) || sq.prepare("SELECT owner_user_id, lab_id FROM user_seats WHERE seat_email = ? AND status = 'pending'").get(email.toLowerCase());
+      const pend = typeof req.body?.inviteToken === "string"
+        ? sq.prepare("SELECT owner_user_id, lab_id, invited_at FROM user_seats WHERE invite_token = ? AND status = 'pending'").get(req.body.inviteToken)
+        : null;
+      // A pending invite is claimed with its own link, never by typing its address. Sign-up doesn't
+      // verify email, so anyone who knew the address could otherwise take the seat, an admin seat
+      // included (BUG-133). The link dies after the same 30 days the join page shows.
+      if (!pend && sq.prepare("SELECT 1 FROM user_seats WHERE lower(seat_email) = ? AND status = 'pending'").get(email.toLowerCase())) {
+        return res.status(409).json({ error: "This email has a pending invitation. Use the link in your invitation email, or ask your lab to send it again.", code: "INVITE_LINK_REQUIRED" });
+      }
+      if (pend && Date.now() - new Date(pend.invited_at).getTime() > 30 * 24 * 60 * 60 * 1000) {
+        return res.status(400).json({ error: "This invitation has expired. Ask your lab to send it again.", code: "INVITE_EXPIRED" });
+      }
+      // System security settings: a person joining a lab whose owner requires a symbol gets that rule now.
       if (pend) {
         const joinPolicy = pend.lab_id ? policyForLab(sq, Number(pend.lab_id)) : getOwnerSettings(sq, Number(pend.owner_user_id));
         const symProblem = passwordProblemFor(joinPolicy, password);
@@ -6942,7 +6951,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // wrong. See incident 2026-05-05 (Emily Du / xiaoyiem@usc.edu).
     const { inviteToken: reqInviteToken } = req.body;
     let seatInvite: any = null;
-    if (reqInviteToken) {
+    if (typeof reqInviteToken === "string") {
       seatInvite = (db as any).$client.prepare(
         // 2026-06-09 Auth unification: pull seat_type + lab_id +
         // staff_employee_id so the Staff Portal branch below can link
@@ -6950,11 +6959,6 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         // seat's own lab_id (NOT the inviter's primary lab).
         "SELECT id, owner_user_id, seat_type, lab_id, staff_employee_id, invite_role FROM user_seats WHERE invite_token = ? AND status = 'pending'"
       ).get(reqInviteToken) as any;
-    }
-    if (!seatInvite) {
-      seatInvite = (db as any).$client.prepare(
-        "SELECT id, owner_user_id, seat_type, lab_id, staff_employee_id, invite_role FROM user_seats WHERE seat_email = ? AND status = 'pending'"
-      ).get(email.toLowerCase()) as any;
     }
 
     // Save HIPAA acknowledgment + hospital info + plan from signup. When a

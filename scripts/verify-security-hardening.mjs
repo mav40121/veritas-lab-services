@@ -4,15 +4,16 @@
 //      secret, password, pin, ...) at any depth while leaving other fields intact.
 //   B) the login rate limiter blocks brute-force by failed-attempt count per
 //      IP+email, resets on a successful login, and expires after the window.
-// Mirrors the exact logic in server/index.ts (redactSensitive) and
+// Mirrors the exact logic in server/logRedact.ts (redactSensitive) and
 // server/routes.ts (loginFailures limiter). Run: node scripts/verify-security-hardening.mjs
 let pass = 0, fail = 0;
 const check = (n, c) => { if (c) { pass++; console.log("PASS  " + n); } else { fail++; console.log("FAIL  " + n); } };
 
-// ── A) Redactor (identical to server/index.ts) ─────────────────────────────
-const SENSITIVE_LOG_KEY = /^(token|secret|password|pass|pwd|jwt|api_?key|authorization|access_?token|refresh_?token|pin|client_secret)$/i;
+// ── A) Redactor (identical to server/logRedact.ts) ─────────────────────────
+const SENSITIVE_LOG_KEY = /token$|secret|password|^pass$|^pwd$|^jwt$|api_?key|authorization|^pin$/i;
+const TOKEN_IN_VALUE = /[?&][a-z_]*token=|\/surveyor\/[\w-]{8,}/i;
 function redactSensitive(key, value) {
-  if (SENSITIVE_LOG_KEY.test(key) && typeof value === "string") return "[REDACTED]";
+  if (typeof value === "string" && (SENSITIVE_LOG_KEY.test(key) || TOKEN_IN_VALUE.test(value))) return "[REDACTED]";
   return value;
 }
 const red = (obj) => JSON.stringify(obj, redactSensitive);
