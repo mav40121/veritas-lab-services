@@ -9,7 +9,6 @@ import { authHeaders } from "@/lib/auth";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
   Dialog,
@@ -225,12 +224,6 @@ export default function VeritaMapAppPage() {
         <div>
           <div className="flex items-center gap-2 mb-1">
             <h1 className="text-2xl font-bold tracking-tight">VeritaMap®</h1>
-            <Badge
-              variant="outline"
-              className="text-xs bg-primary/5 text-primary border-primary/20"
-            >
-              Beta
-            </Badge>
           </div>
           <p className="text-sm text-muted-foreground">
             Test Menu Regulatory Mapping: track calibration verification,

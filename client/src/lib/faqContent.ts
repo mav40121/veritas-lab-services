@@ -65,7 +65,7 @@ export const TEA_ARTICLE_FAQ: FaqQA[] = [
             },
             {
               q: "How often does CLIA TEa change?",
-              a: "Infrequently, but the CLIA proficiency testing final rule (CMS-3355-F, published July 11, 2022) was the first major update in decades for many analytes. Before that, some values dated to 1992. The Subpart I criteria took effect July 11, 2024 and were implemented for laboratories on January 1, 2025, making this the largest single update to CLIA acceptable performance criteria in the modern era. Check the current eCFR rather than relying on reference cards or QC software that may not have been updated."
+              a: "Infrequently, but the CLIA proficiency testing final rule (CMS-3355-F, published July 11, 2022) was the first major update in decades for many analytes. Before that, some values dated to 1992. The updated Subpart I criteria took effect July 11, 2024. Check the current eCFR rather than relying on reference cards or QC software that may not have been updated."
             },
             {
               q: "What does 'target value ±X% or ±Y units, whichever is greater' mean in practice?",
@@ -169,7 +169,7 @@ export const TEA_LOOKUP_FAQ: FaqQA[] = [
   },
   {
     q: "Where do these TEa values come from?",
-    a: "The CLIA PT acceptance limits in 42 CFR §493.927 through §493.959, updated by the CLIA PT final rule (CMS-3355-F, published July 11, 2022, effective July 11, 2024, implemented January 1, 2025).",
+    a: "The CLIA PT acceptance limits in 42 CFR §493.927 through §493.959, updated by the CLIA PT final rule (CMS-3355-F, published July 11, 2022, effective July 11, 2024).",
   },
   {
     q: "Can I use CLIA TEa as my calibration verification acceptance criterion?",
@@ -495,7 +495,7 @@ export const FAQ_CATEGORIES: FaqCategory[] = [
       },
       {
         q: "How often is the regulatory data updated?",
-        a: "The 42 CFR Part 493 TEa values are sourced from the CLIA proficiency testing final rule (CMS-3355-F), published July 11, 2022, effective July 11, 2024, and implemented January 1, 2025, and are updated when CMS publishes a Federal Register notice that changes them. TJC, CAP, COLA, AABB, and CMS references are checked against the published standards, and updates reach the platform without action on your part. See /resources/clia-tea-lookup for the live TEa reference tool.",
+        a: "The 42 CFR Part 493 TEa values are sourced from the CLIA proficiency testing final rule (CMS-3355-F), published July 11, 2022, effective July 11, 2024, and are updated when CMS publishes a Federal Register notice that changes them. TJC, CAP, COLA, AABB, and CMS references are checked against the published standards, and updates reach the platform without action on your part. See /resources/clia-tea-lookup for the live TEa reference tool.",
       },
     ],
   },

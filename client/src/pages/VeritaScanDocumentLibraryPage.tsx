@@ -1011,7 +1011,7 @@ function LinkedPolicySection({ docId }: { docId: number }) {
         </Button>
       </div>
       {policyLinks.length === 0 && (
-        <p className="text-xs text-muted-foreground italic">No VeritaPolicy policy linked. Link one so it can be opened from here.</p>
+        <p className="text-xs text-muted-foreground italic">No VeritaDC policy linked. Link one so it can be opened from here.</p>
       )}
       <div className="space-y-1.5">
         {policyLinks.map(link => (
@@ -1032,12 +1032,12 @@ function LinkedPolicySection({ docId }: { docId: number }) {
       {pickerOpen && (
         <Dialog open onOpenChange={(o) => { if (!o) setPickerOpen(false); }}>
           <DialogContent className="max-w-lg">
-            <DialogHeader><DialogTitle>Link a VeritaPolicy policy</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle>Link a VeritaDC policy</DialogTitle></DialogHeader>
             <div className="space-y-1.5 max-h-[60vh] overflow-y-auto">
               {policiesQuery.isLoading && <p className="text-sm text-muted-foreground">Loading policies...</p>}
-              {policiesQuery.isError && <p className="text-sm text-destructive">Could not load VeritaPolicy policies.</p>}
+              {policiesQuery.isError && <p className="text-sm text-destructive">Could not load VeritaDC policies.</p>}
               {policiesQuery.data && policiesQuery.data.length === 0 && (
-                <p className="text-sm text-muted-foreground">No policies found in VeritaPolicy for this lab.</p>
+                <p className="text-sm text-muted-foreground">No policies found in VeritaDC for this lab.</p>
               )}
               {(policiesQuery.data || []).map(p => {
                 const already = linkedPolicyIds.has(p.id);

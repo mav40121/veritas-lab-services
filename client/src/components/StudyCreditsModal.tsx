@@ -64,7 +64,7 @@ export function StudyCreditsModal() {
         </p>
         <p className="text-sm text-muted-foreground mb-6">
           Upgrade to VeritaCheck&#174; Unlimited for unlimited studies and instrument verifications, every one with a
-          full signed PDF report and saved to your study history. $299 for the first year, then $499 per year.
+          full PDF report with a laboratory director or designee signature block, saved to your study history. $299 for the first year, then $499 per year.
         </p>
         <div className="flex flex-col gap-2">
           <button

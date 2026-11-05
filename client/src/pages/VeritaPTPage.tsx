@@ -17,7 +17,7 @@ const FEATURES = [
 const HOW_IT_WORKS = [
   { step: "1", title: "Add Enrollments", desc: "Record each PT program you are enrolled in, with its provider, program code, and category." },
   { step: "2", title: "Enter Survey Results", desc: "Log your result for each PT event along with peer mean and peer SD, and mark it pass or fail. SDI is calculated automatically." },
-  { step: "3", title: "Close the Loop on Failures", desc: "For any unacceptable result, open a VeritaResponse™ PT failure finding for root cause and corrective action. Remedial action is required by CLIA (42 CFR Part 493 Subpart H) and by CAP checklist requirements." },
+  { step: "3", title: "Close the Loop on Failures", desc: "For any unacceptable result, open a VeritaResponse™ PT failure finding for root cause and corrective action. Corrective action is required under 42 CFR 493.1236, 493.1407(e)(4), and 493.1445(e)(4), and by CAP checklist requirements." },
   { step: "4", title: "See Your Coverage", desc: "VeritaPT™ checks your VeritaMap® test menu against your enrollments and shows required PT gaps, recommended programs, and what is covered." },
 ];
 
