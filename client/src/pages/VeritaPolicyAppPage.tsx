@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Lock, Download, ChevronDown, ChevronUp, Search, Clock, ChevronRight, FileText, Plus, Trash2 } from "lucide-react";
+import { Lock, Download, ChevronDown, ChevronUp, Search, ChevronRight, FileText, Plus, Trash2 } from "lucide-react";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
@@ -315,7 +315,7 @@ export default function VeritaPolicyAppPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "VeritaPolicy-Report.pdf";
+      a.download = "VeritaDC-Report.pdf";
       a.click();
       URL.revokeObjectURL(url);
     } catch {
@@ -343,7 +343,7 @@ export default function VeritaPolicyAppPage() {
       const a = document.createElement("a");
       a.href = dlUrl;
       const safeName = policyName.toLowerCase().replace(/[^a-z0-9]+/g, "_").slice(0, 60);
-      a.download = `VeritaPolicy_${String(policyId).padStart(3, "0")}_${safeName}${uncontrolledCopy ? "_UNCONTROLLED" : ""}.docx`;
+      a.download = `VeritaDC_${String(policyId).padStart(3, "0")}_${safeName}${uncontrolledCopy ? "_UNCONTROLLED" : ""}.docx`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -375,7 +375,7 @@ export default function VeritaPolicyAppPage() {
       const a = document.createElement("a");
       a.href = dlUrl;
       const date = labTodayIso();
-      a.download = `VeritaPolicy_Bundle_${date}${uncontrolledCopy ? "_UNCONTROLLED" : ""}.zip`;
+      a.download = `VeritaDC_Bundle_${date}${uncontrolledCopy ? "_UNCONTROLLED" : ""}.zip`;
       document.body.appendChild(a); a.click(); a.remove();
       URL.revokeObjectURL(dlUrl);
       toast({ title: "Bundle downloaded", description: `${count} policy Word starters in one ZIP` });
@@ -399,7 +399,7 @@ export default function VeritaPolicyAppPage() {
       const a = document.createElement("a");
       a.href = url;
       const date = labTodayIso();
-      a.download = `VeritaPolicy_MasterList_${date}.xlsx`;
+      a.download = `VeritaDC_MasterList_${date}.xlsx`;
       a.click();
       URL.revokeObjectURL(url);
     } catch {
@@ -469,7 +469,7 @@ export default function VeritaPolicyAppPage() {
       <div className="min-h-[60vh] flex flex-col items-center justify-center text-center px-4">
         <Lock size={40} className="text-muted-foreground mb-4" />
         <h2 className="text-xl font-semibold text-foreground mb-2">Upgrade to access VeritaDC&#8482;</h2>
-        <p className="text-muted-foreground text-sm mb-4">VeritaDC&#8482; is included with all paid VeritaAssure&#174; plans.</p>
+        <p className="text-muted-foreground text-sm mb-4">VeritaDC&#8482; is included in Clinic ($999/yr) and above.</p>
         <a href="/pricing"><Button>View Plans</Button></a>
       </div>
     );
@@ -895,15 +895,13 @@ export default function VeritaPolicyAppPage() {
         </div>
       </div>
 
-      {/* Policy library -- Coming Soon */}
+      {/* Policy library: shipped on the My Documents tab */}
       <div className="bg-card border border-border rounded-lg p-6">
         <div className="flex items-center gap-3 mb-2">
           <h2 className="text-base font-semibold text-foreground">Policy Library</h2>
-          <Badge variant="outline" className="text-xs gap-1"><Clock size={10} /> Coming Soon</Badge>
         </div>
         <p className="text-sm text-muted-foreground leading-relaxed">
-          Upload policy documents, track review dates, manage approval workflows, and give staff read-only access to current approved policies.
-          Policy library management is coming in a future update.
+          Upload policy documents, track review dates, and route approvals on the My Documents tab.
         </p>
       </div>
 

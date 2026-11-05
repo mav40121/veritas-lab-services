@@ -55,7 +55,7 @@ test.describe("VeritaPolicy: combined signature report download", () => {
     await sigBtn.first().click();
     const download = await downloadPromise;
     const name = download.suggestedFilename();
-    expect(name, `download name (${name})`).toMatch(/VeritaPolicy_Signature_Report_.*\.xlsx$/);
+    expect(name, `download name (${name})`).toMatch(/VeritaDC_Signature_Report_.*\.xlsx$/);
     const path = await download.path();
     expect(path, "download saved to disk").toBeTruthy();
     const size = path ? statSync(path).size : 0;

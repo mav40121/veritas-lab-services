@@ -1450,7 +1450,7 @@ export default function VeritaPolicyMyPoliciesPage() {
       const a = document.createElement("a");
       a.href = url;
       const date = labTodayIso();
-      a.download = `VeritaPolicy_Signature_Report_${doc.title.replace(/[^A-Za-z0-9_-]+/g, "_").slice(0, 40)}_${date}.xlsx`;
+      a.download = `VeritaDC_Signature_Report_${doc.title.replace(/[^A-Za-z0-9_-]+/g, "_").slice(0, 40)}_${date}.xlsx`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -2483,7 +2483,7 @@ export default function VeritaPolicyMyPoliciesPage() {
                 onClick={() => downloadSignatureReport(viewDoc)}
                 disabled={downloadingSigReport}
                 data-testid="signature-report-button"
-                title="Download the combined signature report: director sign-off, the full attestation roster, and kiosk staff signatures, as one Excel workbook."
+                title="Download the combined signature report: director sign-off, the full attestation roster, and staff login signatures, as one Excel workbook."
               >
                 <FileSpreadsheet size={14} className="mr-1" />
                 {downloadingSigReport ? "Generating..." : "Signature report (Excel)"}
