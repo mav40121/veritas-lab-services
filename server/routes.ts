@@ -10962,8 +10962,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
     // An invite token is the link itself: whoever holds it can claim the seat, an admin
     // seat included. Only someone who manages members gets it; everyone else still sees
-    // who is invited. The page's Copy link button is already theirs alone.
-    if (!canManageLabMembers(req.scope)) pendingInvites = pendingInvites.map((inv) => ({ ...inv, invite_token: null }));
+    // who is invited. The page's Copy link button is already theirs alone. Veritas support
+    // reads as admin here but is refused invitation links (server/vlsSupport.ts), so not them.
+    if (!canManageLabMembers(req.scope) || req.scope?.viaVlsSupport) pendingInvites = pendingInvites.map((inv) => ({ ...inv, invite_token: null }));
 
     res.json({ members: rows, pendingInvites, seatLimits, seatCounts, staffPortal, medicalDirector });
   });

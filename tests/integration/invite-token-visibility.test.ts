@@ -89,6 +89,11 @@ async function main() {
       check(`2. ${who} gets no token on that row`, row(r.body)?.invite_token === null);
       check(`2. ${who} gets the token nowhere in the response`, !r.text.includes(pendingToken));
     }
+    const sup = await call("POST", "/api/auth/register", { email: mail("support"), password: PW, name: "Support Madeup", hipaa_acknowledged: true });
+    sqlite.prepare("UPDATE users SET vls_support = 1 WHERE lower(email) = ?").run(mail("support"));
+    const viaSupport = await call("GET", `${L}/members`, undefined, sup.body.token);
+    check("2. Veritas support still sees who is invited", viaSupport.status === 200 && !!row(viaSupport.body), `HTTP ${viaSupport.status} ${viaSupport.body.error ?? ""}`);
+    check("2. Veritas support gets the token nowhere in the response", !viaSupport.text.includes(pendingToken));
     const list = await call("GET", `${L}/staff-portal-invites`, undefined, staff);
     check("2. The Staff login invite list carries no token either", !list.text.includes(pendingToken) && !/invite_token|inviteToken/.test(list.text), `HTTP ${list.status}`);
 
