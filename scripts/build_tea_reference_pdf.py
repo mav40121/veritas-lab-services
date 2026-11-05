@@ -16,7 +16,7 @@ from reportlab.lib.units import inch
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import (SimpleDocTemplate, Table, TableStyle, Paragraph,
-                                Spacer, HRFlowable)
+                                Spacer, HRFlowable, CondPageBreak)
 
 TEAL = colors.HexColor("#01696F"); DARK = colors.HexColor("#0A3A3D")
 TEXT = colors.HexColor("#28251D"); GRAY = colors.HexColor("#6B7280")
@@ -34,7 +34,7 @@ def main():
     ss = getSampleStyleSheet()
     h1 = ParagraphStyle("h1", parent=ss["Normal"], fontName="Helvetica-Bold", fontSize=17, textColor=TEAL, leading=20)
     sub = ParagraphStyle("sub", parent=ss["Normal"], fontName="Helvetica", fontSize=9, textColor=GRAY, leading=13)
-    sech = ParagraphStyle("sech", parent=ss["Normal"], fontName="Helvetica-Bold", fontSize=10.5, textColor=DARK, leading=13, spaceBefore=10, spaceAfter=3, keepWithNext=1)
+    sech = ParagraphStyle("sech", parent=ss["Normal"], fontName="Helvetica-Bold", fontSize=10.5, textColor=DARK, leading=13, spaceBefore=10, spaceAfter=3)
     cell = ParagraphStyle("cell", parent=ss["Normal"], fontName="Helvetica", fontSize=8.5, textColor=TEXT, leading=11)
     cellb = ParagraphStyle("cellb", parent=cell, fontName="Helvetica-Bold")
     hd = ParagraphStyle("hd", parent=ss["Normal"], fontName="Helvetica-Bold", fontSize=8.5, textColor=colors.white, leading=11)
@@ -73,7 +73,7 @@ def main():
             if i % 2 == 0:
                 st.append(("BACKGROUND", (0, i), (-1, i), ALT))
         t.setStyle(TableStyle(st))
-        story += [Paragraph(f"{sp}  ({len(groups[sp])})", sech), t]
+        story += [CondPageBreak(1.2 * inch), Paragraph(f"{sp}  ({len(groups[sp])})", sech), t]
 
     story += [Spacer(1, 10), HRFlowable(width="100%", thickness=0.75, color=BORDER, spaceAfter=6),
               Paragraph(f"Source: 42 CFR Part 493, Subpart I. Provided by VeritaAssure{REG} | Veritas Lab Services. "
