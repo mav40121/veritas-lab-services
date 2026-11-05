@@ -38281,47 +38281,19 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const sqlite = db.$client;
       const userId = req.ownerUserId;
       const user = sqlite.prepare('SELECT * FROM users WHERE id = ?').get(userId) as any;
-      // Scope to the ACTIVE lab (caller-based); the PDF identity + content then
-      // reflect the lab being viewed, not the seat owner's home lab.
-      const labId = resolveLegacyLabId(req);
-      const scopeCol = labId ? 'lab_id' : 'user_id';
-      const scopeVal = labId ?? userId;
-      const settings = sqlite.prepare(`SELECT * FROM veritapolicy_settings WHERE ${scopeCol} = ?`).get(scopeVal) as any;
-      const statuses = sqlite.prepare(`SELECT * FROM veritapolicy_requirement_status WHERE ${scopeCol} = ?`).all(scopeVal) as any[];
-      const statusMap: Record<number, any> = {};
-      for (const s of statuses) statusMap[s.requirement_id] = s;
-      const lab = labId ? (sqlite.prepare('SELECT * FROM labs WHERE id = ?').get(labId) as any) : resolveActiveLabForRequest(req.user.userId, req);
-      const allReqs = veritapolicyReqSetsForLab(lab);
-      const enrichedReqs = allReqs.map((reqItem: any) => {
-        const us = statusMap[reqItem.id];
-        // Service-line toggles (blood_bank, transplant, microbiology, maternal_serum) removed;
-        // users now mark those N/A individually. Only structural flag (is_independent) remains.
-        let autoNa = false;
-        if (settings) {
-          if (reqItem.service_line === 'independent' && !settings.is_independent) autoNa = true;
-        }
-        const isNa = autoNa || (us?.is_na ? true : false);
-        return {
-          ...reqItem,
-          status: isNa ? 'na' : (us?.status || 'not_started'),
-          is_na: isNa,
-          auto_na: autoNa,
-          policy_name: us?.policy_name || null,
-        };
-      });
-      // Phase 1 (2026-05-01): derive accreditation choice from labs flags so the
-      // PDF subtitle matches what the user sees in the app. CFR is appended for
-      // every lab regardless of choice.
-      const accCountPdf = (lab?.accreditation_cap ? 1 : 0) + (lab?.accreditation_tjc ? 1 : 0)
-        + (lab?.accreditation_cola ? 1 : 0) + (lab?.accreditation_aabb ? 1 : 0);
-      let accreditationChoicePdf = 'CLIA';
-      if (accCountPdf === 1 && lab?.accreditation_tjc) accreditationChoicePdf = 'TJC';
-      else if (accCountPdf === 1 && lab?.accreditation_cap) accreditationChoicePdf = 'CAP';
-      else if (accCountPdf === 1 && lab?.accreditation_aabb) accreditationChoicePdf = 'AABB';
-      else if (accCountPdf === 1 && lab?.accreditation_cola) accreditationChoicePdf = 'COLA';
-      else if (accCountPdf === 2 && lab?.accreditation_cap && lab?.accreditation_aabb) accreditationChoicePdf = 'CAP+AABB';
+      // The lab the tracker screen is showing, and what the screen saved (2026-11-05: this read
+      // veritapolicy_requirement_status, which the screen never writes, so the report said 0%).
+      const lab = resolveActiveLabForRequest(req.user.userId, req);
+      const settings = (lab?.id
+        ? sqlite.prepare('SELECT * FROM veritapolicy_settings WHERE lab_id = ?').get(lab.id)
+        : sqlite.prepare('SELECT * FROM veritapolicy_settings WHERE user_id = ?').get(userId)) as any;
+      const { veritaPolicyTracker, veritaPolicyTrackerSummary } = await import('./veritapolicyTracker');
+      const tracker = veritaPolicyTracker(sqlite, lab, userId);
       const { generateVeritaPolicyPDF } = await import('./pdfReport');
-      const pdfBuf = await generateVeritaPolicyPDF({ user, settings, requirements: enrichedReqs, statusMap, policyMap: {}, policies: [], accreditationBody: accreditationChoicePdf }, licenseCtxFromReq(req));
+      const pdfBuf = await generateVeritaPolicyPDF({
+        lab: { lab_name: lab?.lab_name || user?.clia_lab_name || user?.name, clia_number: lab?.clia_number || user?.clia_number },
+        settings, rows: tracker.rows, summary: veritaPolicyTrackerSummary(tracker.rows), aoLabel: tracker.ao_label,
+      }, licenseCtxFromReq(req));
       res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="VeritaPolicy-Report.pdf"' });
       res.send(pdfBuf);
     } catch (err: any) {
@@ -38340,42 +38312,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const userId = req.ownerUserId;
       // 2026-06-10 Shape A class sweep (Michael L feedback).
       const lab = resolveActiveLabForRequest(req.user.userId, req);
-      type AoCol = { key: 'tjc_citations' | 'cap_citations' | 'cola_citations' | 'aabb_citations'; label: string };
-      const aoCols: AoCol[] = [];
-      if (lab?.accreditation_tjc)  aoCols.push({ key: 'tjc_citations',  label: 'TJC' });
-      if (lab?.accreditation_cap)  aoCols.push({ key: 'cap_citations',  label: 'CAP' });
-      if (lab?.accreditation_cola) aoCols.push({ key: 'cola_citations', label: 'COLA' });
-      if (lab?.accreditation_aabb) aoCols.push({ key: 'aabb_citations', label: 'AABB' });
-      const { VERITAPOLICY_MASTER_LIST } = await import('./veritapolicyMasterList');
-      const scopeCol = lab?.id ? 'lab_id' : 'user_id';
-      const scopeVal = lab?.id ?? userId;
-      const statuses = sqlite.prepare(`SELECT * FROM veritapolicy_master_status WHERE ${scopeCol} = ?`).all(scopeVal) as any[];
-      const sm: Record<string, any> = {};
-      for (const s of statuses) sm[s.policy_id] = s;
-      const rows = VERITAPOLICY_MASTER_LIST.map(p => {
-        const us = sm[p.policy_id];
-        const isNa = !!(us?.is_na);
-        const status = isNa ? 'na' : (us?.status || 'not_started');
-        return {
-          policy_id: p.policy_id,
-          policy_name: p.policy_name,
-          section: p.section,
-          subspecialty: p.subspecialty,
-          service_line: p.service_line,
-          description: p.description,
-          cfr_citations: p.cfr_citations,
-          ao_citations: aoCols.map(a => ({ label: a.label, value: (p as any)[a.key] || '' })),
-          notes: p.notes || '',
-          status,
-          is_na: isNa,
-          na_reason: us?.na_reason || null,
-          our_policy_name: us?.our_policy_name || null,
-          user_notes: us?.notes || null,
-          updated_at: us?.updated_at || null,
-        };
-      });
-      const ao_label = aoCols.length === 0 ? 'CLIA only' : aoCols.map(a => a.label).join(', ');
-      res.json({ rows, ao_label, ao_columns: aoCols.map(a => a.label) });
+      const { veritaPolicyTracker } = await import('./veritapolicyTracker');
+      res.json(veritaPolicyTracker(sqlite, lab, userId));
     } catch (err: any) {
       console.error('VeritaPolicy master-list (in-app) error:', err);
       res.status(500).json({ error: err.message || 'Failed to load master list' });
@@ -38422,31 +38360,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const userId = req.ownerUserId;
       // 2026-06-10 Shape A class sweep (Michael L feedback).
       const lab = resolveActiveLabForRequest(req.user.userId, req);
-      const { VERITAPOLICY_MASTER_LIST } = await import('./veritapolicyMasterList');
-      const scopeCol = lab?.id ? 'lab_id' : 'user_id';
-      const scopeVal = lab?.id ?? userId;
-      const statuses = sqlite.prepare(`SELECT * FROM veritapolicy_master_status WHERE ${scopeCol} = ?`).all(scopeVal) as any[];
-      const sm: Record<string, any> = {};
-      for (const s of statuses) sm[s.policy_id] = s;
-      let complete = 0, in_progress = 0, not_started = 0, na = 0;
-      for (const p of VERITAPOLICY_MASTER_LIST) {
-        const us = sm[p.policy_id];
-        if (us?.is_na) { na += 1; continue; }
-        const st = us?.status || 'not_started';
-        if (st === 'complete') complete += 1;
-        else if (st === 'in_progress') in_progress += 1;
-        else not_started += 1;
-      }
-      const total = VERITAPOLICY_MASTER_LIST.length;
-      const applicable = total - na;
-      const score = applicable > 0 ? Math.round((complete / applicable) * 100) : 0;
-      const aoParts: string[] = [];
-      if (lab?.accreditation_tjc)  aoParts.push('TJC');
-      if (lab?.accreditation_cap)  aoParts.push('CAP');
-      if (lab?.accreditation_cola) aoParts.push('COLA');
-      if (lab?.accreditation_aabb) aoParts.push('AABB');
-      res.json({ total, complete, in_progress, not_started, na, applicable, score,
-        ao_label: aoParts.length === 0 ? 'CLIA only' : aoParts.join(', ') });
+      const { veritaPolicyTracker, veritaPolicyTrackerSummary } = await import('./veritapolicyTracker');
+      const { rows, ao_label } = veritaPolicyTracker(sqlite, lab, userId);
+      res.json({ ...veritaPolicyTrackerSummary(rows), ao_label });
     } catch (err: any) {
       console.error('VeritaPolicy master-list summary error:', err);
       res.status(500).json({ error: err.message || 'Failed to load summary' });
@@ -38733,50 +38649,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   app.get('/api/labs/:labId/veritapolicy/master-list', authMiddleware, labScopeMiddleware, async (req: any, res) => {
     try {
       const sqlite = db.$client;
-      const labId = req.scope.labId;
-      const lab = sqlite.prepare('SELECT * FROM labs WHERE id = ?').get(labId) as any;
-      type AoCol = { key: 'tjc_citations' | 'cap_citations' | 'cola_citations' | 'aabb_citations'; label: string };
-      const aoCols: AoCol[] = [];
-      if (lab?.accreditation_tjc)  aoCols.push({ key: 'tjc_citations',  label: 'TJC' });
-      if (lab?.accreditation_cap)  aoCols.push({ key: 'cap_citations',  label: 'CAP' });
-      if (lab?.accreditation_cola) aoCols.push({ key: 'cola_citations', label: 'COLA' });
-      if (lab?.accreditation_aabb) aoCols.push({ key: 'aabb_citations', label: 'AABB' });
-      const { VERITAPOLICY_MASTER_LIST } = await import('./veritapolicyMasterList');
-      const statuses = sqlite.prepare('SELECT * FROM veritapolicy_master_status WHERE lab_id = ?').all(labId) as any[];
-      const sm: Record<string, any> = {};
-      for (const s of statuses) sm[s.policy_id] = s;
-      const rows = VERITAPOLICY_MASTER_LIST.map(p => {
-        const us = sm[p.policy_id];
-        const isNa = !!(us?.is_na);
-        const status = isNa ? 'na' : (us?.status || 'not_started');
-        return {
-          policy_id: p.policy_id, policy_name: p.policy_name, section: p.section,
-          subspecialty: p.subspecialty, service_line: p.service_line, description: p.description,
-          cfr_citations: p.cfr_citations,
-          ao_citations: aoCols.map(a => ({ label: a.label, value: (p as any)[a.key] || '' })),
-          notes: p.notes || '', status, is_na: isNa,
-          na_reason: us?.na_reason || null, our_policy_name: us?.our_policy_name || null,
-          user_notes: us?.notes || null, updated_at: us?.updated_at || null, is_custom: false,
-        };
-      });
-      // Append this lab's custom policy entries (policies not on the built-in catalog).
-      const customEntries = sqlite.prepare('SELECT * FROM veritapolicy_custom_entries WHERE lab_id = ? ORDER BY id').all(labId) as any[];
-      for (const ce of customEntries) {
-        const pid = `custom-${ce.id}`;
-        const us = sm[pid];
-        const isNa = !!(us?.is_na);
-        rows.push({
-          policy_id: pid, policy_name: ce.policy_name, section: ce.section || 'Custom',
-          subspecialty: '', service_line: ce.service_line || 'all', description: ce.description || '',
-          cfr_citations: ce.cfr_citations || '',
-          ao_citations: aoCols.map(a => ({ label: a.label, value: (ce as any)[a.key] || '' })),
-          notes: ce.notes || '', status: isNa ? 'na' : (us?.status || 'not_started'), is_na: isNa,
-          na_reason: us?.na_reason || null, our_policy_name: us?.our_policy_name || null,
-          user_notes: us?.notes || null, updated_at: us?.updated_at || null, is_custom: true,
-        });
-      }
-      const ao_label = aoCols.length === 0 ? 'CLIA only' : aoCols.map(a => a.label).join(', ');
-      res.json({ rows, ao_label, ao_columns: aoCols.map(a => a.label) });
+      const lab = sqlite.prepare('SELECT * FROM labs WHERE id = ?').get(req.scope.labId) as any;
+      const { veritaPolicyTracker } = await import('./veritapolicyTracker');
+      res.json(veritaPolicyTracker(sqlite, lab, lab?.owner_user_id ?? req.userId));
     } catch (err: any) {
       console.error('VeritaPolicy master-list (lab-scoped) error:', err);
       res.status(500).json({ error: err.message || 'Failed to load master list' });
@@ -38851,33 +38726,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   app.get('/api/labs/:labId/veritapolicy/master-list/summary', authMiddleware, labScopeMiddleware, async (req: any, res) => {
     try {
       const sqlite = db.$client;
-      const labId = req.scope.labId;
-      const lab = sqlite.prepare('SELECT * FROM labs WHERE id = ?').get(labId) as any;
-      const { VERITAPOLICY_MASTER_LIST } = await import('./veritapolicyMasterList');
-      const statuses = sqlite.prepare('SELECT * FROM veritapolicy_master_status WHERE lab_id = ?').all(labId) as any[];
-      const sm: Record<string, any> = {};
-      for (const s of statuses) sm[s.policy_id] = s;
-      let complete = 0, in_progress = 0, not_started = 0, na = 0;
-      const customIds = (sqlite.prepare('SELECT id FROM veritapolicy_custom_entries WHERE lab_id = ?').all(labId) as any[]).map(c => `custom-${c.id}`);
-      const allPolicyIds = [...VERITAPOLICY_MASTER_LIST.map(p => p.policy_id), ...customIds];
-      for (const pid of allPolicyIds) {
-        const us = sm[pid];
-        if (us?.is_na) { na += 1; continue; }
-        const st = us?.status || 'not_started';
-        if (st === 'complete') complete += 1;
-        else if (st === 'in_progress') in_progress += 1;
-        else not_started += 1;
-      }
-      const total = allPolicyIds.length;
-      const applicable = total - na;
-      const score = applicable > 0 ? Math.round((complete / applicable) * 100) : 0;
-      const aoParts: string[] = [];
-      if (lab?.accreditation_tjc)  aoParts.push('TJC');
-      if (lab?.accreditation_cap)  aoParts.push('CAP');
-      if (lab?.accreditation_cola) aoParts.push('COLA');
-      if (lab?.accreditation_aabb) aoParts.push('AABB');
-      res.json({ total, complete, in_progress, not_started, na, applicable, score,
-        ao_label: aoParts.length === 0 ? 'CLIA only' : aoParts.join(', ') });
+      const lab = sqlite.prepare('SELECT * FROM labs WHERE id = ?').get(req.scope.labId) as any;
+      const { veritaPolicyTracker, veritaPolicyTrackerSummary } = await import('./veritapolicyTracker');
+      const { rows, ao_label } = veritaPolicyTracker(sqlite, lab, lab?.owner_user_id ?? req.userId);
+      res.json({ ...veritaPolicyTrackerSummary(rows), ao_label });
     } catch (err: any) {
       console.error('VeritaPolicy master-list summary (lab-scoped) error:', err);
       res.status(500).json({ error: err.message || 'Failed to load summary' });
@@ -39195,48 +39047,17 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     try {
       const sqlite = db.$client;
       const lab = req.scope.lab;
-      const labId = req.scope.labId;
       const ownerUserId = lab?.owner_user_id ?? req.userId;
-      // settings + statuses sourced by lab_id with owner_user_id fallback
-      // for rows that pre-dated the lab_id backfill.
-      const settings = (sqlite.prepare('SELECT * FROM veritapolicy_settings WHERE lab_id = ?').get(labId)
-        ?? sqlite.prepare('SELECT * FROM veritapolicy_settings WHERE user_id = ?').get(ownerUserId)) as any;
-      const statuses = (sqlite.prepare('SELECT * FROM veritapolicy_requirement_status WHERE lab_id = ?').all(labId) as any[]);
-      const statusMap: Record<number, any> = {};
-      for (const s of statuses) statusMap[s.requirement_id] = s;
-      const allReqs = veritapolicyReqSetsForLab(lab);
-      const enrichedReqs = allReqs.map((reqItem: any) => {
-        const us = statusMap[reqItem.id];
-        let autoNa = false;
-        if (settings) {
-          if (reqItem.service_line === 'independent' && !settings.is_independent) autoNa = true;
-        }
-        const isNa = autoNa || (us?.is_na ? true : false);
-        return {
-          ...reqItem,
-          status: isNa ? 'na' : (us?.status || 'not_started'),
-          is_na: isNa,
-          auto_na: autoNa,
-          policy_name: us?.policy_name || null,
-        };
-      });
-      const accCountPdf = (lab?.accreditation_cap ? 1 : 0) + (lab?.accreditation_tjc ? 1 : 0)
-        + (lab?.accreditation_cola ? 1 : 0) + (lab?.accreditation_aabb ? 1 : 0);
-      let accreditationChoicePdf = 'CLIA';
-      if (accCountPdf === 1 && lab?.accreditation_tjc) accreditationChoicePdf = 'TJC';
-      else if (accCountPdf === 1 && lab?.accreditation_cap) accreditationChoicePdf = 'CAP';
-      else if (accCountPdf === 1 && lab?.accreditation_aabb) accreditationChoicePdf = 'AABB';
-      else if (accCountPdf === 1 && lab?.accreditation_cola) accreditationChoicePdf = 'COLA';
-      else if (accCountPdf === 2 && lab?.accreditation_cap && lab?.accreditation_aabb) accreditationChoicePdf = 'CAP+AABB';
-      // Stub user object — PDF generator reads lab_name + clia_number from
-      // this. Sourcing from req.scope.lab guarantees the export reflects
-      // the URL the download came from.
-      const labUser = {
-        lab_name: lab?.lab_name || 'Laboratory',
-        clia_number: lab?.clia_number || null,
-      };
+      const settings = sqlite.prepare('SELECT * FROM veritapolicy_settings WHERE lab_id = ?').get(req.scope.labId) as any;
+      // What the tracker screen saved and shows (2026-11-05: this read veritapolicy_requirement_status, which the screen
+      // never writes, so the report said 0%).
+      const { veritaPolicyTracker, veritaPolicyTrackerSummary } = await import('./veritapolicyTracker');
+      const tracker = veritaPolicyTracker(sqlite, lab, ownerUserId);
       const { generateVeritaPolicyPDF } = await import('./pdfReport');
-      const pdfBuf = await generateVeritaPolicyPDF({ user: labUser, settings, requirements: enrichedReqs, statusMap, policyMap: {}, policies: [], accreditationBody: accreditationChoicePdf }, licenseCtxFromReq(req));
+      const pdfBuf = await generateVeritaPolicyPDF({
+        lab: { lab_name: lab?.lab_name, clia_number: lab?.clia_number },
+        settings, rows: tracker.rows, summary: veritaPolicyTrackerSummary(tracker.rows), aoLabel: tracker.ao_label,
+      }, licenseCtxFromReq(req));
       res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="VeritaPolicy-Report.pdf"' });
       res.send(pdfBuf);
     } catch (err: any) {
