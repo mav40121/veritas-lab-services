@@ -87,16 +87,16 @@ export default function ArticlePrecisionInterpretationPage() {
 
           <Section id="why" title="Why precision verification is required">
             <p>
-              Federal regulation 42 CFR §493.1253 requires every laboratory performing non-waived testing to verify the performance specifications
-              of each method before reporting patient results, and to re-verify whenever a change in reagent lot, instrument, or test system could
-              affect performance. Precision is one of the performance specifications a lab must verify; <Link href="/resources/calibration-verification-requirements-clia" className="text-primary font-medium hover:underline">calibration verification</Link>, accuracy,
-              reportable range, and reference intervals are the others.
+              Federal regulation 42 CFR §493.1253 requires a laboratory that introduces an unmodified, FDA-cleared or approved test system to verify
+              performance specifications before reporting patient results. Precision is one of the specifications a lab must verify; accuracy,
+              reportable range, and reference intervals are the others. <Link href="/resources/calibration-verification-requirements-clia" className="text-primary font-medium hover:underline">Calibration verification</Link> is a
+              separate requirement under §493.1255.
             </p>
             <p>
-              Accrediting bodies layer their own expectations on top of the CLIA requirement. CAP All Common and laboratory-discipline checklists
-              require precision verification at intervals defined by the laboratory director. The Joint Commission references the same activity under
-              its QSA standards. COLA, AABB, and CMS surveyors all expect to see documentation that precision was verified before each method was
-              put into patient use and at the laboratory-defined interval thereafter.
+              Accrediting bodies layer their own expectations on top of the CLIA requirement. CAP's All Common checklist (COM.40300) and TJC standard
+              QSA.02.01.01 require precision verification before a new test, method, or instrument goes into patient use. Neither sets a recurring
+              interval. COLA, AABB, and CMS surveyors all expect to see documentation that precision was verified before each method was
+              put into patient use.
             </p>
             <Callout type="info">
               The verification is the lab’s responsibility. The manufacturer validates the method; the lab verifies that the method performs to spec
@@ -113,13 +113,14 @@ export default function ArticlePrecisionInterpretationPage() {
               against an acceptance criterion.
             </p>
             <p>
-              The simple path is appropriate when all replicates are collected within a single run or a single day. It treats every replicate as
+              The simple path is built for replicates collected within a single run or a single day. It treats every replicate as
               drawn from the same pool, so it does not distinguish variability that comes from within a run versus variability that comes from day-to-day drift.
               When the verification needs to address both, the advanced (EP15) path is the right tool.
             </p>
             <Callout type="tip">
-              The simple path satisfies the CLIA repeatability requirement for analytes that the laboratory director has decided do not need the
-              fuller within-run / between-day decomposition that CLSI EP15-A3 prescribes. For an analyte where day-to-day drift is a known risk,
+              The simple path estimates repeatability only. CLIA requires precision comparable to the manufacturer's, and the CMS brochure describes
+              testing in different runs on different days as well as within a run. Whether a within-run study is enough for a given analyte is the
+              medical director or designee's documented decision. For an analyte where day-to-day drift is a known risk,
               run the advanced path.
             </Callout>
           </Section>
@@ -129,7 +130,7 @@ export default function ArticlePrecisionInterpretationPage() {
             <p><strong>Standard deviation (SD).</strong> A measure of how widely individual replicates spread around the mean. Computed with the n−1 (sample) formula, which is the standard for laboratory precision work. Larger SD means looser precision; smaller SD means tighter.</p>
             <p><strong>Coefficient of variation (CV).</strong> The SD expressed as a percent of the mean: CV = (SD ÷ mean) × 100. CV is the preferred precision metric when the SD scales with concentration, which is common in clinical chemistry. A CV of 5 percent means the SD is one-twentieth of the mean.</p>
             <p><strong>Bias and percent bias.</strong> When a target mean is supplied (for example, the assigned value of a control material from the package insert), bias is the observed mean minus the target mean. Percent bias expresses that difference as a fraction of the target. Bias is an accuracy metric, not a precision metric, but VeritaCheck surfaces it when a target is available because it is useful context.</p>
-            <p><strong>Number of replicates (N).</strong> The count of measurements that contributed to the precision estimate. CLSI EP15-A3 recommends at least 20 replicates for within-run precision and a 5-day × 5-replicates-per-run design for the full within-laboratory precision estimate. With fewer than 20 replicates, the confidence interval around SD becomes wide enough that the precision estimate is much less trustworthy.</p>
+            <p><strong>Number of replicates (N).</strong> The count of measurements that contributed to the precision estimate. CLSI EP15-A3 uses a 5-day by 5-replicate design at two or more concentrations. With fewer replicates, the confidence interval around SD widens and the estimate is less trustworthy.</p>
             <p><strong>95% confidence interval for SD.</strong> A range that has a 95 percent chance of containing the true population SD given the data observed. Computed from the chi-square distribution with N−1 degrees of freedom. As N grows, the interval narrows. At N = 20 the interval is roughly 0.76 to 1.46 times the observed SD; at N = 50 it tightens to roughly 0.84 to 1.24 times.</p>
             <p><strong>95% confidence interval for mean.</strong> The same idea applied to the mean. Computed from the Student t distribution with N−1 degrees of freedom. Width depends on SD and N together.</p>
             <p><strong>Observed 2 SD range.</strong> Mean ± 2 × SD. Under a normal distribution, roughly 95 percent of individual measurements would be expected to fall inside this range. Useful as a quick reading of how far an individual patient result could swing relative to the mean of replicate runs.</p>
@@ -137,10 +138,10 @@ export default function ArticlePrecisionInterpretationPage() {
 
           <Section id="advanced" title="Advanced (EP15) mode and ANOVA components">
             <p>
-              When the data is collected across a structured design, typically 5 days of 5 replicates each, VeritaCheck’s advanced mode uses analysis of variance to decompose the total observed variability into three components:
+              When the data is collected across a structured design, typically 5 days of 5 replicates each, VeritaCheck’s advanced mode uses analysis of variance, on the design CLSI EP15-A3 describes, to decompose the total observed variability into three components:
             </p>
             <p><strong>Within-run SD.</strong> Variability among replicates measured back-to-back in the same run, on the same day, by the same operator. This is the tightest layer.</p>
-            <p><strong>Between-run SD.</strong> Variability added when multiple runs are performed within a day. Captures small drifts in calibration or environment that accumulate between runs.</p>
+            <p><strong>Between-run SD.</strong> Variability added when multiple runs are performed within a day. Captures small drifts in calibration or environment that accumulate between runs. With one run per day, as in the 5-day by 5-replicate design, this component cannot be separated and reports as zero.</p>
             <p><strong>Between-day SD.</strong> Variability added when the design spans multiple days. Captures day-to-day drift in calibration, reagent storage conditions, operator differences, and other slowly-changing factors.</p>
             <p><strong>Total SD.</strong> The square root of the sum of the three variance components. Represents the full within-laboratory precision of the method on this instrument at this analyte and concentration level.</p>
             <p>
@@ -151,11 +152,14 @@ export default function ArticlePrecisionInterpretationPage() {
           <Section id="goals" title="Precision verification goal modes">
             <p>VeritaCheck supports two complementary acceptance criteria. They can be evaluated together; the report shows whichever is populated.</p>
             <p>
-              <strong>CLIA total allowable error (TEa).</strong> Federal regulation 42 CFR §493.927 through §493.959 publishes acceptance limits
-              that the laboratory must satisfy on proficiency testing for each regulated analyte. Many laboratories adopt a fraction of the
-              PT TEa as their precision verification acceptance criterion. A common convention, often attributed to the Association for
-              Diagnostic and Laboratory Medicine (ADLM), is to use half of TEa for precision and the other half for bias. VeritaCheck
-              defaults to the published PT TEa as the precision criterion and additionally surfaces the ADLM internal goal alongside it.
+              <strong>CLIA total allowable error (TEa).</strong> Federal regulation 42 CFR §493.927 through §493.959 publishes the limits
+              proficiency testing programs use to grade each regulated analyte. A medical director or designee may adopt a PT limit, or a fraction
+              of it, as the precision verification acceptance criterion, and should document why it fits the clinical need. CMS said in the preamble
+              to CMS-3355-F (87 FR 41194, July 11, 2022) that PT limits were written to grade proficiency testing and weren't intended as performance
+              goals, and that goals for accuracy and precision should rest on clinical needs and the manufacturer's labeling. That is preamble text,
+              not regulation text. A common convention, often attributed to the Association for Diagnostics &amp; Laboratory Medicine (ADLM), is to use
+              half of TEa for precision and the other half for bias. VeritaCheck evaluates against the criterion set for the study: selecting an
+              analyte preset fills in the published PT limit, and the report additionally surfaces the ADLM internal goal alongside it.
             </p>
             <p>
               <strong>Vendor SD.</strong> The within-run SD claim published by the instrument manufacturer in the package insert. Optional;
@@ -164,9 +168,9 @@ export default function ArticlePrecisionInterpretationPage() {
               vendor goal in addition to the CLIA TEa verdict.
             </p>
             <Callout type="info">
-              These criteria answer different questions. CLIA TEa asks whether the method is fit for the regulatory purpose of reporting
-              patient results. The vendor SD asks whether the lab is matching the manufacturer’s claim. Both are valid; many laboratories
-              evaluate against both.
+              These criteria answer different questions. The PT limit is the line CMS uses to grade proficiency testing; it was not written as a
+              precision goal. The vendor SD asks whether the lab is matching the manufacturer’s claim, which is the comparison §493.1253(b)(1)(i)
+              describes. The report can show both.
             </Callout>
           </Section>
 
@@ -204,7 +208,7 @@ export default function ArticlePrecisionInterpretationPage() {
               When a vendor SD goal is supplied, an additional Vendor SD Goal / Vendor Verdict row appears, color-coded by verdict. When a
               target mean is supplied, a Target Mean / Bias row appears.</p>
             <p><strong>Study Narrative Summary.</strong> Plain-language methodology paragraph, regulatory determination citing the relevant CFR section, ADLM internal goal context, and a closing sentence reminding that final acceptance is the laboratory director's or designee's responsibility.</p>
-            <p><strong>Regulatory Compliance References.</strong> Cross-references to CAP, CLSI, and 42 CFR §493 Subpart I sections that govern the verification activity. Citations only; the underlying standards are referenced by identifier and are not reproduced.</p>
+            <p><strong>Regulatory Compliance References.</strong> Cross-references to CAP, CLSI, and 42 CFR §493 sections. Citations only; the underlying standards are referenced by identifier and are not reproduced.</p>
             <p><strong>Laboratory Director or Designee Review.</strong> Signature block with Accepted / Not accepted checkboxes, signature line, date, print name, and title. Placed on page 1 so the regulatory determination is visible on the same page as the verdict.</p>
             <p><strong>Confidence Intervals and Distribution (page 2).</strong> Per-level table of 95% CI for SD, 95% CI for mean, observed 2 SD range, and (when populated) bias, percent bias, vendor SD goal, and vendor verdict.</p>
             <p><strong>Precision Plot.</strong> A Levey-Jennings style scatter of the standard deviation index (SDI) of each replicate against its specimen index. Reference bands at ±1, ±2, ±3 SDI. When a target mean and target SD are provided, the SDI is computed against the target rather than the observed mean.</p>
@@ -224,7 +228,7 @@ export default function ArticlePrecisionInterpretationPage() {
 
           <Section id="references" title="References">
             <p>
-              <strong>42 CFR Part 493 Subpart I: Proficiency Testing Programs for Nonwaived Testing.</strong> Federal regulation establishing the PT acceptance criteria the laboratory must satisfy and the performance specifications it must verify before reporting patient results.
+              <strong>42 CFR Part 493 Subpart I: Proficiency Testing Programs for Nonwaived Testing.</strong> Federal regulation establishing the PT acceptance criteria used to grade proficiency testing.
             </p>
             <p>
               <strong>42 CFR §493.1253: Establishment and verification of performance specifications.</strong> The CFR provision requiring labs to verify accuracy, precision, reportable range, and reference intervals before patient testing.
@@ -233,7 +237,7 @@ export default function ArticlePrecisionInterpretationPage() {
               <strong>CLSI EP15-A3: User Verification of Precision and Estimation of Bias; Approved Guideline.</strong> Published by the Clinical and Laboratory Standards Institute. The procedural standard most laboratories adopt for the verification activity, including the 5-day × 5-replicate design referenced in advanced mode.
             </p>
             <p>
-              <strong>ADLM: Association for Diagnostic and Laboratory Medicine.</strong> Professional society whose published recommendations on splitting allowable total error into systematic and random error budgets inform the "ADLM internal goal" surfaced alongside the CLIA TEa in VeritaCheck narratives.
+              <strong>ADLM: Association for Diagnostics &amp; Laboratory Medicine.</strong> Professional society whose published recommendations on splitting allowable total error into systematic and random error budgets inform the "ADLM internal goal" surfaced alongside the CLIA TEa in VeritaCheck narratives.
             </p>
             <p>
               Standards bodies own their respective documents; VeritaCheck references them by identifier only and does not reproduce their content.
