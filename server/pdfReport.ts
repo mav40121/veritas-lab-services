@@ -18,6 +18,7 @@ import { rootCauseLabel } from "@shared/ptFailure";
 import { assessmentTypeLabel, evaluationDueDate } from "@shared/competencyEvaluation";
 import { el5SamplesFromRow } from "@shared/competencyEl5Samples";
 import { waivedEvidenceText } from "@shared/competencyWaivedSpecimens";
+import { elementHasData, NEEDS_REVIEW } from "@shared/competencyStatus";
 import { existsSync as _teaExistsSync, readFileSync as _teaReadFileSync } from "fs";
 import { resolve as _teaResolve } from "path";
 import {
@@ -5263,9 +5264,13 @@ function compItemWasScored(item: any): boolean {
 // Pass/Fail as before; an item that was never individually scored shows
 // "Not recorded" so the detail pages stay consistent with the page-1 summary
 // for a paper/historical record. iconCheck/iconCross are hoisted functions.
-function compItemVerdictCell(item: any): string {
+// Michael Q179 = 1: on a row nobody has signed, no Pass means Needs review, not Fail. A signed row keeps its result.
+function compItemVerdictCell(item: any, assessment: any): string {
   if (!compItemWasScored(item)) {
     return `<td style="color:#888;font-style:italic;">Not recorded</td>`;
+  }
+  if (!item.passed && assessment?.locked !== 1 && item.signoff_id == null) {
+    return `<td style="color:#964219;font-weight:600;">Needs review</td>`;
   }
   const cls = item.passed ? "pass-badge" : "fail-badge";
   const label = item.passed ? iconCheck() + " Pass" : iconCross() + " Fail";
@@ -5414,14 +5419,19 @@ export function buildCompetencyHTML(input: CompetencyPDFInput): string {
       // Only score elements that were actually assessed; unscored elements
       // mirror the overall recorded verdict instead of printing a FAIL wall.
       const scoredItems = elItems.filter((i: any) => compItemWasScored(i));
+      // Michael Q179 = 1: an unsigned row with data and no Pass reads Needs review, whatever the record's overall status says.
+      const unmarked = !input.blank && assessment.locked !== 1
+        && elItems.some((i: any) => i.signoff_id == null && !i[naKey] && !i.passed && (elementHasData(i, el.num) || compItemWasScored(i)));
       const statusLabel = isNa
         ? "N/A"
         : elItems.length === 0
           ? "N/A"
-          : scoredItems.length === 0
-            ? (assessment.status === "pass" ? "PASS" : assessment.status === "fail" ? "FAIL" : "N/A")
-            : (scoredItems.every((i: any) => i.passed) ? "PASS" : "FAIL");
-      const statusColor = statusLabel === "PASS" ? "#437A22" : statusLabel === "FAIL" ? "#A12C7B" : "#888";
+          : unmarked
+            ? "NEEDS REVIEW"
+            : scoredItems.length === 0
+              ? (assessment.status === "pass" ? "PASS" : assessment.status === "fail" ? "FAIL" : "N/A")
+              : (scoredItems.every((i: any) => i.passed) ? "PASS" : "FAIL");
+      const statusColor = statusLabel === "PASS" ? "#437A22" : statusLabel === "FAIL" ? "#A12C7B" : statusLabel === "NEEDS REVIEW" ? "#964219" : "#888";
       const justification = isNa ? elItems.map((i: any) => i[naJustKey]).filter(Boolean).join("; ") : "";
       return `<tr>
         <td style="text-align:center;width:5%;font-weight:600;">${el.num}</td>
@@ -5560,7 +5570,7 @@ export function buildCompetencyHTML(input: CompetencyPDFInput): string {
         render: (item: any) => `<td>${esc(item.method_group_name || item.specimen_info || "")}</td>
           <td>${esc(item.el1_specimen_id || item.specimen_info || "")}</td>
           <td>${esc(item.el1_observer_initials || item.supervisor_initials || "")}</td>
-          ${compItemVerdictCell(item)}`,
+          ${compItemVerdictCell(item, assessment)}`,
       },
       {
         num: 2,
@@ -5570,7 +5580,7 @@ export function buildCompetencyHTML(input: CompetencyPDFInput): string {
         render: (item: any) => `<td>${esc(item.method_group_name || "")}</td>
           <td style="word-break:break-word;white-space:normal;max-width:280px;font-size:7.5pt;line-height:1.4;">${esc(item.el2_evidence || item.evidence || "")}</td>
           <td>${esc(item.el2_date || item.date_met || "")}</td>
-          ${compItemVerdictCell(item)}`,
+          ${compItemVerdictCell(item, assessment)}`,
       },
       {
         num: 3,
@@ -5579,7 +5589,7 @@ export function buildCompetencyHTML(input: CompetencyPDFInput): string {
         cols: ["Method Group", "Date Tech Ran QC", "Pass"],
         render: (item: any) => `<td>${esc(item.method_group_name || "")}</td>
           <td>${esc(item.el3_qc_date || item.date_met || "")}</td>
-          ${compItemVerdictCell(item)}`,
+          ${compItemVerdictCell(item, assessment)}`,
       },
       {
         num: 4,
@@ -5589,7 +5599,7 @@ export function buildCompetencyHTML(input: CompetencyPDFInput): string {
         render: (item: any) => `<td>${esc(item.method_group_name || "")}</td>
           <td>${esc(item.el4_date_observed || item.date_met || "")}</td>
           <td>${esc(item.el4_observer_initials || item.supervisor_initials || "")}</td>
-          ${compItemVerdictCell(item)}`,
+          ${compItemVerdictCell(item, assessment)}`,
       },
       {
         num: 5,
@@ -5606,7 +5616,7 @@ export function buildCompetencyHTML(input: CompetencyPDFInput): string {
           <td>${lines.map((s) => esc(s.sampleType)).join("<br>")}</td>
           <td>${lines.map((s) => esc(s.sampleId)).join("<br>")}</td>
           <td>${lines.map((s) => (s.acceptable ? "Yes" : s.acceptable === false ? "No" : "-")).join("<br>")}</td>
-          ${compItemVerdictCell(item)}`;
+          ${compItemVerdictCell(item, assessment)}`;
         },
       },
       {
@@ -5618,7 +5628,7 @@ export function buildCompetencyHTML(input: CompetencyPDFInput): string {
           <td>${esc(item.el6_quiz_id || "")}</td>
           <td>${item.el6_score != null ? item.el6_score + "%" : "-"}</td>
           <td>${esc(item.el6_date_taken || "")}</td>
-          ${compItemVerdictCell(item)}`,
+          ${compItemVerdictCell(item, assessment)}`,
       },
     ];
 
@@ -5636,7 +5646,7 @@ export function buildCompetencyHTML(input: CompetencyPDFInput): string {
           render: (item: any) => `<td>${esc(item.method_group_name || "")}</td>
             <td>${esc(item.el7_date_observed || "")}</td>
             <td>${esc(item.el7_observer_initials || "")}</td>
-            ${compItemVerdictCell(item)}`,
+            ${compItemVerdictCell(item, assessment)}`,
         },
         {
           num: 8,
@@ -5647,7 +5657,7 @@ export function buildCompetencyHTML(input: CompetencyPDFInput): string {
           render: (item: any) => `<td>${esc(item.method_group_name || "")}</td>
             <td style="word-break:break-word;white-space:normal;max-width:280px;font-size:7.5pt;line-height:1.4;">${esc(item.el8_function_assessed || "")}</td>
             <td>${esc(item.el8_date || "")}</td>
-            ${compItemVerdictCell(item)}`,
+            ${compItemVerdictCell(item, assessment)}`,
         },
       );
     }
@@ -5770,7 +5780,7 @@ export function buildCompetencyHTML(input: CompetencyPDFInput): string {
           <td>${esc(waivedEvidenceText(item))}</td>
           <td>${esc(item.waived_date || "")}</td>
           <td>${esc(item.waived_initials || "")}</td>
-          ${compItemVerdictCell(item)}
+          ${compItemVerdictCell(item, assessment)}
         </tr>`;
       }
       html += `</table></div>`;
@@ -5806,7 +5816,7 @@ export function buildCompetencyHTML(input: CompetencyPDFInput): string {
           <td>${esc(waivedEvidenceText(item))}</td>
           <td>${esc(item.waived_date || item.date_met || "")}</td>
           <td>${esc(item.waived_initials || item.supervisor_initials || "")}</td>
-          ${compItemVerdictCell(item)}
+          ${compItemVerdictCell(item, assessment)}
         </tr>`;
       }
     }
@@ -6014,7 +6024,7 @@ interface EmployeeCompetencyRecordInput {
   testSystems: Array<{
     instrumentName: string; department: string | null; complexity: string; analyteCount: number;
     elements: Array<{ num: number; status: string }>;
-    hasData?: boolean; complete?: boolean; signable?: boolean;
+    hasData?: boolean; complete?: boolean; signable?: boolean; needsReview?: boolean;
     // #91: an all-waived test system carries two-of-four waived methods instead of elements.
     waived?: boolean; waivedRequired?: number; waivedPassed?: number;
     waivedMethods?: Array<{ num: number; name: string; date: string; status: string }>;
@@ -6054,6 +6064,8 @@ export function buildEmployeeCompetencyRecordHTML(input: EmployeeCompetencyRecor
     if (s === "pass") return `<span class="chip c-pass">PASS</span>`;
     if (s === "na") return `<span class="chip c-na">N/A</span>`;
     if (s === "fail") return `<span class="chip c-fail">FAIL</span>`;
+    // Only an unsigned method's working entries carry this; a signed set prints its real result (Michael Q179 = 1).
+    if (s === NEEDS_REVIEW) return `<span class="chip c-amber">Needs review</span>`;
     return `<span class="chip c-inc">-</span>`;
   };
   const anyWaived = input.testSystems.some((ts) => ts.waived);
@@ -6084,6 +6096,7 @@ export function buildEmployeeCompetencyRecordHTML(input: EmployeeCompetencyRecor
     const assessment = last ? (last.legacy ? "Signed" : ms(last.milestone)) : ms(ts.nextMilestone || "initial");
     const result = last
       ? (det === "fail" ? `<span class="chip c-fail">Fail</span>` : det === "remediation" ? `<span class="chip c-amber">Remediation required</span>` : `<span class="chip c-pass">Competent</span>`)
+      : ts.needsReview ? `<span class="chip c-amber">Needs review</span>`
       : ts.signable ? `<span class="chip c-teal">Ready to sign</span>`
       : ts.hasData ? `<span class="chip c-amber">In progress</span>`
       : `<span class="chip c-inc">Not started</span>`;

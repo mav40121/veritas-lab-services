@@ -81,7 +81,7 @@ import { seedProfileFor, seedTeaFor, seedCalVerPoints, seedMethodCompQuant, seed
 import type { LicenseContext } from "@shared/licenseText";
 import { validateClia } from "@shared/validateClia";
 import { isValidIfuUrl } from "@shared/ifu";
-import { incompleteElementCells as compIncompleteCells, incompleteElementCellsByInstrument as compIncompleteCellsByInstrument, aggregateElementStatus as compAggregateElementStatus, itemElementStatus as compItemElementStatus, competencyCycleWindowDays, WAIVED_METHOD_NAMES, WAIVED_METHODS_REQUIRED, waivedMethodPassed, waivedPassedCount, methodGroupCoversInstrument } from "@shared/competencyStatus";
+import { incompleteElementCells as compIncompleteCells, incompleteElementCellsByInstrument as compIncompleteCellsByInstrument, aggregateElementStatus as compAggregateElementStatus, itemElementStatus as compItemElementStatus, competencyCycleWindowDays, WAIVED_METHOD_NAMES, WAIVED_METHODS_REQUIRED, waivedMethodPassed, waivedPassedCount, methodGroupCoversInstrument, NEEDS_REVIEW, workingElementStatus, unmarkedElements, methodPassProblem, recordPassProblem } from "@shared/competencyStatus";
 import { competencyDueColumns, competencySeedAtCreate, nextCompetencyDue } from "./competencySchedule";
 import { methodSignerOptions, nextMilestoneAfter, milestonesForComplexity, MILESTONE_LABEL, alignAnnualToMonth, MONTH_NAMES, type SignerCandidate, type MethodMilestone } from "@shared/competencySignoff";
 import { isManualMethod, groupProblem, suggestGroups, groupKey } from "@shared/competencyGrouping";
@@ -25232,7 +25232,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const assessment = (db as any).$client.prepare(
-      `SELECT a.id, a.locked, p.user_id FROM competency_assessments a
+      `SELECT a.id, a.locked, a.status, p.type AS program_type, p.user_id FROM competency_assessments a
        JOIN competency_programs p ON a.program_id = p.id
        WHERE a.id = ?`
     ).get(req.params.id) as any;
@@ -25253,6 +25253,11 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (isBackDated && !documentation) {
       return res.status(400).json({ error: "Written documentation is required when the signed date is not today." });
     }
+    // Michael Q179 = 1: the Pass rule, same as the lab-scoped twin below.
+    const recordPassBlock = assessment.status === "pass"
+      ? recordPassProblem(assessment.program_type, (db as any).$client.prepare("SELECT * FROM competency_assessment_items WHERE assessment_id = ?").all(req.params.id) as any[], { paperNoEntries: isBackDated })
+      : null;
+    if (recordPassBlock) return res.status(409).json({ error: recordPassBlock, code: "ELEMENTS_UNMARKED" });
     const signedOnPaper = isBackDated ? signedOnPaperRaw.slice(0, 10) : null;
     const priorNote = isBackDated ? documentation : null;
     (db as any).$client.prepare(
@@ -25639,7 +25644,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
     const sqlite = (db as any).$client;
     const assessment = sqlite.prepare(
-      `SELECT a.id, a.locked, a.competency_type, p.lab_id FROM competency_assessments a
+      `SELECT a.id, a.locked, a.status, a.competency_type, p.type AS program_type, p.lab_id FROM competency_assessments a
        JOIN competency_programs p ON a.program_id = p.id
        WHERE a.id = ? AND p.lab_id = ?`
     ).get(req.params.id, req.scope.labId) as any;
@@ -25671,6 +25676,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (isBackDated && !documentation) {
       return res.status(400).json({ error: "Written documentation is required when the signed date is not today." });
     }
+    // Michael Q179 = 1: this locks the record with the overall status chosen on its form, so a Pass here asserts a Pass on the
+    // entries. Fail and Remediation Required are still allowed. A paper record entered with no rows has nothing to review.
+    const recordPassBlock = assessment.status === "pass"
+      ? recordPassProblem(assessment.program_type, sqlite.prepare("SELECT * FROM competency_assessment_items WHERE assessment_id = ?").all(req.params.id) as any[], { paperNoEntries: isBackDated })
+      : null;
+    if (recordPassBlock) return res.status(409).json({ error: recordPassBlock, code: "ELEMENTS_UNMARKED" });
     const signedOnPaper = isBackDated ? signedOnPaperRaw.slice(0, 10) : null;
     const priorNote = isBackDated ? documentation : null;
     sqlite.prepare(
@@ -26519,7 +26530,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
               el1_observer_initials, el4_observer_initials
        FROM competency_assessment_items WHERE assessment_id = ?`
     );
-    function summarizeElements(items: any[]) {
+    // A prior record not yet signed: its unmarked rows read Needs review, not Fail (Michael Q179 = 1). A signed one keeps its result.
+    function summarizeElements(items: any[], signed: boolean) {
       const buckets: Record<number, { pass: number; fail: number; na: number; observer: string | null }> = {};
       for (let n = 1; n <= 6; n++) buckets[n] = { pass: 0, fail: 0, na: 0, observer: null };
       for (const it of items) {
@@ -26531,11 +26543,11 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         if (n === 1 && it.el1_observer_initials && !buckets[1].observer) buckets[1].observer = it.el1_observer_initials;
         if (n === 4 && it.el4_observer_initials && !buckets[4].observer) buckets[4].observer = it.el4_observer_initials;
       }
-      const elements: Record<string, { status: "pass" | "fail" | "na" | "none"; observer: string | null }> = {};
+      const elements: Record<string, { status: "pass" | "fail" | "na" | "none" | typeof NEEDS_REVIEW; observer: string | null }> = {};
       for (let n = 1; n <= 6; n++) {
         const b = buckets[n];
-        let status: "pass" | "fail" | "na" | "none" = "none";
-        if (b.fail > 0) status = "fail";
+        let status: "pass" | "fail" | "na" | "none" | typeof NEEDS_REVIEW = "none";
+        if (b.fail > 0) status = signed ? "fail" : NEEDS_REVIEW;
         else if (b.pass > 0) status = "pass";
         else if (b.na > 0) status = "na";
         elements[String(n)] = { status, observer: b.observer };
@@ -26552,7 +26564,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         status: p.status,
         evaluatorName: p.evaluator_name,
         locked: p.locked === 1,
-        elements: summarizeElements(itemsStmt.all(p.id) as any[]),
+        elements: summarizeElements(itemsStmt.all(p.id) as any[], p.locked === 1),
       })),
     });
   });
@@ -29574,11 +29586,16 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
             num: i + 1, name,
             evidence: row?.waived_evidence || "", date: row?.waived_date || "", initials: row?.waived_initials || "", passed: !!row?.passed,
             specimens: row && i + 1 === WAIVED_BLIND_METHOD ? waivedSpecimensFromRow(row) : undefined,
-            status: !hasData ? "unused" : waivedMethodPassed(row) ? "pass" : row.passed ? "incomplete" : "fail",
+            // Michael Q179 = 1: data with no Pass on an unsigned method hasn't failed, nobody has marked it. A signed set keeps its real result (waivedSummary).
+            status: !hasData ? "unused" : waivedMethodPassed(row) ? "pass" : row.passed ? "incomplete" : NEEDS_REVIEW,
           };
         });
         const passedCount = waivedPassedOf(waivedRows) ?? 0;
         const wComplete = passedCount >= WAIVED_METHODS_REQUIRED;
+        const wSignable = wComplete && waivedRows.length > 0;
+        // Enough methods entered that the evaluator has something to review, with at least one still unmarked. The required-methods
+        // rule still decides a Pass, so an extra unmarked method doesn't block it; it just isn't "ready to sign".
+        const wNeedsReview = waivedMethods.some((m) => m.status === NEEDS_REVIEW) && waivedMethods.filter((m) => m.status !== "unused").length >= WAIVED_METHODS_REQUIRED;
         return {
           instrumentId: inst.id,
           instrumentName: inst.instrument_name,
@@ -29588,7 +29605,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           covered: true,
           hasData: waivedMethods.some((m) => m.status !== "unused"),
           complete: wComplete,
-          signable: wComplete && waivedRows.length > 0,
+          signable: wSignable,
+          needsReview: wNeedsReview,
+          readyToSign: wSignable && !wNeedsReview,
+          passBlockMessage: null,
           fromLegacyProgram: false,
           ...methodSignoffState(inst, cLabel(maxRank)),
           ...groupFields,
@@ -29612,11 +29632,16 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       for (let el = 1; el <= elementCount; el++) {
         const st = compAggregateElementStatus(instItems, el);
         // Raw per-element data so the entry form can pre-fill. Only the fields
-        // that element uses are populated; the rest stay empty.
-        elements.push({ num: el, status: st === "none" ? "incomplete" : st, ...elementData(instItems, el) });
+        // that element uses are populated; the rest stay empty. These are working rows, so unmarked data reads
+        // Needs review (Michael Q179 = 1); a signed set goes through signedElements and keeps its real result.
+        elements.push({ num: el, status: workingElementStatus(st), ...elementData(instItems, el) });
       }
       const incomplete = elements.some((e) => e.status === "incomplete");
       const complete = !incomplete && instItems.length > 0;
+      // signable still means a sign-off of some kind can be recorded: Fail and Remediation Required stay allowed on unmarked
+      // entries. readyToSign means it can be signed as a Pass, and is what "ready to sign" reads from.
+      const signable = complete && !fromLegacyProgram;
+      const needsReview = signable && unmarkedElements(elements).length > 0;
       return {
         instrumentId: inst.id,
         instrumentName: inst.instrument_name,
@@ -29626,7 +29651,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         covered: coveringMg.length > 0 || directItems.length > 0 || signState.signoffs.length > 0,
         hasData: instItems.length > 0,
         complete,
-        signable: complete && !fromLegacyProgram,
+        signable,
+        needsReview,
+        readyToSign: signable && !needsReview,
+        passBlockMessage: signable ? methodPassProblem(inst.instrument_name, elements) : null,
         fromLegacyProgram,
         ...signState,
         ...groupFields,
@@ -29723,7 +29751,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         groupId: m.group ? m.group.groupId : null, groupMembers: m.group ? m.group.members.map((x) => ({ id: x.id, name: x.name })) : null,
         complexity: cxOf(m.leadId), people: blocks.length,
         signed: blocks.filter((b: any) => b.signedCurrent).length,
-        ready: blocks.filter((b: any) => b.signable).length,
+        ready: blocks.filter((b: any) => b.readyToSign).length,
+        needsReview: blocks.filter((b: any) => b.needsReview).length,
         overdue: blocks.filter((b: any) => b.overdue).length,
       };
     });
@@ -30101,6 +30130,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // Fail and Remediation Required need the action plan; the target completion date is optional.
     const determination = String(b.determination || "pass");
     if (!["pass", "fail", "remediation"].includes(determination)) return res.status(400).json({ error: "Overall determination must be Pass, Fail or Remediation Required." });
+    // Michael Q179 = 1: a Pass needs every element marked Pass or N/A. Fail and Remediation Required stay allowed on unmarked
+    // entries, which is how an evaluator records someone who didn't pass. A waived method's Pass is ruled by its required
+    // methods (signable above), so it has no block here. Same text as the sign form shows (passBlockMessage).
+    if (determination === "pass" && ts.passBlockMessage) {
+      return res.status(409).json({ error: ts.passBlockMessage, code: "ELEMENTS_UNMARKED", unmarked: unmarkedElements(ts.elements) });
+    }
     const remediationPlan = determination === "pass" ? null : (String(b.remediationPlan || "").trim().slice(0, 2000) || null);
     if (determination !== "pass" && !remediationPlan) return res.status(400).json({ error: "Enter the remediation action plan for a Fail or Remediation Required determination." });
     const remediationTargetDate = determination === "pass" ? null : (String(b.remediationTargetDate || "").trim().slice(0, 10) || null);
