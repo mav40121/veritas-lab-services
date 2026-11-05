@@ -15,12 +15,12 @@ import { test, expect } from "@playwright/test";
 const BASE = process.env.PW_BASE || "https://www.veritaslabservices.com";
 
 test.describe("Demo -> trial handoff: Start Free Trial routes to /register", () => {
-  test("compliance demo: every Start Free Trial CTA points to /register, none to /login", async ({ page }) => {
+  test("compliance demo: every Create Free Account CTA points to /register, none to /login", async ({ page }) => {
     await page.goto(`${BASE}/demo/compliance`, { waitUntil: "domcontentloaded" });
     await page.waitForTimeout(1500);
-    const ctas = page.locator('a:has-text("Start Free Trial")');
+    const ctas = page.locator('a:has-text("Create Free Account")');
     const n = await ctas.count();
-    expect(n, "compliance demo shows at least one Start Free Trial CTA").toBeGreaterThan(0);
+    expect(n, "compliance demo shows at least one Create Free Account CTA").toBeGreaterThan(0);
     for (let i = 0; i < n; i++) {
       const href = await ctas.nth(i).getAttribute("href");
       expect(href, `CTA ${i} routes to signup, not a sign-in wall`).toContain("/register");
