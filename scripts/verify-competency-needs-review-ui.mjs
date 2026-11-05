@@ -210,6 +210,27 @@ await page.getByTestId("sign-method").click();
 await page.getByTestId("method-signed").waitFor({ timeout: 15000 });
 check("it signs as a Pass", /Pass/.test(await page.getByTestId("method-determination").innerText()));
 
+// ── Ola: the two facts the form states beside the choice ─────────────────────
+const ola = await person("Fourth", "Ola");
+{ const d = new Database(process.env.SCRATCH_DB); for (const inst of [ANALYZER, METER]) d.prepare("INSERT INTO staff_employee_instruments (employee_id, instrument_id, created_at) VALUES (?, ?, ?)").run(ola, inst, now); d.close(); }
+await put(ola, ANALYZER, { elements: entries({ 5: { samples: [{ sampleType: "PT", sampleId: "PT-9", acceptable: false }] } }) });
+await put(ola, METER, { waivedMethods: [{ num: 1, evidence: "BS-1", date: day, initials: "CT", passed: true }, { num: 2, evidence: "Observed", date: day, initials: "CT", passed: true }, { num: 3, evidence: "QC reviewed", date: day }] });
+await openMethod(page, ola, "Made-up Analyzer");
+await page.getByTestId("method-sign-form").waitFor({ timeout: 15000 });
+check("a sample marked not acceptable is stated as a fact, and nothing is chosen for them", /Element 5 has a sample marked not acceptable/.test(await page.getByTestId("sample-not-acceptable").innerText()) && (await page.getByTestId("determination-select").inputValue()) === "" && (await page.getByTestId("remediation-box").count()) === 0);
+await shot(page, "sample-not-acceptable");
+await tab(page, "Made-up Meter").click();
+await page.getByTestId("method-sign-form").waitFor({ timeout: 15000 });
+check("waived, two passed plus an unmarked third: the method reads Needs review", /Initial needs review/.test(await tab(page, "Made-up Meter").innerText()));
+check("the form says what happens to the unmarked one", /Method 3 has an entry with no Pass/.test(await page.getByTestId("waived-unmarked-note").innerText()));
+check("the required-methods rule decides the Pass: no block, and it can be signed", (await page.getByTestId("pass-blocked").count()) === 0);
+await page.getByTestId("determination-select").selectOption("pass");
+check("with Pass chosen, Sign is enabled", await page.getByTestId("sign-method").isEnabled());
+await shot(page, "waived-extra-unmarked");
+await page.getByTestId("sign-method").click();
+await page.getByTestId("method-signed").waitFor({ timeout: 15000 });
+check("it signs as a Pass", /Pass/.test(await page.getByTestId("method-determination").innerText()));
+
 // ── By instrument ────────────────────────────────────────────────────────────
 await page.goto(`${BASE}/labs/${labId}/veritacomp-app/instrument/${THIRD}`, { waitUntil: "networkidle" });
 await page.getByTestId("person-panel").waitFor({ timeout: 20000 });
