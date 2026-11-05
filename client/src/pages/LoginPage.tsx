@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/components/AuthContext";
-import { apiRequest } from "@/lib/queryClient";
+import { apiErrorMessage, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { FlaskConical, Search, Building2, CheckCircle, AlertTriangle } from "lucide-react";
 import { useLabRoute } from "@/hooks/useLabRoute";
@@ -344,7 +344,6 @@ export default function LoginPage() {
 
       const res = await apiRequest("POST", "/api/auth/register", payload);
       const data = await res.json();
-      if (!res.ok) { toast({ title: data.error || "Registration failed", variant: "destructive" }); return; }
       if (data.mfa_setup_required) { finishSignIn(data, registerForm.email); return; }
 
       if (data.session_token) {
@@ -353,7 +352,7 @@ export default function LoginPage() {
 
       login(data.token, data.user);
       navigate(labRoute(isStockHost() ? "/veritastock" : "/dashboard"));
-    } catch { toast({ title: "Registration failed", variant: "destructive" }); }
+    } catch (err) { toast({ title: apiErrorMessage(err, "Registration failed"), variant: "destructive" }); }
     finally { setLoading(false); }
   }
 
