@@ -113,7 +113,7 @@ async function main() {
         if (!bodyText.includes(LAB_NAME)) errors.push(`body missing lab name '${LAB_NAME}'`);
         if (!headerText.includes(LAB_NAME)) errors.push(`header missing lab name '${LAB_NAME}'`);
         if (!headerText.includes(CLIA)) errors.push(`header missing CLIA '${CLIA}'`);
-        if (!footerText.includes("VeritaAssure") || !footerText.includes("VeritaPolicy")) errors.push("footer missing brand line");
+        if (!footerText.includes("VeritaAssure") || !(footerText.includes("VeritaDC") || footerText.includes("VeritaPolicy"))) errors.push("footer missing brand line");
         const bodyEmDashes = (bodyText.match(/—/g) || []).length;
         if (bodyEmDashes > 0) errors.push(`body has ${bodyEmDashes} em-dash(es) (CLAUDE.md §3 violation)`);
         // If the master list row has any accreditor citations, the rendered

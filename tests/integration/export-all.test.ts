@@ -151,7 +151,7 @@ async function main() {
     check("2b. the download is a zip named for the lab", !!ex.zip && /IT_Export_Lab_A_VeritaAssure_Records_\d{4}-\d{2}-\d{2}\.zip/.test(ex.t?.body.filename || "") && (ex.f?.headers.get("content-type") || "").includes("zip"), `${ex.t?.body.filename} ${ex.bytes} bytes`);
     const names: string[] = ex.zip ? Object.keys(ex.zip.files) : [];
     check("2c. Index.xlsx, records workbooks and JSON are in the zip", names.includes("Index.xlsx") && names.includes("Records/VeritaCheck records.xlsx") && names.includes("Records/JSON/studies.json"), names.filter((n) => !n.endsWith("/")).slice(0, 8).join(", "));
-    check("2d. the policy document file is in the zip", names.some((n) => n.startsWith("Files/VeritaPolicy/") && n.endsWith("v1.txt")), names.filter((n) => n.startsWith("Files/")).join(", "));
+    check("2d. the policy document file is in the zip", names.some((n) => n.startsWith("Files/VeritaDC/") && n.endsWith("v1.txt")), names.filter((n) => n.startsWith("Files/")).join(", "));
     const certFile = names.find((n) => n.startsWith("Files/VeritaLab/lab_certificate_documents/") && n.endsWith("clia-cert.pdf"));
     check("2e. the uploaded certificate (stored in the database) is in the zip", !!certFile && (await ex.zip.file(certFile).async("string")).startsWith("%PDF-1.4 IT CERT"), certFile || "missing");
     const register5 = names.find((n) => n.startsWith("Reports/VeritaStaff/"));

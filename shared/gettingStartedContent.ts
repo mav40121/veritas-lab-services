@@ -59,7 +59,7 @@ export const SYSTEM_PHASES: PhaseBlock[] = [
     steps: [
       { key: "p3.study", task: "Run your first VeritaCheck® verification study and generate the PDF for the medical director or designee to sign.", who: "Tech or writer", kind: "derived", route: "/study/new" },
       { key: "p3.competency", task: "Assess an employee's competency in VeritaComp™ and capture the evaluator sign-off.", who: "Technical consultant or supervisor", kind: "derived", route: "/veritacomp-app" },
-      { key: "p3.policy", task: "Author or import a policy in VeritaPolicy™ and assign it for read-and-sign.", who: "Owner or admin", kind: "derived", route: "/veritapolicy-app" },
+      { key: "p3.policy", task: "Author or import a policy in VeritaDC™ and assign it for read-and-sign.", who: "Owner or admin", kind: "derived", route: "/veritapolicy-app" },
       { key: "p3.qc", task: "Enter QC in VeritaQC™, apply Westgard rules, and capture the medical director or designee co-sign.", who: "Tech or writer", kind: "derived", route: "/veritaqc-app" },
       { key: "p3.pt_track", task: "Enroll your PT programs in VeritaPT™ and schedule recurring tasks in VeritaTrack™.", who: "Owner or admin", kind: "derived", route: "/veritapt/app" },
     ],
@@ -112,7 +112,7 @@ export const MODULE_GUIDES: ModuleGuide[] = [
     "Complete the required elements and capture the evaluator sign-off.",
     "Generate the competency record.",
   ]},
-  { name: "VeritaPolicy™", stream: "Compliance", what: "Policy and procedure management with read-and-sign and version control.", steps: [
+  { name: "VeritaDC™", stream: "Compliance", what: "Policy and procedure management with read-and-sign and version control.", steps: [
     "Author or import a policy and set its review interval.",
     "Assign it for read-and-sign.",
     "Use the major-revision workflow when a policy changes materially.",

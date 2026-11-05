@@ -138,7 +138,7 @@ export async function runPolicyReviewReminders(): Promise<{
 
     try {
       await resend.emails.send({
-        from: "VeritaPolicy <info@veritaslabservices.com>",
+        from: "VeritaDC <info@veritaslabservices.com>",
         to: r.owner_email,
         subject,
         html: body,

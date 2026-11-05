@@ -6478,7 +6478,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     <p style="margin: 0 0 16px;">Hi ${owner.name || "there"},</p>
     <p style="margin: 0 0 16px;">Three new modules are now included in your VeritaAssure\u00AE subscription:</p>
     <ul style="margin: 0 0 24px; padding-left: 20px; line-height: 1.8;">
-      <li><strong>VeritaPolicy\u2122</strong>: Policy and procedure management with version control and staff acknowledgment tracking</li>
+      <li><strong>VeritaDC\u2122</strong>: Policy and procedure management with version control and staff acknowledgment tracking</li>
       <li><strong>VeritaLab\u2122</strong>: Certificate and accreditation document storage for your laboratory</li>
       <li><strong>VeritaTrack\u2122</strong>: Regulatory compliance calendar to track and sign off timed lab tasks</li>
     </ul>
@@ -38295,7 +38295,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         lab: { lab_name: lab?.lab_name || user?.clia_lab_name || user?.name, clia_number: lab?.clia_number || user?.clia_number },
         settings, rows: tracker.rows, summary: veritaPolicyTrackerSummary(tracker.rows), aoLabel: tracker.ao_label,
       }, licenseCtxFromReq(req));
-      res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="VeritaPolicy-Report.pdf"' });
+      res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="VeritaDC-Report.pdf"' });
       res.send(pdfBuf);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -38416,7 +38416,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const about = wb.addWorksheet('About');
       about.getColumn(1).width = 110;
       const aboutTitle = about.getCell('A1');
-      aboutTitle.value = 'VeritaPolicy Master List';
+      aboutTitle.value = 'VeritaDC Master List';
       aboutTitle.font = { name: 'Calibri', bold: true, size: 14, color: { argb: 'FFFFFFFF' } };
       aboutTitle.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF01696F' } };
       aboutTitle.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
@@ -38455,7 +38455,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const aboutBlank = () => { about.getRow(aboutRow).height = 8; aboutRow += 1; };
 
       aboutSection('About this product');
-      aboutBody('The VeritaPolicy Master List is a working draft of the written policies most clinical laboratories need to satisfy federal regulations and the published standards of their accrediting body. Each row names one policy, identifies the Section and service line it applies to, lists the most-relevant citations from the CFR plus the lab\u2019s accrediting body on file, and carries Notes describing where the supporting documentation typically lives. It is intended to be reviewed and edited by the laboratory director or designee, marked up in the Notes and Keep columns, and returned for the next iteration.');
+      aboutBody('The VeritaDC Master List is a working draft of the written policies most clinical laboratories need to satisfy federal regulations and the published standards of their accrediting body. Each row names one policy, identifies the Section and service line it applies to, lists the most-relevant citations from the CFR plus the lab\u2019s accrediting body on file, and carries Notes describing where the supporting documentation typically lives. It is intended to be reviewed and edited by the laboratory director or designee, marked up in the Notes and Keep columns, and returned for the next iteration.');
       aboutBlank();
 
       aboutSection('How to use this workbook');
@@ -38463,7 +38463,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       aboutBody('Sections: Sections organize policies by where they live in laboratory operations: Specimen Management, Testing, Results, Quality, Personnel, Safety, Information Systems, Leadership, and Specialty Services.');
       aboutBody('Service line: Service Line marks rows that apply only when a specific service is offered. Most rows show "all" because they apply to every laboratory regardless of service mix. Specialty Services rows show their specific line (blood_bank, microbiology, molecular, anatomic_pathology, etc.) so they can be filtered out when a service is not offered.');
       aboutBody(`Citations: This workbook shows the CFR column plus the column for the accrediting body on file for this lab: ${aoLabel}. Each citation cell shows the most-relevant standards for that policy, capped at five per accrediting body.`);
-      aboutBody('Notes: Notes describe where the supporting documentation typically lives, which VeritaPolicy or VeritaCheck module helps draft it, conditional applicability, and role consolidation rules.');
+      aboutBody('Notes: Notes describe where the supporting documentation typically lives, which VeritaDC or VeritaCheck module helps draft it, conditional applicability, and role consolidation rules.');
       aboutBody('Reviewing this draft: Mark the Keep column with "n" for any row your laboratory does not need. Edit the Notes column to capture your review comments. The other columns are locked to preserve the integrity of the citation set; the next iteration will incorporate the changes you make in Notes and Keep.');
       aboutBlank();
 
@@ -38486,7 +38486,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       aboutSection('Coverage gaps');
       aboutBody('Every laboratory operates in a slightly different context. If your laboratory identifies content not covered here, such as a state-specific requirement, a specialty (histocompatibility, cytogenetics, embryology, public-health), or a policy class your operation needs, please email info@veritaslabservices.com so it can be evaluated for inclusion in a future revision.');
 
-      about.headerFooter.oddHeader = `&L&"Calibri,Regular"&10VeritaPolicy Master List&R&"Calibri,Regular"&10${labName}    CLIA: ${cliaNumber}`;
+      about.headerFooter.oddHeader = `&L&"Calibri,Regular"&10VeritaDC Master List&R&"Calibri,Regular"&10${labName}    CLIA: ${cliaNumber}`;
       about.headerFooter.oddFooter = `&L&"Calibri,Regular"&9${labName}    CLIA: ${cliaNumber}&C&"Calibri,Regular"&9&P of &N&R&"Calibri,Regular"&9VeritaAssure`;
       await about.protect(exportPwd, {
         selectLockedCells: false, selectUnlockedCells: false,
@@ -38569,7 +38569,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         ? String.fromCharCode(64 + lastColNum)
         : String.fromCharCode(64 + Math.floor((lastColNum - 1) / 26)) + String.fromCharCode(65 + ((lastColNum - 1) % 26));
       ws.autoFilter = { from: 'A1', to: `${lastColLetter}1` };
-      ws.headerFooter.oddHeader = `&L&"Calibri,Regular"&10VeritaPolicy Master List&R&"Calibri,Regular"&10${labName}    CLIA: ${cliaNumber}`;
+      ws.headerFooter.oddHeader = `&L&"Calibri,Regular"&10VeritaDC Master List&R&"Calibri,Regular"&10${labName}    CLIA: ${cliaNumber}`;
       ws.headerFooter.oddFooter = `&L&"Calibri,Regular"&9${labName}    CLIA: ${cliaNumber}&C&"Calibri,Regular"&9&P of &N&R&"Calibri,Regular"&9VeritaAssure`;
       await ws.protect(exportPwd, {
         selectLockedCells: true, selectUnlockedCells: true,
@@ -38585,7 +38585,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       applyLicenseToExcelJS(wb, licenseCtxFromReq(req, "VeritaDC™"));
       const buffer = await wb.xlsx.writeBuffer();
       const date = labToday();
-      const filename = `VeritaPolicy_MasterList_${date}.xlsx`;
+      const filename = `VeritaDC_MasterList_${date}.xlsx`;
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
       res.send(Buffer.from(buffer));
@@ -38815,7 +38815,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       if (!buf) return res.status(500).json({ error: 'DOCX generation failed' });
 
       const safeSlug = (tmpl.slug || tmpl.policy_name.toLowerCase().replace(/[^a-z0-9]+/g, '_')).slice(0, 60);
-      const filename = `VeritaPolicy_${String(policyId).padStart(3, '0')}_${safeSlug}${uncontrolled ? '_UNCONTROLLED' : ''}.docx`;
+      const filename = `VeritaDC_${String(policyId).padStart(3, '0')}_${safeSlug}${uncontrolled ? '_UNCONTROLLED' : ''}.docx`;
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
       res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
       res.setHeader('Content-Length', String(buf.length));
@@ -38989,7 +38989,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         const buf = await generatePolicyDocxBuffer(pid, labCtx, crosswalk, { downloadedBy: bundleDownloadedBy, downloadedAt: bundleDownloadedAt, uncontrolled: bundleUncontrolled }, houseFormatFor(sqlite, labId, pid));
         if (!buf) { skipped += 1; continue; }
         const safeSlug = (tmpl.slug || tmpl.policy_name.toLowerCase().replace(/[^a-z0-9]+/g, '_')).slice(0, 60);
-        const filename = `VeritaPolicy_${pid.padStart(3, '0')}_${safeSlug}${bundleUncontrolled ? '_UNCONTROLLED' : ''}.docx`;
+        const filename = `VeritaDC_${pid.padStart(3, '0')}_${safeSlug}${bundleUncontrolled ? '_UNCONTROLLED' : ''}.docx`;
         zip.file(filename, buf);
         added += 1;
       }
@@ -38998,7 +38998,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const safeLab = (lab.lab_name || 'Your Laboratory').replace(/[^A-Za-z0-9 _-]/g, '');
       const today = labToday();
       const readme = [
-        `VeritaPolicy bundle for ${safeLab}`,
+        `VeritaDC bundle for ${safeLab}`,
         `Generated: ${today}`,
         `CLIA: ${lab.clia_number || 'pending'}`,
         ``,
@@ -39013,15 +39013,15 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         ``,
         ...(bundleUncontrolled ? [
           `These starters carry an UNCONTROLLED COPY watermark. They are for`,
-          `hand-out or reference only. The controlled master stays in VeritaPolicy.`,
+          `hand-out or reference only. The controlled master stays in VeritaDC.`,
           ``,
         ] : []),
-        `Generated by VeritaAssure (R) | VeritaPolicy (TM).`,
+        `Generated by VeritaAssure (R) | VeritaDC (TM).`,
       ].join('\n');
       zip.file(`README_${today}.txt`, readme);
 
       const buf = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE', compressionOptions: { level: 6 } });
-      const zipName = `VeritaPolicy_${safeLab.replace(/\s+/g, '_')}_${today}.zip`;
+      const zipName = `VeritaDC_${safeLab.replace(/\s+/g, '_')}_${today}.zip`;
       res.setHeader('Content-Type', 'application/zip');
       res.setHeader('Content-Disposition', `attachment; filename="${zipName}"`);
       res.setHeader('Content-Length', String(buf.length));
@@ -39059,7 +39059,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         lab: { lab_name: lab?.lab_name, clia_number: lab?.clia_number },
         settings, rows: tracker.rows, summary: veritaPolicyTrackerSummary(tracker.rows), aoLabel: tracker.ao_label,
       }, licenseCtxFromReq(req));
-      res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="VeritaPolicy-Report.pdf"' });
+      res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="VeritaDC-Report.pdf"' });
       res.send(pdfBuf);
     } catch (err: any) {
       console.error('VeritaPolicy pdf (lab-scoped) error:', err);
@@ -39108,7 +39108,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const about = wb.addWorksheet('About');
       about.getColumn(1).width = 110;
       const aboutTitle = about.getCell('A1');
-      aboutTitle.value = 'VeritaPolicy Master List';
+      aboutTitle.value = 'VeritaDC Master List';
       aboutTitle.font = { name: 'Calibri', bold: true, size: 14, color: { argb: 'FFFFFFFF' } };
       aboutTitle.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF01696F' } };
       aboutTitle.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
@@ -39144,14 +39144,14 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const aboutBlank = () => { about.getRow(aboutRow).height = 8; aboutRow += 1; };
 
       aboutSection('About this product');
-      aboutBody('The VeritaPolicy Master List is a working draft of the written policies most clinical laboratories need to satisfy federal regulations and the published standards of their accrediting body. Each row names one policy, identifies the Section and service line it applies to, lists the most-relevant citations from the CFR plus the lab’s accrediting body on file, and carries Notes describing where the supporting documentation typically lives. It is intended to be reviewed and edited by the laboratory director or designee, marked up in the Notes and Keep columns, and returned for the next iteration.');
+      aboutBody('The VeritaDC Master List is a working draft of the written policies most clinical laboratories need to satisfy federal regulations and the published standards of their accrediting body. Each row names one policy, identifies the Section and service line it applies to, lists the most-relevant citations from the CFR plus the lab’s accrediting body on file, and carries Notes describing where the supporting documentation typically lives. It is intended to be reviewed and edited by the laboratory director or designee, marked up in the Notes and Keep columns, and returned for the next iteration.');
       aboutBlank();
       aboutSection('How to use this workbook');
       aboutBody('The Master List tab contains the policies most clinical laboratories need to meet federal regulations and accrediting body standards. Use the column filters at the top of each column to narrow by Section, Subspecialty, Service Line, or other fields.');
       aboutBody('Sections: Sections organize policies by where they live in laboratory operations: Specimen Management, Testing, Results, Quality, Personnel, Safety, Information Systems, Leadership, and Specialty Services.');
       aboutBody('Service line: Service Line marks rows that apply only when a specific service is offered. Most rows show "all" because they apply to every laboratory regardless of service mix. Specialty Services rows show their specific line (blood_bank, microbiology, molecular, anatomic_pathology, etc.) so they can be filtered out when a service is not offered.');
       aboutBody(`Citations: This workbook shows the CFR column plus the column for the accrediting body on file for this lab: ${aoLabel}. Each citation cell shows the most-relevant standards for that policy, capped at five per accrediting body.`);
-      aboutBody('Notes: Notes describe where the supporting documentation typically lives, which VeritaPolicy or VeritaCheck module helps draft it, conditional applicability, and role consolidation rules.');
+      aboutBody('Notes: Notes describe where the supporting documentation typically lives, which VeritaDC or VeritaCheck module helps draft it, conditional applicability, and role consolidation rules.');
       aboutBody('Reviewing this draft: Mark the Keep column with "n" for any row your laboratory does not need. Edit the Notes column to capture your review comments. The other columns are locked to preserve the integrity of the citation set; the next iteration will incorporate the changes you make in Notes and Keep.');
       aboutBlank();
       aboutSection('Disclaimer');
@@ -39170,7 +39170,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       aboutSection('Coverage gaps');
       aboutBody('Every laboratory operates in a slightly different context. If your laboratory identifies content not covered here, such as a state-specific requirement, a specialty (histocompatibility, cytogenetics, embryology, public-health), or a policy class your operation needs, please email info@veritaslabservices.com so it can be evaluated for inclusion in a future revision.');
 
-      about.headerFooter.oddHeader = `&L&"Calibri,Regular"&10VeritaPolicy Master List&R&"Calibri,Regular"&10${labName}    CLIA: ${cliaNumber}`;
+      about.headerFooter.oddHeader = `&L&"Calibri,Regular"&10VeritaDC Master List&R&"Calibri,Regular"&10${labName}    CLIA: ${cliaNumber}`;
       about.headerFooter.oddFooter = `&L&"Calibri,Regular"&9${labName}    CLIA: ${cliaNumber}&C&"Calibri,Regular"&9&P of &N&R&"Calibri,Regular"&9VeritaAssure`;
       await about.protect(exportPwd, {
         selectLockedCells: false, selectUnlockedCells: false,
@@ -39237,7 +39237,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         ? String.fromCharCode(64 + lastColNum)
         : String.fromCharCode(64 + Math.floor((lastColNum - 1) / 26)) + String.fromCharCode(65 + ((lastColNum - 1) % 26));
       ws.autoFilter = { from: 'A1', to: `${lastColLetter}1` };
-      ws.headerFooter.oddHeader = `&L&"Calibri,Regular"&10VeritaPolicy Master List&R&"Calibri,Regular"&10${labName}    CLIA: ${cliaNumber}`;
+      ws.headerFooter.oddHeader = `&L&"Calibri,Regular"&10VeritaDC Master List&R&"Calibri,Regular"&10${labName}    CLIA: ${cliaNumber}`;
       ws.headerFooter.oddFooter = `&L&"Calibri,Regular"&9${labName}    CLIA: ${cliaNumber}&C&"Calibri,Regular"&9&P of &N&R&"Calibri,Regular"&9VeritaAssure`;
       await ws.protect(exportPwd, {
         selectLockedCells: true, selectUnlockedCells: true,
@@ -39251,7 +39251,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       applyLicenseToExcelJS(wb, licenseCtxFromReq(req, "VeritaDC™"));
       const buffer = await wb.xlsx.writeBuffer();
       const date = labToday();
-      const filename = `VeritaPolicy_MasterList_${date}.xlsx`;
+      const filename = `VeritaDC_MasterList_${date}.xlsx`;
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
       res.send(Buffer.from(buffer));
@@ -41240,7 +41240,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           ? null
           : !check.ok
           ? (check as any).reason
-          : "You have view-only access to VeritaPolicy. Ask the owner or an admin for edit access to approve.",
+          : "You have view-only access to VeritaDC. Ask the owner or an admin for edit access to approve.",
       });
     }
   );
@@ -42812,7 +42812,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const about = wb.addWorksheet("About");
       about.getColumn(1).width = 110;
       const aboutTitle = about.getCell("A1");
-      aboutTitle.value = "VeritaPolicy Compliance Dashboard";
+      aboutTitle.value = "VeritaDC Compliance Dashboard";
       aboutTitle.font = { name: "Calibri", bold: true, size: 14, color: { argb: "FFFFFFFF" } };
       aboutTitle.fill = { type: "pattern", pattern: "solid", fgColor: { argb: teal } };
       aboutTitle.alignment = { vertical: "middle", horizontal: "left", indent: 1 };
@@ -42846,17 +42846,17 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       };
       const aboutBlank = () => { about.getRow(aboutRow).height = 8; aboutRow += 1; };
       aboutSection("About this workbook");
-      aboutBody("This workbook is a point-in-time snapshot of the lab's VeritaPolicy compliance dashboard as of the date the export was generated. Each tab mirrors a panel of the live web dashboard so the same numbers can be shared with surveyors, the medical director, or the Quality Committee without screenshots.");
+      aboutBody("This workbook is a point-in-time snapshot of the lab's VeritaDC compliance dashboard as of the date the export was generated. Each tab mirrors a panel of the live web dashboard so the same numbers can be shared with surveyors, the medical director, or the Quality Committee without screenshots.");
       aboutBlank();
       aboutSection("How to use this workbook");
       aboutBody("The Headline tab shows total document counts by status. The Per Manual tab breaks those numbers down by policy manual (Chemistry, Hematology, etc). Overdue Documents lists every approved policy past its next-review date. Due Soon lists approved policies with next-review dates in the next 30 days. Per User Attestations shows pending vs completed attestation counts per active lab member. Staff Signatures lists bench staff who read and signed policies with their staff login, with how many they signed and when they last signed.");
       aboutBlank();
       aboutSection("Disclaimer");
-      aboutBody("This workbook is a snapshot, not an authoritative record. The live VeritaPolicy module is the audit-grade record. Status (Approved / In Review / Draft / Expired / Overdue / Due Soon) is calculated from the document's status field and the next_review_date entered by the lab. The lab director is responsible for keeping the underlying VeritaPolicy data current and for the disposition of any overdue policy.");
+      aboutBody("This workbook is a snapshot, not an authoritative record. The live VeritaDC module is the audit-grade record. Status (Approved / In Review / Draft / Expired / Overdue / Due Soon) is calculated from the document's status field and the next_review_date entered by the lab. The lab director is responsible for keeping the underlying VeritaDC data current and for the disposition of any overdue policy.");
       aboutBlank();
       aboutSection("Coverage gaps");
       aboutBody("If your laboratory needs a column or tab not represented here, please email info@veritaslabservices.com so it can be evaluated for inclusion in a future revision.");
-      about.headerFooter.oddHeader = `&L&\"Calibri,Regular\"&10VeritaPolicy Compliance Dashboard&R&\"Calibri,Regular\"&10${labName}    CLIA: ${cliaNumber}`;
+      about.headerFooter.oddHeader = `&L&\"Calibri,Regular\"&10VeritaDC Compliance Dashboard&R&\"Calibri,Regular\"&10${labName}    CLIA: ${cliaNumber}`;
       about.headerFooter.oddFooter = `&L&\"Calibri,Regular\"&9${labName}    CLIA: ${cliaNumber}&C&\"Calibri,Regular\"&9&P of &N&R&\"Calibri,Regular\"&9VeritaAssure`;
       await about.protect(exportPwd, {
         selectLockedCells: false, selectUnlockedCells: false,
@@ -42989,7 +42989,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       staffSheet.getColumn(4).width = 20;
 
       const buf = await wb.xlsx.writeBuffer();
-      const filename = `VeritaPolicy_Compliance_${labToday()}.xlsx`;
+      const filename = `VeritaDC_Compliance_${labToday()}.xlsx`;
       res.set({
         "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         "Content-Disposition": `attachment; filename="${filename}"`,
@@ -43644,7 +43644,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           .slice(0, 40) || "policy";
       const date = labToday();
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-      res.setHeader("Content-Disposition", `attachment; filename="VeritaPolicy_Signature_Report_${safe}_${date}.xlsx"`);
+      res.setHeader("Content-Disposition", `attachment; filename="VeritaDC_Signature_Report_${safe}_${date}.xlsx"`);
       res.send(buf);
     }
   );

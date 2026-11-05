@@ -160,7 +160,7 @@ function reportCalls(sqlite: any, ctx: ExportCtx): ReportCall[] {
     calls.push({ module: "VeritaComp", what: `Letter of Delegation: ${d.delegate_name || d.id}`, method: "GET", path: `/api/labs/${L}/director-delegations/${d.id}/pdf`, fallbackName: `Letter_of_Delegation_${d.id}.pdf` });
   }
   calls.push({ module: "VeritaStaff", what: "Testing personnel competency register", method: "GET", path: `/api/labs/${L}/staff/competency-register.xlsx`, fallbackName: "VeritaStaff_Competency_Register.xlsx" });
-  calls.push({ module: "VeritaPolicy", what: "Policy master list", method: "GET", path: `/api/labs/${L}/veritapolicy/master-list/excel`, fallbackName: "VeritaPolicy_Master_List.xlsx" });
+  calls.push({ module: "VeritaDC", what: "Policy master list", method: "GET", path: `/api/labs/${L}/veritapolicy/master-list/excel`, fallbackName: "VeritaDC_Master_List.xlsx" });
   for (const r of ids("SELECT DISTINCT control_lot_id, period_year, period_month FROM qc_period_reviews WHERE lab_id = ?", L)) {
     calls.push({ module: "VeritaQC", what: `Monthly review ${r.period_year}-${String(r.period_month).padStart(2, "0")}, lot ${r.control_lot_id}`, method: "GET", path: `/api/labs/${L}/qc/period-reviews/pdf?control_lot_id=${r.control_lot_id}&year=${r.period_year}&month=${r.period_month}`, fallbackName: `VeritaQC_Review_${r.control_lot_id}_${r.period_year}-${r.period_month}.pdf` });
   }
@@ -231,7 +231,7 @@ const MODULE_ABOUT: Record<string, string> = {
   "VeritaScan": "Every readiness scan and its answers, custom questions, the document library, and the links between documents and checklist items.",
   "VeritaComp": "Competency programs, assessments and every element entry, checklists, method groups, method sign-offs, quizzes and results, reminders, and letters of delegation.",
   "VeritaStaff": "The testing personnel roster, roles and specialties, assigned test systems, documents, competency schedules, duty changes, position descriptions, staff signatures, and continuing-education profiles.",
-  "VeritaPolicy": "Manuals, documents and every version, approval workflows and steps, sign-offs, read attestations, quizzes, notes, links, surveyor links, review reminders, and the policy master list status.",
+  "VeritaDC": "Manuals, documents and every version, approval workflows and steps, sign-offs, read attestations, quizzes, notes, links, surveyor links, review reminders, and the policy master list status.",
   "VeritaQC": "Control lots, every QC result, rule violations, corrective actions, notes, monthly reviews, rule settings, import mappings, and IQCP plans with their risk, QC plan and QA items.",
   "VeritaPT": "PT enrollments, events and results, corrective actions, reminders, and alternative assessment records.",
   "VeritaLab": "Certificates and their uploaded documents, reminders, the CMS-116 draft, director history, site contacts, test menu changes, and CLIA fee payments.",
@@ -429,14 +429,14 @@ export async function buildExportZip(sqlite: any, ctx: ExportCtx, opts: { base: 
     FROM policy_versions v JOIN policy_documents d ON d.id = v.document_id
     WHERE d.lab_id = ? ORDER BY d.id, v.version_number`).all(ctx.labId) as any[];
   for (const v of versions) {
-    const rel = `Files/VeritaPolicy/${v.doc_id} ${safeName(v.title, 60)}/v${v.version_number}.${safeName(v.file_format || "bin", 8)}`;
+    const rel = `Files/VeritaDC/${v.doc_id} ${safeName(v.title, 60)}/v${v.version_number}.${safeName(v.file_format || "bin", 8)}`;
     let status = "Included";
     try {
       const abs = v.file_path ? resolveVersionFilePath(v.file_path) : "";
       if (abs && fs.existsSync(abs)) zip.file(rel, fs.readFileSync(abs));
       else status = "File not found in storage";
     } catch { status = "File could not be read"; }
-    manifest.push({ folder: "Files/VeritaPolicy", file: rel.split("/").slice(2).join("/"), what: `Policy document version ${v.version_number}`, count: "", status });
+    manifest.push({ folder: "Files/VeritaDC", file: rel.split("/").slice(2).join("/"), what: `Policy document version ${v.version_number}`, count: "", status });
   }
 
   job.step = "Writing records workbooks";
