@@ -2693,7 +2693,7 @@ return (
               </div>
               <h1 className="font-serif text-4xl font-bold mb-3">The studies your lab has always run, finally done right.</h1>
               <p className="text-muted-foreground text-lg max-w-2xl leading-relaxed">
-                Calibration verification, method comparison, and precision studies, automated and browser-based. CLIA-compliant PDF reports with statistical analysis and pass/fail evaluation mapped to 42 CFR Part 493, TJC standards, and CAP checklists.
+                Calibration verification, method comparison, and precision studies, automated and browser-based. CFR-cited PDF reports with statistical analysis and pass/fail evaluation.
               </p>
             </div>
           </section>
@@ -2800,7 +2800,7 @@ return (
                           <SelectItem value="carryover">Carryover Verification (CLSI EP10-A3)</SelectItem>
                           <SelectItem value="accuracy_bias">Accuracy / Bias: Single Instrument vs Target (CLSI EP15-A3)</SelectItem>
                           <SelectItem value="linearity">Linearity (CLSI EP06)</SelectItem>
-                          <SelectItem value="reportable_range">Reportable Range / AMR Verification (CLIA §493.1255)</SelectItem>
+                          <SelectItem value="reportable_range">Reportable Range / AMR Verification (CLIA §493.1253(b)(1)(i)(C))</SelectItem>
                           <SelectItem value="manual_diff">Manual Differential (Rümke 95% CI, CLSI H20)</SelectItem>
                           <SelectItem value="heparin_range">Heparin Therapeutic Range: aPTT vs Anti-Xa (Brill-Edwards)</SelectItem>
                         </SelectContent>
@@ -2808,7 +2808,7 @@ return (
                       {studyType === "cal_ver" && (
                         <div className="flex items-start gap-2 mt-2 p-2.5 rounded-md bg-primary/5 border border-primary/15 text-xs text-muted-foreground leading-relaxed">
                           <Info size={13} className="text-primary shrink-0 mt-0.5" />
-                          <span>Calibration verification is required by CLIA even when your analyzer uses manufacturer-assigned calibration. VeritaCheck documents the verification process, not the calibration itself, which is what 42 CFR {"\u00A7"}493.1255 actually requires.</span>
+                          <span>Calibration verification applies to nonwaived quantitative test systems (42 CFR {"§"}493.1255). CMS lists exceptions, including instruments that are factory or manufacturer calibrated; TJC limits that exception to instruments that cannot be calibrated after implementation. VeritaCheck{"®"} documents the verification process, not the calibration itself.</span>
                         </div>
                       )}
                       {studyType === "cal_ver_correlation" && (
@@ -3082,7 +3082,7 @@ return (
                   <CardContent className="space-y-4">
                     <div className="flex items-start gap-2 p-2.5 rounded-md bg-primary/5 border border-primary/15 text-xs text-muted-foreground leading-relaxed">
                       <Info size={13} className="text-primary shrink-0 mt-0.5" />
-                      <span>EP17-A2 establishes Limit of Blank, Limit of Detection, and Limit of Quantitation. Establishment mode is used for modified or in-house tests (42 CFR {"§"}493.1253(b)(2)(iii)). Verification mode confirms a manufacturer's published claim (42 CFR {"§"}493.1253(b)(1)). Establishment requires ~60 blank and ~60 low-level replicates across multiple reagent lots and days for full EP17-A2 compliance.</span>
+                      <span>EP17-A2 establishes Limit of Blank, Limit of Detection, and Limit of Quantitation. Establishment mode is used for modified or in-house tests (42 CFR {"§"}493.1253(b)(2)(iii)). Verification mode confirms a manufacturer's published claim; analytical sensitivity is not among the characteristics named in 42 CFR {"§"}493.1253(b)(1), so this is a laboratory choice under CLSI EP17-A2. Establishment requires ~60 blank and ~60 low-level replicates across multiple reagent lots and days for full EP17-A2 compliance.</span>
                     </div>
                     <div className="grid sm:grid-cols-2 gap-4">
                       <div className="space-y-1.5"><Label>Study Mode</Label>
@@ -3169,7 +3169,7 @@ return (
                         </Select>
                         <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700/50 px-3 py-2.5">
                           <p className="text-sm text-amber-900 dark:text-amber-200 leading-snug">
-                            <strong>Don&apos;t see your analyte?</strong> CLIA has no defined TEa for it. Check the box below and enter your lab-defined goal.
+                            <strong>Don&apos;t see your analyte?</strong> Not every analyte has a preset. Some that are not listed still have a CLIA PT limit in 42 CFR Part 493, Subpart I (for example, the general immunology analytes in {"§"}493.927), and others have none. Check the box below and enter your lab-defined goal.
                           </p>
                         </div>
                         <div className="flex items-center gap-2 pl-1">
@@ -3610,7 +3610,7 @@ return (
                           />
                           <div className="space-y-0.5">
                             <div>Include vendor SDI comparison (assayed QC only)</div>
-                            <div className="text-xs text-muted-foreground">Enter the package-insert mean and SD per level for an assayed QC product. Computes Standard Deviation Index per Westgard. Informational only; the lab uses its own calculated SD on the chart per CLIA §493.1256.</div>
+                            <div className="text-xs text-muted-foreground">Enter the package-insert mean and SD per level for an assayed QC product. Computes Standard Deviation Index per Westgard. Informational only in this study; the lab uses its own calculated SD on the chart. CLIA permits a verified stated value (§493.1256(d)(10)(ii)).</div>
                           </div>
                         </label>
                       </div>
@@ -3736,7 +3736,7 @@ return (
                   ))}
                   <Alert>
                     <Shield size={14} />
-                    <AlertDescription className="text-xs">Per CLIA 42 CFR §493.1256, the laboratory must determine its own mean and SD for the QC materials it uses. The lab's calculated mean and SD from this study become the operating values on the Levey-Jennings chart. Vendor (package-insert) SD is reference only.</AlertDescription>
+                    <AlertDescription className="text-xs">CLIA lets a laboratory use the stated value of a commercially assayed control when it matches the method and instrument and the laboratory has verified it (42 CFR §493.1256(d)(10)(ii)). TJC expects the laboratory to determine its own statistics for each lot, and CLSI C24 recommends limits from the laboratory's own data. The lab's calculated mean and SD from this study become the operating values on the Levey-Jennings chart. Vendor (package-insert) SD is reference only in this study.</AlertDescription>
                   </Alert>
                 </div>
               ) : studyType === "multi_analyte_coag" ? (
@@ -4284,7 +4284,7 @@ return (
               ) : studyType === "reportable_range" ? (
                 <Card>
                   <CardHeader className="pb-3"><CardTitle className="text-base flex items-center justify-between">
-                    <span>Reportable Range / AMR Verification Data Entry (CLIA §493.1255)</span>
+                    <span>Reportable Range / AMR Verification Data Entry (CLIA §493.1253(b)(1)(i)(C))</span>
                     {activeLabId ? (
                       <Button
                         type="button"
@@ -4304,7 +4304,7 @@ return (
                   <CardContent className="space-y-4">
                     <div className="flex items-start gap-2 p-2.5 rounded-md bg-primary/5 border border-primary/15 text-xs text-muted-foreground leading-relaxed">
                       <Info size={13} className="text-primary shrink-0 mt-0.5" />
-                      <span>CLIA §493.1255 AMR verification: declare your claimed reportable range, then measure material spanning that range at 2-5 levels with at least 2 replicates per level. The study passes when every level's mean bias against assigned does not exceed the CLIA total allowable error (using the dual-criterion percent-or-absolute allowance).</span>
+                      <span>CLIA §493.1253(b)(1)(i)(C) reportable range verification: declare your claimed reportable range, then measure material spanning that range at 2-5 levels with at least 2 replicates per level. A two-level study does not meet §493.1255(b)(2)(ii) for calibration verification. The study passes when every level's mean bias against assigned does not exceed the CLIA total allowable error (using the dual-criterion percent-or-absolute allowance).</span>
                     </div>
                     <div className="grid sm:grid-cols-4 gap-4">
                       <div className="space-y-1.5"><Label>Analyte Name</Label><Input placeholder="e.g. Glucose" value={rrAnalyte} onChange={e => setRrAnalyte(e.target.value)} data-testid="input-rr-analyte" /></div>
@@ -4557,10 +4557,10 @@ return (
                         <div className="rounded-md bg-muted/50 border p-3 space-y-2">
                           <p className="text-xs font-medium">Simple: aggregate precision (CV) per level</p>
                           <p className="text-xs text-muted-foreground leading-relaxed">
-                            Verifies the manufacturer's precision claim for an FDA-cleared, unmodified assay by computing the coefficient of variation (CV) at each level. For each level, the calculation is: mean of replicates, standard deviation (SD, n-1 denominator), and CV = (SD divided by mean) times 100. CLSI EP15-A3 recommends a minimum of 5 days at 5 replicates per day for full verification; the simple path treats all replicates as a single pool and is appropriate when the data is collected within one run or one day.
+                            Supports verifying the manufacturer's precision claim for an FDA-cleared, unmodified assay by computing the coefficient of variation (CV) at each level. For each level, the calculation is: mean of replicates, standard deviation (SD, n-1 denominator), and CV = (SD divided by mean) times 100. CLSI EP15-A3 recommends a minimum of 5 days at 5 replicates per day for full verification; the simple path treats all replicates as a single pool and estimates repeatability only. CLIA requires precision comparable to the manufacturer's, and the CMS brochure describes testing in different runs on different days as well as within a run. Whether a within-run study is enough for a given analyte is the medical director or designee's documented decision.
                           </p>
                           <p className="text-xs text-muted-foreground leading-relaxed">
-                            Acceptance criterion: the observed CV at each level must be at or below the adopted precision acceptance criterion (typically half of the §493 PT total allowable error per the ADLM recommendation, or the manufacturer's published CV claim, whichever applies). When an absolute floor is set, the dual-criterion rule under 42 CFR §493.1253(b)(1)(ii) applies: pass if the observed difference is within the greater of the percent or the absolute allowance.
+                            Acceptance criterion: the observed CV at each level must be at or below the precision acceptance criterion your medical director or designee adopts. 42 CFR §493.1253(b)(1)(i)(B) makes the manufacturer's precision claim the regulatory comparison; a director may also adopt a §493 PT limit or a fraction of it, and should document why it fits the clinical need. When an absolute floor is set, pass if the observed difference is within the greater of the percent or the absolute allowance, the form the Subpart I tables use.
                           </p>
                           <p className="text-xs text-muted-foreground leading-relaxed">
                             What this path does not do: it does not decompose variance into within-run and between-day components. For that, use Advanced (EP15) mode, which is the right path for laboratory-developed tests and modified procedures.
