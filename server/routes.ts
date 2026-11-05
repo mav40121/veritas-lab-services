@@ -250,16 +250,17 @@ import { CLSI_COMPLIANCE_MATRIX_B64, SOFTWARE_VALIDATION_TEMPLATE_B64, SPECIMEN_
 import { cliaAnalytes, ptCategoryLinks } from "./cliaAnalytes";
 import { createAnalyteMatcher, nzKey, specialtyCategory } from "./ptAnalyteMatcher";
 import { validateVendorPrograms, PT_VENDORS } from "./ptVendorCatalog";
-import { hasCanonicalTea } from "./backfillAbsoluteFloor";
+import { teaLabelFor, type StoredCriterion } from "@shared/regulatedAnalytes";
 import { DEMO_USER_EMAIL, SIGNUP_ALERT_TO, BUSINESS_NOTICE_TO } from "./constants";
 
 // Per parking-lot #1: VeritaCheck artifacts (PDF narratives, persisted
-// summary text) must say "Lab-Set Internal Goal" for analytes without a
-// canonical 42 CFR §493 PT criterion. Citing §493 PT TEa for Lipase or
+// summary text) must say "Lab-Set Internal Goal" unless the study holds the
+// analyte's 42 CFR §493 PT criterion. Citing §493 PT TEa for Lipase or
 // Vitamin D 25-OH would be a real compliance error: the §493 number does
-// not exist for those analytes.
-function acceptanceCriterionLabel(testName: string): string {
-  return hasCanonicalTea(testName)
+// not exist for those analytes. A lab's own number on a regulated analyte is
+// the same error.
+function acceptanceCriterionLabel(testName: string, stored: StoredCriterion): string {
+  return teaLabelFor(testName, stored) === "CLIA TEa"
     ? "adopted acceptance criterion (TEa)"
     : "laboratory-defined acceptance criterion (Lab-Set Internal Goal)";
 }
@@ -20967,8 +20968,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           passCount,
           totalCount,
           summary: overallPass
-            ? `All ${totalCount} measurements passed within the ${acceptanceCriterionLabel(studyRow.test_name)} of +/-${teaPct}%. Calibration verification acceptable.`
-            : `${totalCount - passCount} of ${totalCount} measurements exceeded the ${acceptanceCriterionLabel(studyRow.test_name)} of +/-${teaPct}%.`,
+            ? `All ${totalCount} measurements passed within the ${acceptanceCriterionLabel(studyRow.test_name, study)} of +/-${teaPct}%. Calibration verification acceptable.`
+            : `${totalCount - passCount} of ${totalCount} measurements exceeded the ${acceptanceCriterionLabel(studyRow.test_name, study)} of +/-${teaPct}%.`,
         };
 
         const pdfBuffer = await generatePDFBuffer(study as any, results, "22D0999999", null, licenseCtxFromReq(req));
@@ -21137,8 +21138,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           passCount,
           totalCount: levelResults.length,
           summary: overallPass
-            ? `All ${levelResults.length} precision levels passed within the ${acceptanceCriterionLabel(studyRow.test_name)} of ${_teaDisplay}. Manufacturer precision claims verified.`
-            : `${levelResults.length - passCount} of ${levelResults.length} precision levels exceeded the ${acceptanceCriterionLabel(studyRow.test_name)} of ${_teaDisplay}.`,
+            ? `All ${levelResults.length} precision levels passed within the ${acceptanceCriterionLabel(studyRow.test_name, study)} of ${_teaDisplay}. Manufacturer precision claims verified.`
+            : `${levelResults.length - passCount} of ${levelResults.length} precision levels exceeded the ${acceptanceCriterionLabel(studyRow.test_name, study)} of ${_teaDisplay}.`,
         };
         const pdfBuffer = await generatePDFBuffer(study as any, results, "22D0999999", null, licenseCtxFromReq(req));
         const filename = `VeritaCheck_Precision_${study.testName.replace(/\s+/g, "_")}_${study.date}.pdf`;
@@ -21204,8 +21205,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           passCount,
           totalCount,
           summary: overallPass
-            ? `All ${totalCount} paired specimens passed within the ${acceptanceCriterionLabel(studyRow.test_name)} of ${_teaDisplay}. New reagent lot acceptable for clinical use.`
-            : `${totalCount - passCount} of ${totalCount} paired specimens exceeded the ${acceptanceCriterionLabel(studyRow.test_name)} of ${_teaDisplay}.`,
+            ? `All ${totalCount} paired specimens passed within the ${acceptanceCriterionLabel(studyRow.test_name, study)} of ${_teaDisplay}. New reagent lot acceptable for clinical use.`
+            : `${totalCount - passCount} of ${totalCount} paired specimens exceeded the ${acceptanceCriterionLabel(studyRow.test_name, study)} of ${_teaDisplay}.`,
         };
         const pdfBuffer = await generatePDFBuffer(study as any, results, "22D0999999", null, licenseCtxFromReq(req));
         const filename = `VeritaCheck_LotToLot_${study.testName.replace(/\s+/g, "_")}_${study.date}.pdf`;
@@ -21359,8 +21360,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         xRange: { min: Math.min(...xs), max: Math.max(...xs) },
         yRange: { [comparisonName]: { min: Math.min(...ys), max: Math.max(...ys) } },
         summary: overallPass
-          ? `All ${n} samples passed within the ${acceptanceCriterionLabel(studyRow.test_name)} of ${isAbsoluteTea ? `\u00B1${teaFractionStored} ${teaUnitVal}` : `\u00B1${(teaFractionStored * 100).toFixed(1)}%`}. Method is acceptable for patient testing.`
-          : `${n - passCount} of ${n} samples exceeded the ${acceptanceCriterionLabel(studyRow.test_name)} of ${isAbsoluteTea ? `\u00B1${teaFractionStored} ${teaUnitVal}` : `\u00B1${(teaFractionStored * 100).toFixed(1)}%`}.`,
+          ? `All ${n} samples passed within the ${acceptanceCriterionLabel(studyRow.test_name, study)} of ${isAbsoluteTea ? `\u00B1${teaFractionStored} ${teaUnitVal}` : `\u00B1${(teaFractionStored * 100).toFixed(1)}%`}. Method is acceptable for patient testing.`
+          : `${n - passCount} of ${n} samples exceeded the ${acceptanceCriterionLabel(studyRow.test_name, study)} of ${isAbsoluteTea ? `\u00B1${teaFractionStored} ${teaUnitVal}` : `\u00B1${(teaFractionStored * 100).toFixed(1)}%`}.`,
       };
 
       const pdfBuffer = await generatePDFBuffer(study as any, results, "22D0999999", null, licenseCtxFromReq(req));

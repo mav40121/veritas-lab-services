@@ -117,6 +117,13 @@ jobs:
         # Cathy Thornton (RFGH) 2026-11-04: waived blind specimen testing takes several specimens and passes only when every one did; a non-technical
         # assessment can be a 6-Month or an Annual.
         run: npm run test:competency-waived-specimens
+      - name: VeritaCheck recognizes every regulated analyte
+        # Every row of the Subpart I table, direct, fallback and negative name cases, a lab's own criterion, and the frozen self-heal list.
+        run: DB_PATH=.tmp-verify-reg.db npx tsx scripts/verify-regulated-analyte-labels.ts
+      - name: Run regulated analyte labels integration test
+        # A saved study named for a newly recognized analyte stays byte-identical through the startup pass; the pass still heals what it healed;
+        # a re-rendered report labels it CLIA TEa or Lab-Set Internal Goal with the true CFR section, and never says "no criterion exists" of a regulated analyte.
+        run: npm run test:regulated-analyte-labels
       - name: Run manual method groups integration test
         # Michael 2026-11-04: manual tests can be grouped with each other, one complexity, never with an analyzer (BUG-043 protection).
         run: npm run test:manual-method-groups

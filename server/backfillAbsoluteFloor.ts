@@ -1,8 +1,19 @@
 import { db } from "./db";
 import { cliaAnalytes } from "./cliaAnalytes";
 import { CFR_MAP } from "./veritamapData";
+import { NAME_MAP, regulatedAnalyteFor } from "@shared/regulatedAnalytes";
 
-// --- Canonical CLIA TEa data (from cliaTeaData.ts / backfill-absolute-floor.js) ---
+export { NAME_MAP };
+
+// --- The analytes the startup self-heal and the write guard act on ---
+//
+// FROZEN. Do not add a row. backfillAbsoluteFloorOnStartup (Pass 2) and enforceCanonicalTea (server/storage.ts) overwrite the criterion on
+// any study with no preset label whose name resolves to a row here, so a new row rewrites saved customer studies on the next deploy.
+//
+// This is NOT the list of regulated analytes. That is client/src/lib/cliaTeaData.ts (all of 42 CFR 493 Subpart I, pinned to the eCFR by
+// scripts/verify-citations-tea-cap.py), and the PDF and screen labels read it through shared/regulatedAnalytes.ts. Every row here must
+// match that table word for word; scripts/verify-regulated-analyte-labels.ts and script/teaCanonicalRenderAudit.ts fail if one drifts or
+// if a row is added. The order matters too: the substring fallback in resolveCanonicalAnalyte takes the first hit.
 export const teaData: { analyte: string; criteria: string }[] = [
   { analyte: "Alanine Aminotransferase (ALT/SGPT)", criteria: "±15% or ±6 U/L (greater)" },
   { analyte: "Albumin", criteria: "±8%" },
@@ -71,84 +82,6 @@ export const teaData: { analyte: string; criteria: string }[] = [
  * Parse a CLIA criteria string and extract the absolute floor value.
  * Returns { value, unit } or null if no absolute floor (percent-only or absolute-only).
  */
-/**
- * Returns true if the named analyte has a canonical 42 CFR §493 PT criterion
- * in `teaData`. Match is case-insensitive on whitespace-trimmed names. Used to
- * decide whether VeritaCheck should label the acceptance criterion as "CLIA TEa"
- * (canonical, with a §493 Subpart I citation) or "Lab-Set Internal Goal"
- * (laboratory-defined, no §493 citation). Parking-lot item #1.
- */
-// Alias index built once at module load. Each teaData entry contributes its
-// full name plus any parenthetical aliases (e.g. "Alanine Aminotransferase
-// (ALT/SGPT)" → "ALT" and "SGPT" map to the canonical entry). Also matches
-// when the user's free-text test name embeds an alias (e.g. "ALT (Pfizer
-// side-by-side)" still resolves to ALT). Built 2026-05-20 to fix the
-// false-negative narrative path that was treating common short names as
-// "Lab-Set Internal Goal" instead of canonical CLIA criteria.
-const _canonicalAliasSet: Set<string> = (() => {
-  const s = new Set<string>();
-  for (const row of teaData) {
-    const full = row.analyte.trim().toLowerCase();
-    s.add(full);
-    // Pull any parenthetical content and split on "/" so combined aliases
-    // like "(ALT/SGPT)" yield both "alt" and "sgpt".
-    const parenMatches = row.analyte.match(/\(([^)]+)\)/g) || [];
-    for (const paren of parenMatches) {
-      const inner = paren.slice(1, -1);
-      for (const alias of inner.split(/[\/,]/)) {
-        const a = alias.trim().toLowerCase();
-        if (a.length > 0) s.add(a);
-      }
-    }
-    // Also add the pre-paren portion (e.g. "Alanine Aminotransferase").
-    const prePar = row.analyte.split("(")[0].trim().toLowerCase();
-    if (prePar.length > 0) s.add(prePar);
-  }
-  return s;
-})();
-
-// Escape regex metacharacters in an alias before embedding it in a RegExp.
-// Earlier version had two bugs: the character class was malformed (closed
-// prematurely on the first \\] so almost no chars got escaped) and the
-// replacement string had four backslashes instead of two (which inserted a
-// literal "\\" prefix before each metachar instead of the single backslash
-// the regex engine expects). Fixed and unit-tested 2026-05-20.
-function escapeRegexAlias(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-export function hasCanonicalTea(analyte: string | null | undefined): boolean {
-  if (!analyte) return false;
-  const needle = String(analyte).trim().toLowerCase();
-  if (!needle) return false;
-  // An unregulated analyte never carries a canonical CLIA TEa, even when its
-  // name overlaps a regulated one (MICROALBUMIN vs Albumin): same guard as
-  // resolveFloor / resolveCanonicalAnalyte.
-  if (isUnregulatedAnalyte(String(analyte).trim())) return false;
-  // NAME_MAP is the table the floor and canonical-analyte resolvers consult.
-  // "Hemoglobin" / "HGB" / "Hgb" map there to "CBC - Hemoglobin" (CLIA TEa
-  // +/-4%), but none of those spellings is an alias in teaData, so until
-  // 2026-10-07 this returned false for them and the VeritaCheck PDF labeled a
-  // regulated hematology analyte a "Lab-Set Internal Goal" with "per
-  // laboratory director or designee policy" authority (QA sweep 2026-10-04).
-  // A null mapping is an explicit "no canonical TEa" (e.g. LIPASE).
-  for (const [key, canonical] of Object.entries(NAME_MAP)) {
-    if (key.toLowerCase() === needle) return canonical !== null;
-  }
-  if (_canonicalAliasSet.has(needle)) return true;
-  // Fall back to substring match for free-text test names that embed a
-  // canonical alias inside extra annotation (e.g. "ALT (Pfizer side-by-side)"
-  // or "Glucose - QC Run 3"). Check each indexed alias against the needle.
-  // Word-boundary check to avoid false positives like "alt" matching inside
-  // a word that incidentally contains the letters.
-  for (const alias of _canonicalAliasSet) {
-    if (alias.length < 3) continue; // skip ultra-short aliases to avoid noise
-    const re = new RegExp(`\\b${escapeRegexAlias(alias)}\\b`, "i");
-    if (re.test(needle)) return true;
-  }
-  return false;
-}
-
 export function parseAbsoluteFloor(criteria: string): { value: number; unit: string } | null {
   const dualMatch = criteria.match(
     /±[\d.]+%\s+or\s+±([\d.]+)\s+([^(]+?)\s*\(greater\)/i
@@ -187,56 +120,6 @@ for (const entry of teaData) {
     floorByAnalyte.set(entry.analyte, floor);
   }
 }
-
-// Map from DB test_name -> canonical analyte name (or null = explicitly unmapped)
-export const NAME_MAP: Record<string, string | null> = {
-  "GC1 CREAT": "Creatinine",
-  "FREE T4": "Free Thyroxine (Free T4)",
-  "GLUCOSE": "Glucose (excluding home use devices)",
-  "Urea (BUN)": "Urea Nitrogen (BUN)",
-  "CREATININE": "Creatinine",
-  "SODIUM (NA+)": "Sodium",
-  "POTASSIUM (K+)": "Potassium",
-  "CHLORIDE (CL-)": "Chloride",
-  "CARBON DIOXIDE (ECO2)": "Carbon Dioxide (CO2/Bicarbonate)",
-  "CALCIUM": "Calcium, Total",
-  "TOTAL PROTEIN": "Total Protein",
-  "ALBUMIN": "Albumin",
-  "TOTAL BILIRUBIN": "Bilirubin, Total",
-  "AST": "Aspartate Aminotransferase (AST/SGOT)",
-  "ALT/SGPT": "Alanine Aminotransferase (ALT/SGPT)",
-  "URIC ACID": "Uric Acid",
-  "TRIGLYCERIDES": "Triglycerides",
-  "CHOLESTEROL TOTAL": "Cholesterol, Total",
-  "AMYLASE": "Amylase",
-  "PHOSPHORUS": "Phosphorus",
-  "ALKALINE PHOSPHATE": "Alkaline Phosphatase",
-  "LDHI": "Lactate Dehydrogenase (LDH)",
-  "CK": "Creatine Kinase (CK)",
-  "Gamma glutamyl transferase (GGT)": "Gamma Glutamyl Transferase (GGT)",
-  "MAGNESIUM": "Magnesium",
-  "CHOLESTEROL, HDL": "Cholesterol, HDL",
-  "CHOLESTEROL, LDL DIRECT": "Cholesterol, LDL (direct)",
-  "IRON, TOTAL (FE)": "Iron, Total",
-  "TOTAL IRON BINDING CAPACITY, DIRECT (DTIBC)": "Total Iron Binding Capacity (TIBC)",
-  "PT": "Prothrombin Time (PT)",
-  // Plain "Hemoglobin"/"HGB" is the CBC analyte (±4% per the 2022 final rule),
-  // NOT glycated "Hemoglobin A1c (HbA1c)" (±8%). Without these exact mappings,
-  // the substring fallback below collapses "Hemoglobin" into the earlier-
-  // inserted A1c entry and mis-assigns 8% (Troy Regional, 2026-08-14).
-  "Hemoglobin": "CBC - Hemoglobin",
-  "HGB": "CBC - Hemoglobin",
-  "Hgb": "CBC - Hemoglobin",
-  // Same substring-collapse class: plain "Thyroxine"/"T4" is Total T4, but the
-  // substring fallback collapses it into the earlier "Free Thyroxine (Free T4)".
-  // ("FREE T4" already maps to Free Thyroxine above, so free T4 is unaffected.)
-  "Thyroxine": "Thyroxine (T4)",
-  "T4": "Thyroxine (T4)",
-  "LIPASE": null,
-  "BILIRUBIN, UNBOUND": null,
-  "BILIRUBIN, DIRECT": null,
-  "IRON SATURATION (%IRON SAT)": null,
-};
 
 /**
  * Returns true iff `testName` matches an analyte in cliaAnalytes.ts whose tier is
@@ -309,27 +192,29 @@ export function resolveCanonicalAnalyte(testName: string): string | null {
 }
 
 // The 42 CFR 493 Subpart I section a study's regulatory sentence should cite
-// ("The results ... meet the CLIA criteria per 42 CFR §493.9xx"). Resolved from
-// the analyte's CLIA subspecialty in the server catalog (Hematology ->
-// §493.941, Endocrinology -> §493.933, Coagulation -> §493.941, ...), via the
-// same CFR_MAP VeritaMap uses. Until 2026-10-07 pdfReport.ts read
-// `study.cfr`, which nothing ever set, so every narrative cited §493.931
-// (Routine Chemistry), including hematology studies. §493.931 stays the
-// documented default when the analyte is not in the catalog (CLAUDE.md §5).
+// ("The results ... meet the CLIA criteria per 42 CFR §493.9xx"). A Subpart I
+// analyte cites its own table row. Reading the catalog first printed §493.911
+// (Bacteriology) on every "AST" study, because the catalog also lists AST as
+// Antimicrobial Susceptibility Testing, and §493.931 on "Phenytoin (Dilantin)"
+// and "Follicle Stimulating Hormone (FSH)", which it did not find by that name.
+// Any other name in the catalog gets its subspecialty's section via the same
+// CFR_MAP VeritaMap uses, and "" when that subspecialty has none (Urinalysis).
+// §493.931 stays the documented default for a name the catalog does not hold
+// (CLAUDE.md §5). The PDF prints a section only for a recognized analyte
+// (shared/regulatedAnalytes.ts criterionStanding), so neither of those two
+// reaches a report.
 export const DEFAULT_CFR_SECTION = "42 CFR §493.931";
 export function cfrSectionForTestName(testName: string | null | undefined): string {
   if (!testName) return DEFAULT_CFR_SECTION;
   const raw = String(testName).trim();
   if (!raw) return DEFAULT_CFR_SECTION;
-  const norm = (s: string) => s.replace(/^cbc\s*-\s*/i, "").trim().toLowerCase();
-  const candidates = new Set<string>([norm(raw)]);
-  const canonical = resolveCanonicalAnalyte(raw);
-  if (canonical) candidates.add(norm(canonical));
+  const row = regulatedAnalyteFor(raw);
+  if (row) return `42 CFR ${row.cfr}`;
+  const needle = raw.toLowerCase();
   for (const a of cliaAnalytes) {
-    const names = [a.name, ...a.aliases].map((n) => n.toLowerCase());
-    if (!names.some((n) => candidates.has(n))) continue;
+    if (![a.name, ...a.aliases].some((n) => n.toLowerCase() === needle)) continue;
     const section = CFR_MAP[a.subspecialty] ?? CFR_MAP[a.specialty];
-    return section ? `42 CFR ${section}` : DEFAULT_CFR_SECTION;
+    return section ? `42 CFR ${section}` : "";
   }
   return DEFAULT_CFR_SECTION;
 }

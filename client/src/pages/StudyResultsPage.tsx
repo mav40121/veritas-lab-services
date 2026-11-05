@@ -65,7 +65,7 @@ import { computeStudyResults } from "@/lib/studyResults";
 import { evaluateHeparinRange, normalizeHeparinInput, heparinRangeNarrative, heparinRangeChartSVG } from "@shared/heparinRange";
 import { evaluateManualDiff } from "@shared/rumke";
 import { labLocaleDate } from "@/lib/labDate";
-import { teaLabelFor } from "@/lib/cliaTeaData";
+import { teaLabelFor } from "@shared/regulatedAnalytes";
 
 import {
   ScatterChart,
@@ -702,7 +702,7 @@ function CalVerReport({ study, results }: { study: Study; results: CalVerResults
         {[
           { label: "Data Levels", value: levelResults.length },
           { label: "Results Passing", value: `${results.passCount} / ${results.totalCount}` },
-          { label: teaLabelFor(study.testName), value: formatTeaDisplay(study) },
+          { label: teaLabelFor(study.testName, study as any), value: formatTeaDisplay(study) },
           { label: "Max % Recovery", value: `${results.maxPctRecovery.toFixed(1)}%` },
         ].map(({ label, value }) => (
           <Card key={label}><CardContent className="p-4">
@@ -1121,7 +1121,7 @@ function MethodCompReport({ study, results }: { study: Study; results: MethodCom
         {[
           { label: "Patient Samples", value: levelResults.length },
           { label: "Results Passing", value: `${results.passCount} / ${results.totalCount}` },
-          { label: teaLabelFor(study.testName), value: formatTeaDisplay(study) },
+          { label: teaLabelFor(study.testName, study as any), value: formatTeaDisplay(study) },
           { label: "Instruments", value: allInstrumentNames.length },
         ].map(({ label, value }) => (
           <Card key={label}><CardContent className="p-4">
@@ -1717,7 +1717,7 @@ function AccuracyBiasReport({ study, results }: { study: Study; results: any }) 
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 text-xs">
             <div><div className="text-muted-foreground">Analyte</div><div className="font-mono">{results.analyte || study.testName}</div></div>
             <div><div className="text-muted-foreground">Units</div><div className="font-mono">{units || "-"}</div></div>
-            <div><div className="text-muted-foreground">CLIA TEa</div><div className="font-mono">{fmtPct(teaPct, 1)}{results.absoluteFloor ? ` or ${results.absoluteFloor} ${results.absoluteUnit || ""}` : ""}{(study as any).cliaPresetLabel ? ` (${(study as any).cliaPresetLabel})` : ""}</div></div>
+            <div><div className="text-muted-foreground">{teaLabelFor(study.testName, study as any)}</div><div className="font-mono">{fmtPct(teaPct, 1)}{results.absoluteFloor ? ` or ${results.absoluteFloor} ${results.absoluteUnit || ""}` : ""}{(study as any).cliaPresetLabel ? ` (${(study as any).cliaPresetLabel})` : ""}</div></div>
             <div><div className="text-muted-foreground">Levels</div><div className="font-mono">{levels.length}</div></div>
             <div><div className="text-muted-foreground">Min % Recovery</div><div className="font-mono">{minRec !== null ? fmtPct(minRec) : "-"}</div></div>
             <div><div className="text-muted-foreground">Max % Recovery</div><div className="font-mono">{maxRec !== null ? fmtPct(maxRec) : "-"}</div></div>
@@ -1980,7 +1980,7 @@ function LinearityReport({ study, results }: { study: Study; results: any }) {
             <div><div className="text-muted-foreground">Intercept</div><div className="font-mono">{fmt(intercept, 3)}</div></div>
             <div><div className="text-muted-foreground">r²</div><div className="font-mono">{fmt(r2, 4)}</div></div>
             <div><div className="text-muted-foreground">|Slope - 1|</div><div className="font-mono">{fmtPct(slopeBiasPct)}</div></div>
-            <div><div className="text-muted-foreground">CLIA TEa</div><div className="font-mono">{fmtPct(teaPct, 1)}{results.absoluteFloor ? ` or ${results.absoluteFloor} ${results.absoluteUnit || ""}` : ""}{(study as any).cliaPresetLabel ? ` (${(study as any).cliaPresetLabel})` : ""}</div></div>
+            <div><div className="text-muted-foreground">{teaLabelFor(study.testName, study as any)}</div><div className="font-mono">{fmtPct(teaPct, 1)}{results.absoluteFloor ? ` or ${results.absoluteFloor} ${results.absoluteUnit || ""}` : ""}{(study as any).cliaPresetLabel ? ` (${(study as any).cliaPresetLabel})` : ""}</div></div>
           </div>
           {results.summary && (
             <div className="mt-4 text-xs text-muted-foreground leading-relaxed">{results.summary}</div>
@@ -2077,7 +2077,7 @@ function ReportableRangeReport({ study, results }: { study: Study; results: any 
             <div><div className="text-muted-foreground">Analyte</div><div className="font-mono">{results.analyte || study.testName}</div></div>
             <div><div className="text-muted-foreground">Units</div><div className="font-mono">{units || "-"}</div></div>
             <div><div className="text-muted-foreground">Claimed Range</div><div className="font-mono">{claimedTxt}</div></div>
-            <div><div className="text-muted-foreground">CLIA TEa</div><div className="font-mono">{fmtPct(teaPct, 1)}{results.absoluteFloor ? ` or ${results.absoluteFloor} ${results.absoluteUnit || ""}` : ""}{(study as any).cliaPresetLabel ? ` (${(study as any).cliaPresetLabel})` : ""}</div></div>
+            <div><div className="text-muted-foreground">{teaLabelFor(study.testName, study as any)}</div><div className="font-mono">{fmtPct(teaPct, 1)}{results.absoluteFloor ? ` or ${results.absoluteFloor} ${results.absoluteUnit || ""}` : ""}{(study as any).cliaPresetLabel ? ` (${(study as any).cliaPresetLabel})` : ""}</div></div>
             <div><div className="text-muted-foreground">Levels</div><div className="font-mono">{levels.length}</div></div>
           </div>
           {results.summary && (

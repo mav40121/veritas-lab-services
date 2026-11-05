@@ -13,7 +13,8 @@
 //      endocrinology -> §493.933, chemistry -> §493.931, unknown -> §493.931 (documented default)
 //
 // Run: DB_PATH=.tmp-verify-hgb.db npx tsx scripts/verify-hgb-canonical-tea-cfr.ts
-import { hasCanonicalTea, cfrSectionForTestName, DEFAULT_CFR_SECTION } from "../server/backfillAbsoluteFloor";
+import { cfrSectionForTestName, DEFAULT_CFR_SECTION } from "../server/backfillAbsoluteFloor";
+import { hasCanonicalTea } from "../shared/regulatedAnalytes";
 
 let pass = true;
 const ok = (name: string, cond: boolean, extra = "") => {

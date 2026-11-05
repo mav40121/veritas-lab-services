@@ -1,4 +1,5 @@
-// Unit-test receipt for hasCanonicalTea (server/backfillAbsoluteFloor.ts).
+// Historic receipt from 2026-05-20: the first alias-matching version of hasCanonicalTea, re-implemented in plain JS. It does not import
+// the current code. The current matcher is shared/regulatedAnalytes.ts and its receipt is scripts/verify-regulated-analyte-labels.ts.
 // Re-implements the alias-set construction + matching logic in plain JS so
 // it can run without tsx/node-modules, then exercises every code path:
 //   (1) direct alias-set hit (e.g. "ALT" matches "alt")

@@ -94,6 +94,8 @@ PRESET_ANALYTE = {
     "Hemoglobin": "CBC - Hemoglobin", "Leukocyte Count / WBC": "CBC - WBC (White Blood Cell Count)", "Partial Thromboplastin Time": "Partial Thromboplastin Time (PTT/aPTT)", "Platelet Count": "CBC - Platelet Count",
     "Prothrombin Time / PT": "Prothrombin Time (PT)",
 }
+# The day EXPECTED was taken from the eCFR. Every VeritaCheck PDF prints this date, so redo the comparison before changing it.
+ECFR_COMPARED_ON = "2026-11-05"
 LAB_SET = {"Lipase", "Bilirubin, Direct", "Bilirubin, Unbound", "Iron Saturation", "Vitamin D, 25-Hydroxy", "Procalcitonin", "Custom"}
 
 fails = 0
@@ -168,6 +170,7 @@ for a, want in EXPECTED.items():
 for a in sorted(set(got) - set(EXPECTED)):
     check(f"{a} is listed in Subpart I", False, "row is not in the expected set")
 check("no rows cite non-CFR sources (RCPA, WSLH)", "RCPA" not in src and "WSLH" not in src)
+check(f"CLIA_TEA_TABLE_ECFR_DATE is {ECFR_COMPARED_ON}, the day the expected set was taken", f'CLIA_TEA_TABLE_ECFR_DATE = "{ECFR_COMPARED_ON}"' in src)
 
 
 def parse_criteria(c):

@@ -3,8 +3,8 @@
  *
  * Render-time audit backstop for canonical 42 CFR §493 PT TEa values.
  *
- * Strategy: for every entry in the canonical teaData list, construct a
- * synthetic Study object as if a user had selected that analyte through the
+ * Strategy: for every numeric row of the Subpart I table (client/src/lib/cliaTeaData.ts),
+ * construct a synthetic Study object as if a user had selected that analyte through the
  * UI, then call teaDisplayStr() (the single source of truth for how TEa
  * appears on every PDF) and assert the rendered string matches the canonical
  * criteria byte-for-byte (after a small whitespace / unicode normalization).
@@ -18,21 +18,26 @@
  * pass-floor-fail-pct must each produce the expected overall verdict using
  * the same percent OR floor (greater) rule the production compute paths use.
  *
- * On success, writes dist/data/tea_audit.json with the verification date and
- * pass status. The freshness footer in regulatoryComplianceBoxHTML reads this
- * file at request time so every PDF prints "Canonical TEa list verified
- * against 42 CFR §493 on YYYY-MM-DD."
+ * Also fails when the startup self-heal's frozen list (teaData in
+ * server/backfillAbsoluteFloor.ts) drifts from that table or changes size: a new
+ * row there rewrites saved customer studies.
+ *
+ * This audit compares the renderer with the table. It does not read the CFR, so it
+ * no longer stamps the date the PDFs print: that is CLIA_TEA_TABLE_ECFR_DATE, beside
+ * the table, pinned by scripts/verify-citations-tea-cap.py.
  *
  * Run as a pre-build step from script/build.ts. Exits non-zero on failure.
  */
-import { mkdir, writeFile } from "fs/promises";
-import path from "path";
-import { teaData, parseCanonicalTea, parseAbsoluteFloor } from "../server/backfillAbsoluteFloor.js";
+import { teaData as selfHealRows, parseCanonicalTea, parseAbsoluteFloor } from "../server/backfillAbsoluteFloor.js";
 import { teaDisplayStr, buildPrecisionHTML } from "../server/pdfReport.js";
+import { teaData as subpartITable } from "../client/src/lib/cliaTeaData.js";
+import { cfrNumericCriterion } from "../shared/regulatedAnalytes.js";
 
 type Study = any;
 
-const ROOT = path.resolve(import.meta.dirname || ".", "..");
+// Rows Subpart I states as a number. The others ("100% accuracy", "±2 dilutions ...") have no TEa to render.
+const numericRows = subpartITable.filter((r) => cfrNumericCriterion(r.criteria) !== null);
+const SELF_HEAL_ROW_COUNT = 59;
 
 /**
  * Build the synthetic Study object the way storage / write-guard code path
@@ -114,7 +119,7 @@ type Failure = { analyte: string; rule: string; expected?: string; got?: string 
 
 function auditTeaDisplayStr(): Failure[] {
   const failures: Failure[] = [];
-  for (const { analyte, criteria } of teaData) {
+  for (const { analyte, criteria } of numericRows) {
     const study = syntheticStudyFor(analyte, criteria);
     const rendered = teaDisplayStr(study);
 
@@ -187,7 +192,7 @@ function auditSmokeRender(): Failure[] {
   ];
 
   for (const analyte of cases) {
-    const entry = teaData.find((t) => t.analyte === analyte);
+    const entry = numericRows.find((t) => t.analyte === analyte);
     if (!entry) {
       failures.push({ analyte, rule: "Smoke-render case not found in canonical teaData" });
       continue;
@@ -314,64 +319,28 @@ function auditDualVerdicts(): Failure[] {
   return failures;
 }
 
-async function writeFreshnessArtifact() {
-  // Content-comparison: only rewrite tea_audit.json when the meaningful
-  // payload (cfr, canonicalAnalyteCount, pass) actually changed. Stops the
-  // file from churning git status with a fresh verifiedAt on every build.
-  // The verifiedAt then reflects the last time the audit found something
-  // different to record, not the last time the build ran, which is the
-  // honest semantics.
-  const meaningfulPayload = {
-    cfr: "42 CFR §493 Subpart I",
-    canonicalAnalyteCount: teaData.length,
-    pass: true,
-  };
-  const outDir = path.join(ROOT, "dist", "data");
-  const devDir = path.join(ROOT, "server", "data");
-  await mkdir(outDir, { recursive: true });
-  await mkdir(devDir, { recursive: true });
-
-  // Read existing dev-tree artifact (the one git tracks) and compare.
-  const devPath = path.join(devDir, "tea_audit.json");
-  let existingVerifiedAt: string | null = null;
-  let needsRewrite = true;
-  try {
-    const { readFile } = await import("fs/promises");
-    const raw = await readFile(devPath, "utf-8");
-    const j = JSON.parse(raw);
-    const existingMeaningful = {
-      cfr: j.cfr,
-      canonicalAnalyteCount: j.canonicalAnalyteCount,
-      pass: j.pass,
-    };
-    if (JSON.stringify(existingMeaningful) === JSON.stringify(meaningfulPayload) && j.verifiedAt) {
-      existingVerifiedAt = String(j.verifiedAt);
-      needsRewrite = false;
-    }
-  } catch {
-    /* file missing or unreadable — fall through to write */
+function auditSelfHealList(): Failure[] {
+  const failures: Failure[] = [];
+  const fixHint = "Do not add rows here: it rewrites saved studies. See the comment on teaData in server/backfillAbsoluteFloor.ts.";
+  if (selfHealRows.length !== SELF_HEAL_ROW_COUNT) {
+    failures.push({ analyte: "teaData", rule: `Frozen self-heal list has ${selfHealRows.length} rows, expected ${SELF_HEAL_ROW_COUNT}. ${fixHint}` });
   }
-
-  const verifiedAt = needsRewrite ? new Date().toISOString() : existingVerifiedAt!;
-  const payload = { verifiedAt, ...meaningfulPayload };
-  // Always write to dist/data (build output, never tracked).
-  await writeFile(path.join(outDir, "tea_audit.json"), JSON.stringify(payload, null, 2));
-  // Only write to server/data when content actually changed (so git status stays clean).
-  if (needsRewrite) {
-    await writeFile(devPath, JSON.stringify(payload, null, 2));
-    console.log(`[teaCanonicalRenderAudit] Stamped TEA_AUDIT_VERIFIED_AT=${verifiedAt} (content changed)`);
-  } else {
-    console.log(`[teaCanonicalRenderAudit] TEA_AUDIT_VERIFIED_AT unchanged at ${verifiedAt} (no content drift)`);
+  for (const { analyte, criteria } of selfHealRows) {
+    const row = subpartITable.find((t) => t.analyte === analyte);
+    if (!row) failures.push({ analyte, rule: "Frozen self-heal row is not in the Subpart I table" });
+    else if (row.criteria !== criteria) failures.push({ analyte, rule: "Frozen self-heal row differs from the Subpart I table", expected: row.criteria, got: criteria });
   }
+  return failures;
 }
 
 async function main() {
-  console.log(`[teaCanonicalRenderAudit] Auditing ${teaData.length} canonical analytes...`);
+  console.log(`[teaCanonicalRenderAudit] Auditing ${numericRows.length} numeric Subpart I rows...`);
   const failures: Failure[] = [];
 
   failures.push(...auditTeaDisplayStr());
   failures.push(...auditSmokeRender());
   failures.push(...auditDualVerdicts());
+  failures.push(...auditSelfHealList());
 
   // Unregulated short-circuit regression: analytes whose name or alias contains
   // a regulated canonical name as a substring must NOT canonicalize. Historical
@@ -411,12 +380,11 @@ async function main() {
       if (f.expected) console.error(`    expected: ${f.expected}`);
       if (f.got) console.error(`    got:      ${f.got}`);
     }
-    console.error("\nFix: update server/backfillAbsoluteFloor.ts canonical teaData to match 42 CFR §493 Subpart I,");
+    console.error("\nFix: correct the row against 42 CFR §493 Subpart I in client/src/lib/cliaTeaData.ts, or the renderer,");
     console.error("then re-run the build.\n");
     process.exit(1);
   }
 
-  await writeFreshnessArtifact();
   console.log("[teaCanonicalRenderAudit] OK — all canonical analytes render correctly.");
 }
 

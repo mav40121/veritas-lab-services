@@ -3,8 +3,13 @@
 // Sections: §493.927 (Immunology), §493.931 (Chemistry), §493.933 (Endocrinology),
 //           §493.937 (Toxicology), §493.941 (Hematology and coagulation), §493.959 (Immunohematology)
 // Every row and value below is pinned to the eCFR tables by scripts/verify-citations-tea-cap.py.
-// Analytes that are not listed in Subpart I do not belong in this table: hasCanonicalTea() labels
-// anything here "CLIA TEa".
+// Analytes that are not listed in Subpart I do not belong in this table: shared/regulatedAnalytes.ts
+// labels a study on anything here "CLIA TEa" when it holds this criterion.
+
+// The day the rows below were last compared with the eCFR tables. Every VeritaCheck PDF prints it
+// ("Canonical TEa list verified against 42 CFR §493 on ..."), so change it only when the comparison is redone.
+// scripts/verify-citations-tea-cap.py pins it to the date of its expected set.
+export const CLIA_TEA_TABLE_ECFR_DATE = "2026-11-05";
 
 export type TeaSpecialty =
   | "Routine Chemistry"
@@ -155,32 +160,6 @@ export const specialties: TeaSpecialty[] = [
   "Coagulation",
   "Immunohematology",
 ];
-
-/**
- * True if the named analyte has a canonical 42 CFR §493 PT criterion in `teaData`.
- * Match is case-insensitive on whitespace-trimmed names. Used to decide whether
- * VeritaCheck should label the acceptance criterion as "CLIA TEa" (canonical)
- * or "Lab-Set Internal Goal" (laboratory-defined, no §493 citation).
- *
- * Mirrors the server-side helper at server/backfillAbsoluteFloor.ts so client
- * and server stay in sync. Parking-lot item #1.
- */
-export function hasCanonicalTea(analyte: string | null | undefined): boolean {
-  if (!analyte) return false;
-  const needle = String(analyte).trim().toLowerCase();
-  if (!needle) return false;
-  return teaData.some((row) => row.analyte.trim().toLowerCase() === needle);
-}
-
-/**
- * Returns the user-facing label for the acceptance criterion. Returns "CLIA TEa"
- * when the analyte has a canonical §493 PT criterion, otherwise "Lab-Set Internal
- * Goal" so the UI does not falsely imply a CLIA citation that does not exist
- * (e.g., LIPASE, BILIRUBIN UNBOUND/DIRECT, IRON SAT).
- */
-export function teaLabelFor(analyte: string | null | undefined): string {
-  return hasCanonicalTea(analyte) ? "CLIA TEa" : "Lab-Set Internal Goal";
-}
 
 export function searchTea(query: string, specialty?: TeaSpecialty): TeaAnalyte[] {
   const q = query.toLowerCase().trim();

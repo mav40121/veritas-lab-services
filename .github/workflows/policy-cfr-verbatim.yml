@@ -33,6 +33,16 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # Every VeritaCheck PDF prints "Canonical TEa list verified against 42 CFR §493 on <date>". This is what makes that true: the table, row for
+      # row, against the set taken from the eCFR, and the printed date against the day that set was taken. The CAP and stored-PDF cases print SKIP here.
+      - name: The CLIA TEa table matches the eCFR and the date the PDFs print
+        run: python scripts/verify-citations-tea-cap.py
+
       - name: Every policy CFR quote is verbatim at its citation
         run: node scripts/verify-policy-cfr-quotes.mjs
 
