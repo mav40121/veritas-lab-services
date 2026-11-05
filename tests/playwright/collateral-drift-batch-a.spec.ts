@@ -21,9 +21,9 @@ test.describe("Collateral drift Batch A: corrected copy on public pages", () => 
     expect(t).not.toContain("One shared lab kiosk login");
   });
 
-  test("roadmap shows 269 instruments and the Mayo layer is gone", async ({ page }) => {
+  test("roadmap shows the instrument count and the Mayo layer is gone", async ({ page }) => {
     const t = await bodyText(page, "/roadmap");
-    expect(t).toContain("Maps 269 instruments");
+    expect(t).toContain("Maps more than 270 instruments");
     expect(t).not.toContain("Mayo Clinic Laboratories");
     expect(t).not.toContain("190+");
   });
