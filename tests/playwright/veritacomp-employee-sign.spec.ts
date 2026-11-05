@@ -62,6 +62,8 @@ test.describe("VeritaComp: per-method sign-off", () => {
     await page.getByTestId("test-system-tab").filter({ hasText: ts.instrumentName }).first().click();
     await expect(page.getByTestId("method-sign-form")).toBeVisible({ timeout: 8000 });
     await expect(page.getByTestId("signer-select")).not.toHaveValue("");
+    // Michael Q179 = 1: the form never opens on a determination; the evaluator chooses.
+    await page.getByTestId("determination-select").selectOption("pass");
     await page.getByTestId("sign-method").click();
     await expect(page.getByTestId("method-signed")).toBeVisible({ timeout: 8000 });
     await expect(page.getByTestId("method-signed")).toContainText(/Initial signed/);

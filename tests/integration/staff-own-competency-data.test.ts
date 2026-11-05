@@ -287,7 +287,7 @@ async function main() {
     ] });
     check("12a. waived: evidence and date save; Pass and initials sent by the client are not taken", w1.s === 200 && waivedRow(1)?.waived_evidence === "BS-1 glucose 92" && waivedRow(1)?.passed === 0 && !waivedRow(1)?.waived_initials && waivedRow(2)?.waived_evidence === "Observed by me" && waivedRow(2)?.passed === 0 && !waivedRow(2)?.waived_initials, `${w1.s} ${w1.j.error ?? ""}`);
     v = await view(annId);
-    check("12b. two waived rows with no Pass count as 0 of 2, so nothing can be signed", tsOf(v, METER).waivedPassed === 0 && tsOf(v, METER).signable === false && tsOf(v, METER).waivedMethods?.[0]?.status === "fail");
+    check("12b. two waived rows with no Pass count as 0 of 2, so nothing can be signed", tsOf(v, METER).waivedPassed === 0 && tsOf(v, METER).signable === false && tsOf(v, METER).waivedMethods?.[0]?.status === "needs_review");
     const rowNums = sqlite.prepare(`SELECT method_number, element_number FROM competency_assessment_items WHERE id = ?`).get(waivedRow(1).id) as any;
     check("12c. waived rows carry no element or method number", rowNums.method_number == null && rowNums.element_number == null);
     const passBoth = await evaluatorPut(annId, METER, { waivedMethods: [

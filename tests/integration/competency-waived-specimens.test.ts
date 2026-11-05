@@ -75,7 +75,7 @@ async function main() {
     check("1. the first stays in the old columns", row1().waived_evidence === "BS-1 glucose 92" && row1().waived_date === day && row1().waived_initials === "MU" && row1().passed === 1);
     await put({ waivedMethods: [{ num: 1, specimens: [pass("BS-1 glucose 92"), pass("BS-2 glucose 180", false)] }] });
     m = await method1();
-    check("1. one specimen not passed means the method isn't", m?.status === "fail" && m?.passed === false && m?.specimens?.[1]?.passed === false && m?.specimens?.[0]?.passed === true, JSON.stringify({ s: m?.status, list: m?.specimens?.map((x: any) => x.passed) }));
+    check("1. one specimen not passed means the method isn't", m?.status === "needs_review" && m?.passed === false && m?.specimens?.[1]?.passed === false && m?.specimens?.[0]?.passed === true, JSON.stringify({ s: m?.status, list: m?.specimens?.map((x: any) => x.passed) }));
     await put({ waivedMethods: [{ num: 1, specimens: [pass("BS-1 only")] }] });
     check("1. one specimen stores no list, the same as before", row1().waived_specimens_json === null && row1().waived_evidence === "BS-1 only");
     await put({ waivedMethods: [{ num: 1, specimens: [pass("BS-1"), { evidence: "", date: "", initials: "", passed: false }, pass("BS-3")] }] });
