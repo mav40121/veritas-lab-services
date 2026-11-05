@@ -126,11 +126,11 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
   },
   "/pricing": {
     title: "Pricing | VeritaAssure\u00AE Lab Compliance Software",
-    description: "Simple annual pricing for clinical laboratory compliance software. Plans for individual labs, community hospitals, regional hospitals, and enterprise health systems.",
+    description: "Simple annual pricing for clinical laboratory compliance software. Plans for individual labs, community hospitals, regional hospitals, and multi-lab health systems.",
   },
   "/services": {
     title: "Services | Veritas Lab Services Laboratory Consulting",
-    description: "Laboratory consulting services including compliance assessments, accreditation preparation, performance verification support, and staff education by Michael Veri, MLS(ASCP), CPHQ.",
+    description: "Laboratory consulting led by Michael Veri, MS, MBA, MLS(ASCP), CPHQ, a former TJC Laboratory Surveyor. Mock inspections, productivity analysis, director coverage, and leadership coaching.",
   },
   "/contact": {
     title: "Contact | Veritas Lab Services",
@@ -159,13 +159,13 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
     ogImage: `${BASE_URL}/demo-og.png`,
   },
   "/demo/operations": {
-    title: "VeritaBench\u2122 Demo - Lab Productivity & Staffing Tools | VeritaAssure\u00AE",
-    description: "See VeritaBench\u2122 in action. Interactive productivity calculator, monthly tracking, and by-hour staffing analysis built for clinical laboratories.",
+    title: "Operations Demo - Lab Productivity & Staffing Tools | VeritaAssure\u00AE",
+    description: "See the operations modules in action. Interactive VeritaBench\u2122 scorecard, VeritaPace\u2122 monthly tracking, VeritaShift\u2122 by-hour staffing, VeritaStock\u2122 inventory, and VeritaOps\u2122 cost per reportable test.",
     ogImage: `${BASE_URL}/demo-og.png`,
   },
   "/demo/compliance": {
     title: "Compliance Suite Demo | VeritaAssure\u00AE Lab Compliance Software",
-    description: "Try the VeritaAssure\u00AE compliance demo. Explore VeritaCheck® performance verification, VeritaScan® inspection readiness, VeritaMap® reportable ranges, and VeritaComp™ competency tracking.",
+    description: "Try the VeritaAssure\u00AE compliance demo. Explore VeritaCheck® performance verification, VeritaScan® inspection readiness, VeritaMap® test menu mapping, and VeritaComp™ competency tracking.",
     ogImage: `${BASE_URL}/demo-og.png`,
   },
   "/roadmap": {
@@ -194,7 +194,7 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
   },
   "/veritapt": {
     title: "VeritaPT\u2122 | Proficiency Testing Gap Analyzer for Clinical Labs",
-    description: "Identify PT coverage gaps in your laboratory test menu. Ensure every analyte has a proficiency testing program and stay compliant with CLIA PT requirements.",
+    description: "Identify PT coverage gaps in your laboratory test menu. See which analytes need a PT program or alternative assessment.",
   },
   "/veritalab": {
     title: "VeritaLab™ | Laboratory Certificate and Document Storage Software",
@@ -244,7 +244,7 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
         author: {
           "@type": "Person",
           name: "Michael Veri",
-          jobTitle: "Former Joint Commission Laboratory Surveyor",
+          jobTitle: "Owner, Veritas Lab Services, LLC",
           url: `${BASE_URL}/team`,
         },
         publisher: { "@id": `${BASE_URL}/#organization` },
@@ -277,11 +277,11 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
   "/resources/post-analytical-critical-values-corrected-reports": {
     title: "Critical Values and Corrected Reports: The Post-Analytical Last Mile",
     description:
-      "A former Joint Commission surveyor on the post-analytical last mile: the critical value list your medical staff must own, read-back that confirms delivery, and the corrected-report call CLIA requires under 42 CFR 493.1291(k).",
+      "A former Joint Commission surveyor on the post-analytical last mile: the critical value list your medical staff should own, read-back that confirms delivery, and the prompt notification CLIA requires for a corrected report under 42 CFR 493.1291(k).",
     jsonLd: articleJsonLd({
       headline: "The Last Mile: Why a Correct Result Still Reaches the Patient Wrong",
       description:
-        "A former Joint Commission surveyor on the post-analytical last mile: the critical value list your medical staff must own, read-back that confirms delivery, and the corrected-report call CLIA requires under 42 CFR 493.1291(k).",
+        "A former Joint Commission surveyor on the post-analytical last mile: the critical value list your medical staff should own, read-back that confirms delivery, and the prompt notification CLIA requires for a corrected report under 42 CFR 493.1291(k).",
       articleBody:
         "A laboratory measures its success by the accuracy of the number; a patient experiences it as whether the right clinician acted on the right number in time. The post-analytical last mile is the least-watched phase in most laboratories because it happens after the part the lab controls, and it is where a correct result still reaches the patient wrong. The critical value list is a medical decision, not a laboratory one: the thresholds belong to your medical executive committee, and CLIA requires the laboratory to immediately alert the responsible clinician to imminently life-threatening results, or panic or alert values (42 CFR 493.1291(g)). Calling is not the same as reaching; the read-back confirms a specific licensed person received and repeated the value, and the number that matters is the tail, not the average callback. When an error in a reported result is detected, 42 CFR 493.1291(k) requires you to notify the person who ordered or used the result, not merely to issue an amended report, because the harm is already at the bedside. Autoverification is a quality-control decision, not a default: rules written once and never revisited release today's results on yesterday's assumptions. The last mile stays broken because it is measured by documentation, and an audit that confirms a call was logged does not confirm anyone received it. Sections: The critical value list nobody chose; The call that was made but not received; The correction that never reached the care; The result that left without a human; Why the last mile stays broken.",
       path: "/resources/post-analytical-critical-values-corrected-reports",
@@ -329,7 +329,7 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
         author: {
           "@type": "Person",
           name: "Michael Veri",
-          jobTitle: "Former Joint Commission Laboratory Surveyor",
+          jobTitle: "Owner, Veritas Lab Services, LLC",
           url: `${BASE_URL}/team`,
         },
         publisher: { "@id": `${BASE_URL}/#organization` },
@@ -371,7 +371,7 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
       author: {
         "@type": "Person",
         name: "Michael Veri",
-        jobTitle: "Former Joint Commission Laboratory Surveyor",
+        jobTitle: "Owner, Veritas Lab Services, LLC",
         url: `${BASE_URL}/team`,
       },
       publisher: { "@id": `${BASE_URL}/#organization` },
@@ -400,7 +400,7 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
         author: {
           "@type": "Person",
           name: "Michael Veri",
-          jobTitle: "Former Joint Commission Laboratory Surveyor",
+          jobTitle: "Owner, Veritas Lab Services, LLC",
           url: `${BASE_URL}/team`,
         },
         publisher: { "@id": `${BASE_URL}/#organization` },
@@ -462,10 +462,10 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
   },
   "/resources/how-to-perform-method-comparison-study": {
     title: "How to Perform a Method Comparison Study (Clinical Lab, CLIA)",
-    description: "Step-by-step guide to performing a CLIA-compliant method comparison study, including sample requirements, statistical analysis, and acceptable bias thresholds.",
+    description: "Step-by-step guide to performing a method comparison study under CLIA, including sample requirements, statistical analysis, and acceptable bias thresholds.",
     jsonLd: articleJsonLd({
       headline: "How to Perform a Method Comparison Study in Your Clinical Laboratory",
-      description: "Step-by-step guide to performing a CLIA-compliant method comparison study, including sample requirements, statistical analysis, and acceptable bias thresholds.",
+      description: "Step-by-step guide to performing a method comparison study under CLIA, including sample requirements, statistical analysis, and acceptable bias thresholds.",
       articleBody: "A method comparison study, also called a Correlation study, is required whenever your laboratory implements a new test method, adds a new instrument that performs an existing test, or needs to demonstrate equivalence between two instruments running the same analyte. Done correctly, it provides documented evidence that the new method produces results comparable to your existing method across the full analytical range. Done incorrectly or incompletely, it is a finding waiting to appear on your CAP or TJC inspection report. Method comparison is required when placing a new analyzer into service, adding a new reagent system, or comparing two instruments. Use a minimum of 40 patient specimens spanning the full analytical measurement range. Define your acceptance criteria before running the study, not after. VeritaCheck® handles regression calculations and generates an inspector-ready report automatically. Sections: When a Method Comparison Is Required; Specimen Requirements; Running the Study; What Pass or Fail Means; Common Mistakes; Documentation for Your Inspection File.",
       path: "/resources/how-to-perform-method-comparison-study",
       datePublished: "2026-04-25",
@@ -518,11 +518,11 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
   },
   "/resources/how-to-validate-veritacheck-clia": {
     title: "How to Validate VeritaCheck\u00AE for CLIA Compliance | Veritas Lab Services",
-    description: "Software validation documentation for VeritaCheck\u00AE under CLIA requirements. How to validate laboratory information systems and comply with 42 CFR 493.1252.",
+    description: "Software validation documentation for VeritaCheck\u00AE: how to document that the tool performs as intended in your laboratory with an IQ/OQ/PQ record.",
     jsonLd: articleJsonLd({
       headline: "How to Validate VeritaCheck\u00AE for Your Clinical Laboratory: A Step-by-Step Guide for Lab Directors",
-      description: "Software validation documentation for VeritaCheck\u00AE under CLIA requirements. How to validate laboratory information systems and comply with 42 CFR 493.1252.",
-      articleBody: "If you are preparing to use VeritaCheck\u00AE in your clinical laboratory, your first question should be: do we have a validation record on file? For most regulated labs, the answer needs to be yes before you run a single study through any software tool. The good news is that validating VeritaCheck\u00AE is straightforward, and most labs can complete it in under two hours. Software validation is required under CLIA 42 CFR 493.1251 and CAP checklist item COM.01300. The appropriate framework is IQ/OQ/PQ: Installation Qualification, Operational Qualification, Performance Qualification. Most labs complete the full process in under two hours. A free Software Validation Record template is available at veritaslabservices.com. Sections: Why Software Validation Is Required; What Validating VeritaCheck\u00AE Actually Means; Step-by-Step Validation Process; The Software Validation Template; How Long Does It Take?; What to Keep on File.",
+      description: "Software validation documentation for VeritaCheck\u00AE: how to document that the tool performs as intended in your laboratory with an IQ/OQ/PQ record.",
+      articleBody: "If you are preparing to use VeritaCheck\u00AE in your clinical laboratory, your first question should be: do we have a validation record on file? For most regulated labs, the answer needs to be yes before you run a single study through any software tool. The good news is that validating VeritaCheck\u00AE is straightforward, and most labs can complete it in under two hours. Neither 42 CFR Part 493 nor the CAP checklists name a software validation requirement for a statistical tool like VeritaCheck\u00AE; documenting that it works as intended is a sound laboratory practice. The appropriate framework is IQ/OQ/PQ: Installation Qualification, Operational Qualification, Performance Qualification. Most labs complete the full process in under two hours. A free Software Validation Record template is available at veritaslabservices.com. Sections: Why Software Validation Is Required; What Validating VeritaCheck\u00AE Actually Means; Step-by-Step Validation Process; The Software Validation Template; How Long Does It Take?; What to Keep on File.",
       path: "/resources/how-to-validate-veritacheck-clia",
       datePublished: "2026-05-17",
     }),
@@ -544,11 +544,11 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
   },
   "/calculator": {
     title: "VeritaBench\u2122 | Free Lab Productivity Scorecard | VeritaAssure\u00AE",
-    description: "Free VeritaBench\u2122 productivity tool. Enter monthly billable volume and paid hours to score your lab against community hospital, large trauma center, and reference lab peer benchmarks.",
+    description: "Free VeritaBench\u2122 productivity tool. Enter monthly billable tests and productive hours to score your lab against community hospital, large trauma center, and reference lab ranges.",
   },
   "/veritabench": {
     title: "VeritaPace\u2122 | Monthly Lab Productivity Tracker | VeritaAssure\u00AE",
-    description: "Track monthly lab productivity with VeritaPace\u2122. Billable tests per paid hour benchmarking, FTE and overtime analysis, and peer comparisons. Included with VeritaAssure\u00AE Suite plans.",
+    description: "Track monthly lab productivity with VeritaPace\u2122. Productive hours per billable test against facility-type ranges, FTE and overtime analysis, and year-over-year trend. Included with VeritaAssure\u00AE Suite plans.",
   },
   "/veritabench/staffing": {
     title: "VeritaShift\u2122 | By-Hour Lab Staffing Analyzer | VeritaAssure\u00AE",
@@ -556,7 +556,7 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
   },
   "/veritabench/pi": {
     title: "VeritaQA\u2122 | Lab Quality Metrics Dashboard | VeritaAssure\u00AE",
-    description: "Track department-level laboratory quality metrics with VeritaQA\u2122. Performance improvement dashboards aligned to TJC and CAP standards. Included with VeritaAssure\u00AE Suite plans.",
+    description: "Track department-level laboratory quality metrics with VeritaQA\u2122. Performance improvement dashboards with starter metrics drawn from CAP, TJC, CLSI, and AABB sources. Included with VeritaAssure\u00AE Suite plans.",
   },
   "/veritastock": {
     title: "VeritaStock\u2122 | Laboratory Inventory & Reagent Management | VeritaAssure\u00AE",
@@ -564,7 +564,7 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
   },
   "/veritatrack": {
     title: "VeritaTrack\u2122 | Laboratory QC Task Tracking & Sign-off | VeritaAssure\u00AE",
-    description: "Track recurring QC tasks, daily checks, maintenance, and quality sign-offs across your lab. Due-date alerts, full sign-off history, and Excel export. Included with VeritaAssure\u00AE Suite plans.",
+    description: "Track recurring regulatory tasks, maintenance, and quality sign-offs across your lab. Due-date alerts, full sign-off history, and Excel export. Included with VeritaAssure\u00AE Suite plans.",
   },
   "/veritatrack-app": {
     title: "VeritaTrack\u2122 App | QC Task Sign-off | VeritaAssure\u00AE",
@@ -592,11 +592,11 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
   },
   "/operations": {
     title: "Operations | VeritaAssure\u00AE Lab Productivity & CPRT",
-    description: "VeritaOps\u2122 tools for lab operations: cost-per-reportable-test analytics, productivity benchmarking, by-hour staffing, monthly tracking, and quality metrics.",
+    description: "The VeritaAssure\u00AE operations modules: cost-per-reportable-test analytics, productivity benchmarking, by-hour staffing, monthly tracking, and quality metrics.",
   },
   "/book/scoping-call": {
     title: "Book a Scoping Call | Veritas Lab Services",
-    description: "Schedule a 30-minute scoping call with Michael Veri to plan your VeritaAssure\u00AE rollout, accreditation timeline, or lab operations review.",
+    description: "Schedule a no-cost 50-minute scoping call with Michael Veri to confirm engagement fit, scope, and price before any paper changes hands.",
   },
   "/founding-labs": {
     title: "Founding Labs | VeritaAssure\u00AE Founding Lab Program",
@@ -612,7 +612,7 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
   },
   "/demo/qc": {
     title: "VeritaQC\u2122 Demo | Westgard QC + Monthly Attestation",
-    description: "Try the VeritaQC\u2122 demo. Westgard QC rules, monthly attestation, daily review queue, and director sign-off built for clinical laboratories.",
+    description: "See the VeritaQC\u2122 demo. Westgard QC rules, monthly attestation, daily review queue, and director sign-off built for clinical laboratories.",
   },
   "/resources/manual-logs-why-most-labs-should-stop": {
     title: "Manual Logs: Why Most Labs Should Stop | Veritas Lab Services",
@@ -620,7 +620,7 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
     jsonLd: articleJsonLd({
       headline: "Manual Logs: Why We Used Them, and Why Most Labs Should Stop",
       description: "Most clinical labs still use paper or Excel logs for QC, maintenance, and competency. Why that fails CLIA, TJC, and CAP audits, and what to do instead.",
-      articleBody: "Manual logs are one of those things in the laboratory that everyone uses, nobody questions, and almost nobody could explain the original reason for. They are a fix for a problem most modern labs no longer have. Manual logs exist to solve a memory problem from an era when computers were scarce in the lab. Every time a result moves from the bench to a log to the computer, a new error mode is introduced: the transcription event. The 24-hour transcribed-result review requirement exists specifically to catch the errors the log itself creates. In a modern lab with a computer on every counter, direct entry from the analyzer to the LIS eliminates both the memory risk and the transcription risk. Removing the log removes the administrative review burden that comes with it. Sections: Why the manual log exists; The hidden cost of the log; What changed; What direct entry buys you; When the log still earns its place.",
+      articleBody: "Manual logs are one of those things in the laboratory that everyone uses, nobody questions, and almost nobody could explain the original reason for. They are a fix for a problem most modern labs no longer have. Manual logs exist to solve a memory problem from an era when computers were scarce in the lab. Every time a result moves from the bench to a log to the computer, a new error mode is introduced: the transcription event. A review of transcribed results, often set at 24 hours by policy, exists specifically to catch the errors the log itself creates. In a modern lab with a computer on every counter, direct entry from the analyzer to the LIS eliminates both the memory risk and the transcription risk. Removing the log removes the administrative review burden that comes with it. Sections: Why the manual log exists; The hidden cost of the log; What changed; What direct entry buys you; When the log still earns its place.",
       path: "/resources/manual-logs-why-most-labs-should-stop",
       datePublished: "2026-05-13",
     }),
@@ -649,10 +649,10 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
   },
   "/resources/why-veritacheck-vs-legacy-verification": {
     title: "VeritaCheck\u00AE vs Legacy Verification | Veritas Lab Services",
-    description: "How VeritaCheck\u00AE improves on legacy EP15, EP9, calibration verification, and method comparison workflows. CLIA-compliant PDF output, director sign-off.",
+    description: "How VeritaCheck\u00AE improves on legacy EP15, EP09, calibration verification, and method comparison workflows. CFR-cited PDF output, director sign-off.",
     jsonLd: articleJsonLd({
       headline: "Why VeritaCheck\u00AE vs. Legacy Verification Software",
-      description: "How VeritaCheck\u00AE improves on legacy EP15, EP9, calibration verification, and method comparison workflows. CLIA-compliant PDF output, director sign-off.",
+      description: "How VeritaCheck\u00AE improves on legacy EP15, EP09, calibration verification, and method comparison workflows. CFR-cited PDF output, director sign-off.",
       articleBody: "A side-by-side comparison authored for lab directors evaluating a tool change. Four dimensions: cost, time-to-first-study, integration breadth, and compliance defensibility. Most clinical laboratories that run method verification studies today use a legacy desktop verification tool that has been the de facto standard for the better part of two decades. The tool works. It is also priced for an era before browser-based clinical software, structured to assume a single Windows workstation, and integrated only with itself. VeritaCheck\u00AE is a browser-based alternative that produces the same verification studies under the same CLSI EP standards, at a cost that is closer to a consumer SaaS subscription than a per-seat enterprise license, integrated into a broader VeritaAssure\u00AE platform that handles policy, mapping, competency, lab certificates, and cost-per-reportable-test in one login. This page lays out the four dimensions a lab director should compare before switching. Sections: When to switch.",
       path: "/resources/why-veritacheck-vs-legacy-verification",
       datePublished: "2026-06-14",
@@ -729,13 +729,13 @@ const methodComparisonHowTo: Record<string, unknown> = {
   "@context": "https://schema.org",
   "@type": "HowTo",
   name: "How to perform a method comparison study in a clinical laboratory",
-  description: "Running a correlation and method comparison study under CLSI EP09-A3 and interpreting the result against total allowable error.",
+  description: "Running a correlation and method comparison study under CLSI EP09c and interpreting the result against total allowable error.",
   step: [
     { "@type": "HowToStep", name: "Confirm a study is required", text: "Run a method comparison when placing a new analyzer into service, adding a new reagent system for an existing test, or demonstrating that two instruments running the same analyte produce equivalent results." },
     { "@type": "HowToStep", name: "Collect the specimens", text: "Use a minimum of 40 patient specimens spanning the full analytical measurement range, deliberately collected at low, mid, and high concentrations. Fresh patient samples reflect the actual matrix; QC materials do not." },
     { "@type": "HowToStep", name: "Set acceptance criteria in advance", text: "Define acceptable limits for slope, intercept, and bias before running the study, with bias at medical decision points within total allowable error." },
     { "@type": "HowToStep", name: "Run both methods and calculate the statistics", text: "Test each specimen on both methods and calculate slope, y-intercept, Pearson correlation coefficient, and bias at decision points using Deming or Passing-Bablok regression, which accounts for error in both methods." },
-    { "@type": "HowToStep", name: "Determine pass or fail and document", text: "Compare the results to the pre-defined criteria, record the determination for the inspection file, and have the medical director or designee review it. CLSI EP09-A3 is the reference protocol." },
+    { "@type": "HowToStep", name: "Determine pass or fail and document", text: "Compare the results to the pre-defined criteria, record the determination for the inspection file, and have the medical director or designee review it. CLSI EP09c is the reference protocol." },
   ],
 };
 const mockInspectionHowTo: Record<string, unknown> = {
