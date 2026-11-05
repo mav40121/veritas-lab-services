@@ -64,7 +64,7 @@ function GaugeBar({ ratio, low, high }: { ratio: number; low: number; high: numb
 }
 
 export default function ProductivityCalculatorPage() {
-  useSEO({ title: "VeritaBench\u2122 | Free Lab Productivity Scorecard | VeritaAssure\u00AE", description: "Free VeritaBench\u2122 productivity tool. Enter monthly billable volume and paid hours to score your lab against community hospital, large trauma center, and reference lab peer benchmarks." });
+  useSEO({ title: "VeritaBench\u2122 | Free Lab Productivity Scorecard | VeritaAssure\u00AE", description: "Free VeritaBench\u2122 productivity tool. Enter monthly billable tests and productive hours to score your lab against community hospital, large trauma center, and reference lab ranges." });
   const [productiveHours, setProductiveHours] = useState<string>("");
   const [billableTests, setBillableTests] = useState<string>("");
   const [facilityType, setFacilityType] = useState<string>("community");
@@ -89,7 +89,7 @@ export default function ProductivityCalculatorPage() {
     const band = benchmark.low && benchmark.high ? getBand(ratio, benchmark.low, benchmark.high) : null;
     const targetHours = midpoint ? midpoint * tests : null;
     const hoursDiff = targetHours ? effectiveHours - targetHours : null;
-    const fteDiff = hoursDiff ? hoursDiff / (2080 / 12 * 0.85) : null;
+    const fteDiff = hoursDiff ? hoursDiff / (2080 / 12 * ((estimateFromFTE ? productivePct : 85) / 100)) : null;
     const rate = parseFloat(hourlyRate) || 35;
     // hoursDiff > 0 means you use MORE hours than benchmark (overstaffed, savings opportunity)
     // hoursDiff < 0 means you use FEWER hours than benchmark (outperforming)
@@ -97,7 +97,7 @@ export default function ProductivityCalculatorPage() {
     const isOutperforming = hoursDiff != null && hoursDiff < 0;
 
     return { ratio, band, midpoint, targetHours, hoursDiff, fteDiff, annualSavings, isOutperforming };
-  }, [effectiveHours, tests, facilityType, hourlyRate]);
+  }, [effectiveHours, tests, facilityType, hourlyRate, estimateFromFTE, productivePct]);
 
   return (
     <div className="min-h-[80vh] py-12 px-4">
