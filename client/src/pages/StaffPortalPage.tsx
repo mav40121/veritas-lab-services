@@ -25,6 +25,8 @@ import { useLocation } from "wouter";
 import DOMPurify from "dompurify";
 import { QuizQuestionImage } from "@/components/QuizQuestionImage";
 import { StaffApprovalsView } from "@/components/StaffApprovalsView";
+import { WaivedSpecimenRows } from "@/components/WaivedSpecimenRows";
+import type { WaivedSpecimen } from "@shared/competencyWaivedSpecimens";
 import { clearAuth } from "@/lib/auth";
 import { useAuth } from "@/components/AuthContext";
 import { useLabRoute } from "@/hooks/useLabRoute";
@@ -933,6 +935,12 @@ function StaffPortalActivityView({
 // On sign, employee_acknowledged flips to 1 on competency_assessments
 // AND a row lands in staff_portal_competency_signoffs for non-
 // repudiation receipts.
+//
+// 2026-11-05: the per-lab implicit "Competency" record is a container, signed method by method, so it is no longer listed
+// for acknowledgement. In its place, own_record is a plain row that opens the person's own record, with how many methods
+// are signed. A program-based waived record takes the person's evidence and dates here too.
+interface PortalOwnRecord { employee_id: number; lab_id: number; methods_total: number; methods_signed: number }
+
 interface PortalCompetency {
   assessment_id: number;
   program_id: number;
@@ -980,6 +988,16 @@ interface PortalCompetencyDetail {
     el6_score: number | null;
     el6_date_taken: string | null;
   }>;
+  waived_items?: Array<{
+    id: number;
+    method_number: number;
+    method_name: string;
+    evidence: string;
+    date: string;
+    initials: string;
+    passed: boolean;
+    specimens?: WaivedSpecimen[];
+  }>;
 }
 
 function StaffPortalCompetenciesView({
@@ -991,9 +1009,11 @@ function StaffPortalCompetenciesView({
   onBack: () => void;
   onSignOut: () => void;
 }) {
+  const [, navigate] = useLocation();
   const [list, setList] = useState<PortalCompetency[] | null>(null);
   const [listError, setListError] = useState<string | null>(null);
   const [bridgeStatus, setBridgeStatus] = useState<string>("ok");
+  const [ownRecord, setOwnRecord] = useState<PortalOwnRecord | null>(null);
   const [active, setActive] = useState<PortalCompetency | null>(null);
   const [detail, setDetail] = useState<PortalCompetencyDetail | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
@@ -1003,12 +1023,17 @@ function StaffPortalCompetenciesView({
   // Employee self-edit of the factual DATA on their own unsigned assessment.
   // Keyed by item id -> the editable fields for that element.
   const [editItems, setEditItems] = useState<Record<number, any>>({});
+  // Program-based waived rows: item id -> evidence, date and (blind specimen testing) the specimen list.
+  const [editWaived, setEditWaived] = useState<Record<number, any>>({});
   const [savingData, setSavingData] = useState(false);
   const [dataMsg, setDataMsg] = useState<string | null>(null);
   const [dataError, setDataError] = useState<string | null>(null);
 
   function setItemField(itemId: number, field: string, value: string) {
     setEditItems((prev) => ({ ...prev, [itemId]: { ...(prev[itemId] || {}), [field]: value } }));
+  }
+  function setWaivedField(itemId: number, field: string, value: unknown) {
+    setEditWaived((prev) => ({ ...prev, [itemId]: { ...(prev[itemId] || {}), [field]: value } }));
   }
 
   async function saveMyData() {
@@ -1018,10 +1043,17 @@ function StaffPortalCompetenciesView({
     setDataMsg(null);
     try {
       const items = Object.entries(editItems).map(([id, fields]) => ({ id: Number(id), ...(fields as any) }));
+      // Data fields only. Pass and initials stay the evaluator's; the server keeps them whatever is sent.
+      const waived_items = (detail.waived_items || []).map((w) => {
+        const v = editWaived[w.id] || {};
+        return v.specimens
+          ? { id: w.id, specimens: (v.specimens as WaivedSpecimen[]).map((s) => ({ evidence: s.evidence, date: s.date })) }
+          : { id: w.id, evidence: v.evidence ?? "", date: v.date ?? "" };
+      });
       const r = await fetch(`/api/staff-portal-session/competencies/${active.assessment_id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ employee_id: employee.id, items }),
+        body: JSON.stringify({ employee_id: employee.id, items, waived_items }),
       });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
@@ -1046,6 +1078,7 @@ function StaffPortalCompetenciesView({
       .then((d) => {
         setList(d.competencies || []);
         setBridgeStatus(d.bridge_status || "ok");
+        setOwnRecord(d.own_record || null);
       })
       .catch((e: any) => setListError(e.message || "Could not load competencies"));
   }
@@ -1082,6 +1115,9 @@ function StaffPortalCompetenciesView({
           };
         }
         setEditItems(seed);
+        const waivedSeed: Record<number, any> = {};
+        for (const w of (d.waived_items || [])) waivedSeed[w.id] = { evidence: w.evidence, date: w.date, specimens: w.specimens };
+        setEditWaived(waivedSeed);
       })
       .catch((e: any) => setDetailError(e.message || "Could not load assessment"));
   }
@@ -1092,6 +1128,7 @@ function StaffPortalCompetenciesView({
     setDetailError(null);
     setSignError(null);
     setEditItems({});
+    setEditWaived({});
     setDataMsg(null);
     setDataError(null);
   }
@@ -1193,12 +1230,44 @@ function StaffPortalCompetenciesView({
             )}
           </div>
 
-          {detail && detail.competency_type === "technical" && (detail.items?.length ?? 0) > 0 && !detail.locked && !active.signed && !detail.already_acknowledged && (
+          {detail && ((detail.competency_type === "technical" && (detail.items?.length ?? 0) > 0) || (detail.waived_items?.length ?? 0) > 0) && !detail.locked && !active.signed && !detail.already_acknowledged && (
             <div className="border border-border rounded-lg bg-card p-4 mb-4" data-testid="sp-competency-myinfo">
               <div className="text-sm font-semibold mb-1">Add my information</div>
               <p className="text-xs text-muted-foreground mb-3">
-                Fill in the details from your own testing: the specimen you ran, dates, and evidence. Your evaluator sets the observer and the Pass result and gives the final approval.
+                {(detail.waived_items?.length ?? 0) > 0
+                  ? "Fill in the details from your own testing: the evidence and the date you performed each method. Your evaluator sets Pass and the initials and gives the final approval."
+                  : "Fill in the details from your own testing: the specimen you ran, dates, and evidence. Your evaluator sets the observer and the Pass result and gives the final approval."}
               </p>
+              {(detail.waived_items?.length ?? 0) > 0 && (
+                <div className="space-y-3" data-testid="sp-myinfo-waived">
+                  {(detail.waived_items || []).map((w) => {
+                    const v = editWaived[w.id] || {};
+                    const fieldCls = "w-full border border-border rounded p-1.5 text-sm bg-background";
+                    return (
+                      <div key={w.id} className="border border-border/60 rounded-md p-2" data-testid={`sp-myinfo-waived-${w.method_number}`}>
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <div className="text-xs font-medium">Method {w.method_number}: {w.method_name}</div>
+                          {!v.specimens && (
+                            <div className="text-[11px] text-muted-foreground shrink-0" data-testid={`sp-myinfo-waived-${w.method_number}-evaluator`}>
+                              {w.passed ? "Pass" : "Not yet passed"}{w.initials ? ` · ${w.initials}` : ""}
+                            </div>
+                          )}
+                        </div>
+                        {v.specimens ? (
+                          <WaivedSpecimenRows rows={v.specimens} onChange={(rows) => setWaivedField(w.id, "specimens", rows)} evaluatorLocked testId={`sp-myinfo-waived-${w.method_number}`} />
+                        ) : (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <div><label className="text-[11px] text-muted-foreground">Evidence</label>
+                              <input className={fieldCls} value={v.evidence ?? ""} onChange={(e) => setWaivedField(w.id, "evidence", e.target.value)} data-testid={`sp-myinfo-waived-${w.method_number}-evidence`} /></div>
+                            <div><label className="text-[11px] text-muted-foreground">Date performed</label>
+                              <input type="date" className={fieldCls} value={v.date ?? ""} onChange={(e) => setWaivedField(w.id, "date", e.target.value)} data-testid={`sp-myinfo-waived-${w.method_number}-date`} /></div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
               <div className="space-y-3">
                 {(() => {
                   const groups: Record<string, any[]> = {};
@@ -1339,7 +1408,7 @@ function StaffPortalCompetenciesView({
           )}
           {list === null ? (
             <div className="text-sm text-muted-foreground py-6 text-center">Loading assessments...</div>
-          ) : list.length === 0 ? (
+          ) : list.length === 0 && !ownRecord ? (
             <div className="text-sm text-muted-foreground py-6 text-center" data-testid="sp-competency-empty">
               {bridgeStatus === "no_competency_record"
                 ? "No VeritaComp™ record bridges to this staff entry yet. Ask the lab director to add a competency assessment for you."
@@ -1347,6 +1416,25 @@ function StaffPortalCompetenciesView({
             </div>
           ) : (
             <div className="divide-y divide-border">
+              {ownRecord && (
+                <button
+                  type="button"
+                  onClick={() => navigate(`/labs/${ownRecord.lab_id}/veritacomp-app/employee/${ownRecord.employee_id}`)}
+                  className="w-full text-left py-3 px-2 hover:bg-muted flex items-center justify-between gap-3"
+                  data-testid="sp-competency-own-record"
+                >
+                  <div className="flex-1">
+                    <div className="text-sm font-medium">My competency record</div>
+                    <div className="text-xs text-muted-foreground" data-testid="sp-competency-own-record-count">
+                      {ownRecord.methods_signed} of {ownRecord.methods_total} method{ownRecord.methods_total === 1 ? "" : "s"} signed
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      Enter your specimen IDs, dates and evidence here. Your evaluator signs off each method on its own.
+                    </div>
+                  </div>
+                  <span className="text-xs px-2 py-1 rounded border border-border text-muted-foreground shrink-0">Open</span>
+                </button>
+              )}
               {list.map((c) => (
                 <button
                   key={c.assessment_id}
