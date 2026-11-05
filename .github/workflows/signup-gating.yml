@@ -120,6 +120,10 @@ jobs:
       - name: Run manual method groups integration test
         # Michael 2026-11-04: manual tests can be grouped with each other, one complexity, never with an analyzer (BUG-043 protection).
         run: npm run test:manual-method-groups
+      - name: Run VeritaScan auto-completion integration test
+        # Site review 2026-11-05: a passing assessment marks only what its record supports (technical: item 60, with all six procedures shown;
+        # waived and non-technical: nothing), a draft or failed study marks nothing, the lab's own answer stays, and the admin audit is counts only.
+        run: npm run test:competency-scan-items
       - name: Run email verification integration test
         # Michael 2026-11-05: a public sign-up can't sign in or hold a seat until its owner confirms the address with the link and the
         # password they chose. An invitation's link proves the address it was mailed to. Sign-up again replaces an unconfirmed account.
