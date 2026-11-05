@@ -63,7 +63,7 @@ return (
             <div className="font-semibold text-sm text-primary mb-3">Key Takeaways</div>
             <ul className="space-y-2">
               {[
-                "Calibration verification must be performed at least every six months for all non-waived quantitative tests",
+                "Calibration verification must be performed at least every six months for applicable quantitative non-waived test systems, with exceptions CMS lists",
                 "Several events trigger out-of-cycle verification beyond the standard schedule",
                 "Documentation completeness is the most common inspection finding, not whether the verification was performed",
                 "VeritaCheck® automates calculations, applies acceptance criteria, and generates inspector-ready PDF reports",
@@ -82,15 +82,15 @@ return (
 
           <h2 className="font-serif text-2xl font-bold mt-10 mb-3">What the Regulation Requires</h2>
           <p>
-            Under 42 CFR 493.1255, laboratories must perform calibration verification at least every six months for each quantitative test system. Calibration verification confirms that your instrument continues to accurately measure across its entire reportable range, using materials with known concentrations that span from the low end to the high end of that range.
+            Under 42 CFR 493.1255, laboratories must perform calibration verification at least every six months for each applicable test system. Calibration verification confirms that your instrument continues to accurately measure across its entire reportable range, using materials with known concentrations that span from the low end to the high end of that range.
           </p>
           <p>
-            The requirement applies to all non-waived quantitative tests. Waived tests are exempt from this specific requirement, though good laboratory practice still supports periodic verification.
+            Calibration verification applies to quantitative nonwaived test systems, with exceptions CMS lists: factory or manufacturer calibrated instruments, tests measured in units of time such as PT and ACT, automated cell counters running two control levels each day, automated chemistry analyzers meeting the three-level control conditions, and systems calibrated at least every six months with three or more levels including low, mid, and high. Waived tests are exempt unless the manufacturer's instructions require it.
           </p>
 
           <h2 className="font-serif text-2xl font-bold mt-10 mb-3">When You Must Verify Beyond the Six-Month Cycle</h2>
           <p>
-            Several events trigger an out-of-cycle calibration verification requirement. These include: a complete change of reagent lot when the manufacturer specifies verification is needed, major instrument maintenance or repair that could affect performance, and any time QC results suggest the calibration may have shifted. Documenting the trigger event along with the verification results is important because inspectors often look for this connection.
+            Several events trigger an out-of-cycle calibration verification requirement. These include: a complete change of reagents, unless the laboratory can demonstrate that changing lots does not affect the reportable range and control values are not adversely affected; major preventive maintenance or replacement of critical parts that may influence test performance; and controls that show an unusual trend or shift or fall outside limits when other means of assessing and correcting them fail to identify and correct the problem. Documenting the trigger event along with the verification results is important because inspectors often look for this connection.
           </p>
 
           <Callout type="warning">
@@ -99,7 +99,7 @@ return (
 
           <h2 className="font-serif text-2xl font-bold mt-10 mb-3">What Analytes Require It</h2>
           <p>
-            Calibration verification is required for all quantitative non-waived tests you report to patients. This includes high-volume chemistry panels, hematology indices that carry a reportable range, coagulation assays, and immunoassay quantitative tests. If you are unsure whether a specific analyte requires it, the manufacturer's instructions for use are the starting reference. CLIA 42 CFR 493.1255 and CAP checklist item COM.30450 provide additional guidance.
+            Calibration verification applies to the quantitative non-waived tests you report to patients, apart from the exceptions above. This commonly includes high-volume chemistry panels and immunoassay quantitative tests. TJC does not require it for coagulation methods. If you are unsure whether a specific analyte requires it, the manufacturer's instructions for use are the starting reference. CLIA 42 CFR 493.1255 and CAP's discipline checklists (for example CHM.13400 and CHM.13600 in chemistry) provide additional guidance.
           </p>
 
           <h2 className="font-serif text-2xl font-bold mt-10 mb-3">What Your Documentation Must Include</h2>
@@ -128,7 +128,7 @@ return (
               <div>
                 <div className="font-semibold text-sm mb-1">VeritaCheck® automates calibration verification</div>
                 <p className="text-sm text-muted-foreground mb-3">
-                  Enter your data and VeritaCheck® handles every calculation: recovery percentages, pass/fail against CLIA TEa, and a signed PDF report with your CLIA number. Your first study is free.
+                  Enter your data and VeritaCheck® handles every calculation: recovery percentages, pass/fail against your adopted criterion, and a PDF report with your CLIA number, ready for director or designee signature. Your first two studies are free.
                 </p>
                 <Button asChild size="sm" className="bg-primary text-primary-foreground">
                   <Link href="/veritacheck">Run a Free Study <ChevronRight size={13} className="ml-1" /></Link>
@@ -157,7 +157,7 @@ return (
             <FlaskConical size={28} className="mx-auto mb-3 opacity-80" />
             <h3 className="font-serif text-xl font-bold mb-2">Ready to run your next study?</h3>
             <p className="text-primary-foreground/80 text-sm max-w-md mx-auto mb-5">
-              VeritaCheck® handles calibration verification with automated CLIA TEa lookup, all statistics calculated, and a signed PDF report generated in minutes.
+              VeritaCheck® handles calibration verification with automated CLIA TEa lookup, all statistics calculated, and a PDF report ready for director or designee signature, generated in minutes.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Button asChild size="lg" className="bg-white text-primary hover:bg-white/90 font-semibold">
@@ -174,7 +174,7 @@ return (
             <div className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3">References</div>
             <ol className="space-y-1.5 text-xs text-muted-foreground list-decimal list-inside">
               <li>Code of Federal Regulations. (2024). 42 CFR 493.1255 - Calibration and Calibration Verification. <a href="https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">ecfr.gov</a></li>
-              <li>College of American Pathologists. (2024). COM.30450 - Calibration Verification. CAP Accreditation Checklists.</li>
+              <li>College of American Pathologists. CHM.13400, CHM.13600. CAP Accreditation Checklists.</li>
               <li>Centers for Medicare & Medicaid Services. (2006). Calibration and Calibration Verification: CLIA Brochure. <a href="https://www.cms.gov/files/document/clia-brochure-calibration-and-calibration-verification-april-2006.pdf" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">cms.gov</a></li>
             </ol>
           </div>

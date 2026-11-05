@@ -27,7 +27,7 @@ function Callout({ children, type = "info" }: { children: React.ReactNode; type?
 }
 
 export default function ArticleMethodComparisonPage() {
-    useSEO({ title: "How to Perform a Method Comparison Study for CLIA | Veritas Lab Services", description: "Step-by-step guide to performing a CLIA-compliant method comparison study, including sample requirements, statistical analysis, and acceptable bias thresholds." });
+    useSEO({ title: "How to Perform a Method Comparison Study for CLIA | Veritas Lab Services", description: "Step-by-step guide to performing a method comparison study under CLIA, including sample requirements, statistical analysis, and acceptable bias thresholds." });
 return (
     <div className="min-h-screen bg-background">
 
@@ -44,7 +44,7 @@ return (
             How to Perform a Method Comparison Study in Your Clinical Laboratory
           </h1>
           <p className="text-muted-foreground text-lg leading-relaxed mb-6">
-            A method comparison study is required whenever your laboratory implements a new test method, adds a new instrument, or needs to demonstrate equivalence between two instruments running the same analyte.
+            CLIA requires a laboratory running the same test on different instruments or methods to evaluate the relationship between them twice a year. A method comparison is also a common way to verify accuracy when a new method goes in, and TJC requires one when a method is replaced.
           </p>
           <div className="flex items-center gap-5 text-xs text-muted-foreground border-t border-border pt-4">
             <span className="flex items-center gap-1.5"><User size={12} /> Michael Veri, Former Joint Commission Surveyor, CPHQ</span>
@@ -63,8 +63,8 @@ return (
             <div className="font-semibold text-sm text-primary mb-3">Key Takeaways</div>
             <ul className="space-y-2">
               {[
-                "Method comparison is required when placing a new analyzer into service, adding a new reagent system, or comparing two instruments",
-                "Use a minimum of 40 patient specimens spanning the full analytical measurement range",
+                "CLIA requires method comparison twice a year when two instruments or methods run the same test. It is also a common way to verify accuracy at introduction, and TJC requires one when a method is replaced",
+                "CLSI EP09c suggests about 40 patient specimens spanning the measuring range. CLIA and TJC set no minimum; the laboratory director decides",
                 "Define your acceptance criteria before running the study, not after",
                 "VeritaCheck® handles regression calculations and generates an inspector-ready report automatically",
               ].map(t => (
@@ -81,17 +81,17 @@ return (
         <div className="prose prose-slate dark:prose-invert max-w-none space-y-6 text-[15px] leading-relaxed">
 
           <p>
-            A method comparison study, also called a Correlation study, is required whenever your laboratory implements a new test method, adds a new instrument that performs an existing test, or needs to demonstrate equivalence between two instruments running the same analyte. Done correctly, it provides documented evidence that the new method produces results comparable to your existing method across the full analytical range. Done incorrectly or incompletely, it is a finding waiting to appear on your CAP or TJC inspection report.
+            A method comparison study, also called a Correlation study, is required twice a year when your laboratory runs the same test on different instruments or methods (42 CFR §493.1281(a)). It is also a common way to verify accuracy when a new test method goes in (§493.1253(b)(1)(i)(A)), and TJC requires one when a method is replaced. Done correctly, it provides documented evidence that the new method produces results comparable to your existing method across the full analytical range. Done incorrectly or incompletely, it is a finding waiting to appear on your CAP or TJC inspection report.
           </p>
 
           <h2 className="font-serif text-2xl font-bold mt-10 mb-3">When a Method Comparison Is Required</h2>
           <p>
-            The primary triggers are: placing a new analyzer into service, adding a new reagent system for an existing test, and whenever two instruments in your lab perform the same test and you need to demonstrate they produce equivalent results. CLSI EP09c is the reference protocol. CAP checklist items COM.30650 and COM.30700 address method comparison and correlation directly.
+            The primary triggers are: two instruments, methods, or testing sites running the same test, which CLIA requires you to evaluate twice a year (42 CFR §493.1281(a)); and placing a new analyzer or reagent system into service, where a comparison is a common way to verify accuracy (§493.1253(b)(1)(i)(A)). CLSI EP09c is the reference protocol. CAP checklist items COM.04250 and COM.04300 address comparability of instruments and methods directly.
           </p>
 
           <h2 className="font-serif text-2xl font-bold mt-10 mb-3">Specimen Requirements</h2>
           <p>
-            Use a minimum of 40 patient specimens that span the full analytical measurement range for the analyte. Fresh patient samples are strongly preferred over QC materials or commercial comparators because they reflect the actual matrix your methods will encounter in routine testing. Specimens should represent the full range from low to high, not clustered around the midpoint. Collecting samples at low, mid, and high concentrations deliberately will produce more meaningful statistics.
+            CLSI EP09c suggests about 40 patient specimens that span the full analytical measurement range for the analyte. CLIA and TJC set no minimum; the laboratory director decides. Fresh patient samples are strongly preferred over QC materials or commercial comparators because they reflect the actual matrix your methods will encounter in routine testing. Specimens should represent the full range from low to high, not clustered around the midpoint. Collecting samples at low, mid, and high concentrations deliberately will produce more meaningful statistics.
           </p>
 
           <Callout type="tip">
@@ -129,7 +129,7 @@ return (
               <div>
                 <div className="font-semibold text-sm mb-1">VeritaCheck® automates method comparison</div>
                 <p className="text-sm text-muted-foreground mb-3">
-                  VeritaCheck® handles the regression calculations automatically and generates an inspector-ready Correlation / Method Comparison report with your CLIA number and a complete statistical summary. Your first study is free.
+                  VeritaCheck® handles the regression calculations automatically and generates an inspector-ready Correlation / Method Comparison report with your CLIA number and a complete statistical summary. Your first two studies are free.
                 </p>
                 <Button asChild size="sm" className="bg-primary text-primary-foreground">
                   <Link href="/veritacheck">Run a Free Study <ChevronRight size={13} className="ml-1" /></Link>
@@ -158,7 +158,7 @@ return (
             <FlaskConical size={28} className="mx-auto mb-3 opacity-80" />
             <h3 className="font-serif text-xl font-bold mb-2">Ready to run your next study?</h3>
             <p className="text-primary-foreground/80 text-sm max-w-md mx-auto mb-5">
-              VeritaCheck® handles method comparison with Deming regression, Bland-Altman analysis, CLIA TEa evaluation, and a signed PDF report generated in minutes.
+              VeritaCheck® handles method comparison with Deming regression, Bland-Altman analysis, evaluation against your adopted criterion, and a PDF report ready for director or designee signature, generated in minutes.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Button asChild size="lg" className="bg-white text-primary hover:bg-white/90 font-semibold">
@@ -175,7 +175,7 @@ return (
             <div className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3">References</div>
             <ol className="space-y-1.5 text-xs text-muted-foreground list-decimal list-inside">
               <li>CLSI EP09c. (2018). Measurement Procedure Comparison and Bias Estimation Using Patient Samples. <a href="https://clsi.org/standards/products/method-evaluation/documents/ep09/" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">clsi.org</a></li>
-              <li>College of American Pathologists. (2024). COM.30650, COM.30700 - Method Comparison and Correlation. CAP Accreditation Checklists.</li>
+              <li>College of American Pathologists. COM.04250, COM.04300 - Comparability of Instruments and Methods. CAP Accreditation Checklists.</li>
               <li>Code of Federal Regulations. (2024). Title 42, Part 493: Laboratory Requirements. <a href="https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">ecfr.gov</a></li>
             </ol>
           </div>
