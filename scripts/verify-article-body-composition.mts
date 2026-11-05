@@ -109,12 +109,13 @@ console.log("\nCase 4: IDEMPOTENCY. The old short-circuit was silently doing thi
 console.log("\nCase 5: the live map. No authored body was discarded.");
 {
   // The four routes with no FAQ and no HowTo, whose authored bodies deletion would
-  // have gutted. Byte lengths are the ones measured live before this change.
+  // have gutted. Lengths re-measured 2026-11-05 after the site copy corrections
+  // to these authored bodies. A change here should match a deliberate copy edit.
   const FLOOR: Record<string, number> = {
-    "/resources/how-to-validate-veritacheck-clia": 923,
-    "/resources/why-veritacheck-vs-legacy-verification": 1003,
-    "/resources/laboratory-inventory-management": 1016,
-    "/resources/how-veritaassure-trains-lab-leaders": 1450,
+    "/resources/how-to-validate-veritacheck-clia": 1132,
+    "/resources/why-veritacheck-vs-legacy-verification": 1063,
+    "/resources/laboratory-inventory-management": 1133,
+    "/resources/how-veritaassure-trains-lab-leaders": 1475,
   };
   for (const [route, expected] of Object.entries(FLOOR)) {
     const meta: any = (seoMetadataMap as any)[route];
