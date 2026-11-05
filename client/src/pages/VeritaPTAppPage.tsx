@@ -322,7 +322,7 @@ export default function VeritaPTAppPage() {
         <FlaskConical size={48} className="mx-auto mb-4 text-[#006064]" />
         <h2 className="text-2xl font-bold mb-2">VeritaPT™</h2>
         <p className="text-muted-foreground mb-6">
-          PT coverage analysis is available on all paid plans. Upgrade to see your proficiency testing gaps and program recommendations.
+          PT coverage analysis is included in Clinic ($999/yr) and above. Upgrade to see your proficiency testing gaps and program recommendations.
         </p>
         <Button asChild className="bg-[#006064] hover:bg-[#004d50] text-white">
           <Link href={labRoute("/account/settings")}>Upgrade Plan</Link>

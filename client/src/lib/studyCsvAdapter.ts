@@ -102,7 +102,7 @@ function serializeRefInterval(dataPoints: RefIntervalDP[]): string {
   return toCsv(dataPoints as unknown as Record<string, unknown>[], cols);
 }
 
-// Carryover (CLSI EP10-A3) source-data CSV: sequence, material (L/H), value.
+// Carryover (CLSI EP10) source-data CSV: sequence, material (L/H), value.
 // Computed metrics (mean LL/LH, carryover, error limit) live in the PDF and on
 // the results page; the CSV is for the analyst's raw inputs only.
 type CarryoverDP = { sequence: number; sample_type: "L" | "H"; value: number | null };
