@@ -11,6 +11,9 @@
 // hire can be signed department by department (MethodSignOffPanel). The whole-record Sign & Complete is retired.
 // #91 (2026-10-12): an all-waived test system (glucose meter, urine dipstick reader)
 // shows the four waived methods (two required) instead of the six CLIA elements.
+// Staff self-entry (2026-11-05, Michael's 2026-09-27 rule): a Staff login on their OWN record (the server says so in
+// canEnterOwnData) fills in the factual data and saves through .../my-data. Observer, N/A, Pass, Acceptable, Element 4,
+// evaluator initials and sign-off stay disabled, and the server keeps them from the stored row whatever is sent.
 import { NaReasonPresets } from "@/components/competency/NaReasonPresets";
 import { useState, useEffect } from "react";
 import { Link, useParams } from "wouter";
@@ -33,6 +36,7 @@ import { ObserverInitialsField, type QualifiedObserver } from "@/components/Obse
 import { WaivedSpecimenRows } from "@/components/WaivedSpecimenRows";
 import { WAIVED_BLIND_METHOD, type WaivedSpecimen } from "@shared/competencyWaivedSpecimens";
 import { ELEMENT_NAMES, ELEMENT_FIELDS } from "@/lib/competencyElements";
+import { SELF_ELEMENT_FIELDS, isSelfEntryField, selfSampleRemovable } from "@shared/competencySelfEntry";
 
 interface ElementData { num: number; status: string; passed?: boolean; na?: boolean; naJustification?: string; [k: string]: any; }
 // Element 5 can record more than one blind / PT sample for a test system (Michael Q71 = 1). The edit buffer keeps them
@@ -49,6 +53,8 @@ interface TestSystem extends MethodSignState {
 interface EmployeeView {
   employee: { id: number; name: string; title: string | null; complexity: string; hireDate?: string | null };
   elementCount: number; latestAssessmentId: number | null; testSystems: TestSystem[];
+  // True only for a Staff login on their own record in a lab that can still take writes. Decided on the server.
+  canEnterOwnData?: boolean;
 }
 const TONE: Record<string, string> = {
   green: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
@@ -58,14 +64,20 @@ const TONE: Record<string, string> = {
   muted: "bg-muted text-muted-foreground",
 };
 
-function waivedBadge(status: string) {
+// A person's own entry with no Pass yet reads as a failure to the record ("data, not passed"), but they just typed it:
+// on their own record it says what is actually happening.
+const WaitingBadge = () => <Badge className="text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300" data-testid="waiting-for-evaluator">Waiting for evaluator</Badge>;
+
+function waivedBadge(status: string, selfEntry = false) {
   if (status === "pass") return <Badge className="text-[10px] bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">PASS</Badge>;
+  if (status === "fail" && selfEntry) return <WaitingBadge />;
   if (status === "fail") return <Badge className="text-[10px] bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">Not passed</Badge>;
   if (status === "incomplete") return <Badge className="text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">Needs date</Badge>;
   return <Badge className="text-[10px] bg-muted text-muted-foreground">Not used</Badge>;
 }
 
-function statusBadge(status: string) {
+function statusBadge(status: string, selfEntry = false) {
+  if (status === "fail" && selfEntry) return <WaitingBadge />;
   const cls = status === "pass" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
     : status === "fail" ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
     : status === "na" ? "bg-muted text-muted-foreground"
@@ -119,6 +131,11 @@ export default function VeritaCompEmployeePage() {
   const readyCount = testSystems.filter((t) => t.signable).length;
   const overdueCount = testSystems.filter((t) => t.overdue).length;
   const refresh = () => { if (url) qc.invalidateQueries({ queryKey: [url] }); };
+  // Staff self-entry: evaluator-owned controls are locked and only the listed data fields open up. Everyone else: readOnly decides, as before.
+  const selfEntry = !!data?.canEnterOwnData;
+  const evaluatorLocked = readOnly || selfEntry;
+  const dataLocked = readOnly && !selfEntry;
+  const fieldLocked = (element: number, key: string) => (selfEntry ? !isSelfEntryField(element, key) : readOnly);
 
   // Seed the edit buffer whenever the active test system (or fetched data) changes.
   useEffect(() => {
@@ -155,10 +172,21 @@ export default function VeritaCompEmployeePage() {
         return { num: el.num, ...f };
       });
       const waivedMethods = (current.waivedMethods || []).map((m) => ({ num: m.num, ...(wform[m.num] || {}) }));
-      const r = await fetch(`${API_BASE}/api/labs/${activeLabId}/competency/employee/${employeeId}/test-system/${current.instrumentId}`, {
+      const base = `${API_BASE}/api/labs/${activeLabId}/competency/employee/${employeeId}/test-system/${current.instrumentId}`;
+      // A self-entry sends the data fields only. The server would ignore anything else, so this is just honest about what is being saved.
+      const selfBody = current.waived
+        ? { waivedMethods: waivedMethods.map((m: any) => (m.num === WAIVED_BLIND_METHOD
+            ? { num: m.num, specimens: (m.specimens ?? [{ evidence: m.evidence ?? "", date: m.date ?? "" }]).map((s: any) => ({ evidence: s.evidence ?? "", date: s.date ?? "" })) }
+            : { num: m.num, evidence: m.evidence ?? "", date: m.date ?? "" })) }
+        : { elements: current.elements.filter((el) => SELF_ELEMENT_FIELDS[el.num] && !form[el.num]?.na).map((el) => {
+            const f = form[el.num] || {};
+            if (el.num === 5) return { num: 5, samples: samplesOf(f).map((s) => ({ sampleType: s.sampleType ?? "", sampleId: s.sampleId ?? "" })) };
+            return { num: el.num, ...Object.fromEntries(Object.keys(SELF_ELEMENT_FIELDS[el.num]).map((k) => [k, f[k] ?? ""])) };
+          }) };
+      const r = await fetch(selfEntry ? `${base}/my-data` : base, {
         method: "PUT",
         headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify(current.waived ? { waivedMethods } : { elements }),
+        body: JSON.stringify(selfEntry ? selfBody : current.waived ? { waivedMethods } : { elements }),
       });
       if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || `HTTP ${r.status}`); }
       return r.json();
@@ -266,8 +294,15 @@ export default function VeritaCompEmployeePage() {
                         <Badge className={`text-[10px] ${TONE[signoffSummary(current).tone]}`}>{signoffSummary(current).label}</Badge>
                       </div>
                       <div className="mb-3">
-                        <MethodSignOffPanel part="status" labId={activeLabId!} employeeId={employeeId} employeeName={data.employee.name} ts={current} readOnly={readOnly} onChanged={refresh} openSignoffId={linkedSignoff} />
+                        <MethodSignOffPanel part="status" labId={activeLabId!} employeeId={employeeId} employeeName={data.employee.name} ts={current} readOnly={evaluatorLocked} onChanged={refresh} openSignoffId={linkedSignoff} />
                       </div>
+                      {selfEntry && (
+                        <p className="text-xs mb-3 rounded px-2 py-1.5 bg-teal-50 dark:bg-teal-900/20 text-teal-900 dark:text-teal-200" data-testid="self-entry-note">
+                          {current.waived
+                            ? "You can fill in the evidence and date for each method you performed; your evaluator sets Pass, the evaluator initials and the final sign-off."
+                            : "You can fill in your specimen IDs, dates, evidence, sample IDs and quiz details; your evaluator sets the observer, Pass and the final sign-off."}
+                        </p>
+                      )}
                       {current.groupMembers?.length ? (
                         <p className="text-[11px] mb-2 rounded px-2 py-1.5 bg-teal-50 dark:bg-teal-900/20 text-teal-900 dark:text-teal-200" data-testid="group-note">
                           Grouped by the lab: {current.groupMembers.map((m) => m.name).join(" and ")} need no new or unique skills, so one competency covers {current.groupMembers.length === 2 ? "both" : "all of them"}.
@@ -287,35 +322,35 @@ export default function VeritaCompEmployeePage() {
                               const w = wform[m.num] || {};
                               return (
                                 <div key={m.num} className="border border-border rounded-lg p-3" data-testid={`waived-method-${m.num}`}>
-                                  <div className="flex items-center justify-between gap-2 mb-2">
+                                  <div className={`flex items-center justify-between gap-2 mb-2 ${selfEntry ? "flex-wrap sm:flex-nowrap" : ""}`}>
                                     <div className="text-xs font-semibold">Method {m.num}: {m.name}</div>
                                     <div className="flex items-center gap-3 shrink-0">
                                       {m.num !== WAIVED_BLIND_METHOD && (
                                       <label className="flex items-center gap-1 text-[11px] cursor-pointer">
-                                        <input type="checkbox" className="w-3.5 h-3.5" disabled={readOnly} checked={!!w.passed}
+                                        <input type="checkbox" className="w-3.5 h-3.5" disabled={evaluatorLocked} checked={!!w.passed}
                                           onChange={(e) => setWField(m.num, "passed", e.target.checked)} data-testid={`waived-method-${m.num}-passed`} /> Pass
                                       </label>
                                       )}
-                                      {waivedBadge(m.status)}
+                                      {waivedBadge(m.status, selfEntry)}
                                     </div>
                                   </div>
                                   {m.num === WAIVED_BLIND_METHOD ? (
-                                    <WaivedSpecimenRows rows={w.specimens ?? [{ evidence: w.evidence ?? "", date: w.date ?? "", initials: w.initials ?? "", passed: !!w.passed }]} onChange={(rows) => setWField(m.num, "specimens", rows)} disabled={readOnly} testId={`waived-method-${m.num}`} />
+                                    <WaivedSpecimenRows rows={w.specimens ?? [{ evidence: w.evidence ?? "", date: w.date ?? "", initials: w.initials ?? "", passed: !!w.passed }]} onChange={(rows) => setWField(m.num, "specimens", rows)} disabled={dataLocked} evaluatorLocked={selfEntry} testId={`waived-method-${m.num}`} />
                                   ) : (
                                   <div className="flex flex-wrap gap-2">
                                     <div className="flex-[2] min-w-[160px]">
                                       <label className="text-[10px] text-muted-foreground">Evidence</label>
-                                      <Input className="text-xs h-8" disabled={readOnly} value={w.evidence ?? ""}
+                                      <Input className="text-xs h-8" disabled={dataLocked} value={w.evidence ?? ""}
                                         onChange={(e) => setWField(m.num, "evidence", e.target.value)} data-testid={`waived-method-${m.num}-evidence`} />
                                     </div>
                                     <div className="flex-1 min-w-[120px]">
                                       <label className="text-[10px] text-muted-foreground">Date performed</label>
-                                      <Input type="date" className="text-xs h-8" disabled={readOnly} value={w.date ?? ""}
+                                      <Input type="date" className="text-xs h-8" disabled={dataLocked} value={w.date ?? ""}
                                         onChange={(e) => setWField(m.num, "date", e.target.value)} data-testid={`waived-method-${m.num}-date`} />
                                     </div>
                                     <div className="flex-1 min-w-[100px]">
                                       <label className="text-[10px] text-muted-foreground">Evaluator initials</label>
-                                      <Input className="text-xs h-8" disabled={readOnly} value={w.initials ?? ""}
+                                      <Input className="text-xs h-8" disabled={evaluatorLocked} value={w.initials ?? ""}
                                         onChange={(e) => setWField(m.num, "initials", e.target.value)} data-testid={`waived-method-${m.num}-initials`} />
                                     </div>
                                   </div>
@@ -327,7 +362,7 @@ export default function VeritaCompEmployeePage() {
                         </div>
                       ) : (
                       <>
-                      <p className="text-[11px] text-muted-foreground mb-3">Enter each element's data, or mark N/A with a reason. Every element needs data or N/A to be complete.</p>
+                      {!selfEntry && <p className="text-[11px] text-muted-foreground mb-3">Enter each element's data, or mark N/A with a reason. Every element needs data or N/A to be complete.</p>}
 
                       <div className="space-y-3">
                         {current.elements.map((el) => {
@@ -335,27 +370,27 @@ export default function VeritaCompEmployeePage() {
                           const fields = ELEMENT_FIELDS[el.num] || [];
                           return (
                             <div key={el.num} className="border border-border rounded-lg p-3" data-testid={`element-${el.num}`}>
-                              <div className="flex items-center justify-between gap-2 mb-2">
+                              <div className={`flex items-center justify-between gap-2 mb-2 ${selfEntry ? "flex-wrap sm:flex-nowrap" : ""}`}>
                                 <div className="text-xs font-semibold">Element {el.num}: {ELEMENT_NAMES[el.num]}</div>
                                 <div className="flex items-center gap-3 shrink-0">
                                   <label className="flex items-center gap-1 text-[11px] cursor-pointer">
-                                    <input type="checkbox" className="w-3.5 h-3.5" disabled={readOnly} checked={!!f.na}
-                                      onChange={(e) => setField(el.num, "na", e.target.checked)} /> N/A
+                                    <input type="checkbox" className="w-3.5 h-3.5" disabled={evaluatorLocked} checked={!!f.na}
+                                      onChange={(e) => setField(el.num, "na", e.target.checked)} data-testid={`element-${el.num}-na`} /> N/A
                                   </label>
                                   {!f.na && (
                                     <label className="flex items-center gap-1 text-[11px] cursor-pointer">
-                                      <input type="checkbox" className="w-3.5 h-3.5" disabled={readOnly} checked={!!f.passed}
-                                        onChange={(e) => setField(el.num, "passed", e.target.checked)} /> Pass
+                                      <input type="checkbox" className="w-3.5 h-3.5" disabled={evaluatorLocked} checked={!!f.passed}
+                                        onChange={(e) => setField(el.num, "passed", e.target.checked)} data-testid={`element-${el.num}-pass`} /> Pass
                                     </label>
                                   )}
-                                  {statusBadge(el.status)}
+                                  {statusBadge(el.status, selfEntry)}
                                 </div>
                               </div>
                               {f.na ? (
                                 <>
-                                  <Input placeholder="Justification for N/A (required)" className="text-xs h-8 border-amber-400" disabled={readOnly}
+                                  <Input placeholder="Justification for N/A (required)" className="text-xs h-8 border-amber-400" disabled={evaluatorLocked}
                                     value={f.naJustification || ""} onChange={(e) => setField(el.num, "naJustification", e.target.value)} data-testid={`element-${el.num}-na-just`} />
-                                  <NaReasonPresets element={el.num} disabled={readOnly} onPick={(r) => setField(el.num, "naJustification", r)} />
+                                  <NaReasonPresets element={el.num} disabled={evaluatorLocked} onPick={(r) => setField(el.num, "naJustification", r)} />
                                 </>
                               ) : el.num === 5 ? (
                                 <div className="space-y-2" data-testid="element-5-samples">
@@ -363,22 +398,22 @@ export default function VeritaCompEmployeePage() {
                                     <div key={i} className="flex flex-wrap items-end gap-2" data-testid={`element-5-sample-${i}`}>
                                       <div className="flex-1 min-w-[120px]">
                                         <label className="text-[10px] text-muted-foreground">{all.length > 1 ? `Sample ${i + 1} type` : "Sample type"}</label>
-                                        <Input className="text-xs h-8" disabled={readOnly} value={s.sampleType ?? ""}
+                                        <Input className="text-xs h-8" disabled={dataLocked} value={s.sampleType ?? ""}
                                           onChange={(e) => setSample(i, "sampleType", e.target.value)} data-testid={`element-5-sampleType-${i}`} />
                                       </div>
                                       <div className="flex-1 min-w-[120px]">
                                         <label className="text-[10px] text-muted-foreground">Sample ID</label>
-                                        <Input className="text-xs h-8" disabled={readOnly} value={s.sampleId ?? ""}
+                                        <Input className="text-xs h-8" disabled={dataLocked} value={s.sampleId ?? ""}
                                           onChange={(e) => setSample(i, "sampleId", e.target.value)} data-testid={`element-5-sampleId-${i}`} />
                                       </div>
                                       <div className="min-w-[90px]">
                                         <label className="text-[10px] text-muted-foreground">Acceptable</label>
                                         <label className="flex items-center gap-1 text-xs h-8">
-                                          <input type="checkbox" className="w-3.5 h-3.5" disabled={readOnly} checked={!!s.acceptable}
+                                          <input type="checkbox" className="w-3.5 h-3.5" disabled={evaluatorLocked} checked={!!s.acceptable}
                                             onChange={(e) => setSample(i, "acceptable", e.target.checked)} data-testid={`element-5-acceptable-${i}`} /> Yes
                                         </label>
                                       </div>
-                                      {!readOnly && all.length > 1 && (
+                                      {!dataLocked && all.length > 1 && (!selfEntry || selfSampleRemovable(all, i)) && (
                                         <Button type="button" variant="ghost" size="sm" className="h-8 px-2" aria-label={`Remove sample ${i + 1}`}
                                           onClick={() => setSamples((list) => list.filter((_, j) => j !== i))} data-testid={`element-5-remove-${i}`}>
                                           <X size={14} />
@@ -386,7 +421,7 @@ export default function VeritaCompEmployeePage() {
                                       )}
                                     </div>
                                   ))}
-                                  {!readOnly && (
+                                  {!dataLocked && (
                                     <Button type="button" variant="outline" size="sm" className="h-7 text-xs"
                                       onClick={() => setSamples((list) => [...list, { ...BLANK_SAMPLE }])} data-testid="element-5-add-sample">
                                       <Plus size={12} className="mr-1" /> Add another sample
@@ -400,14 +435,14 @@ export default function VeritaCompEmployeePage() {
                                       <label className="text-[10px] text-muted-foreground">{fld.label}</label>
                                       {fld.type === "observer" ? (
                                         <ObserverInitialsField value={f[fld.key] ?? ""} onChange={(v) => setField(el.num, fld.key, v)}
-                                          observers={observers || []} isLoading={observersLoading} disabled={readOnly}
+                                          observers={observers || []} isLoading={observersLoading} disabled={evaluatorLocked}
                                           triggerClassName="text-xs h-8" data-testid={`element-${el.num}-${fld.key}`} />
                                       ) : fld.type === "bool" ? (
                                         <label className="flex items-center gap-1 text-xs h-8">
-                                          <input type="checkbox" className="w-3.5 h-3.5" disabled={readOnly} checked={!!f[fld.key]} onChange={(e) => setField(el.num, fld.key, e.target.checked)} /> Yes
+                                          <input type="checkbox" className="w-3.5 h-3.5" disabled={evaluatorLocked} checked={!!f[fld.key]} onChange={(e) => setField(el.num, fld.key, e.target.checked)} /> Yes
                                         </label>
                                       ) : (
-                                        <Input type={fld.type === "number" ? "number" : fld.type === "date" ? "date" : "text"} className="text-xs h-8" disabled={readOnly}
+                                        <Input type={fld.type === "number" ? "number" : fld.type === "date" ? "date" : "text"} className="text-xs h-8" disabled={fieldLocked(el.num, fld.key)}
                                           value={f[fld.key] ?? ""} onChange={(e) => setField(el.num, fld.key, e.target.value)} data-testid={`element-${el.num}-${fld.key}`} />
                                       )}
                                     </div>
@@ -421,7 +456,7 @@ export default function VeritaCompEmployeePage() {
                       </>
                       )}
 
-                      {!readOnly && (
+                      {!dataLocked && (
                         <div className="flex justify-end mt-3">
                           <Button size="sm" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending} data-testid="save-test-system">
                             {saveMutation.isPending && <Loader2 className="animate-spin mr-1" size={12} />} Save {current.instrumentName}
@@ -429,7 +464,7 @@ export default function VeritaCompEmployeePage() {
                         </div>
                       )}
                       <div className="mt-3">
-                        <MethodSignOffPanel part="sign" labId={activeLabId!} employeeId={employeeId} employeeName={data.employee.name} ts={current} readOnly={readOnly} onChanged={refresh} />
+                        <MethodSignOffPanel part="sign" labId={activeLabId!} employeeId={employeeId} employeeName={data.employee.name} ts={current} readOnly={evaluatorLocked} onChanged={refresh} />
                       </div>
                     </>
                   )}
