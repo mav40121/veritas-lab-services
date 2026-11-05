@@ -176,7 +176,7 @@ const articles = [
   {
     slug: "clia-tea-what-lab-directors-dont-know",
     title: "CLIA Allowable Error (TEa): What It Is, Where to Find It, and Why Most Lab Directors Don't Know About It",
-    summary: "In 200+ inspections as a Joint Commission surveyor, most lab directors evaluated calibration verification against manufacturer criteria, unaware that the regulatory standard lives in federal law. Here's where to find it and how to use it.",
+    summary: "In 200+ inspections as a Joint Commission surveyor, I regularly saw labs evaluate calibration verification against manufacturer criteria, unaware that CLIA publishes a PT acceptance limit a medical director or designee may adopt. Here's where to find it and what it was written to do.",
     category: "Regulatory Compliance",
     readTime: "10 min read",
     author: "Michael Veri",
@@ -260,7 +260,7 @@ const tools = [
   {
     slug: "clia-tea-lookup",
     title: "CLIA TEa Lookup Tool",
-    description: `Search the complete 2025 CLIA acceptable performance criteria for ${teaData.length} analytes. Free, no login required.`,
+    description: `Search the CLIA proficiency testing acceptance limits for ${teaData.length} analytes, from 42 CFR Part 493, Subpart I. Free, no login required.`,
     badge: "Free Tool",
   },
 ];

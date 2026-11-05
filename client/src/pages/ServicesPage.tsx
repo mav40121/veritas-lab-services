@@ -480,7 +480,7 @@ export default function ServicesPage() {
                   <ul className="space-y-1.5">
                     {[
                       "Calibration Verification / Linearity, Correlation / Method Comparison, Precision Verification, Reagent Lot Verification",
-                      "Slope, intercept, R², proportional bias, CLIA TEa presets for major analytes",
+                      "Slope, intercept, R², proportional bias, CLIA PT limit presets for major analytes or a criterion your director adopts",
                       "Director-signable PDFs with the CFR citation in the narrative",
                       "Cloud-hosted, no install",
                       "Studies retained for the life of the account plus two years",
