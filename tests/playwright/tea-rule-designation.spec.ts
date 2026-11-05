@@ -4,7 +4,7 @@
 // fix (PR #762). The TEa content called the proficiency-testing acceptable-
 // performance rule the "2025 CLIA Final Rule" — a rule that does not exist by
 // that name. Corrected to its real designation: CMS-3355-F (effective July 11,
-// 2024; lab implementation January 1, 2025). NOTE this is NOT CMS-3326-F, the
+// 2024). NOTE this is NOT CMS-3326-F, the
 // separate personnel/histocompatibility/sanctions rule effective Dec 28, 2024.
 //
 // Asserts the corrected designation is present and the misnomer is gone on the
