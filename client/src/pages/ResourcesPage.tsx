@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { ChevronRight, Clock, FlaskConical, User, Search, Download, CheckCircle2, Tag } from "lucide-react";
+import { Shield, ChevronRight, Clock, FlaskConical, User, Search, Download, CheckCircle2, Tag } from "lucide-react";
 import { NewsletterSignup } from "@/components/NewsletterSignup";
 import { teaData } from "@/lib/cliaTeaData";
 
@@ -334,6 +334,13 @@ return (
           <div className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-4">Free Downloads</div>
           <div className="grid sm:grid-cols-2 gap-3">
             {[
+              {
+                title: "VeritaCheck® CLSI Compliance Matrix",
+                desc: "One-page landscape reference mapping the core VeritaCheck® verification study types to CLSI, CLIA (42 CFR), CAP, and TJC standards.",
+                url: "/api/downloads/clsi-compliance-matrix",
+                filename: "VeritaCheck_CLSI_Compliance_Matrix.pdf",
+                icon: Shield,
+              },
               {
                 title: "VeritaCheck® Software Validation Template",
                 desc: "4-page fillable template to document your laboratory's review and director approval of VeritaCheck® before placing it into service.",

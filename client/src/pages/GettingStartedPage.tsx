@@ -305,9 +305,25 @@ export default function GettingStartedPage() {
       <div className="mt-8 rounded-xl border border-primary/20 bg-card p-6">
         <div className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3">Free Downloads</div>
         <p className="text-sm text-muted-foreground mb-4">
-          Download this template to document your laboratory's review of VeritaCheck&#174; before placing it into service. No login required.
+          Download these to map the core VeritaCheck&#174; study types to their standards and to document your laboratory's review of VeritaCheck&#174; before placing it into service.
         </p>
         <div className="grid sm:grid-cols-2 gap-3">
+          <div className="rounded-lg border border-border bg-muted/30 p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Shield size={15} className="text-primary shrink-0" />
+              <span className="font-semibold text-sm">CLSI Compliance Matrix</span>
+            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed mb-3">
+              One-page reference mapping the core VeritaCheck&#174; verification study types to CLSI, CLIA, CAP, and TJC standards.
+            </p>
+            <a
+              href="/api/downloads/clsi-compliance-matrix"
+              download="VeritaCheck_CLSI_Compliance_Matrix.pdf"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:text-primary/80 transition-colors"
+            >
+              <Download size={13} /> Download PDF
+            </a>
+          </div>
           <div className="rounded-lg border border-border bg-muted/30 p-4">
             <div className="flex items-center gap-2 mb-2">
               <CheckCircle2 size={15} className="text-primary shrink-0" />
