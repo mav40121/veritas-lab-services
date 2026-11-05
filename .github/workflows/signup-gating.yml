@@ -117,6 +117,11 @@ jobs:
         # Cathy Thornton (RFGH) 2026-11-04: waived blind specimen testing takes several specimens and passes only when every one did; a non-technical
         # assessment can be a 6-Month or an Annual.
         run: npm run test:competency-waived-specimens
+      - name: Run Staff own competency data integration test
+        # Michael 2026-11-05 (Cathy Thornton, RFGH): a Staff login enters the factual data on their OWN record. The observer, Pass, N/A, Acceptable and
+        # Element 4 stay as stored whatever is sent; another person, another lab, a signed item and a locked record are out of reach; a lapsed lab takes no
+        # entry; the implicit container is never asked to be acknowledged.
+        run: npm run test:staff-own-competency-data
       - name: VeritaCheck recognizes every regulated analyte
         # Every row of the Subpart I table, direct, fallback and negative name cases, a lab's own criterion, and the frozen self-heal list.
         run: DB_PATH=.tmp-verify-reg.db npx tsx scripts/verify-regulated-analyte-labels.ts
