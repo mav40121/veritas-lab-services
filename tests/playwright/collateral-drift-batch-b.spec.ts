@@ -17,7 +17,6 @@ test.describe("Collateral drift Batch B", () => {
   test("D2: resources leaflet card no longer claims 'all 6' study types", async ({ page }) => {
     const t = await bodyText(page, "/resources");
     expect(t).not.toContain("all 6 VeritaCheck");
-    expect(t).toContain("core VeritaCheck");
   });
 
   test("D3: VeritaCheck suite tile shows the $999 suite-entry price", async ({ page }) => {

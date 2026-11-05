@@ -13,7 +13,7 @@ const BASE = process.env.PW_BASE || "https://www.veritaslabservices.com";
 test.describe("Homepage: sample-report gallery", () => {
   test("section renders with downloadable sample reports", async ({ page }) => {
     await page.goto(`${BASE}/`, { waitUntil: "networkidle" });
-    await expect(page.getByRole("heading", { name: "See a real signed report" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "See a sample report" })).toBeVisible();
     const buttons = page.getByRole("button", { name: /Download sample PDF/ });
     expect(await buttons.count()).toBeGreaterThanOrEqual(7);
     // The two most common studies were added 2026-09-29 (previously absent).
