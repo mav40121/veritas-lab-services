@@ -15,15 +15,15 @@ const DEMO_MAILTO = "mailto:info@veritaslabservices.com?subject=Hospital%20inven
 
 const features = [
   { icon: ArrowLeftRight, title: "Multi-location transfers", desc: "Move stock from your warehouse down to a stockroom, back up, or across sites. Every move is logged with a full chain of custody." },
-  { icon: ScanLine, title: "Barcode scan to count", desc: "Scan a shelf on any phone. Counts update live, in the unit you stock in, with who and when on every entry." },
-  { icon: RefreshCw, title: "Par-driven replenishment", desc: "When a stockroom dips below par, restock from your own warehouse first. Only order from the vendor when the warehouse runs dry." },
+  { icon: ScanLine, title: "Barcode scan to count", desc: "Scan a shelf with a phone's browser camera. Counts update live, in the unit you stock in, with who and when on every entry." },
+  { icon: RefreshCw, title: "Par-driven replenishment", desc: "See low stock at every location, and move stock from your warehouse in a reviewed batch before you order from the vendor." },
   { icon: CalendarClock, title: "Lot, expiration, and audit", desc: "Track lots and expiry, catch waste before it happens, and hand an inspector a clean, defensible record." },
 ];
 
 const steps = [
   { n: "1", title: "Scan", desc: "Barcode your shelves and count once." },
   { n: "2", title: "Track", desc: "Burn rate and par level for every location." },
-  { n: "3", title: "Replenish", desc: "Transfer or order, and never run out." },
+  { n: "3", title: "Replenish", desc: "Transfer or order before you run out." },
 ];
 
 export default function HospitalInventoryPage() {
@@ -43,7 +43,7 @@ export default function HospitalInventoryPage() {
             Hospital inventory control, without the six-figure system
           </h1>
           <p className="text-lg text-muted-foreground mb-8 leading-relaxed max-w-2xl mx-auto">
-            Track every supply across your warehouse and stockrooms, scan to count on any phone, and stop running out or expiring stock. Built for the facilities the big systems price out.
+            Track every supply across your warehouse and stockrooms, scan to count from a phone browser, and stop running out or expiring stock. Built for the facilities the big systems price out.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
@@ -56,7 +56,7 @@ export default function HospitalInventoryPage() {
           <div className="flex gap-5 justify-center flex-wrap mt-7 text-sm text-muted-foreground">
             <span className="inline-flex items-center gap-1.5"><ShieldCheck size={15} className="text-primary" /> No PHI, ever</span>
             <span className="inline-flex items-center gap-1.5"><ClipboardCheck size={15} className="text-primary" /> Surveyor-ready audit trail</span>
-            <span className="inline-flex items-center gap-1.5"><Smartphone size={15} className="text-primary" /> Works on any phone</span>
+            <span className="inline-flex items-center gap-1.5"><Smartphone size={15} className="text-primary" /> Scan with a phone's browser camera</span>
           </div>
         </div>
       </section>

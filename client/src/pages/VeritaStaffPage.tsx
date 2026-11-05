@@ -12,11 +12,11 @@ const FEATURES = [
   "CLIA role assignments: LD, CC, TC, TS, GS, TP with specialty coverage",
   "CMS 209 Laboratory Personnel Report auto-generation (pre-filled PDF)",
   "Competency timeline engine: Initial, 6-month, 1st Annual, Annual milestones",
-  "TJC, CAP, COLA, CLIA-only, and NYS timeline rule sets built in",
+  "One CLIA timeline for every lab, with TJC's late tolerances and New York State's hire-anchored schedule built in",
   "TC/TS specialty mapping with all 17 CMS specialty categories",
   "VeritaMap\u00AE integration: import departments and suggest TC/TS specialties",
   "High and moderate complexity role logic with proper separation",
-  "Early completion recalculates due dates from actual completion date",
+  "Due dates follow the competency actually recorded; the 1st Annual stays 12 months from the initial",
   "Written by a former TJC laboratory surveyor with 200+ facility inspections",
 ];
 
@@ -36,7 +36,7 @@ const FEATURE_CARDS = [
   {
     icon: UserCheck,
     title: "Competency Timeline Tracking",
-    desc: "Calculate and track competency milestones: Initial (TJC/CAP), 6-month, 1st Annual, and Annual. Rules adjust automatically based on your accreditor.",
+    desc: "Calculate and track competency milestones: Initial, 6-month, 1st Annual, and Annual, with TJC's late tolerances and New York State's schedule where they apply.",
     color: "text-amber-600 bg-amber-500/10 border-amber-500/20",
   },
 ];
@@ -54,7 +54,6 @@ return (
             <div>
               <div className="flex items-center gap-2 mb-4">
                 <Building2 size={20} className="text-primary" />
-                <Badge className="bg-primary/10 text-primary border-0">New Product</Badge>
                 <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 border">Now Live</Badge>
               </div>
               <h1 className="font-serif text-5xl font-bold mb-3 leading-tight">VeritaStaff{"™"}</h1>
@@ -67,7 +66,7 @@ return (
                 </p>
               </div>
               <p className="text-muted-foreground leading-relaxed mb-6">
-                Every CLIA-certified laboratory must maintain accurate personnel records and demonstrate that staff qualifications match their assigned roles and testing responsibilities. Whether your lab holds a certificate of compliance, accreditation (TJC, CAP, COLA), or operates under CLIA only, VeritaStaff{"™"} manages the complete lifecycle: from hire-date onboarding through competency milestone tracking to CMS 209 report generation. Built by a former TJC laboratory surveyor with 200+ facility inspections.
+                Every laboratory performing nonwaived testing must maintain accurate personnel records and demonstrate that staff qualifications match their assigned roles and testing responsibilities. Whether your lab holds a certificate of compliance, accreditation (TJC, CAP, COLA), or operates under CLIA only, VeritaStaff{"™"} manages the complete lifecycle: from hire-date onboarding through competency milestone tracking to CMS 209 report generation. Built by a former TJC laboratory surveyor with 200+ facility inspections.
               </p>
 
               {!isLoggedIn && (
@@ -150,11 +149,11 @@ return (
           <div className="max-w-5xl mx-auto">
             <h2 className="font-serif text-3xl font-bold text-center mb-3">CLIA Role Assignments</h2>
             <p className="text-muted-foreground text-center max-w-2xl mx-auto mb-8">
-              VeritaStaff{"™"} enforces correct role assignment rules so your CMS 209 is always accurate.
+              VeritaStaff{"™"} flags any TC or TS without a specialty before you generate the CMS 209.
             </p>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {[
-                { code: "LD", name: "Laboratory Director", desc: "Overall responsibility. Not listed as CC, TC, TS, or GS." },
+                { code: "LD", name: "Laboratory Director", desc: "Overall responsibility. If qualified, may also perform CC, TC, TS, or GS duties, or delegate them." },
                 { code: "CC", name: "Clinical Consultant", desc: "Provides clinical consultation. Delegated by LD." },
                 { code: "TC", name: "Technical Consultant", desc: "Moderate complexity oversight. Specialty number required." },
                 { code: "TS", name: "Technical Supervisor", desc: "High complexity oversight. Specialty number required." },
@@ -202,7 +201,7 @@ return (
               {[
                 { step: "1", title: "Set Up Your Lab", desc: "Enter your CLIA number, accreditation body, and testing complexity. Optionally import departments from VeritaMap\u00AE." },
                 { step: "2", title: "Add Staff", desc: "Enter each employee with credentials, qualifications, and hire date. Assign CLIA roles and specialties." },
-                { step: "3", title: "Track Competency", desc: "VeritaStaff\u2122 calculates due dates based on your accreditor's rules. Mark completions and the timeline auto-updates." },
+                { step: "3", title: "Track Competency", desc: "VeritaStaff\u2122 calculates due dates on the CLIA timeline, with TJC's late tolerances and New York State's schedule where they apply. Mark completions and the timeline updates." },
                 { step: "4", title: "Generate CMS 209", desc: "Click one button to produce a pre-filled CMS 209 PDF, ready for the laboratory director's signature." },
               ].map((s) => (
                 <div key={s.step} className="text-center">

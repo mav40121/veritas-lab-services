@@ -8,25 +8,24 @@ import { useAuth } from "@/components/AuthContext";
 import { useLabRoute } from "@/hooks/useLabRoute";
 
 const FEATURES = [
-  "Track PT enrollment by analyte, specialty, and PT provider",
+  "Read your VeritaMap® test menu and see which analytes have required PT gaps, recommended programs, or current coverage",
+  "Track PT enrollment by program and PT provider",
   "Enter survey results with peer comparison and automatic SDI calculation",
-  "Corrective action documentation with root cause, action taken, and verification",
-  "Surveyor-ready PDF report with full PT history by analyte",
-  "Integrates with VeritaScan® to auto-complete PT compliance checklist items",
+  "Open a VeritaResponse™ PT failure finding for root cause, corrective action, preventive action, and a monitoring plan",
 ];
 
 const HOW_IT_WORKS = [
-  { step: "1", title: "Add Enrollments", desc: "Record each analyte you are enrolled for, along with the PT provider, program code, and specialty." },
-  { step: "2", title: "Enter Survey Results", desc: "Log your result for each PT event along with peer mean, peer SD, and acceptable range. SDI is calculated automatically." },
-  { step: "3", title: "Close the Loop on Failures", desc: "For any unacceptable result, document the root cause, corrective action, and verification. Required by CLIA 42 CFR 493.801 and CAP checklist requirements." },
-  { step: "4", title: "Generate Your Report", desc: "Download a surveyor-ready PDF covering all enrollments, events, and corrective actions. Have it ready before the survey window opens." },
+  { step: "1", title: "Add Enrollments", desc: "Record each PT program you are enrolled in, with its provider, program code, and category." },
+  { step: "2", title: "Enter Survey Results", desc: "Log your result for each PT event along with peer mean and peer SD, and mark it pass or fail. SDI is calculated automatically." },
+  { step: "3", title: "Close the Loop on Failures", desc: "For any unacceptable result, open a VeritaResponse™ PT failure finding for root cause and corrective action. Remedial action is required by CLIA (42 CFR Part 493 Subpart H) and by CAP checklist requirements." },
+  { step: "4", title: "See Your Coverage", desc: "VeritaPT™ checks your VeritaMap® test menu against your enrollments and shows required PT gaps, recommended programs, and what is covered." },
 ];
 
 export default function VeritaPTPage() {
   const labRoute = useLabRoute();
   const { isLoggedIn } = useAuth();
 
-    useSEO({ title: "VeritaPT™ | Proficiency Testing Gap Analyzer for Clinical Labs", description: "Identify PT coverage gaps in your laboratory test menu. Ensure every analyte has a proficiency testing program and stay compliant with CLIA PT requirements." });
+    useSEO({ title: "VeritaPT™ | Proficiency Testing Gap Analyzer for Clinical Labs", description: "Identify PT coverage gaps in your laboratory test menu. See which analytes need a PT program or alternative assessment." });
 return (
     <div>
       {/* Hero */}
@@ -41,7 +40,7 @@ return (
               </div>
               <h1 className="font-serif text-5xl font-bold mb-3 leading-tight">VeritaPT™</h1>
               <p className="text-xl text-muted-foreground font-medium mb-5">
-                Proficiency Testing Tracking
+                Proficiency Testing Coverage and Tracking
               </p>
               <div className="border-l-4 border-primary pl-4 mb-6">
                 <p className="text-base leading-relaxed italic text-foreground/90">
@@ -49,7 +48,7 @@ return (
                 </p>
               </div>
               <p className="text-muted-foreground leading-relaxed mb-8">
-                Track PT enrollment, survey results, and corrective actions by analyte. Monitor unacceptable results, close the loop with documented corrective actions, and generate surveyor-ready reports in seconds. Built by a former TJC laboratory surveyor with 200+ facility inspections.
+                See which analytes on your test menu need PT, and track enrollments and survey results. Monitor unacceptable results and close the loop with a VeritaResponse™ finding. Built by a former TJC laboratory surveyor with 200+ facility inspections.
               </p>
               <div className="flex flex-wrap gap-3">
                 {isLoggedIn ? (
@@ -71,14 +70,14 @@ return (
                 <CardContent className="p-6">
                   <div className="flex items-center gap-2 mb-4">
                     <ClipboardList size={18} className="text-primary" />
-                    <span className="font-semibold text-sm">PT Summary</span>
+                    <span className="font-semibold text-sm">Sample PT Coverage</span>
                   </div>
                   <div className="grid grid-cols-2 gap-3 mb-4">
                     {[
-                      { label: "Active Enrollments", value: "12" },
-                      { label: "Events This Year", value: "24" },
-                      { label: "Pass Rate", value: "95.8%" },
-                      { label: "Open CAs", value: "1" },
+                      { label: "Required PT Gaps", value: "1" },
+                      { label: "Required PT Covered", value: "24" },
+                      { label: "Recommended (Not Enrolled)", value: "3" },
+                      { label: "Waived Tests", value: "4" },
                     ].map((item) => (
                       <div key={item.label} className="bg-muted/50 rounded-lg p-3 text-center">
                         <div className="text-2xl font-bold text-primary">{item.value}</div>
@@ -88,9 +87,9 @@ return (
                   </div>
                   <div className="space-y-2">
                     {[
-                      { analyte: "Glucose", event: "2026-B", result: "PASS" },
-                      { analyte: "Hemoglobin A1c", event: "2026-A", result: "PASS" },
-                      { analyte: "PT/INR", event: "2026-A", result: "PASS" },
+                      { analyte: "Glucose", event: "Routine Chemistry", result: "Enrolled" },
+                      { analyte: "Hemoglobin A1c", event: "Routine Chemistry", result: "Enrolled" },
+                      { analyte: "PT/INR", event: "Hematology", result: "Enrolled" },
                     ].map((row) => (
                       <div key={row.analyte} className="flex items-center justify-between text-sm p-2 rounded bg-muted/30">
                         <span className="font-medium">{row.analyte}</span>
@@ -113,7 +112,7 @@ return (
         <div className="container-default py-14">
           <div className="max-w-3xl mx-auto">
             <h2 className="font-serif text-3xl font-bold mb-2 text-center">What VeritaPT™ Tracks</h2>
-            <p className="text-muted-foreground text-center mb-10">Everything an inspector expects to find, organized and retrievable in seconds.</p>
+            <p className="text-muted-foreground text-center mb-10">Your PT coverage, enrollments and events, in one place.</p>
             <div className="grid sm:grid-cols-2 gap-4">
               {FEATURES.map((f) => (
                 <div key={f} className="flex items-start gap-3 p-4 rounded-lg border border-border bg-card">
@@ -131,7 +130,7 @@ return (
         <div className="container-default py-14">
           <div className="max-w-3xl mx-auto">
             <h2 className="font-serif text-3xl font-bold mb-2 text-center">How It Works</h2>
-            <p className="text-muted-foreground text-center mb-10">Four steps from enrollment to surveyor-ready report.</p>
+            <p className="text-muted-foreground text-center mb-10">Four steps from enrollment to a clear view of your PT coverage.</p>
             <div className="grid sm:grid-cols-2 gap-6">
               {HOW_IT_WORKS.map((item) => (
                 <div key={item.step} className="flex gap-4">
@@ -172,7 +171,7 @@ return (
             <div className="mt-6 p-4 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 flex items-start gap-3">
               <AlertTriangle size={16} className="text-amber-600 shrink-0 mt-0.5" />
               <p className="text-sm text-amber-800 dark:text-amber-300">
-                Unacceptable PT results require documented corrective action including root cause analysis. VeritaPT™ provides the documentation structure. Final review and approval must be completed by the laboratory director or designee.
+                Unacceptable PT results require documented remedial action. A VeritaResponse™ finding provides the documentation structure, including root cause. Final review and approval must be completed by the laboratory director or designee.
               </p>
             </div>
           </div>
@@ -184,7 +183,7 @@ return (
         <div className="container-default py-14 text-center">
           <h2 className="font-serif text-3xl font-bold mb-3">Ready to track PT the right way?</h2>
           <p className="text-muted-foreground max-w-xl mx-auto mb-8">
-            VeritaPT™ is included in your VeritaAssure® subscription. Sign in to get started.
+            VeritaPT™ is included in Clinic ($999/yr) and above. Sign in to get started.
           </p>
           {isLoggedIn ? (
             <Button asChild size="lg">

@@ -388,7 +388,7 @@ export default function VeritaPacePage() {
                 </p>
                 <div className="border-l-4 border-primary pl-4 mb-6">
                   <p className="text-base leading-relaxed italic text-foreground/90">
-                    "Know exactly when you're overstaffed, understaffed, and how you track against published facility-type benchmarks."
+                    See how your monthly productivity tracks against facility-type ranges.
                   </p>
                 </div>
       <ModuleHowToCard
@@ -411,7 +411,7 @@ export default function VeritaPacePage() {
                   <li className="flex items-start gap-2"><TrendingUp size={16} className="text-primary mt-0.5 shrink-0" /><span>Monthly productivity tracking with year-over-year trend analysis</span></li>
                   <li className="flex items-start gap-2"><Award size={16} className="text-primary mt-0.5 shrink-0" /><span>Productive hours per billable test vs facility-type reference ranges</span></li>
                   <li className="flex items-start gap-2"><Users size={16} className="text-primary mt-0.5 shrink-0" /><span>FTE counts and overtime ratio calculations from payroll data</span></li>
-                  <li className="flex items-start gap-2"><Clock size={16} className="text-primary mt-0.5 shrink-0" /><span>By-hour staffing analyzer to identify overstaffed and understaffed periods</span></li>
+                  <li className="flex items-start gap-2"><Clock size={16} className="text-primary mt-0.5 shrink-0" /><span>Pairs with VeritaShift{"™"} by-hour staffing analysis to identify overstaffed and understaffed periods</span></li>
                 </ul>
 
                 {/* Pricing */}

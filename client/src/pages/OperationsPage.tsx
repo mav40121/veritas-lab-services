@@ -15,7 +15,7 @@ const MODULES = [
     label: "VeritaBench™",
     desc: "Free quick benchmarking tool",
     detail:
-      "One-page benchmarking against published productivity targets. Free. No sign-in. Designed for a quick pulse check on whether your lab's billable tests per paid hour fall inside, above, or below the published benchmark.",
+      "One-page benchmarking against published productivity targets. Free. No sign-in. Designed for a quick pulse check on whether your lab's productive hours per billable test fall inside, above, or below the benchmark for your facility type.",
     badge: "Live",
     badgeColor: "emerald",
     icon: BarChart3,
@@ -26,7 +26,7 @@ const MODULES = [
     label: "VeritaPace™",
     desc: "Monthly data and trends",
     detail:
-      "Month-over-month productivity tracking with billable tests, paid hours, FTE, overtime, and trend lines. Built for lab managers who report up to the C-suite on operational performance.",
+      "Month-over-month productivity tracking with billable tests, productive hours, FTE, overtime, and trend lines. Built for lab managers who report up to the C-suite on operational performance.",
     badge: "Live",
     badgeColor: "emerald",
     icon: TrendingUp,
@@ -48,7 +48,7 @@ const MODULES = [
     label: "VeritaQA™",
     desc: "Department quality metrics",
     detail:
-      "Performance Improvement dashboard for department-level quality indicators. Track metric trends, targets, and corrective actions. Designed to satisfy PI requirements without the spreadsheet burden.",
+      "Performance Improvement dashboard for department-level quality indicators. Track metric trends, targets, and corrective actions. Designed to support your PI program without the spreadsheet burden.",
     badge: "Live",
     badgeColor: "emerald",
     icon: Activity,

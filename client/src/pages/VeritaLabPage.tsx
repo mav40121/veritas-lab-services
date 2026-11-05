@@ -28,9 +28,9 @@ const FEATURE_CARDS = [
 ];
 
 const FEATURES = [
-  "CLIA certificate auto-populated from your account CLIA lookup data",
-  "Track CAP accreditation, TJC accreditation, state licenses, and lab director licenses",
-  "Configurable expiration reminders: 9 months, 6 months, 3 months, 30 days, and at expiration",
+  "CLIA certificate auto-populated from the CLIA number on your account",
+  "Track CAP accreditation, TJC accreditation, ISO 15189, state licenses, lab director licenses, and vendor agreements, with COLA and others under Other",
+  "Automatic expiration reminders: 9 months, 6 months, 3 months, 30 days, and at expiration",
   "Reminders delivered via email to the account owner",
   "Upload and archive actual certificate PDFs, scanned images, and supporting documents",
   "Color-coded status badges: expired, expiring soon, current, no date entered",
@@ -52,7 +52,6 @@ return (
             <div>
               <div className="flex items-center gap-2 mb-4">
                 <Award size={20} className="text-primary" />
-                <Badge className="bg-primary/10 text-primary border-0">New Product</Badge>
                 <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 border">Now Live</Badge>
               </div>
               <h1 className="font-serif text-5xl font-bold mb-3 leading-tight">VeritaLab{"™"}</h1>
@@ -71,7 +70,7 @@ return (
               <div className="flex flex-wrap gap-3 mb-8">
                 <div className="bg-card border border-border rounded-lg px-4 py-2.5 text-center">
                   <div className="text-2xl font-bold text-primary">Included</div>
-                  <div className="text-xs text-muted-foreground">in all VeritaAssure® plans</div>
+                  <div className="text-xs text-muted-foreground">in Clinic ($999/yr) and above</div>
                 </div>
               </div>
 
@@ -164,7 +163,7 @@ return (
             <h2 className="font-serif text-3xl font-bold text-center mb-10">How It Works</h2>
             <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
               {[
-                { step: "1", title: "Auto-Detect CLIA", desc: "Your CLIA certificate is auto-populated from the CLIA lookup you completed at signup. Just add your expiration date." },
+                { step: "1", title: "Auto-Detect CLIA", desc: "Your CLIA certificate is auto-populated from the CLIA number on your account. Just add your expiration date." },
                 { step: "2", title: "Add Certificates", desc: "Add CAP, TJC, state licenses, lab director credentials, and any other certificates your lab holds." },
                 { step: "3", title: "Get Reminders", desc: "Automated email reminders fire at 9 months, 6 months, 3 months, 30 days, and on the expiration date." },
                 { step: "4", title: "Archive Documents", desc: "Upload your actual certificate PDFs and scanned images. Retrieve them instantly when a surveyor asks." },
