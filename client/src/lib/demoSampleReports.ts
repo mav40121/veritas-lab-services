@@ -491,7 +491,7 @@ export const DEMO_SAMPLES: DemoSample[] = [
   {
     key: "simple-precision",
     label: "Simple Precision Verification",
-    blurb: "Aggregate within-day precision (CV) per level. Verifies the manufacturer's precision claim for an FDA-cleared, unmodified assay.",
+    blurb: "Aggregate within-day precision (CV) per level, shown against the criterion the lab adopted, here a CLIA PT limit. For an FDA-cleared, unmodified assay, CLIA's comparison for precision is the manufacturer's claim.",
     clsi: "CLSI EP15-A3",
     cfr: "42 CFR §493.1253(b)(1)(i)(B)",
     filename: "VeritaCheck_Sample_Simple_Precision.pdf",
