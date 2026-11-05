@@ -7,6 +7,7 @@
 //   POST /api/auth/sso/complete  {code} -> the usual sign-in response (session-bound token)
 //   GET/POST /api/admin/sso/configs (ADMIN_SECRET) -> Veritas sets SSO up with the customer's IT
 // Sign-in failures land on /login?sso_error=<reason>; the page explains them in plain words.
+import { clearEmailVerification } from "./emailVerification";
 import { ssoConfigForEmail, ssoConfigById, discover, newSignIn, saveSignInState, takeSignInState, authorizeUrl,
   exchangeCode, verifyIdToken, emailFromClaims, newHandoff, takeHandoff, parseDomains, domainOf, entraIssuer,
   normalizeDomains, sealClientSecret, SsoTokenError } from "./sso";
@@ -92,7 +93,8 @@ export function registerSsoRoutes(app: any, deps: {
     if (!h) return res.status(401).json({ error: "This sign-in link expired. Sign in again.", code: "SSO_HANDOFF_EXPIRED" });
     const user = storage.getUserById(Number(h.user_id));
     if (!user) return res.status(401).json({ error: "Account not found." });
-    // The organization's sign-in already did the second factor: no VeritaAssure code step.
+    // The organization's sign-in proved the address, and already did the second factor: no VeritaAssure code step.
+    clearEmailVerification(sqlite, user.id);
     res.json(buildSignIn(req, user, "sso"));
   });
 

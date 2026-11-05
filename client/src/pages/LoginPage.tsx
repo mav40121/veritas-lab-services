@@ -127,6 +127,9 @@ export default function LoginPage() {
   const [conflictData, setConflictData] = useState<any>(null);
   // Two-factor sign-in: the code step or first-time setup, between the password and the session.
   const [mfaStep, setMfaStep] = useState<any>(null);
+  // Email verification: the address waiting for its link, after signing up or trying to sign in.
+  const [confirmEmail, setConfirmEmail] = useState<string | null>(null);
+  const [confirmResent, setConfirmResent] = useState(false);
   const [mfaEmail, setMfaEmail] = useState("");
   // Single sign-on (server/ssoRoutes.ts): a sign-in returning from the organization's login, or why it failed.
   const [ssoError, setSsoError] = useState<string | null>(null);
@@ -249,6 +252,7 @@ export default function LoginPage() {
       }
       const se = serverError(err);
       if (se.code === "ACCOUNT_LOCKED" || se.code === "ACCOUNT_INACTIVE") { setNotice(se.error || null); return; }
+      if (se.code === "EMAIL_NOT_VERIFIED") { setConfirmResent(false); setConfirmEmail(loginForm.email.trim()); return; }
       toast({ title: se.error || "Login failed", variant: "destructive" });
     }
     finally { setLoading(false); }
@@ -344,6 +348,7 @@ export default function LoginPage() {
 
       const res = await apiRequest("POST", "/api/auth/register", payload);
       const data = await res.json();
+      if (data.verification_required) { setConfirmResent(false); setConfirmEmail(data.email); return; }
       if (data.mfa_setup_required) { finishSignIn(data, registerForm.email); return; }
 
       if (data.session_token) {
@@ -391,7 +396,16 @@ export default function LoginPage() {
         </div>
         <Card>
           <CardContent className="pt-5">
-            {expiredStep ? (
+            {confirmEmail ? (
+              <div className="space-y-3" data-testid="confirm-email-step">
+                <h2 className="text-lg font-semibold">Check your email</h2>
+                <p className="text-sm text-muted-foreground">We sent a link to <span className="font-medium text-foreground">{confirmEmail}</span>. Open it and enter the password you chose to finish setting up your account. The link is good for 24 hours.</p>
+                {confirmResent && <p role="status" className="text-sm text-muted-foreground" data-testid="confirm-email-resent">If this address is waiting to be confirmed, a new link is on its way. Check your spam folder too.</p>}
+                <Button type="button" variant="outline" className="w-full" data-testid="confirm-email-resend"
+                  onClick={async () => { try { await apiRequest("POST", "/api/auth/resend-verification", { email: confirmEmail }); setConfirmResent(true); } catch { toast({ title: "Could not send a new link", variant: "destructive" }); } }}>Send a new link</Button>
+                <Button type="button" variant="ghost" className="w-full" onClick={() => setConfirmEmail(null)}>Back to sign in</Button>
+              </div>
+            ) : expiredStep ? (
               <PasswordExpiredStep step={expiredStep} onDone={(r) => finishSignIn(r, expiredStep.email)} onCancel={() => setExpiredStep(null)} />
             ) : mfaStep ? (
               mfaStep.mfa_setup_required ? (
