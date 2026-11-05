@@ -29,6 +29,7 @@ import { hasCanonicalTea, cfrSectionForTestName } from "./backfillAbsoluteFloor"
 import { evaluateManualDiff } from "./rumke";
 import { evaluateHeparinRange, normalizeHeparinInput, heparinRangeNarrative, heparinRangeChartSVG } from "@shared/heparinRange";
 import { setPdfContent } from "./pdfContent";
+import type { VeritaPolicyTrackerRow, veritaPolicyTrackerSummary } from "./veritapolicyTracker";
 
 // HTML-escape user-provided strings before they land in the rendered
 // PDF body. Used for customLabel and any other field that originates
@@ -6849,13 +6850,12 @@ export async function generateVeritaPTPDF(data: VeritaPTPDFData, licenseCtx?: Pa
 // ─── VeritaPolicy™ PDF ────────────────────────────────────────────────────────
 
 interface VeritaPolicyPDFInput {
-  user: any;
+  lab: { lab_name?: string | null; clia_number?: string | null };
   settings: any;
-  requirements: any[];
-  statusMap: Record<number, any>;
-  policyMap: Record<number, any>;
-  policies: any[];
-  accreditationBody?: string;
+  // What the tracker screen shows (server/veritapolicyTracker.ts).
+  rows: VeritaPolicyTrackerRow[];
+  summary: ReturnType<typeof veritaPolicyTrackerSummary>;
+  aoLabel: string;
 }
 
 function escHtml(s: string | null | undefined): string {
@@ -6868,89 +6868,27 @@ function escHtml(s: string | null | undefined): string {
 }
 
 function buildVeritaPolicyPDFHTML(input: VeritaPolicyPDFInput): string {
-  const { user, settings, requirements, statusMap, policyMap, policies, accreditationBody } = input;
+  const { lab, settings, rows, summary, aoLabel } = input;
 
-  const labName = escHtml(user?.lab_name || user?.name || "Laboratory");
-  const cliaRaw = user?.clia_number || user?.cliaNumber || "";
-  const clia = cliaRaw ? escHtml(cliaRaw) : "CLIA: Not on file - enter in account settings";
+  const labName = escHtml(lab?.lab_name || "Laboratory");
+  const cliaRaw = lab?.clia_number || "";
+  const clia = cliaRaw ? escHtml(cliaRaw) : "Not on file - enter in account settings";
   const dateGen = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
 
-  // Build dynamic subtitle based on accreditation body and actual requirement count.
-  // Phase 1 (2026-05-01): six-option model. Values: TJC, CAP, AABB, COLA,
-  // CAP+AABB, CLIA. Legacy values ('tjc', 'cap', 'both') still tolerated for
-  // any older caller that might pass them.
-  const body = accreditationBody || settings?.accreditation_body || 'CLIA';
-  const reqCount = requirements.length;
-  let subtitleText: string;
-  switch (body) {
-    case 'TJC':
-    case 'tjc':
-      subtitleText = `${reqCount} Required Policies (TJC + CFR)`;
-      break;
-    case 'CAP':
-    case 'cap':
-      subtitleText = `${reqCount} Required Policies (CAP + CFR)`;
-      break;
-    case 'AABB':
-    case 'aabb':
-      subtitleText = `${reqCount} Required Policies (AABB + CFR)`;
-      break;
-    case 'COLA':
-    case 'cola':
-      subtitleText = `${reqCount} Required Policies (COLA + CFR)`;
-      break;
-    case 'CAP+AABB':
-      subtitleText = `${reqCount} Required Policies (CAP + AABB + CFR)`;
-      break;
-    case 'CLIA':
-    case 'clia':
-      subtitleText = `${reqCount} Required Policies (CFR / CLIA)`;
-      break;
-    case 'both':
-      // Legacy compatibility for any old caller
-      subtitleText = `${reqCount} Required Policies (TJC + CAP)`;
-      break;
-    default:
-      subtitleText = `${reqCount} ${body.toUpperCase()} Required Policies`;
+  // The header line on the tracker screen: "<total> policies (<accreditors>)".
+  const subtitleText = `${summary.total} policies (${escHtml(aoLabel)})`;
+  const { applicable, complete, in_progress: inProgress, not_started: notStarted, na, score } = summary;
+
+  // Group by Section, in order of first appearance, as the screen does.
+  const sections = new Map<string, VeritaPolicyTrackerRow[]>();
+  for (const r of rows) {
+    if (!sections.has(r.section)) sections.set(r.section, []);
+    sections.get(r.section)!.push(r);
   }
-
-  // Compute summary -- requirements come pre-enriched with status and policy_name
-  let total = 0, complete = 0, inProgress = 0, notStarted = 0, na = 0;
-  const reqWithStatus = requirements.map((req: any) => {
-    const isNa = req.is_na || false;
-    const status = req.status || "not_started";
-    if (isNa) { na++; }
-    else {
-      total++;
-      if (status === "complete") complete++;
-      else if (status === "in_progress") inProgress++;
-      else notStarted++;
-    }
-    return { ...req, status, is_na: isNa };
-  });
-
-  const score = total > 0 ? Math.round((complete / total) * 100) : 0;
-
-  // Group by chapter
-  const chapters: Record<string, { label: string; reqs: any[] }> = {};
-  for (const r of reqWithStatus) {
-    if (!chapters[r.chapter]) chapters[r.chapter] = { label: r.chapter_label, reqs: [] };
-    chapters[r.chapter].reqs.push(r);
-  }
-
-  // Service line settings display
-  const serviceLines = [
-    { key: "has_blood_bank", label: "Blood Bank / Transfusion Service" },
-    { key: "has_transplant", label: "Transplant Testing" },
-    { key: "has_microbiology", label: "Microbiology" },
-    { key: "has_maternal_serum", label: "Maternal Serum Marker Screening" },
-    { key: "is_independent", label: "Independent Laboratory" },
-  ];
 
   function statusColor(s: string) {
     if (s === "complete") return "#437A22";
     if (s === "in_progress") return "#964219";
-    if (s === "na") return "#7A7974";
     return "#7A7974";
   }
   function statusLabel(s: string) {
@@ -6960,78 +6898,43 @@ function buildVeritaPolicyPDFHTML(input: VeritaPolicyPDFInput): string {
     return "Not Started";
   }
 
-  // Build chapter sections
-  const chapterSections = Object.entries(chapters).map(([ch, data]) => {
-    const rows = data.reqs.map((r: any) => {
+  const sectionBlocks = Array.from(sections.entries()).map(([section, sectionRows]) => {
+    const tableRows = sectionRows.map((r) => {
       const rowStyle = r.is_na ? "opacity: 0.55;" : "";
-      const stdStyle = r.is_na ? "text-decoration: line-through;" : "";
-      const lpText = r.policy_name ? escHtml(r.policy_name) : "<em style=\"color:#999\">Not entered</em>";
+      const nameStyle = r.is_na ? "text-decoration: line-through;" : "";
+      const citations = [{ label: "CFR", value: r.cfr_citations }, ...(r.ao_citations || [])].filter((c) => c.value)
+        .map((c) => `<div><strong>${escHtml(c.label)}</strong> ${escHtml(c.value)}</div>`).join("");
+      const ourName = r.our_policy_name ? escHtml(r.our_policy_name) : "<em style=\"color:#999\">Not entered</em>";
       return `
-        <tr style="${rowStyle}">
-          <td style="font-family:monospace;font-size:7pt;${stdStyle}">${escHtml(r.standard.length > 30 ? r.standard.slice(0, 30) + "..." : r.standard)}</td>
-          <td>${escHtml(r.name)}</td>
+        <tr data-policy-id="${escHtml(r.policy_id)}" data-status="${escHtml(r.status)}" style="${rowStyle}">
+          <td style="font-family:monospace;font-size:7pt">${r.is_custom ? "Custom" : escHtml(r.policy_id)}</td>
+          <td style="${nameStyle}">${escHtml(r.policy_name)}</td>
+          <td class="cite">${citations || "<em style=\"color:#999\">No citations</em>"}</td>
           <td style="text-align:center"><span style="color:${statusColor(r.status)};font-weight:700">${statusLabel(r.status)}</span></td>
-          <td>${lpText}</td>
+          <td>${ourName}</td>
         </tr>`;
     }).join("");
 
     return `
-      <div class="chapter-section">
-        <div class="chapter-header">${escHtml(ch)} - ${escHtml(data.label)}</div>
+      <div class="section-block">
+        <div class="section-header">${escHtml(section)} (${sectionRows.length})</div>
         <table class="req-table">
           <thead>
             <tr>
-              <th style="width:22%">Standard</th>
-              <th style="width:38%">Requirement</th>
-              <th style="width:14%;text-align:center">Status</th>
-              <th style="width:26%">Our Policy Name</th>
+              <th style="width:7%">ID</th>
+              <th style="width:27%">Policy</th>
+              <th style="width:32%">Citations</th>
+              <th style="width:11%;text-align:center">Status</th>
+              <th style="width:23%">Our Policy Name</th>
             </tr>
           </thead>
-          <tbody>${rows}</tbody>
+          <tbody>${tableRows}</tbody>
         </table>
       </div>`;
   }).join("");
 
-  // Policy library table
-  function policyReviewBadge(nextReview: string | null): string {
-    if (!nextReview) return "";
-    const d = new Date(nextReview);
-    const diff = Math.ceil((d.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-    if (diff < 0) return `<span style="color:#A12C7B;font-weight:700"> (OVERDUE)</span>`;
-    if (diff <= 90) return `<span style="color:#964219;font-weight:700"> (Due Soon)</span>`;
-    return "";
-  }
-
-  const policyRows = policies.map((p: any, i: number) => {
-    const bg = i % 2 === 0 ? "#FFFFFF" : "#EBF3F8";
-    const countMap: Record<number, number> = {};
-    // count from statusMap
-    for (const s of Object.values(statusMap) as any[]) {
-      if (s.lab_policy_id) countMap[s.lab_policy_id] = (countMap[s.lab_policy_id] || 0) + 1;
-    }
-    const covered = countMap[p.id] || 0;
-    const nr = p.next_review ? new Date(p.next_review).toLocaleDateString() : "-";
-    const lr = p.last_reviewed ? new Date(p.last_reviewed).toLocaleDateString() : "-";
-    return `
-      <tr style="background:${bg}">
-        <td style="font-family:monospace">${escHtml(p.policy_number) || "-"}</td>
-        <td><strong>${escHtml(p.policy_name)}</strong></td>
-        <td>${escHtml(p.owner) || "-"}</td>
-        <td><span style="color:${statusColor(p.status)};font-weight:700">${statusLabel(p.status)}</span></td>
-        <td>${lr}</td>
-        <td>${nr}${policyReviewBadge(p.next_review)}</td>
-        <td style="text-align:center">${covered}</td>
-      </tr>`;
-  }).join("") || `<tr><td colspan="7" style="text-align:center;color:#7A7974;padding:12px">No policies in library</td></tr>`;
-
-  // Service line summary rows
-  const slRows = serviceLines.map(sl => {
-    const active = settings && settings[sl.key] ? true : false;
-    return `<tr>
-      <td>${sl.label}</td>
-      <td style="text-align:center;color:${active ? "#437A22" : "#7A7974"};font-weight:700">${active ? "Yes" : "No"}</td>
-    </tr>`;
-  }).join("");
+  // The one lab setting the tracker screen saves.
+  const independent = !!settings?.is_independent;
 
   return `<!DOCTYPE html>
 <html>
@@ -7041,8 +6944,7 @@ function buildVeritaPolicyPDFHTML(input: VeritaPolicyPDFInput): string {
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 9pt; color: #1a1a1a; background: white; }
 
-/* Page 1 only styles */
-.page1 { min-height: 100vh; page-break-after: always; }
+/* Page 1 only styles. No min-height here: at 100vh the license band pushed page 1 over and printed a blank page 2. */
 .page-break { page-break-before: always; }
 
 h1.report-title { font-size: 18pt; font-weight: 700; color: #01696F; margin-bottom: 2px; }
@@ -7074,7 +6976,7 @@ h2.report-subtitle { font-size: 10pt; font-weight: 400; color: #555; margin-bott
 .summary-table td { padding: 3px 8px; border: 0.5px solid #D0D0D0; text-align: center; font-weight: 600; }
 .summary-table tr:nth-child(even) td { background: #EBF3F8; }
 
-/* Service lines */
+/* Lab settings */
 .service-table { width: 100%; border-collapse: collapse; font-size: 8pt; margin-bottom: 14px; }
 .service-table th { background: #01696F; color: white; font-weight: 700; padding: 3px 8px; text-align: left; }
 .service-table td { padding: 3px 8px; border: 0.5px solid #D0D0D0; }
@@ -7091,25 +6993,19 @@ h2.report-subtitle { font-size: 10pt; font-weight: 400; color: #555; margin-bott
 .check-item { display: flex; align-items: center; gap: 6px; font-size: 8.5pt; }
 .check-box { width: 14px; height: 14px; border: 1px solid #888; display: inline-block; }
 
-/* Chapter sections */
-.section-heading { font-size: 10pt; font-weight: 700; color: #01696F; margin: 18px 0 10px 0; border-bottom: 1px solid #D0D0D0; padding-bottom: 4px; }
-.chapter-section { margin-bottom: 18px; }
-.chapter-header { font-size: 9pt; font-weight: 700; color: white; background: #01696F; padding: 5px 8px; border-radius: 3px 3px 0 0; margin-bottom: 0; }
+/* Section blocks */
+.section-block { margin-bottom: 18px; }
+.section-header { font-size: 9pt; font-weight: 700; color: white; background: #01696F; padding: 5px 8px; border-radius: 3px 3px 0 0; margin-bottom: 0; break-after: avoid; page-break-after: avoid; }
 
-/* Requirements table */
+/* Policy table */
 .req-table { width: 100%; border-collapse: collapse; font-size: 7.5pt; }
 .req-table th { background: #4a9a9f; color: white; font-weight: 600; padding: 3px 6px; text-align: left; font-size: 7pt; }
 .req-table td { padding: 3px 6px; border-bottom: 0.5px solid #D0D0D0; vertical-align: top; }
+.req-table tr { break-inside: avoid; page-break-inside: avoid; }
 .req-table tr:nth-child(even) td { background: #EBF3F8; }
 .req-table tr:nth-child(odd) td { background: #FFFFFF; }
-
-/* Policy table */
-.policy-table { width: 100%; border-collapse: collapse; font-size: 7.5pt; margin-top: 10px; }
-.policy-table th { background: #01696F; color: white; font-weight: 700; padding: 4px 6px; text-align: left; font-size: 7pt; }
-.policy-table td { padding: 3px 6px; border-bottom: 0.5px solid #D0D0D0; vertical-align: top; }
-
-.footer-line { font-size: 7pt; color: #888; text-align: center; margin-top: 14px; padding-top: 6px; border-top: 1px solid #D0D0D0; }
-.page-section-title { font-size: 12pt; font-weight: 700; color: #01696F; margin-bottom: 12px; }
+.req-table td.cite { font-size: 6.5pt; color: #444; }
+.req-table td.cite strong { color: #01696F; }
 </style>
 </head>
 <body>
@@ -7134,7 +7030,7 @@ h2.report-subtitle { font-size: 10pt; font-weight: 400; color: #555; margin-bott
     </div>
     <div class="stat-grid">
       <div class="stat-box stat-total">
-        <div class="stat-val">${total}</div>
+        <div class="stat-val">${applicable}</div>
         <div class="stat-lbl">Total Applicable</div>
       </div>
       <div class="stat-box stat-complete">
@@ -7166,7 +7062,7 @@ h2.report-subtitle { font-size: 10pt; font-weight: 400; color: #555; margin-bott
     </thead>
     <tbody>
       <tr>
-        <td>${total}</td>
+        <td>${applicable}</td>
         <td style="color:#437A22">${complete}</td>
         <td style="color:#964219">${inProgress}</td>
         <td style="color:#7A7974">${notStarted}</td>
@@ -7176,16 +7072,21 @@ h2.report-subtitle { font-size: 10pt; font-weight: 400; color: #555; margin-bott
     </tbody>
   </table>
 
-  <!-- Service line settings -->
-  <div style="font-size:8.5pt;font-weight:700;margin-bottom:6px;color:#1a1a1a">Service Line Settings</div>
+  <!-- Lab settings -->
+  <div style="font-size:8.5pt;font-weight:700;margin-bottom:6px;color:#1a1a1a">Lab Settings</div>
   <table class="service-table">
     <thead>
       <tr>
-        <th style="width:70%">Service Line</th>
+        <th style="width:70%">Setting</th>
         <th style="width:30%;text-align:center">Active</th>
       </tr>
     </thead>
-    <tbody>${slRows}</tbody>
+    <tbody>
+      <tr>
+        <td>Independent Laboratory</td>
+        <td style="text-align:center;color:${independent ? "#437A22" : "#7A7974"};font-weight:700">${independent ? "Yes" : "No"}</td>
+      </tr>
+    </tbody>
   </table>
 
   <!-- Signature block -->
@@ -7226,10 +7127,10 @@ h2.report-subtitle { font-size: 10pt; font-weight: 400; color: #555; margin-bott
 
 </div>
 
-<!-- PAGE 2+: Requirements by Chapter -->
+<!-- PAGE 2+: Policies by Section -->
 <div class="page-break">
   <div class="header-block">
-    <h1 class="report-title">VeritaDC&#8482; - Requirements Detail</h1>
+    <h1 class="report-title">VeritaDC&#8482; - Policies by Section</h1>
     <div class="meta-row">
       <span><strong>Laboratory:</strong> ${labName}</span>
       <span><strong>CLIA:</strong> ${clia}</span>
@@ -7237,35 +7138,7 @@ h2.report-subtitle { font-size: 10pt; font-weight: 400; color: #555; margin-bott
     </div>
   </div>
 
-  ${chapterSections}
-
-</div>
-
-<!-- FINAL PAGE: Policy Library -->
-<div class="page-break">
-  <div class="header-block">
-    <h1 class="report-title">VeritaDC&#8482; - Policy Library Index</h1>
-    <div class="meta-row">
-      <span><strong>Laboratory:</strong> ${labName}</span>
-      <span><strong>CLIA:</strong> ${clia}</span>
-      <span><strong>Generated:</strong> ${dateGen}</span>
-    </div>
-  </div>
-
-  <table class="policy-table">
-    <thead>
-      <tr>
-        <th style="width:10%">Policy #</th>
-        <th style="width:28%">Policy Name</th>
-        <th style="width:14%">Owner</th>
-        <th style="width:10%">Status</th>
-        <th style="width:12%">Last Reviewed</th>
-        <th style="width:14%">Next Review</th>
-        <th style="width:12%;text-align:center">Req. Covered</th>
-      </tr>
-    </thead>
-    <tbody>${policyRows}</tbody>
-  </table>
+  ${sectionBlocks}
 
 </div>
 
