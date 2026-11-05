@@ -1,43 +1,18 @@
 // scripts/verify-security-hardening.mjs
 // Proves the two P2 security hardening fixes:
-//   A) the request logger's response-body redactor masks credentials (token,
-//      secret, password, pin, ...) at any depth while leaving other fields intact.
+//   A) the request logger writes no response body, and masks a credential in the path.
 //   B) the login rate limiter blocks brute-force by failed-attempt count per
 //      IP+email, resets on a successful login, and expires after the window.
-// Mirrors the exact logic in server/logRedact.ts (redactSensitive) and
+// Mirrors the exact logic in server/logRedact.ts (requestLogLine) and
 // server/routes.ts (loginFailures limiter). Run: node scripts/verify-security-hardening.mjs
 let pass = 0, fail = 0;
 const check = (n, c) => { if (c) { pass++; console.log("PASS  " + n); } else { fail++; console.log("FAIL  " + n); } };
 
-// ── A) Redactor (identical to server/logRedact.ts) ─────────────────────────
-const SENSITIVE_LOG_KEY = /token$|secret|password|^pass$|^pwd$|^jwt$|api_?key|authorization|^pin$/i;
-const TOKEN_IN_VALUE = /[?&][a-z_]*token=|\/surveyor\/[\w-]{8,}/i;
-function redactSensitive(key, value) {
-  if (typeof value === "string" && (SENSITIVE_LOG_KEY.test(key) || TOKEN_IN_VALUE.test(value))) return "[REDACTED]";
-  return value;
-}
-const red = (obj) => JSON.stringify(obj, redactSensitive);
-
-// The real login response shape: token must be masked, user fields kept.
-const loginResp = { token: "eyJhbGciOi.SECRET.JWT", user: { id: 7, email: "a@b.com", plan: "clinic" } };
-const s1 = red(loginResp);
-check("redactor masks top-level token", s1.includes('"token":"[REDACTED]"'));
-check("redactor keeps non-sensitive fields (email/plan)", s1.includes('"email":"a@b.com"') && s1.includes('"plan":"clinic"'));
-
-// Nested + varied key names.
-const nested = { data: { apiKey: "AKIA123", refresh_token: "rt_abc", nested: { password: "hunter2", pin: "1234" } }, count: 3 };
-const s2 = red(nested);
-check("redactor masks nested apiKey", s2.includes('"apiKey":"[REDACTED]"'));
-check("redactor masks nested refresh_token", s2.includes('"refresh_token":"[REDACTED]"'));
-check("redactor masks deeply-nested password + pin", s2.includes('"password":"[REDACTED]"') && s2.includes('"pin":"[REDACTED]"'));
-check("redactor leaves numbers/other keys intact", s2.includes('"count":3'));
-
-// Non-sensitive lookalikes and non-string secrets are left as-is.
-const edge = { token_count: 5, description: "the secret sauce", secret: 42 };
-const s3 = red(edge);
-check("redactor does not mask a non-matching key (token_count)", s3.includes('"token_count":5'));
-check("redactor does not mask a value that merely contains 'secret'", s3.includes('"the secret sauce"'));
-check("redactor leaves a non-string 'secret' value (only strings masked)", s3.includes('"secret":42'));
+// ── A) Request log (identical to server/logRedact.ts): no response body, and no credential in the path ──
+const TOKEN_IN_PATH = /^(\/api\/(?:surveyor|seats\/invite|pdf|zip|export-all\/file|scheduling\/booking)\/)[^/]+/;
+const requestLogLine = (method, path, status, ms) => `${method} ${path.replace(TOKEN_IN_PATH, "$1[REDACTED]")} ${status} in ${ms}ms`;
+check("the log line masks a token in the path", requestLogLine("GET", "/api/surveyor/TOK/policies", 200, 5) === "GET /api/surveyor/[REDACTED]/policies 200 in 5ms");
+check("the log line leaves other paths alone", requestLogLine("GET", "/api/labs/3/members", 200, 5) === "GET /api/labs/3/members 200 in 5ms");
 
 // ── B) Login rate limiter (mirror of server/routes.ts, now injectable) ─────
 const WINDOW = 15 * 60 * 1000, MAX = 10;

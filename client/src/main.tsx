@@ -1,6 +1,6 @@
 import { createRoot } from "react-dom/client";
 import * as Sentry from "@sentry/react";
-import { SENTRY_DATA_COLLECTION } from "@shared/sentryDataCollection";
+import { SENTRY_DATA_COLLECTION, sentryBreadcrumbFilter, sentryEventFilter } from "@shared/sentryDataCollection";
 import App from "./App";
 import "./index.css";
 
@@ -13,6 +13,8 @@ if (import.meta.env.VITE_SENTRY_DSN) {
     environment: import.meta.env.MODE || "production",
     tracesSampleRate: 0,
     dataCollection: SENTRY_DATA_COLLECTION, // no personal information (shared/sentryDataCollection.ts)
+    beforeBreadcrumb: sentryBreadcrumbFilter,
+    beforeSend: sentryEventFilter,
   });
 }
 

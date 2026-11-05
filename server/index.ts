@@ -2,13 +2,15 @@
 // load time so it can capture early-startup errors. Guarded by env var so
 // the app boots without Sentry when SENTRY_DSN is unset (e.g. local dev).
 import * as Sentry from "@sentry/node";
-import { SENTRY_DATA_COLLECTION } from "@shared/sentryDataCollection";
+import { SENTRY_DATA_COLLECTION, sentryBreadcrumbFilter, sentryEventFilter } from "@shared/sentryDataCollection";
 if (process.env.SENTRY_DSN) {
   Sentry.init({
     dsn: process.env.SENTRY_DSN,
     environment: process.env.NODE_ENV || "production",
     tracesSampleRate: 0,
     dataCollection: SENTRY_DATA_COLLECTION, // no personal information (shared/sentryDataCollection.ts)
+    beforeBreadcrumb: sentryBreadcrumbFilter,
+    beforeSend: sentryEventFilter,
   });
 }
 
@@ -18,7 +20,7 @@ import { serveStatic } from "./static";
 import path from "path";
 import { loadCsp, cspHeaderName, imgTrialCsp } from "./securityHeaders";
 import { createServer } from "http";
-import { redactPath, redactSensitive } from "./logRedact";
+import { requestLogLine } from "./logRedact";
 
 // Fail loud if required secrets are missing - catches Railway env var misconfigurations at deploy time
 const REQUIRED_SECRETS = ["JWT_SECRET", "ADMIN_SECRET", "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET"] as const;
@@ -142,24 +144,9 @@ export function log(message: string, source = "express") {
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
-  let capturedJsonResponse: Record<string, any> | undefined = undefined;
-
-  const originalResJson = res.json;
-  res.json = function (bodyJson, ...args) {
-    capturedJsonResponse = bodyJson;
-    return originalResJson.apply(res, [bodyJson, ...args]);
-  };
 
   res.on("finish", () => {
-    const duration = Date.now() - start;
-    if (path.startsWith("/api")) {
-      let logLine = `${req.method} ${redactPath(path)} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse, redactSensitive)}`;
-      }
-
-      log(logLine);
-    }
+    if (path.startsWith("/api")) log(requestLogLine(req.method, path, res.statusCode, Date.now() - start));
   });
 
   next();
