@@ -235,8 +235,10 @@ async function main() {
     const todayEmpty = await newRecord(waivedProg, "pass", [], "waived");
     check("5k. the same empty record signed today is refused", (await signRecord(todayEmpty)).s === 409 && lockedOf(todayEmpty) === 0);
     const ntProg = (await call("POST", `${L}/competency/programs`, { name: "Made-up Non-technical", department: "General", type: "nontechnical", checklistItems: [{ description: "Made-up item" }] }, tk)).j.id;
-    const ntRec = await newRecord(ntProg, "pass", [{ itemLabel: "A", ntItemLabel: "A", ntDateMet: day, ntEmployeeInitials: "PT", ntSupervisorInitials: "JE", passed: true }], "nontechnical");
-    check("5l. a non-technical record has no element marks and is unchanged", (await signRecord(ntRec)).s === 200 && lockedOf(ntRec) === 1);
+    // A row numbered like an element and not marked, which would be refused on a technical record: the rule doesn't reach this one.
+    const ntRec = await newRecord(ntProg, "pass", [{ methodNumber: 1, elementNumber: 1, itemLabel: "A", ntItemLabel: "A", ntDateMet: day, ntEmployeeInitials: "PT", ntSupervisorInitials: "JE", passed: false }], "nontechnical");
+    const ntSigned = await signRecord(ntRec);
+    check("5l. a non-technical record has no element marks and is unchanged", ntSigned.s === 200 && lockedOf(ntRec) === 1, `${ntSigned.s} ${ntSigned.j.error ?? ""}`);
 
     // ── 6. What prints ────────────────────────────────────────────────────────
     // Someone new: Kim's whole-record signs above count as imported history on her method (BUG-120), so her method reads as signed.
