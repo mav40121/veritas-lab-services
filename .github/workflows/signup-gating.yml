@@ -120,6 +120,10 @@ jobs:
       - name: Run manual method groups integration test
         # Michael 2026-11-04: manual tests can be grouped with each other, one complexity, never with an analyzer (BUG-043 protection).
         run: npm run test:manual-method-groups
+      - name: Run email verification integration test
+        # Michael 2026-11-05: a public sign-up can't sign in or hold a seat until its owner confirms the address with the link and the
+        # password they chose. An invitation's link proves the address it was mailed to. Sign-up again replaces an unconfirmed account.
+        run: npm run test:email-verification
       - name: Run invite token visibility integration test
         # 2026-11-04: an invite token claims its seat, an admin seat included, so only people who manage members get it. Surveyor link
         # tokens go to VeritaDC editors only. The invite link and the surveyor link still work.

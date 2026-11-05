@@ -66,6 +66,7 @@ import { passwordProblem } from "@shared/passwordRule";
 import { registerTwoFactorRoutes, twoFactorLoginGate, setupResponse } from "./twoFactorRoutes";
 import { registerSsoRoutes } from "./ssoRoutes";
 import { ssoConfigForEmail } from "./sso";
+import { clearEmailVerification, confirmedUserByEmail, emailVerificationOn, isUnconfirmed, registerEmailVerificationRoutes, sendVerificationEmail, startEmailVerification } from "./emailVerification";
 import { mfaRequirement, getMfa, isEnrolled, setTwoFactorEmailSender, forgetDevices } from "./twoFactor";
 import {
   effectivePolicy, policyForLab, getOwnerSettings, passwordProblemFor, setUserPassword, recordNewPassword, passwordExpired,
@@ -3663,7 +3664,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!lab) return res.status(404).json({ error: "Lab not found" });
     const labOwnerId = lab.owner_user_id;
     const normalizedEmail = String(email).toLowerCase();
-    const existingUser = storage.getUserByEmail(normalizedEmail);
+    const existingUser = confirmedUserByEmail((db as any).$client, storage, normalizedEmail);
     const seatUserId = existingUser ? existingUser.id : null;
     // Duplicate-member check.
     if (seatUserId) {
@@ -6914,13 +6915,17 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
     const { email, password, name, hipaa_acknowledged } = parsed.data;
     if (!hipaa_acknowledged) return res.status(400).json({ error: "You must acknowledge the data use policy to create an account." });
-    if (storage.getUserByEmail(email)) return res.status(409).json({ error: "Email already registered" });
+    // An unconfirmed sign-up holds no claim to its address: signing up again, or an invitation's link, replaces it.
+    const earlierSignup = storage.getUserByEmail(email);
+    const replacesUnconfirmed = !!earlierSignup && isUnconfirmed((db as any).$client, earlierSignup.id);
+    if (earlierSignup && !replacesUnconfirmed) return res.status(409).json({ error: "Email already registered" });
     const pwProblem = passwordProblem(password);
     if (pwProblem) return res.status(400).json({ error: pwProblem, code: "PASSWORD_RULE" });
+    let claimsInvite = false;
     {
       const sq = (db as any).$client;
       const pend = typeof req.body?.inviteToken === "string"
-        ? sq.prepare("SELECT owner_user_id, lab_id, invited_at FROM user_seats WHERE invite_token = ? AND status = 'pending'").get(req.body.inviteToken)
+        ? sq.prepare("SELECT owner_user_id, lab_id, invited_at, seat_email FROM user_seats WHERE invite_token = ? AND status = 'pending'").get(req.body.inviteToken)
         : null;
       // A seat is claimed with its own link, never by typing its address. Sign-up doesn't verify email,
       // so anyone who knew the address could otherwise take the seat, an admin seat included (BUG-133).
@@ -6928,6 +6933,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       // days the join page shows.
       if (!pend && sq.prepare("SELECT 1 FROM user_seats WHERE lower(seat_email) = ? AND status IN ('pending', 'active')").get(email.toLowerCase())) {
         return res.status(409).json({ error: "This email has a pending invitation. Use the link in your invitation email, or ask your lab to send it again.", code: "INVITE_LINK_REQUIRED" });
+      }
+      // An invitation's link proves the address it was mailed to, and no other, so it only signs up that address.
+      if (pend && String(pend.seat_email || "").toLowerCase() !== email.toLowerCase()) {
+        return res.status(400).json({ error: "This invitation is for a different email address.", code: "INVITE_EMAIL_MISMATCH" });
       }
       if (pend && Date.now() - new Date(pend.invited_at).getTime() > 30 * 24 * 60 * 60 * 1000) {
         return res.status(400).json({ error: "This invitation has expired. Ask your lab to send it again.", code: "INVITE_EXPIRED" });
@@ -6937,6 +6946,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       if (!pend && Number(ssoConfigForEmail(sq, email)?.required) === 1) {
         return res.status(403).json({ error: "Your organization signs in with single sign-on. Ask your lab to invite you.", code: "SSO_REQUIRED" });
       }
+      claimsInvite = !!pend;
       // System security settings: a person joining a lab whose owner requires a symbol gets that rule now.
       if (pend) {
         const joinPolicy = pend.lab_id ? policyForLab(sq, Number(pend.lab_id)) : getOwnerSettings(sq, Number(pend.owner_user_id));
@@ -6945,8 +6955,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       }
     }
     const passwordHash = await bcrypt.hash(password, 10);
-    const user = storage.createUser(email.toLowerCase(), passwordHash, name);
+    if (replacesUnconfirmed) (db as any).$client.prepare("UPDATE users SET password_hash = ?, name = ? WHERE id = ?").run(passwordHash, name, earlierSignup!.id); // security-settings-ok: an unconfirmed account's first password
+    const user = replacesUnconfirmed ? storage.getUserById(earlierSignup!.id)! : storage.createUser(email.toLowerCase(), passwordHash, name);
     recordNewPassword((db as any).$client, user.id);
+    // A public sign-up waits for its owner to confirm the address. An invitation's link already proved it.
+    const needsVerification = emailVerificationOn() && !claimsInvite;
+    if (!needsVerification && replacesUnconfirmed) clearEmailVerification((db as any).$client, user.id);
 
     // Resolve seat-invite FIRST so token-claim takes precedence over any
     // body.plan / body.hospital_name / body.seat_count / body.bed_count the
@@ -7098,7 +7112,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // Session-bound token (server/sessionAuth.ts). A new account joining a lab that requires
     // two-factor sign-in gets first-time setup instead (server/twoFactorRoutes.ts).
     const regMfa = mfaRequirement((db as any).$client, user.id);
-    const regSession = regMfa.required ? null : issueSession((db as any).$client, user.id, req);
+    const regSession = regMfa.required || needsVerification ? null : issueSession((db as any).$client, user.id, req);
     const token = regSession?.token;
     const sessionToken = regSession?.sessionToken;
 
@@ -7121,10 +7135,13 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const sp = legacySeatForUser((db as any).$client, user.id, "permissions") as any;
       try { registerSeatPermissions = JSON.parse(sp?.permissions || "{}"); } catch { registerSeatPermissions = {}; }
     }
-    res.json({ ...(regMfa.required ? setupResponse(user, regMfa) : { token, session_token: sessionToken }), user: { id: user.id, email: user.email, name: user.name, plan: responsePlan, studyCredits: user.studyCredits, hasCompletedOnboarding: isSeatUser ? true : false, isSeatUser, seatPermissions: registerSeatPermissions, subscriptionExpiresAt: responseSubExpiry, subscriptionStatus: responseSubStatus, accessLevel: responseAccessLevel, cliaNumber: null, cliaLabName: null, cliaTier: null, seatCount: isSeatUser ? 0 : selectedSeatCount } });
+    if (needsVerification) {
+      const emailSent = await sendVerificationEmail(resend, FRONTEND_URL, user.email, startEmailVerification((db as any).$client, user.id));
+      res.json({ verification_required: true, email: user.email, email_sent: emailSent });
+    } else res.json({ ...(regMfa.required ? setupResponse(user, regMfa) : { token, session_token: sessionToken }), user: { id: user.id, email: user.email, name: user.name, plan: responsePlan, studyCredits: user.studyCredits, hasCompletedOnboarding: isSeatUser ? true : false, isSeatUser, seatPermissions: registerSeatPermissions, subscriptionExpiresAt: responseSubExpiry, subscriptionStatus: responseSubStatus, accessLevel: responseAccessLevel, cliaNumber: null, cliaLabName: null, cliaTier: null, seatCount: isSeatUser ? 0 : selectedSeatCount } });
 
-    // Send welcome email via Resend
-    if (resend) {
+    // Send welcome email via Resend. A sign-up still confirming its address gets that email instead.
+    if (resend && !needsVerification) {
       resend.emails.send({
         from: "VeritaAssure\u00AE <info@veritaslabservices.com>",
         to: [email],
@@ -7260,6 +7277,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   };
   const clearLoginRate = (key: string): void => { loginFailures.delete(key); };
 
+  registerEmailVerificationRoutes(app, { sqlite: (db as any).$client, storage, resend, frontendUrl: FRONTEND_URL, checkLoginRate, recordLoginFailure, clearLoginRate });
   app.post("/api/auth/login", async (req, res) => {
     const parsed = loginSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
@@ -7298,6 +7316,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     }
     // Verified credentials: clear the failure counter for this IP+email.
     clearLoginRate(rlKey);
+    if (isUnconfirmed(loginSql, user.id)) {
+      return res.status(403).json({ error: "Confirm your email before signing in. Check your inbox for the link, or send a new one below.", code: "EMAIL_NOT_VERIFIED" });
+    }
     clearPasswordFailures(loginSql, user.id);
     if (isInactive(loginSql, user.id, policy)) {
       logAudit({ userId: user.id, module: "account", action: "update", entityType: "account.inactive_refused", entityLabel: `Sign-in refused: no sign-in for over ${policy.inactiveDays} days`, ipAddress: req.ip });
@@ -11163,7 +11184,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const normalizedEmail = String(email).toLowerCase();
 
     // Duplicate-member check.
-    const existingUser = storage.getUserByEmail(normalizedEmail);
+    const existingUser = confirmedUserByEmail((db as any).$client, storage, normalizedEmail);
     const seatUserId = existingUser ? existingUser.id : null;
     if (seatUserId) {
       const dupMember = sqlite.prepare(
@@ -11562,7 +11583,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     ).get(labOwnerId, normalizedEmail, req.scope.labId) as any;
     if (dupSeat) return res.status(409).json({ error: "This email already has a seat on this lab. Use the seat list to manage it." });
 
-    const existingUser = storage.getUserByEmail(normalizedEmail);
+    const existingUser = confirmedUserByEmail((db as any).$client, storage, normalizedEmail);
     const seatUserId = existingUser ? existingUser.id : null;
     if (seatUserId) {
       // If the email maps to an existing main-site account, we don't
@@ -19835,6 +19856,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const set = await setUserPassword((db as any).$client, row.user_id, String(password));
     if (!set.ok) return res.status(400).json({ error: set.error, code: set.code });
     db.$client.prepare("UPDATE reset_tokens SET used_at = ? WHERE token = ?").run(new Date().toISOString(), token);
+    clearEmailVerification(db.$client, row.user_id); // the reset link proved the address
 
     logAudit({
       userId: row.user_id,
@@ -32116,7 +32138,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (existingActive) return res.status(409).json({ error: "This email already has a seat assigned" });
 
     // Check if invited user already has an account
-    const existingUser = storage.getUserByEmail(email.toLowerCase());
+    const existingUser = confirmedUserByEmail((db as any).$client, storage, email.toLowerCase());
     const seatUserId = existingUser ? existingUser.id : null;
     const newStatus = seatUserId ? "active" : "pending";
 

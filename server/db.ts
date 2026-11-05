@@ -8888,6 +8888,11 @@ try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_veritaceu_profiles_lab ON veri
   addCol("users", "locked_at", "ALTER TABLE users ADD COLUMN locked_at TEXT");
   addCol("users", "last_sign_in_at", "ALTER TABLE users ADD COLUMN last_sign_in_at TEXT");
   addCol("users", "reenabled_at", "ALTER TABLE users ADD COLUMN reenabled_at TEXT");
+  // Email verification at sign-up (server/emailVerification.ts). 0 for every account that exists today.
+  addCol("users", "email_verification_pending", "ALTER TABLE users ADD COLUMN email_verification_pending INTEGER NOT NULL DEFAULT 0");
+  addCol("users", "email_verification_token_hash", "ALTER TABLE users ADD COLUMN email_verification_token_hash TEXT");
+  addCol("users", "email_verification_expires_at", "ALTER TABLE users ADD COLUMN email_verification_expires_at TEXT");
+  addCol("users", "email_verification_sent_at", "ALTER TABLE users ADD COLUMN email_verification_sent_at TEXT");
 }
 
 // Record-view logging (Lifepoint IPS III.1(i), committed for 2026-10-31; server/recordViews.ts): who opened which

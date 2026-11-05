@@ -128,6 +128,7 @@ const VeritaAssurePage = lazy(() => import("@/pages/VeritaAssurePage"));
 const LearnPage = lazy(() => import("@/pages/LearnPage"));
 const AdminReportPage = lazy(() => import("@/pages/AdminReportPage"));
 const JoinPage = lazy(() => import("@/pages/JoinPage"));
+const VerifyEmailPage = lazy(() => import("@/pages/VerifyEmailPage"));
 const ProductivityCalculatorPage = lazy(() => import("@/pages/ProductivityCalculatorPage"));
 const VeritaPacePage = lazy(() => import("@/pages/VeritaPacePage"));
 const VeritaShiftPage = lazy(() => import("@/pages/VeritaShiftPage"));
@@ -362,7 +363,7 @@ function AppContent() {
     const p = location;
     const allowed =
       p === "/" ||
-      p.startsWith("/login") || p.startsWith("/reset-password") || p.startsWith("/join") ||
+      p.startsWith("/login") || p.startsWith("/reset-password") || p.startsWith("/join") || p.startsWith("/verify-email") ||
       p.startsWith("/inventory") || p.startsWith("/account") || p.startsWith("/veritastock") ||
       /^\/labs\/\d+\/(veritastock|members|account)/.test(p);
     if (!allowed) setLocation("/");
@@ -422,6 +423,7 @@ function AppContent() {
           <Route path="/login" component={LoginPage} />
           <Route path="/register" component={LoginPage} />
           <Route path="/join" component={JoinPage} />
+          <Route path="/verify-email" component={VerifyEmailPage} />
           <Route path="/terms" component={TermsPage} />
           <Route path="/privacy" component={PrivacyPage} />
           <Route path="/trust" component={TrustPage} />
