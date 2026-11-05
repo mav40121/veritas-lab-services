@@ -18,6 +18,7 @@ import { serveStatic } from "./static";
 import path from "path";
 import { loadCsp, cspHeaderName, imgTrialCsp } from "./securityHeaders";
 import { createServer } from "http";
+import { redactPath, redactSensitive } from "./logRedact";
 
 // Fail loud if required secrets are missing - catches Railway env var misconfigurations at deploy time
 const REQUIRED_SECRETS = ["JWT_SECRET", "ADMIN_SECRET", "STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET"] as const;
@@ -138,16 +139,6 @@ export function log(message: string, source = "express") {
   console.log(`${formattedTime} [${source}] ${message}`);
 }
 
-// Redact credentials from logged API response bodies. The request logger below
-// stringifies the whole JSON response for every /api call, which would otherwise
-// write auth tokens (login returns { token }), admin secrets, passwords, and PINs
-// into the server logs. This replacer masks any such field at any depth.
-const SENSITIVE_LOG_KEY = /^(token|secret|password|pass|pwd|jwt|api_?key|authorization|access_?token|refresh_?token|pin|client_secret)$/i;
-function redactSensitive(key: string, value: any): any {
-  if (SENSITIVE_LOG_KEY.test(key) && typeof value === "string") return "[REDACTED]";
-  return value;
-}
-
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
@@ -162,7 +153,7 @@ app.use((req, res, next) => {
   res.on("finish", () => {
     const duration = Date.now() - start;
     if (path.startsWith("/api")) {
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
+      let logLine = `${req.method} ${redactPath(path)} ${res.statusCode} in ${duration}ms`;
       if (capturedJsonResponse) {
         logLine += ` :: ${JSON.stringify(capturedJsonResponse, redactSensitive)}`;
       }
