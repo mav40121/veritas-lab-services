@@ -76,10 +76,10 @@ check("CLIA_PRESETS[10] is Blood Gas pO2 (cluster sentinel)",
   rows[10]?.label.includes("Blood Gas pO2"),
   `got "${rows[10]?.label}"`);
 
-const sepBlock = source.match(/\{CLIA_PRESETS\.slice\(0,\s*8\)[^]*?<SelectSeparator[^]*?CLIA_PRESETS\[8\][^]*?<SelectSeparator[^]*?CLIA_PRESETS\[9\][^]*?CLIA_PRESETS\.slice\(10,\s*37\)/);
+const sepBlock = source.match(/\{CLIA_PRESETS\.slice\(0,\s*8\)[^]*?<SelectSeparator[^]*?CLIA_PRESETS\[8\][^]*?<SelectSeparator[^]*?CLIA_PRESETS\[9\][^]*?CLIA_PRESETS\.slice\(10,\s*38\)/);
 check("VeritaCheckPage.tsx renders separators around positions 8 and 9",
   !!sepBlock,
-  "expected slice(0, 8) ... SelectSeparator ... CLIA_PRESETS[8] ... SelectSeparator ... CLIA_PRESETS[9] ... slice(10, 37)");
+  "expected slice(0, 8) ... SelectSeparator ... CLIA_PRESETS[8] ... SelectSeparator ... CLIA_PRESETS[9] ... slice(10, 38)");
 
 console.log("");
 console.log(`SUMMARY: ${pass} pass, ${fail} fail`);
