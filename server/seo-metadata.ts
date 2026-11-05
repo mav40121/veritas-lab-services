@@ -150,8 +150,8 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
     description: "Get started with VeritaAssure\u00AE. Follow the step-by-step onboarding guide to set up your laboratory compliance platform.",
   },
   "/book": {
-    title: "Book a Consultation | Veritas Lab Services",
-    description: "Schedule a consultation or demo with Michael Veri. Learn how VeritaAssure\u00AE can help your laboratory stay compliant and survey-ready.",
+    title: "Lab Management 101: A Guide to Laboratory Leadership | Veritas Lab Services",
+    description: "Lab Management 101 by Michael Veri, MS, MBA, MLS(ASCP), CPHQ: the forthcoming guide to laboratory leadership. Join the notification list.",
   },
   "/demo": {
     title: "Demo | VeritaAssure\u00AE Lab Compliance & Operations Software",

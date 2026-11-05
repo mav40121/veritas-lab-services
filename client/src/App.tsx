@@ -519,7 +519,8 @@ function AppContent() {
               an ad / email / social link uses. Each previously fell through to the
               404 page (a silent funnel leak); redirect them to the real page so no
               first-touch bounces. Signup/trial -> /register; get-started -> the real
-              getting-started page; demo-booking -> /book; product/features ->
+              getting-started page; demo requests -> /demo (it has the request form);
+              scheduling -> /book/scoping-call (/book is the book page); product/features ->
               /veritaassure; about -> /team. Verified 2026-09-08 that all twelve 404'd. */}
           <Route path="/signup">{() => <Redirect to="/register" />}</Route>
           <Route path="/sign-up">{() => <Redirect to="/register" />}</Route>
@@ -527,9 +528,9 @@ function AppContent() {
           <Route path="/trial">{() => <Redirect to="/register" />}</Route>
           <Route path="/get-started">{() => <Redirect to="/getting-started" />}</Route>
           <Route path="/start">{() => <Redirect to="/getting-started" />}</Route>
-          <Route path="/request-demo">{() => <Redirect to="/book" />}</Route>
-          <Route path="/book-a-demo">{() => <Redirect to="/book" />}</Route>
-          <Route path="/schedule">{() => <Redirect to="/book" />}</Route>
+          <Route path="/request-demo">{() => <Redirect to="/demo" />}</Route>
+          <Route path="/book-a-demo">{() => <Redirect to="/demo" />}</Route>
+          <Route path="/schedule">{() => <Redirect to="/book/scoping-call" />}</Route>
           <Route path="/features">{() => <Redirect to="/veritaassure" />}</Route>
           <Route path="/product">{() => <Redirect to="/veritaassure" />}</Route>
           <Route path="/about">{() => <Redirect to="/team" />}</Route>

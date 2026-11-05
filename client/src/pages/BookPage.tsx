@@ -97,7 +97,7 @@ const PULL_QUOTES = [
 ];
 
 export default function BookPage() {
-    useSEO({ title: "Book a Consultation | Veritas Lab Services", description: "Schedule a consultation or demo with Michael Veri. Learn how VeritaAssure® can help your laboratory stay compliant and survey-ready." });
+    useSEO({ title: "Lab Management 101: A Guide to Laboratory Leadership | Veritas Lab Services", description: "Lab Management 101 by Michael Veri, MS, MBA, MLS(ASCP), CPHQ: the forthcoming guide to laboratory leadership. Join the notification list." });
 return (
     <div>
       {/* Hero */}

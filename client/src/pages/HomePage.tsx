@@ -121,7 +121,7 @@ return (
               { name: "VeritaPT™", href: "/veritapt" },
               { name: "VeritaTrack™", href: "/veritatrack" },
               { name: "VeritaStock™", href: "/veritastock" },
-              { name: "VeritaBench™", href: "/veritabench" },
+              { name: "VeritaBench™", href: "/calculator" },
             ].map(({ name, href }) => (
               <Link key={name} href={href}>
                 <span className="inline-flex items-center px-3 py-1.5 rounded-full border border-primary/30 text-primary text-xs font-medium bg-primary/5 hover:bg-primary/10 transition-colors cursor-pointer">
