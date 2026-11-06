@@ -192,6 +192,10 @@ jobs:
         # Michael 2026-11-04 (Q161 = 1): the roster shows who signed by either path; a Staff login signature closes their assignment,
         # but not a required quiz or a newer version; the bell lists what is left; the Excel report carries the roster.
         run: npm run test:veritadc-signature-status
+      - name: Run VeritaDC read-and-sign by group integration test
+        # Step D of Heywood's move: a Staff login sees and signs only what's assigned to them. A document, manual or the whole lab goes to groups,
+        # named people or everyone; new documents and new group members follow; assigning sends no email; coworkers' status stays hidden.
+        run: npm run test:veritadc-read-sign-groups
       - name: Run VeritaDC staff approvals integration test
         # Michael 2026-11-04 (Q155 = 1): a staff login named on a route step or in its group reads and signs with typed name and password, using
         # no editing seat. Nobody else can open it, a changed document is refused, and the editor's approve and reject paths are unchanged.

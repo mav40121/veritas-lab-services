@@ -58,6 +58,8 @@ sql("UPDATE user_sessions SET is_active = 0 WHERE user_id = ?", annId);
 const annToken = (await call("POST", "/api/auth/login", { email: annEmail, password: pw })).body.token;
 addEmp("Pat", "Sample");
 addEmp("Nia", "Nologin");
+// Since Step D a Staff login sees only what's assigned; this check is about the roster, so everything goes to everyone.
+await call("POST", `/api/labs/${labId}/veritapolicy/read-sign`, { scope: "lab", everyone: true }, token);
 const assigned = await call("POST", `/api/labs/${labId}/veritapolicy/documents/${doc}/attestations`, { assignedToUserIds: [annId] }, token);
 check("S0. Ann is assigned the document", assigned.status === 201, `HTTP ${assigned.status}`);
 
