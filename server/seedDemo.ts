@@ -108,10 +108,9 @@ export async function seedDemoData() {
     // failing) study back to FAIL on every deploy and log a bogus migration.
     const troponinDataPoints = generateTroponinData();
     sqlite.prepare(
-      "UPDATE studies SET instrument = ?, analyst = ?, date = ?, clia_allowable_error = ?, tea_is_percentage = ?, tea_unit = ?, data_points = ?, instruments = ? WHERE id = ?"
+      "UPDATE studies SET instrument = ?, date = ?, clia_allowable_error = ?, tea_is_percentage = ?, tea_unit = ?, data_points = ?, instruments = ? WHERE id = ?"
     ).run(
       'Abbott ARCHITECT i2000SR [Primary]',
-      'Michael Veri, MS, MBA, MLS(ASCP), CPHQ',
       '2026-02-14',
       0.30, // 30% TEa stored as decimal fraction
       1, // percentage
@@ -185,7 +184,7 @@ export async function seedDemoData() {
       demoUserId,
       "Sodium",
       "Ortho VITROS 5600 [Primary]",
-      "Michael Veri, MS, MBA, MLS(ASCP), CPHQ",
+      "T. Alvarez, MLS(ASCP)",
       "2026-01-29",
       "ref_interval",
       4, // 4 mmol/L absolute TEa (same as Sodium method comparison)
@@ -217,7 +216,7 @@ export async function seedDemoData() {
       demoUserId,
       "Glucose",
       "Roche Cobas c503",
-      "Michael Veri, MS, MBA, MLS(ASCP), CPHQ",
+      "T. Alvarez, MLS(ASCP)",
       "2026-02-21",
       "precision",
       0.07, // 7.0% TEa stored as decimal fraction
@@ -231,10 +230,9 @@ export async function seedDemoData() {
   } else {
     // Backfill data in case study exists with stale data
     sqlite.prepare(
-      "UPDATE studies SET instrument = ?, analyst = ?, date = ?, clia_allowable_error = ?, tea_is_percentage = ?, tea_unit = ?, data_points = ?, instruments = ?, result = 'pass' WHERE id = ?"
+      "UPDATE studies SET instrument = ?, date = ?, clia_allowable_error = ?, tea_is_percentage = ?, tea_unit = ?, data_points = ?, instruments = ?, result = 'pass' WHERE id = ?"
     ).run(
       "Roche Cobas c503",
-      "Michael Veri, MS, MBA, MLS(ASCP), CPHQ",
       "2026-02-21",
       0.07,
       1,
@@ -263,7 +261,7 @@ export async function seedDemoData() {
       demoUserId,
       "Hemoglobin A1c",
       "Bio-Rad D-100",
-      "Michael Veri, MS, MBA, MLS(ASCP), CPHQ",
+      "T. Alvarez, MLS(ASCP)",
       "2026-03-12",
       "lot_to_lot",
       0.06, // 6.0% relative TEa stored as decimal fraction
@@ -277,10 +275,9 @@ export async function seedDemoData() {
   } else {
     // Backfill data in case study exists with stale data
     sqlite.prepare(
-      "UPDATE studies SET instrument = ?, analyst = ?, date = ?, clia_allowable_error = ?, tea_is_percentage = ?, tea_unit = ?, data_points = ?, instruments = ?, result = 'pass' WHERE id = ?"
+      "UPDATE studies SET instrument = ?, date = ?, clia_allowable_error = ?, tea_is_percentage = ?, tea_unit = ?, data_points = ?, instruments = ?, result = 'pass' WHERE id = ?"
     ).run(
       "Bio-Rad D-100",
-      "Michael Veri, MS, MBA, MLS(ASCP), CPHQ",
       "2026-03-12",
       0.06,
       1,
@@ -310,7 +307,7 @@ export async function seedDemoData() {
       demoUserId,
       "Troponin I",
       "Beckman DxI 9000 Access",
-      "Michael Veri, MS, MBA, MLS(ASCP), CPHQ",
+      "T. Alvarez, MLS(ASCP)",
       "2026-04-08",
       "sensitivity",
       0,       // sensitivity does not use cliaAllowableError; CV / bias thresholds are baked into the input
@@ -323,10 +320,9 @@ export async function seedDemoData() {
     console.log("[seed] Inserted Troponin I Sensitivity study");
   } else {
     sqlite.prepare(
-      "UPDATE studies SET instrument = ?, analyst = ?, date = ?, clia_allowable_error = 0, tea_is_percentage = 0, tea_unit = ?, data_points = ?, instruments = ?, result = 'pass' WHERE id = ?"
+      "UPDATE studies SET instrument = ?, date = ?, clia_allowable_error = 0, tea_is_percentage = 0, tea_unit = ?, data_points = ?, instruments = ?, result = 'pass' WHERE id = ?"
     ).run(
       "Beckman DxI 9000 Access",
-      "Michael Veri, MS, MBA, MLS(ASCP), CPHQ",
       "2026-04-08",
       "ng/mL",
       JSON.stringify(generateTroponinSensitivityData()),
@@ -677,7 +673,7 @@ function seedStudies(sqlite: any, demoUserId: number, now: string) {
     demoUserId,
     "Sodium",
     "Ortho VITROS 5600 [Primary]",
-    "Michael Veri, MS, MBA, MLS(ASCP), CPHQ",
+    "T. Alvarez, MLS(ASCP)",
     "2026-01-15",
     "method_comparison",
     4, // 4 mmol/L absolute TEa
@@ -697,7 +693,7 @@ function seedStudies(sqlite: any, demoUserId: number, now: string) {
     demoUserId,
     "Potassium",
     "Ortho VITROS 5600 [Primary]",
-    "Michael Veri, MS, MBA, MLS(ASCP), CPHQ",
+    "T. Alvarez, MLS(ASCP)",
     "2026-01-15",
     "method_comparison",
     0.3, // 0.3 mmol/L absolute TEa
@@ -750,7 +746,7 @@ function seedStudies(sqlite: any, demoUserId: number, now: string) {
     demoUserId,
     "Sodium",
     "Ortho VITROS 5600 [Primary]",
-    "Michael Veri, MS, MBA, MLS(ASCP), CPHQ",
+    "T. Alvarez, MLS(ASCP)",
     "2026-01-29",
     "ref_interval",
     4, // 4 mmol/L absolute TEa (same as Sodium method comparison)
@@ -981,7 +977,7 @@ function seedTroponinStudy(sqlite: any, demoUserId: number, now: string) {
     demoUserId,
     'Troponin I',
     'Abbott ARCHITECT i2000SR [Primary]',
-    'Michael Veri, MS, MBA, MLS(ASCP), CPHQ',
+    'T. Alvarez, MLS(ASCP)',
     '2026-02-14',
     'method_comparison',
     0.30, // 30% CLIA TEa (stored as decimal fraction)

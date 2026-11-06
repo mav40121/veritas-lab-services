@@ -74,7 +74,7 @@ import {
 } from "./securityPolicy";
 import { registerSecuritySettingsRoutes } from "./securitySettingsRoutes";
 import { recordViewMiddleware, accessReport, accessReportExcel } from "./recordViews";
-import { DEMO_FIXTURE_NAME, planDemoFixtureRename, demoFixtureRenameReport, applyDemoFixtureRename } from "./demoFixtureRename";
+import { DEMO_FIXTURE_NAME, planDemoFixtureRename, demoFixtureRenameReport, applyDemoFixtureRename, fixtureCliaForSampleReport } from "./demoFixtureRename";
 import { resealAll } from "./secretRotation";
 import { labWideCorrelation, correlationPeerInstruments, describeCorrelationInstrument, rowComplexity, mapComplianceGaps } from "./labWideCorrelation";
 import { attachSopLinks, sopLinksByDocument, effectiveSop } from "./veritamapSopLink";
@@ -13915,6 +13915,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       }
 
       if (cliaLabName) { (study as any)._labName = cliaLabName; }
+      // A public sample report names the demo fixture. No signed-in lab, so its CLIA comes from the fixture, and only for that exact pair.
+      if (!cliaNumber && !cliaLabName) cliaNumber = fixtureCliaForSampleReport(study);
 
       // Resolve VeritaMap-linked instrument data for report rendering (shared with export-all: server/studyPdf.ts)
       if (study.instrumentMeta) {

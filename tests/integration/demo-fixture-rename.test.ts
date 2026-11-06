@@ -34,6 +34,7 @@ async function main() {
   check("1. the sample reports name no real analyst", !/M\. Veri|J\. Hall|D\. McCormick/.test(reports));
   check("1. they use the three made-up names", ["T. Alvarez, MLS(ASCP)", "R. Okafor, MLS(ASCP)", "L. Brooks, MLS(ASCP)"].every((n) => reports.includes(n)));
   check("1. the quiz placeholder names nobody real", !readFileSync("client/src/pages/VeritaCompAppPage.tsx", "utf8").includes(["John", "Hall"].join(" ")));
+  check("1. no placeholder names a client", !/placeholder=.*San Carlos/.test(readFileSync("client/src/pages/AccountSettingsPage.tsx", "utf8")));
   const banner = readFileSync("client/src/pages/DemoLabPage.tsx", "utf8");
   check("1. the demo banner says fictional", banner.includes(`Live Demo - ${NEW} (fictional)`));
 
@@ -67,6 +68,16 @@ async function main() {
     check("2. the map and the scan use it too", /^Sample Regional - /.test(mapName()) && /^Sample Regional - /.test(scanName()), `${mapName()} | ${scanName()}`);
     const staffNames = sqlite.prepare("SELECT lab_name FROM staff_labs WHERE clia_number IN (?, '05D2187634')").all(CLIA) as any[];
     check("2. so do the staff labs", staffNames.length > 0 && staffNames.every((s) => s.lab_name.startsWith("Sample Regional")), JSON.stringify(staffNames));
+    const REAL_ANALYST = ["Michael", "Veri, MS, MBA, MLS(ASCP), CPHQ"].join(" ");
+    const demoAnalysts = () => (sqlite.prepare("SELECT DISTINCT analyst FROM studies WHERE user_id = ?").all(demo.id) as any[]).map((r) => r.analyst);
+    check("2. a fresh seed's demo studies name a made-up analyst", demoAnalysts().includes("T. Alvarez, MLS(ASCP)") && !demoAnalysts().includes(REAL_ANALYST), JSON.stringify(demoAnalysts()));
+
+    // The public sample reports' CLIA
+    const { fixtureCliaForSampleReport } = await import("../../server/demoFixtureRename");
+    check("2. a sample report with the fixture's name and CLIA prints that CLIA", fixtureCliaForSampleReport({ _labName: NEW, _cliaNumber: CLIA }) === CLIA);
+    check("2. another lab's CLIA under the fixture's name is ignored", fixtureCliaForSampleReport({ _labName: NEW, _cliaNumber: "49D0000001" }) === undefined);
+    check("2. the fixture's CLIA under another name is ignored", fixtureCliaForSampleReport({ _labName: "Made-up Other Lab", _cliaNumber: CLIA }) === undefined);
+    check("2. a report with neither gets none", fixtureCliaForSampleReport({}) === undefined);
 
     // Production's shape: the fixture carrying the old name, the titles with their em dash, a second staff lab on the older seed's CLIA.
     const emDash = "—";
@@ -89,6 +100,10 @@ async function main() {
     const customerStaff = Number(sqlite.prepare("INSERT INTO staff_labs (user_id, lab_name, clia_number, created_at, updated_at) VALUES (?, ?, '49D0000001', ?, ?)").run(customerUser, OLD, now, now).lastInsertRowid);
     const customerMap = Number(sqlite.prepare("INSERT INTO veritamap_maps (user_id, lab_id, name, instruments, created_at, updated_at) VALUES (?, ?, ?, '[]', ?, ?)").run(customerUser, customerLab, `${OLD_PREFIX} ${emDash} their map`, now, now).lastInsertRowid);
     const customerScan = Number(sqlite.prepare("INSERT INTO veritascan_scans (user_id, lab_id, name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)").run(customerUser, customerLab, `${OLD_PREFIX} ${emDash} their scan`, now, now).lastInsertRowid);
+    // Production's demo studies name a real person, and someone else's study can carry the same words. That one is their record.
+    const demoStudyCount = Number(sqlite.prepare("UPDATE studies SET analyst = ? WHERE user_id = ? AND analyst = 'T. Alvarez, MLS(ASCP)'").run(REAL_ANALYST, demo.id).changes);
+    const customerStudy = Number(sqlite.prepare("INSERT INTO studies (user_id, test_name, instrument, analyst, date, study_type, clia_allowable_error, data_points, instruments, status, created_at) SELECT ?, test_name, instrument, ?, date, study_type, clia_allowable_error, data_points, instruments, status, created_at FROM studies WHERE user_id = ? LIMIT 1").run(customerUser, REAL_ANALYST, demo.id).lastInsertRowid);
+    const fixtureRows = 7 + demoStudyCount;
 
     const snapshot = () => JSON.stringify({
       labs: sqlite.prepare("SELECT id, lab_name, clia_number FROM labs ORDER BY id").all(),
@@ -96,6 +111,7 @@ async function main() {
       staff: sqlite.prepare("SELECT id, lab_name, clia_number, lab_address_street, lab_address_city, lab_address_zip FROM staff_labs ORDER BY id").all(),
       maps: sqlite.prepare("SELECT id, name FROM veritamap_maps ORDER BY id").all(),
       scans: sqlite.prepare("SELECT id, name FROM veritascan_scans ORDER BY id").all(),
+      studies: sqlite.prepare("SELECT id, analyst FROM studies ORDER BY id").all(),
     });
     const auditRows = () => Number((sqlite.prepare("SELECT COUNT(*) AS n FROM audit_log WHERE entity_label LIKE 'Demo lab fixture renamed%'").get() as any).n);
     const start = snapshot();
@@ -116,10 +132,10 @@ async function main() {
     const empty = await post({});
     check("4. no options means a dry run", empty.s === 200 && empty.j.dryRun === true);
     check("4. a dry run writes nothing", snapshot() === start && auditRows() === 0);
-    check("4. it counts the fixture by table", dry.j.toChange?.labs?.count === 1 && dry.j.toChange?.users?.count === 1 && dry.j.toChange?.staff_labs?.count === 2 && dry.j.toChange?.veritamap_maps?.count === 2 && dry.j.toChange?.veritascan_scans?.count === 1 && dry.j.total === 7, JSON.stringify(dry.j.toChange));
+    check("4. it counts the fixture by table", dry.j.toChange?.labs?.count === 1 && dry.j.toChange?.users?.count === 1 && dry.j.toChange?.staff_labs?.count === 2 && dry.j.toChange?.veritamap_maps?.count === 2 && dry.j.toChange?.veritascan_scans?.count === 1 && dry.j.toChange?.studies?.count === demoStudyCount && demoStudyCount > 0 && dry.j.total === fixtureRows, JSON.stringify(dry.j.toChange));
     check("4. it gives the fixture's ids", dry.j.toChange?.labs?.ids?.[0] === labId && dry.j.toChange?.users?.ids?.[0] === demo.id && dry.j.toChange?.veritamap_maps?.ids?.includes(fixtureMapInLab));
     check("4. it counts what it would leave alone", dry.j.leftAlone?.labs === 1 && dry.j.leftAlone?.users === 1 && dry.j.leftAlone?.staff_labs === 1 && dry.j.leftAlone?.veritamap_maps === 1 && dry.j.leftAlone?.veritascan_scans === 1, JSON.stringify(dry.j.leftAlone));
-    check("4. there are no names in the answer", !/River|Sample Regional|Made Up|example\.test/.test(dry.text), dry.text.slice(0, 200));
+    check("4. there are no names in the answer", !/River|Sample Regional|Made Up|example\.test|Veri,|Alvarez/.test(dry.text), dry.text.slice(0, 200));
     check("4. a write with no confirm words is refused", (await post({ dryRun: false })).s === 400);
     const wrong = await post({ dryRun: false, confirm: "yes" });
     check("4. a write with the wrong words is refused", wrong.s === 400 && wrong.j.code === "CONFIRM_REQUIRED", wrong.text.slice(0, 120));
@@ -127,7 +143,9 @@ async function main() {
 
     // 5. The write
     const wrote = await post({ dryRun: false, confirm: NEW });
-    check("5. the write answers", wrote.s === 200 && wrote.j.dryRun === false && wrote.j.changed === 7 && wrote.j.remaining === 0, wrote.text.slice(0, 200));
+    check("5. the write answers", wrote.s === 200 && wrote.j.dryRun === false && wrote.j.changed === fixtureRows && wrote.j.remaining === 0, wrote.text.slice(0, 200));
+    check("5. the demo studies now name a made-up analyst", !demoAnalysts().includes(REAL_ANALYST) && demoAnalysts().includes("T. Alvarez, MLS(ASCP)"), JSON.stringify(demoAnalysts()));
+    check("5. another person's study with the same words did not move", (sqlite.prepare("SELECT analyst AS n FROM studies WHERE id = ?").get(customerStudy) as any).n === REAL_ANALYST);
     const get = (sql: string, ...a: unknown[]) => sqlite.prepare(sql).get(...a) as any;
     check("5. the fixture lab has the new name and the same CLIA", get("SELECT lab_name AS n FROM labs WHERE id = ?", labId).n === NEW && get("SELECT clia_number AS n FROM labs WHERE id = ?", labId).n === CLIA);
     check("5. so does the demo user", get("SELECT clia_lab_name AS n FROM users WHERE id = ?", demo.id).n === NEW && get("SELECT clia_number AS n FROM users WHERE id = ?", demo.id).n === CLIA);
@@ -145,10 +163,10 @@ async function main() {
     check("5. nor their map", get("SELECT name AS n FROM veritamap_maps WHERE id = ?", customerMap).n === `${OLD_PREFIX} ${emDash} their map`);
     check("5. nor their scan", get("SELECT name AS n FROM veritascan_scans WHERE id = ?", customerScan).n === `${OLD_PREFIX} ${emDash} their scan`);
     check("5. nor a lab with another name", get("SELECT lab_name AS n FROM labs WHERE id = ?", otherLab).n === "Some Other Lab");
-    check("5. each changed row has an audit row", auditRows() === 7, String(auditRows()));
+    check("5. each changed row has an audit row", auditRows() === fixtureRows, String(auditRows()));
     const afterWrite = snapshot();
     const again = await post({ dryRun: false, confirm: NEW });
-    check("5. a second run changes nothing", again.s === 200 && again.j.changed === 0 && snapshot() === afterWrite && auditRows() === 7, again.text.slice(0, 160));
+    check("5. a second run changes nothing", again.s === 200 && again.j.changed === 0 && snapshot() === afterWrite && auditRows() === fixtureRows, again.text.slice(0, 160));
     await seedDemoData();
     check("5. nor does the next boot put the old name back", snapshot() === afterWrite);
     const { applyDemoFixtureRename } = await import("../../server/demoFixtureRename");
@@ -169,6 +187,7 @@ async function main() {
     check("6. and a fictional address", overview.address === "100 Medical Center Drive, Sampletown, CA 00000", overview.address);
     const scan = await (await fetch(`${base}/api/demo/data`)).text();
     check("6. the public demo data has no old name once the write has run", !scan.includes(OLD_PREFIX));
+    check("6. and no real analyst", !scan.includes(REAL_ANALYST));
   } finally {
     server.close();
   }
