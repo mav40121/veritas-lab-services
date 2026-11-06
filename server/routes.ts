@@ -22880,6 +22880,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const id = Number(req.params.id); const sqlite = (db as any).$client;
     const ex = sqlite.prepare("SELECT id FROM lab_equipment WHERE id = ? AND lab_id = ?").get(id, req.scope.labId);
     if (!ex) return res.status(404).json({ error: "Equipment not found in this lab" });
+    // A stain log is a record the lab keeps (Q178 = 1): an instrument holding one is retired, not deleted. Rows nothing was recorded on go with it.
+    const stainEntries = (sqlite.prepare("SELECT COUNT(*) AS n FROM stain_log_entries WHERE equipment_id = ? AND lab_id = ?").get(id, req.scope.labId) as any).n;
+    if (stainEntries > 0) return res.status(409).json({ error: `This instrument holds ${stainEntries} stain log ${stainEntries === 1 ? "entry" : "entries"}, so it can't be deleted. Retire it instead.`, code: "HOLDS_STAIN_LOG", entry_count: stainEntries });
+    sqlite.prepare("DELETE FROM stain_log_rows WHERE equipment_id = ? AND lab_id = ?").run(id, req.scope.labId);
     sqlite.prepare("DELETE FROM equipment_maintenance_events WHERE equipment_id = ?").run(id);
     sqlite.prepare("DELETE FROM lab_equipment WHERE id = ?").run(id);
     res.json({ ok: true });
@@ -44432,6 +44436,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   registerTemperatureLogRoutes(app, authMiddleware, requireWriteAccess, requireModuleEdit);
   const { registerMaintainRecordReviewRoutes } = await import('./maintainRecordReview');
   registerMaintainRecordReviewRoutes(app, authMiddleware, requireWriteAccess);
+  const { registerStainLogRoutes } = await import('./stainLog');
+  registerStainLogRoutes(app, authMiddleware, requireWriteAccess, requireModuleEdit, hasModuleEditAccess);
+  const { registerBlankFormRoutes } = await import('./veritadcBlankForms');
+  registerBlankFormRoutes(app, authMiddleware, requireModuleEdit);
 
   // VeritaComp bulk import: past competency dates per person and method (Q164 = 1)
   const { registerCompetencyMethodHistoryRoutes } = await import('./competencyMethodHistory');

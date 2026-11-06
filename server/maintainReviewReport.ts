@@ -2,6 +2,8 @@
 //
 // One month of VeritaMaintain records with their review, as a workbook a lab can hand to an inspector (Michael 2026-11-04, Q161 = 1). Customer-facing workbook standard:
 // About sheet first, lab identity in three layers, brand colors, sheets protected.
+import { CODE_LABELS } from "../shared/stainLogRules";
+
 const TEAL = "FF01696F", TINT = "FFE6F2F2", ACCENT = "FF0A3A3D", INK = "FF28251D", ALT = "FFEBF3F8", GRID = "FFD0D0D0";
 const GREEN = "FF437A22", AMBER = "FF964219", RED = "FFA12C7B";
 
@@ -10,8 +12,11 @@ const EVENT_LABEL: Record<string, string> = {
   function_check: "Function check", troubleshooting: "Troubleshooting", solution_change: "Solution change",
 };
 
+// The stain log's sheets appear only in a month that has stain log entries, so a lab without one sees the workbook it always did.
+const ITEM_TYPE_LABEL: Record<string, string> = { equipment: "Instrument", temp_unit: "Temperature", stain_manual: "Manual stain log" };
+
 export async function generateMaintainReviewReport(
-  data: { month: string; items: any[]; readings: any[]; events: any[] },
+  data: { month: string; items: any[]; readings: any[]; events: any[]; stainEntries?: any[]; manualEntries?: any[] },
   identity: { labName: string; cliaNumber: string },
 ): Promise<Buffer> {
   const { default: ExcelJS } = await import("exceljs");
@@ -56,7 +61,9 @@ export async function generateMaintainReviewReport(
   section("About this report");
   body(`This workbook is one month of equipment and temperature records for ${labName}, ${data.month}, with who reviewed each record and when. It is a point-in-time copy. The live VeritaAssure record is the record of authority.`);
   section("How to use it");
-  body("Monthly Review lists each instrument and temperature unit, what the records show, any problem found, the corrective action the reviewer recorded, and the signature. Temperature Readings and Equipment Entries are the underlying records for the month. An entry added after a review was signed is called out on the Monthly Review sheet.");
+  const stainEntries = data.stainEntries ?? [];
+  const manualEntries = data.manualEntries ?? [];
+  body(`Monthly Review lists each instrument and temperature unit, what the records show, any problem found, the corrective action the reviewer recorded, and the signature. Temperature Readings and Equipment Entries are the underlying records for the month.${stainEntries.length ? " Stain Log lists each coded entry, with the lot number and expiration on a change; a voided entry stays listed with its reason." : ""}${manualEntries.length ? " Manual Stain Log lists each manual stain; it holds no specimen number, and the link to a patient stays in the lab's LIS." : ""} An entry added after a review was signed is called out on the Monthly Review sheet.`);
   section("Source");
   body("Every line comes from what this lab recorded in VeritaMaintain. Ranges, schedules and corrective actions are the lab's own. Nothing here is calculated beyond counting those records against the readings per day the lab set.");
   section("Coverage gaps");
@@ -99,7 +106,7 @@ export async function generateMaintainReviewReport(
     ["Record", "Type", "What the records show", "Problems found", "Status", "Reviewed by", "Signed as", "Signed", "Corrective action", "Added after review"],
     [30, 14, 36, 36, 12, 24, 30, 12, 40, 12],
     data.items.map((i) => [
-      i.name, i.type === "equipment" ? "Instrument" : "Temperature", (i.review?.summary?.notes ?? i.notes ?? []).join("; "),
+      i.name, ITEM_TYPE_LABEL[i.type] ?? "Record", (i.review?.summary?.notes ?? i.notes ?? []).join("; "),
       (i.review ? i.review.problems : i.problems).join("; "), i.review ? "Reviewed" : "Not reviewed",
       i.review?.typed_signature ?? "", i.review?.capacity_label ?? "", i.review ? String(i.review.signed_at).slice(0, 10) : "", i.review?.corrective_action ?? "", i.entries_after_review || "",
     ]),
@@ -121,6 +128,29 @@ export async function generateMaintainReviewReport(
     [30, 12, 22, 20, 60],
     data.events.map((x) => [x.instrument_name, x.event_date, EVENT_LABEL[x.event_type] || x.event_type, x.performed_by ?? "", x.notes ?? ""]),
   );
+  const voidedText = (x: any) => (x.voided_at ? `Voided ${String(x.voided_at).slice(0, 10)}: ${x.void_reason ?? ""}` : "");
+  const flagVoided = (col: number) => (row: any, v: any[]) => { if (v[col - 1]) row.getCell(col).font = { name: "Calibri", size: 10, bold: true, color: { argb: RED } }; };
+  if (stainEntries.length) {
+    await sheetFor(
+      "Stain Log",
+      ["Instrument", "Row", "Date", "Code", "Meaning", "Lot number", "Expiration", "Initials", "Corrective action", "Voided"],
+      [26, 22, 12, 8, 20, 16, 12, 10, 40, 30],
+      stainEntries.map((x) => [x.instrument_name, x.row_name, x.log_date, x.code, CODE_LABELS[x.code] ?? "", x.lot_number ?? "", x.expiration_date ?? "", x.initials ?? "", x.corrective_action ?? "", voidedText(x)]),
+      flagVoided(10),
+    );
+  }
+  if (manualEntries.length) {
+    await sheetFor(
+      "Manual Stain Log",
+      ["Date", "Specimen type", "Result", "Test slide", "Initials", "Comments or corrective action", "Voided"],
+      [12, 26, 10, 10, 10, 50, 30],
+      manualEntries.map((x) => [x.log_date, x.specimen_type, x.result === "problem" ? "Problem" : "Good", x.test_slide ? "Yes" : "No", x.initials ?? "", x.comments ?? "", voidedText(x)]),
+      (row, v) => {
+        if (v[2] === "Problem") row.getCell(3).font = { name: "Calibri", size: 10, bold: true, color: { argb: RED } };
+        flagVoided(7)(row, v);
+      },
+    );
+  }
   const buf = await wb.xlsx.writeBuffer();
   return Buffer.from(buf);
 }
