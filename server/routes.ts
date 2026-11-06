@@ -10999,6 +10999,13 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       ORDER BY CASE lm.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END, lm.created_at ASC
     `).all(ownerUserId, req.scope.labId);
 
+    // Michael Q192 = 1: a Staff login gets its own row and no pending invitations, nothing about anyone else or the lab's seats.
+    if (membersOwnIn(req)) {
+      const ownRows = (rows as any[]).filter((r) => r.user_id === req.userId);
+      const isMine = medicalDirector && ownRows.some((r) => String(r.email || "").toLowerCase() === medicalDirector.email.toLowerCase());
+      return res.json({ members: ownRows, pendingInvites: [], seatLimits: null, seatCounts: null, staffPortal: null, medicalDirector: isMine ? medicalDirector : null, ownOnly: true });
+    }
+
     // Pending invites: user_seats rows scoped to this lab where the recipient
     // hasn't accepted yet (no matching user account = no lab_members row
     // exists for them yet).
@@ -11078,7 +11085,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // reads as admin here but is refused invitation links (server/vlsSupport.ts), so not them.
     if (!canManageLabMembers(req.scope) || req.scope?.viaVlsSupport) pendingInvites = pendingInvites.map((inv) => ({ ...inv, invite_token: null }));
 
-    res.json({ members: rows, pendingInvites, seatLimits, seatCounts, staffPortal, medicalDirector });
+    res.json({ members: rows, pendingInvites, seatLimits, seatCounts, staffPortal, medicalDirector, ownOnly: false });
   });
 
   // PUT /api/labs/:labId/medical-director
@@ -24278,6 +24285,11 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     staffOwnScope((db as any).$client, req.userId, labId ?? req.scope?.labId ?? null, module);
   // The roster: a Staff seat with edit on VeritaStaff works on it, and one with edit on VeritaComp assigns quizzes from it, so both keep it.
   const rosterOwnIn = (req: any, labId?: unknown): StaffOwnScope | null => staffOwnIn(req, labId, "veritastaff") && staffOwnIn(req, labId);
+  // The members list (Michael Q192 = 1): the seats that keep the roster, and a Staff seat with edit on VeritaScan or VeritaDC, whose owner pickers and assign list need the names.
+  const membersOwnIn = (req: any): StaffOwnScope | null => {
+    const own = rosterOwnIn(req);
+    return own && !staffSeatEditsAny((db as any).$client, req.userId, req.scope?.labId, ["veritascan", "veritapolicy"]) ? own : null;
+  };
   const refuseStaffOwn = (res: any) => res.status(403).json({ error: "A staff login can only open their own records.", code: "STAFF_OWN_ONLY" });
   // Reads only evaluators use (a whole-lab list, an evaluator's picker): a Staff login is refused.
   const notForStaffLogin = (req: any, res: any, next: any) => (staffOwnIn(req) ? refuseStaffOwn(res) : next());
