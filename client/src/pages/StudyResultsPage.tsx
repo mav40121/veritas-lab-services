@@ -204,7 +204,6 @@ function generateNarrative(results: StudyResults, study: Study): string {
   // BUG-085: a study that cannot be evaluated gets no narrative (it would read as a FAIL); the summary says why.
   if ((results as any).notEvaluable) return "";
   const cliaPct = (study.cliaAllowableError * 100).toFixed(1);
-  const adlmPct = (study.cliaAllowableError * 50).toFixed(1);
   let narrative = "";
 
   if (isCalVerCorrelation(results)) {
@@ -221,8 +220,6 @@ function generateNarrative(results: StudyResults, study: Study): string {
 
   if (isCalVer(results)) {
     const cv = results as CalVerResults;
-    const maxErr = Math.max(...cv.levelResults.map(r => Math.abs(r.obsError * 100)));
-    const meetsAdlm = maxErr <= study.cliaAllowableError * 50;
     const slope = Object.values(cv.regression)[0];
     const slopeVal = slope?.slope ?? 1;
     const interceptVal = slope?.intercept ?? 0;
@@ -238,9 +235,6 @@ function generateNarrative(results: StudyResults, study: Study): string {
         : `a small negative constant offset of ${Math.abs(interceptVal).toFixed(3)} units at low concentrations`;
     if (cv.overallPass) {
       narrative = `All ${cv.totalCount} calibration levels for ${study.testName} fell within the adopted calibration verification acceptance criterion of ±${cliaPct}% (§493 PT TEa for this analyte; adopted under 42 CFR §493.1255(b)(2) and §493.1253(b)(3)). `;
-      narrative += meetsAdlm
-        ? `The maximum observed error of ${maxErr.toFixed(1)}% also meets the ADLM-recommended internal goal of ±${adlmPct}%, indicating performance well above the adopted acceptance criterion. `
-        : `The maximum observed error of ${maxErr.toFixed(1)}% meets the adopted acceptance criterion; the ADLM recommends an internal goal of ±${adlmPct}% for enhanced quality assurance. `;
       narrative += `The regression slope of ${slopeVal.toFixed(3)} (ideal: 1.000) and intercept of ${interceptVal.toFixed(3)} (ideal: 0) indicate ${slopeInterp} and ${interceptInterp}. This instrument is performing within the adopted limits across its reportable range.`;
     } else {
       const failCount = cv.totalCount - cv.passCount;
@@ -297,7 +291,6 @@ function generateNarrative(results: StudyResults, study: Study): string {
   } else if (isPrecision(results)) {
     const pr = results as PrecisionResults;
     const maxCV = Math.max(...pr.levelResults.map(r => (r as any).totalCV ?? r.cv ?? 0));
-    const meetsAdlm = maxCV <= study.cliaAllowableError * 50;
     const isAdvanced = (pr as any).mode === "advanced";
     // Methodology note shared between pass and fail narratives. Names the
     // path (Simple vs Advanced EP15), cites EP15-A3 alongside the existing
@@ -309,9 +302,6 @@ function generateNarrative(results: StudyResults, study: Study): string {
     if (pr.overallPass) {
       narrative = methodologyNote;
       narrative += `The precision study for ${study.testName} demonstrated a maximum observed CV of ${maxCV.toFixed(2)}%, which is within the adopted precision acceptance criterion of ±${cliaPct}% (§493 PT TEa for this analyte; adopted under 42 CFR §493.1253(b)(1)(i)(B)). `;
-      narrative += meetsAdlm
-        ? `The result also meets the ADLM-recommended internal precision goal of ±${adlmPct}%, indicating performance well above the adopted acceptance criterion. `
-        : `The ADLM recommends an internal precision goal of ±${adlmPct}% for enhanced quality assurance. `;
       if (isAdvanced && (pr.levelResults[0] as any)?.withinRunCV !== undefined) {
         const wrCV = ((pr.levelResults[0] as any).withinRunCV ?? 0).toFixed(2);
         const bdCV = ((pr.levelResults[0] as any).betweenDayCV ?? 0).toFixed(2);

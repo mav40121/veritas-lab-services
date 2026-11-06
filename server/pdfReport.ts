@@ -1430,7 +1430,6 @@ function narrativeHTML(
   // section follows the analyte's CLIA subspecialty (hematology -> \u00A7493.941).
   const cfrSection = (study as any)?.cfr || cfrSectionForTestName((study as any)?.testName);
   const cliaPct = (cliaError * 100).toFixed(1);
-  const adlmPct = (cliaError * 50).toFixed(1); // ADLM = half of CLIA TEa
   let narrative = "";
 
   const calNames: string[] = studyType === "cal_ver"
@@ -1446,31 +1445,20 @@ function narrativeHTML(
     const calLabel = criterionLabel(analyteName, study);
     const nLevels = (results.levelResults || []).length;
     const failing: string[] = [];
-    let worstPct = -1, worstName = "";
     const lines = calNames.map((n) => {
       const reg: any = (results.regression || {})[`${n} vs. Assigned`];
       const rows = (results.levelResults || []).filter((r: any) => r.instruments?.[n]);
       if (rows.some((r: any) => r.instruments[n].passFail !== "Pass")) failing.push(seriesNickname(n));
       const errs = rows.map((r: any) => isAbsolute ? Math.abs(r.instruments[n].value - r.assignedValue) : Math.abs((r.instruments[n].obsError ?? 0) * 100));
       const maxE = errs.length ? Math.max(...errs) : 0;
-      if (!isAbsolute && maxE > worstPct) { worstPct = maxE; worstName = seriesNickname(n); }
       const maxStr = isAbsolute ? `${sf(maxE, 2)} ${unit}`.trim() : `${sf(maxE, 1)}%`;
       return `${seriesNickname(n)}: slope ${sf(reg?.slope ?? 1, 3)}, intercept ${sf(reg?.intercept ?? 0, 3)}, maximum observed error ${maxStr}`;
     });
     narrative = `${nLevels} calibration levels for ${analyteName} were run on ${calNames.length} analyzers against the ${calAdj} calibration verification acceptance criterion of ${teaStr} (${calSource}). ${lines.join("; ")}. `;
-    // ADLM "half of CLIA TEa" goal is a percentage concept; omit it for absolute-TEa analytes.
-    if (!isAbsolute) {
-      narrative += worstPct <= cliaError * 50
-        ? `The largest observed error on any analyzer, ${sf(worstPct, 1)}% (${worstName}), also meets the ADLM-recommended internal goal of ±${adlmPct}%. `
-        : `The largest observed error on any analyzer was ${sf(worstPct, 1)}% (${worstName}); the ADLM recommends an internal goal of ±${adlmPct}% for enhanced quality assurance. `;
-    }
     narrative += results.overallPass
       ? `<b>Each calibration level on each analyzer was individually evaluated against the ${calAdj} acceptance criterion (${calLabel}) of ${teaStr} ${calAuthority}. All levels on every analyzer satisfied this criterion.</b> Final approval and clinical determination must be made by the laboratory director or designee.`
       : `<b>Each calibration level on each analyzer was individually evaluated against the ${calAdj} acceptance criterion (${calLabel}) of ${teaStr} ${calAuthority}. One or more levels did not satisfy this criterion (${failing.join(", ") || "see the per-level table"}); see the per-level table for details.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
   } else if (studyType === "cal_ver") {
-    const calLevelResults = results.levelResults || [];
-    const maxErr = calLevelResults.length > 0 ? Math.max(...calLevelResults.map((r: any) => Math.abs((r.obsError ?? 0) * 100))) : 0;
-    const meetsAdlm = maxErr <= cliaError * 50;
     const slope = Object.values((results.regression || {}) as any)[0] as any;
     const slopeVal: number = slope?.slope ?? 1;
     const interceptVal: number = slope?.intercept ?? 0;
@@ -1491,15 +1479,6 @@ function narrativeHTML(
     const calLabel = criterionLabel(analyteName, study);
     if (results.overallPass) {
       narrative = `All ${results.totalCount} calibration levels for ${analyteName} fell within the ${calAdj} calibration verification acceptance criterion of ${teaStr} (${calSource}). `;
-      // ADLM "half of CLIA TEa" goal is a percentage concept; omit it for absolute-TEa
-      // analytes (e.g. Sodium +/-4 mmol/L), where "half" and the %-based maxErr are meaningless.
-      if (!isAbsolute) {
-        if (meetsAdlm) {
-          narrative += `The maximum observed error of ${sf(maxErr, 1)}% also meets the ADLM-recommended internal goal of ±${adlmPct}%, indicating performance well above the ${calAdj} acceptance criterion. `;
-        } else {
-          narrative += `The maximum observed error of ${sf(maxErr, 1)}% meets the ${calAdj} acceptance criterion; the ADLM recommends an internal goal of ±${adlmPct}% for enhanced quality assurance. `;
-        }
-      }
       narrative += `The regression slope of ${sf(slopeVal, 3)} (ideal: 1.000) and intercept of ${sf(interceptVal, 3)} (ideal: 0) indicate ${slopeInterp} and ${interceptInterp}. This instrument is performing within the ${calAdj} limits across its reportable range. `;
       narrative += `<b>Each calibration level was individually evaluated against the ${calAdj} acceptance criterion (${calLabel}) of ${teaStr} ${calAuthority}. All levels satisfied this criterion.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
     } else {
@@ -1595,7 +1574,6 @@ function narrativeHTML(
   if (studyType === "precision") {
     const levels = results.levelResults || [];
     const maxCV: number = levels.length > 0 ? Math.max(...levels.map((r: any) => r.totalCV ?? r.cv ?? 0)) : 0;
-    const meetsAdlm = maxCV <= cliaError * 50;
     const isAdvanced = results.mode === "advanced";
 
     const prAdj = criterionAdjective(analyteName, study);
@@ -1612,11 +1590,6 @@ function narrativeHTML(
     if (results.overallPass) {
       narrative = methodologyNote;
       narrative += `The precision study for ${analyteName} demonstrated a maximum observed CV of ${sf(maxCV, 2)}%, which is within the ${prAdj} precision acceptance criterion of ±${cliaPct}% (${prSource}). `;
-      if (meetsAdlm) {
-        narrative += `The result also meets the ADLM-recommended internal precision goal of ±${adlmPct}%, indicating performance well above the ${prAdj} acceptance criterion. `;
-      } else {
-        narrative += `The ADLM recommends an internal precision goal of ±${adlmPct}% for enhanced quality assurance. `;
-      }
       if (isAdvanced && levels[0]?.withinRunCV !== undefined) {
         const wrCV = levels[0].withinRunCV?.toFixed(2) ?? "-";
         const bdCV = levels[0].betweenDayCV?.toFixed(2) ?? "-";
@@ -1874,14 +1847,6 @@ export function buildCalVerCorrelationHTML(study: Study, results: CalVerCorrelat
   const label = criterionLabel(analyte, study);
   const authority = criterionAuthorityPhrase(analyte, cfrSection, study);
   let narrative = `${levels.length} known-value samples for ${analyte} were run on ${names.length} analyzers. `;
-  if (!absolute) {
-    // ADLM "half of CLIA TEa" goal is a percentage concept; omitted for absolute-TEa analytes.
-    const worst = names.map((n) => ({ n, e: maxErr(n) })).sort((p, q) => q.e - p.e)[0];
-    const adlmPct = (study.cliaAllowableError * 50).toFixed(1);
-    if (worst) narrative += worst.e <= study.cliaAllowableError * 50
-      ? `The largest error on any analyzer, ${sf(worst.e, 1)}% (${seriesNickname(worst.n)}), also meets the ADLM-recommended internal goal of \u00B1${adlmPct}%. `
-      : `The largest error on any analyzer was ${sf(worst.e, 1)}% (${seriesNickname(worst.n)}); the ADLM recommends an internal goal of \u00B1${adlmPct}%. `;
-  }
   narrative += cvPass
     ? `<b>Calibration verification: each level on each analyzer was individually evaluated against the ${adj} acceptance criterion (${label}) of ${teaStr} ${authority} (42 CFR §493.1255(b)(3)). All levels on every analyzer satisfied this criterion.</b> `
     : `<b>Calibration verification: each level on each analyzer was individually evaluated against the ${adj} acceptance criterion (${label}) of ${teaStr} ${authority} (42 CFR §493.1255(b)(3)). ${cvFailing.length ? `One or more levels did not satisfy this criterion (${cvFailing.map(seriesNickname).join(", ")}).` : "No analyzer readings were entered."}</b> `;
