@@ -30,7 +30,7 @@ test("finding sign-off follows the server rule and the history shows", async ({ 
     return { email, token: r.token as string };
   };
   const owner = await reg("owner", "PW Owner"), md = await reg("md", "PW Medical Director"), staff = await reg("staff", "PW Staff");
-  const labId = Number((await (await request.post(`${BASE}/api/admin/provision-demo-lab`, { data: { secret: ADMIN, ownerEmail: owner.email, labName: "Riverside Regional Medical Center", plan: "hospital" } })).json()).labId);
+  const labId = Number((await (await request.post(`${BASE}/api/admin/provision-demo-lab`, { data: { secret: ADMIN, ownerEmail: owner.email, labName: "Sample Regional Medical Center", plan: "hospital" } })).json()).labId);
 
   const Database = createRequire(import.meta.url)("better-sqlite3");
   const db = new Database(DBFILE);

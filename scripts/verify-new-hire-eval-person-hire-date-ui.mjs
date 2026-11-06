@@ -25,13 +25,13 @@ const PW = ["Zq", "hire", "7x!"].join("-");
 const email = `eval-hire-${Date.now()}@example.com`;
 const reg = await call("POST", "/api/auth/register", { email, password: PW, name: "Jordan Ellis", hipaa_acknowledged: true });
 const uid = reg.body?.user?.id, token = reg.body?.token, user = reg.body?.user;
-const lab = (await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail: email, labName: "Riverside Regional Medical Center (QA)", plan: "hospital" })).body?.labId;
+const lab = (await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail: email, labName: "Sample Regional Medical Center (QA)", plan: "hospital" })).body?.labId;
 let samStaff = null, samComp = null;
 scratch((d) => {
   d.prepare("UPDATE users SET has_completed_onboarding = 1, onboarding_seen = 1 WHERE id = ?").run(uid);
   d.prepare("UPDATE labs SET has_completed_onboarding = 1 WHERE id = ?").run(lab);
   const now = new Date().toISOString();
-  const sl = Number(d.prepare("INSERT INTO staff_labs (user_id, lab_name, clia_number, created_at, updated_at, tier2_lab_id) VALUES (?, 'Riverside Regional Medical Center (QA)', '22D0999999', ?, ?, ?)").run(uid, now, now, lab).lastInsertRowid);
+  const sl = Number(d.prepare("INSERT INTO staff_labs (user_id, lab_name, clia_number, created_at, updated_at, tier2_lab_id) VALUES (?, 'Sample Regional Medical Center (QA)', '22D0999999', ?, ?, ?)").run(uid, now, now, lab).lastInsertRowid);
   // Alphabetically first person, as Amanda Tyndall was at Sampson: the old form preselected her.
   d.prepare("INSERT INTO staff_employees (lab_id, user_id, last_name, first_name, title, hire_date, performs_testing, status, tier2_lab_id, created_at, updated_at) VALUES (?, ?, 'Abbott', 'Amanda', 'Lab Tech', '2024-03-01', 1, 'active', ?, ?, ?)").run(sl, uid, lab, now, now);
   samStaff = Number(d.prepare("INSERT INTO staff_employees (lab_id, user_id, last_name, first_name, title, hire_date, performs_testing, status, tier2_lab_id, created_at, updated_at) VALUES (?, ?, 'Rivera', 'Sam', 'Lab Assistant', '2026-10-19', 1, 'active', ?, ?, ?)").run(sl, uid, lab, now, now).lastInsertRowid);

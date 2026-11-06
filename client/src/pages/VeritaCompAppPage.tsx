@@ -6625,7 +6625,7 @@ function EditQuizDialog({
             </Label>
             <Input
               id="variant-title"
-              placeholder='e.g. "John Hall Lab MLA Competency Quiz"'
+              placeholder='e.g. "Sample Lab MLA Competency Quiz"'
               value={variantTitle}
               onChange={e => setVariantTitle(e.target.value)}
             />

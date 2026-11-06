@@ -375,7 +375,7 @@ function CalculatorSection() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// SECTION 2: Productivity Tracker (read-only, Riverside data)
+// SECTION 2: Productivity Tracker (read-only, Sample Regional data)
 // ══════════════════════════════════════════════════════════════════════════════
 
 function TrackerSection() {
@@ -444,7 +444,7 @@ function TrackerSection() {
       <div className="flex items-center gap-3 px-4 py-3 rounded-lg" style={{ backgroundColor: "#01696F10" }}>
         <Activity size={18} style={{ color: "#01696F" }} />
         <div>
-          <div className="font-semibold text-sm" style={{ color: "#01696F" }}>Riverside Regional Medical Center</div>
+          <div className="font-semibold text-sm" style={{ color: "#01696F" }}>Sample Regional Medical Center</div>
           <div className="text-xs text-muted-foreground">15 months of productivity data, {sorted[0] && `${FULL_MONTHS[sorted[0].month]} ${sorted[0].year}`} to {currentMonth && `${FULL_MONTHS[currentMonth.month]} ${currentMonth.year}`}</div>
         </div>
       </div>
@@ -571,7 +571,7 @@ function TrackerSection() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// SECTION 3: Staffing Analyzer (read-only, Riverside data)
+// SECTION 3: Staffing Analyzer (read-only, Sample Regional data)
 // ══════════════════════════════════════════════════════════════════════════════
 
 const DEMO_THROUGHPUT_PER_TECH = 20;
@@ -669,7 +669,7 @@ function StaffingSection() {
         <Grid3X3 size={18} style={{ color: "#01696F" }} />
         <div>
           <div className="font-semibold text-sm" style={{ color: "#01696F" }}>{study.name}</div>
-          <div className="text-xs text-muted-foreground">{study.department} - Riverside Regional Medical Center</div>
+          <div className="text-xs text-muted-foreground">{study.department} - Sample Regional Medical Center</div>
         </div>
       </div>
 
@@ -785,7 +785,7 @@ function StaffingSection() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// SECTION 4: Inventory Manager (read-only, Riverside data)
+// SECTION 4: Inventory Manager (read-only, Sample Regional data)
 // ══════════════════════════════════════════════════════════════════════════════
 
 interface DemoInventoryItem {
@@ -913,7 +913,7 @@ function InventorySection() {
       <div className="flex items-center gap-3 px-4 py-3 rounded-lg" style={{ backgroundColor: "#01696F10" }}>
         <Package size={18} style={{ color: "#01696F" }} />
         <div>
-          <div className="font-semibold text-sm" style={{ color: "#01696F" }}>Riverside Regional Medical Center</div>
+          <div className="font-semibold text-sm" style={{ color: "#01696F" }}>Sample Regional Medical Center</div>
           <div className="text-xs text-muted-foreground">{stats.total} inventory items with burn-rate tracking across all departments</div>
         </div>
       </div>
@@ -1164,7 +1164,7 @@ export default function DemoPage() {
             </div>
             <h2 className="font-serif text-2xl sm:text-3xl font-bold mb-3">Track Productivity Over Time</h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
-              Sample data for our demonstration lab, Riverside Regional Medical Center: 15 months of productive hours per billable test, holding near 0.19 through 2025 and dropping to about 0.145 in early 2026.
+              Sample data for our demonstration lab, Sample Regional Medical Center (fictional): 15 months of productive hours per billable test, holding near 0.19 through 2025 and dropping to about 0.145 in early 2026.
             </p>
           </div>
           <TrackerSection />

@@ -25,7 +25,7 @@ test("a delegated technical supervisor sees and uses the QC co-sign button", asy
   const ownerEmail = `pw-qcc-owner-${stamp}@example.com`, tsEmail = `pw-qcc-ts-${stamp}@example.com`;
   const owner = await (await request.post(`${BASE}/api/auth/register`, { data: { email: ownerEmail, password: pw, name: "PW QC Owner", hipaa_acknowledged: true } })).json();
   const ts = await (await request.post(`${BASE}/api/auth/register`, { data: { email: tsEmail, password: pw, name: "PW Tech Supervisor", hipaa_acknowledged: true } })).json();
-  const labId = Number((await (await request.post(`${BASE}/api/admin/provision-demo-lab`, { data: { secret: ADMIN, ownerEmail, labName: "Riverside Regional Medical Center", plan: "hospital" } })).json()).labId);
+  const labId = Number((await (await request.post(`${BASE}/api/admin/provision-demo-lab`, { data: { secret: ADMIN, ownerEmail, labName: "Sample Regional Medical Center", plan: "hospital" } })).json()).labId);
   await request.post(`${BASE}/api/auth/complete-onboarding`, { headers: { Authorization: `Bearer ${owner.token}` } });
   await request.post(`${BASE}/api/auth/complete-onboarding`, { headers: { Authorization: `Bearer ${ts.token}` } });
 

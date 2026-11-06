@@ -885,7 +885,7 @@ function LabSetupDialog({ open, onOpenChange, lab, isStaffAccreditorAllowed }: {
         <div className="space-y-4">
           <div>
             <label className="text-sm font-medium">Lab Name *</label>
-            <Input value={form.labName} onChange={(e) => setForm({ ...form, labName: e.target.value })} placeholder="e.g., Riverside Regional Medical Center" />
+            <Input value={form.labName} onChange={(e) => setForm({ ...form, labName: e.target.value })} placeholder="e.g., Sample Regional Medical Center" />
           </div>
           <div>
             <label className="text-sm font-medium">CLIA Number (optional)</label>

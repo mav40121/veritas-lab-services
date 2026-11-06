@@ -55,7 +55,7 @@ db.exec(`
 //          ownership reference, perhaps an old account or a seat user). The
 //          requester's user_id is 100. The legacy query misses this map
 //          because 100 != 999.
-//   Lab 2 = Riverside. Has one map owned by user 100. Both queries see it.
+//   Lab 2 = Sample Regional. Has one map owned by user 100. Both queries see it.
 db.prepare("INSERT INTO labs (id) VALUES (1)").run();
 db.prepare("INSERT INTO labs (id) VALUES (2)").run();
 
@@ -63,7 +63,7 @@ const insertMap = db.prepare(
   "INSERT INTO veritamap_maps (user_id, lab_id, name) VALUES (?, ?, ?)"
 );
 const sanCarlosMapId = insertMap.run(999, 1, "San Carlos Main").lastInsertRowid;
-const riversideMapId = insertMap.run(100, 2, "Riverside Main").lastInsertRowid;
+const sampleMapId = insertMap.run(100, 2, "Sample Main").lastInsertRowid;
 
 const insertInst = db.prepare(
   "INSERT INTO veritamap_instruments (map_id, instrument_name) VALUES (?, ?)"
@@ -72,9 +72,9 @@ const insertInst = db.prepare(
 for (const name of ["Cobas c503", "Cobas c702", "Sysmex XN-1000", "Stago Compact Max", "Atellica CH"]) {
   insertInst.run(sanCarlosMapId, name);
 }
-// Riverside has 3 instruments.
+// Sample Regional has 3 instruments.
 for (const name of ["Roche Cobas 6000", "Stago STA-R Max", "Sysmex CS-2500"]) {
-  insertInst.run(riversideMapId, name);
+  insertInst.run(sampleMapId, name);
 }
 
 // Reproduce the legacy user-scoped query (the bug shape).
@@ -124,8 +124,8 @@ function check(name, cond, detail) {
     `legacy returned ${legacy.length} rows`
   );
   check(
-    "legacy WHERE m.user_id = 100: only Riverside's 3 instruments visible (the customer-observed symptom on the wrong lab)",
-    legacy.length === 3 && legacy.every((r) => r.map_name === "Riverside Main")
+    "legacy WHERE m.user_id = 100: only Sample Regional's 3 instruments visible (the customer-observed symptom on the wrong lab)",
+    legacy.length === 3 && legacy.every((r) => r.map_name === "Sample Main")
   );
 }
 
@@ -150,12 +150,12 @@ function check(name, cond, detail) {
   );
 }
 
-// 3. Lab-scoped query for Lab 2 returns only Riverside's 3 instruments.
+// 3. Lab-scoped query for Lab 2 returns only Sample Regional's 3 instruments.
 {
   const lab2 = labScoped(2);
   check(
-    "lab-scoped Lab 2: returns Riverside's 3 instruments only",
-    lab2.length === 3 && lab2.every((r) => r.map_name === "Riverside Main")
+    "lab-scoped Lab 2: returns Sample Regional's 3 instruments only",
+    lab2.length === 3 && lab2.every((r) => r.map_name === "Sample Main")
   );
 }
 

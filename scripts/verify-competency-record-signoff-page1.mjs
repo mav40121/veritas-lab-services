@@ -39,7 +39,7 @@ const method = (name, signer, extra = {}) => ({
   nextDue: signer ? { targetDate: "2027-10-30", latest: null } : null, ...extra,
 });
 const record = (methods) => ({
-  labName: "Riverside Regional Medical Center", cliaNumber: "22D0999999",
+  labName: "Sample Regional Medical Center", cliaNumber: "22D0999999",
   employee: { name: "Jordan Example", title: "MLS", complexity: "H", hireDate: "2024-09-23" },
   elementCount: 6, testSystems: methods,
 });

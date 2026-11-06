@@ -23,8 +23,8 @@ const REPO_ROOT = path.resolve(__dirname, "..");
 const POLICY_ID = process.argv[2] || "110";
 const OUT_PATH = process.argv[3] || "C:\\Users\\veril\\OneDrive - veritaslabservices com\\Lab\\Verita Products\\VeritaPolicy_Sample_110_InfectionPrevention.docx";
 
-// Riverside demo lab fixture per CLAUDE.md §7.
-const LAB = { lab_name: "Riverside Regional Medical Center", clia_number: "22D0999999" };
+// Sample Regional demo lab fixture per CLAUDE.md §7.
+const LAB = { lab_name: "Sample Regional Medical Center", clia_number: "22D0999999" };
 
 async function main() {
   const { generatePolicyDocxBuffer, loadTemplate } = await import("../server/veritapolicyDocx.ts");
@@ -36,7 +36,7 @@ async function main() {
   console.log(`Loaded template #${POLICY_ID}: ${tmpl.policy_name}`);
   console.log(`  ${(tmpl.policy_statements||[]).length} statements, ${(tmpl.procedure_steps||[]).length} steps, ${(tmpl.definitions||[]).length} defs, ${(tmpl.cfr_text_blocks||[]).length} CFR blocks`);
 
-  // Build crosswalk fixture: assume Riverside is TJC + CAP + COLA accredited
+  // Build crosswalk fixture: assume Sample Regional is TJC + CAP + COLA accredited
   // so the sample exercises the full crosswalk rendering path.
   const tsPath = path.join(REPO_ROOT, "server", "veritapolicyMasterList.ts");
   const mlText = fs.readFileSync(tsPath, "utf-8");

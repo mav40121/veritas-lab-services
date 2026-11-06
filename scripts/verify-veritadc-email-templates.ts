@@ -9,7 +9,7 @@ import { renderTemplateString, renderReminderEmail, DEFAULT_TEMPLATES } from "..
 
 const vars = {
   policy_title: "Specimen Rejection Criteria",
-  lab_name: "Riverside Regional",
+  lab_name: "Sample Regional",
   next_review_date: "2026-11-01",
   owner_name: "Dr. Chen",
   days_until: 12,
@@ -20,11 +20,11 @@ interface C { name: string; got: any; exp: any; }
 const cases: C[] = [
   { name: "substitutes a known field", got: renderTemplateString("Due: {{policy_title}}", vars), exp: "Due: Specimen Rejection Criteria" },
   { name: "numeric field renders", got: renderTemplateString("in {{days_until}} days", vars), exp: "in 12 days" },
-  { name: "whitespace inside braces tolerated", got: renderTemplateString("{{  lab_name  }}", vars), exp: "Riverside Regional" },
+  { name: "whitespace inside braces tolerated", got: renderTemplateString("{{  lab_name  }}", vars), exp: "Sample Regional" },
   { name: "missing known field -> empty", got: renderTemplateString("[{{owner_name}}]", { policy_title: "x" }), exp: "[]" },
   { name: "unknown token left intact", got: renderTemplateString("hi {{totally_unknown}}", vars), exp: "hi {{totally_unknown}}" },
   { name: "custom template renders subject+html", got: renderReminderEmail({ subject: "{{policy_title}} due {{next_review_date}}", body_html: "<p>{{lab_name}}</p>" }, vars),
-    exp: { subject: "Specimen Rejection Criteria due 2026-11-01", html: "<p>Riverside Regional</p>" } },
+    exp: { subject: "Specimen Rejection Criteria due 2026-11-01", html: "<p>Sample Regional</p>" } },
   { name: "default 30_day subject uses days_until + title", got: renderReminderEmail(DEFAULT_TEMPLATES["30_day_warning"], vars).subject,
     exp: "Policy review due in 12 days: Specimen Rejection Criteria" },
   { name: "default overdue subject", got: renderReminderEmail(DEFAULT_TEMPLATES["overdue"], vars).subject, exp: "Policy review overdue: Specimen Rejection Criteria" },

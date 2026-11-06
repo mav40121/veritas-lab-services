@@ -17,7 +17,7 @@ If any check fails: stop, open a fix PR, do not move on to the next item until t
 
 ## 2. Lab switching (Multi-Lab Tier 2)
 
-- [ ] NavBar shows a lab dropdown ("Michaels Lab" or "Riverside Regional Medical Center") when signed in to an account with ≥2 active memberships. Single-lab users see no dropdown.
+- [ ] NavBar shows a lab dropdown ("Michaels Lab" or "Sample Regional Medical Center") when signed in to an account with ≥2 active memberships. Single-lab users see no dropdown.
 - [ ] Click the dropdown → both labs listed → click the other → URL flips to `/labs/<other-id>/<path>` AND the page content swaps to that lab's data.
 - [ ] After switching, click any module link (Open Map, Open Scan, All Programs, etc.) → **stays in the new lab's URL**. Does not bounce to the default lab. (Regression risk: PRs #181, #182.)
 

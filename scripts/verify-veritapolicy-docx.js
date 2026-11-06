@@ -24,7 +24,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const REPO_ROOT = path.resolve(__dirname, "..");
 
-const LAB_NAME = "Riverside Regional Medical Center";
+const LAB_NAME = "Sample Regional Medical Center";
 const CLIA = "22D0999999";
 
 async function loadMasterList() {

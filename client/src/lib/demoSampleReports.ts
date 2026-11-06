@@ -7,7 +7,7 @@
 // produce a clean PASS so the demo viewer sees the platform's positive
 // output.
 //
-// Demo lab identity is Riverside Regional Medical Center, CLIA 22D0999999
+// Demo lab identity is Sample Regional Medical Center, CLIA 22D0999999
 // (the only lab identity allowed to be hardcoded per CLAUDE.md §7).
 
 import {
@@ -25,7 +25,7 @@ import {
   type DataPoint,
 } from "@/lib/calculations";
 
-const DEMO_LAB_NAME = "Riverside Regional Medical Center";
+const DEMO_LAB_NAME = "Sample Regional Medical Center";
 const DEMO_CLIA = "22D0999999";
 
 // ─── Sample 1: QC Lot Verification (Glucose, two levels, three sections) ────
@@ -202,7 +202,7 @@ function buildPTINRSample() {
     id: -3, userId: -1, createdByUserId: -1,
     testName: "PT/INR Geometric Mean Calculator (Stago STA-R Max3)",
     instrument: "Stago STA-R Max3",
-    analyst: "M. Veri, MLS(ASCP)",
+    analyst: "T. Alvarez, MLS(ASCP)",
     date: "2026-04-18",
     studyType: "pt_coag",
     cliaAllowableError: 0.15,
@@ -261,7 +261,7 @@ function buildSimplePrecisionSample() {
     id: -4, userId: -1, createdByUserId: -1,
     testName: "Creatinine Simple Precision Verification",
     instrument: "Roche Cobas 8000",
-    analyst: "J. Hall, MLS(ASCP)",
+    analyst: "R. Okafor, MLS(ASCP)",
     date: "2026-04-12",
     studyType: "precision",
     cliaAllowableError: tea,
@@ -342,7 +342,7 @@ function buildSensitivitySample() {
     id: -5, userId: -1, createdByUserId: -1,
     testName: "Troponin I High-Sensitivity (Sensitivity Verification)",
     instrument: "Ortho VITROS 5600",
-    analyst: "D. McCormick, MLS(ASCP)",
+    analyst: "L. Brooks, MLS(ASCP)",
     date: "2026-04-08",
     studyType: "sensitivity",
     cliaAllowableError: 0.30,
@@ -379,7 +379,7 @@ function buildCalVerSample() {
     id: -6, userId: -1, createdByUserId: -1,
     testName: "Glucose Calibration Verification / Linearity",
     instrument: "Roche Cobas 8000",
-    analyst: "J. Hall, MLS(ASCP)",
+    analyst: "R. Okafor, MLS(ASCP)",
     date: "2026-09-15",
     studyType: "cal_ver",
     cliaAllowableError: 0.08, teaIsPercentage: 1, teaUnit: "%",
@@ -415,7 +415,7 @@ function buildMethodComparisonSample() {
     id: -7, userId: -1, createdByUserId: -1,
     testName: "Glucose Correlation / Method Comparison",
     instrument: COMP,
-    analyst: "J. Hall, MLS(ASCP)",
+    analyst: "R. Okafor, MLS(ASCP)",
     date: "2026-09-16",
     studyType: "method_comparison",
     cliaAllowableError: 0.08, teaIsPercentage: 1, teaUnit: "%",

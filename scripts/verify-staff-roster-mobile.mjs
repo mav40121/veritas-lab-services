@@ -1,7 +1,7 @@
 // scripts/verify-staff-roster-mobile.mjs
-// Gate 3 browser receipt for BUG-030 (roster cards ran past a phone screen on production Riverside: long titles and
+// Gate 3 browser receipt for BUG-030 (roster cards ran past a phone screen on production Sample Regional: long titles and
 // role badges in one row that could not wrap) and BUG-031 (a waived tester read "Moderate complexity"). Builds a roster
-// shaped like Riverside's (a long title with TS and TC badges, a waived tester) on a LOCAL server and checks it at
+// shaped like Sample Regional's (a long title with TS and TC badges, a waived tester) on a LOCAL server and checks it at
 // 390 px and on the detail page. Never point it at production. Usage:
 //   PW_BASE=http://localhost:5159 SCRATCH_DB=<scratch db> OUT=<dir> node scripts/verify-staff-roster-mobile.mjs
 import { createRequire } from "node:module";

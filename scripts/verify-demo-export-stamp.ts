@@ -26,7 +26,7 @@ function ok(label: string, cond: boolean) {
 }
 
 const demoCtx: Partial<LicenseContext> = { licensee: "USON System Lab", email: "uson-demo@example.com", isDemo: true };
-const realCtx: Partial<LicenseContext> = { licensee: "Riverside Regional", email: "rrmc@example.com", isDemo: false };
+const realCtx: Partial<LicenseContext> = { licensee: "Sample Regional", email: "srmc@example.com", isDemo: false };
 
 // 1. normalizeLicenseContext defaults isDemo to false when omitted.
 ok("normalize: isDemo defaults false when omitted", normalizeLicenseContext({ licensee: "x", email: "y" }).isDemo === false);

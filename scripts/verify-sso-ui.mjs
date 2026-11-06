@@ -62,7 +62,7 @@ const PW = ["Zq", "ssoui", "7x!"].join("-");
 const email = `jordan.${stamp}@hospital-qa.test`;
 const reg = await call("POST", "/api/auth/register", { email, password: PW, name: "Jordan Ellis", hipaa_acknowledged: true });
 const uid = reg.body?.user?.id;
-await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail: email, labName: "Riverside Regional Medical Center (QA)", plan: "hospital" });
+await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail: email, labName: "Sample Regional Medical Center (QA)", plan: "hospital" });
 scratch((d) => { d.prepare("UPDATE users SET has_completed_onboarding = 1, onboarding_seen = 1 WHERE id = ?").run(uid); d.prepare("UPDATE labs SET has_completed_onboarding = 1 WHERE owner_user_id = ?").run(uid); d.prepare("UPDATE user_sessions SET is_active = 0 WHERE user_id = ?").run(uid); });
 const existing = (await call("GET", `/api/admin/sso/configs?secret=${ADMIN}`)).body?.configs?.find((c) => c.emailDomains.includes("hospital-qa.test"));
 const saved = await call("POST", "/api/admin/sso/configs", { secret: ADMIN, ...(existing ? { id: existing.id } : {}), name: "Hospital QA (Entra)", issuer, clientId: CLIENT_ID, emailDomains: ["hospital-qa.test"], required: false, enabled: true });

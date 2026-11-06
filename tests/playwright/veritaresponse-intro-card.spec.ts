@@ -23,7 +23,7 @@ test("VeritaResponse intro card covers every entry type, and an internal event r
   const email = `pw-vrcard-${Date.now()}@example.com`;
   const password = ["Pw", "vrcard", "7x!"].join("-");
   const reg = await (await request.post(`${BASE}/api/auth/register`, { data: { email, password, name: "PW Response Owner", hipaa_acknowledged: true } })).json();
-  const labId = Number((await (await request.post(`${BASE}/api/admin/provision-demo-lab`, { data: { secret: ADMIN, ownerEmail: email, labName: "Riverside Regional Medical Center", plan: "hospital" } })).json()).labId);
+  const labId = Number((await (await request.post(`${BASE}/api/admin/provision-demo-lab`, { data: { secret: ADMIN, ownerEmail: email, labName: "Sample Regional Medical Center", plan: "hospital" } })).json()).labId);
   const token = reg.token as string; // the registration's own session (a second sign-in would meet the one-session rule)
   await request.post(`${BASE}/api/auth/complete-onboarding`, { headers: { Authorization: `Bearer ${token}` } });
   const headers = { Authorization: `Bearer ${token}`, "X-Active-Lab-Id": String(labId) };

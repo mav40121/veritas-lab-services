@@ -34,8 +34,8 @@ const email = `twofa-sys-${stamp}@example.com`;
 const kimEmail = `twofa-sys-kim-${stamp}@example.com`;
 const reg = await call("POST", "/api/auth/register", { email, password: PW, name: "Jordan Ellis", hipaa_acknowledged: true });
 const uid = reg.body?.user?.id;
-const lab1 = (await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail: email, labName: "Riverside Regional Medical Center (QA)", plan: "hospital" })).body?.labId;
-const lab2 = (await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail: email, labName: "Riverside Outpatient Lab (QA)", plan: "hospital" })).body?.labId;
+const lab1 = (await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail: email, labName: "Sample Regional Medical Center (QA)", plan: "hospital" })).body?.labId;
+const lab2 = (await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail: email, labName: "Sample Outpatient Lab (QA)", plan: "hospital" })).body?.labId;
 const kim = await call("POST", "/api/auth/register", { email: kimEmail, password: PW, name: "Kim Bravo", hipaa_acknowledged: true });
 await call("POST", "/api/admin/create-lab-invite", { secret: ADMIN, labId: lab2, email: kimEmail, role: "staff" });
 scratch((d) => {
@@ -62,7 +62,7 @@ let ownerToken = reg.body.token, ownerUser = reg.body.user, key = "";
   const card = page.getByTestId("two-factor-card");
   await card.scrollIntoViewIfNeeded();
   const warn = await page.getByTestId("mfa-system-warning").innerText().catch(() => "");
-  check("1a. before Turn on, the owner is told it covers both labs and the people in them", warn.includes("As the lab owner") && warn.includes("all 2 of your labs") && warn.includes("Riverside Outpatient Lab (QA)") && warn.includes("1 other person"), warn);
+  check("1a. before Turn on, the owner is told it covers both labs and the people in them", warn.includes("As the lab owner") && warn.includes("all 2 of your labs") && warn.includes("Sample Outpatient Lab (QA)") && warn.includes("1 other person"), warn);
   await card.screenshot({ path: `${OUT}/two-factor-owner-off-light.png` });
   await card.getByRole("button", { name: "Turn on" }).click();
   await page.getByTestId("mfa-key").filter({ hasText: /[A-Z2-7]{4}/ }).waitFor(); // selector wait: the enforced CSP blocks waitForFunction's eval
@@ -120,7 +120,7 @@ for (const scheme of ["light", "dark"]) {
   await page.getByRole("button", { name: "Sign In", exact: true }).click();
   await page.getByTestId("two-factor-setup").waitFor({ timeout: 10000 });
   const s = await page.getByTestId("two-factor-setup").innerText();
-  check("4a. the member lands on first-time setup naming the lab, not signed in yet", s.includes("Riverside Outpatient Lab (QA)") && (await page.evaluate(() => localStorage.getItem("veritas_token"))) === null, s.replace(/\s+/g, " ").slice(0, 160));
+  check("4a. the member lands on first-time setup naming the lab, not signed in yet", s.includes("Sample Outpatient Lab (QA)") && (await page.evaluate(() => localStorage.getItem("veritas_token"))) === null, s.replace(/\s+/g, " ").slice(0, 160));
   await page.screenshot({ path: `${OUT}/two-factor-owner-member-setup-light.png` });
   await ctx.close();
 }

@@ -25,7 +25,7 @@ test("exemption controls follow VeritaMap edit, not VeritaCheck edit", async ({ 
   const ownerEmail = `pw-cov-owner-${stamp}@example.com`, seatEmail = `pw-cov-seat-${stamp}@example.com`;
   const owner = await (await request.post(`${BASE}/api/auth/register`, { data: { email: ownerEmail, password: pw, name: "PW Cov Owner", hipaa_acknowledged: true } })).json();
   const seat = await (await request.post(`${BASE}/api/auth/register`, { data: { email: seatEmail, password: pw, name: "PW Cov Seat", hipaa_acknowledged: true } })).json();
-  const labId = Number((await (await request.post(`${BASE}/api/admin/provision-demo-lab`, { data: { secret: ADMIN, ownerEmail, labName: "Riverside Regional Medical Center", plan: "hospital" } })).json()).labId);
+  const labId = Number((await (await request.post(`${BASE}/api/admin/provision-demo-lab`, { data: { secret: ADMIN, ownerEmail, labName: "Sample Regional Medical Center", plan: "hospital" } })).json()).labId);
   const auth = { Authorization: `Bearer ${owner.token}`, "X-Active-Lab-Id": String(labId) };
   await request.post(`${BASE}/api/auth/complete-onboarding`, { headers: { Authorization: `Bearer ${owner.token}` } });
   await request.post(`${BASE}/api/auth/complete-onboarding`, { headers: { Authorization: `Bearer ${seat.token}` } });

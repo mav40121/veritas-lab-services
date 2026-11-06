@@ -1,5 +1,5 @@
 /**
- * Seed demo account data for Riverside Regional Medical Center.
+ * Seed demo account data for Sample Regional Medical Center.
  * Runs on startup -- safe to re-run (uses INSERT OR IGNORE / upsert logic).
  */
 import { db } from "./db";
@@ -15,12 +15,13 @@ export async function seedDemoData() {
 
   if (existing) {
     demoUserId = existing.id;
-    sqlite.prepare("UPDATE users SET plan = 'lab', has_completed_onboarding = 1, clia_number = '22D0999999', clia_lab_name = 'Riverside Regional Medical Center' WHERE id = ?").run(demoUserId);
+    // The lab name isn't set here: a boot changes no name on an existing row, so a deploy can't rename production. POST /api/admin/demo-fixture/rename does that.
+    sqlite.prepare("UPDATE users SET plan = 'lab', has_completed_onboarding = 1, clia_number = '22D0999999' WHERE id = ?").run(demoUserId);
   } else {
     const hash = await bcrypt.hash("VeritaDemo2026!", 10);
     const now = new Date().toISOString();
     const result = sqlite.prepare(
-      "INSERT INTO users (email, password_hash, name, plan, study_credits, has_completed_onboarding, clia_number, clia_lab_name, created_at) VALUES (?, ?, ?, 'lab', 99999, 1, '22D0999999', 'Riverside Regional Medical Center', ?)"
+      "INSERT INTO users (email, password_hash, name, plan, study_credits, has_completed_onboarding, clia_number, clia_lab_name, created_at) VALUES (?, ?, ?, 'lab', 99999, 1, '22D0999999', 'Sample Regional Medical Center', ?)"
     ).run(DEMO_USER_EMAIL, hash, "Demo User", now);
     demoUserId = Number(result.lastInsertRowid);
   }
@@ -46,7 +47,7 @@ export async function seedDemoData() {
     console.error("[seed] Defensive sensitivity fix failed:", err.message);
   }
 
-  // ─── 2. VeritaMap -- Riverside Regional Map ──────────────────────────────
+  // ─── 2. VeritaMap -- Sample Regional Map ──────────────────────────────
   const existingMap = sqlite.prepare("SELECT id FROM veritamap_maps WHERE user_id = ?").get(demoUserId);
   let mapId: number;
   const now = new Date().toISOString();
@@ -77,7 +78,7 @@ export async function seedDemoData() {
   } else {
     const mapResult = sqlite.prepare(
       "INSERT INTO veritamap_maps (user_id, name, instruments, created_at, updated_at) VALUES (?, ?, '[]', ?, ?)"
-    ).run(demoUserId, "Riverside Regional - 2026 Compliance Map", now, now);
+    ).run(demoUserId, "Sample Regional - 2026 Compliance Map", now, now);
     mapId = Number(mapResult.lastInsertRowid);
     seedMapData(sqlite, mapId, now);
   }
@@ -382,8 +383,8 @@ export async function seedDemoData() {
 
   // ─── VeritaStaff: Lab + Employees ──────────────────────────────────────────
   // BUG-039 (2026-10-12): the guard also looks at the demo user's lab. Keyed on user_id
-  // alone, it re-seeded six duplicate people into Riverside at the first boot after the
-  // BUG-032 owner repair moved Riverside's staff rows from the demo user to the lab owner.
+  // alone, it re-seeded six duplicate people into Sample Regional at the first boot after the
+  // BUG-032 owner repair moved Sample Regional's staff rows from the demo user to the lab owner.
   const demoLabId = (sqlite.prepare("SELECT lab_id FROM users WHERE id = ?").get(demoUserId) as any)?.lab_id ?? null;
   const existingStaffLab = sqlite.prepare("SELECT id FROM staff_labs WHERE user_id = ?").get(demoUserId)
     || (demoLabId != null && (
@@ -417,7 +418,7 @@ export async function seedDemoData() {
   // ─── Copy 5 reference studies into operator's personal lab (Pfizer / Daniela handoff) ──
   // The operator's personal lab needs the 5 most recent VeritaCheck reference studies
   // so they appear in "My Studies" when a partner is granted seat access. Source rows
-  // were built under the demo fixture (Riverside Regional / 22D0999999); this block
+  // were built under the demo fixture (Sample Regional / 22D0999999); this block
   // copies them verbatim into the row owned by OWNER_CLIA.
   //
   // Identity is by CLIA, NOT email: one email will own multiple labs once enterprise
@@ -604,7 +605,7 @@ function seedMapData(sqlite: any, mapId: number, now: string) {
 function seedScanData(sqlite: any, demoUserId: number, now: string) {
   const scanResult = sqlite.prepare(
     "INSERT INTO veritascan_scans (user_id, name, created_at, updated_at) VALUES (?, ?, ?, ?)"
-  ).run(demoUserId, "Riverside Regional - 2026 Annual Inspection Readiness", now, now);
+  ).run(demoUserId, "Sample Regional - 2026 Annual Inspection Readiness", now, now);
   const scanId = Number(scanResult.lastInsertRowid);
 
   const scanItemStmt = sqlite.prepare(`
@@ -1376,7 +1377,7 @@ function seedInventoryData(sqlite: any, demoUserId: number, now: string) {
             ?, ?, ?, ?)
   `);
 
-  // Realistic items for Riverside Regional Medical Center (community hospital, 200K-500K tests/yr)
+  // Realistic items for Sample Regional Medical Center (community hospital, 200K-500K tests/yr)
   // Reorder point = burn_rate * (lead_time + safety_stock)
   // Some items intentionally below reorder point for demo alerts
   const items = [
@@ -1437,7 +1438,7 @@ function seedVeritaStaffData(sqlite: any, demoUserId: number, now: string) {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     demoUserId,
-    "Riverside Regional Medical Center - Core Laboratory",
+    "Sample Regional Medical Center - Core Laboratory",
     "22D0999999",
     "1200 Medical Center Drive",
     "Nashville", "TN", "37203",

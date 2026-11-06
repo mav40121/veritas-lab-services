@@ -4,7 +4,7 @@ description: Comprehensive pre-demo QA sweep across all four login types (owner,
 
 Run a full QA sweep that would catch access, plan-gating, document-generation, and render bugs before a client or a live demo does. Work through these steps in order. Do NOT claim it passed without the receipts (the matrix + the browser results). This is safe: everything runs against a disposable COPY of production, never production itself.
 
-This sweep runs ONLY against Michael's own QA system, never a client account. The default target is org 5 ("Veritas QA System": Michaels Lab, NYS demo lab, Riverside). If the user passes a specific lab id, honor it with `--lab <id>` (the sweep refuses any lab outside the QA org). Never point it at a client or prospect lab.
+This sweep runs ONLY against Michael's own QA system, never a client account. The default target is org 5 ("Veritas QA System": Michaels Lab, NYS demo lab, Sample Regional). If the user passes a specific lab id, honor it with `--lab <id>` (the sweep refuses any lab outside the QA org). Never point it at a client or prospect lab.
 
 ## 1. Credentials + a fresh production copy
 - Pull `ADMIN_SECRET` and `JWT_SECRET` from Railway env per CLAUDE.md credential handling. Never echo them.

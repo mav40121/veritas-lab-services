@@ -948,14 +948,14 @@ try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_pt_vendor_programs ON pt_vendo
   try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_corr_signoff_date ON veritamap_test_correlations(signoff_date)"); } catch {}
 }
 
-// Seed VeritaStaff demo data for Riverside Regional (user_id = 1)
+// Seed VeritaStaff demo data for Sample Regional (user_id = 1)
 {
   const existingStaffLab = sqlite.prepare("SELECT id FROM staff_labs WHERE clia_number = '05D2187634'").get() as any;
   if (!existingStaffLab) {
     const now = new Date().toISOString();
     const labResult = sqlite.prepare(
       "INSERT INTO staff_labs (user_id, lab_name, clia_number, lab_address_street, lab_address_city, lab_address_state, lab_address_zip, lab_phone, certificate_type, accreditation_body, includes_nys, complexity, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-    ).run(1, 'Riverside Regional Medical Center', '05D2187634', '1 Riverside Drive', 'Riverside', 'CA', '92501', '', 'accreditation', 'TJC', 0, 'high', now, now);
+    ).run(1, 'Sample Regional Medical Center', '05D2187634', '1 Sample Drive', 'Sampletown', 'CA', '00000', '', 'accreditation', 'TJC', 0, 'high', now, now);
     const labId = labResult.lastInsertRowid;
 
     // Employee 1: Laboratory Director
@@ -994,7 +994,7 @@ try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_pt_vendor_programs ON pt_vendo
       "INSERT INTO staff_competency_schedules (employee_id, lab_id, initial_completed_at, initial_signed_by, six_month_due_at, six_month_completed_at, six_month_signed_by, first_annual_due_at, annual_due_at, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     ).run(emp3Id, labId, '2022-03-20', 'Lab Director', '2022-09-20', '2022-09-15', 'Lab Director', '2023-03-15', '2026-03-15', null);
 
-    console.log('[seed] VeritaStaff demo data seeded for Riverside Regional');
+    console.log('[seed] VeritaStaff demo data seeded for Sample Regional');
   }
 }
 

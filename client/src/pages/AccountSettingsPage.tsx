@@ -524,7 +524,7 @@ export default function AccountSettingsPage() {
               id="lab_name"
               value={labName}
               onChange={(e) => setLabName(e.target.value)}
-              placeholder={onStock ? "e.g. San Carlos Apache Healthcare" : "e.g. Riverside Regional Medical Center"}
+              placeholder={onStock ? "e.g. San Carlos Apache Healthcare" : "e.g. Sample Regional Medical Center"}
               disabled={isLoading || !!settings?.is_seat || !!settings?.lab_name_locked}
             />
             {!settings?.is_seat && settings?.lab_name_locked && (

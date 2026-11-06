@@ -24,7 +24,7 @@ const JSZip = require("jszip");
 const { generatePolicyDocxBuffer } = await import("../server/veritapolicyDocx");
 const { VERITAPOLICY_MASTER_LIST } = await import("../server/veritapolicyMasterList");
 
-const LAB = { lab_name: "Riverside Regional Medical Center", clia_number: "22D0999999" };
+const LAB = { lab_name: "Sample Regional Medical Center", clia_number: "22D0999999" };
 const RF = { format: "redington_fairview" as const, draftDate: "2026-10-13" };
 const ORDER = ["Title:", "Department:", "Effective Date:", "Authorization:", "Principle:", "Policy:", "Procedure:", "References:", "Revised:", "Biannual Approval/Review Documentation:"];
 let fails = 0, passes = 0;

@@ -3,7 +3,7 @@ import { useSEO } from "@/hooks/useSEO";
 
 // VeritaQC™ Phase 1 demo. Unauthenticated walkthrough that mirrors what a
 // logged-in user sees on /veritaqc-app and /veritaqc-app/review, using a
-// hardcoded fixture (Riverside Regional, Estradiol Lot DEMO-2026-04). 90
+// hardcoded fixture (Sample Regional, Estradiol Lot DEMO-2026-04). 90
 // days of QC, one 1-2s warning, one 1-3s rejection with corrective action
 // filed, one accepted monthly review.
 
@@ -193,7 +193,7 @@ export default function DemoQcPage() {
           90 days of Estradiol QC. One warning, one rejection with corrective action filed. One signed monthly review.
         </p>
         <p style={{ color: "rgba(255,255,255,0.65)", fontSize: 13, maxWidth: 720, margin: "0 auto", lineHeight: 1.5 }}>
-          Demo lab: Riverside Regional Medical Center (CLIA 22D0999999). Fixture for demonstration only.
+          Demo lab: Sample Regional Medical Center (fictional), CLIA 22D0999999. Fixture for demonstration only.
         </p>
       </div>
 

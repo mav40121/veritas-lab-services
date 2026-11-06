@@ -296,7 +296,7 @@ export default function DemoSelectorPage() {
         <div style={{ height: "1px", background: "linear-gradient(to right, transparent, #01696F30, transparent)", marginBottom: "40px" }} />
         <SampleReportsSection
           heading="VeritaCheck® Sample Reports"
-          subheading="Download a real, generated PDF for seven common study types. Demo lab identity is Riverside Regional Medical Center (CLIA 22D0999999), a fixture for demonstration only."
+          subheading="Download a real, generated PDF for seven common study types. Demo lab identity is Sample Regional Medical Center (fictional), CLIA 22D0999999, a fixture for demonstration only."
         />
       </div>
 

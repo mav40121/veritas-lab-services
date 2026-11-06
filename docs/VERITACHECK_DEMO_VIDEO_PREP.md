@@ -23,9 +23,9 @@ case a label moved.
 
 ## 1. Pre-flight (do this before you hit record)
 
-- **Account/lab:** record on your own demo lab, never a client account. Riverside
+- **Account/lab:** record on your own demo lab, never a client account. Sample Regional
   Regional Medical Center (CLIA 22D0999999) is the demo fixture identity. Confirm
-  the header shows Riverside and the demo CLIA, not a real lab.
+  the header shows Sample Regional and the demo CLIA, not a real lab.
 - **Clean window:** full-screen the browser. Close other tabs so the tab strip is
   not a giveaway. Hide bookmarks bar. Use a clean browser profile with no
   personal extensions visible.
@@ -45,7 +45,7 @@ case a label moved.
 Keep the pre-fill minimal so the take shows the real work, not setup. Before
 recording, the demo lab should have:
 
-- Lab identity set to Riverside Regional Medical Center, CLIA 22D0999999, with a
+- Lab identity set to Sample Regional Medical Center, CLIA 22D0999999, with a
   medical director name on file (so the generated PDF signature block is
   populated and page 1 looks complete).
 - At least one instrument already on the menu so the Instrument field has a

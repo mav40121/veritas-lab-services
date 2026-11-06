@@ -17,7 +17,7 @@ import { typeReportHTMLForTest, generateTypeReportPDF, validateTypeReport, layou
 
 let fails = 0;
 const ok = (name: string, cond: boolean, detail = "") => { console.log(`${cond ? "PASS" : "FAIL"}  ${name}${detail ? "  :: " + detail : ""}`); if (!cond) fails++; };
-const user = { lab_name: "Riverside Regional Medical Center", clia_number: "22D0999999" };
+const user = { lab_name: "Sample Regional Medical Center", clia_number: "22D0999999" };
 const capa = { root_cause: "Control vial left at room temperature.", corrective_action: "Vial discarded; open-vial dating added.", preventive_action: "Start-of-shift check.", monitoring_plan: "QC review at 30, 60 and 90 days." };
 const base = { id: 41, status: "open", anchor_date: "2026-10-01", due_date: "2026-10-31", description: "Made-up event <script>alert(1)</script> for the guard.", ...capa };
 const cases: Record<string, { finding: any; qc?: any; title: string; cite: string }> = {
@@ -55,7 +55,7 @@ async function directorBottom(page: any, html: string): Promise<number> {
   await page.setViewport({ width: 703, height: 943, deviceScaleFactor: 1 });
   for (const [kind, c] of Object.entries(cases)) {
     const html = typeReportHTMLForTest({ finding: c.finding, user, qc: c.qc });
-    ok(`${kind}: title, citation, lab identity and review block`, html.includes(c.title) && html.includes(c.cite) && html.includes("Riverside Regional Medical Center") && html.includes("CLIA: 22D0999999") && html.includes("Medical Director or Designee Review"));
+    ok(`${kind}: title, citation, lab identity and review block`, html.includes(c.title) && html.includes(c.cite) && html.includes("Sample Regional Medical Center") && html.includes("CLIA: 22D0999999") && html.includes("Medical Director or Designee Review"));
     ok(`${kind}: no em dash, user text escaped`, !html.includes("—") && !html.includes("<script>alert(1)</script>") && html.includes("&lt;script&gt;"));
     ok(`${kind}: validator passes a complete entry`, validateTypeReport(c.finding).ok, JSON.stringify(validateTypeReport(c.finding).missing));
     // The renderer's own layout decision, measured in this browser (CI fonts are taller than local, as on the server).

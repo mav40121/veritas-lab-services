@@ -62,7 +62,7 @@ function makeDb() {
     INSERT INTO labs (id, user_id, lab_name, clia_number) VALUES
       (1, 100, 'Michael L Lab', '99D0000001'),
       (2, 200, 'UMass Memorial Health - Milford Regional Medical Center', '22D0070843'),
-      (3, 300, 'Riverside Regional Medical Center', '22D0999999');
+      (3, 300, 'Sample Regional Medical Center', '22D0999999');
     INSERT INTO users (id, lab_id) VALUES (10, 2); -- Michael L's user; default_lab_id = Milford (the bug)
     INSERT INTO lab_members (lab_id, user_id, status) VALUES (1, 10, 'active'); -- but he is an active member of his own lab
     INSERT INTO lab_members (lab_id, user_id, status) VALUES (2, 10, 'active'); -- and also of Milford
@@ -104,7 +104,7 @@ function makeDb() {
 // ── Test 5: non-member lab_id silently downgrades (does NOT leak) ─────────
 {
   const db = makeDb();
-  // User 10 is NOT a member of lab 3 (Riverside). Header should be rejected.
+  // User 10 is NOT a member of lab 3 (Sample Regional). Header should be rejected.
   const lab = resolveActiveLabForRequest(db, 10, { headers: { "x-active-lab-id": "3" }, body: {} });
   check("non-member lab_id is rejected", lab?.id !== 3, `got ${lab?.id} -- LEAK if 3`);
   check("non-member lab_id falls back to default_lab_id", lab?.id === 2);

@@ -92,7 +92,7 @@ async function main() {
   const single = await post("/api/admin/veritamap/add-analyte", { secret: ADMIN, labId: other.labId, instrumentNameLike: "VITROS", analyte: "Procalcitonin (PCT)", copyFromAnalyte: "Lipase", dryRun: true });
   check("6. single-map lab without mapId works as before", single.s === 200 && single.j.mapId === otherMap && single.j.results?.[0]?.action === "would-insert", `${single.s} ${JSON.stringify(single.j)}`);
 
-  // set-complexity had the same one-map refusal (Riverside, two maps: Clinitek Novus pH/SG WAIVED -> MODERATE, 2026-10-12).
+  // set-complexity had the same one-map refusal (Sample Regional, two maps: Clinitek Novus pH/SG WAIVED -> MODERATE, 2026-10-12).
   const sc = { secret: ADMIN, labId: A.labId, instrumentNameLike: "VITROS", analytes: ["Lipase"], complexity: "HIGH" };
   const scAmb = await post("/api/admin/veritamap/set-complexity", { ...sc, dryRun: true });
   const scForeign = await post("/api/admin/veritamap/set-complexity", { ...sc, mapId: otherMap, dryRun: true });

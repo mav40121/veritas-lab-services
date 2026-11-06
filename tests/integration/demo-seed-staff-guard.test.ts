@@ -1,8 +1,8 @@
 // tests/integration/demo-seed-staff-guard.test.ts
 //
-// Receipt for BUG-039 (2026-10-12). The boot-time demo seeder (server/seedDemo.ts) seeded Riverside's VeritaStaff lab
+// Receipt for BUG-039 (2026-10-12). The boot-time demo seeder (server/seedDemo.ts) seeded Sample Regional's VeritaStaff lab
 // and six people only when no staff_labs row belonged to the demo USER. The BUG-032 owner repair (10/11) moved
-// Riverside's staff rows to the lab owner, so the next boot re-seeded six duplicate people into Riverside (production
+// Sample Regional's staff rows to the lab owner, so the next boot re-seeded six duplicate people into Sample Regional (production
 // staff_employees 242-247, created at the 3c999bdd boot). The guard now also looks at the demo user's lab.
 //   1. a fresh seed creates the demo staff (fixture; the count depends on the boot seed in db.ts)
 //   2. after the staff rows move to another owner (what the repair did), a second seed adds no people and no staff lab
@@ -22,7 +22,7 @@ async function main() {
   const demo = sqlite.prepare("SELECT id, lab_id FROM users WHERE email = 'demo@veritaslabservices.com'").get() as any;
   let labId = demo?.lab_id;
   if (labId == null) {
-    labId = Number(sqlite.prepare("INSERT INTO labs (lab_name, clia_number, owner_user_id) VALUES ('Riverside Regional Medical Center', '22D0999999', ?)").run(demo.id).lastInsertRowid);
+    labId = Number(sqlite.prepare("INSERT INTO labs (lab_name, clia_number, owner_user_id) VALUES ('Sample Regional Medical Center', '22D0999999', ?)").run(demo.id).lastInsertRowid);
     sqlite.prepare("UPDATE users SET lab_id = ? WHERE id = ?").run(labId, demo.id);
   }
   // Tie the seeded staff to the demo lab, as production's tier2 backfill did.

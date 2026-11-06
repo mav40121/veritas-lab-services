@@ -28,7 +28,7 @@ const PW = ["Zq", "ui", "7x!"].join("-");
 const email = `twofa-ui-${Date.now()}@example.com`;
 const reg = await call("POST", "/api/auth/register", { email, password: PW, name: "Jordan Ellis", hipaa_acknowledged: true });
 const uid = reg.body?.user?.id;
-const lab = await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail: email, labName: "Riverside Regional Medical Center (QA)", plan: "hospital" });
+const lab = await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail: email, labName: "Sample Regional Medical Center (QA)", plan: "hospital" });
 const labId = lab.body?.labId;
 const member = await call("POST", "/api/auth/register", { email: `twofa-ui-kim-${Date.now()}@example.com`, password: PW, name: "Kim Bravo", hipaa_acknowledged: true });
 await call("POST", "/api/admin/create-lab-invite", { secret: ADMIN, labId, email: member.body?.user?.email, role: "staff" });
