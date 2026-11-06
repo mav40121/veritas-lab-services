@@ -698,8 +698,9 @@ function StaffPortalPoliciesView({
 
           {active.read_only ? (
             <div className="border border-border rounded-lg bg-card p-4 text-sm text-muted-foreground" data-testid="sp-policies-read-only">
-              This document isn't assigned to you, so there's nothing to sign. You're reading the current version.
-              {active.status === "expired" && " Its review is overdue."}
+              {active.status === "expired"
+                ? "This document's review is overdue, so it can't be signed right now. You're reading the current version."
+                : "This document isn't assigned to you, so there's nothing to sign. You're reading the current version."}
             </div>
           ) : active.signed ? (
             <div className="border border-green-200 bg-green-50 rounded-lg p-4" data-testid="sp-policies-already-signed">
