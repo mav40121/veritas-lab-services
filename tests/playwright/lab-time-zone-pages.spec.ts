@@ -28,7 +28,7 @@ test("a page's default date is the lab's calendar day", async ({ page, request }
   const email = `pw-tzp-${Date.now()}@example.com`;
   const password = ["Pw", "tzp", "7x!"].join("-");
   const reg = await (await request.post(`${BASE}/api/auth/register`, { data: { email, password, name: "PW TZ Pages", hipaa_acknowledged: true } })).json();
-  const labId = Number((await (await request.post(`${BASE}/api/admin/provision-demo-lab`, { data: { secret: ADMIN, ownerEmail: email, labName: "Riverside Regional Medical Center", plan: "hospital" } })).json()).labId);
+  const labId = Number((await (await request.post(`${BASE}/api/admin/provision-demo-lab`, { data: { secret: ADMIN, ownerEmail: email, labName: "Sample Regional Medical Center", plan: "hospital" } })).json()).labId);
   const token = reg.token as string; // the registration's own session (a second sign-in would meet the one-session rule)
   await request.post(`${BASE}/api/auth/complete-onboarding`, { headers: { Authorization: `Bearer ${token}` } });
   const setZone = async (tz: string) => {

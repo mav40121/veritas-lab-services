@@ -17,8 +17,8 @@ import { join } from "node:path";
 const OUT_DIR = process.env.OUT || "license-stamp-qc";
 mkdirSync(OUT_DIR, { recursive: true });
 const ctx = {
-  licensee: "Riverside Regional Medical Center",
-  email: "director@riverside.example",
+  licensee: "Sample Regional Medical Center",
+  email: "director@sample-regional.example",
   plan: "hospital",
   issueDate: "2026-05-05",
 };
@@ -64,7 +64,7 @@ async function qcServerPdf() {
 async function qcVeritaScanPdf() {
   const { generateVeritaScanPDF } = await import("../server/pdfReport");
   const data = {
-    scanName: "Riverside Regional QC Scan",
+    scanName: "Sample Regional QC Scan",
     createdAt: "2026-05-01",
     updatedAt: "2026-05-05",
     cliaNumber: "22D0999999",
@@ -106,7 +106,7 @@ async function qcCompetencyPdf() {
       method_groups: "Chemistry",
     } as any,
     items: [], methodGroups: [], checklistItems: [],
-    labName: "Riverside Regional Medical Center",
+    labName: "Sample Regional Medical Center",
     quizResults: [], cliaNumber: "22D0999999",
   } as any, ctx);
   writeFileSync(join(OUT_DIR, "veritacomp_post_stamp.pdf"), buf);
@@ -116,9 +116,9 @@ async function qcCompetencyPdf() {
 async function qcCms209Pdf() {
   const { generateCMS209PDF } = await import("../server/pdfReport");
   const buf = await generateCMS209PDF({
-    lab: { lab_name: "Riverside Regional Medical Center", clia_number: "22D0999999",
-           lab_address_street: "100 Medical Center Drive", lab_address_city: "Riverside",
-           lab_address_state: "CA", lab_address_zip: "92501" },
+    lab: { lab_name: "Sample Regional Medical Center", clia_number: "22D0999999",
+           lab_address_street: "100 Medical Center Drive", lab_address_city: "Sampletown",
+           lab_address_state: "CA", lab_address_zip: "00000" },
     employees: [
       { last_name: "Tech", first_name: "Sample", middle_initial: null,
         highest_complexity: "H", performs_testing: 1, qualifications_text: "MLS(ASCP)",
@@ -133,7 +133,7 @@ async function qcCms209Pdf() {
 async function qcVeritaPtPdf() {
   const { generateVeritaPTPDF } = await import("../server/pdfReport");
   const buf = await generateVeritaPTPDF({
-    labName: "Riverside Regional Medical Center",
+    labName: "Sample Regional Medical Center",
     cliaNumber: "22D0999999",
     generatedAt: "May 5, 2026",
     summary: { totalEnrollments: 1, eventsThisYear: 1, passRate: 100, openCorrectiveActions: 0 },
@@ -150,7 +150,7 @@ async function qcCumsumPdf() {
     { year: 2026, old_lot_number: "L1", new_lot_number: "L2",
       old_lot_geomean: 90.1, new_lot_geomean: 91.0, difference: 0.9, cumsum: 0.9, verdict: "ACCEPT" },
   ];
-  const buf = await generateCumsumPDF(tracker as any, entries as any, [], "22D0999999", "Riverside Regional Medical Center", ctx);
+  const buf = await generateCumsumPDF(tracker as any, entries as any, [], "22D0999999", "Sample Regional Medical Center", ctx);
   writeFileSync(join(OUT_DIR, "veritacheck_cumsum_post_stamp.pdf"), buf);
   console.log("wrote veritacheck_cumsum_post_stamp.pdf");
 }

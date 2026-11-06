@@ -74,6 +74,7 @@ import {
 } from "./securityPolicy";
 import { registerSecuritySettingsRoutes } from "./securitySettingsRoutes";
 import { recordViewMiddleware, accessReport, accessReportExcel } from "./recordViews";
+import { DEMO_FIXTURE_NAME, planDemoFixtureRename, demoFixtureRenameReport, applyDemoFixtureRename } from "./demoFixtureRename";
 import { resealAll } from "./secretRotation";
 import { labWideCorrelation, correlationPeerInstruments, describeCorrelationInstrument, rowComplexity, mapComplianceGaps } from "./labWideCorrelation";
 import { attachSopLinks, sopLinksByDocument, effectiveSop } from "./veritamapSopLink";
@@ -1595,6 +1596,33 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
   });
 
+  // Demo lab fixture rename (Michael Q190 = 1): moves the fixture's existing rows to the new name, in one transaction. Dry run unless dryRun is
+  // false AND confirm is the new name. Counts and ids, no names. The secret comes from the header only. server/demoFixtureRename.ts.
+  app.post("/api/admin/demo-fixture/rename", (req: any, res) => {
+    const secret = req.headers["x-admin-secret"] as string | undefined;
+    if (!secret || secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const sqlite = (db as any).$client;
+    const dryRun = req.body?.dryRun !== false;
+    if (!dryRun && req.body?.confirm !== DEMO_FIXTURE_NAME) {
+      return res.status(400).json({ error: "A write needs confirm set to the new name.", code: "CONFIRM_REQUIRED" });
+    }
+    const plan = planDemoFixtureRename(sqlite, DEMO_USER_EMAIL);
+    const report = demoFixtureRenameReport(sqlite, plan);
+    if (dryRun) return res.json({ dryRun, ...report });
+    const changed = applyDemoFixtureRename(sqlite, plan.rows);
+    for (const r of changed) {
+      logAudit({
+        userId: 0, module: "admin", action: "update", entityType: r.table, entityId: r.id,
+        entityLabel: `Demo lab fixture renamed (${r.table} ${r.id})`,
+        before: Object.fromEntries(Object.entries(r.changes).map(([c, v]) => [c, v[0]])),
+        after: Object.fromEntries(Object.entries(r.changes).map(([c, v]) => [c, v[1]])),
+        ipAddress: req.ip,
+      });
+    }
+    console.log(`[admin/demo-fixture/rename] changed ${changed.length} of ${plan.rows.length} planned row(s)`);
+    res.json({ dryRun, ...report, changed: changed.length, remaining: planDemoFixtureRename(sqlite, DEMO_USER_EMAIL).rows.length });
+  });
+
   // BUG-068 cleanup (Q52 = 1): clear the made-up competency values the old startup backfill wrote. Dry run unless
   // dryRun is false. Never touches a signed assessment or a lab in excludeLabIds (the demo lab). One audit row per
   // item changed, filed under the lab owner. server/competencyBackfillCleanup.ts.
@@ -2385,7 +2413,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  // Admin: raise the public demo VeritaScan (Riverside Regional, demo user) to a
+  // Admin: raise the public demo VeritaScan (Sample Regional, demo user) to a
   // target inspection-readiness level so the /demo/compliance VeritaScan tab shows
   // a strong but credible score. Promotes Not-Assessed items to Compliant and
   // leaves a spread of realistic gaps across domains (never one whole domain
@@ -20984,9 +21012,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const instrumentCount = map ? ((db as any).$client.prepare("SELECT COUNT(*) as cnt FROM veritamap_instruments WHERE map_id = ?").get(map.id)?.cnt || 0) : 0;
 
       res.json({
-        labName: "Riverside Regional Medical Center",
+        labName: "Sample Regional Medical Center",
         cliaNumber: "22D0999999",
-        address: "100 Medical Center Drive, Riverside, CA 92501",
+        address: "100 Medical Center Drive, Sampletown, CA 00000",
         stats: {
           studyCount,
           scanCompletionPct: scanPct,
@@ -21082,7 +21110,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           dataPoints: dp,
           instruments: instNames,
           status: studyRow.status,
-          _labName: "Riverside Regional Medical Center",
+          _labName: "Sample Regional Medical Center",
         };
 
         // Build cal_ver level results
@@ -21186,7 +21214,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           studyType: "ref_interval", cliaAllowableError: 0.1,
           teaIsPercentage: 1, tea_is_percentage: 1, teaUnit: '%', tea_unit: '%',
           dataPoints: dp, instruments: instNames, status: studyRow.status,
-          _labName: "Riverside Regional Medical Center",
+          _labName: "Sample Regional Medical Center",
           _cliaNumber: "22D0999999",
         };
         const results = {
@@ -21223,7 +21251,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           dataPoints: dp,
           instruments: instNames,
           status: studyRow.status,
-          _labName: "Riverside Regional Medical Center",
+          _labName: "Sample Regional Medical Center",
           _cliaNumber: "22D0999999",
         };
         const pdfBuffer = await generatePDFBuffer(study as any, sensResults, "22D0999999", null, licenseCtxFromReq(req));
@@ -21312,7 +21340,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           cliaAbsoluteUnit: _absUnit || null,
           clia_absolute_unit: _absUnit || null,
           dataPoints: dp, instruments: instNames, status: studyRow.status,
-          _labName: "Riverside Regional Medical Center",
+          _labName: "Sample Regional Medical Center",
         };
         const results = {
           type: "precision",
@@ -21380,7 +21408,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           cliaAbsoluteUnit: _absUnit || null,
           clia_absolute_unit: _absUnit || null,
           dataPoints: dp, instruments: instNames, status: studyRow.status,
-          _labName: "Riverside Regional Medical Center",
+          _labName: "Sample Regional Medical Center",
         };
         const results = {
           type: "lot_to_lot",
@@ -21419,7 +21447,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         dataPoints: dp,
         instruments: instNames,
         status: studyRow.status,
-        _labName: "Riverside Regional Medical Center",
+        _labName: "Sample Regional Medical Center",
       };
 
       // Build full MethodCompData results for PDF generator
@@ -21621,7 +21649,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
       // ===== Lab identity (Excel Export Standard) =====
       // Demo lab is hard-coded; real maps use the user's CLIA record.
-      const labName = "Riverside Regional Medical Center (DEMO)";
+      const labName = "Sample Regional Medical Center (DEMO)";
       const cliaNumber = "22D0999999 (DEMO)";
       const exportPwd = process.env.EXCEL_PROTECT_PASSWORD || "veritaassure-export";
 
@@ -21673,7 +21701,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       };
       const aboutBlank = () => { about.getRow(aboutRow).height = 8; aboutRow += 1; };
       aboutSection("About this product");
-      aboutBody("This is a public demo of the VeritaMap compliance map. The data shown is fictional, generated for a fictional laboratory called Riverside Regional Medical Center under fictional CLIA number 22D0999999. It exists so prospective users can see what a populated compliance map looks like before subscribing. None of the analytes, instruments, dates, or notes represent any real laboratory.");
+      aboutBody("This is a public demo of the VeritaMap compliance map. The data shown is fictional, generated for a fictional laboratory called Sample Regional Medical Center under fictional CLIA number 22D0999999. It exists so prospective users can see what a populated compliance map looks like before subscribing. None of the analytes, instruments, dates, or notes represent any real laboratory.");
       aboutBlank();
       aboutSection("How to use this workbook");
       aboutBody("The Compliance Map tab lists every analyte in the demo. Use the auto-filter on the header row to narrow by department, specialty, or complexity. The shape of the export (columns, color coding, layout) is identical to a real subscriber's export; only the data is fictional.");
@@ -21807,7 +21835,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       applyLicenseToExcelJS(wb, licenseCtxFromReq(req, "VeritaMap®"));
       const buffer = await wb.xlsx.writeBuffer();
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-      res.setHeader("Content-Disposition", `attachment; filename="VeritaMap_Demo_Riverside_Regional.xlsx"`);
+      res.setHeader("Content-Disposition", `attachment; filename="VeritaMap_Demo_Sample_Regional.xlsx"`);
       res.send(Buffer.from(buffer));
     } catch (err: any) {
       console.error("Demo Excel error:", err);
@@ -21897,7 +21925,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
       const pdfBuffer = await generateVeritaScanPDF(
         {
-          scanName: scan.name || "Riverside Regional - 2026 Inspection Readiness",
+          scanName: scan.name || "Sample Regional - 2026 Inspection Readiness",
           createdAt: scan.created_at,
           updatedAt: scan.updated_at,
           items: mergedItems,
@@ -21908,7 +21936,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         licenseCtxFromReq(req)
       );
 
-      const safeName = "Riverside_Regional";
+      const safeName = "Sample_Regional";
       const date = labToday();
       const label = type === "executive" ? "Executive" : "Full";
       const filename = `VeritaScan_${label}_${safeName}_${date}.pdf`;
@@ -22053,7 +22081,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         items,
         methodGroups,
         checklistItems,
-        labName: "Riverside Regional Medical Center",
+        labName: "Sample Regional Medical Center",
         quizResults,
         cliaNumber: "22D0999999",
       }, licenseCtxFromReq(req));
@@ -22072,12 +22100,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   app.get("/api/demo/staff/cms209", async (req, res) => {
     try {
       const demoLab = {
-        lab_name: "Riverside Regional Medical Center",
+        lab_name: "Sample Regional Medical Center",
         clia_number: "22D0999999",
         lab_address_street: "100 Medical Center Drive",
-        lab_address_city: "Riverside",
+        lab_address_city: "Sampletown",
         lab_address_state: "CA",
-        lab_address_zip: "92501",
+        lab_address_zip: "00000",
       };
 
       const demoEmployees = [
@@ -29782,7 +29810,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         const legacyItems = (sqlite.prepare("SELECT * FROM competency_assessment_items WHERE assessment_id = ? AND instrument_id = ?").all(legacy.id, legacyInst) as any[]);
         signoffs.push({
           // BUG-049 (2026-10-14): carry the record's own type, so the next step and due date follow from it. With
-          // milestone null the view asked for the initial again and computed no due date (Lisa Thompson, Riverside).
+          // milestone null the view asked for the initial again and computed no due date (Lisa Thompson, Sample Regional).
           id: null, legacy: true, milestone: ({ initial: "initial", "6month": "six_month", six_month: "six_month", first_annual: "first_annual", annual: "annual" } as Record<string, string>)[String(legacy.assessment_type || "")] || null,
           signedDate: String(legacy.signed_on_paper_date || "").slice(0, 10) || labLocalDate(legacy.completion_date) || null, // BUG-047: lab date
           signerName: legacy.evaluator_name || null, signerRole: legacy.evaluator_title || null, signerInitials: legacy.evaluator_initials || null,
@@ -36529,7 +36557,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // POST /api/admin/labs/transfer-owner — ADMIN: transfer ONE lab's ownership to a
   // new owner WITHOUT deleting any content, and optionally attach the lab to an
   // organization. This is the no-wipe sibling of reset-and-reassign: use it to
-  // re-parent an existing lab (e.g. hand the Riverside demo fixture to Michael and
+  // re-parent an existing lab (e.g. hand the Sample Regional demo fixture to Michael and
   // pull it into the QA system) when the user-facing transfer route cannot run
   // because the lab's owner_user_id is an account we must not impersonate.
   // Body: { secret, labId, newOwnerUserId, oldOwnerUserId?, attachToOrgId?,

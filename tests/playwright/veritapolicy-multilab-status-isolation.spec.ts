@@ -8,7 +8,7 @@
 //
 // This drives the authenticated lab-scoped API as a MULTI-LAB owner: set policy
 // "1" to different statuses in two labs, then read both back and assert they are
-// independent. It uses the verilabguy test account (owns Michaels Lab + Riverside
+// independent. It uses the verilabguy test account (owns Michaels Lab + Sample Regional
 // Regional, no real policy data), and RESTORES the original status of each lab
 // afterward. Needs PW_TOKEN (multi-lab owner JWT); compile-only in CI otherwise.
 //

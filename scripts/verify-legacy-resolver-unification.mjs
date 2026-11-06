@@ -43,7 +43,7 @@ db.exec(`
 // lab 2 (default 2 via membership only). u4 is the DRIFT user: lab_id=3 but
 // default_lab_id=1. u5 is a seat user under u1. u6 is a PENDING member of 2.
 db.exec(`
-  INSERT INTO labs VALUES (1,'Michaels Lab',1),(2,'Riverside Regional',1),(3,'Other Lab',2);
+  INSERT INTO labs VALUES (1,'Michaels Lab',1),(2,'Sample Regional',1),(3,'Other Lab',2);
   INSERT INTO users VALUES (1,1,1),(2,3,3),(3,NULL,NULL),(4,3,1),(5,NULL,NULL),(6,NULL,1);
   INSERT INTO lab_members (lab_id,user_id,status) VALUES (2,3,'active'),(2,6,'pending');
   INSERT INTO user_seats (seat_user_id,owner_user_id,status) VALUES (5,1,'active');

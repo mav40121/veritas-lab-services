@@ -44,7 +44,7 @@ db.exec(`
 
 // Two labs, two owners.
 //   Lab 1 = Michaels Lab, owned by user 100.
-//   Lab 2 = Riverside Regional, owned by user 200.
+//   Lab 2 = Sample Regional, owned by user 200.
 // 14 items in Lab 1. Mixed account_id: 9 owned by 100 (Michael), 5 owned by
 // user 150 (a Michaels Lab seat user). This is the customer-real shape.
 const insertItem = db.prepare(
@@ -53,7 +53,7 @@ const insertItem = db.prepare(
 
 const MICHAEL = 100;
 const SEAT = 150; // seat user inside Michaels Lab
-const RIVERSIDE = 200;
+const SAMPLE_REGIONAL = 200;
 
 const lab1Items = [
   ["IPA (Isopropyl Alcohol), 70%", "A459-1", null, "FLAMMABLE CABINET", "VLS-00006063"],
@@ -76,13 +76,13 @@ for (let i = 0; i < lab1Items.length; i++) {
   insertItem.run(lab1AccountIds[i], 1, ...lab1Items[i]);
 }
 
-// Riverside has its own 3 items, all owned by RIVERSIDE user.
+// Sample Regional has its own 3 items, all owned by SAMPLE_REGIONAL user.
 const lab2Items = [
   ["Demo Glucose Cal", null, null, null, "VLS-RIVER-001"],
   ["Demo BUN Reagent", null, null, null, null],
   ["Demo ALT Reagent", null, null, null, null],
 ];
-for (const item of lab2Items) insertItem.run(RIVERSIDE, 2, ...item);
+for (const item of lab2Items) insertItem.run(SAMPLE_REGIONAL, 2, ...item);
 
 // --- Reproduce the two endpoint query shapes ---
 
@@ -160,16 +160,16 @@ function check(name, cond, detail) {
   );
 }
 
-// 3. Lab-scoped query against Lab 2 returns only the 3 Riverside items.
+// 3. Lab-scoped query against Lab 2 returns only the 3 Sample Regional items.
 {
   const lab2Scoped = labScopedRows(2);
   check(
-    "lab-scoped WHERE lab_id = 2 returns only Riverside's 3 items",
+    "lab-scoped WHERE lab_id = 2 returns only Sample Regional's 3 items",
     lab2Scoped.length === 3,
     `got ${lab2Scoped.length}, expected 3`
   );
   check(
-    "lab-scoped query for Lab 2 contains only Riverside item names",
+    "lab-scoped query for Lab 2 contains only Sample Regional item names",
     lab2Scoped.every((r) => r.item_name.startsWith("Demo "))
   );
 }

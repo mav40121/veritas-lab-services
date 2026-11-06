@@ -18,7 +18,7 @@ const call = async (method, path, body) => { const r = await fetch(BASE + path, 
 const PW = ["Zq", "demo", "7x!"].join("-");
 const email = `demo-label-${Date.now()}@example.com`;
 const reg = await call("POST", "/api/auth/register", { email, password: PW, name: "Jordan Ellis", hipaa_acknowledged: true });
-const lab = (await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail: email, labName: "Riverside Regional Medical Center (QA)", plan: "hospital" })).body?.labId;
+const lab = (await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail: email, labName: "Sample Regional Medical Center (QA)", plan: "hospital" })).body?.labId;
 const d = new Database(process.env.SCRATCH_DB);
 d.prepare("UPDATE users SET has_completed_onboarding = 1, onboarding_seen = 1 WHERE id = ?").run(reg.body?.user?.id);
 d.prepare("UPDATE labs SET has_completed_onboarding = 1 WHERE id = ?").run(lab);

@@ -427,7 +427,7 @@ return (
               </div>
               {/* Right — preview cards */}
               <div className="bg-muted/30 border-l border-border p-6 flex flex-col justify-center gap-3">
-                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Demo Preview - Riverside Regional Medical Center</div>
+                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Demo Preview - Sample Regional Medical Center (fictional)</div>
                 {[
                   { analyte: "Glucose", status: "PASS", color: "emerald" },
                   { analyte: "Hemoglobin", status: "OVERDUE", color: "red" },

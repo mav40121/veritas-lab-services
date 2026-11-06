@@ -2,7 +2,7 @@
 //
 // BUG-049 (2026-10-14): a method signed on the whole record before per-method sign-off (a locked assessment in the
 // lab's implicit program) reads as a legacy sign-off. It was built with milestone null, so the person's page asked for
-// the INITIAL again and computed no due date (Lisa Thompson, Riverside lab 1, waived Nova StatStrip, initial signed
+// the INITIAL again and computed no due date (Lisa Thompson, Sample Regional lab 1, waived Nova StatStrip, initial signed
 // 10/13/2026). The legacy sign-off now carries the record's own assessment_type.
 // Boots the built server (dist/index.cjs) on a COPY of a production backup (never written) and asserts, for every
 // legacy-locked implicit record in it:

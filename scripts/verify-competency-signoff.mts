@@ -22,7 +22,7 @@ const ok = (label: string, cond: boolean) => { console.log(`${cond ? "PASS" : "F
 const render = (status: string, extra: Record<string, any> = {}, blank = false) =>
   buildCompetencyHTML({
     assessment: { status, employee_name: "Test Tech", competency_type: "moderate", assessment_type: "6-month", assessment_date: "2026-06-01", ...extra },
-    items: [], methodGroups: [], checklistItems: [], labName: "Riverside Regional", cliaNumber: "22D0999999", blank,
+    items: [], methodGroups: [], checklistItems: [], labName: "Sample Regional", cliaNumber: "22D0999999", blank,
   } as any);
 
 const failHtml = render("fail");

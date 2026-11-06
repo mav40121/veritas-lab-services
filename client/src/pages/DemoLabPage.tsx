@@ -265,7 +265,7 @@ export default function DemoLabPage() {
       const res = await fetch(`${API_BASE}/api/demo/map/excel`);
       if (!res.ok) return;
       const blob = await res.blob();
-      saveAs(blob, "VeritaMap_Riverside_Regional.xlsx");
+      saveAs(blob, "VeritaMap_Sample_Regional.xlsx");
     } catch {}
   }
 
@@ -306,7 +306,7 @@ export default function DemoLabPage() {
       if (!res.ok) return;
       const { token } = await res.json();
       const date = labTodayIso();
-      downloadPdfToken(token, `VeritaScan_${type === "executive" ? "Executive" : "Full"}_Riverside_Regional_${date}.pdf`);
+      downloadPdfToken(token, `VeritaScan_${type === "executive" ? "Executive" : "Full"}_Sample_Regional_${date}.pdf`);
     } catch (err) {
       console.error("Scan PDF error:", err);
     } finally {
@@ -322,7 +322,7 @@ export default function DemoLabPage() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex flex-col sm:flex-row items-center justify-between gap-2">
             <div className="flex items-center gap-2 text-sm font-medium">
               <Shield size={16} />
-              VeritaAssure&#174; Live Demo - Riverside Regional Medical Center | A sample lab for demonstration only. Browse the results and download the PDFs.
+              VeritaAssure&#174; Live Demo - Sample Regional Medical Center (fictional) | A sample lab for demonstration only. Browse the results and download the PDFs.
             </div>
             <Button asChild size="sm" className="bg-white text-[#006064] hover:bg-white/90 font-semibold border-0">
               <Link href="/register">Create Free Account <ArrowRight size={14} className="ml-1" /></Link>
@@ -672,7 +672,7 @@ export default function DemoLabPage() {
 
               {/* Sample reports (Pfizer demo follow-up 2026-05-19). Lives at the
                   bottom of the VeritaCheck tab so a prospect reviewing the
-                  Riverside studies can also download representative PDFs for
+                  Sample Regional studies can also download representative PDFs for
                   the EP study families not represented in the seed (QC Lot
                   Verification with three sections, PT/INR Geometric Mean
                   Calculator, Simple Precision, etc.). Each PDF runs through
@@ -692,7 +692,7 @@ export default function DemoLabPage() {
             <div className="space-y-5">
               <div className="border-l-4 border-[#006064] pl-5 mb-2">
                 <p className="text-lg sm:text-xl font-bold text-foreground leading-snug">
-                  Riverside Regional's laboratory is mapped: 12 instruments and 2 manual methods across Chemistry, Hematology, Coagulation, Urinalysis, Blood Bank, and Point of Care.
+                  Sample Regional's laboratory is mapped: 12 instruments and 2 manual methods across Chemistry, Hematology, Coagulation, Urinalysis, Blood Bank, and Point of Care.
                 </p>
                 <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
                   When building your lab in VeritaMap&#174;, you select your instruments from a library of more than 300 instruments and manual procedures. VeritaMap&#174; pulls that instrument's test menu from its library. You toggle the tests your lab performs, and VeritaMap&#174; builds your test menu with CLIA test complexity filled in from the library, plus structured fields for the reference ranges, critical values, and AMR your lab verifies and adopts per CLIA 493.1253. The result is a living map of your laboratory.
@@ -748,7 +748,7 @@ export default function DemoLabPage() {
                         <p className="text-sm text-muted-foreground leading-relaxed">
                           VeritaMap&#174; identified <strong className="text-foreground">
                           {Object.entries(map.intelligence as Record<string, any>).filter(([, v]: [string, any]) => v.correlationRequired).length} analytes
-                          </strong> requiring correlation studies across Riverside Regional's instruments.
+                          </strong> requiring correlation studies across Sample Regional's instruments.
                         </p>
                       </div>
                     </div>
@@ -772,10 +772,10 @@ export default function DemoLabPage() {
             <div className="space-y-5">
               <div className="border-l-4 border-[#006064] pl-5 mb-2">
                 <p className="text-lg sm:text-xl font-bold text-foreground leading-snug">
-                  Riverside Regional's inspection readiness checklist is scored live across all major TJC and CAP domains.
+                  Sample Regional's inspection readiness checklist is scored live across all major TJC and CAP domains.
                 </p>
                 <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
-                  VeritaScan&#174; walks through 173 items drawn from TJC and CAP requirements, tracks completion status by domain, and flags items that need attention before a surveyor arrives. The checklist exports to Excel for documentation and evidence gathering. Below is Riverside Regional's current readiness snapshot.
+                  VeritaScan&#174; walks through 173 items drawn from TJC and CAP requirements, tracks completion status by domain, and flags items that need attention before a surveyor arrives. The checklist exports to Excel for documentation and evidence gathering. Below is Sample Regional's current readiness snapshot.
                 </p>
               </div>
               {scan ? (
@@ -935,7 +935,7 @@ export default function DemoLabPage() {
             <div className="space-y-5">
               <div className="border-l-4 border-[#006064] pl-5 mb-2">
                 <p className="text-lg sm:text-xl font-bold text-foreground leading-snug">
-                  Riverside Regional has documented annual competency for its Chemistry department staff.
+                  Sample Regional has documented annual competency for its Chemistry department staff.
                 </p>
                 <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
                   Every element required by CLIA, from direct observation of patient test performance to problem-solving assessment, is captured here with supporting documentation fields. Element 6 includes a scored quiz appended directly to the competency record. VeritaComp&#8482; manages technical, waived, and non-technical competency.
@@ -1031,7 +1031,7 @@ export default function DemoLabPage() {
             <div className="space-y-5">
               <div className="border-l-4 border-[#006064] pl-5 mb-2">
                 <p className="text-lg sm:text-xl font-bold text-foreground leading-snug">
-                  Riverside Regional's personnel records show each person's CLIA role, credentials, and competency status.
+                  Sample Regional's personnel records show each person's CLIA role, credentials, and competency status.
                 </p>
                 <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
                   VeritaStaff&#8482; tracks CLIA role assignments (Laboratory Director, Clinical Consultant, Technical Consultant, Technical Supervisor, General Supervisor, Testing Personnel), qualification requirements by complexity level, and competency timelines for every employee. You always know who is current, who is due, and who is overdue, before the surveyor asks.
@@ -1105,7 +1105,7 @@ export default function DemoLabPage() {
             <div className="space-y-5">
               <div className="border-l-4 border-[#006064] pl-5 mb-2">
                 <p className="text-lg sm:text-xl font-bold text-foreground leading-snug">
-                  Riverside Regional knows exactly which analytes are covered by PT and which need attention.
+                  Sample Regional knows exactly which analytes are covered by PT and which need attention.
                 </p>
                 <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
                   VeritaPT&#8482; reads your VeritaMap&#174; test menu, checks each analyte against CLIA PT requirements, and shows you gaps, recommended programs, and what you already have covered.
@@ -1262,7 +1262,7 @@ export default function DemoLabPage() {
             <div className="space-y-5">
               <div className="border-l-4 border-[#006064] pl-5 mb-2">
                 <p className="text-lg sm:text-xl font-bold text-foreground leading-snug">
-                  Riverside Regional never misses a certificate renewal.
+                  Sample Regional never misses a certificate renewal.
                 </p>
                 <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
                   VeritaLab&#8482; tracks CLIA, CAP, TJC, ISO 15189, state laboratory licenses, lab director licenses, and vendor agreements, with COLA and others under Other, and sends advance email reminders at 9 months, 6 months, 3 months, 30 days, and at expiration. Document archive holds every certificate PDF.

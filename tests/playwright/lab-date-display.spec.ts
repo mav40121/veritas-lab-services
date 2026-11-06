@@ -20,7 +20,7 @@ test("a certificate's expiration date shows as the stored day, not the day befor
   test.skip(!ADMIN || !LOCAL, "local build with PW_ADMIN_SECRET only");
   const email = `pw-labdate-${Date.now()}@example.com`;
   const reg = await (await request.post(`${BASE}/api/auth/register`, { data: { email, password: ["Pw", "date", "7x!"].join("-"), name: "PW Date Owner", hipaa_acknowledged: true } })).json();
-  const labId = Number((await (await request.post(`${BASE}/api/admin/provision-demo-lab`, { data: { secret: ADMIN, ownerEmail: email, labName: "Riverside Regional Medical Center", plan: "hospital" } })).json()).labId);
+  const labId = Number((await (await request.post(`${BASE}/api/admin/provision-demo-lab`, { data: { secret: ADMIN, ownerEmail: email, labName: "Sample Regional Medical Center", plan: "hospital" } })).json()).labId);
   await request.post(`${BASE}/api/auth/complete-onboarding`, { headers: { Authorization: `Bearer ${reg.token}` } });
   const cert = await request.post(`${BASE}/api/labs/${labId}/veritalab/certificates`, {
     headers: { Authorization: `Bearer ${reg.token}`, "X-Active-Lab-Id": String(labId) },

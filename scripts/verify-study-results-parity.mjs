@@ -20,7 +20,7 @@ const call = async (method, path, body) => { const r = await fetch(BASE + path, 
 
 const email = `parity-${Date.now()}@example.com`;
 const reg = await call("POST", "/api/auth/register", { email, password: ["Zq", "parity", "7x!"].join("-"), name: "Jordan Ellis", hipaa_acknowledged: true });
-const lab = (await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail: email, labName: "Riverside Regional Medical Center (Parity QA)", plan: "hospital" })).body?.labId;
+const lab = (await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail: email, labName: "Sample Regional Medical Center (Parity QA)", plan: "hospital" })).body?.labId;
 check("0. QA owner and lab", !!lab);
 
 // One study of each type from the production copy (newest of each type), copied into the scratch lab.

@@ -44,10 +44,10 @@ const live14 = [
   sys("Siemens Clinitek Advantus Urinalysis Analyzer", "Urinalysis", "MODERATE", 10),
 ];
 const record = (testSystems) => ({
-  labName: "Riverside Regional Medical Center", cliaNumber: "22D0999999",
+  labName: "Sample Regional Medical Center", cliaNumber: "22D0999999",
   employee: { name: "Jordan Example", title: "BS / BA", complexity: "M", hireDate: "2024-09-23" }, elementCount: 6, testSystems,
 });
-const license = { licensee: "Riverside Regional Medical Center", email: "lab@example.com", issueDate: "2026-11-03", product: "VeritaComp™" };
+const license = { licensee: "Sample Regional Medical Center", email: "lab@example.com", issueDate: "2026-11-03", product: "VeritaComp™" };
 for (const [name, systems] of [["record-heading.pdf", live14], ["record-heading-short.pdf", live14.slice(1, 4)]]) {
   const buf = await generateEmployeeCompetencyRecordPDF(record(systems), license);
   fs.writeFileSync(path.join(OUT, name), buf);

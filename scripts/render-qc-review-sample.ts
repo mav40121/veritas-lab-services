@@ -10,7 +10,7 @@ const sqlite = (db as any).$client;
 const now = new Date().toISOString();
 sqlite.prepare("INSERT INTO users (email, password_hash, name, created_at) VALUES (?, 'x', 'Dana Director', ?)").run(`dana-${Date.now()}@example.com`, now);
 const dana = Number(sqlite.prepare("SELECT MAX(id) id FROM users").get().id);
-sqlite.prepare("INSERT INTO labs (lab_name, clia_number, owner_user_id, created_at) VALUES ('Riverside Regional Medical Center (QA)', '22D0999999', ?, ?)").run(dana, now);
+sqlite.prepare("INSERT INTO labs (lab_name, clia_number, owner_user_id, created_at) VALUES ('Sample Regional Medical Center (QA)', '22D0999999', ?, ?)").run(dana, now);
 const L = Number(sqlite.prepare("SELECT MAX(id) id FROM labs").get().id);
 const lotId = Number(sqlite.prepare("INSERT INTO qc_control_lots (lab_id, analyte, level, lot_number, mfr_mean, mfr_sd, status) VALUES (?, 'Glucose', 'L1', 'G-123', 100, 3, 'active')").run(L).lastInsertRowid);
 for (const [d, v] of [["2026-08-03", 99.5], ["2026-08-10", 101.2], ["2026-08-17", 98.9], ["2026-08-24", 100.8]] as const)

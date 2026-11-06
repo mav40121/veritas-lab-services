@@ -65,7 +65,7 @@ const one = (sql, ...a) => db.prepare(sql).get(...a);
 //      lab can exercise the 4th login; this is the whole point of the MD persona),
 //   2. else a lab with an admin-member distinct from the owner (the USON-demo persona),
 //   3. else any lab in the org with active members.
-// Ordering by lab id alone is wrong: it grabbed Riverside (no MD, no seats) over
+// Ordering by lab id alone is wrong: it grabbed Sample Regional (no MD, no seats) over
 // Michaels Lab, silently dropping the director and staff logins.
 const lab = FORCE_LAB
   ? one(`SELECT id, owner_user_id, organization_id FROM labs WHERE id = ?`, FORCE_LAB)

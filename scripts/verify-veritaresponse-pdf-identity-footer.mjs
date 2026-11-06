@@ -66,7 +66,7 @@ db.exec(`
   CREATE TABLE labs (id INTEGER PRIMARY KEY, lab_name TEXT, clia_number TEXT);
   CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT, name TEXT, plan TEXT,
                       clia_lab_name TEXT, clia_number TEXT);
-  INSERT INTO labs (id, lab_name, clia_number) VALUES (5, 'Riverside Regional Medical Center', '22D0999999');
+  INSERT INTO labs (id, lab_name, clia_number) VALUES (5, 'Sample Regional Medical Center', '22D0999999');
   INSERT INTO users (id, email, name, plan, clia_lab_name, clia_number)
     VALUES (3, 'director@example.com', 'Michael Veri', 'hospital', 'Michaels Lab', '11D2222222');
 `);
@@ -85,8 +85,8 @@ function resolve(finding, ownerUserId) {
 
 // FIXED behaviour: a finding on lab 5 stamps the LAB's name + CLIA (multi-lab correct).
 const onLab = resolve({ lab_id: 5 }, 3);
-ok("#1 finding on lab 5 -> lab_name = 'Riverside Regional Medical Center'",
-  onLab.lab_name === "Riverside Regional Medical Center");
+ok("#1 finding on lab 5 -> lab_name = 'Sample Regional Medical Center'",
+  onLab.lab_name === "Sample Regional Medical Center");
 ok("#1 finding on lab 5 -> clia_number = '22D0999999' (NOT 'Not on file')",
   onLab.clia_number === "22D0999999");
 

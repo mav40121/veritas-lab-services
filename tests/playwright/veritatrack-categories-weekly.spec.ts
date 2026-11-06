@@ -30,7 +30,7 @@ test("a lab adds its own category and a weekly task", async ({ page, request }) 
   const email = `pw-vtcat-${Date.now()}@example.com`;
   const password = ["Pw", "vt", "7x!"].join("-");
   const reg = await (await request.post(`${BASE}/api/auth/register`, { data: { email, password, name: "PW VT Owner", hipaa_acknowledged: true } })).json();
-  const prov = await (await request.post(`${BASE}/api/admin/provision-demo-lab`, { data: { secret: ADMIN, ownerEmail: email, labName: "Riverside Regional Medical Center", plan: "hospital" } })).json();
+  const prov = await (await request.post(`${BASE}/api/admin/provision-demo-lab`, { data: { secret: ADMIN, ownerEmail: email, labName: "Sample Regional Medical Center", plan: "hospital" } })).json();
   const labId = Number(prov.labId);
   const token = reg.token as string;
   const auth = { Authorization: `Bearer ${token}`, "X-Active-Lab-Id": String(labId) };

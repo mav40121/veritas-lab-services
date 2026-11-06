@@ -175,7 +175,7 @@ export interface TransferOpts {
   // owner with no other primary should land on the lab they just received).
   // Admin re-parenting of an existing lab passes false so it does NOT hijack the
   // new owner's existing primary lab, and leaves the old owner's primary intact
-  // (e.g. the demo account keeps Riverside as its primary so public /demo still
+  // (e.g. the demo account keeps Sample Regional as its primary so public /demo still
   // resolves there after the lab is handed to Michael).
   movePrimary?: boolean;
 }

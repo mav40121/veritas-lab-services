@@ -25,7 +25,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const email = `specimen-ui-${Date.now()}@example.com`;
 const reg = await call("POST", "/api/auth/register", { email, password: ["Zq", "spec", "7x!"].join("-"), name: "Jordan Ellis", hipaa_acknowledged: true });
 const token = reg.body?.token, user = reg.body?.user, uid = user?.id;
-const lab = (await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail: email, labName: "Riverside Regional Medical Center (QA)", plan: "hospital" })).body?.labId;
+const lab = (await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail: email, labName: "Sample Regional Medical Center (QA)", plan: "hospital" })).body?.labId;
 scratch((d) => { d.prepare("UPDATE users SET has_completed_onboarding = 1, onboarding_seen = 1 WHERE id = ?").run(uid); d.prepare("UPDATE labs SET has_completed_onboarding = 1 WHERE id = ?").run(lab); });
 const L = `/api/labs/${lab}/veritamap`;
 const map = (await call("POST", `${L}/maps`, { name: "QA Chemistry" }, token)).body;
