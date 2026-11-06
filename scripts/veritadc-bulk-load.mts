@@ -175,13 +175,6 @@ async function convertAll(items: { sha: string; source: string; kind: "doc" | "p
     // Nothing of the customer's stays in the temp folder.
     fs.rmSync(tmp, { recursive: true, force: true });
   }
-  // PowerPoint: slides against PDF pages.
-  for (const it of items) {
-    const c = out.get(it.sha);
-    if (!c?.ok || it.kind !== "ppt" || c.after?.pages !== undefined) continue;
-    const pages = await pdfPageCount(c.outPath!);
-    c.after = { ...(c.after || {}), pages };
-  }
   return out;
 }
 
@@ -313,6 +306,11 @@ async function main() {
     }
   }
   const conversions = await convertAll([...toConvert.values()], workDir, allowConvert);
+  // PowerPoint: slides against PDF pages. Here so a conversion reused from the work folder is counted too.
+  for (const it of toConvert.values()) {
+    const c = conversions.get(it.sha);
+    if (c?.ok && it.kind === "ppt") c.after = { ...(c.after || {}), pages: await pdfPageCount(c.outPath!) };
+  }
 
   // ── 4. Check each file the way the server will, and add up the bytes ──
   const stats = {
