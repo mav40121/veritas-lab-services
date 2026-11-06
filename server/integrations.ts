@@ -110,6 +110,13 @@ export function autoCompleteVeritaScanItems(study: {
   }
 }
 
+/** The VeritaScan items a passing study of this type and test marks: the rule autoCompleteVeritaScanItems applies. */
+export function scanItemsForPassingStudy(studyType: string, testName: string): number[] {
+  const keywords = STUDY_TYPE_KEYWORDS[studyType];
+  if (!keywords || keywords.length === 0) return [];
+  return findMatchingScanItemIds(keywords, testName, studyType);
+}
+
 /**
  * Find VeritaScan item IDs that match a given study type and analyte.
  * Uses the 173-item checklist structure.
