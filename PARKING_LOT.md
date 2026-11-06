@@ -50,7 +50,7 @@ and TJC (CAMLAB PDF + text extract).
 **Source:** prior session handoff. Re-confirmed during 2026-05-01 QC
 review.
 
-**Status:** Open. Multi-hour subagent fan-out work. Work-pass 2026-10-04: BLOCKED on materials. AABB and COLA columns cannot be source-grounded without the gated manuals (item #28); CAP is 11/12 modules verifiable from files on the drive, MOL file missing (item #27); TJC is operator-authoritative. Not startable without fabricating accreditor citations. Awaiting #27 + #28. **CAP existence audit 2026-10-09:** scripts/audit-cap-citations-vs-mas.py (read-only) checked every CAP ID in the VeritaPolicy master list (58 policies, 525 distinct citations incl. 5 ranges) against the 12 MAS checklist files on the drive: 0 missing (all 520 single IDs and both endpoints of every range exist; nothing cites the missing MOL checklist). What remains for the CAP column is relevance (is each requirement the right one for its policy), a human review, not an existence problem.
+**Status:** Open. Multi-hour subagent fan-out work. Work-pass 2026-10-04: BLOCKED on materials. AABB and COLA columns cannot be source-grounded without the gated manuals (item #28); CAP is 11/12 modules verifiable from files on the drive, MOL file missing (item #27); TJC is operator-authoritative. Not startable without fabricating accreditor citations. Awaiting #27 + #28. **CAP existence audit 2026-10-09:** scripts/audit-cap-citations-vs-mas.py (read-only) checked every CAP ID in the VeritaPolicy master list (58 policies, 525 distinct citations incl. 5 ranges) against the 12 MAS checklist files on the drive: 0 missing (all 520 single IDs and both endpoints of every range exist; nothing cites the missing MOL checklist). What remains for the CAP column is relevance (is each requirement the right one for its policy), a human review, not an existence problem. **VeritaScan crosswalk read 2026-11-05 (75a1991e):** all 173 VeritaScan rows read one by one against the CAP requirement text and the eCFR paragraph, not only the rows the site reviewers listed; 129 lines changed in client/src/lib/veritaScanData.ts. Citations that didn't fit were replaced, and N/A stands where no CAP item fits. TJC EP numbers changed only where the manual text on file settles them; the rest are unchanged and were listed for Michael. That read covers VeritaScan's CAP, CFR and TJC citations only. The AABB and COLA rebuild stays blocked on #28.
 
 **Pre- vs post-COLA:** Pre-COLA. May 6-8 conference; Saturday + Sunday +
 Monday available before the booth.
@@ -148,86 +148,6 @@ extracts the exhaustive ID set and re-runs the QA audit.
 
 **Pre- vs post-COLA:** Post-COLA. Operator-side action item, no code
 work pending until the source documents land.
-
----
-
-### 29. VeritaStock barcode scanning (full mobile scan flow)
-
-**Effort:** L (12 working days, ~3 weeks calendar)
-**Importance:** High — strategic moat vs Unity Lab Services ($30K+/yr); presold as included on Clinic+ tiers; build triggers on first paid commitment.
-
-**What:** The remaining barcode-scanning build for VeritaStock, scoped
-during the 2026-05-20 Pfizer follow-up discussion. Order-now reorder
-document (PDF + Excel) already shipped in PR #286. This item is the
-mobile scan companion that turns VeritaStock into a true Unity Lab
-Services-class inventory product.
-
-**Full scope (12 working days):**
-- Day 1: barcode generation library + "Print Labels" PDF endpoint
-  (Avery 5160, 30 labels per sheet)
-- Day 2: schema additions (`barcode_value` column on
-  `inventory_items` + `scan_events` audit table) with ALTER TABLE
-  migration pattern
-- Day 3: PWA shell - manifest, service worker, install prompt,
-  mobile-first layout
-- Day 4: scanner page - camera access via MediaDevices API,
-  zxing-js decode, item lookup, quantity entry, submit
-- Day 5: scan-history view per item + scan-events Excel audit export
-- Day 6: edge cases - offline scan queue with local IndexedDB,
-  permission-denied UX, seat-user scan permissions
-- Day 7: real-device testing (iOS Safari + Android Chrome) + verify
-  script
-- Day 8: polish, marketing copy, roadmap page update, docs, Gate 3
-  prod verify
-- Day 9-10: offline queue hardening + mobile UI polish + error states
-- Day 11-12: label-printing wizard + item-catalog CSV import +
-  onboarding flow
-
-**Why parked vs build now:**
-- No paying customers yet for VeritaStock specifically
-- Pfizer expressed interest but has not committed; quote and pricing
-  discussion still in flight as of 2026-05-21
-- Pre-sell strategy decided: trigger build on first paid commitment
-  rather than speculative-build
-- "Coming Q3 2026" badge in marketing copy serves as signal-of-demand
-  capture in the meantime
-
-**Pricing model (locked during 2026-05-21 strategy session):**
-- Barcode scanning is INCLUDED FREE on every Clinic+ tier that has
-  VeritaStock (per the gate-by-cost-to-deliver principle - the
-  feature costs zero per customer to deliver after build)
-- Optional onboarding service: $1,500 flat (covers custom label
-  generation, CSV catalog import, 1-hour training Zoom)
-- Marketing line: "Unity Lab Services charges $30K+/year for barcode
-  scanning. We include it free with VeritaStock. Optional onboarding:
-  $1,500 flat. No tier upgrade required."
-
-**Technical anchors locked:**
-- PWA (Progressive Web App), NOT native iOS/Android apps - phone
-  camera works fine for lab volumes (200-400 items per round, not
-  Amazon-warehouse scale)
-- Libraries: zxing-js (scanning) and bwip-js (label generation) -
-  both MIT/Apache, $0 cost
-- No third-party services, no app store fees, no new infrastructure
-- Reuses existing JWT auth and multi-lab scoping
-
-**Out-of-pocket cash cost: $0.** Time cost: ~12 dev days + ~6 hours
-of operator testing.
-
-**Trigger to build:** First paid commitment from Pfizer or any other
-Hospital/Enterprise prospect that names barcode scanning as a
-requirement. Pre-sale closes via the Pfizer email or a similar
-inbound, then build kicks off the same day.
-
-**Source:** 2026-05-20 Pfizer follow-up session, after the order-now
-reorder document shipped (PR #286). Strategic decision documented in
-the team pricing analysis docx at
-`C:\Users\veril\Downloads\VeritaAssure-Pricing-Analysis-2026-05-21.docx`
-(version 2). The Request-an-Instrument feature (PR #293) was built
-instead as the durable customer-feedback channel for VeritaMap;
-barcode scanning waits on revenue commitment.
-
-**Status:** Parked pending first paid commitment. Work-pass 2026-10-04: HELD BY STRATEGY, build-decision needs Michael. Already fully scoped (12-day plan below), so nothing to add by re-scoping. Trigger remains first paid commitment naming barcode scanning. Building now would override the locked strategy and spend ~12 dev days speculatively. Recommendation: hold. Say the word to build speculatively.
 
 ---
 
@@ -375,7 +295,7 @@ _(item #37 closed 2026-05-28; see C28 below)_
 - **In-browser DOCX editing.** MediaLab has a structured editor that creates a Table of Contents from headings. We treat documents as opaque files; revisions require a new upload.
 - **Reviewer-phrase library.** MediaLab provides standard reject phrases ("Section X needs CFR citation"). Our reviewer enters free-text comment.
 - **Cross-policy linking.** MediaLab lets one policy reference another by ID; surveyor can click through. Ours treats each doc as an island.
-- **SSO / Active Directory integration.** Lab IT departments expect AD login. We have email+password only.
+- ~~**SSO / Active Directory integration.** Lab IT departments expect AD login. We have email+password only.~~ **SHIPPED 2026-10-15** (PR #1656, 89fab194), see below.
 - **Excel export of compliance dashboard.** Surveyors want xlsx with VeritaAssure brand colors and proper headers. Our dashboard is JSON only. Half-day to add per the Excel Standard in CLAUDE.md §6.
 - **Print stylesheet.** MediaLab has a print view. Ours uses default browser print.
 - **Auto-expire cron** (was deferred from Phase 6B). Approved policies past `next_review_date` by 60+ days currently stay status='approved' with a visual red flag. MediaLab auto-flips to expired and locks edits.
@@ -399,6 +319,8 @@ All five small parity items are now shipped. Items 6+ (SSO/AD, approval delegati
 Work-pass 2026-10-04: STATUS CORRECTED + remaining items scoped. Verified in-code that 4 of the 7 "remaining" depth items actually shipped THIS session: per-department role mapping (policy_manual_approvers + manualId override in canUserApproveStep), reviewer-phrase library (REJECT_PHRASES), cross-policy linking (policy_document_links), and customizable email templates (policy_email_templates). SSO is scoped (docs/SSO_AD_DESIGN.md, PR #1458). Two depth items remained unbuilt after the status review: approval delegation and in-browser DOCX editing. Both specced in docs/VERITADC_PARITY_REMAINING_DESIGN.md.
 
 **Approval delegation: SHIPPED 2026-10-04** (on Michael's go). A reviewer (or owner/admin) names a temporary designate who inherits their approval eligibility for a date window; delegation layered onto canUserApproveStepDelegated / countEligibleReviewersForStepDelegated with two self-approval laundering guards; delegate's approvals attributed to the delegator on the signoff + audit. CRUD + a Delegations dialog in My Documents. Verified: scripts/verify-veritadc-approval-delegation.ts (19/19 incl. both guards), API guards (self-delegation/bad-dates 400), and a full local browser exercise (create -> ACTIVE -> revoke). PR #1460 merged + deployed 2026-10-04 (c6ef093f, health 200, route 401 unauthenticated); approve-by-delegate E2E verified locally (PR #1462 doc). Prod click-through was not performed. Remaining on this item: in-browser DOCX editing only.
+
+**SSO: SHIPPED 2026-10-15** (PR #1656, 89fab194). Single sign-on with Microsoft Entra (OpenID Connect), set up per customer: routed by email domain, optional or required, existing accounts only, support accounts refused. Until Veritas sets a customer up, sign-in behaves as before.
 
 **In-browser DOCX editing:** still a multi-week L; hold until a prospect names it (see the design doc's recommendation).
 
@@ -530,7 +452,7 @@ dialog on lab 5 offers FH9 and RT4 under Hematology, FH2P is gone from the
 picker, and an existing enrollment on a retired code still displays.
 
 **Source:** Lisa, 2026-10-07 ~10:20 (screenshot, lab 5 VeritaPT enrollments dialog).
-**Status:** VERIFICATION STEP 2026-10-07: Lisa supplied the CAP Surveys 2026 and 2027 catalog PDFs; scripts/cap_catalog/extract_cap_catalog.py (pdftotext -layout parse: 756 codes in 2026, 764 in 2027, FH9 and RT4 present, FH2P absent from both) and build_cap_review_workbook.py produced the review workbook at Verita Products/VeritaPT/CAP_Surveys_catalog_review_2026-10-07.xlsx (773 rows: add 696, keep 72, retire FH2P and CMP3, 3 low-confidence rows). Scripts merged (PR 1d9e70e2). Waiting on Lisa's verification; then one admin load with the catalog edition as source, retired codes set inactive (4 existing CAP enrollments keep displaying). API vendor list still to check the same way. **2026-10-12:** five codes Redington-Fairview could not find were loaded on Michael's Q119 = 1 (DAT, JAT, JATE1, JE1, WBCR; names from CAP's online list via Lindsay Webber's screenshot, checked against the 2026 catalog pages); CAP catalog 74 -> 79. The rest of the review workbook still waits on a director's sign-off. **2026-10-27 (API half):** production's 223 API programs compared with API's 2026 Catalog of Programs (api-pt.com PDF, 132 pages, 292 programs): add 70 (mostly 2-sample and add-on variants, plus programs such as 232 Urinalysis & HCG, 143 Urine Chemistry and the andrology set 152-154), fix 3 wrong codes (production 20, 10 and 12 are API's 171 SHBG and Testosterone, 272 Urinalysis & HCG - I and 271 Automated Urine Microscopy - S), retire 1 (213 CoaguSense PT/INR is not in the 2026 catalog; set inactive, never deleted), keep 219 (11 with catalog-name wording to check). Review workbook: Verita Products/VeritaPT/API_catalog_review_2026-10-27.xlsx with build_api_review_workbook.py beside it. Like the CAP list, nothing loads until a director verifies it.
+**Status:** VERIFICATION STEP 2026-10-07: Lisa supplied the CAP Surveys 2026 and 2027 catalog PDFs; scripts/cap_catalog/extract_cap_catalog.py (pdftotext -layout parse: 756 codes in 2026, 764 in 2027, FH9 and RT4 present, FH2P absent from both) and build_cap_review_workbook.py produced the review workbook at Verita Products/VeritaPT/CAP_Surveys_catalog_review_2026-10-07.xlsx (773 rows: add 696, keep 72, retire FH2P and CMP3, 3 low-confidence rows). Scripts merged (PR 1d9e70e2). Waiting on Lisa's verification; then one admin load with the catalog edition as source, retired codes set inactive (4 existing CAP enrollments keep displaying). API vendor list still to check the same way. **2026-10-12:** five codes Redington-Fairview could not find were loaded on Michael's Q119 = 1 (DAT, JAT, JATE1, JE1, WBCR; names from CAP's online list via Lindsay Webber's screenshot, checked against the 2026 catalog pages); CAP catalog 74 -> 79. The rest of the review workbook still waits on a director's sign-off. **2026-10-27 (API half):** production's 223 API programs compared with API's 2026 Catalog of Programs (api-pt.com PDF, 132 pages, 292 programs): add 70 (mostly 2-sample and add-on variants, plus programs such as 232 Urinalysis & HCG, 143 Urine Chemistry and the andrology set 152-154), fix 3 wrong codes (production 20, 10 and 12 are API's 171 SHBG and Testosterone, 272 Urinalysis & HCG - I and 271 Automated Urine Microscopy - S), retire 1 (213 CoaguSense PT/INR is not in the 2026 catalog; set inactive, never deleted), keep 219 (11 with catalog-name wording to check). Review workbook: Verita Products/VeritaPT/API_catalog_review_2026-10-27.xlsx with build_api_review_workbook.py beside it. Like the CAP list, nothing loads until a director verifies it. **2026-10-14:** the CAP HBF code (Fetal Red Cell Detection) was approved and loaded on Michael's Q175 = 1 (REQ-058, load_pt_program_hbf.mjs; CAP catalog 79 -> 80), after Lindsay Webber at Redington-Fairview asked for it 10/13. Redington-Fairview has now hit nine missing codes: CAP DAT, JAT, JATE1, JE1, WBCR and HBF (REQ-049, REQ-058) and API 151, 161 and 213 (REQ-048). Each was added on its own; the rest of the review workbooks still wait on a director.
 ---
 
 ### 81. Antimicrobial stewardship: the laboratory's share of the hospital program, inside VeritaAssure
@@ -592,24 +514,6 @@ _(item #88 closed 2026-10-08; see C91 below)_
 
 ---
 
-### 93. VeritaMap's SOP review column is separate from VeritaDC
-
-**Effort:** M (1-2 weeks)
-**Importance:** Medium. The map's compliance panel shows "17 SOP overdue" for a lab whose policies live in VeritaDC with their own review dates.
-
-**What:** veritamap_tests.last_sop_review is a hand-entered date per analyte with a 24-month cycle (client/src/pages/VeritaMapMapPage.tsx). VeritaDC tracks each policy's approval, version and next review date. The two never meet, so a lab keeps two sets of review dates or the map reads red. Options: link an analyte's SOP to a VeritaDC document and read its last approval date (the way VeritaCheck studies now stamp cal ver and correlation dates), or drop the SOP column from the map's score. Needs Michael's call.
-
-**Source:** St. Charles demo dry run, 2026-10-11 (Riverside map 1 reads 82% with "17 SOP overdue").
-**Decision (Michael Q85 = 1, 2026-10-11):** link, after the 10/14 St. Charles demo. Each analyte's SOP links to a VeritaDC policy and the map reads that policy's last review date.
-**Build breakdown (steps 1 and 2 approved, Q86 = 1):**
-1. Server: `veritamap_tests.sop_document_id` (nullable, ALTER migration). Set or clear it on the lab-scoped map route; the policy must be in the same lab and not archived. The map's test rows return the linked policy's title, status, last review date (newest `policy_signoffs` row with action 'approved' or 'recertified') and next review date. SOP overdue = linked policy not approved, or its next review date has passed. Rows with no link keep the hand-entered `last_sop_review` exactly as today. The map Excel export and the VeritaTrack seeding read the same derived date.
-2. Client: the SOP Review cell gets "Link policy" (search this lab's VeritaDC policies), then shows the policy title, its last review date and a status chip, with Unlink; one policy can be linked to several analytes at once (one chemistry procedure often covers many tests).
-3. Optional: the VeritaDC policy row shows "Used by N tests on VeritaMap".
-Receipts: an integration test for the derivation (linked, unlinked fallback, unapproved, review passed, recertified) that fails on the old code, and a browser receipt for the link picker.
-**Status:** Steps 1 and 2 SHIPPED: PR #1736 merged 2026-10-27 (2cdb9621), live in 3e6a4006 (05:11 UTC). A test's SOP can link to a VeritaDC policy (Link policy on the SOP cell; one or many tests at once); the map, the lab-wide view, the Excel export and VeritaTrack's import read the policy's review state (Current while approved and inside its next review date, Overdue otherwise, with the reason). tests/integration/veritamap-sop-link.test.ts 12/12; production check: map detail carries sop_document_id and sop_link (sandbox lab 35, 05:13 UTC). Step 3 stays parked.
-
----
-
 ### 96. FAQ promises data retention, exports and a deletion notice the product does not have
 
 **Effort:** XS (under a day for the copy fix; the features themselves would be M)
@@ -618,7 +522,7 @@ Receipts: an integration test for the derivation (linked, unlinked fallback, una
 **What:** the "Data Retention and Cancellation" answers in client/src/lib/faqContent.ts (lines 605-614 on main, 2026-10-14) say: data is kept 2 years after a subscription ends and can be reactivated; "every module that generates structured data has an Excel or PDF export function"; and after 2 years the account is deleted with an email notice first. In the product, cancelling drops the lab to the free plan, which blocks most exports; Equipment (VeritaMaintain) has no export and VeritaPT has no export button although its page promises a PDF (VeritaPTPage.tsx line 22); no 2-year deletion job or notice email exists. Fix the copy to say what the product does (or build the missing pieces, Michael's call), then check the FAQ page and its prerendered/static copy.
 
 **Source:** found 2026-10-09 during the Mike Hiltunen and Natalie Lamb replies; promised as "its own item" that day and never raised. Parked 2026-10-14 from the weekly review.
-**Status:** Open. Needs Michael's call: correct the copy, or build retention/export/notice to match it.
+**Status:** Open. Needs Michael's call: correct the copy, or build retention/export/notice to match it. **2026-11-06:** the Privacy Policy repeats the deletion promise. client/src/pages/PrivacyPage.tsx line 56 (section 7, Data Retention) says data is kept 2 years after cancellation, then permanently deleted with an email notice first, so whichever way Michael decides has to reach that page as well as the FAQ.
 
 ---
 
@@ -646,43 +550,6 @@ Receipts: an integration test for the derivation (linked, unlinked fallback, una
 
 ---
 
-### 105. Tissue sub-module in VeritaStock: human tissue for implant, tracked from receipt to the patient
-
-**Effort:** M to L (2-4 weeks) for a tissue sub-module built on VeritaStock's receiving, lot and expiration, and recall pieces, plus the issue, implant and disposition record and a perpetual log; more if the tissue ID is barcode-scanned.
-**Importance:** High. Every hospital that stores or implants human tissue (bone grafts and putty, skin substitutes, amniotic membrane, tendons) must trace each graft from the supplier to the patient and back. FDA requires the tracking (21 CFR 1271.290) and TJC surveys it under its transplant safety standards. Heywood runs it today on a paper form and a macro workbook, and VeritaStock already has the receiving, lot, expiration and recall parts.
-
-**What:** Michael supplied Heywood Hospital's blood bank tissue form (BB FORM.xlsm) as the core of the module, built as a sub-module of VeritaStock rather than a nineteenth module. The form's workflow, which the sub-module should follow:
-- Receipt, by Materials Management and then the blood bank (date, time, by): tissue type and supplier picked from a catalog (36 products on the form, for example DBX bone putty from Musculoskeletal Transplant Foundation and Apligraf from Organogenesis), quantity or size, the supplier's ID number, expiration date, transport temperature on receipt with the action taken, and package integrity.
-- Issue: date and time, issued by the tech and to the courier, delivered to, recipient, requesting physician, with read-back checks (source ID read back, expiration acceptable, integrity acceptable at issue).
-- Implant: date and time implanted, reconstitution (time, by, solution, solution lot and expiration), implanted by, and the supplier's tissue usage card completed and returned (date).
-- Other disposition (wasted, returned, expired) with a description and who did it.
-- A perpetual log of every unit, built from the entries.
-
-The federal rule (21 CFR 1271.290, eCFR as of 2026-10-01) requires a tracking system that "enables the tracking of all HCT/Ps from: (i) The donor to the consignee or final disposition; and (ii) The consignee or final disposition to the donor", keyed on the supplier's "distinct identification code". The hospital is the consignee in that chain.
-
-Open questions for the scope:
-- Patient identifiers. SETTLED 2026-11-03 (Michael, Q152 = 1): no PHI. VeritaAssure never stores the recipient's name or medical record number. Each unit records the supplier's tissue ID, the implant date and the surgeon, and the hospital's chart holds the patient link; a recall runs tissue ID, then our record, then the chart. Victor was told and asked whether the tissue ID is recorded in the patient's chart (2026-11-04 01:00Z).
-- The TJC transplant safety standard numbers and the record retention period to carry, sourced from the current standard before the build.
-- Storage monitoring: freezer and refrigerator temperatures for stored tissue, and whether that ties to VeritaMaintain or VeritaStock.
-- Whether the supplier usage card prints from the record.
-
-**Source:** Michael 2026-10-23: "put in parking lot: Tissue storage module with full tracking", then "use this as the core of the tissue module. It can be a sub module within veritastock", with Heywood's BB FORM.xlsm (copy at VLS Leads\Heywood Healthcare\Heywood_BB_Tissue_Form_from_Michael_2026-10-23.xlsm).
-**Status:** Open. Scoped 2026-11-03 and queued right after Heywood's VeritaDC document load (parity plan steps A to F). The scope (Lab\Verita Products\Product Specs\VeritaStock_tissue_submodule_scope_2026-11-03.md) found that VeritaStock tracks lots as quantities only, so the sub-module adds one row per graft keyed on the supplier's ID. It reuses the catalog, suppliers, recall matching and the VeritaMaintain temperature logs, and adds a server-side PHI refusal on its free text. The first draft of this entry read "tissue" as anatomic pathology slides and blocks; corrected the same day from the form.
-
----
-
-### 106. Should every account user sign an NDA? Why or why not?
-
-**Effort:** N/A to XS. The decision is Michael's (with counsel); if the answer is a click-through, the build is under a day (an acceptance step at sign-up and first sign-in, stored with a timestamp, like the HIPAA acknowledgment).
-**Importance:** Medium. It protects what users see of the product (screens, workflows, regulatory crosswalks, reports), which matters more as health systems with many users come on and as security reviews ask for evidence, but no customer has required it.
-
-**What:** Michael asked whether every person with a VeritaAssure account should sign a non-disclosure agreement, and why or why not. Context from 2026-10-25: Lifepoint's security review is under way with no NDA signed, which limited what Veritas could share (architecture diagram, security policy). Today the published Terms of Service (effective April 23, 2026) only ask users to keep their sign-in credentials confidential; they have no clause protecting Veritas's confidential or proprietary information. Questions to settle when this is picked up: a mutual NDA with each customer organization versus a click-through for every user; what an individual NDA can realistically be enforced against (a lab tech at a customer site) compared with confidentiality terms in the customer agreement and the Terms of Service; whether a click-through adds sign-up friction for staff-portal users; and how this interacts with the Lifepoint agreement's confidentiality section and the IPS.
-
-**Source:** Michael 2026-10-25: "Parking lot this and return to it later: Should we have all account users sign an NDA? Why or why not?"
-**Status:** Open. Parked; return to it after the Lifepoint questionnaire is submitted.
-
----
-
 ### 107. Safety module: manufacturer SDS for every test added in VeritaMap (safety and map linked)
 
 **Effort:** M to L (part of the safety module build; the SDS library alone is about 1-2 weeks)
@@ -707,18 +574,6 @@ Open questions for the scope:
 
 ---
 
-### 113. Georgetown (lab 18): production does not read a CLIA state from its CLIA number
-
-**Effort:** XS (look up what lab 18 stores; correct it only on Michael's go)
-**Importance:** Medium. Every report header prints the lab's CLIA number; if lab 18 stores a placeholder, its reports print the wrong one.
-
-**What:** the production time zone list (2026-10-27) shows lab 18 "Georgetown Community Hospital" with no CLIA state, so labs.clia_number on lab 18 is not in the CLIA form (two digits, D, seven digits). The account notes say her real CLIA is 18D0322357 (from her CLIA certificate, 2026-09-28; Clinic sale closed 2026-10-05). Check what lab 18 stores and what its reports print, then correct it on Michael's go. Its time zone is right either way: Georgetown, KY is Eastern.
-
-**Source:** production time zone list, 2026-10-27 (PR #1722 admin route).
-**Status:** Open. Read 2026-10-27 (admin report, read-only): labs.clia_number on lab 18 is "PENDING-GEORGETOWN-LPNT" with clia_locked = 1 (locked after its first report), and the owner's account CLIA is the same placeholder, so its reports print the placeholder; support could not correct it (update-lab returned 409 for any locked value). PR #1730 lets support replace a locked placeholder once (a real CLIA stays locked). Data fix ready, dry run by default: vls-ops/prod_fix_lab18_clia.sh (lab 18 -> 18D0322357, owner read from production). Waits on Michael's go. BUG-107. **Applied 2026-10-27 ~07:55 ET (Michael Q3 = 1):** lab 18 and its owner (user 83) now carry 18D0322357 (rule fix #1730 live 7f37ed28). Michael closes.
-
----
-
 ### 114. Schedules: a detailed conversation with Michael, with possible impact on UNC Nash
 
 **Effort:** N/A (a conversation first; any build is sized after it)
@@ -727,11 +582,126 @@ Open questions for the scope:
 **What:** Michael wants a detailed conversation about schedules before anything is built or changed. Which schedules are meant, and how they touch the UNC Nash engagement, is for that conversation; nothing is assumed here. Bring to it: what VeritaAssure schedules today (VeritaShift Scheduler, competency and calibration due dates, VeritaTrack tasks) and the open UNC Nash work items, so the discussion can map his concerns to the product and the engagement.
 
 **Source:** Michael, 2026-10-27: "Parking lot: I want to have a detailed conversation about schedules it may have impact on Unc Nash".
-**Status:** Open. Waiting on Michael to set a time; on the Thursday 2 PM ET outstanding review if it has not happened by then.
+**Status:** Open. The general schedules discussion happened 2026-11-02, with Michael speaking in generalities (weekend rotation, shift length and workforce age, his 6-position 12-hour template). Scheduling was kept out of the Nash report. Michael decides when it returns to Nash.
+
+---
+
+### 115. Tissue tracking follow-ups left out of PR 1838
+
+**Effort:** M (1-2 weeks in all; each build item is XS to S)
+**Importance:** Medium. Units can be recorded without these; a surveyor would ask for the retention period and TJC numbers.
+
+**What:** VeritaStock tissue tracking merged 2026-11-06 (C109); these were left out of it or found while building it. None stops a lab from recording units. The correction gap and the expired-solution check matter most, because they bear on whether the record is right. Shipping the list finishes what the scope and Heywood's form describe.
+- Barcode scan of the supplier's tissue ID. Phase 2 in the scope. The tissue page and server/tissue.ts have no scan code, and VeritaStock's barcode belongs to a product, not a unit.
+- Travel page. Heywood's form says to photocopy it, leave the copy in the blood bank and send the original to surgery. Decide whether the record prints a page that goes with the unit, and mock it first.
+- Staff tile. client/src/components/StaffMyWorkCard.tsx has no tissue tile; the way in is the Tissue button on VeritaStock.
+- Recall case pull. A recall case lists each matching unit with its state and a link to its record, but remove-stock takes lots only (server/stockRecalls.ts line 512). The lab records a disposition on the unit, and the case's "Stock removed" lines don't show it.
+- Reconstitution expiry check. reconstitutionFields (server/tissue.ts line 115) only checks that the solution's expiration is a date, so an expired solution saves at implant with no warning.
+- A correction can't change tissue type or supplier. correctableFields (shared/tissueRules.ts line 219) leaves both out and the first receipt can't be undone (server/tissue.ts line 630), so a unit received under the wrong type or supplier can only be closed out as another disposition.
+- Retention period and TJC transplant safety standard numbers. Neither is shown. The TJC numbers have to come from the current standard. Whether 21 CFR 1271.270(d) binds a consignee hospital is Michael's call.
+
+**Source:** 77aec80b commit message ("Not covered"), Lab\Verita Products\Product Specs\VeritaStock_tissue_submodule_scope_2026-11-03.md, and the 2026-11-06 build queue. Parked on Michael's Q216 = 1.
+**Status:** Open. Not scheduled. The retention line waits on Michael's 21 CFR 1271.270(d) call.
+
+---
+
+### 116. VeritaCheck results screen and PDF say different things about the same study
+
+**Effort:** S (1-3 days; one narrative shared by the screen and the PDF)
+**Importance:** High. A director reads the screen and signs the PDF, and they disagree on the criterion, the CFR paragraph and the analyzer count.
+
+**What:** The results screen writes its own narrative (client/src/pages/StudyResultsPage.tsx, from line 205) instead of using the PDF's (server/pdfReport.ts, from line 1425), and the two have drifted. The screen breaks narrative rules the PDF follows (CLAUDE.md section 5). One shared narrative would end the drift instead of fixing each sentence twice. Line numbers are from main at 9c701920.
+- Absolute criterion printed as a percent. cliaPct multiplies the stored value by 100 (line 206), so Sodium ±4 mmol/L reads ±400.0% on calibration verification and precision (lines 237, 241, 304, 313) and on a failed method comparison (line 289). The PDF prints ±4 mmol/L, except in its precision narrative, which has the same percent sentence (pdfReport.ts lines 1592, 1602).
+- CFR paragraphs differ. Calibration verification: §493.1255(b)(2) and §493.1253(b)(3) on the screen, §493.1255(b)(3) and §493.1253(b)(2) on the PDF. Precision: §493.1253(b)(1)(i)(B) on the screen, §493.1253(b)(2)(ii) on the PDF. Method comparison: §493.1281(a) on the screen's failed result, §493.1253(b)(2) on the PDF. scripts/verify-cfr-paragraph-citations.mjs checks that a paragraph exists, not which one fits, so it doesn't catch this. Which paragraph each study cites has to be settled against the eCFR before the fix.
+- PASS has no closing sentence. Calibration verification and precision PASS on the screen stop before "Final approval and clinical determination must be made by the laboratory director or designee." (lines 238, 310). FAIL and the PDF have it.
+- Two analyzers. The screen counts levels times analyzers and reads "All 10 calibration levels" and "This instrument" (lines 237, 238). The PDF got this fix in BUG-058 (pdfReport.ts line 1439).
+- FAIL tells the reader to review records. "Review calibration, reagent lot, and instrument maintenance records" (line 241) and "Review reagent lot, instrument maintenance, and QC trends" (line 313). The PDF doesn't say this.
+- Precision PASS claims more than was tested. "Manufacturer precision claims are verified." prints with no vendor SD entered, on the screen (line 310) and the PDF (pdfReport.ts line 1598). The vendor SD is optional on the form (client/src/pages/VeritaCheckPage.tsx line 2433), and the sentence before it judges the study against the adopted criterion.
+
+**Source:** found while removing the ADLM claim, 2026-11-06 (build queue); each line read on main at 9c701920. Parked on Michael's Q216 = 1.
+**Status:** Open. Not scheduled. Which CFR paragraph each study cites is Michael's to confirm.
+
+---
+
+### 117. VeritaScan shows "Invalid Date" under the scan title
+
+**Effort:** XS (under a day)
+**Importance:** Medium. Every scan opens with "Invalid Date" under its title. No data or score is affected.
+
+**What:** client/src/pages/VeritaScanScanPage.tsx line 1340 builds the date from scanMeta.updatedAt or createdAt, but the single-scan routes (server/routes.ts lines 18216 and 18464) send the row as stored, with updated_at and created_at. Both names the page reads are undefined, so it formats an empty date and prints "Invalid Date" at lines 1376 and 1504. The scan list is fine because its route sends both spellings (line 18168). Fix: send both from the single-scan routes or read updated_at on the page, with a browser test.
+
+**Source:** read on main at 9c701920, 2026-11-06. Parked on Michael's Q216 = 1.
+**Status:** Open. Not scheduled.
+
+---
+
+### 118. VeritaLab can't clear a certificate's expiration date
+
+**Effort:** XS (under a day)
+**Importance:** Medium. A lab can't remove a wrong expiration date, and reminders keep scheduling on it.
+
+**What:** Both certificate edit routes write expiration_date ?? existing.expiration_date (server/routes.ts lines 33071 and 33162). The form sends null for a blank date (client/src/pages/VeritaLabAppPage.tsx line 236), so the old date stays, the save answers 200, and scheduleReminders runs again on the old date (lines 33080, 33169). Cert number, issuing body, issued date, director and notes follow the same pattern (lines 33068-33073 and 33159-33164). Fix: treat a sent null as a clear and keep the old value only when the field is left out of the request, with a test on both routes.
+
+**Source:** found 2026-11-06 when Splice's certificate row needed its date removed (build queue). Parked on Michael's Q216 = 1.
+**Status:** Open. Goes with the next VeritaLab change.
+
+---
+
+### 119. Precision guide: 12 lines say VeritaCheck with no ®
+
+**Effort:** XS (under a day)
+**Importance:** Low. Mark use on one public article; VeritaCheck has been registered since 2026-10-27.
+
+**What:** client/src/pages/ArticlePrecisionInterpretationPage.tsx names VeritaCheck on 13 lines and only line 161 has the ®. The other 12 are lines 46, 47, 57, 59, 64, 83, 132, 141, 153, 205, 239 and 244, including the page title and meta description. server/seo-metadata.ts line 630 repeats the opening sentence without it. CLAUDE.md section 3 has registered marks use ® in public copy, and script/audit.py doesn't flag the bare name. Fix: add the mark on those lines.
+
+**Source:** found while removing the ADLM claim, 2026-11-06 (build queue); counted on main at 9c701920. Parked on Michael's Q216 = 1.
+**Status:** Open. Not scheduled.
+
+---
+
+### 120. Homepage says "nothing for a breach, or an inspector, to expose" while staff records are held
+
+**Effort:** XS (one line of copy once Michael decides)
+**Importance:** High. Same kind of problem as #96: a public statement a buyer's legal or security review can hold us to.
+
+**What:** client/src/pages/HomePage.tsx line 158, under "We never store PHI. By design.", ends "so there is nothing for a breach, or an inspector, to expose." The product holds no PHI by design, but it does hold staff records: rosters, credential documents, competency records, CE transcripts and read-and-sign history, and a tissue record names a surgeon. The PHI point doesn't support "nothing to expose", so the last clause says more than the rest of the paragraph can back up. It's a decision for Michael, best taken with the data retention promises in #96. Changing it is one line.
+
+**Source:** read on main at 9c701920, 2026-11-06. Parked on Michael's Q216 = 1.
+**Status:** Open. Michael's decision; take it with #96.
 
 ---
 
 ## CLOSED (audit trail)
+
+### C113. VeritaMap's SOP review column reads VeritaDC (was #93)
+
+**Effort:** was M / **Importance:** Medium.
+
+**Closure evidence:** Steps 1 and 2 shipped: PR #1736 merged 2026-10-27 (2cdb9621), live in 3e6a4006 (05:11 UTC). A test's SOP links to a VeritaDC policy, one or many tests at once, and the map, the lab-wide view, the Excel export and VeritaTrack's import read the policy's review state. tests/integration/veritamap-sop-link.test.ts 12/12; production check 2026-10-27: map detail carries sop_document_id and sop_link (sandbox lab 35). **Not built:** optional step 3, "Used by N tests on VeritaMap" on the VeritaDC policy row; the VeritaDC pages and routes don't read sop_document_id (main at 9c701920). Closed on Michael's Q216 = 1, 2026-11-06.
+
+### C112. Should every account user sign an NDA: answered by the Terms of Use and Confidentiality Agreement (was #106)
+
+**Effort:** was N/A to XS / **Importance:** Medium.
+
+**Closure evidence:** Michael chose a click-through for every user (Q141 = 1, 2026-11-03): each user accepts with a typed name before using the app, and a lab owner's acceptance also binds the organization. 37085d51 added the agreement and 84bfd1c3 (PR #1790) is revision 2 after VLS Legal's review. shared/termsOfUse.ts section 7 (Confidentiality) defines Veritas Confidential Information and limits its use and disclosure; section 1 says a signed customer agreement controls where it conflicts. TERMS_VERSION on main is 2026-11-03.2. Closed on Michael's Q216 = 1, 2026-11-06.
+
+### C111. VeritaStock barcode scanning (was #29)
+
+**Effort:** was L / **Importance:** High.
+
+**Closure evidence:** Shipped in May and June 2026; the 2026-10-04 note on this entry ("parked pending first paid commitment") was out of date. 1c9be1c1 (PR #454, schema) through 66871928 (PR #461, camera scanner), 2026-05-29 to 05-30, with the label PDF (#455), scan endpoint (#456), no-camera screens (#457), a label fix (#458) and the count workbook (#459, #460) between them. 46f6f5ed (PR #678, 2026-06-09) added the scan-first count workflow. On main at 9c701920 the scanner is used by VeritaStockPage, VeritaStockReceivingPage and InventoryCountWorkflow. **Remaining, unbuilt:** phone install (no manifest, service worker or install prompt under client/) and the offline scan queue (no IndexedDB). Also unbuilt from the same plan, checked 2026-11-06: nothing reads scan_events, so there is no per-item scan history or scan Excel export, and VeritaStock has no customer catalog import (only the admin /api/admin/import-inventory). None of these has its own entry. The 12-day plan and the 2026-05-21 pricing decision (included on every Clinic+ tier with VeritaStock, optional onboarding $1,500 flat) are in the entry's earlier text: git show 9c701920:PARKING_LOT.md. Closed on Michael's Q216 = 1, 2026-11-06.
+
+### C110. Georgetown (lab 18): the real CLIA replaced the locked placeholder (was #113)
+
+**Effort:** was XS / **Importance:** Medium.
+
+**Closure evidence:** Rule fix PR #1730 merged 2026-10-27 03:41 UTC (707ba70a), live in 7f37ed28: support can replace a locked placeholder once, and a real CLIA stays locked. Data corrected 2026-10-27 ~07:55 ET on Michael's Q3 = 1 (vls-ops/prod_fix_lab18_clia.sh APPLY=1): update-lab 200, reset-user-clia-to-lab 200, read-back lab 18 and owner user 83 both 18D0322357. BUG-107 agrees (resolved in data, PR #1730). Closed on Michael's Q216 = 1, 2026-11-06.
+
+### C109. Tissue tracking in VeritaStock: one record per graft, no PHI (was #105)
+
+**Effort:** was M to L / **Importance:** High.
+
+**Closure evidence:** PR #1838 merged 2026-11-06 17:01 UTC (77aec80b). One row per graft keyed on the supplier's tissue ID, an append-only history and the lab's own catalog; receipt, storage, issue, implant, other disposition, usage card, correction, undo, the perpetual log and lookup by tissue ID; the log as a locked workbook and a PDF; recall matching on tissue ID in every state. No recipient or MRN field exists (Michael Q152 = 1). Commit receipts: integration 258 checks, bite 68 of 68, browser 45 of 45, browser bite 7 of 7. Production 2026-11-06, signed out and nothing written: the tissue units route answers 401, where a made-up sibling route answers 404. The scope's open questions: patient identifiers settled by Q152 = 1; storage reads VeritaMaintain temperature logs (storage unit, latest reading, out-of-range readings while stored); the usage card stays the hospital's paper card, and the record holds only that it went back and when. The retention period, TJC numbers and the other follow-ups moved to #115. Closed on Michael's Q216 = 1, 2026-11-06.
 
 ### C108. "Staff Portal" wording gone from every screen a customer reads (was #101)
 
