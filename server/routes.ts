@@ -1552,7 +1552,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const secret = req.headers["x-admin-secret"] as string | undefined;
     if (!secret || secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
     const sqlite = (db as any).$client;
-    const noOwner = sqlite.prepare("SELECT COUNT(*) AS n FROM studies WHERE user_id IS NULL OR user_id = 0").get() as { n: number };
+    const noOwner = sqlite.prepare("SELECT lab_id, created_at FROM studies WHERE user_id IS NULL OR user_id = 0").all() as Array<{ lab_id: number | null; created_at: string | null }>;
+    // Michael Q193 = 1: these rows stay in place and unopened, and he decides later whether they stay. Dates only, oldest and newest.
+    const noOwnerTimes = noOwner.map((s) => Date.parse(String(s.created_at))).filter((n) => Number.isFinite(n));
+    const dayOf = (ms: number) => new Date(ms).toISOString().slice(0, 10);
     const seats = sqlite.prepare(
       `SELECT us.seat_type AS seat_type, COUNT(*) AS n,
               SUM(CASE WHEN us.lab_id IS NULL THEN 1 ELSE 0 END) AS no_lab,
@@ -1574,7 +1577,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         withNoLab: olderSeats.filter((s) => s.lab_id == null).length,
         holderHasNoMembership: olderSeats.filter((s) => s.lab_id != null && !s.has_membership).length,
       },
-      studiesWithNoOwner: noOwner.n,
+      studiesWithNoOwner: noOwner.length,
+      studiesWithNoOwnerDates: {
+        oldest: noOwnerTimes.length ? dayOf(Math.min(...noOwnerTimes)) : null,
+        newest: noOwnerTimes.length ? dayOf(Math.max(...noOwnerTimes)) : null,
+        withALab: noOwner.filter((s) => s.lab_id != null).length,
+      },
       activeSeatsWithNoActiveMembership: {
         total: seats.reduce((sum, s) => sum + s.n, 0),
         bySeatType: Object.fromEntries(seats.map((s) => [s.seat_type, s.n])),
@@ -12125,10 +12133,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           return b.id - a.id;
         });
         return res.json(userStudies);
-      } catch {}
+      } catch {
+        return res.status(401).json({ error: "Invalid or expired session" });
+      }
     }
-    // Guest: return studies with no userId
-    res.json(storage.getAllStudies().filter(s => !s.userId));
+    // Michael Q193 = 1: sign in to see studies. This used to hand the studies with no owner to anyone.
+    res.status(401).json({ error: "Sign in to see your studies." });
   });
 
   // ── My Studies XLSX export ──
@@ -12492,53 +12502,53 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   });
 
   app.get("/api/studies/:id", (req, res) => {
-    const study = storage.getStudy(parseInt(req.params.id));
-    if (!study) return res.status(404).json({ error: "Study not found" });
-
-    // If study belongs to a user, verify the requester is that user (or their seat user)
-    if (study.userId) {
-      const auth = req.headers.authorization;
-      if (!auth?.startsWith("Bearer ")) {
-        return res.status(403).json({ error: "This study requires authentication" });
-      }
-      try {
-        const payload = verifySessionJwt((db as any).$client, auth.slice(7)) as { userId: number };
-        // 2026-06-02 lab-scoped seat check (same pattern as PR #482 and
-        // sibling fixes in this PR). For a multi-lab owner holding a seat
-        // in someone else's lab, the unscoped seat lookup would map
-        // effectiveUserId to the wrong owner — denying access to their
-        // own studies, or worse, authorizing access to studies in the
-        // other lab. Resolve active lab from Referer.
-        const getActiveLabId: number | null = activeLabIdFromContext(req);
-        let effectiveUserId = payload.userId;
-        if (getActiveLabId) {
-          const ownsLab = (db as any).$client.prepare(
-            "SELECT 1 FROM labs WHERE id = ? AND owner_user_id = ? LIMIT 1"
-          ).get(getActiveLabId, payload.userId);
-          if (!ownsLab) {
-            const seatRow = (db as any).$client.prepare(
-              "SELECT owner_user_id FROM user_seats WHERE seat_user_id = ? AND status = 'active' AND lab_id = ? LIMIT 1"
-            ).get(payload.userId, getActiveLabId) as any;
-            if (seatRow) effectiveUserId = seatRow.owner_user_id;
-          }
-        } else {
-          // Legacy fallback: no active-lab context (#82: owners act as themselves).
-          const seatRow = legacySeatForUser((db as any).$client, payload.userId) as any;
-          if (seatRow) effectiveUserId = seatRow.owner_user_id;
-        }
-        if (effectiveUserId !== study.userId) {
-          return res.status(403).json({ error: "Access denied" });
-        }
-        // Q191: a seat's reach stops at its own lab. The study's lab isn't on the Drizzle row, so read it here.
-        const studyLab = (db as any).$client.prepare("SELECT lab_id FROM studies WHERE id = ?").get(study.id) as any;
-        if (!ownerRowInReach((db as any).$client, payload.userId, effectiveUserId, studyLab?.lab_id)) {
-          return res.status(403).json({ error: "Access denied" });
-        }
-      } catch {
-        return res.status(403).json({ error: "Invalid or expired session" });
-      }
+    // Michael Q193 = 1: sign in first, so a study's existence isn't answered to anyone signed out.
+    const auth = req.headers.authorization;
+    if (!auth?.startsWith("Bearer ")) {
+      return res.status(403).json({ error: "This study requires authentication" });
     }
+    let sessionUserId: number;
+    try {
+      sessionUserId = (verifySessionJwt((db as any).$client, auth.slice(7)) as { userId: number }).userId;
+    } catch {
+      return res.status(403).json({ error: "Invalid or expired session" });
+    }
+    const study = storage.getStudy(parseInt(req.params.id));
+    // A study with no owner stays in place and unopened, for everyone, until Michael decides whether it stays.
+    if (!study || !study.userId) return res.status(404).json({ error: "Study not found" });
 
+    // Verify the requester is the study's owner (or their seat user)
+    // 2026-06-02 lab-scoped seat check (same pattern as PR #482 and
+    // sibling fixes in this PR). For a multi-lab owner holding a seat
+    // in someone else's lab, the unscoped seat lookup would map
+    // effectiveUserId to the wrong owner — denying access to their
+    // own studies, or worse, authorizing access to studies in the
+    // other lab. Resolve active lab from Referer.
+    const getActiveLabId: number | null = activeLabIdFromContext(req);
+    let effectiveUserId = sessionUserId;
+    if (getActiveLabId) {
+      const ownsLab = (db as any).$client.prepare(
+        "SELECT 1 FROM labs WHERE id = ? AND owner_user_id = ? LIMIT 1"
+      ).get(getActiveLabId, sessionUserId);
+      if (!ownsLab) {
+        const seatRow = (db as any).$client.prepare(
+          "SELECT owner_user_id FROM user_seats WHERE seat_user_id = ? AND status = 'active' AND lab_id = ? LIMIT 1"
+        ).get(sessionUserId, getActiveLabId) as any;
+        if (seatRow) effectiveUserId = seatRow.owner_user_id;
+      }
+    } else {
+      // Legacy fallback: no active-lab context (#82: owners act as themselves).
+      const seatRow = legacySeatForUser((db as any).$client, sessionUserId) as any;
+      if (seatRow) effectiveUserId = seatRow.owner_user_id;
+    }
+    if (effectiveUserId !== study.userId) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+    // Q191: a seat's reach stops at its own lab. The study's lab isn't on the Drizzle row, so read it here.
+    const studyLab = (db as any).$client.prepare("SELECT lab_id FROM studies WHERE id = ?").get(study.id) as any;
+    if (!ownerRowInReach((db as any).$client, sessionUserId, effectiveUserId, studyLab?.lab_id)) {
+      return res.status(403).json({ error: "Access denied" });
+    }
     res.json(study);
   });
 
@@ -12567,6 +12577,16 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   }
 
   app.post("/api/studies", (req, res) => {
+    // Michael Q193 = 1: a study can't be saved signed out, so no more studies with no owner. No public page saves here: VeritaCheck
+    // saves through the lab-scoped route, and the demo pages have their own.
+    const auth = req.headers.authorization;
+    let payload: { userId: number };
+    try {
+      if (!auth?.startsWith("Bearer ")) throw new Error("no session");
+      payload = verifySessionJwt((db as any).$client, auth.slice(7)) as { userId: number };
+    } catch {
+      return res.status(401).json({ error: "Sign in to save a study." });
+    }
     // Drafts skip strict insertStudySchema validation since the user may not
     // have filled all required fields yet (data_points, instruments, etc.).
     // Minimum bar: a test_name + study_type so the row is identifiable in the
@@ -12616,68 +12636,60 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       parsed = insertStudySchema.safeParse(req.body);
       if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
     }
-    // Attach userId if authenticated
-    let userId: number | null = null;
-    let createdByUserId: number | null = null;
-    const auth = req.headers.authorization;
-    if (auth?.startsWith("Bearer ")) {
-      try {
-        const payload = verifySessionJwt((db as any).$client, auth.slice(7)) as { userId: number };
-        // 2026-06-01 lab-scoped seat check (same fix as requireModuleEdit
-        // and PR #479's account-settings pattern). The legacy unscoped
-        // POST has no labScopeMiddleware, so derive the active lab from
-        // the Referer URL. Owners of the active lab pass through. If no
-        // active lab can be resolved, fall back to the legacy global
-        // seat check.
-        const postActiveLabId: number | null = activeLabIdFromContext(req);
-        let seatRow: any = null;
-        if (postActiveLabId) {
-          const ownsLab = (db as any).$client.prepare(
-            "SELECT 1 FROM labs WHERE id = ? AND owner_user_id = ? LIMIT 1"
-          ).get(postActiveLabId, payload.userId);
-          if (!ownsLab) {
-            seatRow = (db as any).$client.prepare(
-              "SELECT owner_user_id, permissions FROM user_seats WHERE seat_user_id = ? AND status = 'active' AND lab_id = ? LIMIT 1"
-            ).get(payload.userId, postActiveLabId) as any;
-            if (seatRow) {
-              let perms: Record<string, string> = {};
-              try { perms = JSON.parse(seatRow.permissions || '{}'); } catch {}
-              if ((perms.veritacheck || 'view') !== 'edit') {
-                return res.status(403).json({ error: "You have view-only access to veritacheck. Ask the account owner to grant edit access." });
-              }
-            }
-          }
-        } else {
-          // Legacy fallback: no active-lab context. Non-owners keep the global
-          // behavior; owners act as themselves (#82).
-          seatRow = legacySeatForUser((db as any).$client, payload.userId, "owner_user_id, permissions") as any;
-          if (seatRow) {
-            let perms: Record<string, string> = {};
-            try { perms = JSON.parse(seatRow.permissions || '{}'); } catch {}
-            if ((perms.veritacheck || 'view') !== 'edit') {
-              return res.status(403).json({ error: "You have view-only access to veritacheck. Ask the account owner to grant edit access." });
-            }
+    // The account the study is filed under.
+    // 2026-06-01 lab-scoped seat check (same fix as requireModuleEdit
+    // and PR #479's account-settings pattern). The legacy unscoped
+    // POST has no labScopeMiddleware, so derive the active lab from
+    // the Referer URL. Owners of the active lab pass through. If no
+    // active lab can be resolved, fall back to the legacy global
+    // seat check.
+    const postActiveLabId: number | null = activeLabIdFromContext(req);
+    let seatRow: any = null;
+    if (postActiveLabId) {
+      const ownsLab = (db as any).$client.prepare(
+        "SELECT 1 FROM labs WHERE id = ? AND owner_user_id = ? LIMIT 1"
+      ).get(postActiveLabId, payload.userId);
+      if (!ownsLab) {
+        seatRow = (db as any).$client.prepare(
+          "SELECT owner_user_id, permissions FROM user_seats WHERE seat_user_id = ? AND status = 'active' AND lab_id = ? LIMIT 1"
+        ).get(payload.userId, postActiveLabId) as any;
+        if (seatRow) {
+          let perms: Record<string, string> = {};
+          try { perms = JSON.parse(seatRow.permissions || '{}'); } catch {}
+          if ((perms.veritacheck || 'view') !== 'edit') {
+            return res.status(403).json({ error: "You have view-only access to veritacheck. Ask the account owner to grant edit access." });
           }
         }
-        userId = seatRow ? seatRow.owner_user_id : payload.userId;
-        // Track who actually ran the study so the Admin Report attributes
-        // credit to the seat user (not just the primary seat holder).
-        createdByUserId = payload.userId;
-        // Check subscription write access for authenticated users
-        const fullUser = storage.getUserById(seatRow ? seatRow.owner_user_id : payload.userId);
-        if (fullUser) {
-          const accessLevel = getAccessLevel(fullUser);
-          if (accessLevel === 'read_only') {
-            const expiry = new Date(fullUser.subscriptionExpiresAt!);
-            const retentionEnd = new Date(expiry);
-            retentionEnd.setFullYear(retentionEnd.getFullYear() + 2);
-            return res.status(403).json({ error: "Your subscription has expired. Your data is available in read-only mode for 2 years. Resubscribe to add new records.", code: "SUBSCRIPTION_EXPIRED_READ_ONLY", retentionEndsAt: retentionEnd.toISOString() });
-          }
-          if (accessLevel === 'locked') {
-            return res.status(403).json({ error: "Your data retention period has ended. Please resubscribe to regain access to your account.", code: "DATA_RETENTION_EXPIRED" });
-          }
+      }
+    } else {
+      // Legacy fallback: no active-lab context. Non-owners keep the global
+      // behavior; owners act as themselves (#82).
+      seatRow = legacySeatForUser((db as any).$client, payload.userId, "owner_user_id, permissions") as any;
+      if (seatRow) {
+        let perms: Record<string, string> = {};
+        try { perms = JSON.parse(seatRow.permissions || '{}'); } catch {}
+        if ((perms.veritacheck || 'view') !== 'edit') {
+          return res.status(403).json({ error: "You have view-only access to veritacheck. Ask the account owner to grant edit access." });
         }
-      } catch {}
+      }
+    }
+    const userId: number = seatRow ? seatRow.owner_user_id : payload.userId;
+    // Track who actually ran the study so the Admin Report attributes
+    // credit to the seat user (not just the primary seat holder).
+    const createdByUserId = payload.userId;
+    // Check subscription write access for authenticated users
+    const fullUser = storage.getUserById(seatRow ? seatRow.owner_user_id : payload.userId);
+    if (fullUser) {
+      const accessLevel = getAccessLevel(fullUser);
+      if (accessLevel === 'read_only') {
+        const expiry = new Date(fullUser.subscriptionExpiresAt!);
+        const retentionEnd = new Date(expiry);
+        retentionEnd.setFullYear(retentionEnd.getFullYear() + 2);
+        return res.status(403).json({ error: "Your subscription has expired. Your data is available in read-only mode for 2 years. Resubscribe to add new records.", code: "SUBSCRIPTION_EXPIRED_READ_ONLY", retentionEndsAt: retentionEnd.toISOString() });
+      }
+      if (accessLevel === 'locked') {
+        return res.status(403).json({ error: "Your data retention period has ended. Please resubscribe to regain access to your account.", code: "DATA_RETENTION_EXPIRED" });
+      }
     }
 
     // Server-side pass/fail verification: recompute from data instead of trusting the client.
@@ -12691,18 +12703,14 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       (parsed.data as any).cliaAbsoluteFloor ?? null,
       (parsed.data as any).censoringPolicy ?? "exclude"
     );
-    // Free-study credit gate for the legacy (optional-auth) create path. Guests
-    // (no userId) are unaffected; authenticated free/per_study accounts consume
-    // credits (owner-level here, since lab context is out of scope on this route).
-    if (userId != null) {
-      const _lsOwner = storage.getUserById(userId);
-      const _lsAccess = resolveStudyAccess({ ownerPlan: _lsOwner?.plan, ownerCredits: (_lsOwner as any)?.studyCredits });
-      if (!_lsAccess.unlimited && _lsAccess.credits <= 0) {
-        return res.status(402).json({ error: "You have used your free studies. Upgrade to VeritaCheck Unlimited to run more.", code: "STUDY_CREDITS_EXHAUSTED" });
-      }
+    // Free-study credit gate: free/per_study accounts consume credits (owner-level here, since lab context is out of scope on this route).
+    const _lsOwner = storage.getUserById(userId);
+    const _lsAccess = resolveStudyAccess({ ownerPlan: _lsOwner?.plan, ownerCredits: (_lsOwner as any)?.studyCredits });
+    if (!_lsAccess.unlimited && _lsAccess.credits <= 0) {
+      return res.status(402).json({ error: "You have used your free studies. Upgrade to VeritaCheck Unlimited to run more.", code: "STUDY_CREDITS_EXHAUSTED" });
     }
     const study = storage.createStudy({ ...parsed.data, status: verifiedStatus, userId, createdByUserId });
-    if (userId != null && !isUnlimitedPlan(storage.getUserById(userId)?.plan)) {
+    if (!isUnlimitedPlan(storage.getUserById(userId)?.plan)) {
       consumeStudyCredit((db as any).$client, userId, null);
     }
 

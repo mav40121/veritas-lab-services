@@ -733,7 +733,6 @@ export default function LoginPage() {
             )}
           </CardContent>
         </Card>
-        {!onStock && <p className="text-xs text-center text-muted-foreground mt-4">You can also run a study as a guest without an account.</p>}
       </div>
     </div>
   );
