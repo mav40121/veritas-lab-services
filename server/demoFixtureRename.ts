@@ -8,6 +8,7 @@
 //   labs and users: CLIA 22D0999999 with exactly the old name.
 //   staff_labs: exactly the old name (or its "Core Laboratory" form) on CLIA 22D0999999 or the older VeritaStaff seed's CLIA.
 //   veritamap_maps and veritascan_scans: titled with the old name and owned by the demo user or a fixture lab.
+//   studies: the demo user's own, naming a real person as analyst. The boot seed no longer sets the analyst on an existing row either.
 // Any other row carrying the old name is left alone and counted, so the owner sees it and decides. The report has counts and ids, no names.
 
 export const DEMO_FIXTURE_NAME = "Sample Regional Medical Center";
@@ -21,7 +22,10 @@ const OLDER_STAFF_SEED_CLIA = "05D2187634"; // server/db.ts, the older VeritaSta
 const OLD_STAFF_ADDRESS = { lab_address_street: "1 Riverside Drive", lab_address_city: "Riverside", lab_address_zip: "92501" };
 const NEW_STAFF_ADDRESS = { lab_address_street: "1 Sample Drive", lab_address_city: "Sampletown", lab_address_zip: "00000" };
 
-const TABLES = ["labs", "users", "staff_labs", "veritamap_maps", "veritascan_scans"] as const;
+const OLD_ANALYST = "Michael Veri, MS, MBA, MLS(ASCP), CPHQ";
+const NEW_ANALYST = "T. Alvarez, MLS(ASCP)";
+
+const TABLES = ["labs", "users", "staff_labs", "veritamap_maps", "veritascan_scans", "studies"] as const;
 type FixtureTable = (typeof TABLES)[number];
 // Column -> [value now, value after]. Each update repeats the value now in its WHERE, so a row changed since the plan is left alone.
 export type FixtureRow = { table: FixtureTable; id: number; changes: Record<string, [string, string]> };
@@ -56,7 +60,21 @@ export function planDemoFixtureRename(sqlite: any, demoUserEmail: string): { row
       if (inFixture && String(r.name).startsWith(OLD_PREFIX)) rows.push({ table, id: r.id, changes: { name: [r.name, renamedTitle(r.name)] } });
     }
   }
+  // The public demo reads the demo user's studies by that user, so only those move. A study in anyone else's account is that person's record.
+  if (demoUser) {
+    for (const s of sqlite.prepare("SELECT id FROM studies WHERE user_id = ? AND analyst = ?").all(demoUser.id, OLD_ANALYST) as Array<{ id: number }>) {
+      rows.push({ table: "studies", id: s.id, changes: { analyst: [OLD_ANALYST, NEW_ANALYST] } });
+    }
+  }
   return { rows, demoUserFound: !!demoUser };
+}
+
+/**
+ * The CLIA on a public sample report (client/src/lib/demoSampleReports.ts). With no signed-in lab, POST /api/generate-pdf has no CLIA to print, so these read "Not on file" under a lab the page says
+ * is CLIA 22D0999999. Only the fixture's exact name and number together are honored, so nobody can stamp another lab's CLIA on a report with no sign-in.
+ */
+export function fixtureCliaForSampleReport(study: any): string | undefined {
+  return study?._labName === DEMO_FIXTURE_NAME && study?._cliaNumber === DEMO_FIXTURE_CLIA ? DEMO_FIXTURE_CLIA : undefined;
 }
 
 /** Rows that carry the old name and aren't the fixture. Counts only: nothing here is ever changed by this code. */

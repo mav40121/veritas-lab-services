@@ -18,6 +18,7 @@ if (!process.env.SCRATCH_DB) throw new Error("SCRATCH_DB is required.");
 const NEW = "Sample Regional Medical Center", CLIA = "22D0999999";
 const OLD_WORD = ["River", "side"].join(""), OLD = `${OLD_WORD} Regional Medical Center`, OLD_PREFIX = `${OLD_WORD} Regional`;
 const REAL_ANALYSTS = /M\. Veri|J\. Hall|D\. McCormick/;
+const REAL_ANALYST = ["Michael", "Veri, MS, MBA, MLS(ASCP), CPHQ"].join(" ");
 let failures = 0;
 const check = (name, cond, detail = "") => { console.log(`${cond ? "PASS" : "FAIL"}  ${name}${!cond && detail ? "  :: " + detail : ""}`); if (!cond) failures++; };
 const shot = (page, name) => page.screenshot({ path: path.join(OUT, `site-demorename-${name}.png`), fullPage: false, animations: "disabled" });
@@ -57,6 +58,8 @@ await page.getByText(/Live Demo - /).first().waitFor({ timeout: 20000 });
 const banner = await page.getByText(/Live Demo - /).first().innerText();
 check("compliance demo: the banner names the new lab and says fictional", banner.includes(`Live Demo - ${NEW} (fictional) | A sample lab for demonstration only`), banner);
 check("compliance demo: no em dash in the banner", !/—/.test(banner));
+const firstTab = await text(page);
+check("compliance demo: the studies name a made-up analyst, not Michael", firstTab.includes("T. Alvarez, MLS(ASCP)") && !firstTab.includes(REAL_ANALYST), firstTab.slice(0, 300));
 await shot(page, "compliance");
 const tabLabels = ["VeritaCheck", "VeritaMap", "VeritaScan", "VeritaComp", "VeritaStaff", "VeritaPT", "VeritaLab", "VeritaDC", "VeritaQC", "VeritaTrack", "VeritaResponse"];
 const tabsWithOld = [];
@@ -93,6 +96,8 @@ check("demo selector: seven sample reports", samples.length === 7, String(sample
 await page.locator('[data-testid^="button-sample-"]').first().scrollIntoViewIfNeeded();
 await shot(page, "selector");
 const seen = [];
+let sampleBody = null;
+page.on("request", (r) => { if (r.url().endsWith("/api/generate-pdf") && !sampleBody) sampleBody = r.postData(); });
 for (const id of samples) {
   const [dl] = await Promise.all([page.waitForEvent("download", { timeout: 60000 }), page.getByTestId(id).click()]);
   const file = path.join(OUT, `sample-${id}.pdf`);
@@ -100,7 +105,23 @@ for (const id of samples) {
   seen.push({ id, text: pdfText(file, id.endsWith("correlation-method-comparison") ? path.join(OUT, "site-demorename-sample-pdf.png") : undefined) });
 }
 check("sample PDFs: every one names the new lab", seen.every((s) => s.text.includes(NEW)), seen.filter((s) => !s.text.includes(NEW)).map((s) => s.id).join(", "));
+check("sample PDFs: every one prints the fixture's CLIA", seen.every((s) => s.text.includes(`CLIA: ${CLIA}`)), seen.filter((s) => !s.text.includes(`CLIA: ${CLIA}`)).map((s) => s.id).join(", "));
+check('sample PDFs: none says "Not on file"', seen.every((s) => !/Not on file/i.test(s.text)));
 check("sample PDFs: none prints another lab's CLIA", seen.every((s) => (s.text.match(/\b\d{2}D\d{7}\b/g) || []).every((c) => c === CLIA)));
+// The public route honors only the fixture's exact pair. The same request with another lab's CLIA, or another lab's name, gets no CLIA.
+const replay = async (label, change) => {
+  const body = JSON.parse(sampleBody);
+  Object.assign(body.study, change);
+  const r = await fetch(`${BASE}/api/generate-pdf`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const j = await r.json();
+  const file = path.join(OUT, `${label}.pdf`);
+  fs.writeFileSync(file, Buffer.from(await (await fetch(`${BASE}/api/pdf/${j.token}`)).arrayBuffer()));
+  return pdfText(file);
+};
+const otherClia = await replay("replay-other-clia", { _cliaNumber: "49D0000001" });
+check("another lab's CLIA sent to the public route is not printed", !otherClia.includes("49D0000001") && /Not on file/i.test(otherClia), otherClia.slice(0, 240));
+const otherName = await replay("replay-other-name", { _labName: "Made-up Other Lab" });
+check("the fixture's CLIA under another lab's name is not printed", !otherName.includes(CLIA) && /Not on file/i.test(otherName), otherName.slice(0, 240));
 check("sample PDFs: no old name in any", seen.every((s) => noOld(s.text)), seen.filter((s) => !noOld(s.text)).map((s) => s.id).join(", "));
 check("sample PDFs: no real person as analyst", seen.every((s) => !REAL_ANALYSTS.test(s.text)), seen.filter((s) => REAL_ANALYSTS.test(s.text)).map((s) => s.id).join(", "));
 const allPdfText = seen.map((s) => s.text).join(" ");
@@ -178,6 +199,7 @@ scratch((d) => {
   d.prepare("UPDATE users SET clia_lab_name = ? WHERE id = ?").run(OLD, demoId);
   d.prepare("UPDATE veritamap_maps SET name = ? WHERE user_id = ?").run(`${OLD_PREFIX} ${emDash} 2026 Compliance Map`, demoId);
   d.prepare("UPDATE veritascan_scans SET name = ? WHERE user_id = ?").run(`${OLD_PREFIX} ${emDash} 2026 Annual Inspection Readiness`, demoId);
+  d.prepare("UPDATE studies SET analyst = ? WHERE user_id = ? AND analyst = 'T. Alvarez, MLS(ASCP)'").run(REAL_ANALYST, demoId);
 });
 const rename = async (body) => {
   const r = await fetch(`${BASE}/api/admin/demo-fixture/rename`, { method: "POST", headers: { "Content-Type": "application/json", "x-admin-secret": ADMIN }, body: JSON.stringify(body) });
@@ -191,6 +213,9 @@ const showMap = async () => {
   return h.innerText();
 };
 check("before the write: the page still shows the stored old title", (await showMap()).startsWith(OLD_PREFIX));
+await page.getByRole("button", { name: /^VeritaCheck/ }).first().click();
+await page.getByText(REAL_ANALYST).first().waitFor({ timeout: 15000 });
+check("before the write: the page still shows the stored analyst", (await text(page)).includes(REAL_ANALYST));
 const dry = await rename({ dryRun: true });
 check("dry run: counts the fixture and writes nothing", dry.s === 200 && dry.j.dryRun === true && dry.j.total >= 3 && (await showMap()).startsWith(OLD_PREFIX), JSON.stringify(dry.j).slice(0, 200));
 check("dry run: no names in the answer", !/River|Sample Regional/.test(JSON.stringify(dry.j)));
@@ -201,6 +226,11 @@ check("the write changes what it counted", wrote.s === 200 && wrote.j.changed ==
 const after = await showMap();
 check("after the write: the page shows the new title with no em dash", after === "Sample Regional - 2026 Compliance Map", after);
 check("after the write: the page has no old name", noOld(await text(page)));
+await page.getByRole("button", { name: /^VeritaCheck/ }).first().click();
+await page.getByText("T. Alvarez, MLS(ASCP)").first().waitFor({ timeout: 15000 });
+check("after the write: the studies name the made-up analyst, not Michael", !(await text(page)).includes(REAL_ANALYST));
+await page.getByRole("button", { name: /^VeritaMap/ }).first().click();
+await page.getByRole("heading", { name: /2026 Compliance Map/ }).first().waitFor({ timeout: 15000 });
 await shot(page, "map-after-write");
 
 // ── Dark and phone ───────────────────────────────────────────────────────────
