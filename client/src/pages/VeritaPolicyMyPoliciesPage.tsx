@@ -25,6 +25,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ApprovalRoutesDialog } from "@/components/ApprovalRoutesDialog";
+import { CarriedOverPanel, type CarriedRecord } from "@/components/CarriedOverPanel";
 import { DocumentSignatureRoster } from "@/components/DocumentSignatureRoster";
 import {
   Dialog,
@@ -206,6 +207,8 @@ interface PolicyDocument {
   manual_path?: string | null;
   // Count of non-deleted discussion notes, for the row's Notes badge.
   note_count?: number;
+  // 1 when this document came from the lab's prior system (server/veritadcBulkLoad.ts).
+  carried_over?: number;
   created_at: string;
   updated_at: string;
   // Phase 2.1: in_review rows include these so the UI can render
@@ -763,6 +766,7 @@ export default function VeritaPolicyMyPoliciesPage() {
 
   // Version history loaded into the View modal alongside signoffs.
   const [viewVersions, setViewVersions] = useState<any[]>([]);
+  const [viewCarried, setViewCarried] = useState<CarriedRecord | null>(null);
 
   // ── Per-policy notes (discussion thread) ────────────────────────────────
   const [notesDoc, setNotesDoc] = useState<PolicyDocument | null>(null);
@@ -1340,6 +1344,7 @@ export default function VeritaPolicyMyPoliciesPage() {
     setViewTampered(false);
     setViewSignoffs([]);
     setViewVersions([]);
+    setViewCarried(null);
     setViewLoading(true);
     try {
       const token = localStorage.getItem("veritas_token") || "";
@@ -1355,7 +1360,10 @@ export default function VeritaPolicyMyPoliciesPage() {
         headers: { Authorization: `Bearer ${token}` },
       })
         .then((r) => r.json())
-        .then((body) => setViewVersions(body?.versions || []))
+        .then((body) => {
+          setViewVersions(body?.versions || []);
+          setViewCarried(body?.carried || null);
+        })
         .catch(() => {});
       // PDF and images come back as the file itself; every other format (Word, HTML, Excel, text) as JSON
       // with HTML. Decide by the response type, not the stored format (2026-10-16: more file types).
@@ -1397,6 +1405,7 @@ export default function VeritaPolicyMyPoliciesPage() {
     setViewTampered(false);
     setViewSignoffs([]);
     setViewVersions([]);
+    setViewCarried(null);
   };
 
   // ── Download ────────────────────────────────────────────────────────────
@@ -1864,6 +1873,11 @@ export default function VeritaPolicyMyPoliciesPage() {
                               </div>
                             );
                           })()}
+                          {!!doc.carried_over && (
+                            <div className="text-[10px] mt-1 leading-tight text-muted-foreground" data-testid="carried-over-chip">
+                              effective {fmtDate(doc.effective_date)} · carried over
+                            </div>
+                          )}
                         </td>
                         <td className="py-2 pr-3 text-xs uppercase font-mono text-muted-foreground">
                           {doc.current_file_format || "-"}
@@ -2532,6 +2546,16 @@ export default function VeritaPolicyMyPoliciesPage() {
                 ))}
               </ol>
             </div>
+          )}
+          {viewDoc && viewCarried && (
+            <CarriedOverPanel
+              carried={viewCarried}
+              title={viewDoc.title}
+              facePageUrl={`/api/labs/${activeLabId}/veritapolicy/documents/${viewDoc.id}/carried/face-page`}
+              originalUrl={`/api/labs/${activeLabId}/veritapolicy/documents/${viewDoc.id}/carried/original`}
+              headers={{ Authorization: `Bearer ${localStorage.getItem("veritas_token") || ""}` }}
+              fmtDate={(s) => fmtDate(s ?? null)}
+            />
           )}
           {viewDoc && <PolicyEvidenceLinks labId={activeLabId} policyId={viewDoc.id} />}
           {viewLoading ? (

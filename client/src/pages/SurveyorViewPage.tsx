@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader2, FileText, ShieldCheck, XCircle, Eye } from "lucide-react";
 import { labLocaleDate } from "@/lib/labDate";
+import { CarriedOverPanel, type CarriedRecord } from "@/components/CarriedOverPanel";
 
 interface SurveyorDoc {
   id: number;
@@ -82,6 +83,7 @@ export default function SurveyorViewPage() {
   const [viewTampered, setViewTampered] = useState(false);
   const [viewSignoffs, setViewSignoffs] = useState<Signoff[]>([]);
   const [viewStaffSignatures, setViewStaffSignatures] = useState<any[]>([]);
+  const [viewCarried, setViewCarried] = useState<CarriedRecord | null>(null);
   const [viewLoading, setViewLoading] = useState(false);
 
   const openView = async (doc: SurveyorDoc) => {
@@ -92,11 +94,12 @@ export default function SurveyorViewPage() {
     setViewTampered(false);
     setViewSignoffs([]);
     setViewStaffSignatures([]);
+    setViewCarried(null);
     setViewLoading(true);
     try {
       fetch(`/api/surveyor/${token}/policies/${doc.id}/signoffs`)
         .then((r) => r.json())
-        .then((b) => { setViewSignoffs(b?.signoffs || []); setViewStaffSignatures(b?.staffSignatures || []); })
+        .then((b) => { setViewSignoffs(b?.signoffs || []); setViewStaffSignatures(b?.staffSignatures || []); setViewCarried(b?.carried || null); })
         .catch(() => {});
       // PDF and images come back as the file itself, everything else as JSON with HTML (2026-10-16).
       const res = await fetch(`/api/surveyor/${token}/policies/${doc.id}/render`);
@@ -128,6 +131,7 @@ export default function SurveyorViewPage() {
     setViewIsImage(false);
     setViewTampered(false);
     setViewSignoffs([]);
+    setViewCarried(null);
   };
 
   if (!token) {
@@ -256,6 +260,16 @@ export default function SurveyorViewPage() {
                   The file on disk does not match the hash captured at upload. This is an
                   integrity anomaly the lab should investigate.
                 </div>
+              </div>
+            )}
+            {viewCarried && (
+              <div className="mb-2">
+                <CarriedOverPanel
+                  carried={viewCarried}
+                  title={viewDoc.title}
+                  facePageUrl={`/api/surveyor/${token}/policies/${viewDoc.id}/carried/face-page`}
+                  fmtDate={(s) => fmtDate(s ?? null)}
+                />
               </div>
             )}
             {viewSignoffs.length > 0 && (
