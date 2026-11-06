@@ -242,6 +242,8 @@ async function main() {
     check("7e. the PDF: a technical row prints as it always did", /Technical Competency Assessment/.test(tHtml) && !/Non-Technical Competency Assessment/.test(tHtml) && /No data recorded/.test(tHtml));
     const blankStub = buildCompetencyHTML({ assessment: { id: 0, competency_type: "nontechnical", program_name: "Made-up Safety", department: "Core", employee_name: "", assessment_date: "", status: "pass" }, items: [], methodGroups: [], checklistItems: [{ label: "A", description: "Made-up item" }], labName: "Made-up", quizResults: [], blank: true } as any);
     check("7f. the PDF: the blank worksheet, which sends no program_type, still prints its own type", /Non-Technical Competency Assessment/.test(blankStub) && /Made-up item/.test(blankStub) && !/No data recorded/.test(blankStub));
+    const blankOf = (competency_type: string) => buildCompetencyHTML({ assessment: { id: 0, competency_type, program_name: "Made-up", department: "Core", employee_name: "", assessment_date: "", status: "pass" }, items: [], methodGroups: [], checklistItems: [], labName: "Made-up", quizResults: [], blank: true } as any);
+    check("7f2. the PDF: a technical and a waived blank worksheet too", /Technical Competency Assessment/.test(blankOf("technical")) && !/Non-Technical Competency Assessment/.test(blankOf("technical")) && /Waived Testing Competency Assessment/.test(blankOf("waived")));
 
     const reopen = oldRow(NT, oldPerson.comp, { date: "2026-07-05" });
     const unlocked = await call("POST", `${L}/competency/assessments/${reopen}/unlock`, {}, OWNER.token);
@@ -277,7 +279,9 @@ async function main() {
       const done = sqlite.prepare(`UPDATE staff_competency_schedules SET ${names.map((n) => `${n} = ?`).join(", ")} WHERE employee_id = ?`).run(...names.map((n) => cols[n]), id);
       if (done.changes !== 1) throw new Error(`no schedule row for ${id}`);
     };
-    const pia = await pre("Pia", "Importonly"), sol = await pre("Sol", "Signedonly"), quinn = await pre("Quinn", "Importboth"), rae = await pre("Rae", "Labentered");
+    const pia = await pre("Pia", "Importonly"), sol = await pre("Sol", "Signedonly"), quinn = await pre("Quinn", "Importboth"), rae = await pre("Rae", "Labentered"), tia = await pre("Tia", "Sameday");
+    oldRow(NT, tia.comp, { date: "2026-10-28" }); oldRow(TECH, tia.comp, { date: "2026-10-28" }); // the date is held by a technical record too, so her clock isn't wrong
+    fill(tia.id, { recorded_as: "existing", last_annual_completed_at: "2026-10-28", annual_due_at: "2027-10-28" }); label(tia.id, "Tia Sameday", "from historical import");
     oldRow(NT, pia.comp, { date: "2026-10-28" });
     fill(pia.id, { recorded_as: "existing", last_annual_completed_at: "2026-10-28", annual_due_at: "2027-10-28" }); label(pia.id, "Pia Importonly", "from historical import");
     oldRow(NT, sol.comp, { type: "initial", date: "2026-10-29" });
