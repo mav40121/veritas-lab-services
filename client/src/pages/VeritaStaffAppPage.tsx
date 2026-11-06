@@ -273,7 +273,7 @@ export default function VeritaStaffAppPage() {
 
   // CMS-209 Part B: readiness (TC/TS needs-review gaps + lab specialty list).
   const readinessKey = activeLabId ? `/api/labs/${activeLabId}/staff/cms209-readiness` : `/api/staff/cms209-readiness`;
-  const { data: cms209Readiness } = useQuery<{ labSpecialties: number[]; gaps: { employeeId?: number; name: string; role: string; reason: string }[] }>({
+  const { data: cms209Readiness } = useQuery<{ labSpecialties: number[]; gaps: { employeeId?: number; name: string; role: string; reason: string }[]; ownOnly?: boolean }>({
     queryKey: [readinessKey],
     enabled: !!hasAccess && !!lab,
   });
@@ -503,11 +503,13 @@ export default function VeritaStaffAppPage() {
           director sees exactly who to fix before generating. */}
       {lab && cms209Gaps.length > 0 && (
         <div className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3" data-testid="cms209-gaps-banner">
-          <div className="flex items-center gap-2 text-sm font-semibold text-amber-800">
-            <AlertTriangle size={16} />
-            {cms209Gaps.length} TC/TS assignment{cms209Gaps.length === 1 ? "" : "s"} need a specialty before the CMS 209 is complete
+          <div className="flex items-center gap-2 text-sm font-semibold text-amber-800 dark:text-amber-300">
+            <AlertTriangle size={16} className="shrink-0" />
+            {cms209Readiness?.ownOnly
+              ? "Your TC/TS assignment needs a specialty before the CMS 209 is complete. Ask your lab director or supervisor to add it."
+              : `${cms209Gaps.length} TC/TS assignment${cms209Gaps.length === 1 ? "" : "s"} need a specialty before the CMS 209 is complete`}
           </div>
-          <ul className="mt-1.5 space-y-0.5 text-xs text-amber-900">
+          <ul className="mt-1.5 space-y-0.5 text-xs text-amber-900 dark:text-amber-200">
             {cms209Gaps.map((g, i) => (
               <li key={`${g.employeeId}-${g.role}-${i}`}>
                 <span className="font-mono font-bold">{g.role}</span> {g.name}: {g.reason}

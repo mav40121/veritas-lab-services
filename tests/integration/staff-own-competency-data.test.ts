@@ -678,6 +678,31 @@ async function main() {
     const scoreDoor = await call("POST", "/api/veritacomp/quiz-results", { quizId: quiz.j.id, employeeId: annComp.id, answers: [] }, ANN.token);
     check("35g. a Staff login can't get the answers by posting an empty result", scoreDoor.s === 403 && noKey(scoreDoor), `${scoreDoor.s}`);
 
+    // ── The rest of a person's staff file: real rows, so a refusal or a filter can't pass on an empty list (Michael Q186 = 1) ──
+    const inDays = (n: number) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
+    const staffDoc = (emp: number, docType: string, title: string, expires: string | null, credits: number | null) => sqlite.prepare(
+      "INSERT INTO staff_employee_documents (employee_id, doc_type, title, url, expiration_date, created_at, credits, activity_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+    ).run(emp, docType, title, `https://example.test/${encodeURIComponent(title)}`, expires, now, credits, credits ? inDays(-10) : null);
+    staffDoc(zorkId, "license", "ZQ-LICENSE", inDays(20), null);
+    staffDoc(zorkId, "ce_credit", "ZQ-COURSE", null, 3);
+    staffDoc(annId, "license", "Ann own license", inDays(20), null);
+    staffDoc(annId, "ce_credit", "Ann own course", null, 2);
+    const studyBy = (analyst: string, testName: string) => sqlite.prepare(
+      `INSERT INTO studies (user_id, test_name, instrument, analyst, date, study_type, clia_allowable_error, data_points, instruments, status, created_at)
+       VALUES (?, ?, 'Made-up Analyzer', ?, ?, 'method_comparison', 0.1, '[]', '[]', 'completed', ?)`
+    ).run(OWNER.id, testName, analyst, day, now);
+    studyBy("Quillfeather, Zork", "ZQ-STUDY");
+    studyBy("Self, Ann", "Ann own study");
+    const staffLabOf = (emp: number) => Number((sqlite.prepare("SELECT lab_id FROM staff_employees WHERE id = ?").get(emp) as any).lab_id);
+    const noSpecialtyRole = (emp: number) => sqlite.prepare("INSERT INTO staff_roles (employee_id, lab_id, role, specialty_number, all_specialties) VALUES (?, ?, 'TC', NULL, 0)").run(emp, staffLabOf(emp));
+    noSpecialtyRole(zorkId);
+    sqlite.prepare(
+      `INSERT INTO user_seats (owner_user_id, seat_email, seat_user_id, invited_at, status, permissions, invite_token, lab_id, seat_type, staff_employee_id)
+       VALUES (?, ?, NULL, ?, 'pending', '{"mode":"view_all"}', ?, ?, 'staff_portal', ?)`
+    ).run(OWNER.id, `zork-invite-${stamp}@example.test`, now, `sod-zork-invite-${stamp}`, labId, zorkId);
+    const reminderSaved = await call("PUT", `${L}/competency/reminder-config`, { enabled: true, supervisor_recipients: [{ email: `zork-super-${stamp}@example.test`, name: "Zork Quillfeather" }], escalation_recipients: [] }, OWNER.token);
+    check("35h. the coworker has documents, CE, a study, a CMS 209 gap, an invite and a place on the reminder list", reminderSaved.s === 200, `${reminderSaved.s}`);
+
     // ── A sweep of every read, so a door nobody thought of still fails ────────
     const fillPath = (path: string): string | null => {
       let unknown = false;
@@ -697,11 +722,11 @@ async function main() {
       });
       return unknown ? null : out;
     };
-    // Not competency data: Michael's decision covers competency data, so these stay as they were and are listed for him on the PR.
-    const LEFT_ALONE = new Set([
-      "/api/labs/:labId/staff/employees/:id/documents", "/api/labs/:labId/staff/employees/:id/veritacheck-studies",
-      "/api/labs/:labId/veritaceu/roster-summary", "/api/labs/:labId/staff/credentials-dashboard-stats", "/api/labs/:labId/schedule/staff",
-    ]);
+    // Michael Q186 = 1: schedule names stay open, because staff normally see who's working. Nothing else is left alone.
+    const LEFT_ALONE = new Set(["/api/labs/:labId/schedule/staff"]);
+    // Not on Michael's Q186 list, so not changed here: it gives anyone in the lab every member's name and email, and the read-only members
+    // screen uses it. Raised with him on the PR. It comes off this list when he decides; a new route never goes on it.
+    const NOT_DECIDED = new Set(["/api/labs/:labId/members"]);
     const gets: string[] = [];
     for (const layer of (app as any).router.stack) {
       const r = layer.route;
@@ -712,14 +737,15 @@ async function main() {
     let swept = 0;
     for (const path of gets) {
       const url = fillPath(path);
-      if (!url || LEFT_ALONE.has(path)) continue;
+      if (!url || LEFT_ALONE.has(path) || NOT_DECIDED.has(path)) continue;
       swept++;
       const r = await fetch(base + url, { headers: { Authorization: `Bearer ${ANN.token}` } });
       const text = await r.text();
       if (/Quillfeather|ZQ-[A-Z]+/.test(text)) leaks.push(`${r.status} ${path}`);
     }
     check(`36. no read (${swept} tried) shows a Staff login the coworker's name or entries`, swept > 200 && leaks.length === 0, leaks.join(" | "));
-    for (const path of Array.from(LEFT_ALONE)) console.log(`INFO  left as it was, not competency data: ${path}`);
+    for (const path of Array.from(LEFT_ALONE)) console.log(`INFO  stays open by Michael's decision: ${path}`);
+    for (const path of Array.from(NOT_DECIDED)) console.log(`INFO  open, waiting on Michael's decision: ${path}`);
 
     // ── Fail closed ───────────────────────────────────────────────────────────
     const nobodyReads = (emp: number): string[] => [
@@ -898,6 +924,107 @@ async function main() {
     check("41e. Sign Competencies still works", annAck.s === 200, `${annAck.s} ${annAck.j.error ?? ""}`);
     const annStaffCard = await call("GET", `${L}/staff/employees/${annId}/documents`, undefined, ANN.token);
     check("41f. their own credential documents still open", annStaffCard.s === 200, `${annStaffCard.s}`);
+
+    // ── The rest of a person's staff file (Michael Q186 = 1) ──────────────────
+    const text = (r: { j: any }) => JSON.stringify(r.j);
+    const fileBody = (method: string) => (method === "POST" ? {} : undefined);
+    const fileReads: Array<[string, string, (emp: number) => string, (r: { j: any }) => boolean, (r: { j: any }) => boolean]> = [
+      ["credential documents", "GET", (e) => `${L}/staff/employees/${e}/documents`, (r) => text(r).includes("Ann own license"), (r) => text(r).includes("ZQ-LICENSE")],
+      ["CE summary", "GET", (e) => `${L}/staff/employees/${e}/ceu-summary`, (r) => r.j.earned === 2, (r) => r.j.earned === 3 && text(r).includes("ZQ-COURSE")],
+      ["VeritaCheck studies", "GET", (e) => `${L}/staff/employees/${e}/veritacheck-studies`, (r) => text(r).includes("Ann own study"), (r) => text(r).includes("ZQ-STUDY")],
+      ["CE transcript", "POST", (e) => `${L}/veritaceu/employees/${e}/transcript`, (r) => !!r.j.token, (r) => !!r.j.token],
+    ];
+    for (const [name, method, url, mineOk, theirsOk] of fileReads) {
+      const theirs = await call(method, url(zorkId), fileBody(method), ANN.token);
+      check(`42a. ${name}: a Staff login can't open a coworker's`, refused(theirs) && clean(theirs), `${theirs.s}`);
+      const mine = await call(method, url(annId), fileBody(method), ANN.token);
+      check(`42b. ${name}: a Staff login opens their own`, mine.s === 200 && mineOk(mine) && clean(mine), `${mine.s} ${text(mine).slice(0, 160)}`);
+      for (const [who, token] of [["an editor", EDITOR.token], ["the owner", OWNER.token], ["a Staff seat with edit on VeritaStaff", STAFFEDIT.token], ["a Staff seat with edit on VeritaComp", COMPEDIT.token], ["a lab admin who also holds a Staff seat", ADMINSEAT.token]] as const) {
+        const seen = await call(method, url(zorkId), fileBody(method), token);
+        check(`42c. ${name}: ${who} still opens anyone's`, seen.s === 200 && theirsOk(seen), `${seen.s} ${text(seen).slice(0, 160)}`);
+      }
+      for (const [who, token] of [["no staff record linked", NOLINK.token], ["a deactivated Staff seat", STAFFCUT.token], ["no lab on the seat", LABLESS.token]] as const) {
+        const seen = await call(method, url(zorkId), fileBody(method), token);
+        check(`42d. ${name}: ${who} is refused`, refused(seen) && clean(seen), `${seen.s}`);
+      }
+    }
+
+    const ceuUrl = `${L}/veritaceu/roster-summary`;
+    const ceuAnn = await asAnn(ceuUrl);
+    check("43a. CE roster: only their own row, and the totals count only them", ceuAnn.s === 200 && ceuAnn.j.ownOnly === true && ceuAnn.j.roster?.length === 1 && ceuAnn.j.roster[0].employeeId === annId && ceuAnn.j.roster[0].earned === 2 && ceuAnn.j.employeeCount === 1 && ceuAnn.j.metCount + ceuAnn.j.shortCount === 1 && clean(ceuAnn), text(ceuAnn).slice(0, 200));
+    for (const [who, token] of [["an editor", EDITOR.token], ["the owner", OWNER.token], ["a Staff seat with edit on VeritaStaff", STAFFEDIT.token], ["a Staff seat with edit on VeritaComp", COMPEDIT.token]] as const) {
+      const seen = await call("GET", ceuUrl, undefined, token);
+      check(`43b. CE roster: ${who} sees the whole lab`, seen.s === 200 && seen.j.ownOnly === false && seen.j.employeeCount > 3 && seen.j.roster?.find((r: any) => r.employeeId === zorkId)?.earned === 3, `${seen.s} ${seen.j.employeeCount}`);
+    }
+    for (const [who, token] of [["no staff record linked", NOLINK.token], ["a deactivated Staff seat", STAFFCUT.token], ["no lab on the seat", LABLESS.token]] as const) {
+      const seen = await call("GET", ceuUrl, undefined, token);
+      check(`43c. CE roster: ${who} sees nobody, with no error`, seen.s === 200 && seen.j.ownOnly === true && seen.j.roster?.length === 0 && seen.j.employeeCount === 0 && seesNobody(seen.j), `${seen.s} ${text(seen).slice(0, 160)}`);
+    }
+
+    const credUrl = `${L}/staff/credentials-dashboard-stats`;
+    const credAnn = await asAnn(credUrl);
+    check("44a. expiring credentials: only their own are counted and named", credAnn.s === 200 && credAnn.j.total === 1 && credAnn.j.expiring30 === 1 && credAnn.j.expiringEmployeeIds?.join() === String(annId) && credAnn.j.expiringSample?.length === 1 && credAnn.j.expiringSample[0].docTitle === "Ann own license" && clean(credAnn), text(credAnn).slice(0, 240));
+    for (const [who, token] of [["an editor", EDITOR.token], ["a Staff seat with edit on VeritaStaff", STAFFEDIT.token], ["a Staff seat with edit on VeritaComp", COMPEDIT.token]] as const) {
+      const seen = await call("GET", credUrl, undefined, token);
+      check(`44b. expiring credentials: ${who} sees the lab's`, seen.s === 200 && seen.j.total >= 2 && seen.j.expiringEmployeeIds?.includes(zorkId) && seen.j.expiringEmployeeIds?.includes(annId) && text(seen).includes("ZQ-LICENSE"), `${seen.s} ${seen.j.total}`);
+    }
+    for (const [who, token] of [["no staff record linked", NOLINK.token], ["a deactivated Staff seat", STAFFCUT.token], ["no lab on the seat", LABLESS.token]] as const) {
+      const seen = await call("GET", credUrl, undefined, token);
+      check(`44c. expiring credentials: ${who} sees nobody, with no error`, seen.s === 200 && seen.j.total === 0 && seen.j.expiringSample?.length === 0 && seesNobody(seen.j), `${seen.s} ${text(seen).slice(0, 160)}`);
+    }
+
+    for (const url of [`${L}/staff/cms209`, `/api/staff/cms209`]) {
+      const annPdf = await call("POST", url, {}, ANN.token);
+      check(`45a. ${url}: a Staff login can't generate the lab's personnel report`, refused(annPdf), `${annPdf.s}`);
+      for (const [who, token] of [["no staff record linked", NOLINK.token], ["a deactivated Staff seat", STAFFCUT.token]] as const) {
+        const seen = await call("POST", url, {}, token);
+        check(`45b. ${url}: ${who} is refused`, refused(seen), `${seen.s}`);
+      }
+      for (const [who, token] of [["an editor", EDITOR.token], ["the owner", OWNER.token], ["a Staff seat with edit on VeritaStaff", STAFFEDIT.token], ["a Staff seat with edit on VeritaComp", COMPEDIT.token]] as const) {
+        const seen = await call("POST", url, {}, token);
+        check(`45c. ${url}: ${who} still generates it`, seen.s === 200 && !!seen.j.token, `${seen.s} ${text(seen).slice(0, 160)}`);
+      }
+    }
+
+    noSpecialtyRole(annId);
+    for (const url of [`${L}/staff/cms209-readiness`, `/api/staff/cms209-readiness`]) {
+      const annGaps = await asAnn(url);
+      check(`46a. ${url}: only their own gap, and no coworker's name`, annGaps.s === 200 && annGaps.j.ownOnly === true && annGaps.j.gaps?.length === 1 && annGaps.j.gaps[0].employeeId === annId && clean(annGaps), text(annGaps).slice(0, 200));
+      for (const [who, token] of [["an editor", EDITOR.token], ["a Staff seat with edit on VeritaStaff", STAFFEDIT.token], ["a Staff seat with edit on VeritaComp", COMPEDIT.token]] as const) {
+        const seen = await call("GET", url, undefined, token);
+        check(`46b. ${url}: ${who} sees every gap`, seen.s === 200 && seen.j.ownOnly === false && seen.j.gaps?.some((g: any) => g.employeeId === zorkId) && seen.j.gaps?.some((g: any) => g.employeeId === annId), `${seen.s} ${text(seen).slice(0, 160)}`);
+      }
+      for (const [who, token] of [["no staff record linked", NOLINK.token], ["a deactivated Staff seat", STAFFCUT.token]] as const) {
+        const seen = await call("GET", url, undefined, token);
+        check(`46c. ${url}: ${who} sees no gaps, with no error`, seen.s === 200 && seen.j.gaps?.length === 0 && seesNobody(seen.j), `${seen.s} ${text(seen).slice(0, 160)}`);
+      }
+    }
+
+    const inviteUrl = `${L}/staff-portal-invites`;
+    const inviteAnn = await asAnn(inviteUrl);
+    check("47a. Staff login list: only their own seat, not everyone's email", inviteAnn.s === 200 && inviteAnn.j.invites?.length === 1 && inviteAnn.j.invites[0].email === ANN.email && inviteAnn.j.invites[0].staff_employee_id === annId && clean(inviteAnn) && !text(inviteAnn).includes(BEN.email) && !text(inviteAnn).includes("zork-invite"), text(inviteAnn).slice(0, 240));
+    for (const [who, token] of [["an editor", EDITOR.token], ["the owner", OWNER.token], ["a Staff seat with edit on VeritaStaff", STAFFEDIT.token], ["a Staff seat with edit on VeritaComp", COMPEDIT.token]] as const) {
+      const seen = await call("GET", inviteUrl, undefined, token);
+      check(`47b. Staff login list: ${who} sees everyone's`, seen.s === 200 && seen.j.invites?.length > 2 && text(seen).includes(ANN.email) && text(seen).includes("zork-invite"), `${seen.s} ${seen.j.invites?.length}`);
+    }
+    const inviteNoLink = await call("GET", inviteUrl, undefined, NOLINK.token);
+    check("47c. Staff login list: a seat with no staff record sees only its own row", inviteNoLink.s === 200 && inviteNoLink.j.invites?.length === 1 && inviteNoLink.j.invites[0].email === NOLINK.email, text(inviteNoLink).slice(0, 200));
+    const inviteCut = await call("GET", inviteUrl, undefined, STAFFCUT.token);
+    check("47d. Staff login list: a deactivated Staff seat sees nobody", inviteCut.s === 200 && inviteCut.j.invites?.length === 0, text(inviteCut).slice(0, 200));
+
+    const reminderUrl = `${L}/competency/reminder-config`;
+    const reminderAnn = await asAnn(reminderUrl);
+    check("48a. reminder settings name who gets the emails, so a Staff login is refused", refused(reminderAnn) && clean(reminderAnn), `${reminderAnn.s}`);
+    const reminderStaffEdit = await call("GET", reminderUrl, undefined, STAFFEDIT.token);
+    check("48b. edit on VeritaStaff doesn't open them", refused(reminderStaffEdit), `${reminderStaffEdit.s}`);
+    for (const [who, token] of [["an editor", EDITOR.token], ["the owner", OWNER.token], ["a Staff seat with edit on VeritaComp", COMPEDIT.token]] as const) {
+      const seen = await call("GET", reminderUrl, undefined, token);
+      check(`48c. reminder settings: ${who} still reads them`, seen.s === 200 && seen.j.supervisor_recipients?.[0]?.name === "Zork Quillfeather", `${seen.s}`);
+    }
+
+    const scheduleAnn = await asAnn(`${L}/schedule/staff`);
+    const scheduleEditor = await asEditor(`${L}/schedule/staff`);
+    check("49. schedule names stay open: a Staff login gets the same list of who's working as an editor (Michael's decision)", scheduleAnn.s === 200 && scheduleAnn.j.length > 1 && text(scheduleAnn) === text(scheduleEditor), text(scheduleAnn).slice(0, 200));
   } finally {
     server.close();
   }

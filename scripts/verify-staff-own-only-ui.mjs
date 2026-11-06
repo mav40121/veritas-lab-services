@@ -1,7 +1,8 @@
 // scripts/verify-staff-own-only-ui.mjs
 // Gate 3 receipt for Michael 2026-11-05, Q182 = 1: VeritaComp on screen for a Staff login shows only their own name and record, with no dead links, no empty
 // error screens and no lists of coworkers. Owners and editors see what they always saw. Run against a LOCAL production build on a scratch database, with made-up
-// people (it registers people and provisions a lab, so it refuses any other host). Usage:
+// people (it registers people and provisions a lab, so it refuses any other host). Michael 2026-11-06, Q186 = 1, adds VeritaStaff's Continuing Education tab and CMS 209
+// banner: their own row and gap, no coworker's name, no dead error. Usage:
 //   PW_BASE=http://localhost:5197 SCRATCH_DB=<scratch db> OUT=<dir> node scripts/verify-staff-own-only-ui.mjs
 import { createRequire } from "node:module";
 import path from "node:path";
@@ -232,6 +233,116 @@ await page.getByTestId("sp-competency-own-record").waitFor({ timeout: 15000 });
 check("My sign-offs: their own-record row and their program record still list", /1 of 2 methods signed/.test(await page.getByTestId("sp-competency-own-record-count").innerText()) && (await page.getByTestId("sp-competency-row").count()) === 1);
 await noCoworkers(page, "My sign-offs");
 await shot(page, "signoffs");
+
+// ── The Continuing Education tab and the CMS 209 banner (Michael Q186 = 1) ───
+const inDays = (n) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
+const fileDb = openDb();
+const staffDoc = fileDb.prepare("INSERT INTO staff_employee_documents (employee_id, doc_type, title, url, expiration_date, created_at, credits, activity_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+staffDoc.run(benId, "license", "Quillfeather license", "https://example.test/ben-license", inDays(20), now, null, null);
+staffDoc.run(benId, "ce_credit", "Quillfeather course", "https://example.test/ben-course", null, now, 3, inDays(-10));
+staffDoc.run(annId, "license", "Ann license", "https://example.test/ann-license", inDays(20), now, null, null);
+staffDoc.run(annId, "ce_credit", "Ann course", "https://example.test/ann-course", null, now, 2, inDays(-10));
+const noSpecialty = fileDb.prepare("INSERT INTO staff_roles (employee_id, lab_id, role, specialty_number, all_specialties) SELECT id, lab_id, 'TC', NULL, 0 FROM staff_employees WHERE id = ?");
+noSpecialty.run(benId);
+noSpecialty.run(annId);
+fileDb.close();
+
+apiErrors.length = 0;
+await page.goto(labPath("/veritastaff-app"), { waitUntil: "networkidle" });
+const banner = page.getByTestId("cms209-gaps-banner");
+await banner.waitFor({ timeout: 20000 });
+const bannerText = await banner.innerText();
+check("CMS 209 banner: only their own gap, in words that say whose it is and who can fix it", /Your TC\/TS assignment needs a specialty/.test(bannerText) && /Ask your lab director or supervisor/.test(bannerText) && /Self, Ann/.test(bannerText) && !COWORKER.test(bannerText), bannerText);
+const cmsButtons = page.getByRole("button", { name: /CMS.?209|Day.?1/i });
+check("CMS 209: the buttons that would call the refused route are off", (await cmsButtons.count()) > 0 && (await cmsButtons.evaluateAll((els) => els.every((el) => el.disabled))));
+await noCoworkers(page, "VeritaStaff with the banner");
+await copyChecks(page, "VeritaStaff with the banner");
+await noError(page, "VeritaStaff with the banner");
+await shot(page, "cms209-banner");
+
+await page.goto(labPath("/veritastaff-app?tab=ce"), { waitUntil: "networkidle" });
+await page.getByTestId("ce-tab-status").waitFor({ timeout: 20000 });
+await page.getByText("Ann Self").first().waitFor({ timeout: 20000 });
+const ceText = await pageText(page);
+check("CE tab: says My status, with their own row and credits", (await page.getByTestId("ce-tab-status").innerText()) === "My status" && /2 \/ 36/.test(ceText), ceText.slice(0, 200));
+check("CE tab: no team totals, filter or sort", !/cycle met|team status/i.test(ceText) && !/Show only staff who are short/.test(ceText) && !/Sort:/.test(ceText), ceText.slice(0, 200));
+await noCoworkers(page, "CE tab");
+await copyChecks(page, "CE tab");
+await noError(page, "CE tab");
+await shot(page, "ce-tab");
+for (const name of ["Find free CE", "Requirements"]) {
+  await page.getByRole("button", { name, exact: true }).click();
+  await page.waitForLoadState("networkidle");
+  await noCoworkers(page, `CE tab, ${name}`);
+  await noError(page, `CE tab, ${name}`);
+}
+check("CE tab, Requirements: doesn't send them to a Team status tab they don't have, or tell them to add a profile", !/Team status|until you add one/.test(await pageText(page)), (await pageText(page)).slice(0, 240));
+await shot(page, "ce-requirements");
+await page.getByTestId("ce-tab-status").click();
+await page.getByText("Ann Self").first().click();
+await page.getByText("Ann course", { exact: false }).first().waitFor({ timeout: 20000 });
+check("CE tab: their row opens their own record, with their credits and documents", /Ann license/.test(await pageText(page)) || /Ann course/.test(await pageText(page)));
+await noCoworkers(page, "their own staff record");
+await noError(page, "their own staff record");
+await shot(page, "own-staff-record");
+check("CE tab, banner and their own record: no refused call behind any of it", apiErrors.length === 0, apiErrors.join(" | "));
+await page.goto(labPath(`/veritastaff-app/${benId}`), { waitUntil: "networkidle" });
+await noCoworkers(page, "a coworker's staff record by URL");
+await noError(page, "a coworker's staff record by URL");
+await shot(page, "other-staff-record");
+// The other two VeritaStaff tabs aren't part of this decision: printed for the report, not checked.
+for (const t of ["instruments", "delegations"]) {
+  apiErrors.length = 0;
+  await page.goto(labPath(`/veritastaff-app?tab=${t}`), { waitUntil: "networkidle" });
+  const seen = await pageText(page);
+  console.log(`INFO  ${t} tab for a Staff login: coworker named: ${COWORKER.test(seen)}; refused calls: ${apiErrors.join(", ") || "none"}; error words: ${/Could not load|Failed to|Forbidden/i.test(seen)}`);
+  await shot(page, `tab-${t}`);
+}
+apiErrors.length = 0;
+
+const ceEditor = await open(editor);
+await ceEditor.goto(labPath("/veritastaff-app"), { waitUntil: "networkidle" });
+await ceEditor.getByTestId("cms209-gaps-banner").waitFor({ timeout: 20000 });
+const editorBanner = await ceEditor.getByTestId("cms209-gaps-banner").innerText();
+check("editor: the banner counts and names everyone's gaps", /2 TC\/TS assignments need a specialty/.test(editorBanner) && /Quillfeather, Ben/.test(editorBanner) && /Self, Ann/.test(editorBanner), editorBanner);
+await shot(ceEditor, "cms209-banner-editor");
+await ceEditor.goto(labPath("/veritastaff-app?tab=ce"), { waitUntil: "networkidle" });
+await ceEditor.getByText("Ben Quillfeather").first().waitFor({ timeout: 20000 });
+const editorCe = await pageText(ceEditor);
+check("editor: the CE tab is still Team status with the totals, filter and everyone", (await ceEditor.getByTestId("ce-tab-status").innerText()) === "Team status" && /Show only staff who are short/.test(editorCe) && /cycle met/i.test(editorCe) && /Ann Self/.test(editorCe));
+await shot(ceEditor, "ce-tab-editor");
+
+const ceDark = await open(ann, { colorScheme: "dark" });
+await ceDark.goto(labPath("/veritastaff-app"), { waitUntil: "networkidle" });
+await ceDark.getByTestId("cms209-gaps-banner").waitFor({ timeout: 20000 });
+await shot(ceDark, "cms209-banner-dark");
+await ceDark.goto(labPath("/veritastaff-app?tab=ce"), { waitUntil: "networkidle" });
+await ceDark.getByText("Ann Self").first().waitFor({ timeout: 20000 });
+await shot(ceDark, "ce-tab-dark");
+const cePhone = await open(ann, { viewport: { width: 375, height: 812 } });
+const ceNoSideways = (p) => p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
+await cePhone.goto(labPath("/veritastaff-app"), { waitUntil: "networkidle" });
+await cePhone.getByTestId("cms209-gaps-banner").waitFor({ timeout: 20000 });
+check("phone: the banner has no sideways scroll", await ceNoSideways(cePhone));
+await shot(cePhone, "cms209-banner-phone");
+await cePhone.goto(labPath("/veritastaff-app?tab=ce"), { waitUntil: "networkidle" });
+await cePhone.getByText("Ann Self").first().waitFor({ timeout: 20000 });
+check("phone: the CE tab has no sideways scroll", await ceNoSideways(cePhone));
+await shot(cePhone, "ce-tab-phone");
+
+const ceUnlinked = await open(nell);
+await ceUnlinked.goto(labPath("/veritastaff-app?tab=ce"), { waitUntil: "networkidle" });
+await ceUnlinked.getByTestId("ce-empty").waitFor({ timeout: 20000 });
+check("unlinked seat: the CE tab says what to do, with nobody on it", /Ask your lab director or supervisor to link it/.test(await ceUnlinked.getByTestId("ce-empty").innerText()));
+await noCoworkers(ceUnlinked, "unlinked seat, CE tab");
+await noError(ceUnlinked, "unlinked seat, CE tab");
+await shot(ceUnlinked, "ce-tab-unlinked");
+await ceUnlinked.goto(labPath("/veritastaff-app"), { waitUntil: "networkidle" });
+check("unlinked seat: no CMS 209 banner", (await ceUnlinked.getByTestId("cms209-gaps-banner").count()) === 0);
+const ceUnlinkedDark = await open(nell, { colorScheme: "dark" });
+await ceUnlinkedDark.goto(labPath("/veritastaff-app?tab=ce"), { waitUntil: "networkidle" });
+await ceUnlinkedDark.getByTestId("ce-empty").waitFor({ timeout: 20000 });
+await shot(ceUnlinkedDark, "ce-tab-unlinked-dark");
 
 // ── A Staff seat with no staff record linked ─────────────────────────────────
 const unlinked = await open(nell);

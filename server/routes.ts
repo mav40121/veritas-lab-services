@@ -11717,15 +11717,17 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const sqlite = (db as any).$client;
     reattachOrphanStaffInvites(sqlite, req.scope.labId);
     foldInviteDuplicates(sqlite, req.scope.labId);
-    const rows = sqlite.prepare(
+    // Michael Q186 = 1: a Staff login reads their own seat here, never everyone's email.
+    const own = rosterOwnIn(req);
+    const rows = (sqlite.prepare(
       `SELECT us.id, us.seat_email, us.status, us.invited_at, us.accepted_at,
-              us.staff_employee_id,
+              us.staff_employee_id, us.seat_user_id,
               se.first_name, se.last_name, se.title
        FROM user_seats us
        LEFT JOIN staff_employees se ON se.id = us.staff_employee_id
        WHERE us.lab_id = ? AND us.seat_type = 'staff_portal' AND us.status != 'deactivated'
        ORDER BY se.last_name, se.first_name`
-    ).all(req.scope.labId) as any[];
+    ).all(req.scope.labId) as any[]).filter((r) => !own || r.seat_user_id === req.userId);
     res.json({
       invites: rows.map((r) => ({
         id: r.id,
@@ -24212,7 +24214,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     staffOwnScope((db as any).$client, req.userId, labId ?? req.scope?.labId ?? null, module);
   // The roster: a Staff seat with edit on VeritaStaff works on it, and one with edit on VeritaComp assigns quizzes from it, so both keep it.
   const rosterOwnIn = (req: any, labId?: unknown): StaffOwnScope | null => staffOwnIn(req, labId, "veritastaff") && staffOwnIn(req, labId);
-  const refuseStaffOwn = (res: any) => res.status(403).json({ error: "A staff login can only open their own competency record.", code: "STAFF_OWN_ONLY" });
+  const refuseStaffOwn = (res: any) => res.status(403).json({ error: "A staff login can only open their own records.", code: "STAFF_OWN_ONLY" });
   // Reads only evaluators use (a whole-lab list, an evaluator's picker): a Staff login is refused.
   const notForStaffLogin = (req: any, res: any, next: any) => (staffOwnIn(req) ? refuseStaffOwn(res) : next());
   const notForStaffLoginRoster = (req: any, res: any, next: any) => (rosterOwnIn(req) ? refuseStaffOwn(res) : next());
@@ -27839,7 +27841,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     res.json({ id: Number(result.lastInsertRowid) });
   });
 
-  app.get("/api/labs/:labId/staff/employees/:id/documents", authMiddleware, labScopeMiddleware, (req: any, res) => {
+  app.get("/api/labs/:labId/staff/employees/:id/documents", authMiddleware, labScopeMiddleware, staffOwnRecordOnly("id", rosterOwnIn), (req: any, res) => {
     if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
     const labId = req.scope.labId;
     const emp = (db as any).$client.prepare(
@@ -27930,7 +27932,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // different board's rule without a schema change; nothing is invented server
   // side. Credits are attributed by activity_date when present, else the row's
   // created_at (so legacy rows entered before the field still count).
-  app.get("/api/labs/:labId/staff/employees/:id/ceu-summary", authMiddleware, labScopeMiddleware, (req: any, res) => {
+  app.get("/api/labs/:labId/staff/employees/:id/ceu-summary", authMiddleware, labScopeMiddleware, staffOwnRecordOnly("id", rosterOwnIn), (req: any, res) => {
     if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
     const labId = req.scope.labId;
     const emp = (db as any).$client.prepare(
@@ -28001,9 +28003,11 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     }
     const resolver = loadCeuResolver(sqlite, labId);
 
-    const emps = sqlite.prepare(
+    // Michael Q186 = 1: a Staff login's roster is their own row, so the totals count only them. ownOnly tells the screen to say so.
+    const own = rosterOwnIn(req);
+    const emps = (sqlite.prepare(
       "SELECT id, first_name, last_name, middle_initial, title, ceu_profile_id FROM staff_employees WHERE tier2_lab_id = ? AND status = 'active' ORDER BY last_name, first_name"
-    ).all(labId) as any[];
+    ).all(labId) as any[]).filter((e) => !own || e.id === own.employeeId);
     const creditRows = sqlite.prepare(
       `SELECT d.employee_id AS employee_id, d.id AS id, d.title AS title, d.url AS url,
               d.credits AS credits, d.activity_date AS activity_date, d.created_at AS created_at
@@ -28036,7 +28040,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     res.json({
       required: reqOverride ?? resolver.default.required,
       cycleMonths: cycleOverride ?? resolver.default.cycleMonths,
-      employeeCount: roster.length, metCount, shortCount: roster.length - metCount, roster,
+      employeeCount: roster.length, metCount, shortCount: roster.length - metCount, roster, ownOnly: !!own,
     });
   });
 
@@ -28152,7 +28156,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
   // VeritaCEU phase 3: per-employee CE transcript PDF (internal-use record for
   // license renewal / surveys). Returns a single-use token for /api/pdf/:token.
-  app.post("/api/labs/:labId/veritaceu/employees/:id/transcript", authMiddleware, labScopeMiddleware, async (req: any, res) => {
+  app.post("/api/labs/:labId/veritaceu/employees/:id/transcript", authMiddleware, labScopeMiddleware, staffOwnRecordOnly("id", rosterOwnIn), async (req: any, res) => {
     if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
     const sqlite = (db as any).$client;
     const labId = req.scope.labId;
@@ -28263,6 +28267,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     "/api/labs/:labId/staff/employees/:id/veritacheck-studies",
     authMiddleware,
     labScopeMiddleware,
+    staffOwnRecordOnly("id", rosterOwnIn),
     (req: any, res) => {
       if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
       const labId = req.scope.labId;
@@ -29096,7 +29101,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // ── Competency reminders and escalation (2026-10-08) ─────────────────────
   // Settings, a no-send preview of today's emails, and an admin run endpoint.
   // Engine and design notes: server/competencyReminders.ts.
-  app.get("/api/labs/:labId/competency/reminder-config", authMiddleware, labScopeMiddleware, (req: any, res) => {
+  // The settings name the supervisors and directors who get the emails, so a Staff login can't read them (Michael Q186 = 1).
+  app.get("/api/labs/:labId/competency/reminder-config", authMiddleware, labScopeMiddleware, notForStaffLogin, (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
     const sqlite = (db as any).$client;
     const cfg = readCompetencyReminderConfig(sqlite, req.scope.labId);
@@ -31396,7 +31402,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   app.get("/api/labs/:labId/staff/credentials-dashboard-stats", authMiddleware, labScopeMiddleware, (req: any, res) => {
     if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
     const labId = req.scope.labId;
-    const rows = (db as any).$client.prepare(
+    // Michael Q186 = 1: a Staff login counts and sees only their own credentials, never who else's are expiring.
+    const own = rosterOwnIn(req);
+    const rows = ((db as any).$client.prepare(
       `SELECT d.id AS doc_id, d.doc_type, d.title AS doc_title, d.expiration_date,
               e.id AS emp_id, e.first_name, e.last_name, e.middle_initial
        FROM staff_employee_documents d
@@ -31405,7 +31413,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     ).all(labId) as Array<{
       doc_id: number; doc_type: string; doc_title: string | null; expiration_date: string;
       emp_id: number; first_name: string; last_name: string; middle_initial: string | null;
-    }>;
+    }>).filter((r) => !own || r.emp_id === own.employeeId);
 
     const today = new Date(labToday() + "T00:00:00Z"); // lab calendar day at 00:00 (parking lot #97)
     const dayMs = 24 * 60 * 60 * 1000;
@@ -32006,7 +32014,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   });
 
   // Lab-scoped CMS 209 PDF
-  app.post("/api/labs/:labId/staff/cms209", authMiddleware, labScopeMiddleware, async (req: any, res) => {
+  // The CMS 209 lists every person in the lab, so a Staff login can't generate it (Michael Q186 = 1). Its buttons are off for them too.
+  app.post("/api/labs/:labId/staff/cms209", authMiddleware, labScopeMiddleware, notForStaffLoginRoster, async (req: any, res) => {
     if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
     const tier2LabId = req.scope.labId;
     const lab = (db as any).$client.prepare("SELECT * FROM staff_labs WHERE tier2_lab_id = ?").get(tier2LabId) as any;
@@ -32041,6 +32050,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const lab = activeStaffLab(req, dataUserId) as any;
+    if (rosterOwnIn(req, lab?.tier2_lab_id)) return refuseStaffOwn(res);
     if (!lab) return res.status(400).json({ error: "Lab not set up" });
 
     const employees = (db as any).$client.prepare(
@@ -32089,6 +32099,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   }
   // employeesWithRolesForStaffLab: active employees + their raw roles (carrying
   // all_specialties) for a staff lab, scoped the same way the CMS-209 routes do.
+  // Michael Q186 = 1: a Staff login sees only their own gap on the CMS 209 readiness check, never a coworker's name. labId is the lab
+  // the row belongs to, so the older route with no lab in its path decides the same way. ownOnly lets the banner say whose it is.
+  function cms209GapsFor(req: any, emps: any[], labNums: number[], labId: unknown) {
+    const own = rosterOwnIn(req, labId);
+    return { gaps: cms209Gaps(own ? emps.filter((e) => e.id === own.employeeId) : emps, labNums), ownOnly: !!own };
+  }
   function employeesWithRolesForStaffLab(whereCol: "lab_id" | "tier2_lab_id", scopeId: number): any[] {
     const employees = (db as any).$client.prepare(
       `SELECT * FROM staff_employees WHERE ${whereCol} = ? AND status = 'active' ORDER BY last_name, first_name`
@@ -32127,7 +32143,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (!lab) return res.json({ labSpecialties: [], gaps: [], specialtyLabels: CMS_SPECIALTIES });
     const emps = employeesWithRolesForStaffLab("lab_id", lab.id);
     const labNums = getLabSpecialtyNumbers(lab.id);
-    res.json({ labSpecialties: labNums, gaps: cms209Gaps(emps, labNums), specialtyLabels: CMS_SPECIALTIES });
+    res.json({ labSpecialties: labNums, ...cms209GapsFor(req, emps, labNums, lab.tier2_lab_id), specialtyLabels: CMS_SPECIALTIES });
   });
 
   // Lab-scoped variant: GET the lab specialty list
@@ -32155,7 +32171,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (!lab) return res.json({ labSpecialties: [], gaps: [], specialtyLabels: CMS_SPECIALTIES });
     const emps = employeesWithRolesForStaffLab("tier2_lab_id", req.scope.labId);
     const labNums = getLabSpecialtyNumbers(lab.id);
-    res.json({ labSpecialties: labNums, gaps: cms209Gaps(emps, labNums), specialtyLabels: CMS_SPECIALTIES });
+    res.json({ labSpecialties: labNums, ...cms209GapsFor(req, emps, labNums, req.scope.labId), specialtyLabels: CMS_SPECIALTIES });
   });
 
   // ── CLIA LOOKUP ───────────────────────────────────────────────────────────

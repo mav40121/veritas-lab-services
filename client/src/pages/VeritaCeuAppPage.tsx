@@ -51,6 +51,8 @@ interface RosterSummary {
   metCount: number;
   shortCount: number;
   roster: RosterRow[];
+  // Michael Q186 = 1: a Staff login's roster is their own row. The server decides (rosterOwnIn), so a Staff seat with edit keeps the team view.
+  ownOnly?: boolean;
 }
 interface CeProfile {
   id: number;
@@ -141,6 +143,7 @@ export default function VeritaCeuAppPage({ embedded = false }: { embedded?: bool
   }
 
   const data = summaryQuery.data;
+  const ownOnly = !!data?.ownOnly;
   const roster = (data?.roster || [])
     .filter((r) => (shortOnly ? !r.met : true))
     .sort((a, b) =>
@@ -159,8 +162,11 @@ export default function VeritaCeuAppPage({ embedded = false }: { embedded?: bool
               <h1 className="text-2xl font-bold tracking-tight">VeritaCEU</h1>
             </div>
             <p className="text-sm text-muted-foreground">
-              Continuing-education cycle status across your team. ASCP CMP standard is 36 points every 3 years;
-              log credits on each person&rsquo;s VeritaStaff&trade; record.
+              {ownOnly ? (
+                <>Your continuing-education cycle status. ASCP CMP standard is 36 points every 3 years; your lab logs your credits on your VeritaStaff&trade; record.</>
+              ) : (
+                <>Continuing-education cycle status across your team. ASCP CMP standard is 36 points every 3 years; log credits on each person&rsquo;s VeritaStaff&trade; record.</>
+              )}
             </p>
           </div>
         </div>
@@ -171,8 +177,9 @@ export default function VeritaCeuAppPage({ embedded = false }: { embedded?: bool
         <button
           onClick={() => setTab("status")}
           className={`px-3 py-2 text-sm font-medium -mb-px border-b-2 transition-colors ${tab === "status" ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+          data-testid="ce-tab-status"
         >
-          Team status
+          {ownOnly ? "My status" : "Team status"}
         </button>
         <button
           onClick={() => setTab("directory")}
@@ -189,11 +196,11 @@ export default function VeritaCeuAppPage({ embedded = false }: { embedded?: bool
       </div>
 
       {tab === "directory" && <FreeCeDirectory />}
-      {tab === "requirements" && <RequirementsTab labId={labId} isReadOnly={isReadOnly} />}
+      {tab === "requirements" && <RequirementsTab labId={labId} isReadOnly={isReadOnly} ownOnly={ownOnly} />}
 
       {tab === "status" && <>
       {/* Summary band */}
-      {data && (
+      {data && !ownOnly && (
         <div className="grid grid-cols-3 gap-3 mb-5">
           <Card><CardContent className="py-4 text-center">
             <div className="text-2xl font-bold">{data.employeeCount}</div>
@@ -210,15 +217,17 @@ export default function VeritaCeuAppPage({ embedded = false }: { embedded?: bool
         </div>
       )}
 
-      <div className="flex items-center justify-between mb-3">
-        <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
-          <input type="checkbox" checked={shortOnly} onChange={(e) => setShortOnly(e.target.checked)} />
-          Show only staff who are short
-        </label>
-        <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => setSortKey(sortKey === "status" ? "name" : "status")}>
-          <ArrowUpDown className="h-4 w-4 mr-1.5" />Sort: {sortKey === "status" ? "status" : "name"}
-        </Button>
-      </div>
+      {!ownOnly && (
+        <div className="flex items-center justify-between mb-3">
+          <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
+            <input type="checkbox" checked={shortOnly} onChange={(e) => setShortOnly(e.target.checked)} />
+            Show only staff who are short
+          </label>
+          <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => setSortKey(sortKey === "status" ? "name" : "status")}>
+            <ArrowUpDown className="h-4 w-4 mr-1.5" />Sort: {sortKey === "status" ? "status" : "name"}
+          </Button>
+        </div>
+      )}
 
       {summaryQuery.isLoading && (
         <div className="space-y-2">{[1, 2, 3, 4].map((n) => <div key={n} className="h-16 rounded-lg bg-muted/60 animate-pulse" />)}</div>
@@ -228,8 +237,10 @@ export default function VeritaCeuAppPage({ embedded = false }: { embedded?: bool
       )}
 
       {data && roster.length === 0 && (
-        <Card><CardContent className="py-12 text-center text-sm text-muted-foreground">
-          {data.employeeCount === 0 ? "No active staff on this lab yet. Add people in VeritaStaff™." : "No staff match this filter."}
+        <Card><CardContent className="py-12 text-center text-sm text-muted-foreground" data-testid="ce-empty">
+          {ownOnly
+            ? "Your login isn't linked to an active staff record yet, so there is no CE record to show. Ask your lab director or supervisor to link it."
+            : data.employeeCount === 0 ? "No active staff on this lab yet. Add people in VeritaStaff™." : "No staff match this filter."}
         </CardContent></Card>
       )}
 
@@ -330,7 +341,7 @@ function FreeCeDirectory() {
 // individual staff happens on the Team status tab.
 interface ProfileFormState { name: string; required_credits: string; cycle_months: string; is_default: boolean; }
 
-function RequirementsTab({ labId, isReadOnly }: { labId: number | null; isReadOnly: boolean }) {
+function RequirementsTab({ labId, isReadOnly, ownOnly = false }: { labId: number | null; isReadOnly: boolean; ownOnly?: boolean }) {
   const qc = useQueryClient();
   const { toast } = useToast();
   const key = `/api/labs/${labId}/veritaceu/requirement-profiles`;
@@ -382,13 +393,17 @@ function RequirementsTab({ labId, isReadOnly }: { labId: number | null; isReadOn
     <div>
       <div className="flex items-center justify-between gap-3 mb-3">
         <p className="text-sm text-muted-foreground">
-          CE requirement profiles. Assign one per person on the Team status tab; anyone unassigned uses the default (or ASCP CMP 36/3yr if there is none).
+          {ownOnly
+            ? "CE requirement profiles. Your lab assigns one per person; anyone unassigned uses the default (or ASCP CMP 36/3yr if there is none)."
+            : "CE requirement profiles. Assign one per person on the Team status tab; anyone unassigned uses the default (or ASCP CMP 36/3yr if there is none)."}
         </p>
         <Button size="sm" className="shrink-0" onClick={openAdd} disabled={isReadOnly}><Plus className="h-4 w-4 mr-1.5" />Add profile</Button>
       </div>
       {profiles.length === 0 && (
         <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">
-          No profiles yet. The ASCP CMP standard (36 points every 3 years) applies to everyone until you add one.
+          {ownOnly
+            ? "No profiles yet. The ASCP CMP standard (36 points every 3 years) applies to everyone until your lab adds one."
+            : "No profiles yet. The ASCP CMP standard (36 points every 3 years) applies to everyone until you add one."}
         </CardContent></Card>
       )}
       <div className="space-y-2">
