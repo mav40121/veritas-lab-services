@@ -657,6 +657,27 @@ async function main() {
     const portalPeople = await call("GET", "/api/staff-portal-session/employees", undefined, ANN.token);
     check("35. the portal's employee list holds only the person", portalPeople.s === 200 && portalPeople.j.employees?.length === 1 && portalPeople.j.employees[0].id === annId, JSON.stringify(portalPeople.j.employees));
 
+    // ── The answer key stays with whoever builds the quiz (Michael Q185 = 1) ──
+    const keyUrl = (id: number) => `/api/veritacomp/quizzes/${id}?withAnswers=1`;
+    const noKey = (r: { j: any }) => !JSON.stringify(r.j).includes("correct_answer");
+    const keyStaff = await asAnn(keyUrl(quiz.j.id));
+    check("35a. a Staff login can't read a quiz's answer key", keyStaff.s === 403 && keyStaff.j.code === "STAFF_NO_ANSWER_KEY" && noKey(keyStaff), `${keyStaff.s} ${keyStaff.j.code}`);
+    const keyTrue = await asAnn(`/api/veritacomp/quizzes/${quiz.j.id}?withAnswers=true`);
+    check("35b. the other spelling of the flag is refused too", keyTrue.s === 403 && noKey(keyTrue), `${keyTrue.s}`);
+    const takeView = await asAnn(`/api/veritacomp/quizzes/${quiz.j.id}`);
+    check("35c. they can still open the quiz to take it, with no answers in it", takeView.s === 200 && takeView.j.questions?.length === 1 && noKey(takeView), `${takeView.s}`);
+    const keyEditor = await asEditor(keyUrl(quiz.j.id));
+    check("35d. an editor still reads the answer key", keyEditor.s === 200 && keyEditor.j.questions?.[0]?.correct_answer === "a", `${keyEditor.s}`);
+    const keyOwner = await call("GET", keyUrl(quiz.j.id), undefined, OWNER.token);
+    check("35e. the owner still reads the answer key", keyOwner.s === 200 && keyOwner.j.questions?.[0]?.correct_answer === "a", `${keyOwner.s}`);
+    const sysQuiz = Number(sqlite.prepare("INSERT INTO competency_quizzes (user_id, title, questions, created_at) VALUES (0, 'Made-up default quiz', ?, ?)").run(JSON.stringify([{ id: "s1", question: "Which?", options: ["a", "b"], correct_answer: "a" }]), now).lastInsertRowid);
+    const keySys = await asAnn(keyUrl(sysQuiz));
+    check("35f. a built-in quiz's answer key is refused to a Staff login as well", keySys.s === 403 && noKey(keySys), `${keySys.s}`);
+    sqlite.prepare("DELETE FROM competency_quizzes WHERE id = ?").run(sysQuiz);
+    // The other route that hands back answers scores a result, and it's for editors. A Staff login takes quizzes through My sign-offs.
+    const scoreDoor = await call("POST", "/api/veritacomp/quiz-results", { quizId: quiz.j.id, employeeId: annComp.id, answers: [] }, ANN.token);
+    check("35g. a Staff login can't get the answers by posting an empty result", scoreDoor.s === 403 && noKey(scoreDoor), `${scoreDoor.s}`);
+
     // ── A sweep of every read, so a door nobody thought of still fails ────────
     const fillPath = (path: string): string | null => {
       let unknown = false;
@@ -718,10 +739,14 @@ async function main() {
     const noLinkMe = await call("GET", "/api/labs/me", undefined, NOLINK.token);
     const noLinkHere = (noLinkMe.j as any[]).find((m: any) => m.labId === labId);
     check("37a. the unlinked seat is reported to the page as own-only with no record", noLinkHere?.competencyOwnOnly === true && noLinkHere?.ownEmployeeId === null, JSON.stringify(noLinkHere?.competencyOwnOnly));
+    const keyNoLink = await call("GET", keyUrl(quiz.j.id), undefined, NOLINK.token);
+    check("37a2. the unlinked seat can't read the answer key", keyNoLink.s === 403 && noKey(keyNoLink), `${keyNoLink.s}`);
     const annSeat = () => sqlite.prepare("SELECT id FROM user_seats WHERE seat_user_id = ? AND lab_id = ? AND seat_type = 'staff_portal'").get(ANN.id, labId) as any;
     sqlite.prepare("UPDATE user_seats SET status = 'deactivated' WHERE id = ?").run(annSeat().id);
     await failClosed("a deactivated Staff seat that still has a lab membership", ANN.token, zorkId);
     check("37b. a deactivated seat can't open its old record either", refused(await asAnn(`${L}/competency/employee/${annId}`)));
+    const keyDeactivated = await asAnn(keyUrl(quiz.j.id));
+    check("37b2. a deactivated seat can't read the answer key", keyDeactivated.s === 403 && noKey(keyDeactivated), `${keyDeactivated.s}`);
     sqlite.prepare("UPDATE user_seats SET status = 'active' WHERE id = ?").run(annSeat().id);
     check("37c. restored, the seat reads its own record again", (await asAnn(`${L}/competency/employee/${annId}`)).s === 200);
     const LABLESS = await register("Labless");
@@ -811,6 +836,10 @@ async function main() {
     const staffEditRoster = await call("GET", `${L}/staff/employees`, undefined, STAFFEDIT.token);
     const staffEditRec = await call("GET", `${L}/competency/employee/${zorkId}`, undefined, STAFFEDIT.token);
     check("39b. a Staff seat given edit on VeritaStaff keeps the roster but is still limited in VeritaComp", staffEditRoster.j.length > 3 && refused(staffEditRec), `${staffEditRoster.j.length}/${staffEditRec.s}`);
+    const keyCompEdit = await call("GET", keyUrl(quiz.j.id), undefined, COMPEDIT.token);
+    check("39c. a Staff seat given edit on VeritaComp builds quizzes, so it keeps the answer key", keyCompEdit.s === 200 && keyCompEdit.j.questions?.[0]?.correct_answer === "a", `${keyCompEdit.s}`);
+    const keyStaffEdit = await call("GET", keyUrl(quiz.j.id), undefined, STAFFEDIT.token);
+    check("39d. edit on VeritaStaff doesn't open the answer key", keyStaffEdit.s === 403 && noKey(keyStaffEdit), `${keyStaffEdit.s}`);
     const DEMOTED = await register("Demoted");
     const demotedRow = await person("Demoted", "Dee", [ANALYZER]);
     member(labId, DEMOTED.id); seat(OWNER.id, labId, DEMOTED, "staff_portal", '{"mode":"view_all"}', demotedRow); seat(OWNER.id, labId, DEMOTED, "active", '{"mode":"edit_all"}', null);

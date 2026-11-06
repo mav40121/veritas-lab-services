@@ -26005,6 +26005,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const wantAnswers = req.query.withAnswers === "1" || req.query.withAnswers === "true";
     const parsedQuestions = JSON.parse(quiz.questions || "[]");
     if (wantAnswers) {
+      // The answer key is for whoever builds and reviews the quiz, never for the person taking it (Michael Q185 = 1, 2026-11-05).
+      // A Staff seat given edit on VeritaComp builds quizzes, so staffOwnIn leaves it alone. This route is unscoped, so the check
+      // uses the quiz's own lab; a system-default quiz has none, and staffOwnScope then fails closed for a Staff-only person.
+      if (staffOwnIn(req, quiz.lab_id)) return res.status(403).json({ error: "The answer key isn't available to a staff login.", code: "STAFF_NO_ANSWER_KEY" });
       // Builder / preview view: requires full access, evaluated against the
       // quiz's owning lab (not the caller's own subscription) so lab members
       // who flow through lab_members can see the answer key for any quiz in
