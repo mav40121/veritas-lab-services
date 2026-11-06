@@ -92,6 +92,8 @@ import { PriorYearComparisonDialog } from "@/components/PriorYearComparisonDialo
 import { CompetencyRemindersCard } from "@/components/CompetencyRemindersCard";
 import { programHoldsRecordsMessage } from "@shared/competencyProgramDelete";
 import { CompetencyAnnualMonthCard, CompetencyMethodGroupsLinkCard } from "@/components/CompetencyAnnualMonthCard";
+import { CompetencyNontechnicalFrequencyCard, useNontechnicalDue, useNontechnicalFrequency, nontechnicalDueText, nontechnicalDueClass } from "@/components/CompetencyNontechnicalFrequencyCard";
+import { nontechnicalFrequencyLabel } from "@shared/competencyNontechnicalFrequency";
 import { PTSamplePickerDialog, type PTSample } from "@/components/PTSamplePickerDialog";
 import { AuditTrailDialog } from "@/components/AuditTrailDialog";
 import { PermissionTooltip, PERMISSION_REASONS } from "@/components/PermissionTooltip";
@@ -1239,6 +1241,8 @@ function ProgramListView() {
       <CompetencyRemindersCard />
       {/* 2026-10-13 (Michael Q157 = 1, Sampson REQ-057): optional month that every repeat annual moves into */}
       <CompetencyAnnualMonthCard />
+      {/* 2026-11-06 (Michael 11/4, Q216 = 1): how often non-technical competency comes due at this site */}
+      <CompetencyNontechnicalFrequencyCard />
       {/* 2026-10-14 (Michael Q168 = 1): which analyzers share one competency */}
       <CompetencyMethodGroupsLinkCard />
       {/* #48 Phase 3: required-vs-assessed coverage map, toggle by employee / by instrument */}
@@ -2546,6 +2550,10 @@ function OverviewTab({ program }: { program: Program & { employees: Employee[]; 
   const qc = useQueryClient();
   const { toast } = useToast();
   const [rebuilding, setRebuilding] = useState(false);
+  // The lab's non-technical frequency (Q216 = 1). A new-hire evaluation has its own hire-date clock, so this isn't for it. Blank sends no due rows.
+  const followsFrequency = program.type === "nontechnical" && program.record_kind !== "evaluation";
+  const { data: ntFrequency } = useNontechnicalFrequency(followsFrequency);
+  const { data: ntDue } = useNontechnicalDue(followsFrequency);
 
   // Shape A class sweep (2026-06-08). Walks every VeritaMap in the lab and
   // adds any method groups that are missing on this program (existing groups
@@ -2613,6 +2621,9 @@ function OverviewTab({ program }: { program: Program & { employees: Employee[]; 
           {program.type === "nontechnical" && (
             <div><span className="text-xs text-muted-foreground block">Checklist Items</span>{program.checklistItems?.length || 0}</div>
           )}
+          {followsFrequency && !!ntFrequency?.months && (
+            <div data-testid="program-nt-frequency"><span className="text-xs text-muted-foreground block">Comes due</span>{nontechnicalFrequencyLabel(ntFrequency.months)}</div>
+          )}
           {program.map_id && (
             <div>
               <span className="text-xs text-muted-foreground block">Linked VeritaMap®</span>
@@ -2636,19 +2647,25 @@ function OverviewTab({ program }: { program: Program & { employees: Employee[]; 
               const latest = empAssessments[0];
               // BUG-115: someone marked Not applicable on this program is never "Not assessed" here.
               const na = notApplicable.has(emp.id);
-              const statusColor = na ? "text-muted-foreground bg-muted" : !latest ? "text-muted-foreground bg-muted" :
+              // With a frequency set, a due date that has passed outranks "Current" (Q216 = 1). Blank sends no due data, so this reads as before.
+              const due = followsFrequency && !na ? ntDue?.items.find((i) => i.programId === program.id && i.employeeId === emp.id) : undefined;
+              const lapsed = due?.bucket === "overdue";
+              const statusColor = na ? "text-muted-foreground bg-muted" : lapsed ? "text-red-600 bg-red-500/10" : !latest ? "text-muted-foreground bg-muted" :
                 latest.status === "pass" ? "text-emerald-600 bg-emerald-500/10" :
                 "text-red-600 bg-red-500/10";
-              const statusLabel = na ? "Not applicable" : !latest ? "Not assessed" :
+              const statusLabel = na ? "Not applicable" : lapsed ? "Overdue" : !latest ? "Not assessed" :
                 latest.status === "pass" ? "Current" :
                 latest.status === "fail" ? "Failed" : "Remediation";
               return (
-                <div key={emp.id} className="flex items-center justify-between py-1.5 border-b border-border last:border-0">
-                  <div>
+                <div key={emp.id} className={`flex items-center justify-between gap-x-2 py-1.5 border-b border-border last:border-0 ${due ? "flex-wrap gap-y-1" : ""}`}>
+                  <div className="min-w-0">
                     <span className="text-sm font-medium">{emp.name}</span>
                     <span className="text-xs text-muted-foreground ml-2">{emp.title}</span>
                   </div>
-                  <Badge variant="outline" className={`text-[10px] ${statusColor}`}>{statusLabel}</Badge>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {due && <span className={`text-[11px] ${nontechnicalDueClass(due)}`} data-testid={`roster-nt-due-${emp.id}`}>{nontechnicalDueText(due)}</span>}
+                    <Badge variant="outline" className={`text-[10px] ${statusColor}`} data-testid={`roster-status-${emp.id}`}>{statusLabel}</Badge>
+                  </div>
                 </div>
               );
             })}
@@ -3939,6 +3956,8 @@ function NewAssessmentDialog({
   // A new-hire evaluation (2026-10-16) takes the 30, 60 and 90-day types instead.
   const isEvaluation = program.record_kind === "evaluation";
   const [ntAssessmentType, setNtAssessmentType] = useState(editing?.assessment_type || (isEvaluation ? "30day" : "orientation"));
+  // "2-Year" is only true when the lab hasn't set its own frequency (Q216 = 1). The stored type is 'reassessment' either way.
+  const { data: ntFrequency } = useNontechnicalFrequency(program.type === "nontechnical" && !isEvaluation);
   const [nonTechItems, setNonTechItems] = useState<Record<string, NonTechItemData>>({});
   // The items this record shows and saves: on a new-hire evaluation, the chosen stage's items plus the every-stage
   // items (shared/competencyChecklist.ts); on a competency, the whole checklist.
@@ -4411,7 +4430,7 @@ function NewAssessmentDialog({
                           <SelectItem value="orientation">Orientation</SelectItem>
                           <SelectItem value="6month">6-Month</SelectItem>
                           <SelectItem value="annual">Annual</SelectItem>
-                          <SelectItem value="reassessment">2-Year Reassessment</SelectItem>
+                          <SelectItem value="reassessment" data-testid="nt-type-reassessment">{ntFrequency?.months ? "Reassessment" : "2-Year Reassessment"}</SelectItem>
                           <SelectItem value="duty_change">Duty Change</SelectItem>
                         </>
                       )}
