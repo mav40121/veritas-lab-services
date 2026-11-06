@@ -126,6 +126,10 @@ jobs:
         # Michael 2026-11-05, Q179 = 1: an unsigned entry with data and no Pass reads Needs review, never FAIL. A Pass sign-off needs every element marked
         # Pass or N/A on every route that writes one; Fail and Remediation Required stay allowed. Signed records keep their real result.
         run: npm run test:competency-needs-review
+      - name: Run unscoped read lab isolation integration test
+        # 2026-11-06: someone with no membership in a lab opened its quiz through GET /api/veritacomp/quizzes/:id. A read of a lab-owned row by id, on a route
+        # with no lab in its path, must not cross labs. Every route of that shape is called as outsiders, and a new one fails until it is listed.
+        run: npm run test:unscoped-read-isolation
       - name: VeritaCheck recognizes every regulated analyte
         # Every row of the Subpart I table, direct, fallback and negative name cases, a lab's own criterion, and the frozen self-heal list.
         run: DB_PATH=.tmp-verify-reg.db npx tsx scripts/verify-regulated-analyte-labels.ts

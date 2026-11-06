@@ -17771,6 +17771,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   app.get("/api/veritamap/maps/:id/analyte-values", authMiddleware, (req: any, res) => {
     if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap\u00AE subscription required" });
     const mapId = Number(req.params.id);
+    if (!userCanAccessMap(mapId, req)) return res.status(404).json({ error: "Map not found" });
     const values = (db as any).$client.prepare(
       "SELECT * FROM veritamap_analyte_values WHERE map_id = ? ORDER BY analyte"
     ).all(mapId);
@@ -17824,6 +17825,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   app.get("/api/veritamap/maps/:id/amr-values", authMiddleware, (req: any, res) => {
     if (!hasMapAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaMap\u00AE subscription required" });
     const mapId = Number(req.params.id);
+    if (!userCanAccessMap(mapId, req)) return res.status(404).json({ error: "Map not found" });
     const values = (db as any).$client.prepare(
       "SELECT * FROM veritamap_amr_values WHERE map_id = ? ORDER BY analyte, instrument_id, specimen_type"
     ).all(mapId);
@@ -26002,6 +26004,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const quiz = (db as any).$client.prepare("SELECT * FROM competency_quizzes WHERE id = ?").get(req.params.id) as any;
     if (!quiz) return res.status(404).json({ error: "Quiz not found" });
+    // A lab-owned quiz is read only from inside its lab; only the answer-key branch below used to check. A system-default quiz
+    // (user_id 0) is open to anyone with VeritaComp. An older quiz with no lab on it goes by its program's lab.
+    if (quiz.user_id !== 0 && !userCanAccessLabRow('competency_quizzes', quiz.id, req)
+      && !(quiz.lab_id == null && quiz.program_id != null && userCanAccessLabRow('competency_programs', quiz.program_id, req))) {
+      return res.status(404).json({ error: "Quiz not found" });
+    }
     const wantAnswers = req.query.withAnswers === "1" || req.query.withAnswers === "true";
     const parsedQuestions = JSON.parse(quiz.questions || "[]");
     if (wantAnswers) {
