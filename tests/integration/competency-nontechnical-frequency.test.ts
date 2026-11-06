@@ -277,8 +277,11 @@ async function main() {
     check("5a. a record saved but not signed has no date; signing it starts the clock from the signed date", !beforeSign && signed.s === 200 && afterSign?.lastPassDate === "2026-01-05" && afterSign?.nextDue === "2028-01-05", `${newRec.s} ${signed.s} ${JSON.stringify(afterSign)}`);
     const cohort = await call("POST", `${L}/competency/assessments/cohort-commit`, { programId: safety, employeeIds: [jonC], assessmentType: "annual", assessmentDate: "2025-08-08", status: "pass", evaluatorName: "Made Up Evaluator" }, OWNER.token);
     const jon = item(nontechnicalDueForLab(sqlite, labId, PINNED), jonC);
-    const jonRow = sqlite.prepare("SELECT competency_type FROM competency_assessments WHERE employee_id = ?").get(jonC) as any;
-    check("5b. Cohort Sign-off counts, though it stores 'technical' on the row: the program's type decides", cohort.s === 200 && jon?.nextDue === "2027-08-08" && jonRow?.competency_type === "technical", `${cohort.s} ${cohort.text.slice(0, 120)} ${JSON.stringify(jon)}`);
+    check("5b. a record from Cohort Sign-off counts", cohort.s === 200 && jon?.nextDue === "2027-08-08", `${cohort.s} ${cohort.text.slice(0, 120)} ${JSON.stringify(jon)}`);
+    // An older Bulk Import or Cohort row can hold 'technical' on a non-technical program. The program's type decides, however the row got there.
+    const olderRow = record(lis, jonC, { date: "2025-09-09" });
+    sqlite.prepare("UPDATE competency_assessments SET competency_type = 'technical' WHERE id = ?").run(olderRow);
+    check("5b2. a row storing 'technical' on a non-technical program still counts", item(nontechnicalDueForLab(sqlite, labId, PINNED), jonC, lis)?.nextDue === "2027-09-09", JSON.stringify(item(nontechnicalDueForLab(sqlite, labId, PINNED), jonC, lis)));
     // Signing a person's next record clears the overdue. Taken back afterward so the checks below read Ben as overdue.
     record(safety, benC, { date: "2026-10-01" });
     const benAfter = item(nontechnicalDueForLab(sqlite, labId, PINNED), benC);

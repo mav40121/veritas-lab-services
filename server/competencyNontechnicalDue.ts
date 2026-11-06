@@ -55,7 +55,7 @@ export function nontechnicalDueForLab(sqlite: any, labId: number, todayIso: stri
   const months = readNontechnicalFrequency(sqlite, labId);
   if (!months) return [];
   const tz = labTimeZoneById(sqlite, labId);
-  // On the program's type, never a.competency_type: Bulk Import and Cohort Sign-off write 'technical' there on every row.
+  // On the program's type, never a.competency_type: a Bulk Import or Cohort Sign-off row can hold 'technical' there whatever its program is.
   const rows = sqlite.prepare(
     `SELECT a.id, a.status, a.signed_on_paper_date, a.completion_date, a.assessment_date, a.program_id, a.employee_id,
             p.name AS program_name, p.department, ce.name AS comp_name, ce.title AS comp_title, ce.staff_employee_id,
