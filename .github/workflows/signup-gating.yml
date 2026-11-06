@@ -160,6 +160,13 @@ jobs:
         # A saved study named for a newly recognized analyte stays byte-identical through the startup pass; the pass still heals what it healed;
         # a re-rendered report labels it CLIA TEa or Lab-Set Internal Goal with the true CFR section, and never says "no criterion exists" of a regulated analyte.
         run: npm run test:regulated-analyte-labels
+      - name: VeritaCheck reports make no ADLM half-TEa claim
+        # Q210 = 1 (Michael 2026-11-06): no source exists. Every narrative branch that carried the sentence, percentage and absolute TEa, inside half, between half and full, and failing:
+        # no ADLM wording, no half value, the determination unchanged, the closing sentence last.
+        run: DB_PATH=.tmp-verify-adlm.db npx tsx scripts/verify-no-adlm-half-tea-reports.ts
+      - name: No ADLM half-TEa claim in client, server or shared
+        # script/audit.py runs in the pre-commit hook, which a commit can skip. This proves its ADLM check bites, leaves the real ADLM mentions alone, and scans the tree.
+        run: python3 scripts/verify-adlm-claim-audit.py
       - name: Run manual method groups integration test
         # Michael 2026-11-04: manual tests can be grouped with each other, one complexity, never with an analyzer (BUG-043 protection).
         run: npm run test:manual-method-groups

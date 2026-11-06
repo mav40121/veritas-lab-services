@@ -194,7 +194,7 @@ A clean grep is a required step in the QC checklist, not optional. Visual inspec
 - NO separate "Accepted by" block — it is redundant.
 - Header must say "LABORATORY DIRECTOR OR DESIGNEE REVIEW" — never just "LABORATORY DIRECTOR REVIEW".
 - CFR by specialty (42 CFR 493 Subpart I headings, eCFR as of 2026-10-01): Routine Chemistry = §493.931, Endocrinology = §493.933, Toxicology = §493.937, Hematology = §493.941, Immunohematology = §493.959, General Immunology = §493.927, Syphilis Serology = §493.923, Microbiology = §§493.911-493.919 (Bacteriology §493.911, Mycobacteriology §493.913, Mycology §493.915, Parasitology §493.917, Virology §493.919), default = §493.931. §493.945 is Cytology (gynecologic examinations) ONLY, never microbiology (it was wrongly listed here as Microbiology until 2026-10-09). Histopathology has no Subpart I section. Full specialty→section map: server/veritamapData.ts CFR_MAP, pinned by scripts/verify-cfr-specialty-map.mjs.
-- Cite ADLM-recommended internal goal alongside CLIA TEa where applicable.
+- No ADLM half-TEa claim (Michael 2026-11-06, Q210 = 1). No source exists for it, so don't put it back. Narratives state the CLIA determination and leave any internal goal to the laboratory's director or designee. CLIA leaves the criterion to the lab, the director documents why, and CMS says PT limits aren't performance goals; never call using PT limits "recommended". script/audit.py fails on the claim.
 
 ### VeritaCheck sign-in
 
@@ -204,7 +204,7 @@ A clean grep is a required step in the QC checklist, not optional. Visual inspec
 
 - "Calibration Verification / Linearity" — never "Cal Ver" or "Linearity" alone.
 - "Correlation / Method Comparison" — never "Method Comparison" alone.
-- ADLM goal cited alongside CLIA TEa in narratives.
+- No ADLM half-TEa claim in narratives (Michael 2026-11-06, Q210 = 1; see Regulatory language above).
 - CUMSUM is a study type within VeritaCheck®, never a standalone module. Never list it as its own feature, row, or module.
 
 ### VeritaMap rules
