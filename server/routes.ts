@@ -237,7 +237,8 @@ import { attestationStillCurrent, closeAttestationsCoveredByStaffSignatures, doc
 import { assessmentTypeLabel, assessmentTypeProblem, isEvaluationProgram, normalizeRecordKind } from "@shared/competencyEvaluation";
 import { normalizeSpecimen, normalizeReportableField, specimenLabel } from "@shared/veritamapSpecimen";
 import { buildCompetencyRegisterRows, generateCompetencyRegisterExcel } from "./competencyRegisterExcel";
-import { methodClock, loadInstrumentGroups, loadLabMethodClocks, loadImportedHistory, programNamedInstrumentIds, type InstrumentGroup } from "./competencyMethodClock";
+import { methodClock, loadInstrumentGroups, labGroupRefs, loadLabMethodClocks, loadImportedHistory, programNamedInstrumentIds, type InstrumentGroup } from "./competencyMethodClock";
+import { labGroupsForRow } from "@shared/competencyQuizGroups";
 import {
   deriveCompetencyStatus, competencyView, labMethodClocks,
   readCompetencyReminderConfig, writeCompetencyReminderConfig, planCompetencyReminders, runCompetencyReminders,
@@ -24421,9 +24422,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // staffOwn set (a Staff login, Q182 = 1): only that person's employee row, assessments, results and Not applicable mark go out.
   function buildProgramDetailResponse(program: any, employeesSql: string, employeesArg: number | string, res: any, staffOwn: StaffOwnScope | null = null) {
     const isOwn = (staffEmployeeId: unknown) => !staffOwn || (staffOwn.employeeId != null && Number(staffEmployeeId) === staffOwn.employeeId);
-    const methodGroups = (db as any).$client.prepare(
+    // REQ-131: each row carries the Method groups tab groups it belongs to, read fresh, so a quiz labeled with the row follows the group
+    // (shared/competencyQuizGroups.ts). The row itself isn't touched. The tab is closed to a Staff login, so its groups don't go out here either.
+    const labGroups = !staffOwn && program.lab_id != null ? labGroupRefs((db as any).$client, program.lab_id) : null;
+    const methodGroups = ((db as any).$client.prepare(
       "SELECT * FROM competency_method_groups WHERE program_id = ?"
-    ).all(program.id);
+    ).all(program.id) as any[]).map((row) => (labGroups ? { ...row, labGroups: labGroupsForRow(row.instruments, labGroups) } : row));
     const checklistItems = (db as any).$client.prepare(
       "SELECT * FROM competency_checklist_items WHERE program_id = ? ORDER BY sort_order"
     ).all(program.id);
