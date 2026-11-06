@@ -499,7 +499,7 @@ export default function StainLogPage() {
                         <tr key={e.id} className={`border-b last:border-0 align-top ${e.result === "problem" ? "bg-red-50 dark:bg-red-950/30" : ""}`} data-testid={`manual-row-${e.id}`}>
                           <td className="py-1.5 pr-2 whitespace-nowrap">{e.log_date}</td><td className="py-1.5 pr-2">{e.specimen_type}</td>
                           <td className={`py-1.5 pr-2 ${e.result === "problem" ? "font-semibold text-red-700 dark:text-red-400" : ""}`}>{e.result === "problem" ? "Problem" : "Good"}</td>
-                          <td className="py-1.5 pr-2">{e.test_slide ? "Yes" : ""}</td><td className="py-1.5 pr-2" title={e.recorded_by_name ?? ""}>{e.initials}</td><td className="py-1.5 pr-2 whitespace-pre-wrap">{e.comments ?? ""}</td>
+                          <td className="py-1.5 pr-2">{e.test_slide ? "Yes" : ""}</td><td className="py-1.5 pr-2" title={e.recorded_by_name ?? ""}>{e.initials}</td><td className="py-1.5 pr-2 min-w-[14rem] whitespace-pre-wrap">{e.comments ?? ""}</td>
                           <td className="py-1.5 text-right">{canVoid(e.recorded_by_user_id) && <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => openVoid(`${base}/manual/${e.id}/void`, `${e.log_date}, ${e.specimen_type}`)} data-testid={`manual-void-${e.id}`}>Void</Button>}</td>
                         </tr>
                       ))}

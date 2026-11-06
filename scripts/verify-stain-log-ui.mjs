@@ -65,7 +65,7 @@ const S = `${L}/stain-log`;
 const stainer = (await call("POST", `${L}/equipment`, { instrument_name: "Made-up autostainer", location: "Histology bench 2", serial_number: "MU-100", next_due_date: "2030-01-01" }, token)).body.id;
 sql("UPDATE lab_equipment SET created_at = '2026-01-01T00:00:00.000Z' WHERE id = ?", stainer);
 
-const today = new Date().toLocaleDateString("en-CA");
+const today = (await call("GET", S, undefined, token)).body.today;
 const thisMonth = today.slice(0, 7);
 const [ty, tm] = thisMonth.split("-").map(Number);
 const month = new Date(Date.UTC(ty, tm - 2, 1)).toISOString().slice(0, 7);
@@ -97,6 +97,7 @@ await ownerPage.getByTestId("stain-log-panel").screenshot({ path: `${OUT}/stain-
 await ownerPage.getByTestId("stain-panel-open").click();
 await ownerPage.getByTestId("stain-log-page").waitFor({ timeout: 15000 });
 check("S1. the card opens the stain log", ownerPage.url().includes("/equipment-app/stain-log"), ownerPage.url());
+check("S1. the printed page doesn't show on screen", !(await ownerPage.getByTestId("stain-print-area").isVisible()));
 await ownerPage.getByTestId("stain-no-rows").waitFor({ timeout: 15000 });
 check("S1. an instrument with no rows says so", /No rows yet/.test(await ownerPage.getByTestId("stain-no-rows").innerText()));
 await ownerPage.getByTestId("stain-setup").click();
@@ -372,8 +373,17 @@ const printCheck = async (page, name, expect, wantPages = 1) => {
   const respText = await page.evaluate(async ([u, t]) => (await fetch(u, { headers: { Authorization: `Bearer ${t}` } })).text(), [`${S}/${stainer}?month=${month}`, sam.token]);
   check("S9. a coworker's initials show", html.includes("ZQ"));
   check("S9. their name doesn't, on the page or in what it was sent", !html.includes("Quillfeather") && !respText.includes("Quillfeather"));
-  check("S9. a Staff login can't void someone else's entry", await page.getByTestId(`stain-void-${sql("SELECT id FROM stain_log_entries WHERE recorded_by_user_id = ?", zora.id).id}`).count() === 0);
   await page.getByTestId("stain-grid-card").screenshot({ path: `${OUT}/stain-grid-staff.png` });
+  await page.getByTestId(`stain-cell-${R.eosin}-${weekdays[11]}`).click();
+  await page.getByTestId("stain-record-dialog").waitFor();
+  await page.getByTestId(`stain-existing-${R.eosin}`).waitFor();
+  check("S9. a coworker's entry shows on file, with no way to void it", /On file: Filtered by ZQ/.test(await page.getByTestId(`stain-existing-${R.eosin}`).innerText()) && await page.getByTestId(`stain-void-${sql("SELECT id FROM stain_log_entries WHERE recorded_by_user_id = ?", zora.id).id}`).count() === 0);
+  await page.getByTestId("stain-record-dialog").getByRole("button", { name: "Cancel" }).click();
+  await page.goto(`${BASE}${LOG}?instrument=${stainer}&month=${thisMonth}`, { waitUntil: "networkidle" });
+  await page.getByTestId("stain-grid").waitFor({ timeout: 15000 });
+  await page.getByTestId(`stain-cell-${R.spills}-${todayDay}`).click();
+  await page.getByTestId("stain-record-dialog").waitFor();
+  check("S9. their own entry they can void", await page.getByTestId(`stain-void-${sql("SELECT id FROM stain_log_entries WHERE recorded_by_user_id = ? ORDER BY id DESC LIMIT 1", sam.id).id}`).count() === 1);
   await page.context().close();
 }
 
@@ -447,6 +457,11 @@ const noOverflow = (p) => p.evaluate(() => document.documentElement.scrollWidth 
   check("D1. phone: the manual log doesn't overflow", await noOverflow(phone));
   await phone.context().close();
 }
+
+// The address without the lab in it, which the lab switcher lands on, finds the lab
+await ownerPage.goto(`${BASE}/equipment-app/stain-log`, { waitUntil: "networkidle" });
+await ownerPage.getByTestId("stain-log-page").waitFor({ timeout: 15000 });
+check("D2. the stain log's plain address finds the lab", ownerPage.url().includes(`/labs/${labId}/equipment-app/stain-log`) || await ownerPage.getByTestId("stain-grid").count() > 0, ownerPage.url());
 
 // The VeritaMaintain card, now with a log on it
 await ownerPage.goto(`${BASE}/labs/${labId}/equipment-app`, { waitUntil: "networkidle" });

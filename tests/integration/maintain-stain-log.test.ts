@@ -98,7 +98,7 @@ async function main() {
     const B = await mkLab("b");
     const L = `/api/labs/${A.labId}`;
     const S = `${L}/stain-log`;
-    const today = new Date().toLocaleDateString("en-CA");
+    const today = (await call("GET", S, undefined, A.token)).body.today as string; // the lab's day, which can differ from this machine's
 
     const stainer = (await call("POST", `${L}/equipment`, { instrument_name: "Made-up autostainer", location: "Histology", next_due_date: "2030-01-01" }, A.token)).body.id as number;
     const plain = (await call("POST", `${L}/equipment`, { instrument_name: "Made-up centrifuge", next_due_date: "2030-01-01" }, A.token)).body.id as number;
@@ -313,9 +313,18 @@ async function main() {
     const second0 = item(await reviewMonth(), "equipment", second);
     check("6. a monthly row with nothing in a finished month needs an action", second0.problems.some((p: string) => /Second eosin: no D \(dumped\) recorded this month/.test(p)), JSON.stringify(second0.problems));
     check("6. a lot from last month, past its expiration in use this month, needs one", second0.problems.some((p: string) => /Second bluing: lot AUG-LOT expired 2026-09-10 and was in use on 1 day after that: 9\/12/.test(p)), JSON.stringify(second0.problems));
+    check("6. an instrument with stain entries and no maintenance doesn't say 'No entries this month'", !second0.notes.includes("No entries this month") && second0.summary.entries === 0, JSON.stringify(second0.notes));
     const voidable = (sqlite.prepare("SELECT id FROM stain_log_entries WHERE row_id = ? AND lot_number = 'AUG-LOT'").get(asNeeded) as any).id as number;
     await call("POST", `${SR}/entries/${voidable}/void`, { reason: "Wrong lot typed" }, A.token);
     check("6. a voided change no longer counts as the lot in the station", !item(await reviewMonth(), "equipment", second).problems.some((p: string) => /AUG-LOT/.test(p)));
+    const clarifier = (await addRow({ name: "Second clarifier", row_kind: "stain" }, A.token, `${SR}/rows`)).body.id as number;
+    sqlite.prepare("UPDATE stain_log_rows SET created_at = '2026-01-01T00:00:00.000Z' WHERE id = ?").run(clarifier);
+    await secondDay("2026-07-01", [{ row_id: clarifier, codes: ["C"], lot_number: "JUL-LOT", expiration_date: "2026-07-31" }]);
+    await secondDay("2026-08-10", [{ row_id: clarifier, codes: ["C"], lot_number: "AUG-TYPO", expiration_date: "2027-07-31" }]);
+    const typo = (sqlite.prepare("SELECT id FROM stain_log_entries WHERE row_id = ? AND lot_number = 'AUG-TYPO'").get(clarifier) as any).id as number;
+    check("6. a later change covers an older lot", !item(await reviewMonth(), "equipment", second).problems.some((p: string) => /Second clarifier/.test(p)));
+    await call("POST", `${SR}/entries/${typo}/void`, { reason: "Wrong row" }, A.token);
+    check("6. voiding it puts the older lot back in the station", item(await reviewMonth(), "equipment", second).problems.some((p: string) => /Second clarifier: lot JUL-LOT expired 2026-07-31 and was in use on 1 day after that: 9\/12/.test(p)), JSON.stringify(item(await reviewMonth(), "equipment", second).problems));
     await secondDay("2026-09-13", [{ row_id: mDump, codes: ["D"] }]);
     check("6. the code it needs clears the monthly row", !item(await reviewMonth(), "equipment", second).problems.some((p: string) => /Second eosin/.test(p)));
 
