@@ -118,8 +118,11 @@ async function main() {
     const noReason = await call("POST", naUrl, { employeeId: E2 }, T, L);
     check("4d. a reason is optional", noReason.status === 200 && noReason.body.notApplicable?.[0]?.reason === null, JSON.stringify(noReason.body));
 
-    const del = await call("DELETE", `/api/labs/${L}/competency/programs/${P}`, undefined, T, L);
-    check("5a. deleting the program removes its Not applicable rows", del.status === 200 && Number((sqlite.prepare("SELECT COUNT(*) AS c FROM competency_program_not_applicable WHERE program_id = ?").get(P) as any).c) === 0, String(del.status));
+    // A program holding records can't be deleted (Michael Q184 = 1, tests/integration/competency-program-delete.test.ts), so this is an empty one.
+    const emptyP = await mkProgram("Empty, to delete");
+    const emptyNa = await call("POST", `/api/labs/${L}/competency/programs/${emptyP}/not-applicable`, { employeeId: E2 }, T, L);
+    const del = await call("DELETE", `/api/labs/${L}/competency/programs/${emptyP}`, undefined, T, L);
+    check("5a. deleting an empty program removes its Not applicable rows", emptyNa.status === 200 && del.status === 200 && Number((sqlite.prepare("SELECT COUNT(*) AS c FROM competency_program_not_applicable WHERE program_id = ?").get(emptyP) as any).c) === 0, `${emptyNa.status}/${del.status}`);
   } finally {
     server.close();
   }

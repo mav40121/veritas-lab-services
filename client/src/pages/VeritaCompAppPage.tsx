@@ -90,6 +90,7 @@ import { isQuizImage, quizImageProblem } from "@shared/quizImages";
 import { ObserverInitialsField, type QualifiedObserver } from "@/components/ObserverInitialsField";
 import { PriorYearComparisonDialog } from "@/components/PriorYearComparisonDialog";
 import { CompetencyRemindersCard } from "@/components/CompetencyRemindersCard";
+import { programHoldsRecordsMessage } from "@shared/competencyProgramDelete";
 import { CompetencyAnnualMonthCard, CompetencyMethodGroupsLinkCard } from "@/components/CompetencyAnnualMonthCard";
 import { PTSamplePickerDialog, type PTSample } from "@/components/PTSamplePickerDialog";
 import { AuditTrailDialog } from "@/components/AuditTrailDialog";
@@ -1101,9 +1102,13 @@ function ProgramListView() {
         method: "DELETE",
         headers: authHeaders(),
       });
-      if (!res.ok) throw new Error("Failed to delete");
+      if (res.status === 409) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(programHoldsRecordsMessage(Number(body.record_count) || 0));
+      }
+      if (!res.ok) throw new Error("The program could not be deleted. Please try again.");
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: [programsListUrl] }),
+    onSettled: () => qc.invalidateQueries({ queryKey: [programsListUrl] }),
   });
 
   return (
@@ -1287,7 +1292,7 @@ function ProgramListView() {
                 </div>
                 <div className="space-y-3">
                   {deptPrograms.map(p => (
-            <Card key={p.id} className="group hover:border-primary/30 transition-colors">
+            <Card key={p.id} className="group hover:border-primary/30 transition-colors" data-testid={`program-card-${p.id}`}>
               <CardContent className="p-4">
                 <div className="flex items-start gap-3">
                   <div className="flex-1 min-w-0">
@@ -1319,7 +1324,8 @@ function ProgramListView() {
                   <div className="flex items-center gap-1 shrink-0">
                     {!readOnly && <DeleteConfirmDialog
                       name={p.name}
-                      onDelete={() => deleteProgram.mutate(p.id)}
+                      recordCount={p.assessmentCount}
+                      onDelete={() => deleteProgram.mutateAsync(p.id)}
                     />}
                     <Button
                       size="sm"
@@ -1852,23 +1858,49 @@ function QuizHubDialog({ programs, onClose }: { programs: Program[]; onClose: ()
 
 // ── Delete Confirm ──────────────────────────────────────────────────────
 
-function DeleteConfirmDialog({ name, onDelete }: { name: string; onDelete: () => void }) {
+// Michael 2026-11-06, Q184 = 1: a program holding competency records can't be deleted. The list's count shows the refusal as soon as
+// the box opens, so there is no Delete button to try; if the list is out of date, the server's refusal lands in the same box.
+function DeleteConfirmDialog({ name, recordCount, onDelete }: { name: string; recordCount: number; onDelete: () => Promise<void> }) {
   const [open, setOpen] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const refusal = failure ?? (recordCount > 0 ? programHoldsRecordsMessage(recordCount) : null);
+  const confirmDelete = async () => {
+    setDeleting(true);
+    try {
+      await onDelete();
+      setOpen(false);
+    } catch (e: any) {
+      setFailure(e?.message || "The program could not be deleted. Please try again.");
+    } finally {
+      setDeleting(false);
+    }
+  };
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(next) => { setOpen(next); if (!next) setFailure(null); }}>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0" title="Delete">
+        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0" title="Delete" data-testid="program-delete">
           <Trash2 className="h-4 w-4" />
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-sm">
-        <DialogHeader><DialogTitle>Delete Program?</DialogTitle></DialogHeader>
-        <p className="text-sm text-muted-foreground">
-          Are you sure you want to delete <span className="font-semibold text-foreground">"{name}"</span>? All assessments and data will be permanently removed.
-        </p>
+        <DialogHeader><DialogTitle>{refusal ? "This program can't be deleted" : "Delete Program?"}</DialogTitle></DialogHeader>
+        {refusal ? (
+          <p className="text-sm text-muted-foreground" data-testid="program-delete-refusal">{refusal}</p>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Are you sure you want to delete <span className="font-semibold text-foreground">"{name}"</span>? All assessments and data will be permanently removed.
+          </p>
+        )}
         <div className="flex justify-end gap-2 pt-2">
-          <Button variant="outline" size="sm" onClick={() => setOpen(false)}>Cancel</Button>
-          <Button variant="destructive" size="sm" onClick={() => { onDelete(); setOpen(false); }}>Delete</Button>
+          {refusal ? (
+            <Button variant="outline" size="sm" onClick={() => { setOpen(false); setFailure(null); }} data-testid="program-delete-close">Close</Button>
+          ) : (
+            <>
+              <Button variant="outline" size="sm" onClick={() => setOpen(false)}>Cancel</Button>
+              <Button variant="destructive" size="sm" onClick={confirmDelete} disabled={deleting} data-testid="program-delete-confirm">Delete</Button>
+            </>
+          )}
         </div>
       </DialogContent>
     </Dialog>
