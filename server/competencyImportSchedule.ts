@@ -19,6 +19,8 @@
 //     waived tester, who has no 6-month, it counts as the most recent competency).
 //   - orientation only, or only fail / remediation rows: nothing changes. That person
 //     has not passed a competency, so they stay not cleared.
+// Only records from a technical or waived program reach this file. A non-technical record is loaded onto its own program and never clears
+// anyone (shared/competencyClearance.ts; the caller, importedByStaffEmployee in routes.ts, leaves those rows out).
 // The import never overwrites the lab: a person the lab marked New hire is left
 // alone, and a person whose schedule already has a completion date keeps every date
 // (they are only marked Existing staff when they have no initial and no marking).

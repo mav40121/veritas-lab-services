@@ -101,10 +101,11 @@ export function earliestSignedInitials(sqlite: any, labIds: number[] | null): Ar
     `SELECT staff_employee_id, signed_date AS d, signer_name AS signer, determination FROM competency_method_signoffs
       WHERE milestone = 'initial' AND revoked_at IS NULL AND (determination = 'pass' OR determination IS NULL)`
   ).all() as any[]) take(r, r.determination ? "VeritaComp sign-off" : "VeritaComp sign-off (no determination recorded)");
+  // A non-technical record never clears anyone (shared/competencyClearance.ts).
   for (const r of sqlite.prepare(
     `SELECT ce.staff_employee_id, COALESCE(a.signed_on_paper_date, a.completion_date, a.assessment_date) AS d, a.evaluator_name AS signer
-       FROM competency_assessments a JOIN competency_employees ce ON ce.id = a.employee_id
-      WHERE a.assessment_type = 'initial' AND a.status = 'pass' AND a.locked = 1 AND ce.staff_employee_id IS NOT NULL`
+       FROM competency_assessments a JOIN competency_employees ce ON ce.id = a.employee_id JOIN competency_programs p ON p.id = a.program_id
+      WHERE p.type IN ('technical', 'waived') AND a.assessment_type = 'initial' AND a.status = 'pass' AND a.locked = 1 AND ce.staff_employee_id IS NOT NULL`
   ).all() as any[]) take(r, "VeritaComp record");
   let rows = Array.from(best.values());
   if (labIds && labIds.length) {

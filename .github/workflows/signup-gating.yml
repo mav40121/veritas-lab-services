@@ -130,6 +130,13 @@ jobs:
         # Element 4 stay as stored whatever is sent; another person, another lab, a signed item and a locked record are out of reach; a lapsed lab takes no
         # entry; the implicit container is never asked to be acknowledged.
         run: npm run test:staff-own-competency-data
+      - name: Competency clearance rule
+        # Only a technical or waived record can clear a person for patient testing; what an import builds from what's left, on known dates.
+        run: npx tsx scripts/verify-competency-clearance-types.mts
+      - name: Run competency clearance by program type integration test
+        # 2026-11-06: a non-technical record never clears anyone: Bulk Import, whole-record sign on both routes, the admin backfill and duty-change events. Technical and
+        # waived still do. A new row stores the program's type, older rows read by it, and what's already on file stays as it is.
+        run: npm run test:competency-clearance-program-type
       - name: Run competency Needs review integration test
         # Michael 2026-11-05, Q179 = 1: an unsigned entry with data and no Pass reads Needs review, never FAIL. A Pass sign-off needs every element marked
         # Pass or N/A on every route that writes one; Fail and Remediation Required stay allowed. Signed records keep their real result.

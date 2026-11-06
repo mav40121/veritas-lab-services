@@ -5246,9 +5246,12 @@ export function buildCompetencyHTML(input: CompetencyPDFInput): string {
   const { assessment, items, methodGroups, checklistItems, labName, quizResults } = input;
   const elementDocuments: CompetencyElementDocument[] = input.elementDocuments || [];
   const dateStr = assessment.assessment_date || labToday();
-  const isTechnical = assessment.competency_type === "technical";
-  const isWaived = assessment.competency_type === "waived";
-  const isNonTech = assessment.competency_type === "nontechnical";
+  // The program's type decides what this record is (every record route sends program_type; the blank worksheet has only competency_type). An older Bulk
+  // Import or Cohort row holds 'technical' whatever its program was, and printed as a Technical Competency Assessment.
+  const recordType = assessment.program_type ?? assessment.competency_type;
+  const isTechnical = recordType === "technical";
+  const isWaived = recordType === "waived";
+  const isNonTech = recordType === "nontechnical";
   // New-hire evaluation (2026-10-16, Sampson REQ-076): a non-technical program marked record_kind 'evaluation'. Every
   // title, label and sign-off line on it says Evaluation, never Competency.
   const isEvaluation = isNonTech && assessment.program_record_kind === "evaluation";
@@ -5773,6 +5776,8 @@ export function buildCompetencyHTML(input: CompetencyPDFInput): string {
         </tr>`;
       }
     } else {
+      // A Bulk Import or Cohort record holds no method rows.
+      if (items.length === 0) html += `<tr><td colspan="6" style="text-align:center;color:#888;font-style:italic">No data recorded</td></tr>`;
       for (const item of items) {
         const methodLabel = WAIVED_METHODS[(item.method_number || item.waived_method_number || 1) - 1] || `Method ${item.method_number}`;
         html += `<tr>
@@ -5815,6 +5820,8 @@ export function buildCompetencyHTML(input: CompetencyPDFInput): string {
         </tr>`;
       }
     } else {
+      // A Bulk Import or Cohort record holds no checklist rows.
+      if (items.length === 0) html += `<tr><td colspan="5" style="text-align:center;color:#888;font-style:italic">No data recorded</td></tr>`;
       for (const item of items) {
         html += `<tr>
           <td><strong>${esc(item.nt_item_label || item.item_label || "")}</strong></td>
