@@ -299,13 +299,20 @@ async function main() {
     const piaSt = await statusOf(pia.id);
     check("8a. someone a non-technical import already cleared stays as they are: their status doesn't move at deploy", piaSt?.cleared === true && /Existing staff/.test(piaSt?.label), JSON.stringify(piaSt));
     check("8b. no stored schedule moved, whatever ran", JSON.stringify([pia, sol, quinn, rae].map((p) => sched(p.id))) === held, JSON.stringify(sched(pia.id)));
+    // Added after the last read of the list, so they're still open: one a technical record would close on that read, and one with only a technical record.
+    const both = await newHire("Dax", "Dutyboth"), techOnly = await newHire("Dio", "Dutytechonly");
+    event(both.id); oldRow(NT, both.comp, { type: "duty_change", date: "2026-10-01" }); oldRow(TECH, both.comp, { type: "duty_change", date: "2026-10-01" });
+    event(techOnly.id); oldRow(TECH, techOnly.comp, { type: "duty_change", date: "2026-10-01" });
+    const early = await newHire("Dag", "Dutyearly");
+    event(early.id); oldRow(NT, early.comp, { type: "duty_change", date: "2026-08-01" }); // dated before the event, so it never matched
     const counts = sqlite.prepare(readFileSync("scripts/count-nontechnical-clearance.sql", "utf8")).get() as any;
     check("8c. the count finds Pia and Sol as cleared on non-technical only, in one lab", counts.people_cleared_on_nontechnical_only === 2 && counts.labs_with_people_cleared_on_nontechnical_only === 1, JSON.stringify(counts));
     check("8d. the count finds Quinn, whose clock runs from a non-technical date", counts.people_with_clock_from_nontechnical_date === 1, JSON.stringify(counts));
     check("8e. the count finds the one duty-change event a non-technical record closed", counts.duty_change_events_closed_by_nontechnical === 1, JSON.stringify(counts));
     check("8f. the count finds each older row with the wrong stored type, and no new one", counts.records_with_stored_type_not_the_programs === oldStyleWrong, `${JSON.stringify(counts)} vs ${oldStyleWrong}`);
+    check("8f2. the count finds the two events that now stay open, Dot's and Dov's, and not one a technical record would close or one dated before the event", counts.open_duty_change_events_nontechnical_would_have_closed === 2, JSON.stringify(counts));
     const countKeys = Object.keys(counts).sort().join();
-    check("8g. the count gives numbers only: no name and no lab id", countKeys === "duty_change_events_closed_by_nontechnical,labs_with_people_cleared_on_nontechnical_only,people_cleared_on_nontechnical_only,people_with_clock_from_nontechnical_date,records_with_stored_type_not_the_programs" && Object.values(counts).every((v) => typeof v === "number"), countKeys);
+    check("8g. the count gives numbers only: no name and no lab id", countKeys === "duty_change_events_closed_by_nontechnical,labs_with_people_cleared_on_nontechnical_only,open_duty_change_events_nontechnical_would_have_closed,people_cleared_on_nontechnical_only,people_with_clock_from_nontechnical_date,records_with_stored_type_not_the_programs" && Object.values(counts).every((v) => typeof v === "number"), countKeys);
 
     // ── 9. Technical dates, pinned ───────────────────────────────────────────
     check("9. 42 CFR 493.1451(b)(9) and 493.1413(b)(9) dates: initial + 6, annual + 12, and waived annual from the initial, all as before", sched(tina)?.six_month_due_at === "2026-08-10" && sched(tom)?.annual_due_at === "2027-03-15" && sched(wes)?.annual_due_at === "2027-04-20");
