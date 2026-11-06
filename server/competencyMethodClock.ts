@@ -15,6 +15,7 @@
 import { nextCompetencyDue } from "./competencySchedule";
 import { labLocalDate } from "./dateLocal";
 import { nextMilestoneAfter, alignAnnualToMonth, type MethodMilestone } from "@shared/competencySignoff";
+import type { LabGroupRef } from "@shared/competencyQuizGroups";
 
 export interface ClockSignoff {
   milestone: string | null;
@@ -99,6 +100,15 @@ export function loadInstrumentGroups(sqlite: any, labId: number): Map<number, In
     for (const id of g.memberIds) out.set(id, g);
   }
   return out;
+}
+
+// The lab's groups by name and analyzer name, for labelling a program's method groups (shared/competencyQuizGroups.ts, REQ-131).
+export function labGroupRefs(sqlite: any, labId: number): LabGroupRef[] {
+  const out = new Map<number, LabGroupRef>();
+  for (const g of Array.from(loadInstrumentGroups(sqlite, labId).values())) {
+    if (!out.has(g.groupId)) out.set(g.groupId, { id: g.groupId, name: g.name, members: Array.from(new Set(g.members.map((m) => m.name))) });
+  }
+  return Array.from(out.values());
 }
 
 const rankC = (c: string): number => { const u = String(c || "").toUpperCase(); return u.startsWith("H") ? 3 : u.startsWith("M") ? 2 : u.startsWith("W") ? 1 : 0; };
