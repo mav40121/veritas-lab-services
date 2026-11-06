@@ -100,6 +100,7 @@ import { WaivedSpecimenRows } from "@/components/WaivedSpecimenRows";
 import { cleanWaivedSpecimens, waivedSpecimenColumns, waivedSpecimensFromRow, WAIVED_BLIND_METHOD, type WaivedSpecimen } from "@shared/competencyWaivedSpecimens";
 import { CompetencyCohortSignoffDialog } from "@/components/CompetencyCohortSignoffDialog";
 import { aggregateElementStatus, incompleteElementCells, recordPassProblem, type ElStatus } from "@shared/competencyStatus";
+import { findQuizForMethodGroup, quizFollowsLine, rowGroupNote, rowGroupOthers, type LabGroupRef } from "@shared/competencyQuizGroups";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -143,6 +144,8 @@ interface MethodGroup {
   instruments: string;
   analytes: string;
   notes: string | null;
+  // The lab's groups on the Method groups tab holding an analyzer this row names (program detail only; REQ-131).
+  labGroups?: LabGroupRef[];
 }
 
 interface ChecklistItem {
@@ -4084,35 +4087,6 @@ function NewAssessmentDialog({
     }
   }, [program]);
 
-  // Find quiz for a method group.
-  // Match order:
-  //   1. Exact match on legacy single method_group_id (covers seeded
-  //      system quizzes that target one specific group).
-  //   2. method_group_ids JSON array contains this mgId (covers
-  //      cross-specialty quizzes authored via the Quizzes tab).
-  //   3. Fuzzy match on method_group_name as a final fallback.
-  function findQuizForMg(mgId: number, mgName: string): any | null {
-    if (!quizzes) return null;
-    const byId = quizzes.find(q => q.method_group_id === mgId);
-    if (byId) return byId;
-    const byArray = quizzes.find(q => {
-      if (!q.method_group_ids) return false;
-      try {
-        const ids: number[] = JSON.parse(q.method_group_ids);
-        return Array.isArray(ids) && ids.includes(mgId);
-      } catch { return false; }
-    });
-    if (byArray) return byArray;
-    const byName = quizzes.find(q => {
-      if (!q.method_group_name) return false;
-      const qn = q.method_group_name.toLowerCase();
-      const mn = mgName.toLowerCase();
-      return qn.includes("vitros 5600") && mn.includes("vitros 5600") ||
-             qn.includes(mn) || mn.includes(qn);
-    });
-    return byName || null;
-  }
-
   // Start quiz inline
   async function startQuiz(mgId: number, quizId: number) {
     try {
@@ -4804,7 +4778,7 @@ function NewAssessmentDialog({
                         <Textarea className="text-xs min-h-[32px] border-amber-400" placeholder="Explain why this element is not applicable..." value={getTechDataForElement(6, mg.id).el6_na_justification} onChange={e => setTechField(6, mg.id, "el6_na_justification", e.target.value)} rows={2} />
                       </div>
                     ) : (() => {
-                      const quiz = findQuizForMg(mg.id, mg.name);
+                      const quiz = findQuizForMethodGroup((quizzes || []) as any[], mg, program.methodGroups || []);
                       const el6Data = getTechDataForElement(6, mg.id);
 
                       if (!quiz) {
@@ -5312,6 +5286,7 @@ function QuizzesTab({ program, autoOpenNew }: { program: Program; autoOpenNew?: 
                     key={q.id}
                     quiz={q}
                     methodGroupLabel={methodGroupNames(q)}
+                    followsLine={quizFollowsLine(q, program.methodGroups || [])}
                     isReadOnly={isReadOnly}
                     onPreview={() => setPreviewQuizId(q.id)}
                     onAssign={() => setAssignQuizId(q.id)}
@@ -5422,10 +5397,11 @@ interface QuizAssignmentSummary {
 }
 
 function QuizCardWithAssignStatus({
-  quiz, methodGroupLabel, isReadOnly, onPreview, onAssign, onDelete,
+  quiz, methodGroupLabel, followsLine, isReadOnly, onPreview, onAssign, onDelete,
 }: {
   quiz: QuizListItem;
   methodGroupLabel: string;
+  followsLine: string | null;
   isReadOnly: boolean;
   onPreview: () => void;
   onAssign: () => void;
@@ -5459,6 +5435,7 @@ function QuizCardWithAssignStatus({
               {methodGroupLabel} &middot; created {quiz.created_at.split("T")[0]}
               {quiz.randomize_questions ? " · randomized" : ""}
             </div>
+            {followsLine && <div className="text-[11px] text-muted-foreground" data-testid="quiz-follows-group">{followsLine}</div>}
           </div>
           {!isReadOnly && (
             <div className="flex items-center gap-1">
@@ -5689,6 +5666,27 @@ function AssignQuizDialog({
 
 // ── New Quiz Dialog ────────────────────────────────────────────────────
 
+// One choice under Method Groups Covered, on New Quiz and Edit Quiz. The line under it comes from the Method groups tab, so a
+// group's new analyzer shows here without anyone touching the quiz (REQ-131).
+function QuizGroupOption({ group, checked, onToggle }: { group: MethodGroup; checked: boolean; onToggle: () => void }) {
+  const note = rowGroupNote(group);
+  return (
+    <label className="flex items-start gap-2 text-xs cursor-pointer hover:bg-muted/40 rounded px-1.5 py-1" data-testid="quiz-group-option">
+      <Checkbox className="mt-px" checked={checked} onCheckedChange={onToggle} />
+      <span className="min-w-0">
+        <span className="block truncate">{group.name}</span>
+        {note && <span className="block text-[11px] text-muted-foreground" data-testid="quiz-group-note">{note}</span>}
+      </span>
+    </label>
+  );
+}
+
+// The words on one "Tests knowledge of" choice. A select option can't hold a second line, so the group's other analyzers go in brackets.
+function questionGroupOption(group: MethodGroup): string {
+  const others = rowGroupOthers(group);
+  return `Tests knowledge of: ${group.name}${others.length ? ` (with ${others.join(", ")})` : ""}`;
+}
+
 function emptyQuestion(idx: number): QuizQuestion {
   return {
     id: `q${idx}`,
@@ -5872,13 +5870,7 @@ function NewQuizDialog({
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-40 overflow-y-auto border border-border rounded-md p-2">
                 {groups.map(g => (
-                  <label key={g.id} className="flex items-center gap-2 text-xs cursor-pointer hover:bg-muted/40 rounded px-1.5 py-1">
-                    <Checkbox
-                      checked={selectedGroupIds.includes(g.id)}
-                      onCheckedChange={() => toggleGroup(g.id)}
-                    />
-                    <span className="truncate">{g.name}</span>
-                  </label>
+                  <QuizGroupOption key={g.id} group={g} checked={selectedGroupIds.includes(g.id)} onToggle={() => toggleGroup(g.id)} />
                 ))}
               </div>
             )}
@@ -5966,7 +5958,7 @@ function NewQuizDialog({
                     >
                       <option value="">Tests knowledge of: (not specified)</option>
                       {groups.map(g => (
-                        <option key={g.id} value={g.id}>Tests knowledge of: {g.name}</option>
+                        <option key={g.id} value={g.id}>{questionGroupOption(g)}</option>
                       ))}
                     </select>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
@@ -6531,13 +6523,7 @@ function EditQuizDialog({
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-40 overflow-y-auto border border-border rounded-md p-2">
                 {groups.map(g => (
-                  <label key={g.id} className="flex items-center gap-2 text-xs cursor-pointer hover:bg-muted/40 rounded px-1.5 py-1">
-                    <Checkbox
-                      checked={selectedGroupIds.includes(g.id)}
-                      onCheckedChange={() => toggleGroup(g.id)}
-                    />
-                    <span className="truncate">{g.name}</span>
-                  </label>
+                  <QuizGroupOption key={g.id} group={g} checked={selectedGroupIds.includes(g.id)} onToggle={() => toggleGroup(g.id)} />
                 ))}
               </div>
             )}
@@ -6589,7 +6575,7 @@ function EditQuizDialog({
                   >
                     <option value="">Tests knowledge of: (not specified)</option>
                     {groups.map(g => (
-                      <option key={g.id} value={g.id}>Tests knowledge of: {g.name}</option>
+                      <option key={g.id} value={g.id}>{questionGroupOption(g)}</option>
                     ))}
                   </select>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">

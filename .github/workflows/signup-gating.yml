@@ -163,6 +163,10 @@ jobs:
       - name: Run manual method groups integration test
         # Michael 2026-11-04: manual tests can be grouped with each other, one complexity, never with an analyzer (BUG-043 protection).
         run: npm run test:manual-method-groups
+      - name: Run quiz follows method group integration test
+        # REQ-131: an analyzer grouped on the Method groups tab shows on the quiz form and card. Nothing is stored: program rows, quizzes and what a program
+        # credits stay the same. The Element 6 picker's old matches still win, and a group only fills in where it found nothing.
+        run: npm run test:quiz-follows-group
       - name: Run VeritaScan auto-completion integration test
         # Site review 2026-11-05: a passing assessment marks only what its record supports (technical: item 60, with all six procedures shown;
         # waived and non-technical: nothing), a draft or failed study marks nothing, the lab's own answer stays, and the admin audit is counts only.
