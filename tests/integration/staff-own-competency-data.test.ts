@@ -7,6 +7,9 @@
 //   else, no other lab, no signed item and no locked record; the evaluator's route is unchanged; waived entry works on both
 //   paths; the implicit container is not asked to be acknowledged; a lapsed lab and a non-Staff member are refused; bad
 //   entries are refused; every save is audited.
+// Michael 2026-11-05, Q182 = 1: a Staff login reads only their own competency data, in every lab; owners, editors and every other seat
+// type are unchanged. Sections 21 to 41 check each read as Staff (own and someone else's) and as an editor, every other door to the same
+// data, a sweep of every GET route, fail-closed seats, seats in two labs, and what a Staff login must keep.
 // Run: npm run test:staff-own-competency-data
 import http from "node:http";
 import express from "express";
@@ -39,8 +42,8 @@ async function main() {
   const stamp = Date.now();
   const now = new Date().toISOString();
   const day = "2026-10-15", day2 = "2026-10-20";
-  const call = async (method: string, path: string, body: unknown, token: string) => {
-    const r = await fetch(base + path, { method, headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: body === undefined ? undefined : JSON.stringify(body) });
+  const call = async (method: string, path: string, body: unknown, token: string, headers: Record<string, string> = {}) => {
+    const r = await fetch(base + path, { method, headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...headers }, body: body === undefined ? undefined : JSON.stringify(body) });
     let j: any = {}; try { j = await r.json(); } catch { /* not JSON */ }
     return { s: r.status, j };
   };
@@ -98,7 +101,7 @@ async function main() {
     const seat = (ownerId: number, lab: number, u: { id: number; email: string }, type: string, perms: string, rosterId: number | null) => sqlite.prepare(
       `INSERT INTO user_seats (owner_user_id, seat_email, seat_user_id, invited_at, accepted_at, status, permissions, invite_token, lab_id, seat_type, staff_employee_id)
        VALUES (?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?)`
-    ).run(ownerId, u.email, u.id, now, now, perms, `sod-${u.id}-${stamp}`, lab, type, rosterId);
+    ).run(ownerId, u.email, u.id, now, now, perms, `sod-${u.id}-${lab}-${type}-${stamp}`, lab, type, rosterId);
     member(labId, ANN.id); seat(OWNER.id, labId, ANN, "staff_portal", '{"mode":"view_all"}', annId);
     member(labId, BEN.id); seat(OWNER.id, labId, BEN, "staff_portal", '{"mode":"view_all"}', benId);
     member(labId, CARA.id); seat(OWNER.id, labId, CARA, "staff_portal", '{"mode":"view_all"}', caraId);
@@ -126,7 +129,8 @@ async function main() {
 
     // ── Who the server says may enter data ────────────────────────────────────
     check("1a. a Staff login on their own record may enter data", (await view(annId, ANN.token)).canEnterOwnData === true);
-    check("1b. a Staff login on someone else's record may not", (await view(benId, ANN.token)).canEnterOwnData === false);
+    const benAsAnn = await call("GET", `${L}/competency/employee/${benId}`, undefined, ANN.token);
+    check("1b. a Staff login is refused someone else's record, and nothing tells the page to open fields", benAsAnn.s === 403 && benAsAnn.j.code === "STAFF_OWN_ONLY" && benAsAnn.j.canEnterOwnData === undefined, `${benAsAnn.s}`);
     check("1c. the owner, an editor and a view-only member are not in self-entry", (await view(annId, OWNER.token)).canEnterOwnData === false && (await view(annId, EDITOR.token)).canEnterOwnData === false && (await view(viewerRosterId, VIEWER.token)).canEnterOwnData === false);
     check("1d. the evaluator's route still refuses a Staff login", refusedFlat(await evaluatorPut(annId, ANALYZER, { elements: [{ num: 1, specimenId: "X" }] }, ANN.token)));
 
@@ -486,27 +490,385 @@ async function main() {
     const noAuth = await fetch(`${base}${L}/competency/employee/${annId}/test-system/${ANALYZER}/my-data`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ elements: [] }) });
     check("19f. no token, no entry", noAuth.status === 401, String(noAuth.status));
 
-    // ── What a Staff login can open today (reported, not asserted: a separate open item) ──
-    const benRow = rowsFor(benId, ANALYZER)[0];
-    const reads: Array<[string, string]> = [
-      ["their own record", `${L}/competency/employee/${annId}`],
-      ["another person's record", `${L}/competency/employee/${benId}`],
-      ["another person's record PDF", `${L}/competency/employee/${benId}/record-pdf`],
-      ["by-instrument list", `${L}/competency/by-instrument`],
-      ["one instrument, everyone's block", `${L}/competency/instrument/${ANALYZER}`],
-      ["signed competencies list, whole lab", `${L}/competency/signoffs`],
-      ["competencies owed, whole lab", `${L}/competency/owed`],
-      ["programs list", `${L}/competency/programs`],
-      ["one program with its assessments", `${L}/competency/programs/${techProg}`],
-      ["competency employees list", `${L}/competency/employees`],
-      ["qualified observers", `${L}/staff/qualified-observers`],
-      ["VeritaStaff roster", `${L}/staff/employees`],
-    ];
-    for (const [name, path] of reads) {
-      const r = await call("GET", path, undefined, ANN.token);
-      console.log(`INFO  Staff login opens ${name}: HTTP ${r.s}`);
+    // ── Michael Q182 = 1: a Staff login reads only their own competency data ───
+    const { staffOwnScope } = await import("../../server/competencySelfEntry");
+    const zorkId = await person("Quillfeather", "Zork", [ANALYZER, METER]);
+    await evaluatorPut(zorkId, ANALYZER, { elements: completeEls.map((e) => (e.num === 1 ? { ...e, specimenId: "ZQ-SPECIMEN-1" } : e)) });
+    const zorkSigned = await call("POST", `${L}/competency/employee/${zorkId}/test-system/${ANALYZER}/sign`, { signerStaffEmployeeId: tc, signerInitials: "CT" }, OWNER.token);
+    await evaluatorPut(zorkId, ANALYZER, { elements: [{ num: 1, specimenId: "ZQ-SPECIMEN-2", observerInitials: "CT", passed: true }] });
+    const zorkComp = sqlite.prepare("SELECT id FROM competency_employees WHERE staff_employee_id = ? AND lab_id = ?").get(zorkId, labId) as any;
+    const zorkRec = await call("POST", `${L}/competency/assessments`, { programId: techProg, employeeId: zorkComp.id, assessmentType: "annual", assessmentDate: day, evaluatorName: "Made Up", competencyType: "technical", status: "fail", remediationPlan: "ZQ-REMEDIATION",
+      items: [{ methodNumber: 1, elementNumber: 1, methodGroupId: mgId, methodGroupName: "Older Program Analyzer", el1SpecimenId: "ZQ-SPECIMEN-3", el1ObserverInitials: "CT", passed: true }] }, OWNER.token);
+    const zRec = zorkRec.j.id;
+    const notOnAnnsRecord = Number((await call("POST", `${L}/staff/employees`, { lastName: "Vance", firstName: "Nora", highestComplexity: "H", roles: [{ role: "TS", specialtyNumber: 8 }] }, OWNER.token)).j.id);
+    sqlite.prepare("INSERT INTO staff_duty_change_events (lab_id, employee_id, instrument_id, detected_at) VALUES (?, ?, ?, ?)").run(labId, zorkId, METER, now);
+    const dueSoon = new Date(Date.now() + 5 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+    const rosterLab = (emp: number) => (sqlite.prepare("SELECT lab_id FROM staff_employees WHERE id = ?").get(emp) as any).lab_id;
+    for (const emp of [zorkId, annId]) {
+      if (!sqlite.prepare("SELECT 1 FROM staff_competency_schedules WHERE employee_id = ?").get(emp)) sqlite.prepare("INSERT INTO staff_competency_schedules (employee_id, lab_id) VALUES (?, ?)").run(emp, rosterLab(emp));
+      sqlite.prepare("UPDATE staff_competency_schedules SET annual_due_at = ? WHERE employee_id = ?").run(dueSoon, emp);
     }
-    check("20. reads reported above; another person's record keeps showing their rows unchanged", !!benRow);
+    const quiz = await call("POST", `/api/veritacomp/programs/${techProg}/quizzes`, { title: "Made-up quiz", questions: [{ id: "q1", question: "Which?", options: ["a", "b"], correct_answer: "a" }] }, OWNER.token);
+    sqlite.prepare("UPDATE competency_quizzes SET lab_id = ? WHERE id = ?").run(labId, quiz.j.id);
+    const assigned = await call("POST", `/api/veritacomp/quizzes/${quiz.j.id}/assignments`, { staff_employee_ids: [zorkId, annId] }, OWNER.token);
+    check("21. fixture: a coworker with a signed method, entries, a program record, a due milestone and a quiz", zorkSigned.s === 200 && zorkRec.s === 200 && !!zRec && assigned.s === 200 && notOnAnnsRecord > 0, `${zorkSigned.s} ${zorkRec.s} ${assigned.s}`);
+
+    const COWORKER = /Quillfeather|ZQ-[A-Z]+|\bBen\b/;
+    const clean = (r: { j: any }) => !COWORKER.test(JSON.stringify(r.j));
+    const asAnn = (path: string) => call("GET", path, undefined, ANN.token);
+    const asEditor = (path: string) => call("GET", path, undefined, EDITOR.token);
+    const refused = (r: { s: number; j: any }) => r.s === 403 && r.j.code === "STAFF_OWN_ONLY";
+
+    // ── The eleven reads, as Staff (own and someone else's) and as an editor ──
+    let own = await asAnn(`${L}/competency/employee/${annId}`);
+    let other = await asAnn(`${L}/competency/employee/${zorkId}`);
+    let ed = await asEditor(`${L}/competency/employee/${zorkId}`);
+    check("22a. full record: their own opens, with who may sign taken out", own.s === 200 && own.j.employee?.id === annId && own.j.testSystems?.length > 0 && own.j.testSystems.every((t: any) => Array.isArray(t.signers) && t.signers.length === 0) && clean(own), `${own.s}`);
+    check("22b. full record: another person's is refused", refused(other) && clean(other), `${other.s} ${other.j.code}`);
+    check("22c. full record: an editor opens anyone's, with who may sign", ed.s === 200 && ed.j.employee?.id === zorkId && ed.j.testSystems?.some((t: any) => t.signers?.length > 0), `${ed.s}`);
+
+    own = await asAnn(`${L}/competency/employee/${annId}/record-pdf`);
+    other = await asAnn(`${L}/competency/employee/${zorkId}/record-pdf`);
+    ed = await asEditor(`${L}/competency/employee/${zorkId}/record-pdf`);
+    check("23. record PDF: their own works, another person's is refused, an editor's works", own.s === 200 && !!own.j.token && refused(other) && ed.s === 200 && !!ed.j.token, `${own.s}/${other.s}/${ed.s}`);
+
+    own = await asAnn(`${L}/competency/by-instrument`);
+    ed = await asEditor(`${L}/competency/by-instrument`);
+    const byInst = (r: any, id: number) => (r.j.instruments || []).find((x: any) => x.instrumentId === id);
+    check("24a. by instrument: only the methods assigned to them, each counted on them alone", own.s === 200 && own.j.instruments?.length > 0 && own.j.instruments.every((r: any) => r.people === 1) && !!byInst(own, ANALYZER) && !byInst(own, UNASSIGNED), JSON.stringify((own.j.instruments || []).map((r: any) => [r.instrumentName, r.people])));
+    check("24b. by instrument: an editor sees every instrument and everyone's counts", ed.s === 200 && byInst(ed, ANALYZER)?.people >= 4 && !!byInst(ed, UNASSIGNED), `${byInst(ed, ANALYZER)?.people}`);
+
+    own = await asAnn(`${L}/competency/instrument/${ANALYZER}`);
+    other = await asAnn(`${L}/competency/instrument/${UNASSIGNED}`);
+    ed = await asEditor(`${L}/competency/instrument/${ANALYZER}`);
+    check("25a. one instrument: only their own block, with who may sign taken out", own.s === 200 && own.j.people?.length === 1 && own.j.people[0].employee.id === annId && own.j.people[0].testSystem.signers?.length === 0 && clean(own), `${own.s} ${own.j.people?.length}`);
+    check("25b. one instrument they aren't assigned to is refused", refused(other), `${other.s}`);
+    check("25c. one instrument: an editor sees everyone's block", ed.s === 200 && ed.j.people?.some((p: any) => p.employee.id === zorkId) && ed.j.people?.some((p: any) => p.employee.id === benId) && ed.j.people?.some((p: any) => p.testSystem.signers?.length > 0), `${ed.j.people?.length}`);
+
+    own = await asAnn(`${L}/competency/signoffs`);
+    ed = await asEditor(`${L}/competency/signoffs`);
+    check("26. signed competencies: only their own; an editor sees the whole lab", own.s === 200 && own.j.signoffs?.length > 0 && own.j.signoffs.every((r: any) => r.employeeId === annId) && ed.s === 200 && ed.j.signoffs?.some((r: any) => r.employeeId === zorkId), `${own.j.signoffs?.length}/${ed.j.signoffs?.length}`);
+
+    own = await asAnn(`${L}/competency/owed`);
+    ed = await asEditor(`${L}/competency/owed`);
+    check("27. competencies owed: only their own, and the totals count only them; an editor sees everyone", own.s === 200 && own.j.employees?.length === 1 && own.j.employees[0].employeeId === annId && own.j.totals?.employees === 1 && clean(own) && ed.j.employees?.some((e: any) => e.employeeId === zorkId) && ed.j.totals?.employees > 1, `${own.j.employees?.length}/${ed.j.employees?.length}`);
+
+    own = await asAnn(`${L}/competency/programs`);
+    ed = await asEditor(`${L}/competency/programs`);
+    const staffProgKeys = "department,id,myAssessmentCount,name,record_kind,type";
+    const techProgRow = (own.j as any[]).find?.((p: any) => p.id === techProg);
+    const ownInTech = Number((sqlite.prepare("SELECT COUNT(*) AS n FROM competency_assessments WHERE program_id = ? AND employee_id = ?").get(techProg, annComp.id) as any).n);
+    check("28a. programs list: names and their own count, with nothing about anyone else", own.s === 200 && techProgRow?.name === "Made-up Older Program" && techProgRow?.myAssessmentCount === ownInTech && ownInTech > 0 && (own.j as any[]).every((p: any) => Object.keys(p).sort().join() === staffProgKeys) && clean(own), JSON.stringify(techProgRow));
+    check("28b. programs list: the implicit container isn't listed to a Staff login", !(own.j as any[]).some((p: any) => p.name === "Competency"));
+    check("28c. programs list: an editor still gets the counts and method groups", ed.s === 200 && (ed.j as any[]).find((p: any) => p.id === techProg)?.assessmentCount > ownInTech && Array.isArray((ed.j as any[]).find((p: any) => p.id === techProg)?.methodGroups) && typeof (ed.j as any[])[0]?.employeeCount === "number");
+
+    own = await asAnn(`${L}/competency/programs/${techProg}`);
+    ed = await asEditor(`${L}/competency/programs/${techProg}`);
+    check("29a. one program: only their own assessments, results and employee row", own.s === 200 && own.j.assessments?.length === ownInTech && own.j.assessments.every((a: any) => a.staff_employee_id === annId) && own.j.employees?.length === 1 && own.j.employees[0].staff_employee_id === annId && clean(own), `${own.j.assessments?.length}`);
+    check("29b. one program: an editor sees everyone's assessments and items", ed.s === 200 && ed.j.assessments?.some((a: any) => a.staff_employee_id === zorkId && a.items?.some((i: any) => i.el1_specimen_id === "ZQ-SPECIMEN-3")) && ed.j.employees?.length > 1);
+    await call("POST", `${L}/competency/programs/${techProg}/not-applicable`, { employeeId: benComp.id, reason: "Made-up reason" }, OWNER.token);
+    own = await asAnn(`${L}/competency/programs/${techProg}`);
+    ed = await asEditor(`${L}/competency/programs/${techProg}`);
+    check("29c. one program: another person's Not applicable mark stays off a Staff login's copy", (own.j.notApplicable || []).length === 0 && ed.j.notApplicable?.some((r: any) => r.employee_id === benComp.id), JSON.stringify(ed.j.notApplicable));
+
+    own = await asAnn(`${L}/competency/employees`);
+    ed = await asEditor(`${L}/competency/employees`);
+    check("30. competency employees: only their own row; an editor sees everyone", own.s === 200 && own.j.length === 1 && own.j[0].staff_employee_id === annId && ed.s === 200 && ed.j.length > 2 && ed.j.some((e: any) => e.staff_employee_id === zorkId), `${own.j.length}/${ed.j.length}`);
+
+    own = await asAnn(`${L}/staff/qualified-observers`);
+    const beaObservers = await call("GET", `${L}/staff/qualified-observers`, undefined, BEA.token);
+    ed = await asEditor(`${L}/staff/qualified-observers`);
+    check("31a. qualified observers: only who is named on their own record", own.s === 200 && own.j.length === 1 && own.j[0].employeeId === tc && !own.j.some((o: any) => o.employeeId === notOnAnnsRecord), JSON.stringify(own.j.map((o: any) => o.name)));
+    check("31b. qualified observers: nobody when nobody has observed them", beaObservers.s === 200 && beaObservers.j.length === 0, JSON.stringify(beaObservers.j));
+    check("31c. qualified observers: an editor gets the whole list", ed.s === 200 && ed.j.some((o: any) => o.employeeId === tc) && ed.j.some((o: any) => o.employeeId === notOnAnnsRecord));
+
+    own = await asAnn(`${L}/staff/employees`);
+    ed = await asEditor(`${L}/staff/employees`);
+    check("32a. roster: only their own row", own.s === 200 && own.j.length === 1 && own.j[0].id === annId && !!own.j[0].competencyStatus, `${own.j.length}`);
+    check("32b. roster: an editor gets everyone with their competency status", ed.s === 200 && ed.j.length > 3 && ed.j.find((e: any) => e.id === zorkId)?.competencyStatus != null);
+
+    // ── The same data by another door ─────────────────────────────────────────
+    const zorkDoors: Array<[string, string, string, any?]> = [
+      ["assessment PDF", "GET", `${L}/competency/assessments/${zRec}/pdf`],
+      ["assessment PDF, older route", "GET", `/api/veritacomp/assessments/${zRec}/pdf`],
+      ["assessment PDF, POST route", "POST", `/api/competency/pdf/${zRec}`, {}],
+      ["assessment", "GET", `/api/veritacomp/assessments/${zRec}`],
+      ["assessment quiz results", "GET", `/api/veritacomp/assessments/${zRec}/quiz-results`],
+      ["assessment documents", "GET", `${L}/competency/assessments/${zRec}/element-documents`],
+      ["prior-year comparison", "GET", `${L}/competency/assessments/${zRec}/prior-year-comparison`],
+      ["assessment audit log", "GET", `${L}/competency/assessments/${zRec}/audit-log`],
+      ["survey bundle", "POST", `${L}/competency/survey-bundle`, { periodMonths: null }],
+      ["competency register", "GET", `${L}/staff/competency-register.xlsx`],
+      ["reassessment stats", "GET", `${L}/competency/reassessment-stats`],
+      ["duty-change events", "GET", `${L}/staff/duty-change-events`],
+      ["reminder preview", "GET", `${L}/competency/reminder-preview`],
+      ["import summary", "GET", `${L}/competency/method-history/summary`],
+      ["import template", "GET", `${L}/competency/method-history/template.xlsx`],
+      ["method groups", "GET", `${L}/competency/method-groups`],
+      ["eligible employees", "GET", `${L}/competency/programs/${techProg}/eligible-employees`],
+      ["suggested method groups", "GET", `${L}/competency/programs/${techProg}/employees/${zorkComp.id}/suggested-method-groups`],
+      ["competency employee's instruments", "GET", `${L}/competency/employees/${zorkComp.id}/staff-instruments`],
+      ["one roster row", "GET", `${L}/staff/employees/${zorkId}`],
+      ["one roster row, older route", "GET", `/api/staff/employees/${zorkId}`],
+      ["roster row's instruments", "GET", `${L}/staff/employees/${zorkId}/instruments`],
+      ["former staff", "GET", `${L}/staff/employees-terminated`],
+      ["who runs an instrument", "GET", `${L}/staff/instruments/${ANALYZER}/employees`],
+      ["who runs several instruments", "GET", `${L}/staff/instruments-bulk/employees?ids=${ANALYZER}`],
+    ];
+    for (const [name, method, path, body] of zorkDoors) {
+      const s = await call(method, path, body, ANN.token);
+      const e = await call(method, path, body, EDITOR.token);
+      check(`33. ${name}: refused to a Staff login, open to an editor`, refused(s) && e.s === 200, `${s.s} ${s.j.code} / ${e.s}`);
+    }
+    const annRec = (sqlite.prepare("SELECT a.id FROM competency_assessments a WHERE a.employee_id = ? AND a.program_id = ? ORDER BY a.id LIMIT 1").get(annComp.id, techProg) as any).id;
+    for (const [name, method, path, body] of [
+      ["own assessment PDF", "GET", `${L}/competency/assessments/${annRec}/pdf`],
+      ["own assessment PDF, older route", "GET", `/api/veritacomp/assessments/${annRec}/pdf`],
+      ["own assessment", "GET", `/api/veritacomp/assessments/${annRec}`],
+      ["own assessment documents", "GET", `${L}/competency/assessments/${annRec}/element-documents`],
+      ["own quiz results", "GET", `/api/veritacomp/assessments/${annRec}/quiz-results`],
+      ["own prior-year comparison", "GET", `${L}/competency/assessments/${annRec}/prior-year-comparison`],
+      ["own roster row", "GET", `${L}/staff/employees/${annId}`],
+      ["own instruments", "GET", `${L}/staff/employees/${annId}/instruments`],
+      ["own competency employee's instruments", "GET", `${L}/competency/employees/${annComp.id}/staff-instruments`],
+    ] as Array<[string, string, string, any?]>) {
+      const r = await call(method, path, body, ANN.token);
+      check(`34. ${name}: still opens`, r.s === 200 && clean(r), `${r.s} ${r.j.error ?? ""}`);
+    }
+    const filteredDoors: Array<[string, string, (j: any) => boolean, (j: any) => boolean]> = [
+      ["programs list, older route", `/api/competency/programs`, (j) => j.some((p: any) => p.id === techProg) && j.every((p: any) => p.employeeCount === undefined), (j) => j.some((p: any) => typeof p.employeeCount === "number")],
+      ["one program, older route", `/api/competency/programs/${techProg}`, (j) => j.assessments.length === ownInTech, (j) => j.assessments.some((a: any) => a.staff_employee_id === zorkId)],
+      ["competency employees, older route", `/api/competency/employees`, (j) => j.length === 1 && j[0].staff_employee_id === annId, (j) => j.some((e: any) => e.staff_employee_id === zorkId)],
+      ["roster, older route", `/api/staff/employees`, (j) => j.length === 1 && j[0].id === annId, (j) => j.some((e: any) => e.id === zorkId)],
+      ["program's assessments, older route", `/api/veritacomp/programs/${techProg}/assessments`, (j) => j.length === ownInTech && j.every((a: any) => a.employee_id === annComp.id), (j) => j.some((a: any) => a.employee_id === zorkComp.id)],
+      ["quiz assignments", `/api/veritacomp/quizzes/${quiz.j.id}/assignments`, (j) => j.assignments.length === 1 && j.assignments[0].staff_employee_id === annId, (j) => j.assignments.some((a: any) => a.staff_employee_id === zorkId)],
+      ["VeritaTrack worklist, competency milestones", `${L}/veritatrack/worklist`, (j) => j.cross_module.filter((c: any) => c.source === "veritacomp").every((c: any) => /Self/.test(c.label)) && j.cross_module.some((c: any) => c.source === "veritacomp"), (j) => j.cross_module.some((c: any) => /Quillfeather/.test(c.label))],
+    ];
+    for (const [name, path, staffOk, editorOk] of filteredDoors) {
+      const s = await asAnn(path);
+      const e = await asEditor(path);
+      check(`35. ${name}: a Staff login gets only their own, an editor everyone's`, s.s === 200 && clean(s) && staffOk(s.j) && e.s === 200 && editorOk(e.j), `${s.s}/${e.s} ${JSON.stringify(s.j).slice(0, 160)}`);
+    }
+    // No one is overdue on the fixture yet, and the dashboard's list needs someone overdue to mean anything: Ben, long on the roster, has no initial.
+    sqlite.prepare("UPDATE staff_employees SET created_at = '2019-03-01T00:00:00.000Z' WHERE id = ?").run(benId);
+    const dashS = await asAnn(`${L}/competency/dashboard-stats`);
+    const dashE = await asEditor(`${L}/competency/dashboard-stats`);
+    check("35. dashboard stats: a Staff login is counted alone, and an editor sees the overdue list", dashS.s === 200 && dashS.j.total === 1 && clean(dashS) && !(dashS.j.overdueIds || []).includes(benId) && dashE.s === 200 && dashE.j.total > 1 && dashE.j.overdueIds?.includes(benId), `${dashS.j.total}/${dashE.j.total} ${JSON.stringify(dashE.j.overdueIds)}`);
+    const portalPeople = await call("GET", "/api/staff-portal-session/employees", undefined, ANN.token);
+    check("35. the portal's employee list holds only the person", portalPeople.s === 200 && portalPeople.j.employees?.length === 1 && portalPeople.j.employees[0].id === annId, JSON.stringify(portalPeople.j.employees));
+
+    // ── A sweep of every read, so a door nobody thought of still fails ────────
+    const fillPath = (path: string): string | null => {
+      let unknown = false;
+      const out = path.replace(/:([A-Za-z_]+)/g, (_m, name, offset) => {
+        const prev = path.slice(0, offset).split("/").filter(Boolean).pop() || "";
+        if (name === "labId") return String(labId);
+        if (name === "employeeId" || name === "employee_id") return String(path.includes("/programs/") ? zorkComp.id : zorkId);
+        if (name === "programId") return String(techProg);
+        if (name === "instrumentId") return String(ANALYZER);
+        if (name === "assessmentId" || name === "assessment_id") return String(zRec);
+        if (name === "quizId") return String(quiz.j.id);
+        if (name === "id" && prev === "employees") return String(path.includes("/competency/") ? zorkComp.id : zorkId);
+        if (name === "id" && prev === "programs") return String(techProg);
+        if (name === "id" && prev === "assessments") return String(zRec);
+        if (name === "id" && prev === "quizzes") return String(quiz.j.id);
+        unknown = true; return "1";
+      });
+      return unknown ? null : out;
+    };
+    // Not competency data: Michael's decision covers competency data, so these stay as they were and are listed for him on the PR.
+    const LEFT_ALONE = new Set([
+      "/api/labs/:labId/staff/employees/:id/documents", "/api/labs/:labId/staff/employees/:id/veritacheck-studies",
+      "/api/labs/:labId/veritaceu/roster-summary", "/api/labs/:labId/staff/credentials-dashboard-stats", "/api/labs/:labId/schedule/staff",
+    ]);
+    const gets: string[] = [];
+    for (const layer of (app as any).router.stack) {
+      const r = layer.route;
+      if (!r?.methods?.get) continue;
+      for (const p of Array.isArray(r.path) ? r.path : [r.path]) if (typeof p === "string" && p.startsWith("/api/") && !/^\/api\/(admin|demo|pdf|zip)|\/export-all/.test(p)) gets.push(p);
+    }
+    const leaks: string[] = [];
+    let swept = 0;
+    for (const path of gets) {
+      const url = fillPath(path);
+      if (!url || LEFT_ALONE.has(path)) continue;
+      swept++;
+      const r = await fetch(base + url, { headers: { Authorization: `Bearer ${ANN.token}` } });
+      const text = await r.text();
+      if (/Quillfeather|ZQ-[A-Z]+/.test(text)) leaks.push(`${r.status} ${path}`);
+    }
+    check(`36. no read (${swept} tried) shows a Staff login the coworker's name or entries`, swept > 200 && leaks.length === 0, leaks.join(" | "));
+    for (const path of Array.from(LEFT_ALONE)) console.log(`INFO  left as it was, not competency data: ${path}`);
+
+    // ── Fail closed ───────────────────────────────────────────────────────────
+    const nobodyReads = (emp: number): string[] => [
+      `${L}/competency/employee/${emp}`, `${L}/competency/employee/${emp}/record-pdf`, `${L}/competency/by-instrument`, `${L}/competency/instrument/${ANALYZER}`,
+      `${L}/competency/signoffs`, `${L}/competency/owed`, `${L}/competency/programs`, `${L}/competency/programs/${techProg}`, `${L}/competency/employees`,
+      `${L}/staff/qualified-observers`, `${L}/staff/employees`,
+    ];
+    const seesNobody = (j: any) => !/Quillfeather|ZQ-[A-Z]+|\bBen\b|\bAnn\b|Tate/.test(JSON.stringify(j));
+    const failClosed = async (name: string, token: string, emp: number) => {
+      const results = await Promise.all(nobodyReads(emp).map(async (p) => [p, await call("GET", p, undefined, token)] as const));
+      const bad = results.filter(([, r]) => !(r.s === 403 || r.s === 200) || !seesNobody(r.j)).map(([p, r]) => `${r.s} ${p}`);
+      check(`37. ${name}: all eleven reads show nobody`, bad.length === 0, bad.join(" | "));
+    };
+    const NOLINK = await register("Nolink");
+    member(labId, NOLINK.id); seat(OWNER.id, labId, NOLINK, "staff_portal", '{"mode":"view_all"}', null);
+    await failClosed("a Staff seat with no staff record linked", NOLINK.token, zorkId);
+    const noLinkMe = await call("GET", "/api/labs/me", undefined, NOLINK.token);
+    const noLinkHere = (noLinkMe.j as any[]).find((m: any) => m.labId === labId);
+    check("37a. the unlinked seat is reported to the page as own-only with no record", noLinkHere?.competencyOwnOnly === true && noLinkHere?.ownEmployeeId === null, JSON.stringify(noLinkHere?.competencyOwnOnly));
+    const annSeat = () => sqlite.prepare("SELECT id FROM user_seats WHERE seat_user_id = ? AND lab_id = ? AND seat_type = 'staff_portal'").get(ANN.id, labId) as any;
+    sqlite.prepare("UPDATE user_seats SET status = 'deactivated' WHERE id = ?").run(annSeat().id);
+    await failClosed("a deactivated Staff seat that still has a lab membership", ANN.token, zorkId);
+    check("37b. a deactivated seat can't open its old record either", refused(await asAnn(`${L}/competency/employee/${annId}`)));
+    sqlite.prepare("UPDATE user_seats SET status = 'active' WHERE id = ?").run(annSeat().id);
+    check("37c. restored, the seat reads its own record again", (await asAnn(`${L}/competency/employee/${annId}`)).s === 200);
+    const LABLESS = await register("Labless");
+    member(labId, LABLESS.id);
+    sqlite.prepare(`INSERT INTO user_seats (owner_user_id, seat_email, seat_user_id, invited_at, accepted_at, status, permissions, invite_token, lab_id, seat_type, staff_employee_id) VALUES (?, ?, ?, ?, ?, 'active', '{"mode":"view_all"}', ?, NULL, 'staff_portal', ?)`).run(OWNER.id, LABLESS.email, LABLESS.id, now, now, `sod-labless-${stamp}`, zorkId);
+    await failClosed("an older Staff seat with no lab on it", LABLESS.token, zorkId);
+    check("37d. no lab to check against: someone with only a Staff seat sees nobody; an owner isn't limited", JSON.stringify(staffOwnScope(sqlite, ANN.id, null)) === '{"employeeId":null}' && staffOwnScope(sqlite, OWNER.id, null) === null);
+
+    // ── Per lab: seats in two labs ────────────────────────────────────────────
+    const annLab2 = await person("Self", "Ann", [OTHER_LAB_INST], L2, OWNER2.token);
+    member(lab2, ANN.id); seat(OWNER2.id, lab2, ANN, "staff_portal", '{"mode":"view_all"}', annLab2);
+    check("38a. seats in two labs: lab one holds them to that lab's row", (await asAnn(`${L}/competency/employee/${annId}`)).s === 200 && refused(await asAnn(`${L}/competency/employee/${annLab2}`)) && refused(await asAnn(`${L}/competency/employee/${zorkId}`)));
+    check("38b. seats in two labs: lab two holds them to that lab's row", (await asAnn(`${L2}/competency/employee/${annLab2}`)).s === 200 && refused(await asAnn(`${L2}/competency/employee/${annId}`)) && refused(await asAnn(`${L2}/competency/employee/${zedId}`)));
+    const rosterL2 = await asAnn(`${L2}/staff/employees`);
+    check("38c. seats in two labs: each roster is that lab's own row", rosterL2.j.length === 1 && rosterL2.j[0].id === annLab2 && (await asAnn(`${L}/staff/employees`)).j[0].id === annId, JSON.stringify(rosterL2.j.map?.((e: any) => e.id)));
+    const annMe = await call("GET", "/api/labs/me", undefined, ANN.token);
+    const annHere = (annMe.j as any[]).find((m: any) => m.labId === labId), annThere = (annMe.j as any[]).find((m: any) => m.labId === lab2);
+    check("38d. seats in two labs: the page is told the right row for each lab", annHere?.competencyOwnOnly === true && annHere?.ownEmployeeId === annId && annThere?.competencyOwnOnly === true && annThere?.ownEmployeeId === annLab2, `${annHere?.ownEmployeeId}/${annThere?.ownEmployeeId}`);
+    const annOldRoute = await call("GET", `/api/competency/programs/${techProg}`, undefined, ANN.token, { "X-Active-Lab-Id": String(lab2) });
+    check("38e. a program from lab one read while lab two is active is still held to lab one's row", annOldRoute.s === 200 && annOldRoute.j.assessments?.length === ownInTech && clean(annOldRoute), `${annOldRoute.s} ${annOldRoute.j.assessments?.length}`);
+    const annOtherAssessment = await call("GET", `/api/veritacomp/assessments/${zRec}`, undefined, ANN.token, { "X-Active-Lab-Id": String(lab2) });
+    check("38f. another person's assessment in lab one stays refused while lab two is active", refused(annOtherAssessment), `${annOtherAssessment.s}`);
+    const MIX = await register("Mix");
+    const mixRow = await person("Mixed", "Mo", [OTHER_LAB_INST], L2, OWNER2.token);
+    member(labId, MIX.id); seat(OWNER.id, labId, MIX, "active", '{"mode":"edit_all"}', null);
+    member(lab2, MIX.id); seat(OWNER2.id, lab2, MIX, "staff_portal", '{"mode":"view_all"}', mixRow);
+    const mixEd = await call("GET", `${L}/competency/employee/${zorkId}`, undefined, MIX.token);
+    const mixStaff = await call("GET", `${L2}/competency/employee/${zedId}`, undefined, MIX.token);
+    const mixOwn = await call("GET", `${L2}/competency/employee/${mixRow}`, undefined, MIX.token);
+    check("38g. an editor in one lab and a Staff login in another: everyone here, only themselves there", mixEd.s === 200 && refused(mixStaff) && mixOwn.s === 200, `${mixEd.s}/${mixStaff.s}/${mixOwn.s}`);
+    const mixStaffOwner = await call("GET", `${L}/competency/employee/${zorkId}`, undefined, OWNER2.token);
+    check("38h. another lab's owner with no place here isn't let in", mixStaffOwner.s === 403);
+    member(labId, OWNER2.id); seat(OWNER.id, labId, OWNER2, "staff_portal", '{"mode":"view_all"}', benId);
+    const o2Here = await call("GET", `${L}/competency/employee/${zorkId}`, undefined, OWNER2.token);
+    const o2Own = await call("GET", `${L2}/competency/employee/${zedId}`, undefined, OWNER2.token);
+    check("38i. an owner with a Staff seat in someone else's lab: limited there, unlimited in their own", refused(o2Here) && o2Own.s === 200, `${o2Here.s}/${o2Own.s}`);
+    // A stored row is checked in its own lab, whichever lab is active: MIX is an editor in lab one and a Staff login in lab two.
+    const zedComp = (sqlite.prepare("SELECT id FROM competency_employees WHERE staff_employee_id = ? AND lab_id = ?").get(zedId, lab2) as any)?.id
+      ?? Number(sqlite.prepare("INSERT INTO competency_employees (user_id, lab_id, name, title, status, created_at, staff_employee_id) VALUES (?, ?, 'Zed Lab', '', 'active', ?, ?)").run(OWNER2.id, lab2, now, zedId).lastInsertRowid);
+    const l2Prog = (await call("POST", `${L2}/competency/programs`, { name: "Made-up Lab Two Program", department: "Hematology", type: "technical" }, OWNER2.token)).j.id;
+    const l2Rec = (await call("POST", `${L2}/competency/assessments`, { programId: l2Prog, employeeId: zedComp, assessmentType: "annual", assessmentDate: day, evaluatorName: "Made Up", competencyType: "technical", status: "pass", items: [{ methodNumber: 1, elementNumber: 1, itemLabel: "Made-up", el1SpecimenId: "ZED-SPECIMEN", el1ObserverInitials: "", passed: false }] }, OWNER2.token)).j.id;
+    const lab1Active = { "X-Active-Lab-Id": String(labId) };
+    const mixL2Prog = await call("GET", `/api/competency/programs/${l2Prog}`, undefined, MIX.token, lab1Active);
+    const mixL2Assessment = await call("GET", `/api/veritacomp/assessments/${l2Rec}`, undefined, MIX.token, lab1Active);
+    const mixL2Pdf = await call("GET", `${L2}/competency/assessments/${l2Rec}/pdf`, undefined, MIX.token);
+    const mixL2List = await call("GET", `/api/veritacomp/programs/${l2Prog}/assessments`, undefined, MIX.token, lab1Active);
+    check("38j. lab two's program, read with lab one active, still holds an editor of lab one to their own Staff row there", mixL2Prog.s === 200 && mixL2Prog.j.assessments?.length === 0 && !/ZED-SPECIMEN/.test(JSON.stringify(mixL2Prog.j)) && mixL2List.s === 200 && mixL2List.j.length === 0, `${mixL2Prog.s} ${mixL2Prog.j.assessments?.length} ${mixL2List.j.length}`);
+    check("38k. lab two's assessment and PDF are refused them too", refused(mixL2Assessment) && refused(mixL2Pdf), `${mixL2Assessment.s}/${mixL2Pdf.s}`);
+    seat(OWNER2.id, lab2, OWNER2, "staff_portal", '{"mode":"view_all"}', zedId);
+    sqlite.prepare("UPDATE lab_members SET role = 'staff' WHERE lab_id = ? AND user_id = ?").run(lab2, OWNER2.id);
+    const ownerSelfSeat = await call("GET", `${L2}/competency/employee/${annLab2}`, undefined, OWNER2.token);
+    sqlite.prepare("UPDATE lab_members SET role = 'owner' WHERE lab_id = ? AND user_id = ?").run(lab2, OWNER2.id);
+    check("38l. a lab's owner holding a Staff seat in their own lab isn't limited, whatever their membership role says", ownerSelfSeat.s === 200, `${ownerSelfSeat.s}`);
+
+    // ── Unchanged for everyone else ───────────────────────────────────────────
+    const seesEveryone = async (name: string, token: string) => {
+      const rec = await call("GET", `${L}/competency/employee/${zorkId}`, undefined, token);
+      const emps = await call("GET", `${L}/competency/employees`, undefined, token);
+      const prog = await call("GET", `${L}/competency/programs/${techProg}`, undefined, token);
+      const roster = await call("GET", `${L}/staff/employees`, undefined, token);
+      check(`39. ${name}: sees everyone`, rec.s === 200 && emps.j.length > 2 && prog.j.assessments?.some((a: any) => a.staff_employee_id === zorkId) && roster.j.length > 3, `${rec.s} ${emps.j.length} ${roster.j.length}`);
+    };
+    await seesEveryone("the owner", OWNER.token);
+    await seesEveryone("an editor", EDITOR.token);
+    await seesEveryone("a view-only reviewer", VIEWER.token);
+    await seesEveryone("a member with no seat", PLAIN.token);
+    const CARD = await register("Card");
+    const cardRow = await person("Holder", "Card", [ANALYZER]);
+    member(labId, CARD.id); seat(OWNER.id, labId, CARD, "active", '{"mode":"edit_all"}', cardRow);
+    await seesEveryone("an editor with a staff card", CARD.token);
+    check("39a. an editor with a staff card has no own-only limit on the page", ((await call("GET", "/api/labs/me", undefined, CARD.token)).j as any[]).find((m: any) => m.labId === labId)?.competencyOwnOnly === false);
+    const BOTH = await register("Both");
+    const bothRow = await person("Both", "Bo", [ANALYZER]);
+    member(labId, BOTH.id); seat(OWNER.id, labId, BOTH, "staff_portal", '{"mode":"view_all"}', bothRow); seat(OWNER.id, labId, BOTH, "active", '{"mode":"edit_all"}', null);
+    await seesEveryone("someone holding an editor seat and a Staff seat in the same lab", BOTH.token);
+    const REVIEWER = await register("Reviewer");
+    const reviewerRow = await person("Viewer", "Vic", [ANALYZER]);
+    member(labId, REVIEWER.id); seat(OWNER.id, labId, REVIEWER, "staff_portal", '{"mode":"view_all"}', reviewerRow); seat(OWNER.id, labId, REVIEWER, "view_only", '{"mode":"view_all"}', null);
+    await seesEveryone("someone holding a view-only seat and a Staff seat in the same lab", REVIEWER.token);
+    const COMPEDIT = await register("Compedit");
+    const compEditRow = await person("Edits", "Comp", [ANALYZER]);
+    member(labId, COMPEDIT.id); seat(OWNER.id, labId, COMPEDIT, "staff_portal", '{"mode":"view_all","overrides":{"veritacomp":"edit"}}', compEditRow);
+    await seesEveryone("a Staff seat given edit on VeritaComp (it assigns quizzes from the roster)", COMPEDIT.token);
+    const STAFFEDIT = await register("Staffedit");
+    const staffEditRow = await person("Edits", "Staff", [ANALYZER]);
+    member(labId, STAFFEDIT.id); seat(OWNER.id, labId, STAFFEDIT, "staff_portal", '{"mode":"view_all","overrides":{"veritastaff":"edit"}}', staffEditRow);
+    const staffEditRoster = await call("GET", `${L}/staff/employees`, undefined, STAFFEDIT.token);
+    const staffEditRec = await call("GET", `${L}/competency/employee/${zorkId}`, undefined, STAFFEDIT.token);
+    check("39b. a Staff seat given edit on VeritaStaff keeps the roster but is still limited in VeritaComp", staffEditRoster.j.length > 3 && refused(staffEditRec), `${staffEditRoster.j.length}/${staffEditRec.s}`);
+    const DEMOTED = await register("Demoted");
+    const demotedRow = await person("Demoted", "Dee", [ANALYZER]);
+    member(labId, DEMOTED.id); seat(OWNER.id, labId, DEMOTED, "staff_portal", '{"mode":"view_all"}', demotedRow); seat(OWNER.id, labId, DEMOTED, "active", '{"mode":"edit_all"}', null);
+    sqlite.prepare("UPDATE user_seats SET status = 'deactivated' WHERE seat_user_id = ? AND seat_type = 'active'").run(DEMOTED.id);
+    const demotedRec = await call("GET", `${L}/competency/employee/${zorkId}`, undefined, DEMOTED.token);
+    const demotedSelf = await call("GET", `${L}/competency/employee/${demotedRow}`, undefined, DEMOTED.token);
+    check("39c. a deactivated editor seat beside a live Staff seat lifts nothing", refused(demotedRec) && demotedSelf.s === 200, `${demotedRec.s}/${demotedSelf.s}`);
+    const STAFFCUT = await register("Staffcut");
+    const staffCutRow = await person("Staffcut", "Sam", [ANALYZER]);
+    member(labId, STAFFCUT.id); seat(OWNER.id, labId, STAFFCUT, "staff_portal", '{"mode":"view_all","overrides":{"veritacomp":"edit"}}', staffCutRow);
+    sqlite.prepare("UPDATE user_seats SET status = 'deactivated' WHERE seat_user_id = ?").run(STAFFCUT.id);
+    check("39d. a deactivated Staff seat's old edit permission lifts nothing", refused(await call("GET", `${L}/competency/employee/${zorkId}`, undefined, STAFFCUT.token)));
+    const ADMINSEAT = await register("Adminseat");
+    const adminRow = await person("Admin", "Ada", [ANALYZER]);
+    sqlite.prepare(`INSERT INTO lab_members (lab_id, user_id, role, permissions_json, status, is_primary_lab, accepted_at, created_at, updated_at) VALUES (?, ?, 'admin', '{}', 'active', 0, ?, ?, ?)`).run(labId, ADMINSEAT.id, now, now, now);
+    seat(OWNER.id, labId, ADMINSEAT, "staff_portal", '{"mode":"view_all"}', adminRow);
+    await seesEveryone("a lab admin who also holds a Staff seat", ADMINSEAT.token);
+    const ORGADMIN = await register("Orgadmin");
+    const orgRow = await person("Org", "Ollie", [ANALYZER]);
+    const orgId = Number(sqlite.prepare("INSERT INTO organizations (name) VALUES ('Made-up System')").run().lastInsertRowid);
+    sqlite.prepare("UPDATE labs SET organization_id = ? WHERE id = ?").run(orgId, labId);
+    sqlite.prepare("INSERT INTO organization_members (organization_id, user_id, org_role, status) VALUES (?, ?, 'org_admin', 'active')").run(orgId, ORGADMIN.id);
+    seat(OWNER.id, labId, ORGADMIN, "staff_portal", '{"mode":"view_all"}', orgRow);
+    await seesEveryone("an org admin who also holds a Staff seat", ORGADMIN.token);
+    sqlite.prepare("UPDATE labs SET organization_id = NULL WHERE id = ?").run(labId);
+
+    // ── A feature that really needs the names ─────────────────────────────────
+    const TRACKER = await register("Tracker");
+    const trackerRow = await person("Tracks", "Terry", [ANALYZER]);
+    member(labId, TRACKER.id); seat(OWNER.id, labId, TRACKER, "staff_portal", '{"mode":"view_all","overrides":{"veritatrack":"edit"}}', trackerRow);
+    const pickerNames = await call("GET", `${L}/staff/employees?names=1`, undefined, TRACKER.token);
+    const pickerKeys = Array.from(new Set((pickerNames.j as any[]).flatMap((e: any) => Object.keys(e)))).sort().join();
+    check("40a. a Staff seat that may edit tasks gets names for the owner picker: id, name and title, nothing else", pickerNames.s === 200 && pickerNames.j.length > 3 && pickerKeys === "first_name,id,last_name,middle_initial,title" && pickerNames.j.some((e: any) => e.id === zorkId), pickerKeys);
+    const pickerPlain = await call("GET", `${L}/staff/employees`, undefined, TRACKER.token);
+    check("40b. the same seat's plain roster is still only their own row", pickerPlain.j.length === 1 && pickerPlain.j[0].id === trackerRow, `${pickerPlain.j.length}`);
+    const pickerOldRoute = await call("GET", `/api/staff/employees?names=1`, undefined, TRACKER.token);
+    check("40c. the older route gives the same picker names", pickerOldRoute.s === 200 && pickerOldRoute.j.length > 3 && Object.keys(pickerOldRoute.j[0]).sort().join() === "first_name,id,last_name,middle_initial,title", `${pickerOldRoute.s}`);
+    const annNames = await asAnn(`${L}/staff/employees?names=1`);
+    check("40d. asking for names without edit on those modules gets only their own row", annNames.j.length === 1 && annNames.j[0].id === annId, `${annNames.j.length}`);
+    const editorNames = await asEditor(`${L}/staff/employees?names=1`);
+    check("40e. an editor's picker is unchanged: the full roster", editorNames.j.length > 3 && !!editorNames.j[0].competencyStatus);
+
+    // ── What a Staff login must keep ──────────────────────────────────────────
+    const keepSave = await myData(annId, ANALYZER, { elements: [{ num: 2, evidence: "After Q182", date: day }] });
+    check("41a. a Staff login's own save still works", keepSave.s === 200 && rowOf(rowsFor(annId, ANALYZER), 2).el2_evidence === "After Q182", `${keepSave.s} ${keepSave.j.error ?? ""}`);
+    const myList = await listFor(annId, ANN.token);
+    check("41b. My sign-offs still lists their records and their own-record row", !!myList.own_record && myList.competencies?.length > 0, `${myList.competencies?.length}`);
+    const myQuizzes = await call("GET", `/api/staff-portal-session/quizzes?employee_id=${annId}`, undefined, ANN.token);
+    const myAssignment = (myQuizzes.j.assignments || myQuizzes.j.quizzes || []).find((q: any) => q.quiz_id === quiz.j.id || q.id != null);
+    check("41c. their quiz is still listed", myQuizzes.s === 200 && !!myAssignment, JSON.stringify(myQuizzes.j).slice(0, 200));
+    const myAssignmentId = myAssignment?.assignment_id ?? myAssignment?.id;
+    const quizOpen = await call("GET", `/api/staff-portal-session/quizzes/${myAssignmentId}?employee_id=${annId}`, undefined, ANN.token);
+    const quizTaken = await call("POST", `/api/staff-portal-session/quizzes/${myAssignmentId}/attempt`, { employee_id: annId, answers: [{ question_id: "q1", selected_answer: "a" }], typed_signature: "Ann Self" }, ANN.token);
+    check("41d. they can still open and take it", quizOpen.s === 200 && quizTaken.s === 200, `${quizOpen.s}/${quizTaken.s} ${quizTaken.j.error ?? ""}`);
+    const annAck = await call("POST", `/api/staff-portal-session/competencies/${techRec.j.id}/sign`, { employee_id: annId, typed_signature: "Ann Self" }, ANN.token);
+    check("41e. Sign Competencies still works", annAck.s === 200, `${annAck.s} ${annAck.j.error ?? ""}`);
+    const annStaffCard = await call("GET", `${L}/staff/employees/${annId}/documents`, undefined, ANN.token);
+    check("41f. their own credential documents still open", annStaffCard.s === 200, `${annStaffCard.s}`);
   } finally {
     server.close();
   }

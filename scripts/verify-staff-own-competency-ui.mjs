@@ -3,7 +3,7 @@
 // production build on a scratch database, with made-up people (it registers people and provisions a lab, so it refuses any other host). Usage:
 //   PW_BASE=http://localhost:5197 SCRATCH_DB=<scratch db> OUT=<dir> node scripts/verify-staff-own-competency-ui.mjs
 // Signed in AS the made-up Staff login, in a real browser: types a specimen ID on their own record, saves, reloads and sees it persist; finds Pass and the observer
-// disabled; finds another person's record read-only; adds a specimen on a waived record on both paths; sees the My sign-offs tile and row behave. Light, dark and phone.
+// disabled; finds another person's record refused; adds a specimen on a waived record on both paths; sees the My sign-offs tile and row behave. Light, dark and phone.
 import { createRequire } from "node:module";
 import path from "node:path";
 const require = createRequire(import.meta.url);
@@ -213,16 +213,10 @@ await shot(page, "own-waived-saved");
 
 // ── Someone else's record ────────────────────────────────────────────────────
 await page.goto(`${BASE}/labs/${labId}/veritacomp-app/employee/${benId}`, { waitUntil: "networkidle" });
-await page.getByTestId("test-system-list").waitFor({ timeout: 20000 });
-await tab(page, "Made-up Analyzer").click();
-await page.getByTestId("element-1").waitFor({ timeout: 15000 });
-const openFields = await page.locator('[data-testid^="element-"] input:not([disabled]), [data-testid^="element-"] button:not([disabled]), [data-testid^="waived-"] input:not([disabled])').count();
-check("another person's record: every field disabled, no Save, no note", openFields === 0 && (await page.getByTestId("save-test-system").count()) === 0 && (await page.getByTestId("self-entry-note").count()) === 0, String(openFields));
-check("another person's record: their entries show as before", (await page.getByTestId("element-1-specimenId").inputValue()) === "BEN-1");
+// Michael Q182 = 1 (2026-11-05): a Staff login can't open it at all. scripts/verify-staff-own-only-ui.mjs is the receipt for that rule.
+await page.getByTestId("staff-own-refused").waitFor({ timeout: 20000 });
+check("another person's record: refused, with no fields and no entries of theirs", (await page.getByTestId("element-1").count()) === 0 && (await page.getByTestId("save-test-system").count()) === 0 && !/BEN-1/.test(await pageText(page)));
 await shot(page, "other-person");
-await tab(page, "Made-up Meter").click();
-await page.getByTestId("waived-panel").waitFor({ timeout: 15000 });
-check("another person's waived system: no Add specimen and everything closed", (await page.getByTestId(`${M}-add-specimen`).count()) === 0 && await disabled(`${M}-specimen-0-evidence`) && await disabled("waived-method-2-evidence"));
 
 // ── The owner sees no change ─────────────────────────────────────────────────
 const ownerPage = await open(owner);
