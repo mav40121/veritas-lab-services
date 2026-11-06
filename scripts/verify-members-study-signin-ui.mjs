@@ -3,7 +3,7 @@
 // editor and the owner see what they always saw. Signed out, no public page saves or lists a study, and a study page asks you to sign in; signed in, a study with no owner
 // reads as not found. Run against a LOCAL production build on a scratch database, with made-up people (it registers people and provisions a lab, so it refuses any other
 // host). Usage:
-//   PW_BASE=http://localhost:5197 SCRATCH_DB=<scratch db> OUT=<dir> node scripts/verify-members-study-signin-ui.mjs
+//   PW_BASE=http://localhost:<port> SCRATCH_DB=<scratch db> OUT=<dir> node scripts/verify-members-study-signin-ui.mjs
 import { createRequire } from "node:module";
 import path from "node:path";
 
@@ -29,7 +29,7 @@ const shot = async (page, name) => { await page.waitForTimeout(400); await page.
 const stamp = Date.now();
 const mail = (tag) => `membersown-${tag}-${stamp}@example.test`;
 const reg = (tag, name) => call("POST", "/api/auth/register", { email: mail(tag), password: PW, name, hipaa_acknowledged: true });
-const owner = await reg("owner", "Made Up Owner"), ann = await reg("ann", "Ann Self"), ben = await reg("ben", "Ben Quillfeather"), editor = await reg("editor", "Eddie Editor"), nell = await reg("nell", "Nell Unlinked");
+const owner = await reg("owner", "Made Up Owner"), ann = await reg("ann", "Ann Self"), ben = await reg("ben", "Ben Quillfeather"), editor = await reg("editor", "Eddie Editor"), nell = await reg("nell", "Nell Unlinked"), noLab = await reg("nolab", "Nora Nolab");
 const labId = (await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail: mail("owner"), labName: "Members UI Lab", plan: "hospital" })).labId;
 const L = `/api/labs/${labId}`;
 await call("POST", `${L}/staff/lab`, { labName: "Members UI Lab", cliaNumber: "99D9999995", accreditationBody: "CLIA_ONLY", complexity: "moderate" }, owner.token);
@@ -51,7 +51,7 @@ seat("ann", "staff_portal", '{"mode":"view_all"}', annRow);
 seat("ben", "staff_portal", '{"mode":"view_all"}', benRow);
 seat("nell", "staff_portal", '{"mode":"view_all"}', null);
 seat("editor", "active", '{"mode":"edit_all"}', null);
-for (const tag of ["owner", "ann", "ben", "nell", "editor"]) sdb.prepare("UPDATE users SET has_completed_onboarding = 1, onboarding_seen = 1 WHERE id = ?").run(userId(tag));
+for (const tag of ["owner", "ann", "ben", "nell", "editor", "nolab"]) sdb.prepare("UPDATE users SET has_completed_onboarding = 1, onboarding_seen = 1 WHERE id = ?").run(userId(tag));
 sdb.prepare("UPDATE labs SET has_completed_onboarding = 1, clia_number = '99D9999995', medical_director_email = ?, medical_director_name = 'Quillfeather Director' WHERE id = ?").run(`director-${stamp}@example.test`, labId);
 const studyRow = (uid, lab, name) => Number(sdb.prepare(
   `INSERT INTO studies (user_id, lab_id, test_name, instrument, analyst, date, study_type, clia_allowable_error, data_points, instruments, status, created_at)
@@ -179,7 +179,14 @@ check("owner: their own study opens", /Made-up Owned Study/.test(await ownerPage
 const signedIn = await open(nell);
 await signedIn.goto(`${BASE}/study/${orphanStudy}/results`, { waitUntil: "networkidle" });
 const orphanText = await signedIn.locator("main").innerText();
-check("signed in, a study with no owner: not shown", !/ORPHAN/.test(orphanText), orphanText.slice(0, 200));
+check("signed in with a lab, a study with no owner: not shown", !/ORPHAN/.test(orphanText), orphanText.slice(0, 200));
+// A lab member's page asks the lab's own route. Someone with no lab asks /api/studies/:id, the route this change guards, so that's the page that proves it.
+const noLabPage = await open(noLab);
+let askedTheRoute = false;
+noLabPage.on("request", (r) => { if (new URL(r.url()).pathname === `/api/studies/${orphanStudy}`) askedTheRoute = true; });
+await noLabPage.goto(`${BASE}/study/${orphanStudy}/results`, { waitUntil: "networkidle" });
+const noLabText = await noLabPage.locator("main").innerText();
+check("signed in with no lab, a study with no owner: reads as not found", askedTheRoute && !/ORPHAN/.test(noLabText) && /not found/i.test(noLabText), `${askedTheRoute} ${noLabText.slice(0, 200)}`);
 
 check("no page errors", errors.length === 0, errors.slice(0, 3).join(" | "));
 await browser.close();

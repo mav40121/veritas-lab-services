@@ -2,7 +2,7 @@
 //
 // STANDING integration test for who can read the tokens that open a seat or the documents (found 2026-11-04 while writing up account types). An invite token is the link itself, and whoever holds it can claim the seat, an admin seat included.
 //   1. Owners and admins get the invite token, so Copy link keeps working.
-//   2. An editor and a Staff login still see who is invited, with no token anywhere in the response.
+//   2. An editor still sees who is invited, with no token anywhere in the response. A Staff login sees no pending invitations at all (Michael Q192 = 1).
 //   3. A pending invite is claimed only with its own link, inside 30 days. Typing the invited address is refused, since sign-up doesn't verify email. The link still works, and an admin invite still makes an admin.
 //   4. Surveyor link tokens go to people with VeritaDC edit only. A Staff login and a view-only seat are refused.
 //   5. The surveyor link itself still opens with no login.
@@ -87,12 +87,15 @@ async function main() {
     }
 
     // 2. Everyone else
-    for (const [who, token] of [["An editor", editor], ["A Staff login", staff], ["A view-only seat", viewer]] as const) {
+    for (const [who, token] of [["An editor", editor], ["A view-only seat", viewer]] as const) {
       const r = await call("GET", `${L}/members`, undefined, token);
       check(`2. ${who} still sees who is invited`, r.status === 200 && !!row(r.body), `HTTP ${r.status}`);
       check(`2. ${who} gets no token on that row`, row(r.body)?.invite_token === null);
       check(`2. ${who} gets the token nowhere in the response`, !r.text.includes(pendingToken));
     }
+    const asStaff = await call("GET", `${L}/members`, undefined, staff);
+    check("2. A Staff login doesn't see who is invited", asStaff.status === 200 && asStaff.body.pendingInvites?.length === 0 && !asStaff.text.includes(pendingAdmin), `HTTP ${asStaff.status}`);
+    check("2. A Staff login gets the token nowhere in the response", !asStaff.text.includes(pendingToken));
     const sup = await call("POST", "/api/auth/register", { email: mail("support"), password: PW, name: "Support Madeup", hipaa_acknowledged: true });
     sqlite.prepare("UPDATE users SET vls_support = 1 WHERE lower(email) = ?").run(mail("support"));
     const viaSupport = await call("GET", `${L}/members`, undefined, sup.body.token);
