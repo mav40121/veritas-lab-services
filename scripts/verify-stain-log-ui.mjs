@@ -37,7 +37,7 @@ const owner = await call("POST", "/api/auth/register", { email, password: pw, na
 const token = owner.body.token;
 const labId = (await call("POST", "/api/admin/provision-demo-lab", { secret: ADMIN, ownerEmail: email, labName: "Stain Test Lab", plan: "hospital", isWarehouse: true })).body.labId;
 sql("UPDATE users SET has_completed_onboarding = 1, onboarding_seen = 1, plan = 'hospital' WHERE email = ?", email);
-sql("UPDATE labs SET clia_number = '22D0000123' WHERE id = ?", labId);
+sql("UPDATE labs SET clia_number = '99D0000123' WHERE id = ?", labId);
 const ownerId = sql("SELECT owner_user_id AS o FROM labs WHERE id = ?", labId).o;
 const addPerson = async (tag, name, kind) => {
   const e = `stainui-${tag}-${stamp}@example.com`;
@@ -48,7 +48,7 @@ const addPerson = async (tag, name, kind) => {
   if (kind === "editor") {
     sql(`INSERT INTO user_seats (owner_user_id, seat_email, seat_user_id, invited_at, accepted_at, status, permissions, invite_token, lab_id, seat_type) VALUES (?, ?, ?, ?, ?, 'active', '{"mode":"edit_all"}', ?, ?, 'active')`, ownerId, e, id, now, now, `stainui-${tag}-${stamp}`, labId);
   } else {
-    const staffLab = sql("SELECT id FROM staff_labs WHERE tier2_lab_id = ?", labId)?.id ?? Number(sql("INSERT INTO staff_labs (user_id, lab_name, clia_number, tier2_lab_id, created_at, updated_at) VALUES (?, 'Stain Test Lab', '22D0000123', ?, ?, ?)", ownerId, labId, now, now).lastInsertRowid);
+    const staffLab = sql("SELECT id FROM staff_labs WHERE tier2_lab_id = ?", labId)?.id ?? Number(sql("INSERT INTO staff_labs (user_id, lab_name, clia_number, tier2_lab_id, created_at, updated_at) VALUES (?, 'Stain Test Lab', '99D0000123', ?, ?, ?)", ownerId, labId, now, now).lastInsertRowid);
     const emp = Number(sql("INSERT INTO staff_employees (lab_id, tier2_lab_id, user_id, last_name, first_name, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'active', ?, ?)", staffLab, labId, ownerId, name.split(" ")[1], name.split(" ")[0], now, now).lastInsertRowid);
     sql(`INSERT INTO user_seats (owner_user_id, seat_email, seat_user_id, status, seat_type, lab_id, staff_employee_id, permissions, invited_at, accepted_at) VALUES (?, ?, ?, 'active', 'staff_portal', ?, ?, '{"mode":"view_all"}', ?, ?)`, ownerId, e, id, labId, emp, now, now);
   }
@@ -308,12 +308,11 @@ const printCheck = async (page, name, expect, wantPages = 1) => {
   const text = await area.innerText();
   const screenHidden = await page.evaluate(() => getComputedStyle(document.querySelector(".no-print")).display === "none");
   const colors = await page.evaluate(() => {
-    const el = document.querySelector("#compliance-print-area table td");
-    const c = getComputedStyle(el);
-    return { color: c.color, vis: c.visibility };
+    const seen = [...document.querySelectorAll("#compliance-print-area, #compliance-print-area *")].map((el) => { const c = getComputedStyle(el); return `${c.color}|${c.visibility}`; });
+    return [...new Set(seen)];
   });
   check(`S8. ${name}: the print area shows and the screen doesn't`, shown && screenHidden, `${shown} ${screenHidden}`);
-  check(`S8. ${name}: it reads black`, colors.color === "rgb(0, 0, 0)" && colors.vis === "visible", JSON.stringify(colors));
+  check(`S8. ${name}: every piece of it reads black`, colors.length === 1 && colors[0] === "rgb(0, 0, 0)|visible", JSON.stringify(colors));
   check(`S8. ${name}: it holds what it should`, expect.every((re) => re.test(text)), text.slice(0, 240));
   await page.screenshot({ path: `${OUT}/stain-print-${name}.png` });
   const pdf = await page.pdf({ path: `${OUT}/stain-print-${name}.pdf`, preferCSSPageSize: true, printBackground: true });
@@ -326,7 +325,7 @@ const printCheck = async (page, name, expect, wantPages = 1) => {
 {
   const page = await openAs(token, `${LOG}?instrument=${stainer}&month=${month}`);
   await page.getByTestId("stain-grid").waitFor({ timeout: 15000 });
-  await printCheck(page, "grid", [/Stain log: Made-up autostainer/, new RegExp(`Month: ${month}`), /Stain Test Lab/, /CLIA: 22D0000123/, /HX-1042/, /D = Dumped/, /Monthly review: Reviewed/, /Voided entries/, /Water: 1 day in use/, /VeritaMaintain™/]);
+  await printCheck(page, "grid", [/Stain log: Made-up autostainer/, new RegExp(`Month: ${month}`), /Stain Test Lab/, /CLIA: 99D0000123/, /HX-1042/, /D = Dumped/, /Monthly review: Reviewed/, /Voided entries/, /Water: 1 day in use/, /VeritaMaintain™/]);
   await page.context().close();
   const dark = await openAs(token, `${LOG}?instrument=${stainer}&month=${month}`, { dark: true });
   await dark.getByTestId("stain-grid").waitFor({ timeout: 15000 });
@@ -414,7 +413,7 @@ const printCheck = async (page, name, expect, wantPages = 1) => {
   const dl = await fetch(`${BASE}${L}/veritapolicy/documents/${doc.id}/download`, { headers: { Authorization: `Bearer ${token}` } });
   const buf = Buffer.from(await dl.arrayBuffer());
   const xml = await (await JSZip.loadAsync(buf)).file("word/document.xml").async("string");
-  check("S10. it downloads to print, with this lab's name", dl.status === 200 && xml.includes("Stain Test Lab") && xml.includes("22D0000123"));
+  check("S10. it downloads to print, with this lab's name", dl.status === 200 && xml.includes("Stain Test Lab") && xml.includes("99D0000123"));
   fs.writeFileSync(`${OUT}/rose-blank-form.docx`, buf);
   await page.context().close();
 }

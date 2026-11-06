@@ -74,7 +74,7 @@ async function main() {
     }
     let employeeId: number | null = null;
     if (kind === "staff") {
-      const staffLab = (sqlite.prepare("SELECT id FROM staff_labs WHERE tier2_lab_id = ?").get(labId) as any)?.id ?? Number(sqlite.prepare("INSERT INTO staff_labs (user_id, lab_name, clia_number, tier2_lab_id, created_at, updated_at) VALUES (?, 'Stain Lab', '22D0000789', ?, ?, ?)").run(ownerId, labId, now, now).lastInsertRowid);
+      const staffLab = (sqlite.prepare("SELECT id FROM staff_labs WHERE tier2_lab_id = ?").get(labId) as any)?.id ?? Number(sqlite.prepare("INSERT INTO staff_labs (user_id, lab_name, clia_number, tier2_lab_id, created_at, updated_at) VALUES (?, 'Stain Lab', '99D0000789', ?, ?, ?)").run(ownerId, labId, now, now).lastInsertRowid);
       employeeId = Number(sqlite.prepare("INSERT INTO staff_employees (lab_id, tier2_lab_id, user_id, last_name, first_name, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'Made', 'active', ?, ?)").run(staffLab, labId, ownerId, name.split(" ").pop(), now, now).lastInsertRowid);
       sqlite.prepare("INSERT INTO user_seats (owner_user_id, seat_email, seat_user_id, status, seat_type, lab_id, staff_employee_id, permissions) VALUES (?, ?, ?, 'active', 'staff_portal', ?, ?, '{\"mode\":\"view_all\"}')").run(ownerId, email, userId, labId, employeeId);
     }
@@ -441,7 +441,7 @@ async function main() {
 
     // ── 10. ROSE blank form ──
     const ROSE = `${L}/veritapolicy/blank-forms/rose.docx`;
-    sqlite.prepare("UPDATE labs SET clia_number = '22D0000789' WHERE id = ?").run(A.labId);
+    sqlite.prepare("UPDATE labs SET clia_number = '99D0000789' WHERE id = ?").run(A.labId);
     const docxRes = await fetch(base + ROSE, { headers: { Authorization: `Bearer ${A.token}` } });
     const docxBuf = Buffer.from(await docxRes.arrayBuffer());
     check("10. the form downloads as a Word file", docxRes.status === 200 && /wordprocessingml/.test(docxRes.headers.get("content-type") || "") && /Blank_Form\.docx/.test(docxRes.headers.get("content-disposition") || ""), `${docxRes.status}`);
@@ -449,7 +449,7 @@ async function main() {
     const docXml = await (await JSZip.loadAsync(docxBuf)).file("word/document.xml")!.async("string");
     const footXml = await (await JSZip.loadAsync(docxBuf)).file(/word\/footer/)[0].async("string");
     const docText = docXml.replace(/<\/w:p>/g, "\n").replace(/<[^>]+>/g, "");
-    check("10. it carries this lab's name and CLIA", docText.includes("Stain Lab a") && docText.includes("CLIA: 22D0000789"), docText.slice(0, 120));
+    check("10. it carries this lab's name and CLIA", docText.includes("Stain Lab a") && docText.includes("CLIA: 99D0000789"), docText.slice(0, 120));
     check("10. it has the three sites, five passes each, with the codes", ["First site", "Second site", "Third site"].every((s) => docText.includes(s)) && (docText.match(/88172/g) || []).length === 4 && (docText.match(/88177/g) || []).length === 13, `${(docText.match(/88172/g) || []).length} ${(docText.match(/88177/g) || []).length}`);
     check("10. it has the label box and the signature, and says the patient stays on paper", docText.includes("Patient ID label") && docText.includes("Pathologist signature") && /never entered in VeritaAssure®/.test(docText));
     const emDash = String.fromCharCode(0x2014);
