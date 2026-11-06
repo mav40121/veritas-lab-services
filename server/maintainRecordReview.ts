@@ -12,6 +12,10 @@
 // What counts as a problem needing corrective action: a temperature day short of its readings, or PM still overdue. Out-of-range readings
 // and troubleshooting already carry their own action, so they're shown but don't force one. An instrument with no entries is normal in a
 // month with no PM, so it's shown and nothing more.
+//
+// The stain log (Michael Q178 = 1, 2026-11-06; server/stainLog.ts) reviews here too. An instrument's grid is part of that instrument's record
+// for the month, so one signature covers its maintenance and its stain log. The manual stain log is one more record for the month, when it has
+// entries. shared/stainLogRules.ts says what counts as a problem on a stain log.
 import type { Express } from "express";
 import bcrypt from "bcryptjs";
 import { db } from "./db";
@@ -20,6 +24,7 @@ import { logAudit } from "./audit";
 import { exportAllPlanBypass } from "./exportAllContext";
 import { isLabOwnerUser, mayAttestAsDirectorOrDesignee } from "./delegationGate";
 import { positionLabel, type DelegationPosition } from "./directorDelegation";
+import { MANUAL_ITEM_TYPE, instrumentStainMonth, manualStainMonth } from "./stainLog";
 
 const GATE = "equipment_record_review" as const;
 const isMonth = (v: any): v is string => typeof v === "string" && /^\d{4}-(0[1-9]|1[0-2])$/.test(v);
@@ -96,19 +101,23 @@ export function monthReviewItems(sqlite: any, labId: number, month: string) {
     const events = sqlite.prepare("SELECT event_type, event_date, created_at FROM equipment_maintenance_events WHERE lab_id = ? AND equipment_id = ? AND substr(event_date, 1, 7) = ?").all(labId, e.id, month) as any[];
     const retired = e.status && e.status !== "active";
     const createdDay = String(e.created_at || "").slice(0, 10);
-    if (!reviewOf("equipment", e.id) && !events.length && (retired || createdDay > last)) continue;
+    const stain = instrumentStainMonth(sqlite, labId, e.id, month, today);
+    const stainHeld = stain.entries.length + stain.voided.length;
+    if (!reviewOf("equipment", e.id) && !events.length && !stainHeld && (retired || createdDay > last)) continue;
     const late = events.filter((v) => String(v.created_at || "").slice(0, 10) > addDays(v.event_date, 2)).length;
     const troubleshooting = events.filter((v) => v.event_type === "troubleshooting").length;
     const solutions = events.filter((v) => v.event_type === "solution_change").length;
     const overdue = e.next_due_date && e.next_due_date < asOf && !retired ? e.next_due_date : null;
-    const problems = overdue ? [`PM was due ${overdue} and is not recorded as done`] : [];
+    const problems = [...(overdue ? [`PM was due ${overdue} and is not recorded as done`] : []), ...stain.findings.problems];
     const notes = [
-      !events.length ? "No entries this month" : plural(events.length, "entry", "entries"),
+      events.length ? plural(events.length, "entry", "entries") : stainHeld ? "" : "No entries this month",
       solutions ? plural(solutions, "solution change") : "",
       troubleshooting ? plural(troubleshooting, "troubleshooting entry", "troubleshooting entries") : "",
       late ? `${plural(late, "entry", "entries")} added more than 2 days after the date` : "",
+      ...stain.findings.notes,
     ].filter(Boolean);
-    finish("equipment", e.id, e.instrument_name, e.location || null, !!retired, { entries: events.length, solution_changes: solutions, troubleshooting, entered_late: late, pm_overdue: overdue }, problems, notes, events.map((v) => v.created_at));
+    const summary = { entries: events.length, solution_changes: solutions, troubleshooting, entered_late: late, pm_overdue: overdue, ...(stain.has_log ? stain.findings.summary : {}) };
+    finish("equipment", e.id, e.instrument_name, e.location || null, !!retired, summary, problems, notes, [...events.map((v) => v.created_at), ...stain.entry_times]);
   }
 
   // Temperature and humidity units
@@ -142,6 +151,12 @@ export function monthReviewItems(sqlite: any, labId: number, month: string) {
       late ? `${plural(late, "reading")} added more than 2 days after the date` : "",
     ].filter(Boolean);
     finish("temp_unit", u.id, u.name, u.location || null, !u.active, { readings: readings.length, out_of_range: outOfRange, short_days: shortDays.length, entered_late: late, unit_type: u.unit_type }, problems, notes, readings.map((r) => r.created_at));
+  }
+
+  // The manual stain log: one record for the lab, in a month it has entries. Its id is the lab's, since there's one per lab.
+  const manual = manualStainMonth(sqlite, labId, month);
+  if (manual.has_entries || reviewOf(MANUAL_ITEM_TYPE, labId)) {
+    finish(MANUAL_ITEM_TYPE, labId, "Manual stain log", null, false, manual.summary, [], manual.notes, manual.entry_times);
   }
 
   // Signed for something since removed: the signed record still shows.
@@ -261,8 +276,14 @@ export function registerMaintainRecordReviewRoutes(app: Express, authMiddleware:
          FROM equipment_maintenance_events v JOIN lab_equipment e ON e.id = v.equipment_id
         WHERE v.lab_id = ? AND substr(v.event_date, 1, 7) = ? ORDER BY e.instrument_name, v.event_date, v.id`
     ).all(labId, month) as any[];
+    const stainEntries = db0.prepare(
+      `SELECT e.instrument_name, r.name AS row_name, s.log_date, s.code, s.lot_number, s.expiration_date, s.initials, s.corrective_action, s.voided_at, s.void_reason
+         FROM stain_log_entries s JOIN stain_log_rows r ON r.id = s.row_id AND r.lab_id = s.lab_id JOIN lab_equipment e ON e.id = s.equipment_id AND e.lab_id = s.lab_id
+        WHERE s.lab_id = ? AND substr(s.log_date, 1, 7) = ? ORDER BY e.instrument_name, s.log_date, r.sort_order, s.id`
+    ).all(labId, month) as any[];
+    const manualEntries = db0.prepare("SELECT log_date, specimen_type, result, test_slide, initials, comments, voided_at, void_reason FROM stain_manual_entries WHERE lab_id = ? AND substr(log_date, 1, 7) = ? ORDER BY log_date, id").all(labId, month) as any[];
     const { generateMaintainReviewReport } = await import("./maintainReviewReport");
-    const buf = await generateMaintainReviewReport({ month, items, readings, events }, { labName: labRow?.lab_name || "Laboratory", cliaNumber: labRow?.clia_number || "Not on file" });
+    const buf = await generateMaintainReviewReport({ month, items, readings, events, stainEntries, manualEntries }, { labName: labRow?.lab_name || "Laboratory", cliaNumber: labRow?.clia_number || "Not on file" });
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.setHeader("Content-Disposition", `attachment; filename="VeritaMaintain_Monthly_Review_${month}.xlsx"`);
     res.send(buf);

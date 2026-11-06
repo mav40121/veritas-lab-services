@@ -210,6 +210,10 @@ jobs:
         # Michael 2026-11-04 (Q161 = 1): the medical director or a named designee signs each record for a month; a problem needs a
         # corrective action; what was signed is kept, and a later entry shows as added after the review.
         run: npm run test:maintain-monthly-review
+      - name: Run VeritaMaintain stain log integration test
+        # Michael 2026-11-06 (Q178 = 1): a month grid with the lab's own rows and codes, lot and expiration on a stain change, a manual
+        # list with no specimen number, one review with the rest of VeritaMaintain, Staff record, and the ROSE blank form in VeritaDC.
+        run: npm run test:maintain-stain-log
       - name: Run VeritaDC signature status integration test
         # Michael 2026-11-04 (Q161 = 1): the roster shows who signed by either path; a Staff login signature closes their assignment,
         # but not a required quiz or a newer version; the bell lists what is left; the Excel report carries the roster.

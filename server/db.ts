@@ -4628,6 +4628,88 @@ sqlite.exec(`
   } catch {}
 }
 
+// 2026-11-06 VeritaMaintain stain log (Michael Q178 = 1; server/stainLog.ts, shared/stainLogRules.ts). The lab's own rows on an instrument,
+// a month of coded entries on them, and a list-style manual log. Entries are never edited: a mistake is voided with a reason and stays. No
+// table here has a patient or specimen number field, by the standing no-PHI rule.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS stain_log_rows (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    equipment_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    row_kind TEXT NOT NULL DEFAULT 'stain',
+    frequency TEXT NOT NULL DEFAULT 'as_needed',
+    required_code TEXT,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    active INTEGER NOT NULL DEFAULT 1,
+    retired_at TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE TABLE IF NOT EXISTS stain_log_entries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    equipment_id INTEGER NOT NULL,
+    row_id INTEGER NOT NULL,
+    log_date TEXT NOT NULL,
+    code TEXT NOT NULL,
+    lot_number TEXT,
+    expiration_date TEXT,
+    lot_expired INTEGER NOT NULL DEFAULT 0,
+    initials TEXT NOT NULL,
+    corrective_action TEXT,
+    recorded_by_user_id INTEGER,
+    recorded_by_name TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    voided_at TEXT,
+    voided_by_user_id INTEGER,
+    voided_by_name TEXT,
+    void_reason TEXT
+  );
+  CREATE TABLE IF NOT EXISTS stain_manual_entries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    log_date TEXT NOT NULL,
+    specimen_type TEXT NOT NULL,
+    result TEXT NOT NULL,
+    test_slide INTEGER NOT NULL DEFAULT 0,
+    initials TEXT NOT NULL,
+    comments TEXT,
+    recorded_by_user_id INTEGER,
+    recorded_by_name TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    voided_at TEXT,
+    voided_by_user_id INTEGER,
+    voided_by_name TEXT,
+    void_reason TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_stain_rows_instrument ON stain_log_rows(lab_id, equipment_id, sort_order);
+  CREATE INDEX IF NOT EXISTS idx_stain_entries_month ON stain_log_entries(lab_id, equipment_id, log_date);
+  CREATE INDEX IF NOT EXISTS idx_stain_entries_row ON stain_log_entries(row_id, log_date);
+  CREATE INDEX IF NOT EXISTS idx_stain_manual_month ON stain_manual_entries(lab_id, log_date);
+`);
+{
+  // NEW DB TABLE RULE: an older live copy gets any missing columns.
+  try {
+    const rowCols = (sqlite.prepare("PRAGMA table_info(stain_log_rows)").all() as { name: string }[]).map((c) => c.name);
+    for (const [c, t] of [["lab_id", "INTEGER"], ["equipment_id", "INTEGER"], ["name", "TEXT"], ["row_kind", "TEXT"], ["frequency", "TEXT"], ["required_code", "TEXT"],
+      ["sort_order", "INTEGER"], ["active", "INTEGER"], ["retired_at", "TEXT"], ["created_at", "TEXT"], ["updated_at", "TEXT"]] as Array<[string, string]>) {
+      if (!rowCols.includes(c)) { try { sqlite.exec(`ALTER TABLE stain_log_rows ADD COLUMN ${c} ${t}`); } catch {} }
+    }
+    const entryCols = (sqlite.prepare("PRAGMA table_info(stain_log_entries)").all() as { name: string }[]).map((c) => c.name);
+    for (const [c, t] of [["lab_id", "INTEGER"], ["equipment_id", "INTEGER"], ["row_id", "INTEGER"], ["log_date", "TEXT"], ["code", "TEXT"], ["lot_number", "TEXT"], ["expiration_date", "TEXT"],
+      ["lot_expired", "INTEGER"], ["initials", "TEXT"], ["corrective_action", "TEXT"], ["recorded_by_user_id", "INTEGER"], ["recorded_by_name", "TEXT"], ["created_at", "TEXT"],
+      ["voided_at", "TEXT"], ["voided_by_user_id", "INTEGER"], ["voided_by_name", "TEXT"], ["void_reason", "TEXT"]] as Array<[string, string]>) {
+      if (!entryCols.includes(c)) { try { sqlite.exec(`ALTER TABLE stain_log_entries ADD COLUMN ${c} ${t}`); } catch {} }
+    }
+    const manualCols = (sqlite.prepare("PRAGMA table_info(stain_manual_entries)").all() as { name: string }[]).map((c) => c.name);
+    for (const [c, t] of [["lab_id", "INTEGER"], ["log_date", "TEXT"], ["specimen_type", "TEXT"], ["result", "TEXT"], ["test_slide", "INTEGER"], ["initials", "TEXT"], ["comments", "TEXT"],
+      ["recorded_by_user_id", "INTEGER"], ["recorded_by_name", "TEXT"], ["created_at", "TEXT"], ["voided_at", "TEXT"], ["voided_by_user_id", "INTEGER"], ["voided_by_name", "TEXT"], ["void_reason", "TEXT"]] as Array<[string, string]>) {
+      if (!manualCols.includes(c)) { try { sqlite.exec(`ALTER TABLE stain_manual_entries ADD COLUMN ${c} ${t}`); } catch {} }
+    }
+  } catch {}
+}
+
 // 2026-10-14 VeritaLab CLIA site registry (St. Charles REQ-072, Tracy Tuzzolino: 33 CLIAs on a spreadsheet;
 // server/veritalabRegistry.ts). Per site (lab): points of contact, a dated lab director history with the date
 // CMS was notified, CLIA fee payments, and a test menu change log with the date CMS was notified. Certificate

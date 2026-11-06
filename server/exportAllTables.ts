@@ -212,6 +212,9 @@ export const EXPORT_TABLES: Record<string, ExportTable> = {
   temp_log_units: lab("VeritaMaintain"),
   temp_log_readings: lab("VeritaMaintain"),
   maintain_record_reviews: lab("VeritaMaintain"),
+  stain_log_rows: lab("VeritaMaintain"),
+  stain_log_entries: lab("VeritaMaintain"),
+  stain_manual_entries: lab("VeritaMaintain"),
 
   // VeritaStock
   inventory_items: labOrOwner("VeritaStock", "account_id"),
