@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { MILESTONE_LABEL, type MethodMilestone } from "@shared/competencySignoff";
 import { fmtDate } from "@/lib/competencyElements";
+import { useStaffOwnScope } from "@/hooks/useStaffLogin";
 
 interface SignedRow {
   employeeId: number; employeeName: string; employeeTitle: string | null;
@@ -37,6 +38,7 @@ const selectCls = "h-8 text-xs rounded-md border bg-background px-2";
 
 export default function VeritaCompSignedPage() {
   const activeLabId = useActiveLabId();
+  const { ownOnly } = useStaffOwnScope(); // Michael Q182 = 1: a Staff login's list holds only their own
   const url = activeLabId ? `/api/labs/${activeLabId}/competency/signoffs` : null;
   const { data, isLoading, error } = useQuery<{ signoffs: SignedRow[] }>({
     queryKey: [url ?? "no-lab"],
@@ -73,16 +75,16 @@ export default function VeritaCompSignedPage() {
         <ChevronLeft size={14} /> VeritaComp&trade;
       </Link>
       <div>
-        <h1 className="text-2xl font-bold">Signed competencies</h1>
+        <h1 className="text-2xl font-bold">{ownOnly ? "My signed competencies" : "Signed competencies"}</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Every signed competency in this lab, newest first. Open one to see the entries it was signed on: specimen IDs, observers, evidence, dates and N/A reasons.
+          {ownOnly ? "Your signed competencies" : "Every signed competency in this lab"}, newest first. Open one to see the entries it was signed on: specimen IDs, observers, evidence, dates and N/A reasons.
         </p>
       </div>
 
       <div className="flex flex-wrap items-end gap-2" data-testid="signed-filters">
         <div className="relative flex-1 min-w-[180px]">
           <Search size={14} className="absolute left-2 top-2 text-muted-foreground" />
-          <Input className="h-8 text-xs pl-7" placeholder="Person or method" value={q} onChange={(e) => setQ(e.target.value)} data-testid="signed-search" />
+          <Input className="h-8 text-xs pl-7" placeholder={ownOnly ? "Method" : "Person or method"} value={q} onChange={(e) => setQ(e.target.value)} data-testid="signed-search" />
         </div>
         <select className={selectCls} value={dept} onChange={(e) => setDept(e.target.value)} aria-label="Department" data-testid="signed-dept">
           <option value="">All departments</option>
@@ -111,7 +113,7 @@ export default function VeritaCompSignedPage() {
       )}
       {data && rows.length === 0 && (
         <Card><CardContent className="p-6 text-sm text-muted-foreground" data-testid="signed-empty">
-          No competencies are signed yet. A method appears here once it is signed on the person's page.
+          {ownOnly ? "None of your competencies are signed yet. A method appears here once your evaluator signs it." : "No competencies are signed yet. A method appears here once it is signed on the person's page."}
         </CardContent></Card>
       )}
 

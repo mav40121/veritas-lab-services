@@ -319,8 +319,9 @@ function TaskFormDialog({ trigger, existing, onDone, trackApi, tasksKey, dashKey
   // dialog opens (lab-scoped when a lab is active, legacy otherwise).
   useEffect(() => {
     if (!open) return;
+    // ?names=1: a Staff login who may edit tasks needs coworkers' names here, and gets only those (Michael Q182 = 1).
     const staffApi = trackApi.replace(/veritatrack$/, "staff/employees");
-    fetch(staffApi, { headers: authHeaders() })
+    fetch(`${staffApi}?names=1`, { headers: authHeaders() })
       .then(r => (r.ok ? r.json() : []))
       .then(d => setStaff(Array.isArray(d) ? d : (d?.employees || [])))
       .catch(() => setStaff([]));

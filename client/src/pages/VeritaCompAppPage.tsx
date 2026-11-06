@@ -15,6 +15,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { useMemberships } from "@/hooks/useMemberships";
 import { useLabRoute } from "@/hooks/useLabRoute";
+import { useStaffOwnScope } from "@/hooks/useStaffLogin";
+import { StaffOwnHome, StaffOwnProgram } from "@/components/StaffOwnCompetency";
 import { downloadPdfToken } from "@/lib/utils";
 import { checklistLabel, matchSavedChecklistRows, checklistItemsForType, CHECKLIST_STAGES, CHECKLIST_MAX_ITEMS, CHECKLIST_MAX_DESCRIPTION } from "@shared/competencyChecklist";
 import { assessmentTypeLabel, evaluationDueDate } from "@shared/competencyEvaluation";
@@ -527,6 +529,8 @@ export default function VeritaCompAppPage() {
   const programId = params?.programId ? parseInt(params.programId) : null;
 
   const hasPlanAccess = !!user?.plan && ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "clinic", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(user.plan);
+  // Michael Q182 = 1: a Staff login sees only their own competency data, so none of the screens below are theirs.
+  const { ownOnly, ready: ownScopeReady } = useStaffOwnScope();
 
   if (!isLoggedIn) {
     return (
@@ -574,6 +578,9 @@ export default function VeritaCompAppPage() {
       </div>
     );
   }
+
+  if (!ownScopeReady) return <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8"><div className="h-28 rounded-xl bg-muted/60 animate-pulse" /></div>;
+  if (ownOnly) return programId ? <StaffOwnProgram programId={programId} /> : <StaffOwnHome />;
 
   if (programId) {
     return (

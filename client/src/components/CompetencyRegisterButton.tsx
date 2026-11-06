@@ -7,13 +7,15 @@ import { Button } from "@/components/ui/button";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
+import { useStaffOwnScope } from "@/hooks/useStaffLogin";
 import { useToast } from "@/hooks/use-toast";
 
 export function CompetencyRegisterButton({ size = "sm", variant = "outline" }: { size?: "sm" | "default"; variant?: "outline" | "default" }) {
   const activeLabId = useActiveLabId();
   const { toast } = useToast();
   const [busy, setBusy] = useState(false);
-  if (!activeLabId) return null;
+  const { ownOnly } = useStaffOwnScope(); // the register lists every testing person, so a Staff login never gets it (Michael Q182 = 1)
+  if (!activeLabId || ownOnly) return null;
 
   async function download() {
     setBusy(true);

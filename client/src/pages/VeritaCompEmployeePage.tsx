@@ -38,6 +38,8 @@ import { WAIVED_BLIND_METHOD, type WaivedSpecimen } from "@shared/competencyWaiv
 import { ELEMENT_NAMES, ELEMENT_FIELDS } from "@/lib/competencyElements";
 import { SELF_ELEMENT_FIELDS, isSelfEntryField, selfSampleRemovable } from "@shared/competencySelfEntry";
 import { NEEDS_REVIEW, NEEDS_REVIEW_LABEL } from "@shared/competencyStatus";
+import { useStaffOwnScope } from "@/hooks/useStaffLogin";
+import { StaffOwnRefusal } from "@/components/StaffOwnCompetency";
 
 interface ElementData { num: number; status: string; passed?: boolean; na?: boolean; naJustification?: string; [k: string]: any; }
 // Element 5 can record more than one blind / PT sample for a test system (Michael Q71 = 1). The edit buffer keeps them
@@ -90,6 +92,7 @@ function statusBadge(status: string) {
 export default function VeritaCompEmployeePage() {
   const activeLabId = useActiveLabId();
   const readOnly = useIsReadOnly("veritacomp");
+  const { ownOnly } = useStaffOwnScope(); // Michael Q182 = 1: a Staff login, who can open only their own record
   const { toast } = useToast();
   const qc = useQueryClient();
   const params = useParams();
@@ -213,11 +216,11 @@ export default function VeritaCompEmployeePage() {
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-5">
       <Link href={labRoute("/veritacomp-app")} className="text-xs text-muted-foreground hover:underline inline-flex items-center gap-1">
-        <ChevronLeft size={14} /> All employees
+        <ChevronLeft size={14} /> {ownOnly ? <>VeritaComp&trade;</> : "All employees"}
       </Link>
 
       {isLoading && <div className="text-sm text-muted-foreground py-8 text-center">Loading...</div>}
-      {error && <div className="text-sm text-red-600">Could not load this employee's competency view.</div>}
+      {error && (ownOnly ? <StaffOwnRefusal employeeId={employeeId} /> : <div className="text-sm text-red-600">Could not load this employee's competency view.</div>)}
 
       {data && (
         <>
@@ -234,7 +237,7 @@ export default function VeritaCompEmployeePage() {
                 )}
               </div>
               <p className="text-sm text-muted-foreground mt-1">
-                Competency by test system, from this person's VeritaStaff&trade; instrument assignments. Analytes run the same way on one instrument are covered by a single competency.
+                Competency by test system, from {ownOnly ? "your" : "this person's"} VeritaStaff&trade; instrument assignments. Analytes run the same way on one instrument are covered by a single competency.
               </p>
             </div>
             {testSystems.length > 0 && (
@@ -256,7 +259,9 @@ export default function VeritaCompEmployeePage() {
 
           {testSystems.length === 0 ? (
             <Card><CardContent className="p-6 text-sm text-muted-foreground">
-              No test systems assigned yet. Assign this employee to instruments in VeritaStaff&trade;, and they will appear here.
+              {ownOnly
+                ? <>No test systems are assigned to you yet. Your lab director assigns them in VeritaStaff&trade;, and they will appear here.</>
+                : <>No test systems assigned yet. Assign this employee to instruments in VeritaStaff&trade;, and they will appear here.</>}
             </CardContent></Card>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-[minmax(200px,260px)_1fr] gap-4">
@@ -438,7 +443,7 @@ export default function VeritaCompEmployeePage() {
                                       <label className="text-[10px] text-muted-foreground">{fld.label}</label>
                                       {fld.type === "observer" ? (
                                         <ObserverInitialsField value={f[fld.key] ?? ""} onChange={(v) => setField(el.num, fld.key, v)}
-                                          observers={observers || []} isLoading={observersLoading} disabled={evaluatorLocked}
+                                          observers={observers || []} isLoading={observersLoading} disabled={evaluatorLocked} hideEmptyNote={ownOnly}
                                           triggerClassName="text-xs h-8" data-testid={`element-${el.num}-${fld.key}`} />
                                       ) : fld.type === "bool" ? (
                                         <label className="flex items-center gap-1 text-xs h-8">
