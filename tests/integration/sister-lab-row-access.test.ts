@@ -19,7 +19,7 @@ const OLD_DATE = "2026-03-01T12:00:00.000Z";
 async function main() {
   const { db } = await import("../../server/db");
   const { registerRoutes } = await import("../../server/routes");
-  const { OLDER_SEAT_BEFORE, ownerMatchCounts, resolveRowForMutation, resolveLegacyLabId } = await import("../../server/labAccessGuard");
+  const { OLDER_SEAT_BEFORE, isOlderSeatDate, ownerMatchCounts, resolveRowForMutation, resolveLegacyLabId } = await import("../../server/labAccessGuard");
   const sqlite = (db as any).$client;
   const ADMIN = process.env.ADMIN_SECRET || "test-admin-secret";
   const app = express();
@@ -142,6 +142,12 @@ async function main() {
     // ── The owner themself ───────────────────────────────────────────────────
     await expectReads("owner", OWNER.token, inB, "any of their labs", "open");
     await expectWrites("owner", OWNER.token, inB, "any of their labs", "open");
+    // And where they hold no membership row, so only the owner match can open it.
+    const labD = sibling("Made-up Lab D");
+    sqlite.prepare("UPDATE labs SET plan = 'hospital', subscription_status = 'active' WHERE id = ?").run(labD);
+    const inD = made(labD);
+    await expectReads("owner, no membership row in the lab", OWNER.token, inD, "their own lab", "open");
+    await expectWrites("owner, no membership row in the lab", OWNER.token, inD, "their own lab", "open");
 
     // ── An editor seat and a Staff login in lab A, both members of it ─────────
     const EDITOR = await register("Editor"), STAFF = await register("Staff");
@@ -265,6 +271,10 @@ async function main() {
     await expectReads("new seat with no lab", NEWNOLAB.token, inA, "the lab it's a member of", "open");
     await expectReads("new seat with no lab", NEWNOLAB.token, inB, "sister lab B", "refused");
     await expectWrites("new seat with no lab", NEWNOLAB.token, inB, "sister lab B", "refused");
+    // Holding an older seat doesn't lend age to a new one: a member with an older seat in lab A and a new seat with no lab.
+    const OLDPLUSNEW = await register("Oldplusnew");
+    member(labA, OLDPLUSNEW.id); seat(OWNER.id, OLDPLUSNEW, labA, { since: OLD_DATE }); seat(OWNER.id, OLDPLUSNEW, null);
+    check("older seat in lab A plus a new seat with no lab: the owner match doesn't count for lab B", !ownerMatchCounts(sqlite, OLDPLUSNEW.id, OWNER.id, labB));
     // Re-accepting an older seat makes it new.
     const REACCEPT = await register("Reaccept");
     const reacceptSeat = seat(OWNER.id, REACCEPT, labA, { since: OLD_DATE });
@@ -275,6 +285,15 @@ async function main() {
     const DEACT = await register("Deact");
     seat(OWNER.id, DEACT, labA, { since: OLD_DATE, status: "deactivated" });
     await expectReads("deactivated older seat", DEACT.token, inB, "sister lab B", "refused");
+    check("deactivated older seat: the owner match doesn't count, even asked directly", !ownerMatchCounts(sqlite, DEACT.id, OWNER.id, labB) && !ownerMatchCounts(sqlite, DEACT.id, OWNER.id, labA));
+    check("the owner match counts for the owner themself, asked directly", ownerMatchCounts(sqlite, OWNER.id, OWNER.id, labB));
+
+    // How an older seat's date was written doesn't cost it its reach. All 10 seats on production predate the cutoff.
+    for (const [written, older] of [
+      ["2026-03-01T12:00:00.000Z", true], ["2026-11-05T23:59:59.000Z", true], ["2026-06-09 16:20:26", true], ["Thu Jun 04 2026", true], ["no date anyone can read", true], ["", true],
+      ["2026-11-06T00:00:00.000Z", false], ["2026-11-06 09:00:00", false], [now, false], ["2027-01-15T12:00:00.000Z", false],
+    ] as const) check(`a seat dated "${written}": ${older ? "older" : "new"}`, isOlderSeatDate(written) === older);
+    check("a seat with no date: older", isOlderSeatDate(null));
 
     // ── The two lab resolvers, with and without the header ────────────────────
     // Which rows come back, by id: the writes above renamed some of them.

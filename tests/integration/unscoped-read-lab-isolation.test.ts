@@ -323,6 +323,30 @@ async function main() {
       }
     }
     console.log(`SCOPED  ${scopedCount} tried; the owner sees lab A's data on ${scopedReached} of them; leaks: ${scopedLeaks.join(" | ") || "none"}`);
+    // ── Lists: a sister-lab seat, in its own lab, with and without naming lab A (Michael Q191 = 1) ──
+    // pi/departments is by account with no lab on the row, so the owner match still counts there.
+    const NO_LAB_ON_ROWS = new Set(["/api/pi/departments"]);
+    const listUrls: string[] = [];
+    for (const layer of (app as any).router.stack) {
+      const r = layer.route;
+      if (!r?.methods?.get) continue;
+      for (const p of Array.isArray(r.path) ? r.path : [r.path]) {
+        if (typeof p !== "string" || !p.startsWith("/api/") || NO_LAB_ON_ROWS.has(p) || /^\/api\/(admin|demo|pdf|zip|scheduling|surveyor|export-all|seats\/invite)/.test(p)) continue;
+        if (p.replace(":labId", "").includes(":")) continue;
+        listUrls.push(p.replace(":labId", String(labC)));
+      }
+    }
+    const listLeaks: string[] = [];
+    for (const url of listUrls) {
+      for (const [who, u] of [["sister editor", SISEDIT], ["sister Staff login", SISSTAFF]] as const) {
+        const plain = await call("GET", url, undefined, u.token);
+        if (MARKER.test(plain.text)) listLeaks.push(`${who} ${plain.s} ${url}`);
+        const named = await call("GET", url, undefined, u.token, { "X-Active-Lab-Id": String(labA) });
+        if (MARKER.test(named.text)) listLeaks.push(`${who} naming lab A ${named.s} ${url}`);
+      }
+    }
+    check(`7. no list (${listUrls.length} tried) shows a sister-lab seat lab A's rows, with or without naming lab A`, listUrls.length > 100 && listLeaks.length === 0, listLeaks.join(" | "));
+
     check(`6. a lab-scoped read (${scopedCount} tried, ${scopedReached} showing the owner data) never returns lab A's row to someone scoped to lab B`, scopedCount > 50 && scopedReached > 10 && scopedLeaks.length === 0, scopedLeaks.join(" | "));
   } finally {
     server.close();
