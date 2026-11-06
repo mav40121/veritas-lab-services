@@ -83,6 +83,7 @@ export default function SurveyorViewPage() {
   const [viewTampered, setViewTampered] = useState(false);
   const [viewSignoffs, setViewSignoffs] = useState<Signoff[]>([]);
   const [viewStaffSignatures, setViewStaffSignatures] = useState<any[]>([]);
+  const [viewPriorSignatures, setViewPriorSignatures] = useState<any[]>([]);
   const [viewCarried, setViewCarried] = useState<CarriedRecord | null>(null);
   const [viewLoading, setViewLoading] = useState(false);
 
@@ -94,12 +95,13 @@ export default function SurveyorViewPage() {
     setViewTampered(false);
     setViewSignoffs([]);
     setViewStaffSignatures([]);
+    setViewPriorSignatures([]);
     setViewCarried(null);
     setViewLoading(true);
     try {
       fetch(`/api/surveyor/${token}/policies/${doc.id}/signoffs`)
         .then((r) => r.json())
-        .then((b) => { setViewSignoffs(b?.signoffs || []); setViewStaffSignatures(b?.staffSignatures || []); setViewCarried(b?.carried || null); })
+        .then((b) => { setViewSignoffs(b?.signoffs || []); setViewStaffSignatures(b?.staffSignatures || []); setViewPriorSignatures(b?.priorSignatures || []); setViewCarried(b?.carried || null); })
         .catch(() => {});
       // PDF and images come back as the file itself, everything else as JSON with HTML (2026-10-16).
       const res = await fetch(`/api/surveyor/${token}/policies/${doc.id}/render`);
@@ -331,6 +333,30 @@ export default function SurveyorViewPage() {
                           <span className="text-muted-foreground"> on v{s.version_label ?? s.version_number}</span>
                         )}
                         <span className="text-muted-foreground"> at {fmtDate(s.signed_at)}</span>
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
+            {viewPriorSignatures.length > 0 && (
+              <div className="rounded border bg-muted/30 p-2 text-xs space-y-1 mb-2" data-testid="surveyor-prior-signatures">
+                <div className="font-medium flex items-center gap-1">
+                  <ShieldCheck size={14} /> Read-and-sign in {viewPriorSignatures[0].system}, the lab's prior system ({viewPriorSignatures.length})
+                </div>
+                <p className="text-muted-foreground">
+                  Carried over from {viewPriorSignatures[0].system}'s report when the lab moved. These people signed there, not in VeritaAssure&reg;. The date and version are the ones that report gives.
+                </p>
+                <ol className="space-y-1 max-h-48 overflow-y-auto">
+                  {viewPriorSignatures.map((s: any) => (
+                    <li key={s.id} className="flex items-start gap-2 leading-snug" data-testid="surveyor-prior-row">
+                      <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] uppercase border bg-muted text-muted-foreground border-border">
+                        carried over
+                      </span>
+                      <span className="flex-1">
+                        <span className="font-medium">{s.name}</span>
+                        {s.credentials && <span className="text-muted-foreground"> ({s.credentials})</span>}
+                        <span className="text-muted-foreground"> signed v{s.version} on {s.signed_on}</span>
                       </span>
                     </li>
                   ))}

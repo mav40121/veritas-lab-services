@@ -10,10 +10,14 @@ type RosterPerson = {
   status: "signed" | "older_version" | "not_signed";
   signed_at: string | null; version_label: string | null; carried_forward: boolean; how: string | null;
   assigned: boolean; owes: boolean; groups: string[]; group_ids: number[];
+  // Signed in the lab's prior system and carried over, not signed in VeritaAssure.
+  prior_system?: { system: string; version: string; signed_on: string } | null;
 };
+type PriorHistory = { name: string; credentials: string | null; version: string; signed_on: string; system: string; state: string };
 type RosterGroup = { id: number; name: string; total: number; signed: number; assigned: boolean };
 type RosterStatus = {
   people: RosterPerson[];
+  prior_history?: PriorHistory[];
   groups: RosterGroup[];
   assigned_to: string[];
   summary: { total: number; signed: number; older_version: number; not_signed: number; no_login: number; assigned: number; assigned_signed: number; owes: number };
@@ -88,7 +92,11 @@ export function DocumentSignatureRoster({ labId, documentId }: { labId: number; 
               {!p.has_login && <span className="ml-1 text-xs font-normal text-amber-800 dark:text-amber-300">No login</span>}
               {p.groups.length > 0 && <span className="block text-xs font-normal text-muted-foreground" data-testid="roster-person-groups">{p.groups.join(", ")}</span>}
             </span>
-            {p.status === "signed" ? (
+            {p.status === "signed" && p.prior_system ? (
+              <span className="text-xs text-green-800 dark:text-green-300" data-testid="roster-status">
+                Signed {day(p.prior_system.signed_on)} on v{p.prior_system.version} in {p.prior_system.system}, carried over
+              </span>
+            ) : p.status === "signed" ? (
               <span className="text-xs text-green-800 dark:text-green-300" data-testid="roster-status">
                 Signed {day(p.signed_at)}{p.carried_forward ? ` on v${p.version_label}, carried forward` : ""} ({p.how})
               </span>
@@ -104,6 +112,24 @@ export function DocumentSignatureRoster({ labId, documentId }: { labId: number; 
           </div>
         ))}
       </div>
+      {(data.prior_history?.length ?? 0) > 0 && (
+        <details className="mt-2 border rounded" data-testid="roster-prior-history">
+          <summary className="px-3 py-1.5 text-xs font-medium cursor-pointer">
+            Signed in {data.prior_history![0].system}, not on your active roster ({data.prior_history!.length})
+          </summary>
+          <div className="px-3 pb-2 text-xs text-muted-foreground">
+            History carried over from the prior system. These people didn't sign in VeritaAssure, have no login from it, and owe nothing.
+          </div>
+          <div className="divide-y border-t max-h-40 overflow-y-auto">
+            {data.prior_history!.map((h, i) => (
+              <div key={`${h.name}-${h.signed_on}-${i}`} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 px-3 py-1.5 text-sm" data-testid="roster-prior-row">
+                <span className="min-w-0 break-words">{h.name}{h.credentials && <span className="ml-1 text-xs text-muted-foreground">{h.credentials}</span>}</span>
+                <span className="text-xs text-muted-foreground">Signed {day(h.signed_on)} on v{h.version}</span>
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
     </div>
   );
 }

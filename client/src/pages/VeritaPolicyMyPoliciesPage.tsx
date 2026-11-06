@@ -215,6 +215,8 @@ interface PolicyDocument {
   // Step D (server/policyReadSign.ts): who an approved document goes to, on the editor's list; where this person stands, on a Staff login's.
   read_sign_targets?: string[];
   my_read_sign?: "signed" | "to_sign" | "none";
+  // Signed in the lab's prior system and carried over, not signed in VeritaAssure.
+  my_prior_system?: { system: string; version: string; signed_on: string } | null;
   created_at: string;
   updated_at: string;
   // Phase 2.1: in_review rows include these so the UI can render
@@ -1964,7 +1966,7 @@ export default function VeritaPolicyMyPoliciesPage() {
                               {doc.read_sign_targets.length ? `read-and-sign: ${doc.read_sign_targets.join(", ")}` : "read-and-sign: nobody yet"}
                             </div>
                           )}
-                          {staffOwnDocs && doc.my_read_sign === "signed" && <div className="text-[10px] mt-1 leading-tight text-green-800 dark:text-green-300" data-testid="doc-my-status">You signed this version</div>}
+                          {staffOwnDocs && doc.my_read_sign === "signed" && <div className="text-[10px] mt-1 leading-tight text-green-800 dark:text-green-300" data-testid="doc-my-status">{doc.my_prior_system ? `You signed v${doc.my_prior_system.version} in ${doc.my_prior_system.system} on ${doc.my_prior_system.signed_on}` : "You signed this version"}</div>}
                           {staffOwnDocs && doc.my_read_sign === "to_sign" && <div className="text-[10px] mt-1 leading-tight text-amber-800 dark:text-amber-300" data-testid="doc-my-status">Needs your signature</div>}
                         </td>
                         <td className="py-2 pr-3 text-xs uppercase font-mono text-muted-foreground">

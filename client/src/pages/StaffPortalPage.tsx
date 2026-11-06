@@ -440,6 +440,8 @@ interface PortalPolicy {
   signed_version_label?: string | null;
   doc_number?: string | null;
   manual_path?: string | null;
+  // Signed in the lab's prior system and carried over, not signed in VeritaAssure (Q207).
+  prior_system?: { system: string; version: string; signed_on: string } | null;
   // Opened from the lookup and not assigned to this person: there is nothing to sign.
   read_only?: boolean;
   status?: string;
@@ -702,6 +704,12 @@ function StaffPortalPoliciesView({
                 ? "This document's review is overdue, so it can't be signed right now. You're reading the current version."
                 : "This document isn't assigned to you, so there's nothing to sign. You're reading the current version."}
             </div>
+          ) : active.signed && active.prior_system ? (
+            <div className="border border-green-200 bg-green-50 rounded-lg p-4" data-testid="sp-policies-signed-prior-system">
+              <div className="text-sm font-medium text-green-900">
+                You signed version {active.prior_system.version} on {active.prior_system.signed_on} in {active.prior_system.system}, your lab's prior system. It was carried over when your lab moved, so no new signature is needed.
+              </div>
+            </div>
           ) : active.signed ? (
             <div className="border border-green-200 bg-green-50 rounded-lg p-4" data-testid="sp-policies-already-signed">
               {active.carried_forward ? (
@@ -829,6 +837,11 @@ function StaffPortalPoliciesView({
                       {p.effective_date && <>&middot; Effective {p.effective_date}</>}
                     </div>
                     {p.manual_path && <div className="text-xs text-muted-foreground" data-testid="sp-policies-row-manual">{p.manual_path}</div>}
+                    {p.prior_system && (
+                      <div className="text-xs text-muted-foreground" data-testid="sp-policies-row-prior-system">
+                        Signed v{p.prior_system.version} in {p.prior_system.system} on {p.prior_system.signed_on}, carried over
+                      </div>
+                    )}
                     {/* Minor revisions (Q154): the lab carries signatures forward, and staff are told the document changed. */}
                     {p.carried_forward && (
                       <div className="text-xs text-amber-800 dark:text-amber-400" data-testid="sp-policies-row-updated">
@@ -905,6 +918,8 @@ function StaffPortalPoliciesView({
 interface PortalActivityEvent {
   kind: "policy_signature" | "inventory_adjustment";
   at: string;
+  // A signature carried over from the prior system: that system's report gives a date, no time.
+  date_only?: boolean;
   label: string;
   detail: string;
   document_id?: number;
@@ -1024,7 +1039,7 @@ function StaffPortalActivityView({
                         {e.kind === "policy_signature" ? "Policy" : "Inventory"}
                       </span>
                       <div className="text-xs text-muted-foreground mt-1">
-                        {new Date(e.at).toLocaleString()}
+                        {e.date_only ? e.at.slice(0, 10) : new Date(e.at).toLocaleString()}
                       </div>
                     </div>
                   </div>

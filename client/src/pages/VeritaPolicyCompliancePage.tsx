@@ -98,7 +98,7 @@ interface Compliance {
   overdueList: OverdueRow[];
   dueSoonList: OverdueRow[];
   perUserAttest: UserAttestRow[];
-  perStaffAttest?: { staff_employee_id: number; staff_name: string; title: string | null; signed_count: number; last_signed_at: string | null }[];
+  perStaffAttest?: { staff_employee_id: number; staff_name: string; title: string | null; signed_count: number; carried_count?: number; last_signed_at: string | null }[];
   pendingReviewList: PendingReviewRow[];
 }
 
@@ -722,6 +722,7 @@ export default function VeritaPolicyCompliancePage() {
                     <th className="py-2 pr-3">Staff member</th>
                     <th className="py-2 pr-3">Title</th>
                     <th className="py-2 pr-3 text-right">Policies signed</th>
+                    <th className="py-2 pr-3 text-right">Carried over from the prior system</th>
                     <th className="py-2 pr-3 text-right">Last signed</th>
                   </tr>
                 </thead>
@@ -731,6 +732,7 @@ export default function VeritaPolicyCompliancePage() {
                       <td className="py-2 pr-3 font-medium">{s.staff_name}</td>
                       <td className="py-2 pr-3 text-muted-foreground">{s.title || ""}</td>
                       <td className="py-2 pr-3 text-right">{s.signed_count}</td>
+                      <td className="py-2 pr-3 text-right" data-testid="compliance-carried-count">{s.carried_count || 0}</td>
                       <td className="py-2 pr-3 text-right text-muted-foreground">{s.last_signed_at ? String(s.last_signed_at).slice(0, 10) : ""}</td>
                     </tr>
                   ))}
