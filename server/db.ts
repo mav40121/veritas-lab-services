@@ -8167,6 +8167,79 @@ try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS uq_policy_doc_type_settings
   }
 }
 
+// Documents carried over from a lab's prior system (Heywood's move out of MediaLab, 2026-11-06; server/veritadcBulkLoad.ts).
+// One row per loaded document: the number, version and dates as they stood in the prior system, where the signature face
+// page and the original file are kept (under the document's folder in /data/policies), and which version they belong to.
+// These people signed in the prior system, so nothing here is ever written to policy_signoffs. reminders_start_on holds
+// the review reminders until that lab-local date, so a load never emails anyone.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS policy_carried_records (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    document_id INTEGER NOT NULL,
+    version_id INTEGER NOT NULL,
+    source_system TEXT NOT NULL,
+    source_number TEXT NOT NULL,
+    source_status TEXT,
+    source_version TEXT,
+    title_as_exported TEXT,
+    effective_date TEXT,
+    last_approval_or_review TEXT,
+    next_review_due TEXT,
+    author TEXT,
+    approval_rows INTEGER,
+    review_rows INTEGER,
+    version_count INTEGER,
+    source_manual TEXT,
+    also_filed_in TEXT,
+    face_page_path TEXT,
+    face_page_bytes INTEGER,
+    face_page_sha256 TEXT,
+    original_path TEXT,
+    original_filename TEXT,
+    original_bytes INTEGER,
+    original_sha256 TEXT,
+    converted_from TEXT,
+    reminders_start_on TEXT,
+    batch TEXT,
+    loaded_by TEXT,
+    loaded_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )
+`);
+try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS uq_policy_carried_document ON policy_carried_records(document_id)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_carried_lab_number ON policy_carried_records(lab_id, source_number)`); } catch {}
+{
+  // New DB Table rule: a table that predates this block still gains every column on the live server.
+  const cols = (sqlite.prepare("PRAGMA table_info(policy_carried_records)").all() as { name: string }[]).map((c) => c.name);
+  for (const [col, ddl] of [
+    ["source_status", "TEXT"],
+    ["source_version", "TEXT"],
+    ["title_as_exported", "TEXT"],
+    ["effective_date", "TEXT"],
+    ["last_approval_or_review", "TEXT"],
+    ["next_review_due", "TEXT"],
+    ["author", "TEXT"],
+    ["approval_rows", "INTEGER"],
+    ["review_rows", "INTEGER"],
+    ["version_count", "INTEGER"],
+    ["source_manual", "TEXT"],
+    ["also_filed_in", "TEXT"],
+    ["face_page_path", "TEXT"],
+    ["face_page_bytes", "INTEGER"],
+    ["face_page_sha256", "TEXT"],
+    ["original_path", "TEXT"],
+    ["original_filename", "TEXT"],
+    ["original_bytes", "INTEGER"],
+    ["original_sha256", "TEXT"],
+    ["converted_from", "TEXT"],
+    ["reminders_start_on", "TEXT"],
+    ["batch", "TEXT"],
+    ["loaded_by", "TEXT"],
+  ] as const) {
+    if (!cols.includes(col)) sqlite.exec(`ALTER TABLE policy_carried_records ADD COLUMN ${col} ${ddl}`);
+  }
+}
+
 // MediaLab parity #39 item 2 (2026-06-07): quiz questions on policy
 // attestations. quiz_score + quiz_total_questions columns already exist
 // on policy_attestations (since Phase 4); this table is what those

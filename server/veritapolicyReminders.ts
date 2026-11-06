@@ -25,8 +25,15 @@
 // on an expired doc) is a separate hardening item — this PR ships the
 // state machine flip, not the permission gate.
 
+//
+// Documents carried over from a prior system (policy_carried_records, server/veritadcBulkLoad.ts, 2026-11-06): no notice
+// goes out before the row's reminders_start_on, so a load emails nobody. A document that arrived already past due counts
+// its notices and its 60-day grace from the day it arrived. It reads overdue with its real date, instead of skipping every
+// notice and flipping to expired on the first night.
+
 import { Resend } from "resend";
 import { DEFAULT_TEMPLATES, renderReminderEmail } from "./policyReminderTemplate";
+import { reminderDays, reminderTypeForDays } from "../shared/policyCarriedOver";
 import { db } from "./db";
 import { labToday, labTimeZoneById } from "./dateLocal";
 import { writeAuditLog } from "./veritapolicyApproval";
@@ -49,10 +56,12 @@ export async function runPolicyReviewReminders(): Promise<{
       `SELECT d.id, d.lab_id, d.title, d.owner_user_id, d.current_version_id,
               d.next_review_date,
               u.email AS owner_email, u.name AS owner_name,
-              l.lab_name AS lab_name
+              l.lab_name AS lab_name,
+              c.reminders_start_on, date(c.loaded_at) AS carried_loaded_on
          FROM policy_documents d
          JOIN users u ON u.id = d.owner_user_id
          LEFT JOIN labs l ON l.id = d.lab_id
+         LEFT JOIN policy_carried_records c ON c.document_id = d.id
         WHERE d.archived_at IS NULL
           AND d.status = 'approved'
           AND d.next_review_date IS NOT NULL`
@@ -75,11 +84,13 @@ export async function runPolicyReviewReminders(): Promise<{
     const daysUntil = Math.round((Date.parse(dueDay + "T00:00:00Z") - Date.parse(todayFor(r.lab_id ?? null) + "T00:00:00Z")) / 86400000);
     if (!Number.isFinite(daysUntil)) continue;
 
-    let reminderType: "30_day_warning" | "overdue" | "final" | null = null;
-    if (daysUntil >= -1 && daysUntil <= 30 && daysUntil > 0) reminderType = "30_day_warning";
-    else if (daysUntil === 0 || (daysUntil < 0 && daysUntil > -30)) reminderType = "overdue";
-    else if (daysUntil <= -30 && daysUntil > -60) reminderType = "final";
+    // A carried-over document stays quiet until its start date.
+    if (r.reminders_start_on && todayFor(r.lab_id ?? null) < String(r.reminders_start_on)) {
+      stats.skipped += 1;
+      continue;
+    }
 
+    const reminderType = reminderTypeForDays(reminderDays(todayFor(r.lab_id ?? null), dueDay, r.carried_loaded_on));
     if (!reminderType) continue;
 
     // Idempotency check.
@@ -191,9 +202,12 @@ export function runPolicyAutoExpire(): {
         WHERE d.archived_at IS NULL
           AND d.status = 'approved'
           AND d.next_review_date IS NOT NULL
-          AND date(d.next_review_date) < date('now', '-' || ? || ' days')`
+          AND date(d.next_review_date) < date('now', '-' || ? || ' days')
+          AND NOT EXISTS (SELECT 1 FROM policy_carried_records c
+                           WHERE c.document_id = d.id
+                             AND date(c.loaded_at) >= date('now', '-' || ? || ' days'))`
     )
-    .all(AUTO_EXPIRE_GRACE_DAYS) as any[];
+    .all(AUTO_EXPIRE_GRACE_DAYS, AUTO_EXPIRE_GRACE_DAYS) as any[];
 
   for (const r of rows) {
     stats.scanned += 1;

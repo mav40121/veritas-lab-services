@@ -438,6 +438,27 @@ export async function buildExportZip(sqlite: any, ctx: ExportCtx, opts: { base: 
     } catch { status = "File could not be read"; }
     manifest.push({ folder: "Files/VeritaDC", file: rel.split("/").slice(2).join("/"), what: `Policy document version ${v.version_number}`, count: "", status });
   }
+  // History carried over from a prior system: each document's signature face page and, for a converted file, its original.
+  const carried = sqlite.prepare(`
+    SELECT c.document_id, c.face_page_path, c.original_path, c.original_filename, d.title
+    FROM policy_carried_records c JOIN policy_documents d ON d.id = c.document_id
+    WHERE c.lab_id = ? ORDER BY c.document_id`).all(ctx.labId) as any[];
+  for (const c of carried) {
+    for (const [stored, name, what] of [
+      [c.face_page_path, "signature-face-page.html", "Signature face page from the prior system"],
+      [c.original_path, safeName(c.original_filename || "original", 80), "Original file from the prior system"],
+    ] as const) {
+      if (!stored) continue;
+      const rel = `Files/VeritaDC/${c.document_id} ${safeName(c.title, 60)}/${name}`;
+      let status = "Included";
+      try {
+        const abs = resolveVersionFilePath(stored);
+        if (fs.existsSync(abs)) zip.file(rel, fs.readFileSync(abs));
+        else status = "File not found in storage";
+      } catch { status = "File could not be read"; }
+      manifest.push({ folder: "Files/VeritaDC", file: rel.split("/").slice(2).join("/"), what, count: "", status });
+    }
+  }
 
   job.step = "Writing records workbooks";
   for (const [module, allRecs] of [...byModule.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
