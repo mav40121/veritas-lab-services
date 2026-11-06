@@ -130,6 +130,10 @@ jobs:
         # 2026-11-06: someone with no membership in a lab opened its quiz through GET /api/veritacomp/quizzes/:id. A read of a lab-owned row by id, on a route
         # with no lab in its path, must not cross labs. Every route of that shape is called as outsiders, and a new one fails until it is listed.
         run: npm run test:unscoped-read-isolation
+      - name: Run sister lab row access integration test
+        # Michael 2026-11-06, Q191 = 1: matching a record's owner counts only for the owner, a record with no lab, a seat in that record's lab, an older seat
+        # with no lab, or an older seat whose holder has no membership anywhere. A new seat can't fall into the last two. Both lab resolvers follow it.
+        run: npm run test:sister-lab-row-access
       - name: Run competency program delete integration test
         # Michael 2026-11-06, Q184 = 1: a program holding competency records can't be deleted, on either route: 409 with the count, nothing removed. An empty
         # program still deletes with its setup. The count never reaches someone who can't delete there.
