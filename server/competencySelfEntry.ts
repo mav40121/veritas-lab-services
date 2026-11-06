@@ -9,15 +9,65 @@ import { el5Columns, el5SamplesFromRow, type El5Sample } from "@shared/competenc
 import { WAIVED_METHOD_NAMES } from "@shared/competencyStatus";
 import { WAIVED_BLIND_METHOD, waivedSpecimenColumns, waivedSpecimensFromRow } from "@shared/competencyWaivedSpecimens";
 import { cleanSelfValue, mergeSelfSamples, mergeSelfSpecimens, SELF_ELEMENT_FIELDS, type SelfCleaned, type SelfFieldKind } from "@shared/competencySelfEntry";
+import { resolveSeatPermission, type SeatPermissions } from "@shared/schema";
 
 /** The active Staff seat this user holds in THIS lab, from the session, or null. */
 export function staffSelfSeat(sqlite: any, userId: unknown, labId: unknown): { staff_employee_id: number; permissions: string | null } | null {
   const row = sqlite.prepare(
     `SELECT staff_employee_id, permissions FROM user_seats
       WHERE seat_user_id = ? AND lab_id = ? AND seat_type = 'staff_portal' AND status = 'active' AND staff_employee_id IS NOT NULL
-      LIMIT 1`
+      ORDER BY id LIMIT 1`
   ).get(Number(userId), Number(labId)) as any;
   return row ? { staff_employee_id: Number(row.staff_employee_id), permissions: row.permissions ?? null } : null;
+}
+
+const seatEdits = (permissions: string | null, module: string): boolean => {
+  try { return resolveSeatPermission(JSON.parse(permissions || "{}") as SeatPermissions, module) === "edit"; } catch { return false; }
+};
+
+/** Whose competency data a Staff login may read in one lab: their own roster row, or nobody's when employeeId is null. */
+export interface StaffOwnScope { employeeId: number | null }
+
+/**
+ * Staff logins see their own competency data only (Michael Q182 = 1, 2026-11-05). Null means this person isn't limited in this
+ * lab, and the route runs as it always did. Otherwise they hold a staff_portal seat here, in any status and with or without a
+ * roster link, so a deactivated or unlinked seat is limited to nobody's data rather than falling back to everyone's. These stay
+ * unlimited: the lab's owner or admin, an org admin, anyone holding another live seat in this lab (an editor with a staff card,
+ * a view-only reviewer), and a Staff seat given edit on this module. Checked per lab from the session; a seat in another lab
+ * never counts. labId null (an unscoped route that resolved no lab) fails closed for someone with only a Staff seat.
+ */
+export function staffOwnScope(sqlite: any, userId: unknown, labId: unknown, module = "veritacomp"): StaffOwnScope | null {
+  const uid = Number(userId), lid = Number(labId);
+  const seats = (lid > 0
+    ? sqlite.prepare(
+        `SELECT seat_type, status, permissions FROM user_seats
+          WHERE seat_user_id = ? AND (lab_id = ? OR (lab_id IS NULL AND owner_user_id = (SELECT owner_user_id FROM labs WHERE id = ?)))`
+      ).all(uid, lid, lid)
+    : sqlite.prepare("SELECT seat_type, status, permissions FROM user_seats WHERE seat_user_id = ?").all(uid)) as any[];
+  const staffSeats = seats.filter((s) => s.seat_type === "staff_portal");
+  if (!staffSeats.length) return null;
+  if (seats.some((s) => s.status === "active" && s.seat_type !== "staff_portal")) return null;
+  if (staffSeats.some((s) => s.status === "active" && seatEdits(s.permissions, module))) return null;
+  const manages = lid > 0
+    ? sqlite.prepare(
+        `SELECT 1 FROM labs WHERE id = ? AND owner_user_id = ?
+         UNION SELECT 1 FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active' AND role IN ('owner','admin')
+         UNION SELECT 1 FROM organization_members om JOIN labs l ON l.organization_id = om.organization_id
+                WHERE l.id = ? AND om.user_id = ? AND om.status = 'active' AND om.org_role IN ('org_owner','org_admin')
+         LIMIT 1`
+      ).get(lid, uid, lid, uid, lid, uid)
+    : sqlite.prepare("SELECT 1 FROM labs WHERE owner_user_id = ? LIMIT 1").get(uid);
+  if (manages) return null;
+  const own = lid > 0 ? staffSelfSeat(sqlite, uid, lid) : null;
+  return { employeeId: own ? own.staff_employee_id : null };
+}
+
+/** A Staff seat in this lab with edit on any of these modules: the VeritaTrack and VeritaPT pickers need the names (GET staff/employees?names=1). */
+export function staffSeatEditsAny(sqlite: any, userId: unknown, labId: unknown, modules: string[]): boolean {
+  const seats = sqlite.prepare(
+    "SELECT permissions FROM user_seats WHERE seat_user_id = ? AND lab_id = ? AND seat_type = 'staff_portal' AND status = 'active'"
+  ).all(Number(userId), Number(labId)) as any[];
+  return seats.some((s) => modules.some((m) => seatEdits(s.permissions, m)));
 }
 
 export interface SelfOps { updates: Array<{ id: number; sets: Record<string, any> }>; inserts: Array<Record<string, any>>; deletes: number[] }
