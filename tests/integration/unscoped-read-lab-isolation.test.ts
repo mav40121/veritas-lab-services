@@ -203,6 +203,9 @@ async function main() {
       // Naming lab A in the active-lab header must not get anyone in.
       const named = await call(method, r.url, r.body, OUT.token, { "X-Active-Lab-Id": String(labA) });
       if (MARKER.test(named.text) || (r.outsider !== OWN_LAB_ONLY && named.s === 200)) { leaked = true; results.push(`header naming lab A ${named.s}`); }
+      // And nothing here opens with no sign-in at all.
+      const anon = await fetch(base + r.url, { method, headers: { "Content-Type": "application/json" }, body: r.body === undefined ? undefined : JSON.stringify(r.body) });
+      if (anon.status === 200) { leaked = true; results.push(`no sign-in ${anon.status}`); }
       const belongsOk = (r.belongs || [200]).includes(own.s);
       console.log(`ROUTE  ${r.route}  owner ${own.s}  ${results.join("; ")}`);
       check(`1. ${r.route}: nobody outside lab A reads it`, !leaked, results.filter((x) => /200|WITH/.test(x)).join("; "));
