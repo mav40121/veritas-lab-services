@@ -115,6 +115,14 @@ const noticesSent = () => sql("SELECT COUNT(*) AS n FROM policy_audit_log WHERE 
   const cover = await page.getByTestId("readsign-coverage").innerText();
   check("E1. the manual says what it covers, sub-manuals and later documents", /2 documents in this manual and its sub-manuals today, and any added later/.test(cover), cover);
   check("E1. it says assigning sends no email", /sends no email/.test(await page.getByTestId("readsign-no-email").innerText()));
+  // A group is data the lab enters: built right here, it shows in the picker at once.
+  await page.getByTestId("groups-manage-button").click();
+  await page.getByTestId("group-new-name").fill("Made-up Night shift");
+  await page.getByTestId("group-add").click();
+  await page.waitForTimeout(500);
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(600);
+  check("E1. a group built under Manage groups shows in the picker at once", /Made-up Night shift/.test(await page.getByTestId("readsign-group-picker").innerText()));
   await page.getByTestId(`readsign-pick-group-${chem}`).check();
   await page.screenshot({ path: `${OUT}/readsign-manual-assign.png` });
   await page.getByTestId("readsign-assign").click();

@@ -198,8 +198,12 @@ export function ReadSignDialog({ labId, scope, onClose, onAssignOnePerson }: {
           ) : (
             <>
               <div className="space-y-1.5" data-testid="readsign-current">
-                <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Assigned now</div>
-                {direct.length === 0 && inherited.length === 0 && <p className="text-sm text-muted-foreground" data-testid="readsign-none">Nobody yet, so staff don't see this in their list.</p>}
+                <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{scope.type === "lab" ? "On every document" : "Assigned now"}</div>
+                {direct.length === 0 && inherited.length === 0 && (
+                  <p className="text-sm text-muted-foreground" data-testid="readsign-none">
+                    {scope.type === "lab" ? "Nobody has every document." : "Nobody yet, so staff don't see this in their list."}
+                  </p>
+                )}
                 {direct.map((r) => (
                   <div key={r.id} className="flex items-center gap-2 rounded bg-muted/50 px-3 py-1.5 text-sm" data-testid={`readsign-row-${r.id}`}>
                     <span className="flex-1 min-w-0 [overflow-wrap:anywhere]">

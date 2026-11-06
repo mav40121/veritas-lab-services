@@ -399,7 +399,8 @@ export function readSignPayload(sqlite: any, labId: number, scope: ReadSignScope
     documents: tracker.documents,
     unassigned_documents: tracker.unassigned_documents,
     groups: [...ctx.groupNames.entries()].map(([id, name]) => ({ id, name, people: ctx.groupPeople.get(id)?.size ?? 0 })).sort((a, b) => a.name.localeCompare(b.name)),
-    roster: ctx.roster
+    // The pickers, for whoever can assign.
+    roster: !canEdit ? [] : ctx.roster
       .map((e) => ({ id: e.id, name: rosterName(e), title: e.title ?? null, has_login: !!e.login_user_id || withLogin.has(e.id) }))
       .sort((a, b) => a.name.localeCompare(b.name)),
   };
