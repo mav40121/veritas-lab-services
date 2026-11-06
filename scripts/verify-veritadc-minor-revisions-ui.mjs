@@ -51,6 +51,8 @@ const upload = async (fields, p = `/api/labs/${labId}/veritapolicy/documents`) =
   for (const [k, v] of Object.entries(fields)) fd.append(k, v);
   return (await fetch(BASE + p, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd })).json();
 };
+// Since Step D a Staff login sees only what's assigned; this check is about minor revisions, so everything goes to everyone.
+await call("POST", `/api/labs/${labId}/veritapolicy/read-sign`, { scope: "lab", everyone: true }, token);
 const doc = await upload({ title: "Specimen Rejection Procedure (made-up)", doc_number: "HH 40" });
 sql("UPDATE policy_documents SET status = 'approved' WHERE id = ?", doc.id);
 const staffList = async () => ((await call("GET", `/api/staff-portal-session/policies?employee_id=${emp}`, undefined, staffToken)).body.policies || []).find((p) => p.document_id === doc.id);
