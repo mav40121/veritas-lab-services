@@ -209,7 +209,8 @@ async function main() {
   check("implant needs a time", (await post(`${R1}/implant`, { implanted_date: today, implanted_by: "Dr. Surgeon" })).status === 400);
   check("implant needs who", (await post(`${R1}/implant`, { implanted_date: today, implanted_time: "12:00" })).status === 400);
   check("implant before the issue is refused", (await post(`${R1}/implant`, { implanted_date: today, implanted_time: "10:59", implanted_by: "Dr. Surgeon" })).status === 400);
-  check("part of a reconstitution is refused", (await post(`${R1}/implant`, { implanted_date: today, implanted_time: "12:00", implanted_by: "Dr. Surgeon", reconstituted_time: "11:30" })).status === 400);
+  const recon = { reconstituted_time: "11:30", reconstituted_by: "N. Nurse", reconstitution_solution: "Made-up Saline", reconstitution_lot: "SOL-1", reconstitution_expiration: FUTURE };
+  for (const k of Object.keys(recon)) check(`part of a reconstitution is refused: no ${k}`, (await post(`${R1}/implant`, { implanted_date: today, implanted_time: "12:00", implanted_by: "Dr. Surgeon", ...recon, [k]: "" })).status === 400);
   check("usage card before the implant is refused (409)", (await post(`${R1}/usage-card`, { usage_card_returned: "yes", usage_card_returned_on: today })).status === 409);
   const implanted = await post(`${R1}/implant`, { implanted_date: today, implanted_time: "12:00", implanted_by: "Dr. Surgeon", reconstituted_time: "11:30", reconstituted_by: "N. Nurse", reconstitution_solution: "Made-up Saline", reconstitution_lot: "SOL-1", reconstitution_expiration: FUTURE });
   const dImp = await j(implanted);
@@ -300,14 +301,23 @@ async function main() {
   const cFree = (await j(await addCat("Made-up Never Used", "Made-up Supplier Two"))).id as number;
   check("a row never used can be deleted", (await call("DELETE", `${T}/catalog/${cFree}`, undefined, OA.token)).status === 200);
 
-  // 8. Lookup, and the recall match.
+  // 8. Lookup, and the recall match. Another owner holds the same ID in another lab.
+  const OC = await mkOwner("C");
+  const labC = await mkLab(OC.email, "Tissue Same ID Elsewhere");
+  const TC = `/api/labs/${labC}/veritastock/tissue`;
+  const cC = (await j(await addCat("Made-up Other Owner Item", "Made-up Supplier One", TC, OC.token))).id as number;
+  const uC = await j(await call("POST", `${TC}/units`, receipt({ catalog_id: cC, source_id: "TIS-0001" }), OC.token));
+  check("another owner's lab can hold the same ID", uC.id > 0);
   const look = await j(await call("GET", `${T}/lookup?id=${encodeURIComponent("tis 0001")}`, undefined, OA.token));
   check("lookup finds it however it's typed, one per supplier, with its state", look.matches.length === 2 && look.matches.some((u: any) => u.state === "implanted" && u.implanted_by === "Dr. Surgeon"), JSON.stringify(look.matches).slice(0, 200));
+  check("lookup stays in this lab", !look.matches.some((u: any) => u.id === uC.id));
+  check("the log stays in this lab", !(await j(await call("GET", `${T}/units?filter=all`, undefined, OA.token))).rows.some((u: any) => u.id === uC.id));
   check("lookup with nothing typed is refused", (await call("GET", `${T}/lookup?id=`, undefined, OA.token)).status === 400);
   check("lookup with no match is empty", (await j(await call("GET", `${T}/lookup?id=NOPE`, undefined, OA.token))).matches.length === 0);
   check("another owner can't look up here (403)", (await call("GET", `${T}/lookup?id=TIS0001`, undefined, OB.token)).status === 403);
   check("a unit from another lab isn't reachable by id (404)", (await call("GET", `/api/labs/${labA2}/veritastock/tissue${R1}`, undefined, OA.token)).status === 404);
   check("a write through another lab's path doesn't reach it (404)", (await call("POST", `/api/labs/${labA2}/veritastock/tissue${R1}/undo`, { reason: "x" }, OA.token)).status === 404);
+  check("a seat in this lab can't open the sister lab's tissue log (403)", (await call("GET", `/api/labs/${labA2}/veritastock/tissue/units`, undefined, seat.token)).status === 403);
   const recall = await j(await call("POST", `/api/labs/${labA}/veritastock/recalls`, { notice_type: "recall", vendor: "Made-up Supplier One", product: "Made-up Bone Putty", lot_numbers: "TIS-0001\nTIS-0002-B", local_date: today }, OA.token));
   const rc = await j(await call("GET", `/api/labs/${labA}/veritastock/recalls/${recall.id}`, undefined, OA.token));
   const tm = (rc.matches || []).filter((m: any) => m.source === "tissue");
@@ -316,6 +326,7 @@ async function main() {
   check("recall: finds a unit on the shelf too", tm.some((m: any) => m.tissue.unit_id === u2.id && m.tissue.state === "stored"));
   check("recall: another supplier's same ID shows, flagged to check", tm.some((m: any) => m.tissue.unit_id === uSameId.id && m.vendor_matches === false));
   check("recall: no patient field in a tissue match", !/patient|recipient|mrn/i.test(JSON.stringify(tm)));
+  check("recall: another owner's unit with the same ID isn't there", !tm.some((m: any) => m.tissue.unit_id === uC.id));
   const srcUnit = sqlite.prepare("SELECT id FROM inventory_items WHERE id = ?").get(u1.id);
   const noPull = await call("POST", `/api/labs/${labA}/veritastock/recalls/${recall.id}/remove-stock`, { item_id: 987654, qty: 1 }, OA.token);
   check("recall: pulling stock still works on inventory only", noPull.status === 404 && (srcUnit === undefined || srcUnit !== null));

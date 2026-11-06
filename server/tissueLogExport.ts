@@ -89,13 +89,13 @@ export async function generateTissueLogExcel(rows: any[], ctx: TissueLogContext)
   const thin: any = { style: "thin", color: { argb: "FFD0D0D0" } };
   const border: any = { top: thin, bottom: thin, left: thin, right: thin };
   const protect = { selectLockedCells: true, selectUnlockedCells: true, formatCells: false, formatColumns: false, formatRows: false, insertRows: false, insertColumns: false, deleteRows: false, deleteColumns: false, sort: true, autoFilter: true };
-  const header = `&L&"Calibri,Regular"&10VeritaStock Tissue Perpetual Log&R&"Calibri,Regular"&10${idText}`;
+  const header = `&L&"Calibri,Regular"&10VeritaStock™ Tissue Perpetual Log&R&"Calibri,Regular"&10${idText}`;
   const footer = `&L&"Calibri,Regular"&9${idText}&C&"Calibri,Regular"&9&P of &N&R&"Calibri,Regular"&9VeritaAssure`;
 
   const about = wb.addWorksheet("About");
   about.getColumn(1).width = 110;
   const title = about.getCell("A1");
-  title.value = "VeritaStock Tissue Perpetual Log";
+  title.value = "VeritaStock™ Tissue Perpetual Log";
   title.font = { name: "Calibri", bold: true, size: 14, color: { argb: "FFFFFFFF" } };
   title.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF01696F" } };
   title.alignment = { vertical: "middle", indent: 1 };
@@ -114,9 +114,9 @@ export async function generateTissueLogExcel(rows: any[], ctx: TissueLogContext)
   section("No patient information");
   body("This log never holds a patient's name or medical record number. A lookback runs tissue ID, then this record, then the hospital's chart, where the link to the patient stays. The supplier's tissue usage card is filled in on paper by the hospital; this log records only that it was completed and returned, and the date.");
   section("How to use it");
-  body("Filter the Perpetual Log sheet by tissue ID, supplier or status. A status other than Implanted, Wasted, Returned or Expired means the unit has no final disposition yet and is open. To change a record, correct it on the VeritaStock tissue page, which keeps the history; this workbook is a read-only copy.");
+  body("Filter the Perpetual Log sheet by tissue ID, supplier or status. A status other than Implanted, Wasted, Returned or Expired means the unit has no final disposition yet and is open. To change a record, correct it on the VeritaStock™ tissue page, which keeps the history; this workbook is a read-only copy.");
   section("Source");
-  body(`Recorded by this lab in VeritaStock. The tissue ID is the supplier's "${TISSUE_CFR_CODE_QUOTE}" (${TISSUE_CFR_CODE_CITATION}). ${TISSUE_CFR_TRACKING_CITATION}: a tracking system that "${TISSUE_CFR_TRACKING_QUOTE}". Text read from eCFR, current as of 2026-11-04.`);
+  body(`Recorded by this lab in VeritaStock™. The tissue ID is the supplier's "${TISSUE_CFR_CODE_QUOTE}" (${TISSUE_CFR_CODE_CITATION}). ${TISSUE_CFR_TRACKING_CITATION}: a tracking system that "${TISSUE_CFR_TRACKING_QUOTE}". Text read from eCFR, current as of 2026-11-04.`);
   section("Disclaimer");
   body("This workbook lists what the lab recorded. Decisions about a tissue unit belong to the medical director or designee.");
   section("Coverage gaps");
@@ -168,7 +168,7 @@ export function buildTissueLogHTML(rows: any[], ctx: TissueLogContext): string {
       <td><strong>${esc(stateLabel(u.state))}</strong></td>
     </tr>`;
   }).join("");
-  return `<!doctype html><html><head><meta charset="utf-8"><title>VeritaStock Tissue Perpetual Log</title><style>
+  return `<!doctype html><html><head><meta charset="utf-8"><title>VeritaStock&trade; Tissue Perpetual Log</title><style>
     body { font-family: Helvetica, Arial, sans-serif; color: #28251D; font-size: 7.5pt; margin: 0; }
     .head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #01696F; padding-bottom: 6px; margin-bottom: 8px; }
     .brand { color: #01696F; font-weight: 700; font-size: 13pt; }
