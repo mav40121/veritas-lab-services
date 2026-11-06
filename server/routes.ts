@@ -28356,9 +28356,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         LEFT JOIN veritacheck_verification_studies vs ON vs.study_id = s.id
         LEFT JOIN veritacheck_verifications v ON v.id = vs.verification_id
         WHERE LOWER(s.analyst) IN (${placeholders})
+          AND (s.lab_id = ? OR (s.lab_id IS NULL AND s.user_id = ?))
         ORDER BY s.date DESC, s.id DESC
         LIMIT 100
-      `).all(...variantsLower) as any[];
+      `).all(...variantsLower, labId, req.userId) as any[];
 
       const counts = studies.reduce(
         (acc: any, r: any) => {
