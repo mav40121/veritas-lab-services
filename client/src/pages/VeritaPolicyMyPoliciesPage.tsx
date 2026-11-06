@@ -2427,7 +2427,8 @@ export default function VeritaPolicyMyPoliciesPage() {
               const blocked = descendantIds(manuals, m.id);
               return (
                 <div key={m.id} className="flex flex-wrap items-center gap-2 py-1.5 pr-2" data-testid="manuals-row" style={{ paddingLeft: 8 + Math.min(m.depth || 0, 8) * 18 }}>
-                  <span className="flex-1 min-w-0 truncate text-sm" title={m.path}>
+                  {/* On a phone the name takes its own line, so it isn't cut down to a few letters. */}
+                  <span className="flex-1 min-w-full sm:min-w-0 truncate text-sm" title={m.path}>
                     {m.name}
                   </span>
                   <Select
