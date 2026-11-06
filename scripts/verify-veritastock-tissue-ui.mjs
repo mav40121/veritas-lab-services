@@ -61,6 +61,8 @@ const open = async (opts = {}) => {
 const page = await open();
 const noSideways = (p) => p.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
 const tid = (p, id) => p.getByTestId(id);
+// Polled from here: the enforced CSP refuses page.waitForFunction's eval, which is part of what this run checks.
+const until = async (cond, ms = 15000) => { const end = Date.now() + ms; while (Date.now() < end) { if (await cond()) return true; await new Promise((r) => setTimeout(r, 200)); } return false; };
 const errText = async (p) => (await tid(p, "tissue-error").first().waitFor({ timeout: 15000 }), tid(p, "tissue-error").first().innerText());
 
 // ── The way in ───────────────────────────────────────────────────────────────
@@ -121,9 +123,10 @@ check("a labeled MRN is refused with the reason", /looks like patient informatio
 await tid(page, "notes").scrollIntoViewIfNeeded();
 await shot(page, "phi-refused");
 check("nothing saved on the refusal", scratch((d) => d.prepare("SELECT COUNT(*) n FROM tissue_units WHERE lab_id = ?").get(labId).n) === 0);
-check("the platform's warning shows too", (await page.getByText("This looks like patient information").count()) > 0);
+const platformWarning = page.getByText("This looks like patient information", { exact: true }); // the toast's title; the refusal above reads on past these words
+check("the platform's warning shows too", (await platformWarning.count()) > 0);
 await tid(page, "notes").fill("Arrived on dry ice");
-await page.getByText("This looks like patient information").first().waitFor({ state: "hidden", timeout: 30000 }); // the warning stays 15 seconds
+await platformWarning.first().waitFor({ state: "hidden", timeout: 30000 }); // the warning stays 15 seconds
 await tid(page, "save-receipt").click();
 await tid(page, "tissue-unit").waitFor({ timeout: 15000 });
 check("saved: the record opens, in storage", /In blood bank storage/.test(await tid(page, "unit-state").first().innerText()));
@@ -202,7 +205,7 @@ await tid(page, "tissue-log-row").first().waitFor({ timeout: 15000 });
 check("open shows only the unit with no final disposition", (await tid(page, "tissue-log-row").count()) === 1 && /TIS-OPEN/.test(await tid(page, "tissue-log-table").innerText()));
 await shot(page, "log-open");
 await tid(page, "tissue-filter-all").click();
-await page.waitForFunction(() => document.querySelectorAll('[data-testid="tissue-log-row"]').length === 3);
+await until(async () => (await tid(page, "tissue-log-row").count()) === 3);
 const logText = await tid(page, "tissue-log-table").innerText();
 check("all shows every unit once, with its status", /TIS-1001/.test(logText) && /TIS-EXPIRED/.test(logText) && /TIS-OPEN/.test(logText));
 check("the log's headings name no patient", !/patient|recipient|medical record/i.test(await tid(page, "tissue-log-table").locator("thead").innerText()));
@@ -265,7 +268,7 @@ await page.goto(openUnitUrl, { waitUntil: "networkidle" });
 const dark = await open({ colorScheme: "dark" });
 await dark.goto(P, { waitUntil: "networkidle" });
 await tid(dark, "tissue-filter-all").click();
-await dark.waitForFunction(() => document.querySelectorAll('[data-testid="tissue-log-row"]').length === 3);
+await until(async () => (await tid(dark, "tissue-log-row").count()) === 3);
 check("dark: the page is in dark mode", await dark.evaluate(() => document.documentElement.classList.contains("dark")));
 await shot(dark, "log-dark");
 await dark.goto(`${P}?new=1`, { waitUntil: "networkidle" });
@@ -301,7 +304,7 @@ await stock.goto(`${BASE}/labs/${labId}/veritastock`, { waitUntil: "networkidle"
 await tid(stock, "recalls-button").waitFor({ timeout: 20000 });
 check("veritastock.com: no Tissue button", (await tid(stock, "tissue-button").count()) === 0);
 await stock.goto(P, { waitUntil: "networkidle" });
-await stock.waitForFunction(() => location.pathname === "/", undefined, { timeout: 15000 });
+await until(async () => new URL(stock.url()).pathname === "/");
 check("veritastock.com: the page redirects away", new URL(stock.url()).pathname === "/");
 check("veritastock.com: nothing of the tissue page shows", (await tid(stock, "no-phi-banner").count()) === 0);
 
