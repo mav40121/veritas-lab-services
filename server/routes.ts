@@ -1539,6 +1539,36 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ activeVersion: active, currentVersion: TERMS_VERSION, ...acceptanceCounts(sqlite, active || TERMS_VERSION) });
   });
 
+  // Read-only numbers for the access work, so a fix can be sized before it changes who can open what. Nothing but counts: no names,
+  // emails, row contents or lab ids. The secret comes from the header only, so it never lands in a URL or a log.
+  //   studiesWithNoOwner: the studies GET /api/studies/:id opens with no sign-in, because it skips its check when user_id is NULL or 0.
+  //   activeSeatsWithNoActiveMembership: active user_seats with no active lab_members row for that person in that lab. withNoLabOnSeat
+  //   and withNoUserOnSeat are the part of the total that could never match: an older seat with no lab, or a seat nobody has claimed.
+  app.get("/api/admin/access-audit-counts", (req: any, res) => {
+    const secret = req.headers["x-admin-secret"] as string | undefined;
+    if (!secret || secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const sqlite = (db as any).$client;
+    const noOwner = sqlite.prepare("SELECT COUNT(*) AS n FROM studies WHERE user_id IS NULL OR user_id = 0").get() as { n: number };
+    const seats = sqlite.prepare(
+      `SELECT us.seat_type AS seat_type, COUNT(*) AS n,
+              SUM(CASE WHEN us.lab_id IS NULL THEN 1 ELSE 0 END) AS no_lab,
+              SUM(CASE WHEN us.seat_user_id IS NULL THEN 1 ELSE 0 END) AS no_user
+       FROM user_seats us
+       WHERE us.status = 'active'
+        AND NOT EXISTS (SELECT 1 FROM lab_members lm WHERE lm.user_id = us.seat_user_id AND lm.lab_id = us.lab_id AND lm.status = 'active')
+       GROUP BY us.seat_type`
+    ).all() as Array<{ seat_type: string; n: number; no_lab: number; no_user: number }>;
+    res.json({
+      studiesWithNoOwner: noOwner.n,
+      activeSeatsWithNoActiveMembership: {
+        total: seats.reduce((sum, s) => sum + s.n, 0),
+        bySeatType: Object.fromEntries(seats.map((s) => [s.seat_type, s.n])),
+        withNoLabOnSeat: seats.reduce((sum, s) => sum + s.no_lab, 0),
+        withNoUserOnSeat: seats.reduce((sum, s) => sum + s.no_user, 0),
+      },
+    });
+  });
+
   // BUG-068 cleanup (Q52 = 1): clear the made-up competency values the old startup backfill wrote. Dry run unless
   // dryRun is false. Never touches a signed assessment or a lab in excludeLabIds (the demo lab). One audit row per
   // item changed, filed under the lab owner. server/competencyBackfillCleanup.ts.
