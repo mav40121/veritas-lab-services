@@ -290,6 +290,8 @@ async function main() {
     const realSign = await call("POST", `/api/staff-portal-session/policies/${mu4.id}/sign`, { employee_id: ann.emp, version_id: v, typed_signature: ann.name, content_hash: "madeup" }, ann.token);
     const stReal = await call("GET", `${P}/documents/${mu4.id}/signature-status`, undefined, ownerToken);
     check("7. signing the new version here reads as a Staff login signature", realSign.status === 200 && person(ann.emp, stReal).status === "signed" && person(ann.emp, stReal).how === "Staff login" && !person(ann.emp, stReal).prior_system, JSON.stringify(person(ann.emp, stReal)));
+    const compBoth = (await call("GET", `${P}/compliance`, undefined, ownerToken)).body.perStaffAttest?.find((s: any) => s.staff_employee_id === ann.emp);
+    check("7. the compliance page keeps a signature made here apart from one carried over", compBoth?.signed_count === 1 && compBoth?.carried_count === 2, JSON.stringify(compBoth));
     const older = await sendA([row({ docNumber: "MU 3", version: "2.0", signedOn: "2024-06-01" })]);
     check("7. an earlier major than the one loaded is history only", older.body.counts?.loaded === 1 && older.body.results[0].counts === false && (sqlite.prepare("SELECT version_id FROM policy_prior_signatures WHERE document_id = ?").get(mu3.id) as any).version_id === null);
     check("7. and the person still owes the document", (await list(ann)).find((p) => p.document_id === mu3.id).signed === false && (await bell(ann)).includes(mu3.id));
@@ -397,7 +399,7 @@ async function main() {
     const dry = await runScript(common);
     check("10. the dry run finishes", dry.code === 0, dry.out.slice(-300));
     check("10. it writes nothing", scriptRows() === 0);
-    check("10. it prints no names", !/Scripted|Gone|Pat\b|Mikey|Twin/.test(dry.out.replace(/files[\s\S]*$/, "")), dry.out.slice(0, 200));
+    check("10. it prints no names", !/Scripted|Gone|Pat\b|Mikey|Twin/.test(dry.out), dry.out.slice(0, 200));
     const sum = JSON.parse(fs.readFileSync(latest("dryrun_summary_"), "utf8"));
     const by = sum.rows.byResult;
     check("10. counts: the report", sum.report.rows === 12 && sum.report.people === 5 && sum.report.signed === 10 && sum.report.open === 2, JSON.stringify(sum.report));
@@ -435,7 +437,7 @@ async function main() {
     const appliedSum = JSON.parse(fs.readFileSync(latest("load_summary_"), "utf8"));
     check("10. it loads what the dry run said", appliedSum.outcome.loaded === 7 && scriptRows() === 7, JSON.stringify(appliedSum.outcome));
     check("10. no email, login, seat or assignment", mail.length === mailBefore && JSON.stringify(moving()) === JSON.stringify(seatsBefore));
-    check("10. the load prints no names", !/Scripted|Gone, Pat|Mikey|Twin/.test(applied.out.replace(/"files"[\s\S]*$/, "")));
+    check("10. the load prints no names", !/Scripted|Gone, Pat|Mikey|Twin/.test(applied.out));
     const danaRows = sqlite.prepare("SELECT document_id, version_id, person_state FROM policy_prior_signatures WHERE staff_employee_id = ?").all(dana) as any[];
     check("10. Dana has her lab's two copies, linked", danaRows.length === 2 && danaRows.every((r) => r.version_id != null && r.person_state === "on_roster"), JSON.stringify(danaRows));
     const omarRow = sqlite.prepare("SELECT source_version, version_id FROM policy_prior_signatures WHERE staff_employee_id = ?").get(omar) as any;
