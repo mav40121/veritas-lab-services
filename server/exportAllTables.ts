@@ -141,6 +141,7 @@ export const EXPORT_TABLES: Record<string, ExportTable> = {
   policy_document_notes: lab("VeritaDC"),
   policy_email_templates: lab("VeritaDC"),
   policy_manual_approvers: lab("VeritaDC"),
+  policy_read_sign_assignments: lab("VeritaDC"), // who each document or manual goes to for read-and-sign (server/policyReadSign.ts)
   policy_quiz_questions: lab("VeritaDC"),
   policy_surveyor_links: lab("VeritaDC"),
   veritapolicy_lab_policies: labOrOwner("VeritaDC"),

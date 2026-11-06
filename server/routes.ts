@@ -233,7 +233,8 @@ import { orderManualTree, manualMoveProblem, MAX_MANUAL_DEPTH } from "../shared/
 import { versionLabel, nextVersionParts, cleanDocNumber, docNumberKey, DOC_NUMBER_MAX } from "../shared/policyVersion";
 import { isPolicyDocType, docTypeRules, DOC_TYPE_REVIEW_MONTHS } from "../shared/policyDocTypes";
 import { labCarriesMinorRevisions, signatureStillCurrent, carriedStaffSignature } from "./policyMinorRevision";
-import { attestationStillCurrent, closeAttestationsCoveredByStaffSignatures, documentSignatureStatus, unsignedDocumentsForStaff } from "./policySignatureStatus";
+import { attestationStillCurrent, closeAttestationsCoveredByStaffSignatures, documentSignatureStatus, staffHasSignedCurrent, unsignedDocumentsForStaff } from "./policySignatureStatus";
+import { assignedDocumentIds, loadReadSignContext, logStaffDocumentView, lookupDocuments, registerReadSignRoutes, rulesForDocument, targetLabels, veritaDcStaffGuard } from "./policyReadSign";
 import { assessmentTypeLabel, assessmentTypeProblem, isEvaluationProgram, normalizeRecordKind } from "@shared/competencyEvaluation";
 import { normalizeSpecimen, normalizeReportableField, specimenLabel } from "@shared/veritamapSpecimen";
 import { buildCompetencyRegisterRows, generateCompetencyRegisterExcel } from "./competencyRegisterExcel";
@@ -1553,7 +1554,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const secret = req.headers["x-admin-secret"] as string | undefined;
     if (!secret || secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
     const sqlite = (db as any).$client;
-    const noOwner = sqlite.prepare("SELECT COUNT(*) AS n FROM studies WHERE user_id IS NULL OR user_id = 0").get() as { n: number };
+    const noOwner = sqlite.prepare("SELECT lab_id, created_at FROM studies WHERE user_id IS NULL OR user_id = 0").all() as Array<{ lab_id: number | null; created_at: string | null }>;
+    // Michael Q193 = 1: these rows stay in place and unopened, and he decides later whether they stay. Dates only, oldest and newest.
+    const noOwnerTimes = noOwner.map((s) => Date.parse(String(s.created_at))).filter((n) => Number.isFinite(n));
+    const dayOf = (ms: number) => new Date(ms).toISOString().slice(0, 10);
     const seats = sqlite.prepare(
       `SELECT us.seat_type AS seat_type, COUNT(*) AS n,
               SUM(CASE WHEN us.lab_id IS NULL THEN 1 ELSE 0 END) AS no_lab,
@@ -1575,7 +1579,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         withNoLab: olderSeats.filter((s) => s.lab_id == null).length,
         holderHasNoMembership: olderSeats.filter((s) => s.lab_id != null && !s.has_membership).length,
       },
-      studiesWithNoOwner: noOwner.n,
+      studiesWithNoOwner: noOwner.length,
+      studiesWithNoOwnerDates: {
+        oldest: noOwnerTimes.length ? dayOf(Math.min(...noOwnerTimes)) : null,
+        newest: noOwnerTimes.length ? dayOf(Math.max(...noOwnerTimes)) : null,
+        withALab: noOwner.filter((s) => s.lab_id != null).length,
+      },
       activeSeatsWithNoActiveMembership: {
         total: seats.reduce((sum, s) => sum + s.n, 0),
         bySeatType: Object.fromEntries(seats.map((s) => [s.seat_type, s.n])),
@@ -1641,7 +1650,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/admin/report", (req, res) => {
     const secret = (req.headers["x-admin-secret"] || req.query.secret) as string | undefined;
     const { plan, status } = req.query as { plan?: string; status?: string };
-    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    if (!secret || secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
 
     // Multi-Lab Tier 2: report renders one row per (user, lab membership) pair.
     // A user with active memberships on N labs appears in N rows (one per lab
@@ -2013,7 +2022,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Read-only. Auth: x-admin-secret header or ?secret= query param.
   app.get("/api/admin/users/:userId/activity", (req, res) => {
     const secret = (req.headers["x-admin-secret"] || req.query.secret) as string | undefined;
-    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    if (!secret || secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
     const userId = parseInt(req.params.userId);
     if (!Number.isFinite(userId)) return res.status(400).json({ error: "Invalid userId" });
     const sqlite = (db as any).$client;
@@ -7704,6 +7713,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         const own = holdsStaffSeat ? staffOwnScope((db as any).$client, req.userId, m.lab_id) : null;
         return { competencyOwnOnly: !!own, ownEmployeeId: own?.employeeId ?? null };
       })(),
+      // Step D: in VeritaDC this person sees only what's assigned to them, plus a read-only lookup (server/policyReadSign.ts). The same rule as the routes.
+      documentsOwnOnly: holdsStaffSeat ? !!staffOwnScope((db as any).$client, req.userId, m.lab_id, "veritapolicy") : false,
       permissions: (() => { try { return JSON.parse(m.permissions_json || '{}'); } catch { return {}; } })(),
       isPrimaryLab: !!m.is_primary_lab,
       isAccountHomeLab: homeLabId != null && Number(m.lab_id) === homeLabId,
@@ -8208,11 +8219,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   });
 
   // GET /api/staff-portal-session/policies?employee_id=N
-  //   Authed via staffPortalAuthMiddleware. Returns the lab's approved
-  //   policies plus, for the given staff employee, whether they've
-  //   signed the current version. Policies are universal for every
-  //   employee on the VeritaStaff roster — no per-employee gate flag
-  //   needed here (policies are by-everyone-on-roster, by design).
+  //   Authed via staffPortalAuthMiddleware. Returns the approved documents
+  //   assigned to this staff member (server/policyReadSign.ts) and whether
+  //   they've signed the current version. Documents not assigned to them
+  //   aren't listed (Step D, 2026-11-06).
   app.get("/api/staff-portal-session/policies", staffPortalAuthMiddleware, (req: any, res) => {
     try {
       const labId = req.staffPortalLabId;
@@ -8239,6 +8249,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         `SELECT d.id AS document_id,
                 d.title,
                 d.description,
+                d.manual_id,
                 d.current_version_id,
                 d.effective_date,
                 d.next_review_date,
@@ -8260,9 +8271,11 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
                             WHERE ts.lab_id = d.lab_id AND ts.doc_type = d.doc_type AND ts.requires_read_and_sign = 0)
          ORDER BY d.title`
       ).all(employeeId, labId) as any[];
+      const assigned = assignedDocumentIds(sqlite, labId, { employeeId, userId: req.staffPortalUserId });
+      const staffManualPath = new Map(orderManualTree(sqlite.prepare("SELECT id, parent_id, name, display_order FROM policy_manuals WHERE lab_id = ?").all(labId) as any[]).map((m: any) => [m.id, m.path]));
 
       res.json({
-        policies: policies.map((p: any) => {
+        policies: policies.filter((p: any) => assigned.has(p.document_id)).map((p: any) => {
           // Minor revisions (Q154): in a lab that carries them forward, a signature on an earlier version with the same
           // major number still counts, and the list says the document changed since (server/policyMinorRevision.ts).
           const carried = p.signature_id == null ? carriedStaffSignature(sqlite, labId, p.document_id, employeeId, p.current_version_id) : null;
@@ -8276,6 +8289,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
             version_number: p.version_number,
             version_label: versionLabel(p),
             doc_number: p.doc_number ?? null,
+            manual_path: p.manual_id != null ? staffManualPath.get(p.manual_id) ?? null : null,
             effective_date: p.effective_date,
             next_review_date: p.next_review_date,
             signed: p.signature_id != null || !!carried || !!attested,
@@ -8289,6 +8303,34 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     } catch (err: any) {
       console.error("[staff-portal-session/policies GET] error:", err);
       return res.status(500).json({ error: err.message || "policies_fetch_failed" });
+    }
+  });
+
+  // GET /api/staff-portal-session/policies/lookup?q=
+  //   Read-only lookup of any approved document by title, number or description (server/policyReadSign.ts says why). A search, not a
+  //   list: under two characters it returns nothing. It carries no signature status for anyone but this person.
+  app.get("/api/staff-portal-session/policies/lookup", staffPortalAuthMiddleware, (req: any, res) => {
+    try {
+      const labId = req.staffPortalLabId;
+      const sqlite = (db as any).$client;
+      const assigned = assignedDocumentIds(sqlite, labId, { employeeId: req.staffPortalStaffEmployeeId, userId: req.staffPortalUserId });
+      const results = lookupDocuments(sqlite, labId, String(req.query.q ?? "")).map((d: any) => ({
+        document_id: d.document_id,
+        title: d.title,
+        description: d.description,
+        doc_number: d.doc_number ?? null,
+        status: d.status,
+        version_id: d.current_version_id,
+        version_number: d.version_number,
+        version_label: versionLabel(d),
+        effective_date: d.effective_date,
+        next_review_date: d.next_review_date,
+        assigned: assigned.has(d.document_id),
+      }));
+      res.json({ results });
+    } catch (err: any) {
+      console.error("[staff-portal-session/policies lookup] error:", err);
+      return res.status(500).json({ error: err.message || "policy_lookup_failed" });
     }
   });
 
@@ -8309,14 +8351,14 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       }
       const sqlite = (db as any).$client;
       const doc = sqlite.prepare(
-        `SELECT id, title, description, current_version_id, effective_date, next_review_date
+        `SELECT id, title, description, status, current_version_id, effective_date, next_review_date
          FROM policy_documents
-         WHERE id = ? AND lab_id = ? AND status = 'approved' AND archived_at IS NULL`
+         WHERE id = ? AND lab_id = ? AND status IN ('approved', 'expired') AND archived_at IS NULL`
       ).get(documentId, labId) as any;
       if (!doc) return res.status(404).json({ error: "Policy not found or not approved" });
 
       const version = sqlite.prepare(
-        `SELECT id, version_number, file_format, file_hash_sha256, uploaded_at
+        `SELECT id, version_number, version_major, version_minor, file_format, file_hash_sha256, uploaded_at
          FROM policy_versions WHERE id = ?`
       ).get(doc.current_version_id) as any;
       if (!version) return res.status(404).json({ error: "Policy version not found" });
@@ -8325,10 +8367,14 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         document_id: doc.id,
         title: doc.title,
         description: doc.description,
+        status: doc.status,
+        // False for a document looked up read-only: there is nothing for this person to sign.
+        assigned: assignedDocumentIds(sqlite, labId, { employeeId: req.staffPortalStaffEmployeeId, userId: req.staffPortalUserId }).has(doc.id),
         effective_date: doc.effective_date,
         next_review_date: doc.next_review_date,
         version_id: version.id,
         version_number: version.version_number,
+        version_label: versionLabel(version),
         file_format: version.file_format,
         file_hash: version.file_hash_sha256,
         version_uploaded_at: version.uploaded_at,
@@ -8389,10 +8435,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         `SELECT v.id AS version_id, v.file_path, v.file_format, v.file_hash_sha256 AS expected_hash
          FROM policy_documents d
          JOIN policy_versions v ON v.id = d.current_version_id
-         WHERE d.id = ? AND d.lab_id = ? AND d.status = 'approved' AND d.archived_at IS NULL`
+         WHERE d.id = ? AND d.lab_id = ? AND d.status IN ('approved', 'expired') AND d.archived_at IS NULL`
       ).get(documentId, labId) as any;
       if (!row) return res.status(404).json({ error: "Not found" });
 
+      // Shows on the document's trail and as "opened" on the tracker, as a read in the main app does.
+      logStaffDocumentView(sqlite, labId, documentId, req.staffPortalUserId, req);
       return await sendStaffVersion(res, row);
     } catch (err: any) {
       console.error("[staff-portal-session/policies render] error:", err);
@@ -8442,6 +8490,16 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       if (doc.current_version_id !== versionId) {
         return res.status(409).json({ error: "Policy revised since you started reading. Please reload and re-read.", expected_version_id: doc.current_version_id });
       }
+      // Staff sign only what's assigned to them (Step D). Anything else they may read, but there is nothing to sign.
+      if (!assignedDocumentIds(sqlite, labId, { employeeId, userId: req.staffPortalUserId }).has(documentId)) {
+        return res.status(403).json({ error: "This document isn't assigned to you, so there's nothing to sign.", code: "NOT_ASSIGNED" });
+      }
+      // A manual's assignment can cover a form or job aid the lab set to no read-and-sign. That stays readable, with nothing to sign.
+      const noSign = sqlite.prepare(
+        `SELECT 1 FROM policy_documents d JOIN policy_doc_type_settings ts ON ts.lab_id = d.lab_id AND ts.doc_type = d.doc_type
+          WHERE d.id = ? AND ts.requires_read_and_sign = 0`
+      ).get(documentId);
+      if (noSign) return res.status(409).json({ error: "This document type doesn't need read-and-sign in this lab.", code: "TYPE_NO_READ_AND_SIGN" });
 
       const ip = (req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "").toString().split(",")[0].trim() || null;
       const ua = (req.headers["user-agent"] || "").toString().slice(0, 500) || null;
@@ -10997,6 +11055,13 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       ORDER BY CASE lm.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END, lm.created_at ASC
     `).all(ownerUserId, req.scope.labId);
 
+    // Michael Q192 = 1: a Staff login gets its own row and no pending invitations, nothing about anyone else or the lab's seats.
+    if (membersOwnIn(req)) {
+      const ownRows = (rows as any[]).filter((r) => r.user_id === req.userId);
+      const isMine = medicalDirector && ownRows.some((r) => String(r.email || "").toLowerCase() === medicalDirector.email.toLowerCase());
+      return res.json({ members: ownRows, pendingInvites: [], seatLimits: null, seatCounts: null, staffPortal: null, medicalDirector: isMine ? medicalDirector : null, ownOnly: true });
+    }
+
     // Pending invites: user_seats rows scoped to this lab where the recipient
     // hasn't accepted yet (no matching user account = no lab_members row
     // exists for them yet).
@@ -11076,7 +11141,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // reads as admin here but is refused invitation links (server/vlsSupport.ts), so not them.
     if (!canManageLabMembers(req.scope) || req.scope?.viaVlsSupport) pendingInvites = pendingInvites.map((inv) => ({ ...inv, invite_token: null }));
 
-    res.json({ members: rows, pendingInvites, seatLimits, seatCounts, staffPortal, medicalDirector });
+    res.json({ members: rows, pendingInvites, seatLimits, seatCounts, staffPortal, medicalDirector, ownOnly: false });
   });
 
   // PUT /api/labs/:labId/medical-director
@@ -12131,10 +12196,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           return b.id - a.id;
         });
         return res.json(userStudies);
-      } catch {}
+      } catch {
+        return res.status(401).json({ error: "Invalid or expired session" });
+      }
     }
-    // Guest: return studies with no userId
-    res.json(storage.getAllStudies().filter(s => !s.userId));
+    // Michael Q193 = 1: sign in to see studies. This used to hand the studies with no owner to anyone.
+    res.status(401).json({ error: "Sign in to see your studies." });
   });
 
   // ── My Studies XLSX export ──
@@ -12498,53 +12565,53 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   });
 
   app.get("/api/studies/:id", (req, res) => {
-    const study = storage.getStudy(parseInt(req.params.id));
-    if (!study) return res.status(404).json({ error: "Study not found" });
-
-    // If study belongs to a user, verify the requester is that user (or their seat user)
-    if (study.userId) {
-      const auth = req.headers.authorization;
-      if (!auth?.startsWith("Bearer ")) {
-        return res.status(403).json({ error: "This study requires authentication" });
-      }
-      try {
-        const payload = verifySessionJwt((db as any).$client, auth.slice(7)) as { userId: number };
-        // 2026-06-02 lab-scoped seat check (same pattern as PR #482 and
-        // sibling fixes in this PR). For a multi-lab owner holding a seat
-        // in someone else's lab, the unscoped seat lookup would map
-        // effectiveUserId to the wrong owner — denying access to their
-        // own studies, or worse, authorizing access to studies in the
-        // other lab. Resolve active lab from Referer.
-        const getActiveLabId: number | null = activeLabIdFromContext(req);
-        let effectiveUserId = payload.userId;
-        if (getActiveLabId) {
-          const ownsLab = (db as any).$client.prepare(
-            "SELECT 1 FROM labs WHERE id = ? AND owner_user_id = ? LIMIT 1"
-          ).get(getActiveLabId, payload.userId);
-          if (!ownsLab) {
-            const seatRow = (db as any).$client.prepare(
-              "SELECT owner_user_id FROM user_seats WHERE seat_user_id = ? AND status = 'active' AND lab_id = ? LIMIT 1"
-            ).get(payload.userId, getActiveLabId) as any;
-            if (seatRow) effectiveUserId = seatRow.owner_user_id;
-          }
-        } else {
-          // Legacy fallback: no active-lab context (#82: owners act as themselves).
-          const seatRow = legacySeatForUser((db as any).$client, payload.userId) as any;
-          if (seatRow) effectiveUserId = seatRow.owner_user_id;
-        }
-        if (effectiveUserId !== study.userId) {
-          return res.status(403).json({ error: "Access denied" });
-        }
-        // Q191: a seat's reach stops at its own lab. The study's lab isn't on the Drizzle row, so read it here.
-        const studyLab = (db as any).$client.prepare("SELECT lab_id FROM studies WHERE id = ?").get(study.id) as any;
-        if (!ownerRowInReach((db as any).$client, payload.userId, effectiveUserId, studyLab?.lab_id)) {
-          return res.status(403).json({ error: "Access denied" });
-        }
-      } catch {
-        return res.status(403).json({ error: "Invalid or expired session" });
-      }
+    // Michael Q193 = 1: sign in first, so a study's existence isn't answered to anyone signed out.
+    const auth = req.headers.authorization;
+    if (!auth?.startsWith("Bearer ")) {
+      return res.status(403).json({ error: "This study requires authentication" });
     }
+    let sessionUserId: number;
+    try {
+      sessionUserId = (verifySessionJwt((db as any).$client, auth.slice(7)) as { userId: number }).userId;
+    } catch {
+      return res.status(403).json({ error: "Invalid or expired session" });
+    }
+    const study = storage.getStudy(parseInt(req.params.id));
+    // A study with no owner stays in place and unopened, for everyone, until Michael decides whether it stays.
+    if (!study || !study.userId) return res.status(404).json({ error: "Study not found" });
 
+    // Verify the requester is the study's owner (or their seat user)
+    // 2026-06-02 lab-scoped seat check (same pattern as PR #482 and
+    // sibling fixes in this PR). For a multi-lab owner holding a seat
+    // in someone else's lab, the unscoped seat lookup would map
+    // effectiveUserId to the wrong owner — denying access to their
+    // own studies, or worse, authorizing access to studies in the
+    // other lab. Resolve active lab from Referer.
+    const getActiveLabId: number | null = activeLabIdFromContext(req);
+    let effectiveUserId = sessionUserId;
+    if (getActiveLabId) {
+      const ownsLab = (db as any).$client.prepare(
+        "SELECT 1 FROM labs WHERE id = ? AND owner_user_id = ? LIMIT 1"
+      ).get(getActiveLabId, sessionUserId);
+      if (!ownsLab) {
+        const seatRow = (db as any).$client.prepare(
+          "SELECT owner_user_id FROM user_seats WHERE seat_user_id = ? AND status = 'active' AND lab_id = ? LIMIT 1"
+        ).get(sessionUserId, getActiveLabId) as any;
+        if (seatRow) effectiveUserId = seatRow.owner_user_id;
+      }
+    } else {
+      // Legacy fallback: no active-lab context (#82: owners act as themselves).
+      const seatRow = legacySeatForUser((db as any).$client, sessionUserId) as any;
+      if (seatRow) effectiveUserId = seatRow.owner_user_id;
+    }
+    if (effectiveUserId !== study.userId) {
+      return res.status(403).json({ error: "Access denied" });
+    }
+    // Q191: a seat's reach stops at its own lab. The study's lab isn't on the Drizzle row, so read it here.
+    const studyLab = (db as any).$client.prepare("SELECT lab_id FROM studies WHERE id = ?").get(study.id) as any;
+    if (!ownerRowInReach((db as any).$client, sessionUserId, effectiveUserId, studyLab?.lab_id)) {
+      return res.status(403).json({ error: "Access denied" });
+    }
     res.json(study);
   });
 
@@ -12573,6 +12640,16 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   }
 
   app.post("/api/studies", (req, res) => {
+    // Michael Q193 = 1: a study can't be saved signed out, so no more studies with no owner. No public page saves here: VeritaCheck
+    // saves through the lab-scoped route, and the demo pages have their own.
+    const auth = req.headers.authorization;
+    let payload: { userId: number };
+    try {
+      if (!auth?.startsWith("Bearer ")) throw new Error("no session");
+      payload = verifySessionJwt((db as any).$client, auth.slice(7)) as { userId: number };
+    } catch {
+      return res.status(401).json({ error: "Sign in to save a study." });
+    }
     // Drafts skip strict insertStudySchema validation since the user may not
     // have filled all required fields yet (data_points, instruments, etc.).
     // Minimum bar: a test_name + study_type so the row is identifiable in the
@@ -12622,68 +12699,60 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       parsed = insertStudySchema.safeParse(req.body);
       if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
     }
-    // Attach userId if authenticated
-    let userId: number | null = null;
-    let createdByUserId: number | null = null;
-    const auth = req.headers.authorization;
-    if (auth?.startsWith("Bearer ")) {
-      try {
-        const payload = verifySessionJwt((db as any).$client, auth.slice(7)) as { userId: number };
-        // 2026-06-01 lab-scoped seat check (same fix as requireModuleEdit
-        // and PR #479's account-settings pattern). The legacy unscoped
-        // POST has no labScopeMiddleware, so derive the active lab from
-        // the Referer URL. Owners of the active lab pass through. If no
-        // active lab can be resolved, fall back to the legacy global
-        // seat check.
-        const postActiveLabId: number | null = activeLabIdFromContext(req);
-        let seatRow: any = null;
-        if (postActiveLabId) {
-          const ownsLab = (db as any).$client.prepare(
-            "SELECT 1 FROM labs WHERE id = ? AND owner_user_id = ? LIMIT 1"
-          ).get(postActiveLabId, payload.userId);
-          if (!ownsLab) {
-            seatRow = (db as any).$client.prepare(
-              "SELECT owner_user_id, permissions FROM user_seats WHERE seat_user_id = ? AND status = 'active' AND lab_id = ? LIMIT 1"
-            ).get(payload.userId, postActiveLabId) as any;
-            if (seatRow) {
-              let perms: Record<string, string> = {};
-              try { perms = JSON.parse(seatRow.permissions || '{}'); } catch {}
-              if ((perms.veritacheck || 'view') !== 'edit') {
-                return res.status(403).json({ error: "You have view-only access to veritacheck. Ask the account owner to grant edit access." });
-              }
-            }
-          }
-        } else {
-          // Legacy fallback: no active-lab context. Non-owners keep the global
-          // behavior; owners act as themselves (#82).
-          seatRow = legacySeatForUser((db as any).$client, payload.userId, "owner_user_id, permissions") as any;
-          if (seatRow) {
-            let perms: Record<string, string> = {};
-            try { perms = JSON.parse(seatRow.permissions || '{}'); } catch {}
-            if ((perms.veritacheck || 'view') !== 'edit') {
-              return res.status(403).json({ error: "You have view-only access to veritacheck. Ask the account owner to grant edit access." });
-            }
+    // The account the study is filed under.
+    // 2026-06-01 lab-scoped seat check (same fix as requireModuleEdit
+    // and PR #479's account-settings pattern). The legacy unscoped
+    // POST has no labScopeMiddleware, so derive the active lab from
+    // the Referer URL. Owners of the active lab pass through. If no
+    // active lab can be resolved, fall back to the legacy global
+    // seat check.
+    const postActiveLabId: number | null = activeLabIdFromContext(req);
+    let seatRow: any = null;
+    if (postActiveLabId) {
+      const ownsLab = (db as any).$client.prepare(
+        "SELECT 1 FROM labs WHERE id = ? AND owner_user_id = ? LIMIT 1"
+      ).get(postActiveLabId, payload.userId);
+      if (!ownsLab) {
+        seatRow = (db as any).$client.prepare(
+          "SELECT owner_user_id, permissions FROM user_seats WHERE seat_user_id = ? AND status = 'active' AND lab_id = ? LIMIT 1"
+        ).get(payload.userId, postActiveLabId) as any;
+        if (seatRow) {
+          let perms: Record<string, string> = {};
+          try { perms = JSON.parse(seatRow.permissions || '{}'); } catch {}
+          if ((perms.veritacheck || 'view') !== 'edit') {
+            return res.status(403).json({ error: "You have view-only access to veritacheck. Ask the account owner to grant edit access." });
           }
         }
-        userId = seatRow ? seatRow.owner_user_id : payload.userId;
-        // Track who actually ran the study so the Admin Report attributes
-        // credit to the seat user (not just the primary seat holder).
-        createdByUserId = payload.userId;
-        // Check subscription write access for authenticated users
-        const fullUser = storage.getUserById(seatRow ? seatRow.owner_user_id : payload.userId);
-        if (fullUser) {
-          const accessLevel = getAccessLevel(fullUser);
-          if (accessLevel === 'read_only') {
-            const expiry = new Date(fullUser.subscriptionExpiresAt!);
-            const retentionEnd = new Date(expiry);
-            retentionEnd.setFullYear(retentionEnd.getFullYear() + 2);
-            return res.status(403).json({ error: "Your subscription has expired. Your data is available in read-only mode for 2 years. Resubscribe to add new records.", code: "SUBSCRIPTION_EXPIRED_READ_ONLY", retentionEndsAt: retentionEnd.toISOString() });
-          }
-          if (accessLevel === 'locked') {
-            return res.status(403).json({ error: "Your data retention period has ended. Please resubscribe to regain access to your account.", code: "DATA_RETENTION_EXPIRED" });
-          }
+      }
+    } else {
+      // Legacy fallback: no active-lab context. Non-owners keep the global
+      // behavior; owners act as themselves (#82).
+      seatRow = legacySeatForUser((db as any).$client, payload.userId, "owner_user_id, permissions") as any;
+      if (seatRow) {
+        let perms: Record<string, string> = {};
+        try { perms = JSON.parse(seatRow.permissions || '{}'); } catch {}
+        if ((perms.veritacheck || 'view') !== 'edit') {
+          return res.status(403).json({ error: "You have view-only access to veritacheck. Ask the account owner to grant edit access." });
         }
-      } catch {}
+      }
+    }
+    const userId: number = seatRow ? seatRow.owner_user_id : payload.userId;
+    // Track who actually ran the study so the Admin Report attributes
+    // credit to the seat user (not just the primary seat holder).
+    const createdByUserId = payload.userId;
+    // Check subscription write access for authenticated users
+    const fullUser = storage.getUserById(seatRow ? seatRow.owner_user_id : payload.userId);
+    if (fullUser) {
+      const accessLevel = getAccessLevel(fullUser);
+      if (accessLevel === 'read_only') {
+        const expiry = new Date(fullUser.subscriptionExpiresAt!);
+        const retentionEnd = new Date(expiry);
+        retentionEnd.setFullYear(retentionEnd.getFullYear() + 2);
+        return res.status(403).json({ error: "Your subscription has expired. Your data is available in read-only mode for 2 years. Resubscribe to add new records.", code: "SUBSCRIPTION_EXPIRED_READ_ONLY", retentionEndsAt: retentionEnd.toISOString() });
+      }
+      if (accessLevel === 'locked') {
+        return res.status(403).json({ error: "Your data retention period has ended. Please resubscribe to regain access to your account.", code: "DATA_RETENTION_EXPIRED" });
+      }
     }
 
     // Server-side pass/fail verification: recompute from data instead of trusting the client.
@@ -12697,18 +12766,14 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       (parsed.data as any).cliaAbsoluteFloor ?? null,
       (parsed.data as any).censoringPolicy ?? "exclude"
     );
-    // Free-study credit gate for the legacy (optional-auth) create path. Guests
-    // (no userId) are unaffected; authenticated free/per_study accounts consume
-    // credits (owner-level here, since lab context is out of scope on this route).
-    if (userId != null) {
-      const _lsOwner = storage.getUserById(userId);
-      const _lsAccess = resolveStudyAccess({ ownerPlan: _lsOwner?.plan, ownerCredits: (_lsOwner as any)?.studyCredits });
-      if (!_lsAccess.unlimited && _lsAccess.credits <= 0) {
-        return res.status(402).json({ error: "You have used your free studies. Upgrade to VeritaCheck Unlimited to run more.", code: "STUDY_CREDITS_EXHAUSTED" });
-      }
+    // Free-study credit gate: free/per_study accounts consume credits (owner-level here, since lab context is out of scope on this route).
+    const _lsOwner = storage.getUserById(userId);
+    const _lsAccess = resolveStudyAccess({ ownerPlan: _lsOwner?.plan, ownerCredits: (_lsOwner as any)?.studyCredits });
+    if (!_lsAccess.unlimited && _lsAccess.credits <= 0) {
+      return res.status(402).json({ error: "You have used your free studies. Upgrade to VeritaCheck Unlimited to run more.", code: "STUDY_CREDITS_EXHAUSTED" });
     }
     const study = storage.createStudy({ ...parsed.data, status: verifiedStatus, userId, createdByUserId });
-    if (userId != null && !isUnlimitedPlan(storage.getUserById(userId)?.plan)) {
+    if (!isUnlimitedPlan(storage.getUserById(userId)?.plan)) {
       consumeStudyCredit((db as any).$client, userId, null);
     }
 
@@ -24276,6 +24341,11 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     staffOwnScope((db as any).$client, req.userId, labId ?? req.scope?.labId ?? null, module);
   // The roster: a Staff seat with edit on VeritaStaff works on it, and one with edit on VeritaComp assigns quizzes from it, so both keep it.
   const rosterOwnIn = (req: any, labId?: unknown): StaffOwnScope | null => staffOwnIn(req, labId, "veritastaff") && staffOwnIn(req, labId);
+  // The members list (Michael Q192 = 1): the seats that keep the roster, and a Staff seat with edit on VeritaScan or VeritaDC, whose owner pickers and assign list need the names.
+  const membersOwnIn = (req: any): StaffOwnScope | null => {
+    const own = rosterOwnIn(req);
+    return own && !staffSeatEditsAny((db as any).$client, req.userId, req.scope?.labId, ["veritascan", "veritapolicy"]) ? own : null;
+  };
   const refuseStaffOwn = (res: any) => res.status(403).json({ error: "A staff login can only open their own records.", code: "STAFF_OWN_ONLY" });
   // Reads only evaluators use (a whole-lab list, an evaluator's picker): a Staff login is refused.
   const notForStaffLogin = (req: any, res: any, next: any) => (staffOwnIn(req) ? refuseStaffOwn(res) : next());
@@ -38952,6 +39022,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // are infrequent download paths whose lab-scoped variants land in cleanup
   // once a multi-lab user actually requests them.
 
+  // In front of every /api/labs/:labId/veritapolicy route below, so a route added later is covered too: what a limited Staff login may reach (Step D).
+  app.use("/api/labs/:labId/veritapolicy", veritaDcStaffGuard((db as any).$client));
+
   // GET /api/labs/:labId/veritapolicy/settings
   app.get('/api/labs/:labId/veritapolicy/settings', authMiddleware, labScopeMiddleware, (req: any, res) => {
     const sqlite = db.$client;
@@ -40242,6 +40315,11 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           WHERE l.to_document_id = ? AND l.lab_id = ? AND d.archived_at IS NULL
           ORDER BY d.title`
       ).all(id, req.scope.labId) as any[];
+      // A limited Staff login follows links to approved documents; the picker of everything linkable, drafts included, is the editor's.
+      if (req.dcStaff) {
+        const readable = (r: any) => r.status === "approved" || r.status === "expired";
+        return res.json({ references: references.filter(readable), referencedBy: referencedBy.filter(readable), candidates: [] });
+      }
       const linkedIds = new Set(references.map((r) => r.document_id));
       const candidates = (sqlite.prepare(
         `SELECT id, title, status FROM policy_documents WHERE lab_id = ? AND id != ? AND archived_at IS NULL ORDER BY title`
@@ -40400,8 +40478,26 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         .all(req.scope.labId) as any[];
       // Sub-manuals: manual_path names the manual by its full path ("Parent › Child"); manual_name stays the leaf name.
       const manualPath = new Map(labManualTree(sqlite, req.scope.labId).map((m) => [m.id, m.path]));
+      // A limited Staff login's list holds only the approved documents assigned to them, each with where they stand (server/policyReadSign.ts).
+      if (req.dcStaff) {
+        const mine = assignedDocumentIds(sqlite, req.scope.labId, req.dcStaff);
+        const noSign = new Set(labDocTypeRules(sqlite, req.scope.labId).filter((r) => !r.requires_read_and_sign).map((r) => r.doc_type as string));
+        const own = rows.filter((r) => r.status === "approved" && mine.has(r.id)).map((r) => ({
+          ...r,
+          manual_path: r.manual_id != null ? manualPath.get(r.manual_id) ?? r.manual_name ?? null : null,
+          my_read_sign: r.doc_type && noSign.has(r.doc_type) ? "none"
+            : req.dcStaff.employeeId != null && staffHasSignedCurrent(sqlite, req.scope.labId, r.id, r.current_version_id, req.dcStaff.employeeId, req.dcStaff.userId) ? "signed" : "to_sign",
+        }));
+        return res.json({ documents: withVersionLabel(own) });
+      }
+      // For the editor's list: who each approved document goes to, or nobody yet.
+      const readSign = loadReadSignContext(sqlite, req.scope.labId);
       const enriched = rows.map((row) => {
-        const doc = { ...row, manual_path: row.manual_id != null ? manualPath.get(row.manual_id) ?? row.manual_name ?? null : null };
+        const doc = {
+          ...row,
+          manual_path: row.manual_id != null ? manualPath.get(row.manual_id) ?? row.manual_name ?? null : null,
+          read_sign_targets: row.status === "approved" ? targetLabels(readSign, rulesForDocument(readSign, row)) : [],
+        };
         if (doc.status !== "in_review") return doc;
         const pending = getCurrentPendingStep(sqlite, doc.id);
         if (!pending.step) return doc;
@@ -40619,7 +40715,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         .all(id);
       res.json({
         document: withVersionLabel(withManualTree(sqlite, req.scope.labId, [row]))[0],
-        versions: (versions as any[]).map((v) => ({ ...v, version_label: versionLabel(v) })),
+        // A limited Staff login reads the current version only.
+        versions: (versions as any[]).filter((v) => !req.dcStaff || v.id === row.current_version_id).map((v) => ({ ...v, version_label: versionLabel(v) })),
         // History carried over from the lab's prior system, or null (server/veritadcBulkLoad.ts).
         carried: carriedRecordFor(sqlite, id),
       });
@@ -41450,6 +41547,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         "policy_quiz_questions",
         "staff_portal_policy_signatures",
         "policy_attestations",
+        "policy_read_sign_assignments",
         "policy_review_reminders",
         "policy_carried_records",
         "policy_signoffs",
@@ -42551,6 +42649,15 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const q = String(req.query.q || "").trim();
       if (q.length < 2) return res.json({ results: [] });
       const sqlite = (db as any).$client;
+      // A limited Staff login's read-only lookup: approved documents only, saying which are assigned to them.
+      if (req.dcStaff) {
+        const mine = assignedDocumentIds(sqlite, req.scope.labId, req.dcStaff);
+        const found = lookupDocuments(sqlite, req.scope.labId, q).map((d: any) => ({
+          ...d, id: d.document_id, assigned: mine.has(d.document_id),
+          current_version_number: d.version_number, current_version_major: d.version_major, current_version_minor: d.version_minor,
+        }));
+        return res.json({ results: withVersionLabel(withManualTree(sqlite, req.scope.labId, found)) });
+      }
       const pattern = `%${q}%`;
       const rows = sqlite
         .prepare(
@@ -43989,6 +44096,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           attestations,
           staffSignatures,
           roster: roster.people,
+          rosterGroups: roster.groups,
           carried: carriedRecordFor(sqlite, id),
         },
         { labName: labRow?.lab_name || "Laboratory", cliaNumber: labRow?.clia_number || "Not on file" }
@@ -44184,6 +44292,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       res.json({ pending });
     }
   );
+
+  // VeritaDC read-and-sign by group (Step D; server/policyReadSign.ts).
+  registerReadSignRoutes(app, { sqlite: () => (db as any).$client, authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit, hasModuleEditAccess });
 
   // VeritaTrack routes
   const { registerVeritaTrackRoutes } = await import('./veritatrack');

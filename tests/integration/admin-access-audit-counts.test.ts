@@ -66,6 +66,16 @@ async function main() {
     study(null, "null-owner-2");
     study(0, "zero-owner");
     study(owner, "has-owner");
+    // Their dates (Michael Q193 = 1): oldest and newest across the rows with no owner, however a date was written. The one with an owner doesn't count.
+    const studyAt = (userId: number | null, createdAt: string, lab: number | null) => sqlite.prepare(
+      `INSERT INTO studies (user_id, lab_id, test_name, instrument, analyst, date, study_type, clia_allowable_error, data_points, instruments, status, created_at)
+       VALUES (?, ?, 'Zaudit dated', 'Zaudit Analyzer', 'Zaudit Analyst', '2026-10-15', 'method_comparison', 0.1, '[]', '[]', 'completed', ?)`
+    ).run(userId, lab, createdAt);
+    studyAt(null, "2019-03-04T10:00:00.000Z", null);
+    studyAt(0, "Thu Jun 04 2020", null);
+    studyAt(null, "not a date anyone can read", null);
+    studyAt(null, "2099-12-31T10:00:00.000Z", labA);
+    studyAt(owner, "2001-01-01T10:00:00.000Z", labA);
 
     // Not counted: a live seat with a live membership in the same lab.
     const fine = user("fine"); member(labA, fine); seat("fine", fine, labA, "staff_portal");
@@ -101,7 +111,7 @@ async function main() {
     const after = await asAdmin();
     const seats = after.j.activeSeatsWithNoActiveMembership;
     const added = (type: string) => (seats.bySeatType[type] || 0) - (startSeats.bySeatType[type] || 0);
-    check("2. studies with no owner: NULL and 0 both count, one with an owner doesn't", after.j.studiesWithNoOwner - before.j.studiesWithNoOwner === 3, `${before.j.studiesWithNoOwner} -> ${after.j.studiesWithNoOwner}`);
+    check("2. studies with no owner: NULL and 0 both count, one with an owner doesn't", after.j.studiesWithNoOwner - before.j.studiesWithNoOwner === 7, `${before.j.studiesWithNoOwner} -> ${after.j.studiesWithNoOwner}`);
     check("3. active seats with no active membership: the total is exact", seats.total - startSeats.total === 8, `${startSeats.total} -> ${seats.total}`);
     check("4. per seat type: exact", added("staff_portal") === 2 && added("active") === 5 && added("view_only") === 1, JSON.stringify(seats.bySeatType));
     check("5. the per-type numbers add up to the total", Object.values(seats.bySeatType as Record<string, number>).reduce((a, b) => a + b, 0) === seats.total);
@@ -111,11 +121,17 @@ async function main() {
     const olderNow = after.j.olderSeatsKeepingOwnerReach, olderBefore = before.j.olderSeatsKeepingOwnerReach;
     check("7b. older seats under the older rule: exact, and a new seat with no lab or no membership isn't one", olderNow.withNoLab - olderBefore.withNoLab === 1 && olderNow.holderHasNoMembership - olderBefore.holderHasNoMembership === 2, JSON.stringify(olderNow));
 
+    const noOwnerDates = after.j.studiesWithNoOwnerDates;
+    check("2b. their oldest and newest dates, as days, ignoring the study with an owner and a date nobody can read", noOwnerDates.oldest === "2019-03-04" && noOwnerDates.newest === "2099-12-31", JSON.stringify(noOwnerDates));
+    check("2c. how many of them carry a lab", noOwnerDates.withALab - before.j.studiesWithNoOwnerDates.withALab === 1, JSON.stringify(noOwnerDates));
+
     // ── Numbers only ──────────────────────────────────────────────────────────
     check("8. no email, name, lab name, analyst or test name in the answer", !/zaudit|example\.test|@/i.test(after.text), after.text.slice(0, 300));
     const leaves = (v: unknown): unknown[] => (v && typeof v === "object" ? Object.values(v as object).flatMap(leaves) : [v]);
-    check("9. every value is a number", leaves(after.j).length > 0 && leaves(after.j).every((v) => typeof v === "number"), after.text.slice(0, 300));
-    check("10. the only keys are the counts and the seat types", Object.keys(after.j).sort().join() === "activeSeatsWithNoActiveMembership,olderSeatsKeepingOwnerReach,studiesWithNoOwner" && Object.keys(seats).sort().join() === "bySeatType,total,withNoLabOnSeat,withNoUserOnSeat" && Object.keys(seats.bySeatType).every((k) => ["active", "staff_portal", "view_only"].includes(k)), after.text.slice(0, 300));
+    const { oldest, newest, ...restOfDates } = after.j.studiesWithNoOwnerDates;
+    const numbersPart = { ...after.j, studiesWithNoOwnerDates: restOfDates };
+    check("9. every value is a number, apart from the two days", leaves(numbersPart).length > 0 && leaves(numbersPart).every((v) => typeof v === "number") && /^\d{4}-\d{2}-\d{2}$/.test(oldest) && /^\d{4}-\d{2}-\d{2}$/.test(newest), after.text.slice(0, 300));
+    check("10. the only keys are the counts and the seat types", Object.keys(after.j).sort().join() === "activeSeatsWithNoActiveMembership,olderSeatsKeepingOwnerReach,studiesWithNoOwner,studiesWithNoOwnerDates" && Object.keys(seats).sort().join() === "bySeatType,total,withNoLabOnSeat,withNoUserOnSeat" && Object.keys(seats.bySeatType).every((k) => ["active", "staff_portal", "view_only"].includes(k)), after.text.slice(0, 300));
 
     // ── Read-only ─────────────────────────────────────────────────────────────
     const changes = () => Number((sqlite.prepare("SELECT total_changes() AS n").get() as any).n);
@@ -150,6 +166,15 @@ async function main() {
     const unsetRes = await fetch(`http://127.0.0.1:${typeof unsetAddr === "object" && unsetAddr ? unsetAddr.port : 0}${URL_PATH}`);
     const unsetText = await unsetRes.text();
     check("17. a server with no secret set: a request with no secret is refused", unsetRes.status === 403 && !/\d/.test(unsetText), `${unsetRes.status} ${unsetText.slice(0, 100)}`);
+    // The same for two older admin routes that compared with no check for an unset secret. Their answers hold every account's name and email.
+    for (const [name, url] of [["the admin report", "/api/admin/report"], ["a user's activity", `/api/admin/users/${owner}/activity`]] as const) {
+      const r = await fetch(`http://127.0.0.1:${typeof unsetAddr === "object" && unsetAddr ? unsetAddr.port : 0}${url}`);
+      check(`18. a server with no secret set: ${name} refuses a request with no secret`, r.status === 403, `${r.status}`);
+      const open = await get(url, { "x-admin-secret": ADMIN });
+      check(`18b. with the secret set and given: ${name} still answers`, open.s === 200, `${open.s}`);
+      const none = await get(url);
+      check(`18c. with the secret set and not given: ${name} refuses`, none.s === 403, `${none.s}`);
+    }
     unsetServer.close();
   } finally {
     server.close();

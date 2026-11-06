@@ -140,6 +140,8 @@ async function main() {
     sqlite.prepare("INSERT INTO user_seats (owner_user_id, seat_email, seat_user_id, status, seat_type, lab_id, staff_employee_id) VALUES (?, ?, ?, 'active', 'staff_portal', ?, ?)").run(owner.owner_user_id, staffEmail, staffUid, A.labId, emp);
     const staffTok = issueSession(sqlite, staffUid, { headers: { "user-agent": "doc-types-test" }, ip: "127.0.0.1" }).token;
     sqlite.prepare("UPDATE policy_documents SET status = 'approved' WHERE id IN (?, ?)").run(uForm.body.id, uProc12.body.id);
+    // Since Step D a Staff login sees only what's assigned; this test is about what happens to what they see, so everything goes to everyone.
+    await call("POST", `/api/labs/${A.labId}/veritapolicy/read-sign`, { scope: "lab", everyone: true }, A.token);
     const staffList = await call("GET", `/api/staff-portal-session/policies?employee_id=${emp}`, undefined, staffTok);
     const ids = (staffList.body.policies || []).map((p: any) => p.document_id);
     check("6. the staff login list leaves out the form and keeps the procedure and the untyped-then-retyped policy",

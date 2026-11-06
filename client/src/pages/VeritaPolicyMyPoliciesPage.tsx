@@ -10,6 +10,7 @@ import { useState, useMemo, useEffect } from "react";
 import { labTodayIso, labLocaleDate } from "@/lib/labDate";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { Link } from "wouter";
 import { useAuth } from "@/components/AuthContext";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { useMemberships } from "@/hooks/useMemberships";
@@ -27,6 +28,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { ApprovalRoutesDialog } from "@/components/ApprovalRoutesDialog";
 import { CarriedOverPanel, type CarriedRecord } from "@/components/CarriedOverPanel";
 import { DocumentSignatureRoster } from "@/components/DocumentSignatureRoster";
+import { ReadSignDialog, type ReadSignScopeRef } from "@/components/ReadSignDialog";
+import { useStaffDocScope } from "@/hooks/useStaffLogin";
 import {
   Dialog,
   DialogContent,
@@ -209,6 +212,9 @@ interface PolicyDocument {
   note_count?: number;
   // 1 when this document came from the lab's prior system (server/veritadcBulkLoad.ts).
   carried_over?: number;
+  // Step D (server/policyReadSign.ts): who an approved document goes to, on the editor's list; where this person stands, on a Staff login's.
+  read_sign_targets?: string[];
+  my_read_sign?: "signed" | "to_sign" | "none";
   created_at: string;
   updated_at: string;
   // Phase 2.1: in_review rows include these so the UI can render
@@ -344,11 +350,50 @@ function PolicyEvidenceLinks({ labId, policyId }: { labId: number | null; policy
   );
 }
 
+// Step D: a limited Staff login looks up any approved document by title or number and reads it. A search, not a list, and it asks for no signature.
+function StaffDocumentLookup({ labId, onView }: { labId: number; onView: (doc: PolicyDocument) => void }) {
+  const [q, setQ] = useState("");
+  const term = q.trim();
+  const { data, isFetching } = useQuery<{ results: (PolicyDocument & { assigned: boolean })[] }>({
+    queryKey: [`/api/labs/${labId}/veritapolicy/search?q=${encodeURIComponent(term)}`],
+    queryFn: getQueryFn({ on401: "throw" }),
+    enabled: term.length >= 2,
+  });
+  const results = term.length >= 2 ? data?.results || [] : [];
+  return (
+    <Card data-testid="staff-doc-lookup">
+      <CardContent className="p-4 space-y-2 min-w-0">
+        <div className="text-sm font-medium">Look up another approved document</div>
+        <p className="text-xs text-muted-foreground">Find a procedure that isn't assigned to you, by title or number, and read it. There is nothing to sign.</p>
+        <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Type at least 2 letters" className="max-w-md" data-testid="staff-doc-lookup-input" />
+        {term.length >= 2 && !isFetching && results.length === 0 && <p className="text-xs text-muted-foreground" data-testid="staff-doc-lookup-none">No approved document matches.</p>}
+        {results.length > 0 && (
+          <ul className="border rounded divide-y" data-testid="staff-doc-lookup-results">
+            {results.map((d) => (
+              <li key={d.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 text-sm" data-testid={`staff-doc-lookup-row-${d.id}`}>
+                <span className="min-w-0 [overflow-wrap:anywhere]">
+                  {d.doc_number && <span className="mr-2 font-mono text-xs text-muted-foreground">{d.doc_number}</span>}
+                  {d.title}
+                  {d.manual_path && <span className="block text-xs text-muted-foreground">{d.manual_path}</span>}
+                  {d.status === "expired" && <span className="block text-xs text-amber-800 dark:text-amber-300">Its review is overdue</span>}
+                </span>
+                <Button size="sm" variant="outline" onClick={() => onView(d)} data-testid="staff-doc-lookup-open"><Eye size={12} className="mr-1" /> Read</Button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function VeritaPolicyMyPoliciesPage() {
   // #84 Phase 3: manuals, uploads, versions, archive/move/rename, approval
   // routing, assignments, recertify and links are VeritaPolicy setup. Attest
   // (read-and-sign) and approve/reject (designated approvers) stay.
   const isReadOnly = useIsReadOnly("veritapolicy");
+  // Step D: a limited Staff login sees what's assigned to them and can look up any approved document, read-only (server/policyReadSign.ts).
+  const { ownOnly: staffOwnDocs } = useStaffDocScope();
   const { user } = useAuth();
   const activeLabId = useActiveLabId();
   const { data: memberships } = useMemberships();
@@ -892,6 +937,8 @@ export default function VeritaPolicyMyPoliciesPage() {
     setAssignSelected(new Set());
     setAssignDueDate("");
   };
+  // Step D: read-and-sign to groups, named people or everyone, for one document, a manual and its sub-manuals, or the whole lab.
+  const [readSign, setReadSign] = useState<(ReadSignScopeRef & { doc?: PolicyDocument }) | null>(null);
 
   // ── Per-document attestation tracker: who was assigned, who opened the
   //    document (from the audit trail), and who attested. Reuses the roster
@@ -1537,12 +1584,29 @@ export default function VeritaPolicyMyPoliciesPage() {
         <div>
           <h1 className="text-2xl font-bold">My Documents</h1>
           <p className="text-sm text-muted-foreground">
-            Upload your lab policies and procedures, organize them by manual,
-            route each one through review and approval with electronic
-            signature, and assign read-and-sign to your staff.
+            {staffOwnDocs ? (
+              <>
+                The documents assigned to you. You sign them under{" "}
+                <Link href={`/labs/${activeLabId}/my-signoffs`}><a className="underline" data-testid="staff-docs-signoffs-link">My sign-offs</a></Link>.
+              </>
+            ) : (
+              <>
+                Upload your lab policies and procedures, organize them by manual,
+                route each one through review and approval with electronic
+                signature, and assign read-and-sign to your staff.
+              </>
+            )}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button hidden={isReadOnly}
+            variant="outline"
+            onClick={() => setReadSign({ type: "lab", id: null, name: "All documents in this lab" })}
+            title="Assign documents and manuals to groups, named people or everyone, and see who still owes a signature"
+            data-testid="readsign-open"
+          >
+            <Users size={14} className="mr-1.5" /> Read-and-sign
+          </Button>
           <Button hidden={isReadOnly} variant="outline" onClick={() => openNewManual()}>
             <FolderPlus size={14} className="mr-1.5" /> New Manual
           </Button>
@@ -1614,7 +1678,9 @@ export default function VeritaPolicyMyPoliciesPage() {
         </div>
       )}
 
-      {dueSoonDocs.length > 0 && (
+      {staffOwnDocs && activeLabId && <StaffDocumentLookup labId={activeLabId} onView={(d) => openView(d)} />}
+
+      {!staffOwnDocs && dueSoonDocs.length > 0 && (
         <Card className="border-amber-300 bg-amber-50/30 dark:border-amber-700">
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
@@ -1779,9 +1845,11 @@ export default function VeritaPolicyMyPoliciesPage() {
                 size={32}
                 className="mx-auto text-muted-foreground"
               />
-              <div className="font-medium">No policies uploaded yet</div>
+              <div className="font-medium" data-testid="documents-empty">{staffOwnDocs ? "No documents are assigned to you right now" : "No policies uploaded yet"}</div>
               <div className="text-sm text-muted-foreground">
-                Click Upload Policy to add a Word, PDF, Excel, image or text file.
+                {staffOwnDocs
+                  ? "If you expected some, ask your supervisor. You can still look up an approved document above."
+                  : "Click Upload Policy to add a Word, PDF, Excel, image or text file."}
               </div>
               <Button hidden={isReadOnly} onClick={() => setUploadOpen(true)}>
                 <Upload size={14} className="mr-1.5" /> Upload Policy
@@ -1808,6 +1876,18 @@ export default function VeritaPolicyMyPoliciesPage() {
                 <span className="ml-2 text-xs font-normal text-muted-foreground">
                   ({docs.length} {docs.length === 1 ? "policy" : "policies"})
                 </span>
+                {key !== "unassigned" && !staffOwnDocs && manuals.some((m) => String(m.id) === key) && (
+                  <Button hidden={isReadOnly}
+                    size="sm"
+                    variant="outline"
+                    className="ml-3 h-7 text-xs font-normal align-middle"
+                    onClick={() => setReadSign({ type: "manual", id: Number(key), name: manualName })}
+                    title="Assign this manual and its sub-manuals for read-and-sign"
+                    data-testid={`manual-readsign-${key}`}
+                  >
+                    <Users size={12} className="mr-1" /> Read-and-sign
+                  </Button>
+                )}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -1878,6 +1958,14 @@ export default function VeritaPolicyMyPoliciesPage() {
                               effective {fmtDate(doc.effective_date)} · carried over
                             </div>
                           )}
+                          {/* The editor's list: who this document goes to. The Staff login's list: where they stand. */}
+                          {!staffOwnDocs && doc.status === "approved" && doc.read_sign_targets && (typeRule(doc.doc_type)?.requires_read_and_sign !== false) && (
+                            <div className="text-[10px] mt-1 leading-tight text-muted-foreground" data-testid="doc-read-sign-targets">
+                              {doc.read_sign_targets.length ? `read-and-sign: ${doc.read_sign_targets.join(", ")}` : "read-and-sign: nobody yet"}
+                            </div>
+                          )}
+                          {staffOwnDocs && doc.my_read_sign === "signed" && <div className="text-[10px] mt-1 leading-tight text-green-800 dark:text-green-300" data-testid="doc-my-status">You signed this version</div>}
+                          {staffOwnDocs && doc.my_read_sign === "to_sign" && <div className="text-[10px] mt-1 leading-tight text-amber-800 dark:text-amber-300" data-testid="doc-my-status">Needs your signature</div>}
                         </td>
                         <td className="py-2 pr-3 text-xs uppercase font-mono text-muted-foreground">
                           {doc.current_file_format || "-"}
@@ -2020,12 +2108,14 @@ export default function VeritaPolicyMyPoliciesPage() {
                               <Button hidden={isReadOnly}
                                 size="sm"
                                 variant="outline"
-                                onClick={() => openAssign(doc)}
-                                title="Assign staff to read-and-attest"
+                                onClick={() => setReadSign({ type: "document", id: doc.id, name: doc.title, doc })}
+                                title="Assign this document for read-and-sign to groups, named people or everyone"
+                                data-testid="doc-readsign-button"
                               >
                                 <ShieldCheck size={12} className="mr-1" /> Assign
                               </Button>
                               <Button
+                                hidden={staffOwnDocs}
                                 size="sm"
                                 variant="outline"
                                 onClick={() => setTrackerDoc(doc)}
@@ -2336,8 +2426,9 @@ export default function VeritaPolicyMyPoliciesPage() {
             {manuals.map((m) => {
               const blocked = descendantIds(manuals, m.id);
               return (
-                <div key={m.id} className="flex items-center gap-2 py-1.5 pr-2" data-testid="manuals-row" style={{ paddingLeft: 8 + Math.min(m.depth || 0, 8) * 18 }}>
-                  <span className="flex-1 min-w-0 truncate text-sm" title={m.path}>
+                <div key={m.id} className="flex flex-wrap items-center gap-2 py-1.5 pr-2" data-testid="manuals-row" style={{ paddingLeft: 8 + Math.min(m.depth || 0, 8) * 18 }}>
+                  {/* On a phone the name takes its own line, so it isn't cut down to a few letters. */}
+                  <span className="flex-1 min-w-full sm:min-w-0 truncate text-sm" title={m.path}>
                     {m.name}
                   </span>
                   <Select
@@ -2345,7 +2436,7 @@ export default function VeritaPolicyMyPoliciesPage() {
                     onValueChange={(v) => moveManualMutation.mutate({ id: m.id, parentId: v === TOP_LEVEL ? null : Number(v) })}
                     disabled={isReadOnly || moveManualMutation.isPending}
                   >
-                    <SelectTrigger className="h-8 w-56 shrink-0 text-xs" aria-label={`Where ${m.name} sits`} data-testid={`manual-parent-${m.id}`}>
+                    <SelectTrigger className="h-8 w-56 max-w-full shrink-0 text-xs" aria-label={`Where ${m.name} sits`} data-testid={`manual-parent-${m.id}`}>
                       {/* The trigger names just the parent; the list shows full paths. */}
                       <SelectValue>
                         {m.parent_id ? `Inside ${manuals.find((o) => o.id === m.parent_id)?.name ?? "another manual"}` : "Top level"}
@@ -2362,6 +2453,17 @@ export default function VeritaPolicyMyPoliciesPage() {
                         ))}
                     </SelectContent>
                   </Select>
+                  <Button
+                    hidden={isReadOnly}
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 shrink-0 text-xs"
+                    onClick={() => { setManualsOpen(false); setReadSign({ type: "manual", id: m.id, name: m.path || m.name }); }}
+                    title={`Assign ${m.name} and its sub-manuals for read-and-sign`}
+                    data-testid={`manuals-readsign-${m.id}`}
+                  >
+                    <Users size={13} className="mr-1" /> Read-and-sign
+                  </Button>
                   <Button
                     hidden={isReadOnly}
                     size="sm"
@@ -2490,7 +2592,7 @@ export default function VeritaPolicyMyPoliciesPage() {
             </div>
           )}
           <div className="flex justify-end gap-2">
-            {viewDoc && (
+            {viewDoc && !staffOwnDocs && (
               <Button
                 size="sm"
                 variant="outline"
@@ -2504,6 +2606,7 @@ export default function VeritaPolicyMyPoliciesPage() {
               </Button>
             )}
             <Button
+              hidden={staffOwnDocs}
               size="sm"
               variant="outline"
               onClick={openAuditTrail}
@@ -3107,6 +3210,15 @@ export default function VeritaPolicyMyPoliciesPage() {
         </DialogContent>
       </Dialog>
 
+      {readSign && activeLabId && (
+        <ReadSignDialog
+          labId={activeLabId}
+          scope={readSign}
+          onClose={() => setReadSign(null)}
+          onAssignOnePerson={readSign.doc ? () => { const d = readSign.doc!; setReadSign(null); openAssign(d); } : undefined}
+        />
+      )}
+
       {/* ── Assign attestations modal ───────────────────────────────── */}
       <Dialog
         open={!!assignDoc}
@@ -3235,11 +3347,9 @@ export default function VeritaPolicyMyPoliciesPage() {
                   <Loader2 className="animate-spin" size={14} /> Loading roster...
                 </div>
               ) : !trackerData || trackerData.attestations.length === 0 ? (
-                <div className="rounded border p-4 text-sm text-muted-foreground">
-                  No one is assigned to this document yet. Use{" "}
-                  <span className="font-medium">Assign</span> to send it to staff
-                  for read-and-attest.
-                </div>
+                <p className="text-xs text-muted-foreground" data-testid="tracker-no-per-person">
+                  No login has a per-person assignment with a due date on this document.
+                </p>
               ) : (
                 <>
                   <div className="flex flex-wrap gap-2 text-xs">

@@ -722,12 +722,9 @@ async function main() {
       });
       return unknown ? null : out;
     };
-    // Michael Q186 = 1: schedule names stay open, because staff normally see who's working. Nothing else is left alone.
-    const LEFT_ALONE = new Set(["/api/labs/:labId/schedule/staff"]);
-    // Not on Michael's Q186 list, so not changed here, and raised with him on the PRs. Each comes off this list when he decides; a new route never goes on it.
-    // members gives anyone in the lab every member's name and email, and the read-only members screen uses it. The other three are the lab's VeritaCheck
-    // study lists and coverage, which name the analyst on each study.
-    const NOT_DECIDED = new Set(["/api/labs/:labId/members", "/api/studies", "/api/labs/:labId/studies", "/api/labs/:labId/veritacheck/coverage"]);
+    // Decided, so these stay open. Schedule names (Michael Q186 = 1): staff normally see who's working. The lab's VeritaCheck study lists and coverage:
+    // a study is the lab's record, and who ran it isn't a personnel matter. A new route doesn't go on this list without a decision like those.
+    const LEFT_ALONE = new Set(["/api/labs/:labId/schedule/staff", "/api/studies", "/api/labs/:labId/studies", "/api/labs/:labId/veritacheck/coverage"]);
     const gets: string[] = [];
     for (const layer of (app as any).router.stack) {
       const r = layer.route;
@@ -738,15 +735,14 @@ async function main() {
     let swept = 0;
     for (const path of gets) {
       const url = fillPath(path);
-      if (!url || LEFT_ALONE.has(path) || NOT_DECIDED.has(path)) continue;
+      if (!url || LEFT_ALONE.has(path)) continue;
       swept++;
       const r = await fetch(base + url, { headers: { Authorization: `Bearer ${ANN.token}` } });
       const text = await r.text();
       if (/Quillfeather|ZQ-[A-Z]+/.test(text)) leaks.push(`${r.status} ${path}`);
     }
     check(`36. no read (${swept} tried) shows a Staff login the coworker's name or entries`, swept > 200 && leaks.length === 0, leaks.join(" | "));
-    for (const path of Array.from(LEFT_ALONE)) console.log(`INFO  stays open by Michael's decision: ${path}`);
-    for (const path of Array.from(NOT_DECIDED)) console.log(`INFO  open, waiting on Michael's decision: ${path}`);
+    for (const path of Array.from(LEFT_ALONE)) console.log(`INFO  stays open by decision: ${path}`);
 
     // ── Fail closed ───────────────────────────────────────────────────────────
     const nobodyReads = (emp: number): string[] => [
@@ -1045,6 +1041,39 @@ async function main() {
     const otherOwnerReads = await call("GET", studiesOf(annLab2, L2), undefined, OWNER2.token);
     check("50d. the other customer's owner: their lab's study and their own no-lab study, none of the first lab's", otherOwnerReads.s === 200 && studyNames(otherOwnerReads) === "CROSS no lab owner two|CROSS other customer" && otherOwnerReads.j.counts?.total === 2, `${otherOwnerReads.s} ${studyNames(otherOwnerReads)}`);
     const annInLab2 = await asAnn(studiesOf(annLab2, L2));
+    // ── The members list (Michael Q192 = 1) ───────────────────────────────────
+    const membersUrl = `${L}/members`;
+    sqlite.prepare("UPDATE labs SET medical_director_email = ?, medical_director_name = 'Made Up Director' WHERE id = ?").run(`director-${stamp}@example.test`, labId);
+    const memberEmails = (r: { j: any }) => (r.j.members || []).map((m: any) => m.email);
+    const annMembers = await asAnn(membersUrl);
+    check("51a. members: a Staff login gets its own row and nobody else's", annMembers.s === 200 && annMembers.j.ownOnly === true && memberEmails(annMembers).join() === ANN.email && !text(annMembers).includes(BEN.email) && !text(annMembers).includes(EDITOR.email) && !text(annMembers).includes(OWNER.email), text(annMembers).slice(0, 240));
+    check("51b. members: no pending invitations, no seat counts and no director's name for a Staff login", annMembers.j.pendingInvites?.length === 0 && annMembers.j.seatLimits === null && annMembers.j.seatCounts === null && annMembers.j.staffPortal === null && annMembers.j.medicalDirector === null && !text(annMembers).includes("zork-invite") && !text(annMembers).includes("Made Up Director") && clean(annMembers));
+    for (const [who, token] of [["an editor", EDITOR.token], ["the owner", OWNER.token], ["a Staff seat with edit on VeritaStaff", STAFFEDIT.token], ["a Staff seat with edit on VeritaComp", COMPEDIT.token], ["a lab admin who also holds a Staff seat", ADMINSEAT.token]] as const) {
+      const seen = await call("GET", membersUrl, undefined, token);
+      check(`51c. members: ${who} still gets the whole list`, seen.s === 200 && seen.j.ownOnly === false && memberEmails(seen).includes(ANN.email) && memberEmails(seen).includes(BEN.email) && text(seen).includes("zork-invite") && !!seen.j.seatCounts && seen.j.medicalDirector?.name === "Made Up Director", `${seen.s} ${memberEmails(seen).length}`);
+    }
+    // Their owner pickers and assign list need the names.
+    for (const [who, perms] of [["VeritaScan", '{"mode":"view_all","overrides":{"veritascan":"edit"}}'], ["VeritaDC", '{"mode":"view_all","overrides":{"veritapolicy":"edit"}}']] as const) {
+      const PICKER = await register(`Picker${who}`);
+      member(labId, PICKER.id); seat(OWNER.id, labId, PICKER, "staff_portal", perms, await person("Picks", who, [ANALYZER]));
+      const seen = await call("GET", membersUrl, undefined, PICKER.token);
+      check(`51d. members: a Staff seat with edit on ${who} keeps the names its pickers need`, seen.s === 200 && seen.j.ownOnly === false && memberEmails(seen).includes(BEN.email), `${seen.s}`);
+    }
+    const otherEdit = await register("Otheredit");
+    member(labId, otherEdit.id); seat(OWNER.id, labId, otherEdit, "staff_portal", '{"mode":"view_all","overrides":{"veritatrack":"edit"}}', await person("Tracks", "Other", [ANALYZER]));
+    const otherEditSeen = await call("GET", membersUrl, undefined, otherEdit.token);
+    check("51e. members: edit on a module that doesn't pick from this list doesn't open it", otherEditSeen.j.ownOnly === true && memberEmails(otherEditSeen).join() === otherEdit.email, text(otherEditSeen).slice(0, 160));
+    const noLinkMembers = await call("GET", membersUrl, undefined, NOLINK.token);
+    check("51f. members: a Staff seat with no staff record linked still gets its own row", noLinkMembers.s === 200 && noLinkMembers.j.ownOnly === true && memberEmails(noLinkMembers).join() === NOLINK.email, text(noLinkMembers).slice(0, 160));
+    const cutMembers = await call("GET", membersUrl, undefined, STAFFCUT.token);
+    check("51g. members: a deactivated Staff seat that still has a membership gets only its own row", cutMembers.s === 200 && cutMembers.j.ownOnly === true && memberEmails(cutMembers).join() === STAFFCUT.email, text(cutMembers).slice(0, 160));
+    const DIRECTOR = await register("Directorstaff");
+    member(labId, DIRECTOR.id); seat(OWNER.id, labId, DIRECTOR, "staff_portal", '{"mode":"view_all"}', await person("Director", "Dana", [ANALYZER]));
+    sqlite.prepare("UPDATE labs SET medical_director_email = ? WHERE id = ?").run(DIRECTOR.email, labId);
+    const directorMembers = await call("GET", membersUrl, undefined, DIRECTOR.token);
+    check("51h. members: a Staff login who is the director still sees their own badge", directorMembers.j.ownOnly === true && directorMembers.j.medicalDirector?.email === DIRECTOR.email, text(directorMembers).slice(0, 160));
+    sqlite.prepare("UPDATE labs SET medical_director_email = NULL, medical_director_name = NULL WHERE id = ?").run(labId);
+
     check("50e. the same person's Staff seat in the other lab: that lab's study only", annInLab2.s === 200 && studyNames(annInLab2) === "CROSS other customer", `${annInLab2.s} ${studyNames(annInLab2)}`);
   } finally {
     server.close();

@@ -91,6 +91,8 @@ async function main() {
     const cal = await addStaffLogin("Cal", "Signer");
     const noLogin = addEmployee("Nia", "Nologin");
     const left = addEmployee("Lee", "Leaving", null, "terminated");
+    // Since Step D a Staff login sees only what's assigned; this test is about what happens to what they see, so everything goes to everyone.
+    await call("POST", `${P}/read-sign`, { scope: "lab", everyone: true }, A.token);
 
     const mkDoc = async (title: string, fields: Record<string, string> = {}) => {
       const d = await upload(A, { title, ...fields });

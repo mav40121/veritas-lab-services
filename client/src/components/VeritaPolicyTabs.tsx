@@ -15,6 +15,7 @@
 
 import { Link } from "wouter";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
+import { useStaffDocScope } from "@/hooks/useStaffLogin";
 import { ListChecks, FolderOpen, ShieldCheck, ClipboardCheck, BookOpen } from "lucide-react";
 
 type Tab = "master" | "my-policies" | "compliance" | "iqcp" | "cfr-reference";
@@ -29,12 +30,14 @@ const TABS: { key: Tab; label: string; sub: string; icon: typeof ListChecks }[] 
 
 export function VeritaPolicyTabs({ active }: { active: Tab }) {
   const activeLabId = useActiveLabId();
+  const { ownOnly } = useStaffDocScope();
   if (!activeLabId) return null;
   const base = `/labs/${activeLabId}/veritapolicy-app`;
   return (
     // Scrolls inside its own row on a phone instead of widening the page (BUG-030 class; 2026-10-16).
     <div className="flex gap-1 border-b border-border overflow-x-auto" data-testid="veritapolicy-tabs">
-      {TABS.map((t) => {
+      {/* Compliance names who owes what, so a limited Staff login doesn't get the tab (the server refuses it too). */}
+      {TABS.filter((t) => !(ownOnly && t.key === "compliance")).map((t) => {
         const href = t.sub ? `${base}/${t.sub}` : base;
         const isActive = t.key === active;
         const Icon = t.icon;
