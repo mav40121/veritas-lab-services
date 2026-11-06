@@ -15,6 +15,7 @@ import { authHeaders } from "@/lib/auth";
 import { downloadPdfToken } from "@/lib/utils";
 import { fmtDate } from "@/lib/competencyElements";
 import { assessmentTypeLabel } from "@shared/competencyEvaluation";
+import { useNontechnicalDue, nontechnicalDueText, nontechnicalDueClass } from "@/components/CompetencyNontechnicalFrequencyCard";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -57,6 +58,8 @@ export function StaffOwnHome() {
   });
   const methods = record?.testSystems || [];
   const signed = methods.filter((t) => t.signedCurrent).length;
+  // Their own due dates when the lab has set a non-technical frequency (Q216 = 1); the server sends only their own rows.
+  const { data: ntDue } = useNontechnicalDue(ownEmployeeId != null);
 
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 space-y-6" data-testid="staff-own-home">
@@ -101,11 +104,13 @@ export function StaffOwnHome() {
         ) : (
           <div className="space-y-1.5">
             {(programs || []).map((p) => {
+              const due = ntDue?.items.find((i) => i.programId === p.id);
               const body = (
                 <>
                   <div className="min-w-0">
                     <div className="text-sm font-medium">{p.name}</div>
                     <div className="text-[11px] text-muted-foreground">{[p.department, kindLabel(p.type, p.record_kind)].filter(Boolean).join(" · ")}</div>
+                    {due && <div className={`text-[11px] ${nontechnicalDueClass(due)}`} data-testid="staff-own-nt-due">{nontechnicalDueText(due)}</div>}
                   </div>
                   <div className="flex items-center gap-1 shrink-0 text-xs text-muted-foreground" data-testid="staff-own-program-count">
                     {p.myAssessmentCount > 0 ? `${p.myAssessmentCount} record${p.myAssessmentCount === 1 ? "" : "s"} of yours` : "No record of yours"}
