@@ -130,6 +130,10 @@ jobs:
         # 2026-11-06: someone with no membership in a lab opened its quiz through GET /api/veritacomp/quizzes/:id. A read of a lab-owned row by id, on a route
         # with no lab in its path, must not cross labs. Every route of that shape is called as outsiders, and a new one fails until it is listed.
         run: npm run test:unscoped-read-isolation
+      - name: Run competency program delete integration test
+        # Michael 2026-11-06, Q184 = 1: a program holding competency records can't be deleted, on either route: 409 with the count, nothing removed. An empty
+        # program still deletes with its setup. The count never reaches someone who can't delete there.
+        run: npm run test:competency-program-delete
       - name: Run admin access audit counts integration test
         # 2026-11-06: GET /api/admin/access-audit-counts gives numbers only, for sizing the access work. Exact counts on made-up rows, no names, emails or
         # lab ids in the answer, writes nothing, and refuses with no secret, a wrong secret, a secret in the URL, or no secret set on the server.

@@ -86,6 +86,7 @@ import { competencyDueColumns, competencySeedAtCreate, nextCompetencyDue } from 
 import { methodSignerOptions, nextMilestoneAfter, milestonesForComplexity, MILESTONE_LABEL, alignAnnualToMonth, MONTH_NAMES, type SignerCandidate, type MethodMilestone } from "@shared/competencySignoff";
 import { isManualMethod, groupProblem, suggestGroups, groupKey } from "@shared/competencyGrouping";
 import { cleanEl5Samples, el5Columns, el5SamplesFromRow } from "@shared/competencyEl5Samples";
+import { programHoldsRecordsMessage } from "@shared/competencyProgramDelete";
 import { applySelfOps, planSelfElements, planSelfRecordRows, planSelfWaivedMethods, selfOpsCount, staffOwnScope, staffSeatEditsAny, staffSelfSeat, type StaffOwnScope } from "./competencySelfEntry";
 import { cleanWaivedSpecimens, waivedSpecimenColumns, waivedSpecimensFromRow, waivedEvidenceText, WAIVED_BLIND_METHOD } from "@shared/competencyWaivedSpecimens";
 import { oneRowKey, sameTestNameOnMap, preferredSameTestName } from "@shared/presetAnalytes";
@@ -24691,24 +24692,38 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     });
   });
 
-  // Delete program
+  // Delete program. Michael 2026-11-06, Q184 = 1: a program that holds competency records is refused, the way a quiz with results is;
+  // the records are evidence. An item counts if it sits on one of this program's assessments or points at one of its method groups,
+  // since removing the group would detach it. Only the program's own setup is ever deleted, in one transaction with the count.
+  const deleteProgramIfEmpty = (res: any, programId: number | string) => {
+    const client = (db as any).$client;
+    const refusal = client.transaction(() => {
+      const assessmentCount = Number(client.prepare("SELECT COUNT(*) AS n FROM competency_assessments WHERE program_id = ?").get(programId).n);
+      const itemCount = Number(client.prepare(
+        `SELECT COUNT(*) AS n FROM competency_assessment_items
+         WHERE assessment_id IN (SELECT id FROM competency_assessments WHERE program_id = ?)
+            OR method_group_id IN (SELECT id FROM competency_method_groups WHERE program_id = ?)`
+      ).get(programId, programId).n);
+      if (assessmentCount > 0 || itemCount > 0) return { assessmentCount, itemCount };
+      // delete-reinsert-ok: program delete cascade (this line and the next); nothing is re-inserted
+      client.prepare("DELETE FROM competency_method_groups WHERE program_id = ?").run(programId);
+      client.prepare("DELETE FROM competency_checklist_items WHERE program_id = ?").run(programId);
+      client.prepare("DELETE FROM competency_program_not_applicable WHERE program_id = ?").run(programId);
+      client.prepare("DELETE FROM competency_programs WHERE id = ?").run(programId);
+      return null;
+    })();
+    if (!refusal) return res.json({ ok: true });
+    const recordCount = refusal.assessmentCount || refusal.itemCount;
+    return res.status(409).json({
+      error: programHoldsRecordsMessage(recordCount), code: "PROGRAM_HOLDS_RECORDS",
+      record_count: recordCount, assessment_count: refusal.assessmentCount, item_count: refusal.itemCount,
+    });
+  };
   app.delete("/api/competency/programs/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
-    const dataUserId = req.ownerUserId ?? req.user.userId;
     const program = userCanAccessLabRow('competency_programs', req.params.id, req);
     if (!program) return res.status(404).json({ error: "Program not found" });
-    // Cascade delete
-    const assessments = (db as any).$client.prepare("SELECT id FROM competency_assessments WHERE program_id = ?").all(req.params.id);
-    for (const a of assessments) {
-      (db as any).$client.prepare("DELETE FROM competency_assessment_items WHERE assessment_id = ?").run(a.id);
-    }
-    (db as any).$client.prepare("DELETE FROM competency_assessments WHERE program_id = ?").run(req.params.id);
-    // delete-reinsert-ok: program delete cascade (this line and the next); nothing is re-inserted
-    (db as any).$client.prepare("DELETE FROM competency_method_groups WHERE program_id = ?").run(req.params.id);
-    (db as any).$client.prepare("DELETE FROM competency_checklist_items WHERE program_id = ?").run(req.params.id);
-    (db as any).$client.prepare("DELETE FROM competency_program_not_applicable WHERE program_id = ?").run(req.params.id);
-    (db as any).$client.prepare("DELETE FROM competency_programs WHERE id = ?").run(req.params.id);
-    res.json({ ok: true });
+    return deleteProgramIfEmpty(res, req.params.id);
   });
 
   // Update program settings (method groups, checklist items, name)
@@ -24969,16 +24984,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       "SELECT * FROM competency_programs WHERE id = ? AND lab_id = ?"
     ).get(req.params.id, req.scope.labId);
     if (!program) return res.status(404).json({ error: "Program not found" });
-    const assessments = (db as any).$client.prepare("SELECT id FROM competency_assessments WHERE program_id = ?").all(req.params.id);
-    for (const a of assessments) {
-      (db as any).$client.prepare("DELETE FROM competency_assessment_items WHERE assessment_id = ?").run(a.id);
-    }
-    (db as any).$client.prepare("DELETE FROM competency_assessments WHERE program_id = ?").run(req.params.id);
-    (db as any).$client.prepare("DELETE FROM competency_method_groups WHERE program_id = ?").run(req.params.id);
-    (db as any).$client.prepare("DELETE FROM competency_checklist_items WHERE program_id = ?").run(req.params.id);
-    (db as any).$client.prepare("DELETE FROM competency_program_not_applicable WHERE program_id = ?").run(req.params.id);
-    (db as any).$client.prepare("DELETE FROM competency_programs WHERE id = ?").run(req.params.id);
-    res.json({ ok: true });
+    return deleteProgramIfEmpty(res, req.params.id);
   });
 
   // Lab-scoped DELETE employee-by-id (soft delete).

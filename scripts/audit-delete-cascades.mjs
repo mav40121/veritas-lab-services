@@ -66,6 +66,8 @@ const ALLOWLIST = new Map([
   // results are preserved by a guard, not cleared. The audit looks for a
   // DELETE, which is intentionally absent here.
   ["competency_quizzes::competency_quiz_results", "evidence — handler 409-blocks when results exist; intentionally not cascade-deleted"],
+  // Same rule for a program's competency records (Michael 2026-11-06, Q184 = 1): deleteProgramIfEmpty refuses in the same transaction when any exist.
+  ["competency_programs::competency_assessments", "evidence — handler 409-blocks when records exist; intentionally not cascade-deleted"],
   // False positives: the 3 flagged policy_documents deletes are (1) best-effort
   // cleanup of a just-inserted doc when the file write fails (no questions exist
   // yet) and (2) two synthetic-row deletes in the auto-expire test harness.
