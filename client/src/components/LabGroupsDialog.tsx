@@ -183,7 +183,7 @@ export function LabGroupsDialog({ apiBase, forApprovals = false }: { apiBase: st
           {send.isError && <p className="text-xs text-destructive" data-testid="group-error">{errorText(send.error)}</p>}
           <p className="text-[11px] text-muted-foreground">
             {forApprovals
-              ? "A person signs an approval step with their own login. Someone who leaves the VeritaStaff roster drops out on their own. A group on an approval route can't be retired until it comes off the route."
+              ? "A person signs with their own login. Someone who leaves the VeritaStaff roster drops out on their own, and someone new to a group owes what the group owes. A group on an approval route, or assigned read-and-sign, can't be retired until it comes off."
               : "Someone who leaves the VeritaStaff roster stops getting reminders on their own. A retired group is no longer offered, and the tasks that name it go back to this lab's recipient list."}
           </p>
         </div>

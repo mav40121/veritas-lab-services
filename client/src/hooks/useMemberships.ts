@@ -13,6 +13,8 @@ export interface Membership {
   // Michael Q182 = 1: a Staff login sees only their own competency data in this lab, and ownEmployeeId is their roster row (null
   // when the seat has no link or isn't active). Decided per lab on the server. Optional for deploy skew.
   competencyOwnOnly?: boolean;
+  // Step D: in VeritaDC this person sees only what's assigned to them, plus a read-only lookup (server/policyReadSign.ts).
+  documentsOwnOnly?: boolean;
   ownEmployeeId?: number | null;
   permissions: Record<string, any>;
   isPrimaryLab: boolean;

@@ -18,6 +18,14 @@ export function useIsStaffLogin(): boolean {
 // Michael Q182 = 1 (2026-11-05): a Staff login sees only their own competency data, in every lab. The server decides this per lab
 // (server/competencySelfEntry.ts staffOwnScope, sent on GET /api/labs/me), so the screens and the routes can't disagree. ready is
 // false only while the memberships are loading, so a Staff login never sees the evaluator's screens flash first.
+// Step D (2026-11-06): the same, for VeritaDC documents. A Staff seat given edit on VeritaDC isn't limited, so this is its own flag.
+export function useStaffDocScope(): { ownOnly: boolean; ready: boolean } {
+  const labId = useActiveLabId();
+  const { data, isLoading } = useMemberships();
+  const m = pickCurrentMembership(data, labId);
+  return { ownOnly: !!m?.documentsOwnOnly, ready: !isLoading };
+}
+
 export function useStaffOwnScope(): { ownOnly: boolean; ownEmployeeId: number | null; ready: boolean } {
   const labId = useActiveLabId();
   const { data, isLoading } = useMemberships();

@@ -12,6 +12,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
+import { useStaffDocScope } from "@/hooks/useStaffLogin";
 import { VeritaPolicyTabs } from "@/components/VeritaPolicyTabs";
 import { apiRequest, queryClient, getQueryFn, API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
@@ -132,18 +133,20 @@ export default function VeritaPolicyCompliancePage() {
   const isReadOnly = useIsReadOnly("veritapolicy");
   const activeLabId = useActiveLabId();
   const { toast } = useToast();
+  // Step D: this page names who owes what, so a limited Staff login doesn't load it (the server refuses it too).
+  const { ownOnly: staffOwnDocs } = useStaffDocScope();
 
   const { data, isLoading } = useQuery<Compliance>({
     queryKey: [`/api/labs/${activeLabId}/veritapolicy/compliance`],
     queryFn: getQueryFn({ on401: "throw" }),
-    enabled: !!activeLabId,
+    enabled: !!activeLabId && !staffOwnDocs,
     refetchInterval: 60000,
   });
 
   const { data: linksData } = useQuery<{ links: SurveyorLink[] }>({
     queryKey: [`/api/labs/${activeLabId}/veritapolicy/surveyor-links`],
     queryFn: getQueryFn({ on401: "throw" }),
-    enabled: !!activeLabId,
+    enabled: !!activeLabId && !staffOwnDocs,
   });
   const links = linksData?.links || [];
   // Parking lot #94 (2026-10-11): active links by default; expired and revoked
@@ -218,6 +221,19 @@ export default function VeritaPolicyCompliancePage() {
         <Card>
           <CardContent className="p-6">
             Pick a lab from the lab switcher to view the compliance dashboard.
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (staffOwnDocs) {
+    return (
+      <div className="max-w-3xl mx-auto p-6 space-y-6">
+        <VeritaPolicyTabs active="compliance" />
+        <Card>
+          <CardContent className="p-6 text-sm text-muted-foreground" data-testid="compliance-staff-note">
+            The compliance page shows who owes what, so it is for owners and editors. Your own documents are under My Documents.
           </CardContent>
         </Card>
       </div>

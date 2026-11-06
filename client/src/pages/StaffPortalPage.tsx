@@ -412,8 +412,9 @@ function TileScreenWithPendingCounts({
 
 // ── StaffPortalPoliciesView (Wave K5, 2026-06-08) ─────────────────────
 // Inline screen behind sp-tile-policies. Two states:
-//   1. List: all approved policies for the lab + signed/unsigned chip
-//      per row for the active employee.
+//   1. List: the approved documents assigned to this person (Step D,
+//      server/policyReadSign.ts) + signed/unsigned chip per row, and a
+//      read-only lookup for any other approved document.
 //   2. Detail: title + rendered policy content (mammoth HTML for docx,
 //      <object> for pdf) + typed signature input + Sign button. Sign
 //      submits document_id/version_id/content_hash/typed_signature to
@@ -437,6 +438,25 @@ interface PortalPolicy {
   typed_signature: string | null;
   carried_forward?: boolean;
   signed_version_label?: string | null;
+  doc_number?: string | null;
+  manual_path?: string | null;
+  // Opened from the lookup and not assigned to this person: there is nothing to sign.
+  read_only?: boolean;
+  status?: string;
+}
+
+interface PortalLookupRow {
+  document_id: number;
+  title: string;
+  description: string | null;
+  doc_number: string | null;
+  status: string;
+  version_id: number;
+  version_number: number | null;
+  version_label?: string | null;
+  effective_date: string | null;
+  next_review_date: string | null;
+  assigned: boolean;
 }
 
 interface PortalPolicyRender {
@@ -472,6 +492,33 @@ function StaffPortalPoliciesView({
   const [typedName, setTypedName] = useState<string>(`${employee.first_name}${employee.middle_initial ? ` ${employee.middle_initial}.` : ""} ${employee.last_name}`.trim());
   const [signing, setSigning] = useState(false);
   const [signError, setSignError] = useState<string | null>(null);
+  const [listQ, setListQ] = useState("");
+  const [lookupQ, setLookupQ] = useState("");
+  const [lookup, setLookup] = useState<PortalLookupRow[] | null>(null);
+
+  // Read-only lookup: any approved document by title or number. Waits for two letters.
+  useEffect(() => {
+    const term = lookupQ.trim();
+    if (term.length < 2) { setLookup(null); return; }
+    let cancelled = false;
+    const t = setTimeout(() => {
+      fetch(`/api/staff-portal-session/policies/lookup?q=${encodeURIComponent(term)}`, { headers: { Authorization: `Bearer ${token}` } })
+        .then(async (r) => (r.ok ? r.json() : { results: [] }))
+        .then((d) => { if (!cancelled) setLookup(d.results || []); })
+        .catch(() => { if (!cancelled) setLookup([]); });
+    }, 250);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [lookupQ, token]);
+
+  function openLookup(row: PortalLookupRow) {
+    const mine = policies?.find((p) => p.document_id === row.document_id);
+    openPolicy(mine ?? {
+      document_id: row.document_id, title: row.title, description: row.description, version_id: row.version_id,
+      version_number: row.version_number, version_label: row.version_label, effective_date: row.effective_date,
+      next_review_date: row.next_review_date, signed: false, signed_at: null, typed_signature: null, doc_number: row.doc_number,
+      read_only: true, status: row.status,
+    });
+  }
 
   function fetchList() {
     setPolicies(null);
@@ -649,7 +696,12 @@ function StaffPortalPoliciesView({
             )}
           </div>
 
-          {active.signed ? (
+          {active.read_only ? (
+            <div className="border border-border rounded-lg bg-card p-4 text-sm text-muted-foreground" data-testid="sp-policies-read-only">
+              This document isn't assigned to you, so there's nothing to sign. You're reading the current version.
+              {active.status === "expired" && " Its review is overdue."}
+            </div>
+          ) : active.signed ? (
             <div className="border border-green-200 bg-green-50 rounded-lg p-4" data-testid="sp-policies-already-signed">
               {active.carried_forward ? (
                 // Minor revisions (Q154): the signature is on an earlier version; say which, and that this is a minor change.
@@ -734,12 +786,31 @@ function StaffPortalPoliciesView({
           {policies === null ? (
             <div className="text-sm text-muted-foreground py-6 text-center">Loading approved policies...</div>
           ) : policies.length === 0 ? (
-            <div className="text-sm text-muted-foreground py-6 text-center">
-              No approved policies on this lab's VeritaDC&trade; manuals yet. Ask the lab director.
+            <div className="text-sm text-muted-foreground py-6 text-center" data-testid="sp-policies-none-assigned">
+              No documents are assigned to you right now. If you expected some, ask your supervisor.
             </div>
           ) : (
             <div className="divide-y divide-border">
-              {policies.map((p) => (
+              {policies.length > 10 && (
+                <div className="pb-3">
+                  <input
+                    type="text"
+                    value={listQ}
+                    onChange={(e) => setListQ(e.target.value)}
+                    placeholder={`Filter your ${policies.length} documents`}
+                    className="w-full border border-border rounded-md p-2 text-sm bg-background"
+                    data-testid="sp-policies-filter"
+                  />
+                </div>
+              )}
+              {/* What they still need to sign comes first. */}
+              {[...policies]
+                .filter((p) => {
+                  const q = listQ.trim().toLowerCase();
+                  return !q || p.title.toLowerCase().includes(q) || (p.doc_number || "").toLowerCase().includes(q) || (p.manual_path || "").toLowerCase().includes(q);
+                })
+                .sort((a, b) => Number(a.signed) - Number(b.signed))
+                .map((p) => (
                 <button
                   key={p.document_id}
                   type="button"
@@ -748,11 +819,15 @@ function StaffPortalPoliciesView({
                   data-testid="sp-policies-row"
                 >
                   <div className="flex-1">
-                    <div className="text-sm font-medium" data-testid="sp-policies-row-title">{p.title}</div>
+                    <div className="text-sm font-medium" data-testid="sp-policies-row-title">
+                      {p.doc_number && <span className="mr-2 font-mono text-xs text-muted-foreground">{p.doc_number}</span>}
+                      {p.title}
+                    </div>
                     <div className="text-xs text-muted-foreground">
                       {p.version_number != null && <>Version {p.version_label ?? p.version_number}{" "}</>}
                       {p.effective_date && <>&middot; Effective {p.effective_date}</>}
                     </div>
+                    {p.manual_path && <div className="text-xs text-muted-foreground" data-testid="sp-policies-row-manual">{p.manual_path}</div>}
                     {/* Minor revisions (Q154): the lab carries signatures forward, and staff are told the document changed. */}
                     {p.carried_forward && (
                       <div className="text-xs text-amber-800 dark:text-amber-400" data-testid="sp-policies-row-updated">
@@ -769,6 +844,42 @@ function StaffPortalPoliciesView({
                       Needs your signature
                     </span>
                   )}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Step D: a tech covering another bench can still read that procedure. A search, not a list, and nothing here asks for a signature. */}
+        <div className="border border-border rounded-lg bg-card p-4 mt-4" data-testid="sp-policies-lookup">
+          <div className="text-sm font-medium">Look up another approved document</div>
+          <p className="text-xs text-muted-foreground mt-0.5 mb-2">Find a procedure that isn't assigned to you, by title or number, and read it. There is nothing to sign.</p>
+          <input
+            type="text"
+            value={lookupQ}
+            onChange={(e) => setLookupQ(e.target.value)}
+            placeholder="Type at least 2 letters"
+            className="w-full border border-border rounded-md p-2 text-sm bg-background"
+            data-testid="sp-policies-lookup-input"
+          />
+          {lookup !== null && lookup.length === 0 && (
+            <div className="text-xs text-muted-foreground mt-2" data-testid="sp-policies-lookup-none">No approved document matches.</div>
+          )}
+          {lookup !== null && lookup.length > 0 && (
+            <div className="divide-y divide-border mt-2" data-testid="sp-policies-lookup-results">
+              {lookup.map((r) => (
+                <button
+                  key={r.document_id}
+                  type="button"
+                  onClick={() => openLookup(r)}
+                  className="w-full text-left py-2 px-2 hover:bg-muted flex items-center justify-between gap-3"
+                  data-testid="sp-policies-lookup-row"
+                >
+                  <div className="flex-1 min-w-0 text-sm [overflow-wrap:anywhere]">
+                    {r.doc_number && <span className="mr-2 font-mono text-xs text-muted-foreground">{r.doc_number}</span>}
+                    {r.title}
+                  </div>
+                  <span className="text-xs text-muted-foreground shrink-0">{r.assigned ? "Assigned to you" : "Read only"}</span>
                 </button>
               ))}
             </div>
