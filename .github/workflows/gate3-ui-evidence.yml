@@ -50,7 +50,9 @@ jobs:
           BASE="${{ github.event.pull_request.base.sha }}"
           HEAD="${{ github.event.pull_request.head.sha }}"
 
-          CHANGED=$(git diff --name-only "$BASE" "$HEAD")
+          # Three dots: what this branch changed since it left main. Two dots also listed anything main gained after that,
+          # so a branch that fell behind main's client page changes was asked for browser evidence it had nothing to do with.
+          CHANGED=$(git diff --name-only "$BASE"..."$HEAD")
           echo "Changed files in this PR:"
           echo "$CHANGED" | sed 's/^/  /'
           echo ""

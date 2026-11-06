@@ -1889,7 +1889,7 @@ function DeleteConfirmDialog({ name, recordCount, onDelete }: { name: string; re
           <p className="text-sm text-muted-foreground" data-testid="program-delete-refusal">{refusal}</p>
         ) : (
           <p className="text-sm text-muted-foreground">
-            Are you sure you want to delete <span className="font-semibold text-foreground">"{name}"</span>? All assessments and data will be permanently removed.
+            Are you sure you want to delete <span className="font-semibold text-foreground">"{name}"</span>? It holds no competency records. Its method groups and checklist items will be permanently removed.
           </p>
         )}
         <div className="flex justify-end gap-2 pt-2">
