@@ -219,7 +219,8 @@ export default function VeritaPTAppPage() {
       // form still works, just without analyst attribution.
       if (activeLabId) {
         try {
-          const staffRes = await fetch(`${API_BASE}/api/labs/${activeLabId}/staff/employees`, { headers: authHeaders() });
+          // ?names=1: a Staff login who may edit PT needs coworkers' names here, and gets only those (Michael Q182 = 1).
+          const staffRes = await fetch(`${API_BASE}/api/labs/${activeLabId}/staff/employees?names=1`, { headers: authHeaders() });
           if (staffRes.ok) {
             const sd = await staffRes.json();
             setStaffRoster(Array.isArray(sd) ? sd : []);

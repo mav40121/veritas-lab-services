@@ -10,6 +10,10 @@ export interface Membership {
   // #84: the seat this user holds IN THIS LAB ('active', 'view_only',
   // 'staff_portal', ...), null when none. Optional for deploy skew.
   seatType?: string | null;
+  // Michael Q182 = 1: a Staff login sees only their own competency data in this lab, and ownEmployeeId is their roster row (null
+  // when the seat has no link or isn't active). Decided per lab on the server. Optional for deploy skew.
+  competencyOwnOnly?: boolean;
+  ownEmployeeId?: number | null;
   permissions: Record<string, any>;
   isPrimaryLab: boolean;
   // STATIC account-home-lab flag derived from users.lab_id, which the

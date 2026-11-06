@@ -1,5 +1,6 @@
 import { Switch, Route, Router, useLocation, Redirect } from "wouter";
 import { staffLoginGate } from "@/components/StaffLoginGate";
+import { staffOwnGate } from "@/components/StaffOwnCompetency";
 const VeritaCheckVerificationPage = lazy(() => import("@/pages/VeritaCheckVerificationPage"));
 const ArticleInventoryManagementPage = lazy(() => import("@/pages/ArticleInventoryManagementPage"));
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -155,6 +156,10 @@ const StaffGatedQA = staffLoginGate(VeritaQAPage, "VeritaQA™");
 const StaffGatedPace = staffLoginGate(VeritaPacePage, "VeritaPace™");
 const StaffGatedShift = staffLoginGate(VeritaShiftPage, "VeritaShift™");
 const StaffGatedOps = staffLoginGate(VeritaOpsAppPage, "VeritaOps™");
+// Michael Q182 = 1: a Staff login sees only their own competency data, so VeritaComp's whole-lab pages open their own page instead.
+const StaffOwnGatedCompInstrument = staffOwnGate(VeritaCompInstrumentPage);
+const StaffOwnGatedCompByInstrument = staffOwnGate(VeritaCompByInstrumentPage);
+const StaffOwnGatedCompMethodGroups = staffOwnGate(VeritaCompMethodGroupsPage);
 const RequestInvoicePage = lazy(() => import("@/pages/RequestInvoicePage"));
 import { OnboardingBanner } from "@/components/OnboardingBanner";
 import { analyticsAllowed, ensureAnalyticsLoaded, syncAnalyticsOptOut } from "@/lib/analytics";
@@ -578,10 +583,10 @@ function AppContent() {
           <Route path="/labs/:labId/veritacomp-app" component={VeritaCompAppPage} />
           <Route path="/labs/:labId/veritacomp-app/employee/:employeeId" component={VeritaCompEmployeePage} />
           {/* "By instrument" (2026-10-13): read-only, not linked from the landing until turned on. */}
-          <Route path="/labs/:labId/veritacomp-app/instruments" component={VeritaCompByInstrumentPage} />
-          <Route path="/labs/:labId/veritacomp-app/method-groups" component={VeritaCompMethodGroupsPage} />
+          <Route path="/labs/:labId/veritacomp-app/instruments" component={StaffOwnGatedCompByInstrument} />
+          <Route path="/labs/:labId/veritacomp-app/method-groups" component={StaffOwnGatedCompMethodGroups} />
           <Route path="/labs/:labId/veritacomp-app/signed" component={VeritaCompSignedPage} />
-          <Route path="/labs/:labId/veritacomp-app/instrument/:instrumentId" component={VeritaCompInstrumentPage} />
+          <Route path="/labs/:labId/veritacomp-app/instrument/:instrumentId" component={StaffOwnGatedCompInstrument} />
           <Route path="/labs/:labId/veritacomp-app/:programId" component={VeritaCompAppPage} />
           <Route path="/labs/:labId/veritapt/app" component={VeritaPTAppPage} />
           <Route path="/labs/:labId/veritapt/enrollments" component={VeritaPTEnrollmentsPage} />

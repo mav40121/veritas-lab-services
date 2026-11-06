@@ -49,6 +49,8 @@ interface Props {
   disabled?: boolean;
   /** Keep typed entry for an observer field the LD/TC/TS rule does not cover. */
   allowTyped?: boolean;
+  /** A Staff login gets only the observers on their own record, so an empty list says nothing about the lab. */
+  hideEmptyNote?: boolean;
   /** Optional override for the surrounding wrapper class. */
   className?: string;
   /** Size of the trigger: the program dialog uses h-7, the person page h-8. */
@@ -58,7 +60,7 @@ interface Props {
 
 const SAVED = "__saved";
 
-export function ObserverInitialsField({ value, onChange, observers, isLoading, disabled, allowTyped, className, triggerClassName = "text-xs h-7", ...rest }: Props) {
+export function ObserverInitialsField({ value, onChange, observers, isLoading, disabled, allowTyped, hideEmptyNote, className, triggerClassName = "text-xs h-7", ...rest }: Props) {
   const testId = rest["data-testid"];
   const matchedObserver = matchObserver(observers, value);
   const savedUnmatched = !!(value && value.trim()) && !matchedObserver;
@@ -138,7 +140,7 @@ export function ObserverInitialsField({ value, onChange, observers, isLoading, d
           {allowTyped && <SelectItem value="__type">Type initials manually…</SelectItem>}
         </SelectContent>
       </Select>
-      {observers.length === 0 && (
+      {observers.length === 0 && !hideEmptyNote && (
         <div className="mt-1 text-[10px] text-muted-foreground" data-testid={testId ? `${testId}-empty` : undefined}>
           No Laboratory Director, Technical Consultant or Technical Supervisor in VeritaStaff yet. Add the observer in VeritaStaff with their role.
         </div>
