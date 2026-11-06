@@ -79,7 +79,7 @@ export default function TeaLookupPage() {
         <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-900 p-4 mb-6 flex gap-3 text-sm">
           <AlertTriangle size={16} className="text-amber-600 shrink-0 mt-0.5" />
           <div className="text-amber-800 dark:text-amber-300">
-            <strong>Important:</strong> CLIA TEa values are federally published as the PT acceptable performance criterion. For calibration verification, CLIA leaves the criterion to the laboratory (§493.1253(b)(3) and §493.1255(b)(2)). Some laboratories use manufacturer-stated limits and some adopt the CLIA PT limit; a medical director or designee who adopts one should document why it fits the clinical need. CMS said in the preamble to CMS-3355-F that PT limits were written to grade proficiency testing and weren't intended as performance goals. Your lab may adopt tighter internal criteria (ADLM recommends half of CLIA PT TEa for enhanced quality). Always verify against the current{" "}
+            <strong>Important:</strong> CLIA TEa values are federally published as the PT acceptable performance criterion. For calibration verification, CLIA leaves the criterion to the laboratory (§493.1253(b)(3) and §493.1255(b)(2)). Some laboratories use manufacturer-stated limits and some adopt the CLIA PT limit; a medical director or designee who adopts one should document why it fits the clinical need. CMS said in the preamble to CMS-3355-F that PT limits were written to grade proficiency testing and weren't intended as performance goals. Your lab may adopt tighter internal criteria. Always verify against the current{" "}
             <a href="https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493" target="_blank" rel="noopener noreferrer" className="underline hover:text-amber-900">eCFR</a> before use in compliance decisions. If you are choosing a platform to apply these limits automatically, here is how to choose <Link href="/resources/how-to-choose-lab-compliance-software" className="underline font-medium hover:text-amber-900">lab compliance software</Link>.
           </div>
         </div>
@@ -258,9 +258,9 @@ export default function TeaLookupPage() {
             </p>
           </div>
           <div>
-            <div className="font-semibold mb-2">ADLM recommendation</div>
+            <div className="font-semibold mb-2">Setting an internal goal</div>
             <p className="text-muted-foreground text-xs leading-relaxed">
-              The Association for Diagnostics & Laboratory Medicine (ADLM) recommends using half of the CLIA TEa as internal quality goals, providing a safety margin that keeps results well within acceptable performance even under normal analytical variation.
+              CLIA sets no internal goal; the laboratory sets its own criterion. Some laboratories budget a fraction of allowable total error for a given study, and rules of thumb differ: Westgard uses one-third of TEa for bias on calibration verification, and Data Innovations recommends 25 to 50 percent for systematic error. The medical director or designee decides and should document why.
             </p>
           </div>
         </div>

@@ -83,7 +83,7 @@ function buildHtml(): string {
 
   <div class="panel">
     <h3>4. Compliance defensibility</h3>
-    <p>Every VeritaCheck&reg; PDF has the laboratory director or designee signature block on page 1, alongside the results, the narrative, and the specialty-correct 42 CFR Part 493 citation (Chemistry 493.931, Hematology 493.941, etc.). The ADLM internal goal is shown beside the CLIA PT limit where applicable.</p>
+    <p>Every VeritaCheck&reg; PDF has the laboratory director or designee signature block on page 1, alongside the results, the narrative, and the specialty-correct 42 CFR Part 493 citation (Chemistry 493.931, Hematology 493.941, etc.).</p>
     <p>Once signed, a study is locked. Any change goes through an amendment, and the signed original is archived rather than overwritten. The signer and timestamp are recorded on the study, and deletions and notes go to the lab's audit log. The lab name and CLIA number are in the report header on page 1, alongside the results and the signature block.</p>
     <p>Legacy reports vary in CFR citation accuracy and signature placement. A surveyor has to do their own regulatory cross-reference.</p>
   </div>

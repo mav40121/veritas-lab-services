@@ -176,8 +176,8 @@ export const TEA_LOOKUP_FAQ: FaqQA[] = [
     a: "You can. CLIA leaves the criterion to the laboratory (42 CFR §493.1255(b)(2)), so a medical director or designee may adopt a PT limit and should document why it fits the clinical need. CMS said in the preamble to CMS-3355-F (87 FR 41194, July 11, 2022), which is not regulation text, that PT limits were written to grade proficiency testing and were not intended as performance goals, and that goals for accuracy and precision should rest on clinical needs and the manufacturer's labeling.",
   },
   {
-    q: "What is the ADLM half-TEa recommendation?",
-    a: "ADLM suggests an internal goal at half of the CLIA TEa, giving a quality margin that keeps results well inside acceptable performance.",
+    q: "Does CLIA set an internal goal, such as a fraction of TEa?",
+    a: "CLIA sets no internal goal; the laboratory sets its own criterion. Some laboratories budget a fraction of allowable total error for a given study, and rules of thumb differ: Westgard uses one-third of TEa for bias on calibration verification, and Data Innovations recommends 25 to 50 percent for systematic error. The medical director or designee decides and should document why.",
   },
   {
     q: "Is the lookup tool free?",
@@ -253,7 +253,7 @@ export const PRECISION_FAQ: FaqQA[] = [
   },
   {
     q: "What acceptance criterion should I use?",
-    a: "For precision, the regulation's comparison is the manufacturer's claim: 42 CFR §493.1253(b)(1)(i) has the laboratory show precision comparable to the manufacturer's, so the manufacturer's published within-run SD is the starting point. A medical director or designee may adopt another criterion, such as a fraction of a CLIA PT limit (the ADLM half-TEa convention is one example), and should document why it fits the clinical need. Final acceptance rests with the medical director or designee.",
+    a: "For precision, the regulation's comparison is the manufacturer's claim: 42 CFR §493.1253(b)(1)(i) has the laboratory show precision comparable to the manufacturer's, so the manufacturer's published within-run SD is the starting point. A medical director or designee may adopt another criterion, such as a fraction of a CLIA PT limit, and should document why it fits the clinical need. Final acceptance rests with the medical director or designee.",
   },
 ];
 

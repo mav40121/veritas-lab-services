@@ -188,15 +188,12 @@ return (
             <strong>Check your criteria against the current CFR.</strong> The CLIA PT final rule (CMS-3355-F, published July 11, 2022, effective July 11, 2024) tightened limits for several high-volume analytes. Glucose moved from ±10% to ±8%. Creatinine moved from ±15% to ±10%. If your laboratory adopted PT limits as its calibration verification criteria, check that your template carries the current values.
           </Callout>
 
-          <h2 className="font-serif text-2xl font-bold mt-10 mb-3">The ADLM Recommendation: Half of CLIA TEa</h2>
+          <h2 className="font-serif text-2xl font-bold mt-10 mb-3">Setting an Internal Goal</h2>
           <p>
-            The <a href="https://www.adlm.org" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Association for Diagnostics & Laboratory Medicine (ADLM)</a> recommends that laboratories adopt internal performance goals at <strong>half of the CLIA TEa</strong>, providing a quality margin that keeps results well within acceptable performance even under normal analytical variation.
+            CLIA sets no internal goal; the laboratory sets its own criterion. Some laboratories budget a fraction of allowable total error for a given study, and rules of thumb differ: Westgard uses one-third of TEa for bias on calibration verification, and Data Innovations recommends 25 to 50 percent for systematic error. The medical director or designee decides and should document why.
           </p>
           <p>
-            For glucose, that means an internal goal of ±4% or ±3 mg/dL (half of the CLIA TEa of ±8% or ±6 mg/dL). Using half TEa as an internal standard doesn't change what you report to regulators. It simply gives your quality program a tighter target that reduces the risk of marginal results.
-          </p>
-          <p>
-            Whether to adopt that goal, a PT limit, the manufacturer's limit, or something else is a laboratory director or designee decision. The deciding factors are your patient population and clinical context, and the decision should be documented.
+            Whether to adopt a fraction of TEa, a PT limit, the manufacturer's limit, or something else is a laboratory director or designee decision. The deciding factors are your patient population and clinical context, and the decision should be documented.
           </p>
 
           <h2 className="font-serif text-2xl font-bold mt-10 mb-3">How to Apply TEa to Calibration Verification</h2>
@@ -280,7 +277,6 @@ return (
               <li>Code of Federal Regulations. (2024). Title 42, Part 493, Subpart I. <a href="https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">ecfr.gov</a></li>
               <li>Centers for Medicare & Medicaid Services. (2022). CLIA Proficiency Testing Regulations Related to Analytes and Acceptable Performance, final rule (CMS-3355-F), 87 FR 41194. <a href="https://www.cms.gov" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">cms.gov</a></li>
               <li>Westgard JO. (2024). 2025 CLIA Acceptance Limits for Proficiency Testing. <a href="https://www.westgard.com/clia-and-quality-regulation-requirements/quality-requirements/2024-clia-requirements.html" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">westgard.com</a></li>
-              <li>Association for Diagnostics & Laboratory Medicine. (2024). Quality Management Guidelines. <a href="https://www.adlm.org" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">adlm.org</a></li>
             </ol>
           </div>
 
