@@ -507,7 +507,9 @@ export default function AccountSettingsPage() {
             )}
             {cliaPlaceholderOnFile && (
               <p className="text-xs text-muted-foreground" data-testid="clia-pending-note">
-                Not a CLIA number yet. Enter the lab's 10-character CLIA number when you have it; everything else works without it.
+                {/^N\/A\b/i.test(String(settings?.clia_number ?? "").trim())
+                  ? "This lab doesn't hold a CLIA number, so reports print this line in that spot."
+                  : "Not a CLIA number yet. Enter the lab's 10-character CLIA number when you have it; everything else works without it."}
               </p>
             )}
             {!settings?.is_seat && settings?.clia_locked && (

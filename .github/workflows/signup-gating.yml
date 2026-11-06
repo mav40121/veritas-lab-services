@@ -89,6 +89,14 @@ jobs:
         # Q154 (2026-11-03): per-lab document numbers (unique among active documents), 1.0 / 1.1 / 2.0 versions with
         # legacy versions reading N.0, number edits audited, no move into another lab's manual.
         run: npm run test:veritadc-doc-numbers
+      - name: Verify the VeritaDC bulk load rules
+        # Step E (2026-11-06): title cleaning, dates, versions, which rows load, lab and manual placement, review notices.
+        run: npx tsx scripts/verify-veritadc-carried-over.mts
+      - name: Run VeritaDC bulk load integration test
+        # Step E (2026-11-06): documents carried over from a prior system keep their number, version and real dates, with
+        # the face page attached and no signature in VeritaAssure; safe to rerun; no read-and-sign and no email; reminders
+        # held to a start date; a past-due document stays overdue, not expired; the real load script runs against the routes.
+        run: npm run test:veritadc-bulk-load
       - name: Run VeritaDC document types integration test
         # Q154 (2026-11-03): per-lab rule per type (periodic review, read-and-sign, default interval), applied at upload,
         # approval/re-certify and type change; a no-read-and-sign type can't be assigned and leaves the staff list.

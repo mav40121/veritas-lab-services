@@ -106,7 +106,14 @@ async function main() {
     const rel = `${LA}/${doc}/v1/document.txt`;
     fs.mkdirSync(path.dirname(resolveVersionFilePath(rel)), { recursive: true });
     fs.writeFileSync(resolveVersionFilePath(rel), "Reject hemolyzed potassium specimens.");
-    sqlite.prepare("INSERT INTO policy_versions (document_id, version_number, file_path, file_format, file_size_bytes, file_hash_sha256, uploaded_by) VALUES (?, 1, ?, 'txt', 37, 'x', ?)").run(doc, rel, A.id);
+    const versionRow = sqlite.prepare("INSERT INTO policy_versions (document_id, version_number, file_path, file_format, file_size_bytes, file_hash_sha256, uploaded_by) VALUES (?, 1, ?, 'txt', 37, 'x', ?)").run(doc, rel, A.id);
+    // history carried over from a prior system: its face page and original go with the document
+    const carriedFace = `${LA}/${doc}/carried/face-page.html`;
+    const carriedOriginal = `${LA}/${doc}/carried/original.doc`;
+    fs.mkdirSync(path.dirname(resolveVersionFilePath(carriedFace)), { recursive: true });
+    fs.writeFileSync(resolveVersionFilePath(carriedFace), "<html><body>Made-up face page</body></html>");
+    fs.writeFileSync(resolveVersionFilePath(carriedOriginal), "made-up legacy bytes");
+    sqlite.prepare("INSERT INTO policy_carried_records (lab_id, document_id, version_id, source_system, source_number, face_page_path, original_path, original_filename) VALUES (?, ?, ?, 'OldSystem', 'MU 1', ?, ?, 'MU 1_Specimen Rejection.doc')").run(LA, doc, Number(versionRow.lastInsertRowid), carriedFace, carriedOriginal);
     // an uploaded certificate (BLOB)
     const cert = Number(sqlite.prepare("INSERT INTO lab_certificates (user_id, cert_name, lab_id, created_at, updated_at) VALUES (?, 'CLIA certificate', ?, ?, ?)").run(A.id, LA, now, now).lastInsertRowid);
     sqlite.prepare("INSERT INTO lab_certificate_documents (certificate_id, user_id, filename, original_filename, file_data, uploaded_at, lab_id) VALUES (?, ?, 'c.pdf', 'clia-cert.pdf', ?, ?, ?)").run(cert, A.id, Buffer.from("%PDF-1.4 IT CERT"), now, LA);
@@ -152,6 +159,7 @@ async function main() {
     const names: string[] = ex.zip ? Object.keys(ex.zip.files) : [];
     check("2c. Index.xlsx, records workbooks and JSON are in the zip", names.includes("Index.xlsx") && names.includes("Records/VeritaCheck records.xlsx") && names.includes("Records/JSON/studies.json"), names.filter((n) => !n.endsWith("/")).slice(0, 8).join(", "));
     check("2d. the policy document file is in the zip", names.some((n) => n.startsWith("Files/VeritaDC/") && n.endsWith("v1.txt")), names.filter((n) => n.startsWith("Files/")).join(", "));
+    check("2d2. the carried-over face page and original go with the document", names.some((n) => n.startsWith("Files/VeritaDC/") && n.endsWith("signature-face-page.html")) && names.some((n) => n.startsWith("Files/VeritaDC/") && n.endsWith("MU 1_Specimen Rejection.doc")) && names.includes("Records/JSON/policy_carried_records.json"), names.filter((n) => n.startsWith("Files/VeritaDC")).join(", "));
     const certFile = names.find((n) => n.startsWith("Files/VeritaLab/lab_certificate_documents/") && n.endsWith("clia-cert.pdf"));
     check("2e. the uploaded certificate (stored in the database) is in the zip", !!certFile && (await ex.zip.file(certFile).async("string")).startsWith("%PDF-1.4 IT CERT"), certFile || "missing");
     const register5 = names.find((n) => n.startsWith("Reports/VeritaStaff/"));

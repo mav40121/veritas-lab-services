@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { CheckCircle2, ChevronRight, Building2, CreditCard, FileText, ShieldCheck, Lock, Quote, Minus, Check, ArrowRight, Users } from "lucide-react";
+import { CheckCircle2, ChevronRight, Building2, CreditCard, FileText, ShieldCheck, Lock, Minus, Check, ArrowRight, Users } from "lucide-react";
 import { trackEvent } from "@/lib/analytics";
 
 // 2026-05-26 pricing-page redesign per Lisa Veri's feedback. The prior
@@ -545,9 +545,8 @@ return (
 
       </div>
 
-      {/* Payment methods + testimonials, placed AFTER the plans so a visitor sees
-          the prices right below the hero rather than payment logistics and
-          quotes first. */}
+      {/* Payment methods, placed AFTER the plans so a visitor sees the prices
+          right below the hero rather than payment logistics first. */}
       <section className="border-y border-teal-800/40 bg-teal-950/50">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8 text-center">
           <div className="flex items-center justify-center gap-10 sm:gap-14 mb-4">
@@ -581,29 +580,6 @@ return (
         </div>
       </section>
 
-      {/* Testimonials */}
-      <section className="border-b border-border bg-muted/20">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-12">
-          <div className="grid md:grid-cols-2 gap-8">
-            <div className="text-center px-4">
-              <Quote size={24} className="text-primary/40 mx-auto mb-3" />
-              <p className="text-base italic leading-relaxed mb-4">
-                "I didn't know what questions to ask because I didn't know where my gaps were. VeritaAssure® showed me what I was missing before a surveyor found it first."
-              </p>
-              <p className="text-sm font-semibold">John Hall</p>
-              <p className="text-xs text-muted-foreground">Laboratory Director, San Carlos Apache Healthcare Corporation</p>
-            </div>
-            <div className="text-center px-4">
-              <Quote size={24} className="text-primary/40 mx-auto mb-3" />
-              <p className="text-base italic leading-relaxed mb-4">
-                "VeritaAssure® is a suite of tools that will revolutionize the regulatory side of laboratory management. Whether your lab is accredited by CAP, TJC, or COLA, this streamlines your entire compliance workflow."
-              </p>
-              <p className="text-sm font-semibold">Lisa Veri</p>
-              <p className="text-xs text-muted-foreground">Administrative Lab Director, Milford Regional Medical Center</p>
-            </div>
-          </div>
-        </div>
-      </section>
     </div>
   );
 }

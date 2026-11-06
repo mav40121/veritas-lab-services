@@ -39635,6 +39635,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     isNamedOnRoute,
   } = await import("./veritapolicyApproval");
   const { registerLabGroupRoutes } = await import("./labGroups");
+  const { registerBulkLoadRoutes, carriedRecordFor } = await import("./veritadcBulkLoad");
 
   // Multer config: memory buffer + 25 MB cap. We write to /data/policies on
   // disk after validation rather than storing the blob in SQLite (uploads
@@ -40375,6 +40376,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
                   v.file_format AS current_file_format,
                   v.uploaded_at AS current_uploaded_at,
                   m.name AS manual_name,
+                  EXISTS (SELECT 1 FROM policy_carried_records c WHERE c.document_id = d.id) AS carried_over,
                   (SELECT COUNT(*) FROM policy_document_notes n
                     WHERE n.document_id = d.id AND n.deleted_at IS NULL) AS note_count
              FROM policy_documents d
@@ -40606,6 +40608,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       res.json({
         document: withVersionLabel(withManualTree(sqlite, req.scope.labId, [row]))[0],
         versions: (versions as any[]).map((v) => ({ ...v, version_label: versionLabel(v) })),
+        // History carried over from the lab's prior system, or null (server/veritadcBulkLoad.ts).
+        carried: carriedRecordFor(sqlite, id),
       });
     }
   );
@@ -41435,6 +41439,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         "staff_portal_policy_signatures",
         "policy_attestations",
         "policy_review_reminders",
+        "policy_carried_records",
         "policy_signoffs",
         "policy_versions",
       ];
@@ -42354,8 +42359,11 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // LHF-1: include bench-staff kiosk signatures alongside the approval chain
     // so a surveyor sees who actually read-and-signed, not just the approvers.
     const staffSignatures = staffPolicySignaturesForDoc(sqlite, doc.lab_id, id);
-    res.json({ signoffs: rows, staffSignatures });
+    res.json({ signoffs: rows, staffSignatures, carried: carriedRecordFor(sqlite, id) });
   });
+
+  // Bulk load from a prior system, and the carried-over history it leaves on each document (server/veritadcBulkLoad.ts).
+  registerBulkLoadRoutes(app, { adminSecret: ADMIN_SECRET, authMiddleware, labScopeMiddleware, resolveSurveyorToken });
 
   // ── Phase 7: new-version upload + history + search ─────────────────────
 
@@ -43969,6 +43977,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           attestations,
           staffSignatures,
           roster: roster.people,
+          carried: carriedRecordFor(sqlite, id),
         },
         { labName: labRow?.lab_name || "Laboratory", cliaNumber: labRow?.clia_number || "Not on file" }
       );
