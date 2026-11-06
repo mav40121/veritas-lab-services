@@ -111,6 +111,7 @@ const VeritaLabAppPage = lazy(() => import("@/pages/VeritaLabAppPage"));
 const VeritaQCAppPage = lazy(() => import("@/pages/VeritaQCAppPage"));
 const EquipmentAppPage = lazy(() => import("@/pages/EquipmentAppPage"));
 const InstrumentTrailPage = lazy(() => import("@/pages/InstrumentTrailPage"));
+const StainLogPage = lazy(() => import("@/pages/StainLogPage"));
 const ReadinessDashboardPage = lazy(() => import("@/pages/ReadinessDashboardPage"));
 const SystemRepositoryPage = lazy(() => import("@/pages/SystemRepositoryPage"));
 const VeritaQCDailyReviewPage = lazy(() => import("@/pages/VeritaQCDailyReviewPage"));
@@ -498,6 +499,7 @@ function AppContent() {
           <Route path="/veritalab-app">{wrapLegacy(VeritaLabAppPage)}</Route>
           <Route path="/veritaqc-app">{wrapLegacy(VeritaQCAppPage)}</Route>
           <Route path="/veritaqc-app/review">{wrapLegacy(VeritaQCDailyReviewPage)}</Route>
+          <Route path="/equipment-app/stain-log">{wrapLegacy(StainLogPage)}</Route>
           <Route path="/equipment-app">{wrapLegacy(EquipmentAppPage)}</Route>
           <Route path="/readiness">{wrapLegacy(ReadinessDashboardPage)}</Route>
           <Route path="/veritapolicy-app">{wrapLegacy(VeritaPolicyAppPage)}</Route>
@@ -599,6 +601,7 @@ function AppContent() {
           <Route path="/labs/:labId/veritaceu-app">{() => <VeritaCeuAppPage />}</Route>
           <Route path="/labs/:labId/veritalab-app" component={VeritaLabAppPage} />
           <Route path="/labs/:labId/veritaqc-app" component={VeritaQCAppPage} />
+          <Route path="/labs/:labId/equipment-app/stain-log" component={StainLogPage} />
           <Route path="/labs/:labId/equipment-app" component={EquipmentAppPage} />
           <Route path="/labs/:labId/instruments/:instrumentId/trail" component={InstrumentTrailPage} />
           <Route path="/labs/:labId/readiness" component={ReadinessDashboardPage} />

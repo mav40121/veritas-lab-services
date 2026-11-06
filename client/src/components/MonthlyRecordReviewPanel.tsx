@@ -17,8 +17,8 @@ import { ClipboardCheck, FileSpreadsheet } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 type ReviewItem = {
-  key: string; type: "equipment" | "temp_unit"; id: number; name: string; detail: string | null; retired: boolean;
-  problems: string[]; notes: string[]; entries_after_review: number; summary?: { unit_type?: string };
+  key: string; type: "equipment" | "temp_unit" | "stain_manual"; id: number; name: string; detail: string | null; retired: boolean;
+  problems: string[]; notes: string[]; entries_after_review: number; summary?: { unit_type?: string; stain_rows?: number };
   review: { typed_signature: string; capacity_label: string; signed_at: string; corrective_action: string | null; problems: string[]; summary: { notes?: string[] } } | null;
 };
 type ReviewMonth = { month: string; can_review: boolean; capacity_label: string | null; items: ReviewItem[]; counts: { total: number; reviewed: number; open: number } };
@@ -143,7 +143,12 @@ export function MonthlyRecordReviewPanel({ labId }: { labId: number }) {
                       </td>
                       <td className="py-2 pr-2">
                         <div className="font-medium">{i.name}</div>
-                        <div className="text-xs text-muted-foreground">{i.type === "equipment" ? "Instrument" : i.summary?.unit_type === "humidity" ? "Humidity log" : "Temperature log"}{i.detail ? ` · ${i.detail}` : ""}{i.retired ? " · retired" : ""}</div>
+                        <div className="text-xs text-muted-foreground">{i.type === "equipment" ? "Instrument" : i.type === "stain_manual" ? "Stain log" : i.summary?.unit_type === "humidity" ? "Humidity log" : "Temperature log"}{i.detail ? ` · ${i.detail}` : ""}{i.retired ? " · retired" : ""}</div>
+                        {i.type === "stain_manual" ? (
+                          <Link href={labRoute(`/equipment-app/stain-log?view=manual&month=${month}`)} className="text-xs underline" data-testid={`review-stain-link-${i.key}`}>Open the manual stain log</Link>
+                        ) : i.type === "equipment" && i.summary?.stain_rows ? (
+                          <Link href={labRoute(`/equipment-app/stain-log?instrument=${i.id}&month=${month}`)} className="text-xs underline" data-testid={`review-stain-link-${i.key}`}>Open the stain log</Link>
+                        ) : null}
                       </td>
                       <td className="py-2 pr-2 text-xs">
                         {(i.review ? i.review.problems : i.problems).map((p) => <div key={p} className="font-medium text-red-700 dark:text-red-400">{p}</div>)}
