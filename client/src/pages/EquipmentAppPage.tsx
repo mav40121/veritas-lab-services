@@ -25,6 +25,7 @@ import { Wrench, Lock, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { TemperatureLogsPanel } from "@/components/TemperatureLogsPanel";
 import { MonthlyRecordReviewPanel } from "@/components/MonthlyRecordReviewPanel";
+import { StainLogPanel } from "@/components/StainLogPanel";
 
 interface Equipment {
   id: number;
@@ -343,7 +344,7 @@ export default function EquipmentAppPage() {
         <Wrench className="h-6 w-6 text-primary shrink-0" />
         <div>
           <h1 className="text-2xl font-bold leading-tight">VeritaMaintain&#8482;</h1>
-          <p className="text-sm text-muted-foreground">Instrument maintenance, function checks and temperature logs</p>
+          <p className="text-sm text-muted-foreground">Instrument maintenance, function checks, temperature logs and stain logs</p>
         </div>
         <div className="ml-auto">
           <Button size="sm" onClick={openAdd} disabled={isReadOnly}>+ Add instrument</Button>
@@ -423,6 +424,7 @@ export default function EquipmentAppPage() {
 
       {/* Temperature logs (St. Charles REQ-068): storage units, readings, out-of-range corrective action. */}
       <TemperatureLogsPanel labId={Number(activeLabId)} />
+      <StainLogPanel labId={Number(activeLabId)} />
       <MonthlyRecordReviewPanel labId={Number(activeLabId)} />
 
       {/* Add / edit equipment */}
@@ -494,6 +496,7 @@ export default function EquipmentAppPage() {
                 </select>
               </div>
               <div className="sm:col-span-2"><Label htmlFor="sol-names">Which solutions <span className="text-red-600">*</span></Label><Input id="sol-names" value={solNames} onChange={e => setSolNames(e.target.value)} placeholder="e.g. Hematoxylin, eosin, clarifier" data-testid="sol-names" /></div>
+              <p className="sm:col-span-2 text-[11px] text-muted-foreground" data-testid="sol-stain-log-hint">Keeping a <Link href={labRoute(`/equipment-app/stain-log?instrument=${evForId}`)} className="underline">stain log</Link> on this instrument? Record changes there, so the lot and expiration are kept.</p>
             </>)}
             {evType === "troubleshooting" && (<>
               <div className="sm:col-span-2"><Label htmlFor="ts-problem">Problem <span className="text-red-600">*</span></Label><Textarea id="ts-problem" rows={2} value={tsProblem} onChange={e => setTsProblem(e.target.value)} placeholder="What happened (error code, symptom, QC shift)" /></div>

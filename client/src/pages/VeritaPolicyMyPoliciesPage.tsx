@@ -534,6 +534,30 @@ export default function VeritaPolicyMyPoliciesPage() {
     setUploadIsMajor(false);
   };
 
+  // Michael Q178 = 1 (2026-11-06): ROSE carries a patient label, so it stays a blank paper form, controlled here. This fills the normal
+  // upload with the blank Word file, so it gets its number, version and approval like any other document. server/veritadcBlankForms.ts.
+  const [loadingBlankForm, setLoadingBlankForm] = useState(false);
+  const fillRoseBlankForm = async () => {
+    setLoadingBlankForm(true);
+    try {
+      const token = localStorage.getItem("veritas_token") || "";
+      const res = await fetch(`/api/labs/${activeLabId}/veritapolicy/blank-forms/rose.docx`, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body?.error || "Could not build the blank form");
+      }
+      const blob = await res.blob();
+      setUploadFile(new File([blob], "Rapid_On_Site_Evaluation_Blank_Form.docx", { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" }));
+      setUploadTitle("Rapid On-Site Evaluation (ROSE)");
+      setUploadDocType("form");
+      setUploadDescription("Blank paper form. Filled in by hand; nothing from it is entered in VeritaAssure®.");
+    } catch (err: any) {
+      toast({ title: "Could not build the blank form", description: err?.message, variant: "destructive" });
+    } finally {
+      setLoadingBlankForm(false);
+    }
+  };
+
   const uploadDoc = async () => {
     if (!uploadFile) {
       toast({ title: "Pick a file first", variant: "destructive" });
@@ -2163,6 +2187,14 @@ export default function VeritaPolicyMyPoliciesPage() {
             <DialogTitle>Upload a policy</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
+            <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs" data-testid="upload-blank-forms">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span>Need a blank paper form? Rapid on-site evaluation (ROSE) is ready to use, with your lab's name on it.</span>
+                <Button type="button" size="sm" variant="outline" onClick={fillRoseBlankForm} disabled={loadingBlankForm} data-testid="upload-rose-form">
+                  {loadingBlankForm ? "Building..." : "Use the blank ROSE form"}
+                </Button>
+              </div>
+            </div>
             <div>
               <Label className="text-xs">File (Word, PDF, HTML, Excel, PNG/JPG image or text; up to 25 MB)</Label>
               <Input
