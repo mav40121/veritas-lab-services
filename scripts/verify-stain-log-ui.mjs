@@ -176,7 +176,7 @@ sql("UPDATE stain_log_entries SET created_at = ? WHERE lab_id = ? AND log_date =
 
 // ── S3. The past month ──
 await ownerPage.getByTestId("stain-prev").click();
-await ownerPage.waitForFunction((m) => document.querySelector('[data-testid="stain-month"]')?.textContent === m, month, { timeout: 8000 });
+await ownerPage.getByTestId("stain-month").filter({ hasText: month }).waitFor({ timeout: 8000 });
 await ownerPage.getByTestId(`stain-cell-${R.hema}-${dHema}`).waitFor({ timeout: 10000 });
 await ownerPage.waitForTimeout(500);
 check("S3. Previous moves to the last month and Next comes back", (await ownerPage.getByTestId("stain-next").isEnabled()) && (await ownerPage.getByTestId("stain-month").innerText()) === month);
@@ -431,8 +431,10 @@ const noOverflow = (p) => p.evaluate(() => document.documentElement.scrollWidth 
   await dark.waitForTimeout(300);
   await dark.screenshot({ path: `${OUT}/stain-record-dark.png` });
   await dark.keyboard.press("Escape");
+  await dark.getByTestId("stain-record-dialog").waitFor({ state: "detached", timeout: 8000 });
   await dark.getByTestId("stain-view").selectOption("manual");
   await dark.getByTestId("manual-table").waitFor({ timeout: 10000 });
+  await dark.waitForTimeout(400);
   await dark.getByTestId("manual-card").screenshot({ path: `${OUT}/stain-manual-dark.png` });
   await dark.context().close();
 
@@ -449,6 +451,7 @@ const noOverflow = (p) => p.evaluate(() => document.documentElement.scrollWidth 
   await phone.screenshot({ path: `${OUT}/stain-record-phone.png` });
   check("D1. phone: the record dialog fits the width", await phone.getByTestId("stain-record-dialog").evaluate((el) => el.scrollWidth <= el.clientWidth + 1));
   await phone.keyboard.press("Escape");
+  await phone.getByTestId("stain-record-dialog").waitFor({ state: "detached", timeout: 8000 });
   await phone.getByTestId("stain-view").selectOption("manual");
   await phone.getByTestId("manual-table").waitFor({ timeout: 10000 });
   await phone.waitForTimeout(300);
