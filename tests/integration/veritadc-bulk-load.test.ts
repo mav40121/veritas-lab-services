@@ -346,6 +346,11 @@ async function main() {
     const docx = await zip.generateAsync({ type: "nodebuffer", compression: "STORE" });
     const legacy = Buffer.concat([Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]), Buffer.from("made-up legacy bytes")]);
     const legacyConverted = Buffer.concat([Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]), Buffer.from("a second made-up legacy file")]);
+    const legacySlides = Buffer.concat([Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]), Buffer.from("a made-up legacy slide file")]);
+    const { PDFDocument } = await import("pdf-lib");
+    const onePagePdf = await PDFDocument.create();
+    onePagePdf.addPage();
+    const slidesPdf = Buffer.from(await onePagePdf.save());
     const faces = "All Signature Face Pages";
     put(`North/Chem/ZZ 1_Plain Policy (1).docx`, docx);
     put(`${faces}/ZZ 1_Plain Policy.html`, FACE("ZZ 1", "Plain Policy (1)"));
@@ -367,11 +372,15 @@ async function main() {
     put(`${faces}/ZZ 9_Everywhere.html`, FACE("ZZ 9", "Everywhere"));
     put(`North/Chem/ZZ 10_Has A Label.txt`, "A made-up example label: DOB 01/02/1950.\n");
     put(`${faces}/ZZ 10_Has A Label.html`, FACE("ZZ 10", "Has A Label"));
+    put(`North/Chem/ZZ 11_Slides.ppt`, legacySlides);
+    put(`${faces}/ZZ 11_Slides.html`, FACE("ZZ 11", "Slides"));
     // A cached conversion stands in for Word so this runs on any machine.
     const sha = (b: Buffer) => hashBuffer(b);
     fs.mkdirSync(path.join(work, "converted"), { recursive: true });
     fs.writeFileSync(path.join(work, "converted", `${sha(legacyConverted)}.docx`), docx);
     fs.writeFileSync(path.join(work, "converted", `${sha(legacyConverted)}.json`), JSON.stringify({ kind: "doc", before: { pages: 2, words: 10 }, after: { pages: 3, words: 10 } }));
+    fs.writeFileSync(path.join(work, "converted", `${sha(legacySlides)}.pdf`), slidesPdf);
+    fs.writeFileSync(path.join(work, "converted", `${sha(legacySlides)}.json`), JSON.stringify({ kind: "ppt", before: { slides: 1 }, after: {} }));
     const manifestRows = [
       ["number", "title", "version", "status", "effective_date", "last_approval_or_review", "next_review_due", "author", "signature_rows", "approval_rows", "review_rows", "versions", "face_page", "manual_paths", "files"],
       ["ZZ 1", "Plain Policy-file", "1.0", "approved and current", "1/15/2024", "1/15/2026", "1/15/2027", "Made Up", "2", "1", "1", "1", `${faces}/ZZ 1_Plain Policy.html`, "North / Chem", "ZZ 1_Plain Policy (1).docx"],
@@ -384,6 +393,7 @@ async function main() {
       ["ZZ 8", "Retired", "1.0", "retired", "", "", "", "Made Up", "0", "0", "0", "1", `${faces}/ZZ 8_Retired.html`, "North / Chem", "ZZ 8_Retired.docx"],
       ["ZZ 9", "Everywhere", "1.0", "approved and current", "7/1/2024", "7/1/2026", "7/1/2027", "Made Up", "1", "1", "0", "1", `${faces}/ZZ 9_Everywhere.html`, "Shared", "ZZ 9_Everywhere.docx"],
       ["ZZ 10", "Has A Label", "1.0", "approved and current", "8/1/2024", "8/1/2026", "8/1/2027", "Made Up", "1", "1", "0", "1", `${faces}/ZZ 10_Has A Label.html`, "North / Chem", "ZZ 10_Has A Label.txt"],
+      ["ZZ 11", "Slides", "1.0", "approved and current", "9/1/2024", "9/1/2026", "9/1/2027", "Made Up", "1", "1", "0", "1", `${faces}/ZZ 11_Slides.html`, "North / Chem", "ZZ 11_Slides.ppt"],
     ];
     const manifest = path.join(tmp, "manifest.csv");
     fs.writeFileSync(manifest, "﻿" + manifestRows.map((r) => r.map((c) => `"${c.replace(/"/g, '""')}"`).join(",")).join("\n") + "\n");
@@ -425,6 +435,7 @@ async function main() {
     check("12e. the plan: would load, with one row per lab", dryBy("ZZ 2").length === 2 && dryBy("ZZ 2").every((r) => r.result === "would_load") && dryBy("ZZ 9").length === 2, JSON.stringify(drySummary.outcome));
     check("12f. a .doc with no converter is reported, not skipped", dryBy("ZZ 3")[0]?.result === "not_loaded" && /conversion_failed/.test(dryBy("ZZ 3")[0]?.detail) && /converter_unavailable/.test(dryBy("ZZ 3")[0]?.convert_check));
     check("12g. a conversion that changed something is flagged", /differs: pages 2 to 3/.test(dryBy("ZZ 4")[0]?.convert_check), dryBy("ZZ 4")[0]?.convert_check);
+    check("12g2. a slide file reused from the work folder compares slides to PDF pages and reads clean", dryBy("ZZ 11")[0]?.convert_check === "clean" && dryBy("ZZ 11")[0]?.file_loaded === "pdf", JSON.stringify(dryBy("ZZ 11")[0]));
     check("12h. a file whose contents don't match its type is reported", dryBy("ZZ 5")[0]?.result === "not_loaded" && /bad_format/.test(dryBy("ZZ 5")[0]?.detail));
     check("12i. a document with no file is reported against its lab", dryBy("ZZ 6")[0]?.result === "not_loaded" && /missing_file/.test(dryBy("ZZ 6")[0]?.detail) && dryBy("ZZ 6")[0]?.lab === String(scriptLabOne.labId));
     check("12j. retired stays out of the results", dryBy("ZZ 8").length === 0 && drySummary.tally.manifest_retired === 1);
@@ -443,15 +454,15 @@ async function main() {
     const realRows = await parse(latest("load_results_"));
     const realBy = (num: string) => realRows.filter((r) => r.number === num);
     check("12o. the real run ends non-zero only if something failed to send; here all sendable ones loaded", real.code === 0, real.out.slice(-400));
-    check("12p. one result row per document, per lab", realRows.length === 1 + 2 + 1 + 1 + 1 + 1 + 1 + 2 + 1, String(realRows.length));
+    check("12p. one result row per document, per lab", realRows.length === 1 + 2 + 1 + 1 + 1 + 1 + 1 + 2 + 1 + 1, String(realRows.length));
     check("12q. the good ones loaded, the bad and held ones didn't stop them",
-      ["ZZ 1", "ZZ 4", "ZZ 7"].every((x) => realBy(x)[0]?.result === "loaded") && realBy("ZZ 2").every((r) => r.result === "loaded") && realBy("ZZ 9").every((r) => r.result === "loaded") && ["ZZ 3", "ZZ 5", "ZZ 6", "ZZ 10"].every((x) => realBy(x)[0]?.result === "not_loaded"),
+      ["ZZ 1", "ZZ 4", "ZZ 7", "ZZ 11"].every((x) => realBy(x)[0]?.result === "loaded") && realBy("ZZ 2").every((r) => r.result === "loaded") && realBy("ZZ 9").every((r) => r.result === "loaded") && ["ZZ 3", "ZZ 5", "ZZ 6", "ZZ 10"].every((x) => realBy(x)[0]?.result === "not_loaded"),
       JSON.stringify(realRows.map((r) => [r.number, r.result])));
     const north = (await call("GET", `/api/admin/veritadc/bulk-load/status?labId=${scriptLabOne.labId}`, undefined, undefined, { "x-admin-secret": ADMIN })).body;
     const south = (await call("GET", `/api/admin/veritadc/bulk-load/status?labId=${scriptLabTwo.labId}`, undefined, undefined, { "x-admin-secret": ADMIN })).body;
-    check("12r. the right number landed in each lab", north.documents.carried === 5 && south.documents.carried === 2, `${north.documents.carried} ${south.documents.carried}`);
-    check("12s. every loaded document has its face page", north.documents.carriedWithFacePage === 5 && south.documents.carriedWithFacePage === 2);
-    check("12t. the converted one kept its original", north.documents.carriedWithOriginal === 1);
+    check("12r. the right number landed in each lab", north.documents.carried === 6 && south.documents.carried === 2, `${north.documents.carried} ${south.documents.carried}`);
+    check("12s. every loaded document has its face page", north.documents.carriedWithFacePage === 6 && south.documents.carriedWithFacePage === 2);
+    check("12t. the converted ones kept their originals", north.documents.carriedWithOriginal === 2);
     check("12u. no signature, assignment or reminder came of it", [north, south].every((s) => s.forCarried.signoffs === 0 && s.forCarried.attestations === 0 && s.forCarried.staffSignatures === 0 && s.forCarried.reminders === 0));
     const conv = sqlite.prepare("SELECT c.converted_from, c.original_filename, v.file_format, v.version_major, v.version_minor FROM policy_carried_records c JOIN policy_versions v ON v.id = c.version_id WHERE c.lab_id = ? AND c.source_number = 'ZZ 4'").get(scriptLabOne.labId) as any;
     check("12v. the converted file is the Word file, version 1.1, and names its original", conv.converted_from === "doc" && conv.file_format === "docx" && conv.original_filename === "ZZ 4_Legacy Converted.doc" && conv.version_major === 1 && conv.version_minor === 1, JSON.stringify(conv));
@@ -466,15 +477,15 @@ async function main() {
     const rerun = await runLoad([...common, "--apply", "--reminders-start-on", iso(5)]);
     const rerunRows = await parse(latest("load_results_"));
     check("12z. a rerun recognizes all of them and adds nothing",
-      rerun.code === 0 && rerunRows.filter((r) => r.result === "already_loaded").length === 7 && filesUnder(ROOT).length === filesBeforeRerunScript
-      && (await call("GET", `/api/admin/veritadc/bulk-load/status?labId=${scriptLabOne.labId}`, undefined, undefined, { "x-admin-secret": ADMIN })).body.documents.carried === 5,
+      rerun.code === 0 && rerunRows.filter((r) => r.result === "already_loaded").length === 8 && filesUnder(ROOT).length === filesBeforeRerunScript
+      && (await call("GET", `/api/admin/veritadc/bulk-load/status?labId=${scriptLabOne.labId}`, undefined, undefined, { "x-admin-secret": ADMIN })).body.documents.carried === 6,
       JSON.stringify(rerunRows.map((r) => [r.number, r.result])));
     const dryAfter = await runLoad(common);
     const dryAfterRows = await parse(latest("dryrun_results_"));
-    check("12aa. a dry run after the load says they would be skipped", dryAfter.code === 0 && dryAfterRows.filter((r) => r.result === "would_skip_already_loaded").length === 7);
+    check("12aa. a dry run after the load says they would be skipped", dryAfter.code === 0 && dryAfterRows.filter((r) => r.result === "would_skip_already_loaded").length === 8);
     const cleared = await runLoad([...common, "--apply", "--reminders-start-on", iso(5), "--clear-phi", "ZZ 10"]);
     const clearedRows = await parse(latest("load_results_"));
-    check("12ab. once a person clears it by number, a later run loads it and leaves the rest", cleared.code === 0 && clearedRows.find((r) => r.number === "ZZ 10")?.result === "loaded" && clearedRows.filter((r) => r.result === "already_loaded").length === 7, JSON.stringify(clearedRows.map((r) => [r.number, r.result])));
+    check("12ab. once a person clears it by number, a later run loads it and leaves the rest", cleared.code === 0 && clearedRows.find((r) => r.number === "ZZ 10")?.result === "loaded" && clearedRows.filter((r) => r.result === "already_loaded").length === 8, JSON.stringify(clearedRows.map((r) => [r.number, r.result])));
 
     // 13. Containment
     check("13a. the load left the other lab alone", n("SELECT COUNT(*) AS n FROM policy_documents WHERE lab_id = ?", otherLab.labId) === 1);
