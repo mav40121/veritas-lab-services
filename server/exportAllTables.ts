@@ -228,6 +228,9 @@ export const EXPORT_TABLES: Record<string, ExportTable> = {
   stock_recall_documents: lab("VeritaStock"),
   stock_recall_events: lab("VeritaStock"),
   stock_recall_recipients: lab("VeritaStock"),
+  tissue_catalog: lab("VeritaStock"),
+  tissue_units: lab("VeritaStock"),
+  tissue_unit_events: lab("VeritaStock"),
   intacct_export_config: lab("VeritaStock"),
 
   // VeritaBench, VeritaOps, VeritaQA, VeritaShift
