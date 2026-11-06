@@ -34,6 +34,22 @@ MARK_EXTENSIONS = {".js", ".mjs", ".cjs", ".py", ".json", ".txt", ".svg"}
 HISTORICAL_DOCS = ("SESSION_HANDOFF", "PARKING_LOT", "CHANGELOG", "docs/receipts/")
 # Receipts for this rule hold the wrong forms on purpose, to prove the check bites.
 MARK_FIXTURES = ("scripts/verify-registered-marks",)
+# Michael 2026-11-06, Q210 = 1: no source exists for an "ADLM recommends half of CLIA TEa" goal, and the document once
+# cited for it can't be found. It doesn't come back in any report, screen or page. Real ADLM mentions (the Learning Lab,
+# the critical values statement, source labels, a bio) don't state a goal and don't match. Searched across the whole
+# file so a sentence broken over two JSX lines still matches. Receipt: scripts/verify-adlm-claim-audit.py.
+ADLM_CLAIM = re.compile(
+    r"ADLM\)?(?:\s*</a>)?[\s-]+(?:recommend|suggest|advis|endors)"                  # ADLM recommends, ADLM-recommended, (ADLM)</a> recommends
+    r"|ADLM[\s-]+(?:[\w-]+[\s-]+){0,2}(?:goal|target|half|convention)"              # ADLM goal, ADLM internal goal, ADLM internal precision goal, ADLM half-TEa
+    r"|half[\s-]+(?:of[\s-]+)?(?:the[\s-]+)?(?:CLIA\b|PT[\s-]+TEa\b|TEa\b|(?:total[\s-]+)?allowable)"  # half-TEa, half TEa, half of the CLIA TEa, half of the allowable error
+    r"|\bTEa\s*/\s*2\b"
+    r"|\b(?:cliaError|cliaAllowableError)\s*\*\s*(?:50|0?\.5)\b"                    # the computed half value
+    r"|\b(?:adlmPct|meetsAdlm)\b"
+    r"|Quality Management Guidelines for Clinical Laboratories"                     # the document that can't be found
+    r"|Laboratory Medicine\.\s*\(\d{4}\)\.\s*Quality Management Guidelines"
+    r"|https?://(?:www\.)?adlm\.org/?[\"'\s<)]",                                    # the society's front page, cited as if it were the source
+    re.IGNORECASE,
+)
 
 SKIP_DIRS = {"node_modules", "dist", ".git", ".claude"}
 SKIP_EXTENSIONS = {".lock", ".map", ".png", ".jpg", ".jpeg", ".ico", ".woff", ".woff2", ".ttf", ".eot"}
@@ -76,6 +92,16 @@ def check_marks(rel, lines):
             ERRORS.append(f"[{rel}:{i}] VeritaAssure is registered for the software only -- use TM where it names the consulting service")
 
 
+def check_adlm_claim(rel, content):
+    """No ADLM half-TEa claim in client, server or shared (Michael 2026-11-06, Q210 = 1). See ADLM_CLAIM."""
+    if not rel.startswith(("client/", "server/", "shared/")):
+        return
+    for m in ADLM_CLAIM.finditer(content):
+        i = content.count("\n", 0, m.start()) + 1
+        found = " ".join(m.group(0).split())
+        ERRORS.append(f"[{rel}:{i}] ADLM half-TEa claim, no source exists (Michael 2026-11-06, Q210 = 1): {found}")
+
+
 def check_file(rel, fpath):
     try:
         with open(fpath, "r", encoding="utf-8", errors="replace") as f:
@@ -87,6 +113,7 @@ def check_file(rel, fpath):
     lines = content.splitlines()
     ext = os.path.splitext(fpath)[1].lower()
     rel_unix = rel.replace("\\", "/")
+    check_adlm_claim(rel_unix, content)
     if ext in MARK_EXTENSIONS:
         check_marks(rel_unix, lines)
         return

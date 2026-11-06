@@ -112,12 +112,12 @@ Plain-text questions in chat without numbering, without the ★, or without `[my
 - NO separate "Accepted by" block — it is redundant. Remove it everywhere.
 - Header must say "LABORATORY DIRECTOR OR DESIGNEE REVIEW" — never just "LABORATORY DIRECTOR REVIEW"
 - CFR by specialty: Chemistry=§493.931, Hematology=§493.941, Immunohematology=§493.959, Microbiology=§493.945, default=§493.931 (§493.927 is General Immunology, not Hematology; full map in server/veritamapData.ts CFR_MAP)
-- Cite ADLM-recommended internal goal alongside CLIA TEa where applicable
+- No ADLM half-TEa claim (Michael 2026-11-06, Q210 = 1). No source exists for it, so don't put it back. Narratives state the CLIA determination and leave any internal goal to the laboratory's director or designee. CLIA leaves the criterion to the lab, the director documents why, and CMS says PT limits aren't performance goals; never call using PT limits "recommended". script/audit.py fails on the claim
 
 ## VeritaCheck Labels
 - "Calibration Verification / Linearity" — never "Cal Ver" or "Linearity" alone
 - "Correlation / Method Comparison" — never "Method Comparison" alone
-- ADLM goal cited alongside CLIA TEa in narratives
+- No ADLM half-TEa claim in narratives (Michael 2026-11-06, Q210 = 1; see Regulatory Language above)
 - CUMSUM is a STUDY TYPE within VeritaCheck® — NOT a standalone module. Never list it as its own feature, row, or module. It belongs under VeritaCheck® in all contexts (pricing tables, feature lists, marketing copy, comparison charts).
 
 ## VeritaMap Rules
