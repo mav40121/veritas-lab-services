@@ -118,7 +118,7 @@ export function reattachOrphanStaffInvites(sqlite: any, labId: number): number {
 // Anything here means a row holds real work, so it's never folded into another row automatically.
 const ROW_HOLDS_WORK = [
   ["staff_roles", "employee_id"], ["staff_employee_instruments", "employee_id"], ["competency_employees", "staff_employee_id"], ["competency_method_signoffs", "staff_employee_id"],
-  ["competency_quiz_assignments", "staff_employee_id"], ["schedule_assignments", "staff_employee_id"], ["lab_group_members", "employee_id"], ["policy_read_sign_assignments", "employee_id"],
+  ["competency_quiz_assignments", "staff_employee_id"], ["schedule_assignments", "staff_employee_id"], ["lab_group_members", "employee_id"], ["policy_read_sign_assignments", "employee_id"], ["policy_prior_signatures", "staff_employee_id"],
 ];
 
 /**

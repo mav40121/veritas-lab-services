@@ -200,6 +200,10 @@ export function signedLookup(sqlite: any, ctx: ReadSignContext): (doc: { id: num
   for (const s of sqlite.prepare("SELECT document_id, version_id, staff_employee_id FROM staff_portal_policy_signatures WHERE lab_id = ?").all(labId) as any[]) {
     add(s.document_id, s.staff_employee_id, s.version_id);
   }
+  // A signature carried over from the prior system counts for the version it was loaded against (server/policyPriorSignature.ts).
+  for (const p of sqlite.prepare("SELECT document_id, version_id, staff_employee_id FROM policy_prior_signatures WHERE lab_id = ? AND staff_employee_id IS NOT NULL AND version_id IS NOT NULL").all(labId) as any[]) {
+    add(p.document_id, p.staff_employee_id, p.version_id);
+  }
   const employeeOfUser = new Map<number, number>();
   for (const e of ctx.roster) if (e.login_user_id) employeeOfUser.set(e.login_user_id, e.id);
   for (const s of sqlite.prepare(

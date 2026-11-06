@@ -32,6 +32,8 @@ const ymd = (s: string | null | undefined): string => {
 export function buildSignatureReportRows(input: {
   attestations: Array<{ assignee_name?: string | null; assignee_email?: string | null; assigned_at?: string | null; completed_at?: string | null; is_stale_version?: boolean }>;
   staffSignatures: Array<{ signer_name?: string | null; signer_title?: string | null; signed_at?: string | null }>;
+  // Signed in the prior system (server/policyPriorSignature.ts). Its own kind, so it never reads as a signature in VeritaAssure.
+  priorSignatures?: Array<{ source_system: string; source_name: string; source_credentials?: string | null; source_version: string; signed_on: string; version_id?: number | null; staff_employee_id?: number | null }>;
 }): SignatureRosterRow[] {
   const rows: SignatureRosterRow[] = [];
   for (const a of input.attestations || []) {
@@ -57,6 +59,18 @@ export function buildSignatureReportRows(input: {
       note: "",
     });
   }
+  for (const p of input.priorSignatures || []) {
+    const whoNote = p.staff_employee_id == null ? " Not on the active roster." : "";
+    rows.push({
+      name: p.source_name,
+      detail: p.source_credentials || "",
+      kind: `Carried over from ${p.source_system}`,
+      assignedAt: "",
+      signedAt: ymd(p.signed_on),
+      status: "Signed",
+      note: `Signed version ${p.source_version} in ${p.source_system}, the prior system, not in VeritaAssure.${whoNote}`,
+    });
+  }
   // Pending first (that is what a surveyor and a director chase), then signed,
   // each block alphabetical by name.
   rows.sort((a, b) => {
@@ -66,14 +80,16 @@ export function buildSignatureReportRows(input: {
   return rows;
 }
 
-export function signatureReportSummary(rows: SignatureRosterRow[]): { total: number; signed: number; pending: number; writers: number; staff: number } {
+export function signatureReportSummary(rows: SignatureRosterRow[]): { total: number; signed: number; pending: number; writers: number; staff: number; carried: number } {
   const writers = rows.filter((r) => r.kind.startsWith("Writer"));
+  const carried = rows.filter((r) => r.kind.startsWith("Carried over")).length;
   return {
     total: rows.length,
     signed: rows.filter((r) => r.status === "Signed").length,
     pending: rows.filter((r) => r.status === "Pending").length,
     writers: writers.length,
-    staff: rows.length - writers.length,
+    staff: rows.length - writers.length - carried,
+    carried,
   };
 }
 
@@ -86,6 +102,7 @@ export async function generatePolicySignatureReportExcel(
     attestations: any[];
     staffSignatures: any[];
     roster?: Array<{ name: string; title: string | null; has_login: boolean; status: string; signed_at: string | null; version_label: string | null; how: string | null; assigned?: boolean; groups?: string[] }>;
+    priorSignatures?: Array<{ source_system: string; source_name: string; source_credentials?: string | null; source_version: string; signed_on: string; version_id?: number | null; staff_employee_id?: number | null }>;
     // How each lab group stands on this document (server/policyReadSign.ts documentAudience), when any group has people in it.
     rosterGroups?: Array<{ name: string; total: number; signed: number; assigned: boolean }>;
     // History carried over from the lab's prior system (server/veritadcBulkLoad.ts), when there is any.
@@ -139,6 +156,7 @@ export async function generatePolicySignatureReportExcel(
   body(`This report is the combined signature record for a single policy: ${data.doc.title}${data.doc.policy_number ? ` (${data.doc.policy_number})` : ""}. It shows the director or designee approval and the full roster of everyone assigned to attest, who has signed, who is still pending, and the bench staff who read and signed at the kiosk. It is a point-in-time proof a surveyor can review in one place.`);
   blank();
   section("How to read it");
+  if (data.priorSignatures?.length) body(`Some signatures on this report were made in ${data.priorSignatures[0].source_system}, the lab's prior system, before it moved to VeritaAssure. They are marked Carried over, with the date and version from that system's report. There is no typed name or file hash behind them here.`);
   body("The Director Approval block lists each approval sign-off on the current version. The Signature Roster lists every assigned writer attestation and every staff signature, pending first so open items are obvious. 'Signed an earlier version' flags a signature captured before the current version, which usually needs a fresh attestation. The Everyone on the Roster sheet lists every active person on the VeritaStaff roster, including people nobody assigned this document to, with the date each one signed the current version or a plain Not signed, whether they are assigned it, and their lab groups. The By Group sheet shows how many in each group have signed.");
   blank();
   section("Disclaimer");
@@ -163,7 +181,7 @@ export async function generatePolicySignatureReportExcel(
   sheet.getColumn(1).width = 30; sheet.getColumn(2).width = 34; sheet.getColumn(3).width = 20;
   sheet.getColumn(4).width = 14; sheet.getColumn(5).width = 14; sheet.getColumn(6).width = 12; sheet.getColumn(7).width = 26;
 
-  const rows = buildSignatureReportRows({ attestations: data.attestations, staffSignatures: data.staffSignatures });
+  const rows = buildSignatureReportRows({ attestations: data.attestations, staffSignatures: data.staffSignatures, priorSignatures: data.priorSignatures });
   const sum = signatureReportSummary(rows);
 
   const label = (row: number, k: string, v: string) => {
@@ -218,7 +236,7 @@ export async function generatePolicySignatureReportExcel(
   }
   rr += 1;
 
-  hdrBar(`Signature roster (${sum.writers} writer attestations, ${sum.staff} staff signatures)`);
+  hdrBar(`Signature roster (${sum.writers} writer attestations, ${sum.staff} staff signatures${sum.carried ? `, ${sum.carried} carried over from the prior system` : ""})`);
   const head = sheet.getRow(rr);
   head.values = ["Name", "Email / Title", "Type", "Assigned", "Signed", "Status", "Note"];
   head.font = { name: "Calibri", bold: true, color: { argb: "FFFFFFFF" } };

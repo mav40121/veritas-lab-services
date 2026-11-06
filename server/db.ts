@@ -8453,6 +8453,52 @@ try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS uq_spps_doc_version_employe
   void sppsCols;
 }
 
+// ─── VeritaDC signatures carried over from a prior system (Q207, 2026-11-06) ──
+//
+// A read-and-sign that happened in the lab's prior system (server/veritadcHistoryLoad.ts). Not a staff_portal_policy_signatures row on
+// purpose: nobody signed in VeritaAssure, so there is no typed name, password, IP address or file hash, only the date in the prior system's
+// report. version_id is the loaded version it counts as signed for (null: an earlier major, history only). staff_employee_id is null for
+// someone not on this lab's active roster: kept as history, owing nothing. source_name is the name as the report gave it.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS policy_prior_signatures (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    document_id INTEGER NOT NULL,
+    version_id INTEGER,
+    staff_employee_id INTEGER,
+    person_state TEXT NOT NULL,
+    source_system TEXT NOT NULL,
+    source_name TEXT NOT NULL,
+    name_key TEXT NOT NULL,
+    source_credentials TEXT,
+    source_number TEXT NOT NULL,
+    source_version TEXT NOT NULL,
+    source_type TEXT,
+    assigned_on TEXT,
+    signed_on TEXT NOT NULL,
+    batch TEXT NOT NULL,
+    loaded_by TEXT NOT NULL,
+    loaded_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )
+`);
+{
+  // New DB Table rule: a table that predates this block still gains every column on the live server.
+  const cols = (sqlite.prepare("PRAGMA table_info(policy_prior_signatures)").all() as { name: string }[]).map((c) => c.name);
+  for (const [col, ddl] of [
+    ["version_id", "INTEGER"],
+    ["staff_employee_id", "INTEGER"],
+    ["source_credentials", "TEXT"],
+    ["source_type", "TEXT"],
+    ["assigned_on", "TEXT"],
+    ["loaded_at", "TEXT"],
+  ] as const) {
+    if (!cols.includes(col)) sqlite.exec(`ALTER TABLE policy_prior_signatures ADD COLUMN ${col} ${ddl}`);
+  }
+}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_prior_sig_person ON policy_prior_signatures(lab_id, staff_employee_id)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_prior_sig_document ON policy_prior_signatures(document_id)`); } catch {}
+try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS uq_prior_sig_row ON policy_prior_signatures(lab_id, document_id, name_key, source_version, signed_on, COALESCE(assigned_on, ''))`); } catch {}
+
 // ─── VeritaDC read-and-sign assignments (Step D, 2026-11-06) ─────────────
 //
 // Who a document, a manual (with its sub-manuals) or the whole lab goes to for read-and-sign: a lab group (lab_groups, there is

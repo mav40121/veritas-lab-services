@@ -234,6 +234,7 @@ import { versionLabel, nextVersionParts, cleanDocNumber, docNumberKey, DOC_NUMBE
 import { isPolicyDocType, docTypeRules, DOC_TYPE_REVIEW_MONTHS } from "../shared/policyDocTypes";
 import { labCarriesMinorRevisions, signatureStillCurrent, carriedStaffSignature } from "./policyMinorRevision";
 import { attestationStillCurrent, closeAttestationsCoveredByStaffSignatures, documentSignatureStatus, staffHasSignedCurrent, unsignedDocumentsForStaff } from "./policySignatureStatus";
+import { priorCountsByPerson, priorHow, priorSignatureStillCurrent, priorSignaturesOfDocument } from "./policyPriorSignature";
 import { assignedDocumentIds, loadReadSignContext, logStaffDocumentView, lookupDocuments, registerReadSignRoutes, rulesForDocument, targetLabels, veritaDcStaffGuard } from "./policyReadSign";
 import { assessmentTypeLabel, assessmentTypeProblem, isEvaluationProgram, normalizeRecordKind } from "@shared/competencyEvaluation";
 import { normalizeSpecimen, normalizeReportableField, specimenLabel } from "@shared/veritamapSpecimen";
@@ -8281,6 +8282,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           const carried = p.signature_id == null ? carriedStaffSignature(sqlite, labId, p.document_id, employeeId, p.current_version_id) : null;
           // Someone who already attested to this version in VeritaDC doesn't sign it again here (2026-11-04, Q161).
           const attested = p.signature_id == null && !carried ? attestationStillCurrent(sqlite, labId, p.document_id, req.staffPortalUserId, p.current_version_id) : null;
+          // Signed in the lab's prior system and carried over (Q207). They don't sign again, and the row says where they signed.
+          const prior = p.signature_id == null && !carried && !attested ? priorSignatureStillCurrent(sqlite, labId, p.document_id, employeeId, p.current_version_id) : null;
           return {
             document_id: p.document_id,
             title: p.title,
@@ -8292,9 +8295,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
             manual_path: p.manual_id != null ? staffManualPath.get(p.manual_id) ?? null : null,
             effective_date: p.effective_date,
             next_review_date: p.next_review_date,
-            signed: p.signature_id != null || !!carried || !!attested,
-            signed_at: attested ? attested.completed_at : carried ? carried.signed_at : p.signed_at,
-            typed_signature: attested ? attested.typed_signature : carried ? carried.typed_signature : p.typed_signature,
+            signed: p.signature_id != null || !!carried || !!attested || !!prior,
+            signed_at: prior ? prior.signed_on : attested ? attested.completed_at : carried ? carried.signed_at : p.signed_at,
+            typed_signature: prior ? null : attested ? attested.typed_signature : carried ? carried.typed_signature : p.typed_signature,
+            prior_system: prior ? { system: prior.source_system, version: prior.source_version, signed_on: prior.signed_on } : null,
             carried_forward: !!carried,
             signed_version_label: carried ? carried.signed_version_label : null,
           };
@@ -10326,6 +10330,15 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
          LIMIT 200`
       ).all(labId, employeeId) as any[];
 
+      // What they signed in the prior system, carried over. Said in those words, with the date only: that system's report has no time (Q207).
+      const priorSigs = sqlite.prepare(
+        `SELECT ps.signed_on AS at, ps.source_system, ps.source_version, pd.title AS policy_title, pd.id AS document_id
+           FROM policy_prior_signatures ps JOIN policy_documents pd ON pd.id = ps.document_id
+          WHERE ps.lab_id = ? AND ps.staff_employee_id = ?
+          ORDER BY ps.signed_on DESC
+          LIMIT 200`
+      ).all(labId, employeeId) as any[];
+
       // Inventory adjustments by this staff member. The after_json
       // payload carries staff_employee_id (set by the K6 adjust
       // endpoint). JSON_EXTRACT is sqlite-native.
@@ -10347,6 +10360,14 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           at: s.at,
           label: s.policy_title,
           detail: `Signed as "${s.typed_signature || ""}"${s.version_number != null ? ` (v${versionLabel(s)})` : ""}`,
+          document_id: s.document_id,
+        })),
+        ...priorSigs.map((s: any) => ({
+          kind: "policy_signature" as const,
+          at: s.at,
+          date_only: true,
+          label: s.policy_title,
+          detail: `Signed version ${s.source_version} in ${s.source_system}. Carried over from that system, not signed in VeritaAssure.`,
           document_id: s.document_id,
         })),
         ...inventoryAdjustments.map((a: any) => {
@@ -40485,6 +40506,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         const own = rows.filter((r) => r.status === "approved" && mine.has(r.id)).map((r) => ({
           ...r,
           manual_path: r.manual_id != null ? manualPath.get(r.manual_id) ?? r.manual_name ?? null : null,
+          my_prior_system: (() => {
+            const p = req.dcStaff.employeeId != null ? priorSignatureStillCurrent(sqlite, req.scope.labId, r.id, req.dcStaff.employeeId, r.current_version_id) : null;
+            return p ? { system: p.source_system, version: p.source_version, signed_on: p.signed_on } : null;
+          })(),
           my_read_sign: r.doc_type && noSign.has(r.doc_type) ? "none"
             : req.dcStaff.employeeId != null && staffHasSignedCurrent(sqlite, req.scope.labId, r.id, r.current_version_id, req.dcStaff.employeeId, req.dcStaff.userId) ? "signed" : "to_sign",
         }));
@@ -41548,6 +41573,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         "staff_portal_policy_signatures",
         "policy_attestations",
         "policy_read_sign_assignments",
+        "policy_prior_signatures",
         "policy_review_reminders",
         "policy_carried_records",
         "policy_signoffs",
@@ -42469,11 +42495,17 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // LHF-1: include bench-staff kiosk signatures alongside the approval chain
     // so a surveyor sees who actually read-and-signed, not just the approvers.
     const staffSignatures = staffPolicySignaturesForDoc(sqlite, doc.lab_id, id);
-    res.json({ signoffs: rows, staffSignatures, carried: carriedRecordFor(sqlite, id) });
+    // Read-and-sign from the prior system stays its own list, in the inspector's view too: those people didn't sign in VeritaAssure (Q207).
+    const priorSignatures = priorSignaturesOfDocument(sqlite, doc.lab_id, id).map((p) => ({
+      id: p.id, name: p.source_name, credentials: p.source_credentials, version: p.source_version, signed_on: p.signed_on, system: p.source_system, how: priorHow(p.source_system),
+    }));
+    res.json({ signoffs: rows, staffSignatures, priorSignatures, carried: carriedRecordFor(sqlite, id) });
   });
 
   // Bulk load from a prior system, and the carried-over history it leaves on each document (server/veritadcBulkLoad.ts).
   registerBulkLoadRoutes(app, { adminSecret: ADMIN_SECRET, authMiddleware, labScopeMiddleware, resolveSurveyorToken });
+  const { registerHistoryLoadRoutes } = await import("./veritadcHistoryLoad");
+  registerHistoryLoadRoutes(app, { adminSecret: ADMIN_SECRET });
 
   // ── Phase 7: new-version upload + history + search ─────────────────────
 
@@ -43134,8 +43166,18 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           title: r.title || null,
           signed_count: Number(r.signed_count || 0),
           last_signed_at: r.last_signed_at || null,
+          carried_count: 0,
         };
       });
+      // Signatures carried over from the prior system count apart from the ones made here (Q207).
+      const priorCounts = priorCountsByPerson(sqlite, labId);
+      for (const [employeeId, c] of priorCounts) {
+        const row = perStaffAttest.find((s: any) => s.staff_employee_id === employeeId);
+        if (row) { row.carried_count = c.count; continue; }
+        const e = sqlite.prepare("SELECT first_name, last_name, middle_initial, title FROM staff_employees WHERE id = ?").get(employeeId) as any;
+        const nm = [e?.last_name, e?.first_name].filter(Boolean).join(", ");
+        perStaffAttest.push({ staff_employee_id: employeeId, staff_name: nm ? nm + (e?.middle_initial ? ` ${e.middle_initial}.` : "") : "Staff member", title: e?.title || null, signed_count: 0, last_signed_at: null, carried_count: c.count });
+      }
 
       res.json({
         headline,
@@ -43436,7 +43478,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
          ORDER BY signed_count DESC, se.last_name ASC
       `).all(labId) as any[];
       const staffSheet = wb.addWorksheet("Staff Signatures");
-      styleHeaderRow(staffSheet, ["Staff Member", "Title", "Policies Signed", "Last Signed"]);
+      styleHeaderRow(staffSheet, ["Staff Member", "Title", "Policies Signed", "Last Signed", "Carried Over From Prior System"]);
+      const priorCountsForSheet = priorCountsByPerson(sqlite, labId);
       for (const s of perStaffAttest) {
         const nm = [s.last_name, s.first_name].filter(Boolean).join(", ");
         staffSheet.addRow([
@@ -43444,8 +43487,16 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           s.title || "",
           Number(s.signed_count || 0),
           s.last_signed_at || "",
+          priorCountsForSheet.get(s.staff_employee_id)?.count ?? 0,
         ]);
+        priorCountsForSheet.delete(s.staff_employee_id);
       }
+      for (const [employeeId, c] of priorCountsForSheet) {
+        const e = sqlite.prepare("SELECT first_name, last_name, middle_initial, title FROM staff_employees WHERE id = ?").get(employeeId) as any;
+        const nm = [e?.last_name, e?.first_name].filter(Boolean).join(", ");
+        staffSheet.addRow([nm ? nm + (e?.middle_initial ? ` ${e.middle_initial}.` : "") : "Staff member", e?.title || "", 0, "", c.count]);
+      }
+      staffSheet.getColumn(5).width = 20;
       staffSheet.getColumn(1).width = 28;
       staffSheet.getColumn(2).width = 24;
       staffSheet.getColumn(3).width = 16;
@@ -44097,6 +44148,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           staffSignatures,
           roster: roster.people,
           rosterGroups: roster.groups,
+          priorSignatures: priorSignaturesOfDocument(sqlite, doc.lab_id, id),
           carried: carriedRecordFor(sqlite, id),
         },
         { labName: labRow?.lab_name || "Laboratory", cliaNumber: labRow?.clia_number || "Not on file" }
