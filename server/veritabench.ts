@@ -190,14 +190,11 @@ export function registerVeritaBenchRoutes(
     const ownerId = req.ownerUserId ?? userId;
     try {
       const ok = sqlite.prepare(
-        `SELECT 1 AS ok FROM labs WHERE id = ? AND owner_user_id = ?
+        `SELECT 1 AS ok FROM labs WHERE id = ? AND owner_user_id IN (?, ?)
          UNION
          SELECT 1 AS ok FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active'`
-      ).get(n, userId, n, userId);
+      ).get(n, userId, ownerId, n, userId);
       if (ok) return n;
-      // A seat reaches its owner's lab only where the owner match counts for it (Michael Q191 = 1).
-      const ownersLab = sqlite.prepare("SELECT 1 AS ok FROM labs WHERE id = ? AND owner_user_id = ?").get(n, ownerId);
-      if (ownersLab && ownerMatchCounts(sqlite, userId, ownerId, n)) return n;
     } catch { /* fall through to account-only scoping */ }
     return null;
   };

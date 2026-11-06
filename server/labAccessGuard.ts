@@ -88,6 +88,13 @@ export interface ResolveOptions {
  */
 export const OLDER_SEAT_BEFORE = "2026-11-06";
 
+/** Dates compare as dates: older rows aren't all written one way, and an unreadable one predates the paths that stamp them. */
+export function isOlderSeatDate(since: unknown): boolean {
+  if (since == null || since === "") return true;
+  const t = Date.parse(String(since));
+  return !Number.isFinite(t) || t < Date.parse(OLDER_SEAT_BEFORE);
+}
+
 export function ownerMatchCounts(sqlite: SqliteLike, userId: unknown, ownerId: unknown, rowLabId: unknown): boolean {
   const uid = Number(userId), oid = Number(ownerId);
   if (uid === oid || !rowLabId) return true;
@@ -95,7 +102,7 @@ export function ownerMatchCounts(sqlite: SqliteLike, userId: unknown, ownerId: u
     "SELECT lab_id, COALESCE(accepted_at, invited_at) AS since FROM user_seats WHERE seat_user_id = ? AND owner_user_id = ? AND status = 'active'"
   ).all(uid, oid) as Array<{ lab_id: number | null; since: string | null }>;
   if (seats.some((s) => s.lab_id != null && Number(s.lab_id) === Number(rowLabId))) return true;
-  const older = seats.filter((s) => s.since == null || String(s.since) < OLDER_SEAT_BEFORE);
+  const older = seats.filter((s) => isOlderSeatDate(s.since));
   if (older.length === 0) return false;
   if (older.some((s) => s.lab_id == null)) return true;
   return !sqlite.prepare("SELECT 1 FROM lab_members WHERE user_id = ? AND status = 'active' LIMIT 1").get(uid);

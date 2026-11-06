@@ -59,7 +59,7 @@ import { normalizeLineItems, computeOrgInvoice, laterExpiry, orgSubscriptionExpi
 import { renderMonthlyReviewPDF, type MonthlyReviewPayload, type MonthlyReviewResult } from "./pdfQCMonthly";
 import { buildMonthlyReviewPayload } from "./qcMonthlyReviewPayload";
 import { applyLicenseToExcelJS } from "./licenseStamp";
-import { resolveLegacyLabId as sharedResolveLegacyLabId, ownerMatchCounts, ownerRowInReach, OLDER_SEAT_BEFORE } from "./labAccessGuard";
+import { resolveLegacyLabId as sharedResolveLegacyLabId, ownerMatchCounts, ownerRowInReach, isOlderSeatDate } from "./labAccessGuard";
 import { legacySeatForUser, seatForRequest } from "./seatContext";
 import { checkAuthToken, verifySessionJwt, issueSession, endSessions, touchSession, issuePurposeToken, verifyPurposeToken, describeDevice, clientIp } from "./sessionAuth";
 import { passwordProblem } from "@shared/passwordRule";
@@ -1563,15 +1563,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
        GROUP BY us.seat_type`
     ).all() as Array<{ seat_type: string; n: number; no_lab: number; no_user: number }>;
     // Michael Q191 = 1: the active seats still under the older rule in server/labAccessGuard.ts, so nobody has to read seat rows to check.
-    const olderSeats = sqlite.prepare(
-      `SELECT SUM(CASE WHEN us.lab_id IS NULL THEN 1 ELSE 0 END) AS no_lab,
-              SUM(CASE WHEN us.lab_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM lab_members lm WHERE lm.user_id = us.seat_user_id AND lm.status = 'active') THEN 1 ELSE 0 END) AS no_membership
+    const olderSeats = (sqlite.prepare(
+      `SELECT us.lab_id AS lab_id, COALESCE(us.accepted_at, us.invited_at) AS since,
+              EXISTS (SELECT 1 FROM lab_members lm WHERE lm.user_id = us.seat_user_id AND lm.status = 'active') AS has_membership
        FROM user_seats us
-       WHERE us.status = 'active' AND us.seat_user_id IS NOT NULL
-         AND (COALESCE(us.accepted_at, us.invited_at) IS NULL OR COALESCE(us.accepted_at, us.invited_at) < ?)`
-    ).get(OLDER_SEAT_BEFORE) as { no_lab: number | null; no_membership: number | null };
+       WHERE us.status = 'active' AND us.seat_user_id IS NOT NULL`
+    ).all() as Array<{ lab_id: number | null; since: string | null; has_membership: number }>).filter((s) => isOlderSeatDate(s.since));
     res.json({
-      olderSeatsKeepingOwnerReach: { withNoLab: olderSeats.no_lab ?? 0, holderHasNoMembership: olderSeats.no_membership ?? 0 },
+      olderSeatsKeepingOwnerReach: {
+        withNoLab: olderSeats.filter((s) => s.lab_id == null).length,
+        holderHasNoMembership: olderSeats.filter((s) => s.lab_id != null && !s.has_membership).length,
+      },
       studiesWithNoOwner: noOwner.n,
       activeSeatsWithNoActiveMembership: {
         total: seats.reduce((sum, s) => sum + s.n, 0),
