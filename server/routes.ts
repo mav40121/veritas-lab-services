@@ -821,6 +821,7 @@ export function recomputeAllStudyStatuses(): { fixed: number; skipped: number } 
   return { fixed, skipped };
 }
 import { autoCompleteVeritaScanItems, autoCompleteCompetencyScanItems, auditScanAutoCompletions } from "./integrations";
+import { planMarkCorrection, applyMarkCorrection, CORRECTED_SOURCE } from "./veritascanMarkCorrection";
 import {
   UNITS_LOOKUP, REFERENCE_RANGES, AMR_LOOKUP,
   CFR_MAP as VERITAMAP_CFR_MAP, getComplianceStatus, lookupAnalyte, INSTRUCTIONS_CONTENT,
@@ -35509,6 +35510,35 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   app.get("/api/admin/veritascan/auto-completion-audit", (req, res) => {
     if (req.headers["x-admin-secret"] !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
     res.json(auditScanAutoCompletions((db as any).$client));
+  });
+
+  // One-time correction of automatic VeritaScan marks the records don't support (Michael Q189 = 1). Dry run unless dryRun is false, and
+  // then expectedTotal must name the count the dry run gave: anything else is 409 COUNT_CHANGED with nothing written. Every value in the
+  // answer is a count, a flag or a lab id. The secret comes from the header only. server/veritascanMarkCorrection.ts.
+  app.post("/api/admin/veritascan/correct-auto-marks", (req: any, res) => {
+    const secret = req.headers["x-admin-secret"] as string | undefined;
+    if (!secret || secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const sqlite = (db as any).$client;
+    const { toMove, report } = planMarkCorrection(sqlite);
+    if (req.body?.dryRun !== false) return res.json({ ok: true, dryRun: true, ...report });
+    if (req.body?.expectedTotal !== report.total_to_move) {
+      return res.status(409).json({ error: "The count has changed since the dry run. Nothing was written.", code: "COUNT_CHANGED", total_to_move: report.total_to_move });
+    }
+    const now = new Date().toISOString();
+    const changed = applyMarkCorrection(sqlite, toMove, now);
+    const ownerOf = sqlite.prepare("SELECT owner_user_id AS o FROM labs WHERE id = ?");
+    for (const m of changed) {
+      logAudit({
+        userId: 0, ownerUserId: (m.lab_id != null ? (ownerOf.get(m.lab_id) as any)?.o : m.scan_user_id) ?? undefined, module: "admin", action: "update",
+        entityType: "veritascan_item", entityId: m.id,
+        entityLabel: `VeritaScan item ${m.item_id} moved back to Not Assessed: a ${m.module} automatic mark the records don't support`,
+        before: { status: m.status, notes: m.notes, completion_source: m.completion_source, completion_link: m.completion_link, completion_note: m.completion_note, updated_at: m.updated_at },
+        after: { status: "Not Assessed", completion_source: CORRECTED_SOURCE, completion_link: null, scan_id: m.scan_id, lab_id: m.lab_id },
+        ipAddress: req.ip,
+      });
+    }
+    console.log(`[admin/veritascan/correct-auto-marks] moved ${changed.length} of ${toMove.length} planned mark(s)`);
+    res.json({ ok: true, dryRun: false, ...report, changed: changed.length, remaining: planMarkCorrection(sqlite).report.total_to_move });
   });
 
   // GET /api/admin/competency/not-cleared-audit (Michael Q12 = 1, 2026-10-27). Read-only, writes nothing. Per lab,
