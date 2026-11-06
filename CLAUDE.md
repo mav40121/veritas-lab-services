@@ -196,6 +196,10 @@ A clean grep is a required step in the QC checklist, not optional. Visual inspec
 - CFR by specialty (42 CFR 493 Subpart I headings, eCFR as of 2026-10-01): Routine Chemistry = §493.931, Endocrinology = §493.933, Toxicology = §493.937, Hematology = §493.941, Immunohematology = §493.959, General Immunology = §493.927, Syphilis Serology = §493.923, Microbiology = §§493.911-493.919 (Bacteriology §493.911, Mycobacteriology §493.913, Mycology §493.915, Parasitology §493.917, Virology §493.919), default = §493.931. §493.945 is Cytology (gynecologic examinations) ONLY, never microbiology (it was wrongly listed here as Microbiology until 2026-10-09). Histopathology has no Subpart I section. Full specialty→section map: server/veritamapData.ts CFR_MAP, pinned by scripts/verify-cfr-specialty-map.mjs.
 - Cite ADLM-recommended internal goal alongside CLIA TEa where applicable.
 
+### VeritaCheck sign-in
+
+- Signing in is required to save or open a study (Michael 2026-11-06, Q193 = 1). `GET /api/studies`, `GET /api/studies/:id` and `POST /api/studies` refuse anyone signed out or with a bad session, and answer the same whether or not the study exists. Studies with no owner (user_id NULL or 0, from before this rule) stay in place and unopened: `GET /api/studies/:id` gives 404 even signed in. Michael decides later whether they stay, so don't delete them. `GET /api/admin/access-audit-counts` gives their count, oldest and newest dates, and how many carry a lab.
+
 ### VeritaCheck labels
 
 - "Calibration Verification / Linearity" — never "Cal Ver" or "Linearity" alone.
