@@ -9,7 +9,7 @@ export function StaffMyWorkCard({ className = "" }: { className?: string }) {
   const labRoute = useLabRoute();
   const items = [
     { href: labRoute("/veritaqc-app"), icon: FlaskConical, title: "Record QC", detail: "Enter control results, add notes and file corrective actions." },
-    { href: labRoute("/veritatrack-app"), icon: ClipboardCheck, title: "Sign off tasks", detail: "Daily, weekly and monthly tasks assigned to the lab." },
+    { href: labRoute("/veritatrack-app"), icon: ClipboardCheck, title: "Sign off tasks", detail: "Weekly, monthly and longer-interval tasks assigned to the lab." },
     { href: labRoute("/veritastock"), icon: PackageCheck, title: "Count and receive inventory", detail: "Scan to count, receive orders and write off expired stock." },
     { href: labRoute("/equipment-app"), icon: Wrench, title: "Log maintenance", detail: "Record maintenance done on an instrument." },
     { href: labRoute("/my-signoffs"), icon: PenLine, title: "My sign-offs", detail: "Policies, competencies and quizzes waiting for your signature." },
