@@ -86,6 +86,8 @@ export async function generatePolicySignatureReportExcel(
     attestations: any[];
     staffSignatures: any[];
     roster?: Array<{ name: string; title: string | null; has_login: boolean; status: string; signed_at: string | null; version_label: string | null; how: string | null }>;
+    // History carried over from the lab's prior system (server/veritadcBulkLoad.ts), when there is any.
+    carried?: { source_system: string; source_version: string | null; effective_date: string | null; last_approval_or_review: string | null; is_current_version: boolean } | null;
   },
   identity: { labName: string; cliaNumber: string },
 ): Promise<Buffer> {
@@ -184,10 +186,24 @@ export async function generatePolicySignatureReportExcel(
     sheet.getRow(rr).height = 20; rr += 1;
   };
   hdrBar("Director approval");
-  if (!data.signoffs || data.signoffs.length === 0) {
-    sheet.getCell(`A${rr}`).value = "No director sign-off recorded on the current version.";
-    sheet.getCell(`A${rr}`).font = { name: "Calibri", italic: true, color: { argb: "FF7A7974" } };
+  if (data.carried) {
+    // These people signed in the prior system. The report says so instead of reading as if nobody approved it.
+    const c = data.carried;
+    const when = [c.effective_date ? `effective ${ymd(c.effective_date)}` : "", c.last_approval_or_review ? `last approval or review ${ymd(c.last_approval_or_review)}` : ""].filter(Boolean).join(", ");
+    const what = c.source_version ? `Version ${c.source_version}` : "This document";
+    sheet.getCell(`A${rr}`).value = `${what} was approved and reviewed in ${c.source_system}, the prior system, not in VeritaAssure®${when ? ` (${when})` : ""}. The signature face page on this document's VeritaDC™ record shows who signed and when.`;
+    sheet.getCell(`A${rr}`).font = { name: "Calibri", italic: true, color: { argb: ink } };
+    sheet.getCell(`A${rr}`).alignment = { wrapText: true, vertical: "top" };
+    sheet.mergeCells(`A${rr}:G${rr}`);
+    sheet.getRow(rr).height = 34;
     rr += 1;
+  }
+  if (!data.signoffs || data.signoffs.length === 0) {
+    if (!data.carried) {
+      sheet.getCell(`A${rr}`).value = "No director sign-off recorded on the current version.";
+      sheet.getCell(`A${rr}`).font = { name: "Calibri", italic: true, color: { argb: "FF7A7974" } };
+      rr += 1;
+    }
   } else {
     const sh = sheet.getRow(rr); sh.values = ["Approver", "Action", "Step", "Date"];
     sh.font = { name: "Calibri", bold: true, color: { argb: "FFFFFFFF" } };

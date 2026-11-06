@@ -132,6 +132,7 @@ export const EXPORT_TABLES: Record<string, ExportTable> = {
   policy_attestations: child("VeritaDC", "document_id", "policy_documents"),
   policy_signoffs: child("VeritaDC", "document_id", "policy_documents"),
   policy_review_reminders: child("VeritaDC", "document_id", "policy_documents"),
+  policy_carried_records: lab("VeritaDC"),
   policy_approval_workflows: lab("VeritaDC"),
   policy_approval_steps: child("VeritaDC", "workflow_id", "policy_approval_workflows"),
   policy_approval_delegations: lab("VeritaDC"),
