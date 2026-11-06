@@ -53,7 +53,7 @@ function priorChangesOf(sqlite: any, labId: number, equipmentId: number, month: 
   const first = `${month}-01`;
   return sqlite.prepare(
     `SELECT e.* FROM stain_log_entries e
-      WHERE e.lab_id = ? AND e.equipment_id = ? AND e.code = 'C' AND e.voided_at IS NULL AND e.log_date < ?
+      WHERE e.lab_id = ? AND e.equipment_id = ? AND e.code = 'C' AND e.log_date < ?
         AND e.id = (SELECT x.id FROM stain_log_entries x
                      WHERE x.row_id = e.row_id AND x.lab_id = e.lab_id AND x.code = 'C' AND x.voided_at IS NULL AND x.log_date < ?
                      ORDER BY x.log_date DESC, x.id DESC LIMIT 1)`
