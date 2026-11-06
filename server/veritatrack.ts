@@ -12,6 +12,7 @@ import { DEFAULT_TRACK_CATEGORIES, cleanCategoryName, isDefaultTrackCategory, ca
 import { labWideCorrelation } from "./labWideCorrelation";
 import { exportAllPlanBypass } from "./exportAllContext";
 import { labGroupsPayload, registerLabGroupRoutes } from "./labGroups";
+import { staffOwnScope } from "./competencySelfEntry";
 
 function trackLicenseCtx(req: any): LicenseContext {
   const u = req?.user || null;
@@ -391,8 +392,10 @@ export function registerVeritaTrackRoutes(
       // separately so the worklist labels them ("6-month", "1st annual",
       // "annual") without forcing the director to remember which one
       // is due for which employee.
-      const compEmployees = sqlite.prepare(`
-        SELECT cs.id, cs.six_month_due_at, cs.six_month_completed_at,
+      // Michael Q182 = 1: a Staff login's worklist names only their own competency milestones.
+      const staffOwn = staffOwnScope(sqlite, req.userId, labId);
+      const compEmployees = (sqlite.prepare(`
+        SELECT cs.id, cs.employee_id, cs.six_month_due_at, cs.six_month_completed_at,
                cs.first_annual_due_at, cs.first_annual_completed_at,
                cs.annual_due_at, cs.last_annual_completed_at,
                e.first_name, e.last_name
@@ -400,7 +403,7 @@ export function registerVeritaTrackRoutes(
           JOIN staff_employees e ON e.id = cs.employee_id
          WHERE e.tier2_lab_id = ?
            AND e.status = 'active'
-      `).all(labId) as any[];
+      `).all(labId) as any[]).filter((r) => !staffOwn || r.employee_id === staffOwn.employeeId);
 
       const compMilestonesDue: Array<{ csId: number; employeeName: string; milestone: string; dueAt: string }> = [];
       for (const r of compEmployees) {

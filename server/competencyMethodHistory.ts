@@ -15,6 +15,7 @@ import { labToday, labLocalDate } from "./dateLocal";
 import { loadInstrumentGroups, loadLabMethodClocks } from "./competencyMethodClock";
 import { applyImportedSchedules, summarizeScheduleResults } from "./competencyImportSchedule";
 import { logAudit } from "./audit";
+import { staffOwnScope } from "./competencySelfEntry";
 
 const SHEET = "Past Competencies";
 const HEADERS = ["Person", "Title", "Method", "Department", "Complexity", "On file now", "Last competency date", "Type", "Evaluator", "Person key", "Method key"];
@@ -332,12 +333,15 @@ export function registerCompetencyMethodHistoryRoutes(app: Express, deps: { auth
   };
 
   // Who the template will list, for the import window.
-  app.get("/api/labs/:labId/competency/method-history/summary", authMiddleware, labScopeMiddleware, gate, (req: any, res: any) => {
+  // The template and its summary list every testing person, for the evaluator's import. Not for a Staff login (Michael Q182 = 1).
+  const notForStaffLogin = (req: any, res: any, next: any) =>
+    (staffOwnScope(sqlite(), req.userId, req.scope.labId) ? res.status(403).json({ error: "A staff login can only open their own competency record.", code: "STAFF_OWN_ONLY" }) : next());
+  app.get("/api/labs/:labId/competency/method-history/summary", authMiddleware, labScopeMiddleware, notForStaffLogin, gate, (req: any, res: any) => {
     const d = templateData(sqlite(), req.scope.labId, labToday());
     res.json({ people: d.people, methods: d.rows.length, peopleListed: new Set(d.rows.map((r) => r.staffEmployeeId)).size, peopleWithoutMethods: d.peopleWithoutMethods });
   });
 
-  app.get("/api/labs/:labId/competency/method-history/template.xlsx", authMiddleware, labScopeMiddleware, gate, async (req: any, res: any) => {
+  app.get("/api/labs/:labId/competency/method-history/template.xlsx", authMiddleware, labScopeMiddleware, notForStaffLogin, gate, async (req: any, res: any) => {
     try {
       const today = labToday();
       const lab = sqlite().prepare("SELECT lab_name, clia_number FROM labs WHERE id = ?").get(req.scope.labId) as any;

@@ -86,7 +86,7 @@ import { competencyDueColumns, competencySeedAtCreate, nextCompetencyDue } from 
 import { methodSignerOptions, nextMilestoneAfter, milestonesForComplexity, MILESTONE_LABEL, alignAnnualToMonth, MONTH_NAMES, type SignerCandidate, type MethodMilestone } from "@shared/competencySignoff";
 import { isManualMethod, groupProblem, suggestGroups, groupKey } from "@shared/competencyGrouping";
 import { cleanEl5Samples, el5Columns, el5SamplesFromRow } from "@shared/competencyEl5Samples";
-import { applySelfOps, planSelfElements, planSelfRecordRows, planSelfWaivedMethods, selfOpsCount, staffSelfSeat } from "./competencySelfEntry";
+import { applySelfOps, planSelfElements, planSelfRecordRows, planSelfWaivedMethods, selfOpsCount, staffOwnScope, staffSeatEditsAny, staffSelfSeat, type StaffOwnScope } from "./competencySelfEntry";
 import { cleanWaivedSpecimens, waivedSpecimenColumns, waivedSpecimensFromRow, waivedEvidenceText, WAIVED_BLIND_METHOD } from "@shared/competencyWaivedSpecimens";
 import { oneRowKey, sameTestNameOnMap, preferredSameTestName } from "@shared/presetAnalytes";
 import { quizImageProblem } from "@shared/quizImages";
@@ -7640,6 +7640,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       "SELECT lab_id FROM users WHERE id = ?"
     ).get(req.userId) as any;
     const homeLabId = homeLabRow?.lab_id ? Number(homeLabRow.lab_id) : null;
+    const holdsStaffSeat = !!(db as any).$client.prepare("SELECT 1 FROM user_seats WHERE seat_user_id = ? AND seat_type = 'staff_portal' LIMIT 1").get(req.userId);
 
     res.json(memberships.map(m => ({
       membershipId: m.membership_id,
@@ -7651,6 +7652,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       // 'view_only', 'staff_portal', 'medical_director'...), null when none.
       // role 'staff' alone cannot tell a writer seat from a Staff login.
       seatType: m.seat_type ?? null,
+      // Michael Q182 = 1: this person sees only their own competency data in this lab, and which roster row is theirs. Decided
+      // here, per lab, by the same rule the routes apply, so the screens never guess.
+      ...(() => {
+        const own = holdsStaffSeat ? staffOwnScope((db as any).$client, req.userId, m.lab_id) : null;
+        return { competencyOwnOnly: !!own, ownEmployeeId: own?.employeeId ?? null };
+      })(),
       permissions: (() => { try { return JSON.parse(m.permissions_json || '{}'); } catch { return {}; } })(),
       isPrimaryLab: !!m.is_primary_lab,
       isAccountHomeLab: homeLabId != null && Number(m.lab_id) === homeLabId,
@@ -8126,13 +8133,15 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       if (!ownerRow) return res.status(404).json({ error: "Lab not found" });
       const staffLab = staffLabByLabId(labId, ownerRow.owner_user_id) as any;
       if (!staffLab) return res.json({ lab: { id: labId, name: ownerRow.lab_name, clia: ownerRow.clia_number }, employees: [] });
+      // Self-only (Michael Q182 = 1, 2026-11-05): nothing calls this for the pick-yourself list it was built for, and a Staff
+      // login sees no list of coworkers.
       const employees = sqlite.prepare(
         `SELECT id, first_name, last_name, middle_initial, title, title_code,
                 can_adjust_inventory, can_view_audit
          FROM staff_employees
-         WHERE lab_id = ? AND status = 'active'
+         WHERE lab_id = ? AND id = ? AND status = 'active'
          ORDER BY last_name, first_name`
-      ).all(staffLab.id) as any[];
+      ).all(staffLab.id, req.staffPortalStaffEmployeeId) as any[];
       res.json({
         lab: { id: labId, name: ownerRow.lab_name, clia: ownerRow.clia_number },
         employees: employees.map((e: any) => ({
@@ -24193,6 +24202,50 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     return ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "clinic", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(plan);
   }
 
+  // \u2500\u2500 Staff logins see their own competency data only (Michael Q182 = 1, 2026-11-05) \u2500\u2500
+  // Who is limited and whose record is theirs is decided per lab from the session (server/competencySelfEntry.ts staffOwnScope).
+  // staffOwnIn is null for everyone else, and every route below then runs exactly as before. labId defaults to the lab the request
+  // is working in; a route keyed by a stored row passes that row's lab.
+  const staffOwnIn = (req: any, labId?: unknown, module = "veritacomp"): StaffOwnScope | null =>
+    staffOwnScope((db as any).$client, req.userId, labId ?? req.scope?.labId ?? null, module);
+  // The roster: a Staff seat with edit on VeritaStaff works on it, and one with edit on VeritaComp assigns quizzes from it, so both keep it.
+  const rosterOwnIn = (req: any, labId?: unknown): StaffOwnScope | null => staffOwnIn(req, labId, "veritastaff") && staffOwnIn(req, labId);
+  const refuseStaffOwn = (res: any) => res.status(403).json({ error: "A staff login can only open their own competency record.", code: "STAFF_OWN_ONLY" });
+  // Reads only evaluators use (a whole-lab list, an evaluator's picker): a Staff login is refused.
+  const notForStaffLogin = (req: any, res: any, next: any) => (staffOwnIn(req) ? refuseStaffOwn(res) : next());
+  const notForStaffLoginRoster = (req: any, res: any, next: any) => (rosterOwnIn(req) ? refuseStaffOwn(res) : next());
+  // A read of one person named in the URL by their roster id.
+  const staffOwnRecordOnly = (param: string, ownIn: (req: any) => StaffOwnScope | null = staffOwnIn) => (req: any, res: any, next: any) => {
+    const own = ownIn(req);
+    return own && own.employeeId !== Number(req.params[param]) ? refuseStaffOwn(res) : next();
+  };
+  // A read of one person named in the URL by their competency_employees id.
+  const staffOwnCompEmployeeOnly = (param: string) => (req: any, res: any, next: any) => {
+    const own = staffOwnIn(req);
+    if (!own) return next();
+    const row = (db as any).$client.prepare("SELECT staff_employee_id FROM competency_employees WHERE id = ?").get(req.params[param]) as any;
+    return own.employeeId != null && Number(row?.staff_employee_id) === own.employeeId ? next() : refuseStaffOwn(res);
+  };
+  // A read of one assessment. The limit is checked in the assessment's own lab, so someone with seats in two labs is held to the right one.
+  const staffOwnAssessmentOnly = (param: string) => (req: any, res: any, next: any) => {
+    const row = (db as any).$client.prepare(
+      `SELECT p.lab_id, ce.staff_employee_id FROM competency_assessments a
+         JOIN competency_programs p ON p.id = a.program_id
+         JOIN competency_employees ce ON ce.id = a.employee_id WHERE a.id = ?`
+    ).get(req.params[param]) as any;
+    if (!row) return next(); // the route's own not-found
+    const own = staffOwnIn(req, row.lab_id);
+    return !own || (own.employeeId != null && Number(row.staff_employee_id) === own.employeeId) ? next() : refuseStaffOwn(res);
+  };
+  const ownCompEmployees = (own: StaffOwnScope | null, rows: any[]) => (own ? rows.filter((e) => own.employeeId != null && Number(e.staff_employee_id) === own.employeeId) : rows);
+  // A Staff login's list of programs: names and what they need to find their own record, nothing about anyone else.
+  const staffProgramList = (scopeCol: "lab_id" | "user_id", scopeVal: number, own: StaffOwnScope) => (db as any).$client.prepare(
+    `SELECT p.id, p.name, p.department, p.type, p.record_kind,
+            (SELECT COUNT(*) FROM competency_assessments a JOIN competency_employees ce ON ce.id = a.employee_id
+              WHERE a.program_id = p.id AND ce.staff_employee_id = ?) AS myAssessmentCount
+       FROM competency_programs p WHERE p.${scopeCol} = ? AND COALESCE(p.is_implicit, 0) = 0 ORDER BY p.name`
+  ).all(own.employeeId ?? -1, scopeVal);
+
   // List programs
   app.get("/api/competency/programs", authMiddleware, (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
@@ -24210,6 +24263,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const activeLabId = resolveActiveLabForRequest(req.user.userId, req)?.id ?? null;
     const scopeCol = activeLabId ? "lab_id" : "user_id";
     const scopeVal = activeLabId ?? dataUserId;
+    const staffOwn = staffOwnIn(req, activeLabId);
+    if (staffOwn) return res.json(staffProgramList(scopeCol, scopeVal, staffOwn));
     const programs = (db as any).$client.prepare(
       `SELECT * FROM competency_programs WHERE ${scopeCol} = ? ORDER BY updated_at DESC`
     ).all(scopeVal);
@@ -24328,14 +24383,16 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // reuse this so the response shape stays in sync. Employees are scoped by
   // a caller-provided filter (user_id for legacy, lab_id for lab-scoped) so
   // the program-detail response doesn't leak employees from other labs.
-  function buildProgramDetailResponse(program: any, employeesSql: string, employeesArg: number | string, res: any) {
+  // staffOwn set (a Staff login, Q182 = 1): only that person's employee row, assessments, results and Not applicable mark go out.
+  function buildProgramDetailResponse(program: any, employeesSql: string, employeesArg: number | string, res: any, staffOwn: StaffOwnScope | null = null) {
+    const isOwn = (staffEmployeeId: unknown) => !staffOwn || (staffOwn.employeeId != null && Number(staffEmployeeId) === staffOwn.employeeId);
     const methodGroups = (db as any).$client.prepare(
       "SELECT * FROM competency_method_groups WHERE program_id = ?"
     ).all(program.id);
     const checklistItems = (db as any).$client.prepare(
       "SELECT * FROM competency_checklist_items WHERE program_id = ? ORDER BY sort_order"
     ).all(program.id);
-    const employees = withStaffHireDates((db as any).$client, (db as any).$client.prepare(employeesSql).all(employeesArg) as any[]);
+    const employees = withStaffHireDates((db as any).$client, ((db as any).$client.prepare(employeesSql).all(employeesArg) as any[]).filter((e) => isOwn(e.staff_employee_id)));
     // Phase B3 lite (2026-06-06): LEFT JOIN staff_employees via the FK
     // added in PR #566. When the FK is set, staff_* columns carry the
     // canonical VeritaStaff name/credentials. When NULL (unmatched rows
@@ -24354,7 +24411,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
        WHERE a.program_id = ?
        ORDER BY a.created_at DESC`
     ).all(program.id);
-    const assessmentsWithItems = (assessments as any[]).map((a: any) => {
+    const assessmentsWithItems = (assessments as any[]).filter((a: any) => isOwn(a.staff_employee_id)).map((a: any) => {
       const items = (db as any).$client.prepare(
         "SELECT * FROM competency_assessment_items WHERE assessment_id = ?"
       ).all(a.id);
@@ -24367,7 +24424,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       ...assessmentsWithItems.flatMap((a: any) => (a.items as any[]).map((i) => i.nt_item_image_id)),
     ]);
     // BUG-115: the people marked Not applicable on this program.
-    const notApplicable = notApplicableRows((db as any).$client, program.id);
+    const ownCompIds = new Set(employees.map((e: any) => Number(e.id)));
+    const notApplicable = notApplicableRows((db as any).$client, program.id).filter((r: any) => !staffOwn || ownCompIds.has(Number(r.employee_id)));
     res.json({ ...program, methodGroups, checklistItems, checklistImages, employees, assessments: assessmentsWithItems, notApplicable });
   }
 
@@ -24386,6 +24444,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       empSql,
       program.lab_id ?? req.user.userId,
       res,
+      staffOwnIn(req, program.lab_id),
     );
   });
 
@@ -24424,7 +24483,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // competency_employees (idempotent; same bridge the roster sync uses) so the
   // assessment's employee_id FK is satisfied. A program with no method groups
   // falls back to every active staff member with an instrument assignment.
-  app.get("/api/labs/:labId/competency/programs/:id/eligible-employees", authMiddleware, labScopeMiddleware, (req: any, res) => {
+  app.get("/api/labs/:labId/competency/programs/:id/eligible-employees", authMiddleware, labScopeMiddleware, notForStaffLogin, (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const client = (db as any).$client;
     const labId = req.scope.labId;
@@ -24488,6 +24547,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       "SELECT * FROM competency_employees WHERE lab_id = ? AND status = 'active' ORDER BY name",
       req.scope.labId,
       res,
+      staffOwnIn(req),
     );
   });
 
@@ -24700,7 +24760,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         ? "SELECT * FROM competency_employees WHERE lab_id = ? ORDER BY name"
         : "SELECT * FROM competency_employees WHERE user_id = ? ORDER BY name"
     ).all(activeLabId ?? dataUserId);
-    res.json(withStaffHireDates((db as any).$client, employees as any[]));
+    res.json(withStaffHireDates((db as any).$client, ownCompEmployees(staffOwnIn(req, activeLabId), employees as any[])));
   });
 
   app.post("/api/competency/employees", authMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
@@ -24767,6 +24827,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   app.get("/api/labs/:labId/competency/programs", authMiddleware, labScopeMiddleware, (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
     const labId = req.scope.labId;
+    const staffOwn = staffOwnIn(req);
+    if (staffOwn) return res.json(staffProgramList("lab_id", labId, staffOwn));
     const programs = (db as any).$client.prepare(
       "SELECT * FROM competency_programs WHERE lab_id = ? ORDER BY updated_at DESC"
     ).all(labId);
@@ -24823,7 +24885,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const employees = (db as any).$client.prepare(
       "SELECT * FROM competency_employees WHERE lab_id = ? ORDER BY name"
     ).all(req.scope.labId);
-    res.json(withStaffHireDates((db as any).$client, employees as any[]));
+    res.json(withStaffHireDates((db as any).$client, ownCompEmployees(staffOwnIn(req), employees as any[])));
   });
 
   app.post("/api/labs/:labId/competency/employees", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
@@ -25765,7 +25827,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
   // GET all element documents for one assessment (the client groups by
   // element_number for rendering).
-  app.get("/api/labs/:labId/competency/assessments/:id/element-documents", authMiddleware, labScopeMiddleware, (req: any, res) => {
+  app.get("/api/labs/:labId/competency/assessments/:id/element-documents", authMiddleware, labScopeMiddleware, staffOwnAssessmentOnly("id"), (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
     const labId = req.scope.labId;
     const assessment = (db as any).$client.prepare(
@@ -25800,7 +25862,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // ── VERITACOMP ALIASED ROUTES ──────────────────────────────────────────
 
   // GET /api/veritacomp/assessments/:id
-  app.get("/api/veritacomp/assessments/:id", authMiddleware, (req: any, res) => {
+  app.get("/api/veritacomp/assessments/:id", authMiddleware, staffOwnAssessmentOnly("id"), (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const assessment = (db as any).$client.prepare(
@@ -25823,13 +25885,14 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const program = userCanAccessLabRow('competency_programs', req.params.id, req);
     if (!program) return res.status(404).json({ error: "Program not found" });
+    const staffOwn = staffOwnIn(req, program.lab_id);
     const assessments = (db as any).$client.prepare(
       `SELECT a.*, e.name as employee_name, e.title as employee_title, ${EMPLOYEE_HIRE_DATE_SQL} as employee_hire_date
        FROM competency_assessments a
        JOIN competency_employees e ON a.employee_id = e.id
-       WHERE a.program_id = ?
+       WHERE a.program_id = ? ${staffOwn ? "AND e.staff_employee_id = ?" : ""}
        ORDER BY a.created_at DESC`
-    ).all(req.params.id);
+    ).all(...(staffOwn ? [req.params.id, staffOwn.employeeId ?? -1] : [req.params.id]));
     res.json(assessments);
   });
 
@@ -26183,13 +26246,14 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   //   (when completed) for the director's status display.
   app.get("/api/veritacomp/quizzes/:id/assignments", authMiddleware, (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
-    const quiz = (db as any).$client.prepare("SELECT id, user_id FROM competency_quizzes WHERE id = ?").get(req.params.id) as any;
+    const quiz = (db as any).$client.prepare("SELECT id, user_id, lab_id FROM competency_quizzes WHERE id = ?").get(req.params.id) as any;
     if (!quiz) return res.status(404).json({ error: "Quiz not found" });
     if (quiz.user_id !== 0) {
       const owned = userCanAccessLabRow('competency_quizzes', req.params.id, req);
       if (!owned) return res.status(404).json({ error: "Quiz not found" });
     }
-    const rows = (db as any).$client.prepare(
+    const staffOwn = staffOwnIn(req, quiz.lab_id);
+    const rows = ((db as any).$client.prepare(
       `SELECT qa.id, qa.staff_employee_id, qa.due_date, qa.status, qa.assigned_at,
               qa.completed_at, qa.completed_result_id,
               se.first_name, se.last_name, se.title,
@@ -26199,7 +26263,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
        LEFT JOIN competency_quiz_results cqr ON cqr.id = qa.completed_result_id
        WHERE qa.quiz_id = ?
        ORDER BY se.last_name, se.first_name`
-    ).all(req.params.id) as any[];
+    ).all(req.params.id) as any[]).filter((r) => !staffOwn || (staffOwn.employeeId != null && Number(r.staff_employee_id) === staffOwn.employeeId));
     res.json({
       assignments: rows.map((r) => ({
         id: r.id,
@@ -26301,7 +26365,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   });
 
   // GET /api/veritacomp/assessments/:id/quiz-results
-  app.get("/api/veritacomp/assessments/:id/quiz-results", authMiddleware, (req: any, res) => {
+  app.get("/api/veritacomp/assessments/:id/quiz-results", authMiddleware, staffOwnAssessmentOnly("id"), (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     // Cross-tenant guard (2026-07-09 security review): only return results for an
     // assessment whose program is in a lab the caller can access, else the graded
@@ -26325,7 +26389,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // below scopes by p.user_id, which silently 404s when the caller is a
   // lab MEMBER (not the program's original owner). Mirror of the DELETE
   // pattern already in the client at VeritaCompAppPage.tsx:1104.
-  app.get("/api/labs/:labId/competency/assessments/:id/pdf", authMiddleware, labScopeMiddleware, async (req: any, res) => {
+  app.get("/api/labs/:labId/competency/assessments/:id/pdf", authMiddleware, labScopeMiddleware, staffOwnAssessmentOnly("id"), async (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const assessment = (db as any).$client.prepare(
       `SELECT a.*, p.name as program_name, p.department, p.type as program_type, p.record_kind as program_record_kind,
@@ -26463,7 +26527,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // instrumented as of this PR. Create + per-field update are NOT yet
   // captured. The dialog says so explicitly in its footer until those
   // get instrumented in a follow-up.
-  app.get("/api/labs/:labId/competency/assessments/:id/audit-log", authMiddleware, labScopeMiddleware, (req: any, res) => {
+  app.get("/api/labs/:labId/competency/assessments/:id/audit-log", authMiddleware, labScopeMiddleware, notForStaffLogin, (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
     // Confirm the assessment lives in this lab so a member of lab A can't
     // pull audit data for lab B's assessment id.
@@ -26500,7 +26564,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // assessment sees the year-over-year delta at the moment of sign-off.
   // Reg anchor: §493.1235 (written competency policies) and §493.1445(e)(13) expect the LD to
   // track patterns over time, not just point-in-time.
-  app.get("/api/labs/:labId/competency/assessments/:id/prior-year-comparison", authMiddleware, labScopeMiddleware, (req: any, res) => {
+  app.get("/api/labs/:labId/competency/assessments/:id/prior-year-comparison", authMiddleware, labScopeMiddleware, staffOwnAssessmentOnly("id"), (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
     const current = (db as any).$client.prepare(
       `SELECT a.id, a.employee_id, a.program_id, a.assessment_date, a.status
@@ -26583,7 +26647,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // Only `locked=1` assessments are included. An unlocked draft is not
   // surveyor-defensible evidence; this is the same rule PR #553's Sign &
   // Complete workflow encodes.
-  app.post("/api/labs/:labId/competency/survey-bundle", authMiddleware, labScopeMiddleware, async (req: any, res) => {
+  app.post("/api/labs/:labId/competency/survey-bundle", authMiddleware, labScopeMiddleware, notForStaffLogin, async (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
     const labId = req.scope.labId;
     const periodInput = req.body?.periodMonths;
@@ -26844,7 +26908,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // Legacy single-user-scope route. Kept for backward compat with any
   // external bookmarks; the multi-lab UI now calls the lab-scoped variant
   // above when activeLabId is set.
-  app.get("/api/veritacomp/assessments/:id/pdf", authMiddleware, async (req: any, res) => {
+  app.get("/api/veritacomp/assessments/:id/pdf", authMiddleware, staffOwnAssessmentOnly("id"), async (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const assessment = (db as any).$client.prepare(
       `SELECT a.*, p.name as program_name, p.department, p.type as program_type, p.record_kind as program_record_kind,
@@ -26916,7 +26980,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   });
 
   // PDF generation for competency assessments
-  app.post("/api/competency/pdf/:assessmentId", authMiddleware, async (req: any, res) => {
+  app.post("/api/competency/pdf/:assessmentId", authMiddleware, staffOwnAssessmentOnly("assessmentId"), async (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp\u2122 subscription required" });
     const assessment = (db as any).$client.prepare(
       `SELECT a.*, p.name as program_name, p.department, p.type as program_type, p.record_kind as program_record_kind,
@@ -27179,6 +27243,16 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     res.json(suggestions);
   });
 
+  // The roster for a Staff login is their own row (Michael Q182 = 1). Two pickers need names: VeritaTrack's task owner and VeritaPT's
+  // Tested by, and only someone with edit on those modules ever opens them. They ask with ?names=1 and get id, name and title,
+  // with no competency data. Every other Staff login, and any other caller of the plain list, gets what the route otherwise gives.
+  const staffPickerNames = (req: any, labId: number): any[] | null => {
+    if (req.query?.names !== "1" || !staffSeatEditsAny((db as any).$client, req.userId, labId, ["veritatrack", "veritapt"])) return null;
+    return (db as any).$client.prepare(
+      "SELECT id, first_name, last_name, middle_initial, title FROM staff_employees WHERE tier2_lab_id = ? AND status = 'active' ORDER BY last_name, first_name"
+    ).all(labId) as any[];
+  };
+
   // List employees for a lab
   app.get("/api/staff/employees", authMiddleware, (req: any, res) => {
     if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff\u2122 subscription required" });
@@ -27188,9 +27262,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const lab = activeStaffLab(req, dataUserId) as any;
     if (!lab) return res.json([]);
 
-    const employees = (db as any).$client.prepare(
+    const staffOwn = rosterOwnIn(req, lab.tier2_lab_id);
+    const pickerNames = staffOwn ? staffPickerNames(req, lab.tier2_lab_id) : null;
+    if (pickerNames) return res.json(pickerNames);
+    const employees = ((db as any).$client.prepare(
       "SELECT * FROM staff_employees WHERE lab_id = ? AND status = 'active' ORDER BY last_name, first_name"
-    ).all(lab.id) as any[];
+    ).all(lab.id) as any[]).filter((e) => !staffOwn || e.id === staffOwn.employeeId);
 
     const clocks = labMethodClocks((db as any).$client, lab.tier2_lab_id); // BUG-069: per-method due status
     const result = employees.map((emp: any) => {
@@ -27238,7 +27315,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   app.get("/api/labs/:labId/staff/employees/template", authMiddleware, labScopeMiddleware, staffImportTemplateHandler);
 
   // Get single employee
-  app.get("/api/staff/employees/:id", authMiddleware, (req: any, res) => {
+  app.get("/api/staff/employees/:id", authMiddleware, staffOwnRecordOnly("id", rosterOwnIn), (req: any, res) => {
     if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff\u2122 subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const lab = activeStaffLab(req, dataUserId) as any;
@@ -27412,9 +27489,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   app.get("/api/labs/:labId/staff/employees", authMiddleware, labScopeMiddleware, (req: any, res) => {
     if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
     foldInviteDuplicates((db as any).$client, req.scope.labId); // the second card an invite made goes before anyone sees the list
-    const employees = (db as any).$client.prepare(
+    const staffOwn = rosterOwnIn(req);
+    const pickerNames = staffOwn ? staffPickerNames(req, req.scope.labId) : null;
+    if (pickerNames) return res.json(pickerNames);
+    const employees = ((db as any).$client.prepare(
       "SELECT * FROM staff_employees WHERE tier2_lab_id = ? AND status = 'active' ORDER BY last_name, first_name"
-    ).all(req.scope.labId) as any[];
+    ).all(req.scope.labId) as any[]).filter((e) => !staffOwn || e.id === staffOwn.employeeId);
     const clocks = labMethodClocks((db as any).$client, req.scope.labId); // BUG-069: per-method due status
     const result = employees.map((emp: any) => {
       const roles = (db as any).$client.prepare(
@@ -27514,7 +27594,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   });
 
   // GET single employee in the active lab
-  app.get("/api/labs/:labId/staff/employees/:id", authMiddleware, labScopeMiddleware, (req: any, res) => {
+  app.get("/api/labs/:labId/staff/employees/:id", authMiddleware, labScopeMiddleware, staffOwnRecordOnly("id", rosterOwnIn), (req: any, res) => {
     if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
     const emp = (db as any).$client.prepare(
       "SELECT * FROM staff_employees WHERE id = ? AND tier2_lab_id = ?"
@@ -27690,7 +27770,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // active roster endpoint, scoped by tier2_lab_id, but filters by
   // status = 'terminated'. Includes terminated_at + termination_reason
   // so the surveyor can see when and why.
-  app.get("/api/labs/:labId/staff/employees-terminated", authMiddleware, labScopeMiddleware, (req: any, res) => {
+  app.get("/api/labs/:labId/staff/employees-terminated", authMiddleware, labScopeMiddleware, notForStaffLoginRoster, (req: any, res) => {
     if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
     const employees = (db as any).$client.prepare(
       "SELECT * FROM staff_employees WHERE tier2_lab_id = ? AND status = 'terminated' ORDER BY terminated_at DESC, last_name, first_name"
@@ -28124,7 +28204,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // Employee lookup uses tier2_lab_id (PR #559 hotfix lesson). Instruments
   // are scoped via veritamap_maps.lab_id which is the correct column for
   // that table (no tier2 mirror).
-  app.get("/api/labs/:labId/staff/employees/:id/instruments", authMiddleware, labScopeMiddleware, (req: any, res) => {
+  app.get("/api/labs/:labId/staff/employees/:id/instruments", authMiddleware, labScopeMiddleware, staffOwnRecordOnly("id", rosterOwnIn), (req: any, res) => {
     if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
     const labId = req.scope.labId;
     const emp = (db as any).$client.prepare(
@@ -28344,7 +28424,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
   // GET /api/labs/:labId/staff/instruments/:instrumentId/employees
   // Returns the instrument, the lab's active testing staff, and which are assigned.
-  app.get("/api/labs/:labId/staff/instruments/:instrumentId/employees", authMiddleware, labScopeMiddleware, (req: any, res) => {
+  app.get("/api/labs/:labId/staff/instruments/:instrumentId/employees", authMiddleware, labScopeMiddleware, notForStaffLoginRoster, (req: any, res) => {
     if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
     const labId = req.scope.labId;
     const client = (db as any).$client;
@@ -28445,7 +28525,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
   // GET /api/labs/:labId/staff/instruments-bulk/employees?ids=1,2,3
   // The lab's active testing staff, each with how many of these instruments they are already on.
-  app.get("/api/labs/:labId/staff/instruments-bulk/employees", authMiddleware, labScopeMiddleware, (req: any, res) => {
+  app.get("/api/labs/:labId/staff/instruments-bulk/employees", authMiddleware, labScopeMiddleware, notForStaffLoginRoster, (req: any, res) => {
     if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
     const labId = req.scope.labId;
     const client = (db as any).$client;
@@ -28642,7 +28722,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // source of truth for "what's still open right now".
   //
   // Reg anchor: 42 CFR §493.1451(b)(9) / §493.1413(b)(9) + TJC HR.01.06.01 (BUG-024 citation correction).
-  app.get("/api/labs/:labId/staff/duty-change-events", authMiddleware, labScopeMiddleware, (req: any, res) => {
+  app.get("/api/labs/:labId/staff/duty-change-events", authMiddleware, labScopeMiddleware, notForStaffLogin, (req: any, res) => {
     if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
     const labId = req.scope.labId;
     const client = (db as any).$client;
@@ -28738,7 +28818,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   //
   // Returns { methodGroupIds, reasons } so the dialog can render a star
   // on each suggested tab and a hover tooltip explaining why.
-  app.get("/api/labs/:labId/competency/programs/:programId/employees/:employeeId/suggested-method-groups", authMiddleware, labScopeMiddleware, (req: any, res) => {
+  app.get("/api/labs/:labId/competency/programs/:programId/employees/:employeeId/suggested-method-groups", authMiddleware, labScopeMiddleware, staffOwnCompEmployeeOnly("employeeId"), (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
     const labId = req.scope.labId;
     const client = (db as any).$client;
@@ -28955,7 +29035,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // VeritaStaff-assigned instruments for that staff record. Lets the
   // assessment dialog's cross-surface "Assigned instruments" info row
   // populate without needing the two tables to share an id space.
-  app.get("/api/labs/:labId/competency/employees/:id/staff-instruments", authMiddleware, labScopeMiddleware, (req: any, res) => {
+  app.get("/api/labs/:labId/competency/employees/:id/staff-instruments", authMiddleware, labScopeMiddleware, staffOwnCompEmployeeOnly("id"), (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
     const labId = req.scope.labId;
     const client = (db as any).$client;
@@ -29026,7 +29106,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     res.json(after);
   });
   // What today's run would send for this lab (nothing is sent or logged).
-  app.get("/api/labs/:labId/competency/reminder-preview", authMiddleware, labScopeMiddleware, (req: any, res) => {
+  app.get("/api/labs/:labId/competency/reminder-preview", authMiddleware, labScopeMiddleware, notForStaffLogin, (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
     const sqlite = (db as any).$client;
     const cfg = readCompetencyReminderConfig(sqlite, req.scope.labId);
@@ -29052,7 +29132,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const labId = req.scope.labId;
     const client = (db as any).$client;
 
-    const employees = client.prepare(
+    const staffOwn = staffOwnIn(req);
+    const employees = (client.prepare(
       `SELECT e.id, e.first_name, e.last_name, e.middle_initial, e.title, e.highest_complexity, e.hire_date, e.created_at,
               s.initial_completed_at,
               s.six_month_due_at, s.six_month_completed_at,
@@ -29062,7 +29143,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
        LEFT JOIN staff_competency_schedules s ON s.employee_id = e.id
        WHERE e.tier2_lab_id = ? AND e.status = 'active' AND e.performs_testing = 1
        ORDER BY e.last_name, e.first_name`
-    ).all(labId) as any[];
+    ).all(labId) as any[]).filter((e) => !staffOwn || e.id === staffOwn.employeeId);
 
     // Per-employee CLIA schedule status. Mirrors the dashboard-stats milestone
     // walk exactly (server/routes.ts, /competency/dashboard-stats) so the owed
@@ -29674,6 +29755,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // enter their own specimen numbers). Decided here from the session, never from anything the page sends: a Staff login
   // on their OWN record, in a lab that can still take writes, who doesn't already hold edit access through their seat.
   // Owners, admins and editors keep the evaluator's route below, unchanged.
+  // Who may sign a method lists other people by name and role, for the evaluator's sign-off form. A Staff login never has that form.
+  const withoutSigners = (ts: any) => ({ ...ts, signers: [] });
   const staffMayEnterOwnData = (req: any, empId: number): boolean => {
     const sqlite = (db as any).$client;
     const seat = staffSelfSeat(sqlite, req.userId, req.scope.labId);
@@ -29692,9 +29775,11 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const sqlite = (db as any).$client;
     const empId = Number(req.params.employeeId);
     if (!Number.isFinite(empId)) return res.status(400).json({ error: "Bad employeeId" });
+    const staffOwn = staffOwnIn(req);
+    if (staffOwn && staffOwn.employeeId !== empId) return refuseStaffOwn(res);
     const view = assembleEmployeeCompetencyView(sqlite, labId, empId);
     if (!view) return res.status(404).json({ error: "Employee not found" });
-    res.json({ ...view, canEnterOwnData: staffMayEnterOwnData(req, empId) });
+    res.json({ ...(staffOwn ? { ...view, testSystems: view.testSystems.map(withoutSigners) } : view), canEnterOwnData: staffMayEnterOwnData(req, empId) });
   });
 
   // "By instrument" (2026-10-13, Michael Q154 = 2): the mirror of the per-employee view. Read-only. Each person's block
@@ -29715,6 +29800,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
     const labId = req.scope.labId;
     const sqlite = (db as any).$client;
+    const staffOwn = staffOwnIn(req);
     const instruments = sqlite.prepare(
       `SELECT i.id, i.instrument_name, i.category FROM veritamap_instruments i JOIN veritamap_maps m ON m.id = i.map_id
        WHERE m.lab_id = ? ORDER BY i.category, i.instrument_name`
@@ -29740,7 +29826,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const rows = entries.map((inst: any) => {
       const m = methodOf(groups, inst.id);
       const lead = m.group ? m.group.members.find((x) => x.id === m.leadId) : null;
-      const peopleIds = Array.from(new Set(m.memberIds.flatMap((id) => instrumentPeopleIds(sqlite, labId, id))));
+      const peopleIds = Array.from(new Set(m.memberIds.flatMap((id) => instrumentPeopleIds(sqlite, labId, id)))).filter((id) => !staffOwn || id === staffOwn.employeeId);
       const blocks = peopleIds
         .map((id) => viewOf(id)?.testSystems?.find((t: any) => t.instrumentId === m.leadId))
         .filter(Boolean);
@@ -29756,7 +29842,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         overdue: blocks.filter((b: any) => b.overdue).length,
       };
     });
-    res.json({ instruments: rows });
+    // A Staff login: the methods they are assigned to, counted on their own record alone.
+    res.json({ instruments: staffOwn ? rows.filter((r: any) => r.people > 0) : rows });
   });
 
   // GET /api/labs/:labId/competency/signoffs : every signed competency in the lab, newest first (Michael 2026-11-02: "an
@@ -29767,9 +29854,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
     const labId = req.scope.labId;
     const sqlite = (db as any).$client;
-    const people = sqlite.prepare(
+    const staffOwn = staffOwnIn(req);
+    const people = (sqlite.prepare(
       "SELECT id FROM staff_employees WHERE tier2_lab_id = ? AND status = 'active' ORDER BY last_name, first_name"
-    ).all(labId) as any[];
+    ).all(labId) as any[]).filter((p) => !staffOwn || p.id === staffOwn.employeeId);
     const rows: any[] = [];
     for (const p of people) {
       const view = assembleEmployeeCompetencyView(sqlite, labId, p.id);
@@ -29806,11 +29894,13 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // An analyzer in a lab-chosen group opens the group: everyone who runs any analyzer in it (Michael Q168 = 1).
     const m = methodOf(loadInstrumentGroups(sqlite, labId), instrumentId);
     const lead = m.group ? m.group.members.find((x) => x.id === m.leadId) : null;
-    const peopleIds = Array.from(new Set(m.memberIds.flatMap((id) => instrumentPeopleIds(sqlite, labId, id))));
+    const staffOwn = staffOwnIn(req);
+    const peopleIds = Array.from(new Set(m.memberIds.flatMap((id) => instrumentPeopleIds(sqlite, labId, id)))).filter((id) => !staffOwn || id === staffOwn.employeeId);
+    if (staffOwn && !peopleIds.length) return refuseStaffOwn(res);
     const people = peopleIds.map((empId) => {
       const v = assembleEmployeeCompetencyView(sqlite, labId, empId);
       const testSystem = v?.testSystems?.find((t: any) => t.instrumentId === m.leadId);
-      return v && testSystem ? { employee: v.employee, testSystem } : null;
+      return v && testSystem ? { employee: v.employee, testSystem: staffOwn ? withoutSigners(testSystem) : testSystem } : null;
     }).filter(Boolean);
     res.json({
       instrument: {
@@ -30301,7 +30391,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       return { id: i.id, name: i.name, category: i.category || null, complexity: r >= 3 ? "HIGH" : r === 2 ? "MODERATE" : r === 1 ? "WAIVED" : "UNSPECIFIED", manual: isManualMethod(i.name, i.category), people: (pplStmt.get(i.id, labId) as any)?.n || 0 };
     });
   };
-  app.get("/api/labs/:labId/competency/method-groups", authMiddleware, labScopeMiddleware, (req: any, res) => {
+  app.get("/api/labs/:labId/competency/method-groups", authMiddleware, labScopeMiddleware, notForStaffLogin, (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
     const labId = req.scope.labId;
     const sqlite = (db as any).$client;
@@ -30397,7 +30487,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // sign-off on page 1 (CLAUDE.md section 5). Assembled from the same view the
   // screen uses, so the print never drifts. Returns { token } for the shared
   // /api/pdf/:token download, mirroring the per-assessment PDF route.
-  app.get("/api/labs/:labId/competency/employee/:employeeId/record-pdf", authMiddleware, labScopeMiddleware, async (req: any, res) => {
+  app.get("/api/labs/:labId/competency/employee/:employeeId/record-pdf", authMiddleware, labScopeMiddleware, staffOwnRecordOnly("employeeId"), async (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
     const labId = req.scope.labId;
     const sqlite = (db as any).$client;
@@ -30445,7 +30535,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   app.get("/api/labs/:labId/competency/dashboard-stats", authMiddleware, labScopeMiddleware, (req: any, res) => {
     if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
     const labId = req.scope.labId;
-    const rows = (db as any).$client.prepare(
+    const staffOwn = staffOwnIn(req);
+    const rows = ((db as any).$client.prepare(
       `SELECT e.id, e.first_name, e.last_name, e.middle_initial, e.title, e.hire_date, e.created_at,
               s.initial_completed_at,
               s.six_month_due_at, s.six_month_completed_at,
@@ -30454,7 +30545,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
        FROM staff_employees e
        LEFT JOIN staff_competency_schedules s ON s.employee_id = e.id
        WHERE e.tier2_lab_id = ? AND e.status = 'active' AND e.performs_testing = 1`
-    ).all(labId) as Array<{
+    ).all(labId) as any[]).filter((e) => !staffOwn || e.id === staffOwn.employeeId) as Array<{
       id: number; first_name: string; last_name: string; middle_initial: string | null; title: string | null; hire_date: string | null; created_at: string | null;
       initial_completed_at: string | null;
       six_month_due_at: string | null; six_month_completed_at: string | null;
@@ -30541,7 +30632,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   //   - overdueReassessment:  failed > 30d ago, no follow-up pass yet
   //   - resolved:              fail followed by a later pass (not surfaced)
   // 30d is the customary corrective-action window; longer is a finding.
-  app.get("/api/labs/:labId/competency/reassessment-stats", authMiddleware, labScopeMiddleware, (req: any, res) => {
+  app.get("/api/labs/:labId/competency/reassessment-stats", authMiddleware, labScopeMiddleware, notForStaffLogin, (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
     const labId = req.scope.labId;
     // Pull every assessment in the lab, ordered by employee+program+date so
@@ -31389,7 +31480,18 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   app.get("/api/labs/:labId/staff/qualified-observers", authMiddleware, labScopeMiddleware, (req: any, res) => {
     if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
     const labId = req.scope.labId;
-    res.json(loadQualifiedObservers((db as any).$client, labId));
+    const sqlite = (db as any).$client;
+    const observers = loadQualifiedObservers(sqlite, labId);
+    const staffOwn = staffOwnIn(req);
+    if (!staffOwn) return res.json(observers);
+    // A Staff login never picks an observer. Their locked field names whoever is already on their own record, so that is all they get.
+    const named = staffOwn.employeeId == null ? [] : (sqlite.prepare(
+      `SELECT i.el1_observer_initials AS a, i.el4_observer_initials AS b, i.el7_observer_initials AS c FROM competency_assessment_items i
+         JOIN competency_assessments ca ON ca.id = i.assessment_id
+         JOIN competency_employees ce ON ce.id = ca.employee_id
+        WHERE ce.staff_employee_id = ? AND ce.lab_id = ?`
+    ).all(staffOwn.employeeId, labId) as any[]).flatMap((r) => [r.a, r.b, r.c]).filter(Boolean);
+    res.json(observers.filter((o) => named.some((v) => matchObserver([o], v))));
   });
 
   // GET /api/labs/:labId/staff/position-descriptions
@@ -31828,7 +31930,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // active testing person's competency dates (hire, orientation/training, initial, 6-month, 1st annual, annual),
   // whether they are cleared for patient testing, what is due next, and duty-change reevaluations. Read-only;
   // builder in server/competencyRegisterExcel.ts.
-  app.get("/api/labs/:labId/staff/competency-register.xlsx", authMiddleware, labScopeMiddleware, async (req: any, res) => {
+  app.get("/api/labs/:labId/staff/competency-register.xlsx", authMiddleware, labScopeMiddleware, notForStaffLogin, async (req: any, res) => {
     if (!hasStaffAccess(req.user, req.scope?.lab) && !hasCompetencyAccess(req.user, req.scope?.lab)) {
       return res.status(403).json({ error: "VeritaStaff™ or VeritaComp™ subscription required" });
     }
