@@ -223,6 +223,7 @@ function headerRowHeight(headers: string[], colWidths: number[]): number {
 
 import { logAudit } from "./audit";
 import { syncInitialToStaffSchedule, earliestSignedInitials } from "./competencyClearanceSync";
+import { programCanClearForTesting } from "@shared/competencyClearance";
 import { loadQualifiedObservers, observerProblem, itemObserverEntries, storedObserverValues, matchObserver } from "./competencyObserver";
 import { summarizeCspReport, cspHeaderName } from "./securityHeaders";
 import { normalizeChecklistItems } from "@shared/competencyChecklist";
@@ -10544,9 +10545,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       // navigable on big-volume labs.
       const assessments = sqlite.prepare(
         `SELECT ca.id, ca.program_id, ca.assessment_type, ca.assessment_date,
-                ca.evaluator_name, ca.evaluator_title, ca.competency_type,
+                ca.evaluator_name, ca.evaluator_title,
                 ca.status, ca.employee_acknowledged,
-                cp.name AS program_name, cp.department,
+                cp.name AS program_name, cp.department, cp.type AS program_type,
                 spcs.id AS signoff_id, spcs.signed_at, spcs.typed_signature
          FROM competency_assessments ca
          JOIN competency_programs cp ON cp.id = ca.program_id
@@ -10569,7 +10570,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           assessment_date: a.assessment_date,
           evaluator_name: a.evaluator_name,
           evaluator_title: a.evaluator_title,
-          competency_type: a.competency_type,
+          competency_type: a.program_type,
           status: a.status,
           signed: a.signoff_id != null,
           signed_at: a.signed_at,
@@ -10612,13 +10613,14 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       if (!compEmployee) return res.status(404).json({ error: "No competency record bridged to this staff member" });
 
       const assessment = sqlite.prepare(
-        `SELECT ca.*, cp.name AS program_name, cp.department, cp.is_implicit
+        `SELECT ca.*, cp.name AS program_name, cp.department, cp.is_implicit, cp.type AS program_type
          FROM competency_assessments ca
          JOIN competency_programs cp ON cp.id = ca.program_id
          WHERE ca.id = ? AND ca.employee_id = ?`
       ).get(assessmentId, compEmployee.id) as any;
       if (!assessment) return res.status(404).json({ error: "Assessment not found for this employee" });
 
+      // The hash reads the stored row, so a signature already on file still matches. What the person is told and offered follows the program's type.
       const hash = hashCompetencyAssessment(assessment);
       const isImplicit = assessment.is_implicit === 1; // entered on the person's own record, not here
 
@@ -10627,7 +10629,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       // observer, Pass/Fail verdict, and N/A determinations are the evaluator's
       // and are NOT returned as editable (kept read-only server-side too). A row
       // signed off per method is frozen and isn't offered.
-      const items = (assessment.competency_type === "technical" && !isImplicit)
+      const items = (assessment.program_type === "technical" && !isImplicit)
         ? (sqlite.prepare(
             `SELECT id, method_number, method_group_id, method_group_name,
                     el1_specimen_id, el2_evidence, el2_date, el3_qc_date,
@@ -10664,7 +10666,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         evaluator_name: assessment.evaluator_name,
         evaluator_title: assessment.evaluator_title,
         evaluator_initials: assessment.evaluator_initials,
-        competency_type: assessment.competency_type,
+        competency_type: assessment.program_type,
         status: assessment.status,
         remediation_plan: assessment.remediation_plan,
         locked: assessment.locked === 1,
@@ -10807,13 +10809,13 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const compEmployee = resolveCompEmployee(sqlite, staffEmployee.id, labId);
       if (!compEmployee) return res.status(404).json({ error: "No competency record bridged to this staff member" });
       const assessment = sqlite.prepare(
-        "SELECT ca.*, cp.is_implicit FROM competency_assessments ca JOIN competency_programs cp ON cp.id = ca.program_id WHERE ca.id = ? AND ca.employee_id = ?"
+        "SELECT ca.*, cp.is_implicit, cp.type AS program_type FROM competency_assessments ca JOIN competency_programs cp ON cp.id = ca.program_id WHERE ca.id = ? AND ca.employee_id = ?"
       ).get(assessmentId, compEmployee.id) as any;
       if (!assessment) return res.status(404).json({ error: "Assessment not found for this employee" });
       if (assessment.locked === 1) return res.status(409).json({ error: "This assessment is signed and locked. Ask your evaluator to unlock it to make changes." });
       if (assessment.is_implicit === 1) return res.status(409).json({ error: "Enter this on your own competency record, method by method.", code: "IMPLICIT_RECORD" });
       if (assessment.employee_acknowledged === 1) return res.status(409).json({ error: "You already acknowledged this assessment. Ask your evaluator to make any change." });
-      if (assessment.competency_type === "nontechnical") return res.status(409).json({ error: "This record has no details for you to add." });
+      if (assessment.program_type === "nontechnical") return res.status(409).json({ error: "This record has no details for you to add." });
 
       const beforeItems = sqlite.prepare("SELECT * FROM competency_assessment_items WHERE assessment_id = ?").all(assessmentId) as any[];
       // Whitelisted DATA columns only (server/competencySelfEntry.ts). A row off this record or already signed refuses the save.
@@ -25236,7 +25238,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // employeeId and the staffEmployeeId shim path. Surface usage so we
     // can confirm zero remaining callers before drop.
     console.warn(`[deprecated] POST /api/competency/assessments called by userId=${req.user?.userId ?? "unknown"} (Phase B3 cutover pending)`);
-    const { programId, employeeId, assessmentType, assessmentDate, evaluatorName, evaluatorTitle, evaluatorInitials, competencyType, status, remediationPlan, employeeAcknowledged, supervisorAcknowledged, items } = req.body;
+    const { programId, employeeId, assessmentType, assessmentDate, evaluatorName, evaluatorTitle, evaluatorInitials, status, remediationPlan, employeeAcknowledged, supervisorAcknowledged, items } = req.body;
     // Verify program and employee belong to user
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const program = userCanAccessLabRow('competency_programs', programId, req);
@@ -25267,7 +25269,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const result = (db as any).$client.prepare(
       `INSERT INTO competency_assessments (program_id, employee_id, assessment_type, assessment_date, evaluator_name, evaluator_title, evaluator_initials, competency_type, status, remediation_plan, employee_acknowledged, supervisor_acknowledged, review_period_start, review_period_end, folder, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(programId, employeeId, assessmentType || "initial", aDate, evaluatorName || null, evaluatorTitle || null, evaluatorInitials || null, competencyType || "technical", status || "pass", remediationPlan || null, employeeAcknowledged ? 1 : 0, supervisorAcknowledged ? 1 : 0, finalReviewStart, finalReviewEnd, folderClean, now);
+    ).run(programId, employeeId, assessmentType || "initial", aDate, evaluatorName || null, evaluatorTitle || null, evaluatorInitials || null, (program as any).type, status || "pass", remediationPlan || null, employeeAcknowledged ? 1 : 0, supervisorAcknowledged ? 1 : 0, finalReviewStart, finalReviewEnd, folderClean, now);
     const assessmentId = Number(result.lastInsertRowid);
 
     // Insert assessment items (with new element-specific columns)
@@ -25544,12 +25546,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       after: { locked: 1, completion_date: now, final_signed_by_user_id: req.userId, signed_on_paper_date: signedOnPaper, prior_approval_note: priorNote },
       ipAddress: req.ip,
     });
-    // Michael Q19 = 1: a passed initial signed here also clears the person in VeritaStaff when their record is empty.
+    // Michael Q19 = 1: a passed initial signed here also clears the person in VeritaStaff when their record is empty. Never from a non-technical record.
     try {
       const a = (db as any).$client.prepare(
         `SELECT a.assessment_type, a.status, ce.staff_employee_id FROM competency_assessments a JOIN competency_employees ce ON ce.id = a.employee_id WHERE a.id = ?`
       ).get(req.params.id) as any;
-      if (a && a.assessment_type === "initial" && a.status === "pass" && a.staff_employee_id) {
+      if (a && a.assessment_type === "initial" && a.status === "pass" && a.staff_employee_id && programCanClearForTesting(assessment.program_type)) {
         const who = (db as any).$client.prepare("SELECT name FROM users WHERE id = ?").get(req.userId) as any;
         syncInitialToStaffSchedule((db as any).$client, a.staff_employee_id, { date: signedOnPaper || todayDate, signedBy: who?.name || null, source: "VeritaComp record" }, { actorUserId: req.userId, ip: req.ip });
       }
@@ -25609,7 +25611,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
     // folder added 2026-06-05 PR A (customer-blockers wave item #1): see legacy
     // POST above for rationale; identical behavior here.
-    const { programId, employeeId, assessmentType, assessmentDate, evaluatorName, evaluatorTitle, evaluatorInitials, competencyType, status, remediationPlan, employeeAcknowledged, supervisorAcknowledged, reviewPeriodStart, reviewPeriodEnd, folder, items } = req.body;
+    const { programId, employeeId, assessmentType, assessmentDate, evaluatorName, evaluatorTitle, evaluatorInitials, status, remediationPlan, employeeAcknowledged, supervisorAcknowledged, reviewPeriodStart, reviewPeriodEnd, folder, items } = req.body;
     const labId = req.scope.labId;
     const program = (db as any).$client.prepare(
       "SELECT * FROM competency_programs WHERE id = ? AND lab_id = ?"
@@ -25688,7 +25690,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const result = (db as any).$client.prepare(
       `INSERT INTO competency_assessments (program_id, employee_id, assessment_type, assessment_date, evaluator_name, evaluator_title, evaluator_initials, competency_type, status, remediation_plan, employee_acknowledged, supervisor_acknowledged, review_period_start, review_period_end, folder, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(programId, resolvedEmployeeId, assessmentType || "initial", aDate, evaluatorName || null, evaluatorTitle || null, evaluatorInitials || null, competencyType || "technical", status || "pass", remediationPlan || null, employeeAcknowledged ? 1 : 0, supervisorAcknowledged ? 1 : 0, finalReviewStart, finalReviewEnd, folderClean, now);
+    ).run(programId, resolvedEmployeeId, assessmentType || "initial", aDate, evaluatorName || null, evaluatorTitle || null, evaluatorInitials || null, (program as any).type, status || "pass", remediationPlan || null, employeeAcknowledged ? 1 : 0, supervisorAcknowledged ? 1 : 0, finalReviewStart, finalReviewEnd, folderClean, now);
     const assessmentId = Number(result.lastInsertRowid);
     if (Array.isArray(items)) {
       const stmt = (db as any).$client.prepare(
@@ -25908,7 +25910,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
     const sqlite = (db as any).$client;
     const assessment = sqlite.prepare(
-      `SELECT a.id, a.locked, a.status, a.competency_type, p.type AS program_type, p.lab_id FROM competency_assessments a
+      `SELECT a.id, a.locked, a.status, p.type AS program_type, p.lab_id FROM competency_assessments a
        JOIN competency_programs p ON a.program_id = p.id
        WHERE a.id = ? AND p.lab_id = ?`
     ).get(req.params.id, req.scope.labId) as any;
@@ -25917,7 +25919,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // Completeness gate (2026-09-27): a technical competency may not be signed
     // as complete until every element for every covered test has data or N/A.
     // Server-side mirror of the client rule so an API caller cannot bypass it.
-    if (assessment.competency_type === "technical") {
+    // By the program's type: an older Bulk Import or Cohort row holds 'technical' on a non-technical program, and once unlocked it could never be signed again.
+    if (assessment.program_type === "technical") {
       // NYS-CLEP labs require 8 elements (adds El7/El8, 10 NYCRR 58-1.2(d)); CLIA = 6.
       const labRegime = sqlite.prepare("SELECT primary_regime FROM labs WHERE id = ?").get(req.scope.labId) as any;
       const elementCount = (labRegime?.primary_regime === "NYS-CLEP") ? 8 : 6;
@@ -25963,12 +25966,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       after: { locked: 1, completion_date: now, final_signed_by_user_id: req.userId, signed_on_paper_date: signedOnPaper, prior_approval_note: priorNote },
       ipAddress: req.ip,
     });
-    // Michael Q19 = 1: a passed initial signed here also clears the person in VeritaStaff when their record is empty.
+    // Michael Q19 = 1: a passed initial signed here also clears the person in VeritaStaff when their record is empty. Never from a non-technical record.
     try {
       const a = sqlite.prepare(
         `SELECT a.assessment_type, a.status, ce.staff_employee_id FROM competency_assessments a JOIN competency_employees ce ON ce.id = a.employee_id WHERE a.id = ?`
       ).get(req.params.id) as any;
-      if (a && a.assessment_type === "initial" && a.status === "pass" && a.staff_employee_id) {
+      if (a && a.assessment_type === "initial" && a.status === "pass" && a.staff_employee_id && programCanClearForTesting(assessment.program_type)) {
         const who = sqlite.prepare("SELECT name FROM users WHERE id = ?").get(req.userId) as any;
         syncInitialToStaffSchedule(sqlite, a.staff_employee_id, { date: signedOnPaper || todayDate, signedBy: who?.name || null, source: "VeritaComp record" }, { actorUserId: req.userId, ip: req.ip });
       }
@@ -28963,10 +28966,14 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // dated >= detected_at exists for the same employee. The match is
     // intentionally per-employee not per-instrument: a single
     // duty-change assessment covers all duty changes in the window.
+    // A technical or waived record only: an open event is a person added to an analyzer, and the non-technical form offers Duty Change too
+    // (shared/competencyClearance.ts). An event already closed stays closed.
     const matchStmt = client.prepare(
       `SELECT a.id, a.assessment_date FROM competency_assessments a
        JOIN competency_employees ce ON a.employee_id = ce.id
+       JOIN competency_programs p ON p.id = a.program_id
        WHERE ce.staff_employee_id = ?
+         AND p.type IN ('technical', 'waived')
          AND a.assessment_type = 'duty_change'
          AND date(a.assessment_date) >= date(?)
        ORDER BY a.assessment_date ASC
@@ -31325,7 +31332,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         };
         // Michael Q12 = 1: what the import will do to each person's VeritaStaff schedule (read-only here).
         const { applyImportedSchedules, summarizeScheduleResults } = await import("./competencyImportSchedule");
-        const schedules = summarizeScheduleResults(applyImportedSchedules((db as any).$client, importedByStaffEmployee(validated.filter((v) => v.status !== "error")), { dryRun: true, labId }));
+        const schedules = summarizeScheduleResults(applyImportedSchedules((db as any).$client, importedByStaffEmployee(validated.filter((v) => v.status !== "error"), ctx.programs), { dryRun: true, labId }));
         res.json({ rows: validated, summary, schedules });
       } catch (err: any) {
         console.error("[competency/bulk-preview] error:", err);
@@ -31393,16 +31400,16 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
                 (program_id, employee_id, assessment_type, assessment_date, evaluator_name, evaluator_title, evaluator_initials,
                  competency_type, status, remediation_plan, employee_acknowledged, supervisor_acknowledged, created_at,
                  locked, completion_date, final_signed_by_user_id)
-               VALUES (?, ?, ?, ?, ?, '', '', 'technical', ?, '', 0, 0, ?, 1, ?, ?)`
+               VALUES (?, ?, ?, ?, ?, '', '', ?, ?, '', 0, 0, ?, 1, ?, ?)`
             ).run(
               r.resolvedProgramId, empId, r.parsed.assessmentType, r.parsed.assessmentDate,
-              r.parsed.evaluatorName || "", r.parsed.status, now, r.parsed.assessmentDate, req.userId
+              r.parsed.evaluatorName || "", ctx.programs.find((p) => p.id === r.resolvedProgramId)?.type, r.parsed.status, now, r.parsed.assessmentDate, req.userId
             );
             results.push({ rowNumber: r.rowNumber, assessmentId: Number(insA.lastInsertRowid) });
           }
           // Michael Q12 = 1: people moved over with passed competencies count as cleared, with their schedule
           // running from the latest one (server/competencyImportSchedule.ts). Same transaction as the rows.
-          scheduleResults = applyImportedSchedules(sqlite, importedByStaffEmployee(validated), { dryRun: false, labId });
+          scheduleResults = applyImportedSchedules(sqlite, importedByStaffEmployee(validated, ctx.programs), { dryRun: false, labId });
         });
         tx();
 
@@ -31438,11 +31445,14 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     }
   );
 
-  // The import's rows grouped by the VeritaStaff person they belong to (rows with no staff link have no schedule).
-  function importedByStaffEmployee(rows: Array<{ resolvedStaffEmployeeId: number | null; parsed: { assessmentType: string; assessmentDate: string; status: string; evaluatorName: string } }>) {
+  // The import's rows grouped by the VeritaStaff person they belong to (rows with no staff link have no schedule). Only a technical or
+  // waived program's rows: a non-technical record is loaded and stays on its program, and doesn't clear anyone for patient testing or start
+  // a technical clock (shared/competencyClearance.ts).
+  function importedByStaffEmployee(rows: Array<{ resolvedStaffEmployeeId: number | null; resolvedProgramId: number | null; parsed: { assessmentType: string; assessmentDate: string; status: string; evaluatorName: string } }>, programs: Array<{ id: number; type?: string | null }>) {
     const by = new Map<number, Array<{ assessmentType: string; assessmentDate: string; status: string; evaluatorName: string }>>();
     for (const r of rows) {
       if (r.resolvedStaffEmployeeId == null) continue;
+      if (!programCanClearForTesting(programs.find((p) => p.id === r.resolvedProgramId)?.type)) continue;
       if (!by.has(r.resolvedStaffEmployeeId)) by.set(r.resolvedStaffEmployeeId, []);
       by.get(r.resolvedStaffEmployeeId)!.push({ assessmentType: r.parsed.assessmentType, assessmentDate: r.parsed.assessmentDate, status: r.parsed.status, evaluatorName: r.parsed.evaluatorName });
     }
@@ -31564,10 +31574,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
                 (program_id, employee_id, assessment_type, assessment_date, evaluator_name, evaluator_title, evaluator_initials,
                  competency_type, status, remediation_plan, employee_acknowledged, supervisor_acknowledged, created_at,
                  locked, completion_date, final_signed_by_user_id)
-               VALUES (?, ?, ?, ?, ?, '', '', 'technical', ?, '', 0, 0, ?, 1, ?, ?)`
+               VALUES (?, ?, ?, ?, ?, '', '', ?, ?, '', 0, 0, ?, 1, ?, ?)`
             ).run(
               input.programId, r.employeeId, input.assessmentType, input.assessmentDate,
-              input.evaluatorName.trim(), input.status, now, input.assessmentDate, req.userId
+              input.evaluatorName.trim(), ctx.programs.find((p) => p.id === input.programId)?.type, input.status, now, input.assessmentDate, req.userId
             );
             insertedIds.push(Number(ins.lastInsertRowid));
           }
@@ -35619,10 +35629,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     ).all() as any[];
     const scheduleOf = sqlite.prepare("SELECT * FROM staff_competency_schedules WHERE employee_id = ?");
     const clocksByLab = new Map<number, Map<number, any[]>>();
+    // A non-technical record isn't evidence a person can test patients, so it doesn't count as a passed competency on file here (shared/competencyClearance.ts).
     const passedOf = sqlite.prepare(
       `SELECT a.assessment_type, a.assessment_date FROM competency_assessments a
          JOIN competency_employees ce ON ce.id = a.employee_id
-        WHERE ce.staff_employee_id = ? AND a.status = 'pass' AND a.locked = 1 AND a.assessment_type <> 'orientation'
+         JOIN competency_programs p ON p.id = a.program_id
+        WHERE ce.staff_employee_id = ? AND p.type IN ('technical', 'waived') AND a.status = 'pass' AND a.locked = 1 AND a.assessment_type <> 'orientation'
         ORDER BY a.assessment_date DESC`
     );
     const labs = new Map<number, any>();
