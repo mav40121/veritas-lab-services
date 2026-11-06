@@ -88,6 +88,7 @@ import { methodSignerOptions, nextMilestoneAfter, milestonesForComplexity, MILES
 import { isManualMethod, groupProblem, suggestGroups, groupKey } from "@shared/competencyGrouping";
 import { cleanEl5Samples, el5Columns, el5SamplesFromRow } from "@shared/competencyEl5Samples";
 import { programHoldsRecordsMessage } from "@shared/competencyProgramDelete";
+import { parseNontechnicalFrequency, nontechnicalFrequencyLabel, nontechnicalDueCounts } from "@shared/competencyNontechnicalFrequency";
 import { applySelfOps, planSelfElements, planSelfRecordRows, planSelfWaivedMethods, selfOpsCount, staffOwnScope, staffSeatEditsAny, staffSelfSeat, type StaffOwnScope } from "./competencySelfEntry";
 import { cleanWaivedSpecimens, waivedSpecimenColumns, waivedSpecimensFromRow, waivedEvidenceText, WAIVED_BLIND_METHOD } from "@shared/competencyWaivedSpecimens";
 import { oneRowKey, sameTestNameOnMap, preferredSameTestName } from "@shared/presetAnalytes";
@@ -246,6 +247,7 @@ import {
   deriveCompetencyStatus, competencyView, labMethodClocks,
   readCompetencyReminderConfig, writeCompetencyReminderConfig, planCompetencyReminders, runCompetencyReminders,
 } from "./competencyReminders";
+import { readNontechnicalFrequency, nontechnicalDueForLab } from "./competencyNontechnicalDue";
 import { deleteMapCascade, mapDeleteBlockers } from "./veritamapDelete";
 import { computeGettingStarted, setGettingStartedCheck, isManualKey } from "./gettingStarted";
 import { HOUSE_FORMATS } from "./veritapolicyHouseFormats";
@@ -30582,6 +30584,44 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       before: { competency_annual_month: before }, after: { competency_annual_month: month }, ipAddress: req.ip,
     });
     res.json({ month, updated });
+  });
+
+  // GET/PUT /api/labs/:labId/competency/nontechnical-frequency and GET .../nontechnical-due : how often non-technical competency comes
+  // due at this site (Michael 2026-11-04, go Q216 = 1, 2026-11-06). 12, 24 or 36 months, or null for not set. Any member may see it. Only
+  // the lab's owner or an admin may change it, so an editor or a Staff seat with edit on VeritaComp can't. Saving writes this one column:
+  // due dates are worked out when read (server/competencyNontechnicalDue.ts), so no record moves and technical timing can't change.
+  app.get("/api/labs/:labId/competency/nontechnical-frequency", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    res.json({ months: readNontechnicalFrequency((db as any).$client, req.scope.labId), canEdit: canManageLabMembers(req.scope) });
+  });
+  app.put("/api/labs/:labId/competency/nontechnical-frequency", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    if (!canManageLabMembers(req.scope)) return res.status(403).json({ error: "Only the lab's owner or an admin can change this.", code: "OWNER_OR_ADMIN_ONLY" });
+    const labId = req.scope.labId;
+    const sqlite = (db as any).$client;
+    const parsed = parseNontechnicalFrequency(req.body?.months);
+    if ("error" in parsed) return res.status(400).json({ error: parsed.error, code: "BAD_FREQUENCY" });
+    const before = readNontechnicalFrequency(sqlite, labId);
+    sqlite.prepare("UPDATE labs SET competency_nontechnical_months = ? WHERE id = ?").run(parsed.months, labId);
+    logAudit({
+      userId: req.userId, ownerUserId: req.scope.lab?.owner_user_id ?? req.userId, module: "veritacomp", action: "update",
+      entityType: "competency_nontechnical_frequency", entityId: String(labId),
+      entityLabel: `Non-technical competency frequency: ${nontechnicalFrequencyLabel(parsed.months)}`,
+      before: { competency_nontechnical_months: before }, after: { competency_nontechnical_months: parsed.months }, ipAddress: req.ip,
+    });
+    const today = labToday(labTimeZoneById(sqlite, labId));
+    res.json({ months: parsed.months, counts: nontechnicalDueCounts(nontechnicalDueForLab(sqlite, labId, today)) });
+  });
+  // Names people, so a Staff login gets only their own rows (Michael Q182 = 1), and one with no roster link gets none.
+  app.get("/api/labs/:labId/competency/nontechnical-due", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const labId = req.scope.labId;
+    const sqlite = (db as any).$client;
+    const today = labToday(labTimeZoneById(sqlite, labId));
+    const own = staffOwnIn(req);
+    const all = nontechnicalDueForLab(sqlite, labId, today);
+    const items = own ? all.filter((i) => own.employeeId != null && i.staffEmployeeId === own.employeeId) : all;
+    res.json({ months: readNontechnicalFrequency(sqlite, labId), today, items, counts: nontechnicalDueCounts(items) });
   });
 
   // Method groups (2026-10-14, Michael Q166/Q168 = 1): the lab's one list of which analyzers share a competency. Every

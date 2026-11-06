@@ -702,6 +702,11 @@ async function main() {
     ).run(OWNER.id, `zork-invite-${stamp}@example.test`, now, `sod-zork-invite-${stamp}`, labId, zorkId);
     const reminderSaved = await call("PUT", `${L}/competency/reminder-config`, { enabled: true, supervisor_recipients: [{ email: `zork-super-${stamp}@example.test`, name: "Zork Quillfeather" }], escalation_recipients: [] }, OWNER.token);
     check("35h. the coworker has documents, CE, a study, a CMS 209 gap, an invite and a place on the reminder list", reminderSaved.s === 200, `${reminderSaved.s}`);
+    // Non-technical due dates name people (Q216 = 1). A real row, so the sweep below has one to leak.
+    sqlite.prepare("INSERT INTO competency_assessments (program_id, employee_id, assessment_type, assessment_date, status, locked, completion_date, created_at) VALUES (?, ?, 'annual', ?, 'pass', 1, ?, ?)").run(ntProg, zorkComp.id, inDays(-30), inDays(-30), now);
+    const ntSet = await call("PUT", `${L}/competency/nontechnical-frequency`, { months: 24 }, OWNER.token);
+    const ntOwner = await call("GET", `${L}/competency/nontechnical-due`, undefined, OWNER.token);
+    check("35i. the coworker has a non-technical due date the owner can read", ntSet.s === 200 && /Quillfeather/.test(JSON.stringify(ntOwner.j)), `${ntSet.s} ${JSON.stringify(ntOwner.j).slice(0, 160)}`);
 
     // ── A sweep of every read, so a door nobody thought of still fails ────────
     const fillPath = (path: string): string | null => {

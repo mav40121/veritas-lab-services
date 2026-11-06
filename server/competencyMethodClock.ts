@@ -149,6 +149,13 @@ export interface ImportedRecord {
   evaluatorName: string | null; evaluatorTitle: string | null; evaluatorInitials: string | null;
   historyId?: number;                  // competency_method_history: a past date loaded through Bulk Import, which can be taken back
 }
+// The date a signed record counts from: the paper date when it was signed back-dated, else its completion, else its assessment date.
+// A date-only value is already the lab's calendar day; a timestamp is converted to it (BUG-047).
+export function signedRecordDate(r: { signed_on_paper_date?: string | null; completion_date?: string | null; assessment_date?: string | null }, tz?: string): string | null {
+  const done = String(r.completion_date || "");
+  return String(r.signed_on_paper_date || "").slice(0, 10) || (done.length === 10 ? done : done ? labLocalDate(done, false, tz) : "") || r.assessment_date || null;
+}
+
 export function loadImportedHistory(sqlite: any, labId: number, staffEmployeeId?: number): Map<string, ImportedRecord[]> {
   const out = new Map<string, ImportedRecord[]>();
   // Past dates loaded per person and method (Q164 = 1). A group's rows share one negative key, so a group counts once.
@@ -178,9 +185,7 @@ export function loadImportedHistory(sqlite: any, labId: number, staffEmployeeId?
   for (const r of rows) {
     const milestone = LEGACY_MILESTONE[String(r.assessment_type || "")];
     if (!milestone) continue; // orientation, reassessment, duty change: not a clock milestone
-    // A date-only value is already the lab's calendar day; a timestamp is converted to it (BUG-047).
-    const done = String(r.completion_date || "");
-    const signedDate = String(r.signed_on_paper_date || "").slice(0, 10) || (done.length === 10 ? done : done ? labLocalDate(done) : "") || r.assessment_date || null;
+    const signedDate = signedRecordDate(r);
     const rec: ImportedRecord = {
       assessmentId: r.id, milestone, signedDate, programName: r.program_name,
       evaluatorName: r.evaluator_name || null, evaluatorTitle: r.evaluator_title || null, evaluatorInitials: r.evaluator_initials || null,
