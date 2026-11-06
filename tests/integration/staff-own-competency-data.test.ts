@@ -687,10 +687,10 @@ async function main() {
     staffDoc(zorkId, "ce_credit", "ZQ-COURSE", null, 3);
     staffDoc(annId, "license", "Ann own license", inDays(20), null);
     staffDoc(annId, "ce_credit", "Ann own course", null, 2);
-    const studyBy = (analyst: string, testName: string) => sqlite.prepare(
-      `INSERT INTO studies (user_id, test_name, instrument, analyst, date, study_type, clia_allowable_error, data_points, instruments, status, created_at)
-       VALUES (?, ?, 'Made-up Analyzer', ?, ?, 'method_comparison', 0.1, '[]', '[]', 'completed', ?)`
-    ).run(OWNER.id, testName, analyst, day, now);
+    const studyBy = (analyst: string, testName: string, studyLab: number | null = labId, owner: number | null = OWNER.id) => sqlite.prepare(
+      `INSERT INTO studies (user_id, lab_id, test_name, instrument, analyst, date, study_type, clia_allowable_error, data_points, instruments, status, created_at)
+       VALUES (?, ?, ?, 'Made-up Analyzer', ?, ?, 'method_comparison', 0.1, '[]', '[]', 'completed', ?)`
+    ).run(owner, studyLab, testName, analyst, day, now);
     studyBy("Quillfeather, Zork", "ZQ-STUDY");
     studyBy("Self, Ann", "Ann own study");
     const staffLabOf = (emp: number) => Number((sqlite.prepare("SELECT lab_id FROM staff_employees WHERE id = ?").get(emp) as any).lab_id);
@@ -724,9 +724,10 @@ async function main() {
     };
     // Michael Q186 = 1: schedule names stay open, because staff normally see who's working. Nothing else is left alone.
     const LEFT_ALONE = new Set(["/api/labs/:labId/schedule/staff"]);
-    // Not on Michael's Q186 list, so not changed here: it gives anyone in the lab every member's name and email, and the read-only members
-    // screen uses it. Raised with him on the PR. It comes off this list when he decides; a new route never goes on it.
-    const NOT_DECIDED = new Set(["/api/labs/:labId/members"]);
+    // Not on Michael's Q186 list, so not changed here, and raised with him on the PRs. Each comes off this list when he decides; a new route never goes on it.
+    // members gives anyone in the lab every member's name and email, and the read-only members screen uses it. The other three are the lab's VeritaCheck
+    // study lists and coverage, which name the analyst on each study.
+    const NOT_DECIDED = new Set(["/api/labs/:labId/members", "/api/studies", "/api/labs/:labId/studies", "/api/labs/:labId/veritacheck/coverage"]);
     const gets: string[] = [];
     for (const layer of (app as any).router.stack) {
       const r = layer.route;
@@ -1025,6 +1026,26 @@ async function main() {
     const scheduleAnn = await asAnn(`${L}/schedule/staff`);
     const scheduleEditor = await asEditor(`${L}/schedule/staff`);
     check("49. schedule names stay open: a Staff login gets the same list of who's working as an editor (Michael's decision)", scheduleAnn.s === 200 && scheduleAnn.j.length > 1 && text(scheduleAnn) === text(scheduleEditor), text(scheduleAnn).slice(0, 200));
+
+    // ── VeritaCheck studies stay in the URL's lab: they match on the analyst's name, and the same name turns up in other labs ──
+    const sisterLab = Number(sqlite.prepare("INSERT INTO labs (lab_name, owner_user_id, created_at, updated_at) VALUES ('Made-up Sister Lab', ?, ?, ?)").run(OWNER.id, now, now).lastInsertRowid);
+    studyBy("Self, Ann", "CROSS other customer", lab2, OWNER2.id);
+    studyBy("Ann Self", "CROSS sister lab", sisterLab, OWNER.id);
+    studyBy("Self, Ann", "CROSS no lab owner two", null, OWNER2.id);
+    studyBy("Self, Ann", "CROSS no lab no owner", null, null);
+    studyBy("Self, Ann", "NOLAB owner one", null, OWNER.id);
+    const studyNames = (r: { j: any }) => (r.j.studies || []).map((s: any) => s.test_name ?? s.testName).sort().join("|");
+    const studiesOf = (emp: number, labPath = L) => `${labPath}/staff/employees/${emp}/veritacheck-studies`;
+    const ownerReads = await call("GET", studiesOf(annId), undefined, OWNER.token);
+    check("50a. owner: this lab's study and their own no-lab study, nothing from another customer or their sister lab", ownerReads.s === 200 && studyNames(ownerReads) === "Ann own study|NOLAB owner one" && ownerReads.j.counts?.total === 2, `${ownerReads.s} ${studyNames(ownerReads)} ${ownerReads.j.counts?.total}`);
+    const editorReads = await asEditor(studiesOf(annId));
+    check("50b. editor: this lab's study only", editorReads.s === 200 && studyNames(editorReads) === "Ann own study" && editorReads.j.counts?.total === 1, `${editorReads.s} ${studyNames(editorReads)}`);
+    const annReads = await asAnn(studiesOf(annId));
+    check("50c. a Staff login's own read: this lab's study only", annReads.s === 200 && studyNames(annReads) === "Ann own study" && annReads.j.counts?.total === 1, `${annReads.s} ${studyNames(annReads)}`);
+    const otherOwnerReads = await call("GET", studiesOf(annLab2, L2), undefined, OWNER2.token);
+    check("50d. the other customer's owner: their lab's study and their own no-lab study, none of the first lab's", otherOwnerReads.s === 200 && studyNames(otherOwnerReads) === "CROSS no lab owner two|CROSS other customer" && otherOwnerReads.j.counts?.total === 2, `${otherOwnerReads.s} ${studyNames(otherOwnerReads)}`);
+    const annInLab2 = await asAnn(studiesOf(annLab2, L2));
+    check("50e. the same person's Staff seat in the other lab: that lab's study only", annInLab2.s === 200 && studyNames(annInLab2) === "CROSS other customer", `${annInLab2.s} ${studyNames(annInLab2)}`);
   } finally {
     server.close();
   }
