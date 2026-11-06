@@ -89,8 +89,8 @@ for (const file of ROUTE_FILES) {
     const parent = m[1];
     const children = parentToChildren.get(parent);
     if (!children || children.size === 0) continue;
-    // Window: 25 lines above the parent delete (handlers clear children first).
-    const start = Math.max(0, i - 25);
+    // Window: 30 lines above the parent delete (handlers clear children first). 25 until purge-orphan-lab's list grew past it (tissue tables, 2026-11-06).
+    const start = Math.max(0, i - 30);
     const window = srcLines.slice(start, i + 2).join("\n");
     const missing = [];
     for (const child of children) {

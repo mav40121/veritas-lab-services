@@ -9985,6 +9985,11 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         "SELECT id FROM stock_vendors WHERE id = ? AND lab_id = ?"
       ).get(Number(req.params.id), labId);
       if (!existing) return res.status(404).json({ error: "Vendor not found in this lab" });
+      // A tissue record names its supplier through this row, so a supplier in use stays (server/tissue.ts).
+      const tissueUse = sqlite.prepare(
+        "SELECT (SELECT COUNT(*) FROM tissue_catalog WHERE vendor_id = ? AND lab_id = ?) + (SELECT COUNT(*) FROM tissue_units WHERE vendor_id = ? AND lab_id = ?) AS n"
+      ).get(Number(req.params.id), labId, Number(req.params.id), labId) as { n: number };
+      if (tissueUse.n > 0) return res.status(409).json({ error: "This vendor supplies tissue on your catalog or tissue log, so it can't be deleted.", code: "VENDOR_HOLDS_TISSUE" });
       sqlite.prepare("DELETE FROM stock_vendor_contacts WHERE vendor_id = ? AND lab_id = ?").run(Number(req.params.id), labId);
       sqlite.prepare("DELETE FROM stock_vendors WHERE id = ? AND lab_id = ?").run(Number(req.params.id), labId);
       res.json({ ok: true });
@@ -36363,6 +36368,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       sqlite.prepare("DELETE FROM stock_recall_documents WHERE recall_id IN (SELECT id FROM stock_recalls WHERE lab_id = ?)").run(id);
       sqlite.prepare("DELETE FROM stock_recalls WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM stock_recall_recipients WHERE lab_id = ?").run(id);
+      sqlite.prepare("DELETE FROM tissue_unit_events WHERE lab_id = ?").run(id);
+      sqlite.prepare("DELETE FROM tissue_units WHERE lab_id = ?").run(id);
+      sqlite.prepare("DELETE FROM tissue_catalog WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM staff_duty_change_events WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM staff_position_descriptions WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM policy_quiz_questions WHERE lab_id = ?").run(id);
@@ -44302,6 +44310,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // VeritaStock recall tracker (/api/labs/:labId/veritastock/recalls/*)
   const { registerStockRecallRoutes } = await import('./stockRecalls');
   registerStockRecallRoutes(app, authMiddleware, requireWriteAccess, requireModuleEdit);
+
+  // VeritaStock tissue sub-module (/api/labs/:labId/veritastock/tissue/*; Heywood, REQ-106, no PHI). 404 on veritastock.com.
+  const { registerTissueRoutes } = await import('./tissue');
+  registerTissueRoutes(app, authMiddleware, requireWriteAccess, requireModuleEdit, ADMIN_SECRET);
 
   // VeritaMaintain temperature logs (/api/labs/:labId/temp-logs/*; St. Charles REQ-068)
   const { registerTemperatureLogRoutes } = await import('./temperatureLogs');

@@ -137,6 +137,7 @@ const VeritaStockPage = lazy(() => import("@/pages/VeritaStockPage"));
 const VeritaStockTrendsPage = lazy(() => import("@/pages/VeritaStockTrendsPage"));
 const VeritaStockVendorsPage = lazy(() => import("@/pages/VeritaStockVendorsPage"));
 const VeritaStockRecallsPage = lazy(() => import("@/pages/VeritaStockRecallsPage"));
+const VeritaStockTissuePage = lazy(() => import("@/pages/VeritaStockTissuePage"));
 const VeritaStockSnapOrderPage = lazy(() => import("@/pages/VeritaStockSnapOrderPage"));
 const VeritaShiftSchedulerPage = lazy(() => import("@/pages/VeritaShiftSchedulerPage"));
 const VeritaStockReceivingPage = lazy(() => import("@/pages/VeritaStockReceivingPage"));
@@ -371,7 +372,8 @@ function AppContent() {
       p.startsWith("/login") || p.startsWith("/reset-password") || p.startsWith("/join") || p.startsWith("/verify-email") ||
       p.startsWith("/inventory") || p.startsWith("/account") || p.startsWith("/veritastock") ||
       /^\/labs\/\d+\/(veritastock|members|account)/.test(p);
-    if (!allowed) setLocation("/");
+    // Tissue tracking is for labs, inside VeritaAssure only: never on veritastock.com.
+    if (!allowed || /^\/labs\/\d+\/veritastock\/tissue/.test(p)) setLocation("/");
   }, [location, setLocation]);
 
   // Standalone admin page: no NavBar, no footer, no subscription banners
@@ -619,6 +621,7 @@ function AppContent() {
           <Route path="/labs/:labId/veritastock/enterprise" component={VeritaStockEnterprisePage} />
           <Route path="/labs/:labId/veritastock/vendors" component={VeritaStockVendorsPage} />
           <Route path="/labs/:labId/veritastock/recalls" component={VeritaStockRecallsPage} />
+          <Route path="/labs/:labId/veritastock/tissue" component={VeritaStockTissuePage} />
           <Route path="/labs/:labId/veritaops-app" component={StaffGatedOps} />
           <Route path="/labs/:labId/veritabench/scheduler" component={VeritaShiftSchedulerPage} />
           <Route path="/labs/:labId/veritabench/staffing" component={StaffGatedShift} />

@@ -163,6 +163,10 @@ jobs:
       - name: Run manual method groups integration test
         # Michael 2026-11-04: manual tests can be grouped with each other, one complexity, never with an analyzer (BUG-043 protection).
         run: npm run test:manual-method-groups
+      - name: Run VeritaStock tissue integration test
+        # Heywood, REQ-106, Michael Q152 = 1: no patient field anywhere, PHI refused on every write, expired or a read-back that isn't yes can't be issued, exactly one
+        # final disposition, lookup and recall by tissue ID, the log workbook, the admin catalog load (dry run by default), and 404 on veritastock.com.
+        run: npm run test:veritastock-tissue
       - name: Run quiz follows method group integration test
         # REQ-131: an analyzer grouped on the Method groups tab shows on the quiz form and card. Nothing is stored: program rows, quizzes and what a program
         # credits stay the same. The Element 6 picker's old matches still win, and a group only fills in where it found nothing.

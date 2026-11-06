@@ -6457,6 +6457,131 @@ try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_stock_recall_events_recall ON 
   }
 }
 
+// VeritaStock tissue sub-module (Heywood, parking lot #105, REQ-106; Michael Q152 = 1: NO PHI). One row per graft, keyed on
+// the supplier's distinct identification code. inventory_lots holds quantities and is deleted at zero, so a graft can't live
+// there. There is no recipient column on any of these tables, on purpose: the patient link stays in the hospital's chart.
+//   tissue_catalog      the lab's own list of tissue types and suppliers. vendor_id is a stock_vendors row.
+//   tissue_units        one per graft. tissue_type and supplier_name are what was on the record the day it was received.
+//   tissue_unit_events  append-only history: who, when and the yes/no checks of every step.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS tissue_catalog (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    tissue_type TEXT NOT NULL,
+    vendor_id INTEGER NOT NULL,
+    active INTEGER NOT NULL DEFAULT 1,
+    created_by INTEGER,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (lab_id) REFERENCES labs(id),
+    UNIQUE (lab_id, tissue_type COLLATE NOCASE, vendor_id)
+  );
+  CREATE TABLE IF NOT EXISTS tissue_units (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    catalog_id INTEGER NOT NULL,
+    vendor_id INTEGER NOT NULL,
+    tissue_type TEXT NOT NULL,
+    supplier_name TEXT NOT NULL,
+    source_id TEXT NOT NULL,
+    source_id_key TEXT NOT NULL,
+    quantity_or_size TEXT,
+    expiration_date TEXT NOT NULL,
+    state TEXT NOT NULL DEFAULT 'received_mm',
+    received_mm_date TEXT,
+    received_mm_time TEXT,
+    received_mm_by TEXT,
+    received_bb_date TEXT,
+    received_bb_time TEXT,
+    received_bb_by TEXT,
+    transport_temp_ok INTEGER,
+    transport_action TEXT,
+    package_ok INTEGER,
+    storage_unit_id INTEGER,
+    storage_location TEXT,
+    issued_date TEXT,
+    issued_time TEXT,
+    requesting_physician TEXT,
+    issued_to TEXT,
+    issued_by_tech TEXT,
+    delivered_to TEXT,
+    readback_id_ok INTEGER,
+    readback_expiration_ok INTEGER,
+    readback_integrity_ok INTEGER,
+    implanted_date TEXT,
+    implanted_time TEXT,
+    implanted_by TEXT,
+    reconstituted_time TEXT,
+    reconstituted_by TEXT,
+    reconstitution_solution TEXT,
+    reconstitution_lot TEXT,
+    reconstitution_expiration TEXT,
+    usage_card_returned INTEGER,
+    usage_card_returned_on TEXT,
+    disposition_date TEXT,
+    disposition_time TEXT,
+    disposition_description TEXT,
+    disposition_by TEXT,
+    notes TEXT,
+    created_by INTEGER,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (lab_id) REFERENCES labs(id),
+    UNIQUE (lab_id, vendor_id, source_id_key)
+  );
+  CREATE TABLE IF NOT EXISTS tissue_unit_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    unit_id INTEGER NOT NULL,
+    lab_id INTEGER NOT NULL,
+    event_type TEXT NOT NULL,
+    event_date TEXT,
+    event_time TEXT,
+    performed_by TEXT,
+    checks_json TEXT,
+    detail_json TEXT,
+    recorded_by_user_id INTEGER,
+    recorded_by_name TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (unit_id) REFERENCES tissue_units(id),
+    FOREIGN KEY (lab_id) REFERENCES labs(id)
+  );
+`);
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_tissue_catalog_lab ON tissue_catalog(lab_id, active)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_tissue_units_lab ON tissue_units(lab_id, state)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_tissue_units_key ON tissue_units(source_id_key)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_tissue_unit_events_unit ON tissue_unit_events(unit_id)`); } catch {}
+// ALTER TABLE migrations (NEW DB TABLE RULE, PRAGMA table_info pattern): an older live copy gets any missing column.
+{
+  const addMissing = (have: { name: string }[], alter: (col: string, type: string) => string, need: Array<[string, string]>) => {
+    if (have.length === 0) return;
+    const names = have.map((c) => c.name);
+    for (const [c, t] of need) {
+      if (!names.includes(c)) {
+        try { sqlite.exec(alter(c, t)); } catch {}
+      }
+    }
+  };
+  addMissing(sqlite.prepare("PRAGMA table_info(tissue_catalog)").all() as { name: string }[], (c, t) => `ALTER TABLE tissue_catalog ADD COLUMN ${c} ${t}`,
+    [["active", "INTEGER NOT NULL DEFAULT 1"], ["created_by", "INTEGER"], ["updated_at", "TEXT"]]);
+  addMissing(sqlite.prepare("PRAGMA table_info(tissue_units)").all() as { name: string }[], (c, t) => `ALTER TABLE tissue_units ADD COLUMN ${c} ${t}`,
+    [
+      ["quantity_or_size", "TEXT"], ["state", "TEXT NOT NULL DEFAULT 'received_mm'"],
+      ["received_mm_date", "TEXT"], ["received_mm_time", "TEXT"], ["received_mm_by", "TEXT"],
+      ["received_bb_date", "TEXT"], ["received_bb_time", "TEXT"], ["received_bb_by", "TEXT"],
+      ["transport_temp_ok", "INTEGER"], ["transport_action", "TEXT"], ["package_ok", "INTEGER"],
+      ["storage_unit_id", "INTEGER"], ["storage_location", "TEXT"],
+      ["issued_date", "TEXT"], ["issued_time", "TEXT"], ["requesting_physician", "TEXT"], ["issued_to", "TEXT"], ["issued_by_tech", "TEXT"], ["delivered_to", "TEXT"],
+      ["readback_id_ok", "INTEGER"], ["readback_expiration_ok", "INTEGER"], ["readback_integrity_ok", "INTEGER"],
+      ["implanted_date", "TEXT"], ["implanted_time", "TEXT"], ["implanted_by", "TEXT"],
+      ["reconstituted_time", "TEXT"], ["reconstituted_by", "TEXT"], ["reconstitution_solution", "TEXT"], ["reconstitution_lot", "TEXT"], ["reconstitution_expiration", "TEXT"],
+      ["usage_card_returned", "INTEGER"], ["usage_card_returned_on", "TEXT"],
+      ["disposition_date", "TEXT"], ["disposition_time", "TEXT"], ["disposition_description", "TEXT"], ["disposition_by", "TEXT"],
+      ["notes", "TEXT"], ["created_by", "INTEGER"], ["updated_at", "TEXT"],
+    ]);
+  addMissing(sqlite.prepare("PRAGMA table_info(tissue_unit_events)").all() as { name: string }[], (c, t) => `ALTER TABLE tissue_unit_events ADD COLUMN ${c} ${t}`,
+    [["event_date", "TEXT"], ["event_time", "TEXT"], ["performed_by", "TEXT"], ["checks_json", "TEXT"], ["detail_json", "TEXT"], ["recorded_by_user_id", "INTEGER"], ["recorded_by_name", "TEXT"]]);
+}
+
 // parking-lot #29 Phase 0: scan_events audit table. Every barcode scan
 // (whether it changes quantity or not) writes one row so the lab has a
 // complete who/what/when timeline. account_id matches inventory_items.

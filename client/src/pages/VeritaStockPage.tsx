@@ -2155,6 +2155,20 @@ export default function VeritaStockInventoryPage() {
             </Button>
           </Link>
           )}
+          {/* Tissue tracking (server/tissue.ts): for labs inside VeritaAssure, never on veritastock.com. */}
+          {activeLabId && !onStock && (
+          <Link href={`/labs/${activeLabId}/veritastock/tissue`}>
+            <Button
+              size="sm"
+              variant="outline"
+              title="Receive, store, issue and track each tissue unit by its tissue ID"
+              data-testid="tissue-button"
+            >
+              <PackageCheck size={14} className="mr-1.5" />
+              Tissue
+            </Button>
+          </Link>
+          )}
           {/* Receiving: one screen to receive all open POs, scan-to-receive, and
               a receipt history that documents placed vs received dates so the
               facility can verify its programmed lead times. */}

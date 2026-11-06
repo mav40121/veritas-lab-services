@@ -73,7 +73,8 @@ interface RecallCase {
   days_overdue: number;
 }
 interface LotMatch {
-  source: "lot" | "item"; lot_id: number | null; item_id: number; item_name: string; catalog_number: string | null;
+  source: "lot" | "item" | "tissue"; lot_id: number | null; item_id: number; item_name: string; catalog_number: string | null;
+  tissue?: { unit_id: number; state_label: string; implanted_date: string | null; implanted_time: string | null; implanted_by: string | null; delivered_to: string | null };
   item_vendor: string | null; vendor_matches: boolean; lot_number: string; expiration_date: string | null;
   quantity: number; unit: string | null; lab_id: number; lab_name: string; storage_location: string | null;
 }
@@ -527,7 +528,7 @@ function StockCard({ base, c, onDone }: { base: string; c: CaseDetail; onDone: (
   const { toast } = useToast();
   const [qty, setQty] = useState<Record<string, string>>({});
   const [busyKey, setBusyKey] = useState<string | null>(null);
-  const rowKey = (m: LotMatch) => `${m.item_id}:${m.lot_id ?? "item"}`;
+  const rowKey = (m: LotMatch) => `${m.source}:${m.item_id}:${m.lot_id ?? "item"}`;
   const remove = async (m: LotMatch) => {
     const q = Number(qty[rowKey(m)] ?? m.quantity);
     if (!(q > 0)) { toast({ title: "Enter a quantity", variant: "destructive" }); return; }
@@ -556,7 +557,25 @@ function StockCard({ base, c, onDone }: { base: string; c: CaseDetail; onDone: (
                 <tr><th className="py-1.5 pr-3">Location</th><th className="py-1.5 pr-3">Item</th><th className="py-1.5 pr-3">Lot</th><th className="py-1.5 pr-3">Expires</th><th className="py-1.5 pr-3 text-right">On hand</th><th className="py-1.5">Remove</th></tr>
               </thead>
               <tbody>
-                {c.matches.map((m) => (
+                {c.matches.map((m) => m.tissue ? (
+                  // A tissue unit: where it is now, never a quantity to remove. The hospital goes from here to the chart.
+                  <tr key={rowKey(m)} className="border-t align-top" data-testid="recall-tissue-match">
+                    <td className="py-2 pr-3">{m.lab_name}</td>
+                    <td className="py-2 pr-3">
+                      <div>{m.item_name}</div>
+                      <div className="text-xs text-muted-foreground">{m.item_vendor}</div>
+                      {!m.vendor_matches && <Badge variant="outline" className="mt-1 border-amber-500 text-amber-700 dark:text-amber-400">Check vendor</Badge>}
+                    </td>
+                    <td className="py-2 pr-3 whitespace-nowrap">{m.lot_number}</td>
+                    <td className="py-2 pr-3 whitespace-nowrap">{fmtDate(m.expiration_date)}</td>
+                    <td className="py-2 pr-3 text-right">
+                      <div>{m.tissue.state_label}</div>
+                      {m.tissue.implanted_date && <div className="text-xs text-muted-foreground">{[m.tissue.implanted_date, m.tissue.implanted_time].filter(Boolean).join(" ")}, {m.tissue.implanted_by}</div>}
+                      {m.tissue.delivered_to && <div className="text-xs text-muted-foreground">Delivered to {m.tissue.delivered_to}</div>}
+                    </td>
+                    <td className="py-2"><Link href={`/labs/${m.lab_id}/veritastock/tissue?unit=${m.tissue.unit_id}`} className="underline text-sm" data-testid="recall-tissue-open">Open record</Link></td>
+                  </tr>
+                ) : (
                   <tr key={rowKey(m)} className="border-t align-top">
                     <td className="py-2 pr-3"><div>{m.lab_name}</div>{m.storage_location && <div className="text-xs text-muted-foreground">{m.storage_location}</div>}</td>
                     <td className="py-2 pr-3">

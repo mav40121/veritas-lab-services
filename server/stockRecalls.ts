@@ -27,6 +27,7 @@ import {
   daysBetweenYmd, noticeFilename,
 } from "./stockRecallLogic";
 import { labToday, labTimeZoneById, addLabDays } from "./dateLocal";
+import { TISSUE_STATE_LABELS, isOpenOnLog, type TissueState } from "../shared/tissueRules";
 
 // ── Mailer ────────────────────────────────────────────────────────────────
 export interface RecallMail {
@@ -84,8 +85,23 @@ function networkLabs(sqlite: any, req: any): Map<number, string> {
   return map;
 }
 
+export interface TissueMatchState {
+  unit_id: number;
+  state: string;
+  state_label: string;
+  open: boolean;
+  implanted_date: string | null;
+  implanted_time: string | null;
+  implanted_by: string | null;
+  issued_date: string | null;
+  delivered_to: string | null;
+  disposition_date: string | null;
+}
+
 export interface LotMatch {
-  source: "lot" | "item";
+  source: "lot" | "item" | "tissue";
+  /** Tissue only: where the unit is now. A tissue unit is never pulled by quantity; the lab records its disposition on the unit. */
+  tissue?: TissueMatchState;
   lot_id: number | null;
   item_id: number;
   item_name: string;
@@ -105,7 +121,11 @@ export interface LotMatch {
 // the requester's network. Read-only and computed fresh on every case read.
 // Matches are candidates: lot numbers are not unique across vendors, so each
 // row says whether the item's vendor looks like the recall's vendor.
-export function findLotMatches(sqlite: any, labs: Map<number, string>, lotNumbers: string[], recallVendor: string): LotMatch[] {
+//
+// A tissue recall matches a unit's tissue ID (the supplier's distinct identification code, the only "lot" a graft has) in every
+// state, including one already implanted, which is the row that matters most: the hospital goes from it to the chart. tissueLabs
+// is narrower than labs on purpose (see tissueReachLabs): a tissue record names a surgeon, so it follows the sister-lab rule.
+export function findLotMatches(sqlite: any, labs: Map<number, string>, lotNumbers: string[], recallVendor: string, tissueLabs: Map<number, string> = labs): LotMatch[] {
   const keys = new Set(lotNumbers.map(normalizeLot).filter(Boolean));
   if (keys.size === 0 || labs.size === 0) return [];
   const ids = Array.from(labs.keys());
@@ -148,8 +168,39 @@ export function findLotMatches(sqlite: any, labs: Map<number, string>, lotNumber
       lab_id: r.lab_id, lab_name: labs.get(Number(r.lab_id)) || `Location ${r.lab_id}`, storage_location: r.storage_location ?? null,
     });
   }
+  const tissueIds = Array.from(tissueLabs.keys());
+  if (tissueIds.length > 0) {
+    const tissueRows = sqlite.prepare(`SELECT * FROM tissue_units WHERE lab_id IN (${tissueIds.map(() => "?").join(",")})`).all(...tissueIds) as any[];
+    for (const u of tissueRows) {
+      if (!keys.has(normalizeLot(u.source_id))) continue;
+      out.push({
+        source: "tissue", lot_id: null, item_id: u.id, item_name: u.tissue_type, catalog_number: null,
+        item_vendor: u.supplier_name, vendor_matches: vendorMatches(u.supplier_name), lot_number: u.source_id,
+        expiration_date: u.expiration_date ?? null, quantity: 1, unit: u.quantity_or_size ?? null,
+        lab_id: u.lab_id, lab_name: tissueLabs.get(Number(u.lab_id)) || `Location ${u.lab_id}`, storage_location: u.storage_location ?? null,
+        tissue: {
+          unit_id: u.id, state: u.state, state_label: TISSUE_STATE_LABELS[u.state as TissueState] || u.state, open: isOpenOnLog(u.state),
+          implanted_date: u.implanted_date ?? null, implanted_time: u.implanted_time ?? null, implanted_by: u.implanted_by ?? null,
+          issued_date: u.issued_date ?? null, delivered_to: u.delivered_to ?? null, disposition_date: u.disposition_date ?? null,
+        },
+      });
+    }
+  }
   out.sort((a, b) => Number(b.vendor_matches) - Number(a.vendor_matches) || a.lab_name.localeCompare(b.lab_name) || a.item_name.localeCompare(b.item_name));
   return out;
+}
+
+// Labs whose tissue records this person can actually open: labs they own, an active membership, or the case's own lab. Not every
+// lab their owner holds (Michael 2026-11-06, Q191 = 1), which is what networkLabs reaches for a seat matching supplies.
+function tissueReachLabs(sqlite: any, req: any): Map<number, string> {
+  const rows = sqlite.prepare(
+    `SELECT l.id, l.lab_name FROM labs l WHERE l.owner_user_id = ?
+     UNION SELECT l.id, l.lab_name FROM labs l JOIN lab_members m ON m.lab_id = l.id WHERE m.user_id = ? AND m.status = 'active'`
+  ).all(req.userId, req.userId) as any[];
+  const map = new Map<number, string>();
+  for (const l of rows) map.set(Number(l.id), l.lab_name || `Location ${l.id}`);
+  if (req.scope?.labId && !map.has(Number(req.scope.labId))) map.set(Number(req.scope.labId), req.scope.lab?.lab_name || `Location ${req.scope.labId}`);
+  return map;
 }
 
 function lotsOf(row: any): string[] {
@@ -325,7 +376,7 @@ export function registerStockRecallRoutes(
     const documents = sqlite.prepare("SELECT id, kind, original_filename, mime_type, file_size, uploaded_by, uploaded_at FROM stock_recall_documents WHERE recall_id = ? ORDER BY uploaded_at ASC, id ASC").all(row.id) as any[];
     const events = (sqlite.prepare("SELECT id, user_id, action, detail, created_at FROM stock_recall_events WHERE recall_id = ? ORDER BY id ASC").all(row.id) as any[])
       .map((e) => ({ ...e, user_name: userLabel(sqlite, e.user_id).name }));
-    const matches = row.status === "open" ? findLotMatches(sqlite, networkLabs(sqlite, req), lotsOf(row), row.vendor) : [];
+    const matches = row.status === "open" ? findLotMatches(sqlite, networkLabs(sqlite, req), lotsOf(row), row.vendor, tissueReachLabs(sqlite, req)) : [];
     const recipients = sqlite.prepare("SELECT id, name, email, role FROM stock_recall_recipients WHERE lab_id = ? AND active = 1 ORDER BY name COLLATE NOCASE").all(req.scope.labId);
     res.json({
       ...decorate(sqlite, row, today),
@@ -557,9 +608,11 @@ export function registerStockRecallRoutes(
     ].filter(Boolean) as string[];
     let subject: string; let text: string; let attachments: { filename: string; content: Buffer }[] = [];
     if (stage === "intake") {
-      const matches = findLotMatches(sqlite, networkLabs(sqlite, req), lots, row.vendor);
+      const matches = findLotMatches(sqlite, networkLabs(sqlite, req), lots, row.vendor, tissueReachLabs(sqlite, req));
       const stockLines = matches.length
-        ? matches.map((m) => `- ${m.item_name}, lot ${m.lot_number}: ${m.quantity} ${m.unit || ""} at ${m.lab_name}${m.storage_location ? ` (${m.storage_location})` : ""}${m.vendor_matches ? "" : " [check vendor]"}`.replace(/\s+\]/, "]"))
+        ? matches.map((m) => m.tissue
+          ? `- ${m.item_name}, tissue ID ${m.lot_number}: ${m.tissue.state_label}${m.tissue.implanted_date ? ` ${m.tissue.implanted_date} by ${m.tissue.implanted_by}` : ""} at ${m.lab_name}${m.vendor_matches ? "" : " [check vendor]"}`
+          : `- ${m.item_name}, lot ${m.lot_number}: ${m.quantity} ${m.unit || ""} at ${m.lab_name}${m.storage_location ? ` (${m.storage_location})` : ""}${m.vendor_matches ? "" : " [check vendor]"}`.replace(/\s+\]/, "]"))
         : ["No stock with these lot numbers is on hand."];
       const docs = sqlite.prepare("SELECT original_filename, file_size, file_data FROM stock_recall_documents WHERE recall_id = ? AND kind = 'notice' ORDER BY id").all(row.id) as any[];
       let total = 0;
