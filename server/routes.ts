@@ -59,7 +59,7 @@ import { normalizeLineItems, computeOrgInvoice, laterExpiry, orgSubscriptionExpi
 import { renderMonthlyReviewPDF, type MonthlyReviewPayload, type MonthlyReviewResult } from "./pdfQCMonthly";
 import { buildMonthlyReviewPayload } from "./qcMonthlyReviewPayload";
 import { applyLicenseToExcelJS } from "./licenseStamp";
-import { resolveLegacyLabId as sharedResolveLegacyLabId } from "./labAccessGuard";
+import { resolveLegacyLabId as sharedResolveLegacyLabId, ownerMatchCounts, ownerRowInReach, isOlderSeatDate } from "./labAccessGuard";
 import { legacySeatForUser, seatForRequest } from "./seatContext";
 import { checkAuthToken, verifySessionJwt, issueSession, endSessions, touchSession, issuePurposeToken, verifyPurposeToken, describeDevice, clientIp } from "./sessionAuth";
 import { passwordProblem } from "@shared/passwordRule";
@@ -1354,14 +1354,16 @@ function resolveLabForUser(userId: number): any | null {
   }
   // Seat user with no direct membership: fall back to the seat owner's home lab.
   // Owners never resolve to another owner's seat here (#82).
-  const seatRow = legacySeatForUser(sqlite, userId) as any;
+  const seatRow = legacySeatForUser(sqlite, userId, "owner_user_id, lab_id") as any;
   if (seatRow) {
     const ownerRow = sqlite.prepare(
       "SELECT lab_id FROM users WHERE id = ?"
     ).get(seatRow.owner_user_id) as any;
-    if (ownerRow?.lab_id) {
+    // Q191: the owner's home lab only where the owner match still counts for it; a newer seat lands on its own lab.
+    if (ownerRow?.lab_id && ownerMatchCounts(sqlite, userId, seatRow.owner_user_id, ownerRow.lab_id)) {
       return sqlite.prepare("SELECT * FROM labs WHERE id = ?").get(ownerRow.lab_id);
     }
+    if (seatRow.lab_id) return sqlite.prepare("SELECT * FROM labs WHERE id = ?").get(seatRow.lab_id);
   }
   return null;
 }
@@ -1450,7 +1452,8 @@ function resolveActiveLabForRequestInner(userId: number, req: any): any | null {
              UNION
              SELECT 1 AS ok FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active'`
           ).get(requested, seatOwner.owner_user_id, requested, seatOwner.owner_user_id) as any;
-          if (seatMem) {
+          // Q191: naming a sister lab in the header doesn't get a seat in. Same rule as the row helpers (server/labAccessGuard.ts).
+          if (seatMem && ownerMatchCounts((db as any).$client, userId, seatOwner.owner_user_id, requested)) {
             return (db as any).$client.prepare("SELECT * FROM labs WHERE id = ?").get(requested);
           }
         }
@@ -1560,7 +1563,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         AND NOT EXISTS (SELECT 1 FROM lab_members lm WHERE lm.user_id = us.seat_user_id AND lm.lab_id = us.lab_id AND lm.status = 'active')
        GROUP BY us.seat_type`
     ).all() as Array<{ seat_type: string; n: number; no_lab: number; no_user: number }>;
+    // Michael Q191 = 1: the active seats still under the older rule in server/labAccessGuard.ts, so nobody has to read seat rows to check.
+    const olderSeats = (sqlite.prepare(
+      `SELECT us.lab_id AS lab_id, COALESCE(us.accepted_at, us.invited_at) AS since,
+              EXISTS (SELECT 1 FROM lab_members lm WHERE lm.user_id = us.seat_user_id AND lm.status = 'active') AS has_membership
+       FROM user_seats us
+       WHERE us.status = 'active' AND us.seat_user_id IS NOT NULL`
+    ).all() as Array<{ lab_id: number | null; since: string | null; has_membership: number }>).filter((s) => isOlderSeatDate(s.since));
     res.json({
+      olderSeatsKeepingOwnerReach: {
+        withNoLab: olderSeats.filter((s) => s.lab_id == null).length,
+        holderHasNoMembership: olderSeats.filter((s) => s.lab_id != null && !s.has_membership).length,
+      },
       studiesWithNoOwner: noOwner.n,
       activeSeatsWithNoActiveMembership: {
         total: seats.reduce((sum, s) => sum + s.n, 0),
@@ -12516,6 +12530,11 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         if (effectiveUserId !== study.userId) {
           return res.status(403).json({ error: "Access denied" });
         }
+        // Q191: a seat's reach stops at its own lab. The study's lab isn't on the Drizzle row, so read it here.
+        const studyLab = (db as any).$client.prepare("SELECT lab_id FROM studies WHERE id = ?").get(study.id) as any;
+        if (!ownerRowInReach((db as any).$client, payload.userId, effectiveUserId, studyLab?.lab_id)) {
+          return res.status(403).json({ error: "Access denied" });
+        }
       } catch {
         return res.status(403).json({ error: "Invalid or expired session" });
       }
@@ -12844,12 +12863,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
   app.delete("/api/studies/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritacheck'), (req: any, res) => {
     const studyId = parseInt(req.params.id);
-    const delStudy = (db as any).$client.prepare("SELECT id, user_id, test_name, study_type, analyst, date FROM studies WHERE id = ?").get(studyId) as any;
+    const delStudy = (db as any).$client.prepare("SELECT id, user_id, lab_id, test_name, study_type, analyst, date FROM studies WHERE id = ?").get(studyId) as any;
     if (!delStudy) return res.status(404).json({ error: "Study not found" });
     // Tenant ownership check: caller (or their seat owner) must own this study.
     // Legacy guest studies (user_id IS NULL) are not deletable via this route.
     const callerOwnerId = req.ownerUserId ?? req.userId;
-    if (delStudy.user_id == null || delStudy.user_id !== callerOwnerId) {
+    if (delStudy.user_id == null || delStudy.user_id !== callerOwnerId || !ownerRowInReach((db as any).$client, req.userId, callerOwnerId, delStudy.lab_id)) {
       return res.status(403).json({ error: "Access denied" });
     }
     logAudit({ userId: req.userId, ownerUserId: callerOwnerId, module: "veritacheck", action: "delete", entityType: "study", entityId: req.params.id, entityLabel: delStudy ? `${delStudy.test_name} - ${delStudy.study_type} (${delStudy.date})` : undefined, before: delStudy, ipAddress: req.ip });
@@ -14175,13 +14194,25 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     return labId != null && req.scope?.labId != null && Number(req.scope.labId) === Number(labId);
   }
 
+  // The record's owner matches, and the match counts for this record's lab (Michael Q191 = 1, server/labAccessGuard.ts).
+  function ownerMatch(req: any, rowOwnerId: unknown, rowLabId: unknown): boolean {
+    const ownerId = req.ownerUserId ?? req.user?.userId;
+    return rowOwnerId === ownerId && ownerMatchCounts((db as any).$client, req.userId ?? req.user?.userId, ownerId, rowLabId);
+  }
+  // For a route whose own query filters on the owner: is this assessment's lab in reach?
+  function assessmentInReach(req: any, assessmentId: unknown): boolean {
+    const row = (db as any).$client.prepare(
+      "SELECT p.lab_id FROM competency_assessments a JOIN competency_programs p ON p.id = a.program_id WHERE a.id = ?"
+    ).get(assessmentId) as any;
+    return ownerRowInReach((db as any).$client, req.userId ?? req.user?.userId, req.ownerUserId ?? req.user?.userId, row?.lab_id);
+  }
+
   function userCanAccessMap(mapId: number | string, req: any): any | null {
     const map = (db as any).$client.prepare(
       "SELECT * FROM veritamap_maps WHERE id = ?"
     ).get(mapId) as any;
     if (!map) return null;
-    const dataUserId = req.ownerUserId ?? req.user?.userId;
-    if (map.user_id === dataUserId) return map;
+    if (ownerMatch(req, map.user_id, map.lab_id)) return map;
     if (map.lab_id) {
       const member = (db as any).$client.prepare(
         "SELECT 1 FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active' LIMIT 1"
@@ -14198,8 +14229,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   function userCanAccessFinding(id: number | string, req: any): any | null {
     const row = (db as any).$client.prepare("SELECT * FROM findings WHERE id = ?").get(id) as any;
     if (!row) return null;
-    const dataUserId = req.ownerUserId ?? req.user?.userId;
-    if (row.user_id === dataUserId) return row;
+    if (ownerMatch(req, row.user_id, row.lab_id)) return row;
     if (row.lab_id) {
       const member = (db as any).$client.prepare(
         "SELECT 1 FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active' LIMIT 1"
@@ -14213,8 +14243,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   function userCanAccessScan(id: number | string, req: any): any | null {
     const row = (db as any).$client.prepare("SELECT * FROM veritascan_scans WHERE id = ?").get(id) as any;
     if (!row) return null;
-    const dataUserId = req.ownerUserId ?? req.user?.userId;
-    if (row.user_id === dataUserId) return row;
+    if (ownerMatch(req, row.user_id, row.lab_id)) return row;
     if (row.lab_id) {
       const member = (db as any).$client.prepare(
         "SELECT 1 FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active' LIMIT 1"
@@ -14228,8 +14257,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   function userCanAccessPolicy(id: number | string, req: any): any | null {
     const row = (db as any).$client.prepare("SELECT * FROM veritapolicy_lab_policies WHERE id = ?").get(id) as any;
     if (!row) return null;
-    const dataUserId = req.ownerUserId ?? req.user?.userId;
-    if (row.user_id === dataUserId) return row;
+    if (ownerMatch(req, row.user_id, row.lab_id)) return row;
     if (row.lab_id) {
       const member = (db as any).$client.prepare(
         "SELECT 1 FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active' LIMIT 1"
@@ -14243,8 +14271,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   function userCanAccessStudy(id: number | string, req: any): any | null {
     const row = (db as any).$client.prepare("SELECT * FROM studies WHERE id = ?").get(id) as any;
     if (!row) return null;
-    const dataUserId = req.ownerUserId ?? req.user?.userId;
-    if (row.user_id === dataUserId) return row;
+    if (ownerMatch(req, row.user_id, row.lab_id)) return row;
     if (row.lab_id) {
       const member = (db as any).$client.prepare(
         "SELECT 1 FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active' LIMIT 1"
@@ -14263,8 +14290,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   function userCanAccessLabRow(table: string, id: number | string, req: any): any | null {
     const row = (db as any).$client.prepare(`SELECT * FROM ${table} WHERE id = ?`).get(id) as any;
     if (!row) return null;
-    const dataUserId = req.ownerUserId ?? req.user?.userId;
-    if (row.user_id === dataUserId) return row;
+    if (ownerMatch(req, row.user_id, row.lab_id)) return row;
     if (row.lab_id) {
       const member = (db as any).$client.prepare(
         "SELECT 1 FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active' LIMIT 1"
@@ -14283,8 +14309,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       "SELECT * FROM lab_certificates WHERE id = ? AND is_active = 1"
     ).get(id) as any;
     if (!row) return null;
-    const dataUserId = req.ownerUserId ?? req.user?.userId;
-    if (row.user_id === dataUserId) return row;
+    if (ownerMatch(req, row.user_id, row.lab_id)) return row;
     if (row.lab_id) {
       const member = (db as any).$client.prepare(
         "SELECT 1 FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active' LIMIT 1"
@@ -25199,7 +25224,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
        JOIN competency_programs p ON a.program_id = p.id
        WHERE a.id = ?`
     ).get(req.params.id) as any;
-    if (!assessment || assessment.user_id !== dataUserId) return res.status(404).json({ error: "Assessment not found" });
+    if (!assessment || assessment.user_id !== dataUserId || !assessmentInReach(req, req.params.id)) return res.status(404).json({ error: "Assessment not found" });
     if (accountLabCount(dataUserId) > 1) return res.status(409).json({ error: "This account manages multiple labs. Open the lab first so this change is scoped to the correct one, then retry.", multiLab: true });
     // Locked assessments cannot be edited. The customer must POST to
     // /:id/unlock first (owner / admin only). This is the enforcement
@@ -25314,7 +25339,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
        JOIN competency_programs p ON a.program_id = p.id
        WHERE a.id = ?`
     ).get(req.params.id);
-    if (!assessment || assessment.user_id !== dataUserId) return res.status(404).json({ error: "Assessment not found" });
+    if (!assessment || assessment.user_id !== dataUserId || !assessmentInReach(req, req.params.id)) return res.status(404).json({ error: "Assessment not found" });
     if (accountLabCount(dataUserId) > 1) return res.status(409).json({ error: "This account manages multiple labs. Open the lab first so this change is scoped to the correct one, then retry.", multiLab: true });
     const legacyBlock = competencyAssessmentDeleteBlock(req.params.id);
     if (legacyBlock) return res.status(409).json({ error: legacyBlock, code: "ASSESSMENT_SIGNED" });
@@ -25342,7 +25367,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
        JOIN competency_programs p ON a.program_id = p.id
        WHERE a.id = ?`
     ).get(req.params.id) as any;
-    if (!assessment || assessment.user_id !== dataUserId) return res.status(404).json({ error: "Assessment not found" });
+    if (!assessment || assessment.user_id !== dataUserId || !assessmentInReach(req, req.params.id)) return res.status(404).json({ error: "Assessment not found" });
     if (accountLabCount(dataUserId) > 1) return res.status(409).json({ error: "This account manages multiple labs. Open the lab first so this change is scoped to the correct one, then retry.", multiLab: true });
     if (assessment.locked === 1) return res.status(409).json({ error: "Assessment is already signed and locked" });
     const now = new Date().toISOString();
@@ -25917,7 +25942,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
        JOIN competency_employees e ON a.employee_id = e.id
        WHERE a.id = ? AND p.user_id = ?`
     ).get(req.params.id, dataUserId);
-    if (!assessment) return res.status(404).json({ error: "Assessment not found" });
+    if (!assessment || !assessmentInReach(req, req.params.id)) return res.status(404).json({ error: "Assessment not found" });
     const items = (db as any).$client.prepare("SELECT * FROM competency_assessment_items WHERE assessment_id = ?").all(assessment.id);
     const methodGroups = (db as any).$client.prepare("SELECT * FROM competency_method_groups WHERE program_id = ?").all(assessment.program_id);
     res.json({ ...assessment, items, methodGroups });
@@ -26972,7 +26997,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
        JOIN competency_employees e ON a.employee_id = e.id
        WHERE a.id = ? AND p.user_id = ?`
     ).get(req.params.id, req.ownerUserId ?? req.user.userId);
-    if (!assessment) return res.status(404).json({ error: "Assessment not found" });
+    if (!assessment || !assessmentInReach(req, req.params.id)) return res.status(404).json({ error: "Assessment not found" });
     const items = (db as any).$client.prepare("SELECT * FROM competency_assessment_items WHERE assessment_id = ?").all(assessment.id);
     const methodGroups = (db as any).$client.prepare("SELECT * FROM competency_method_groups WHERE program_id = ?").all(assessment.program_id);
     const checklistItems = (db as any).$client.prepare("SELECT * FROM competency_checklist_items WHERE program_id = ? ORDER BY sort_order").all(assessment.program_id);
@@ -27044,7 +27069,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
        JOIN competency_employees e ON a.employee_id = e.id
        WHERE a.id = ? AND p.user_id = ?`
     ).get(req.params.assessmentId, req.ownerUserId ?? req.user.userId);
-    if (!assessment) return res.status(404).json({ error: "Assessment not found" });
+    if (!assessment || !assessmentInReach(req, req.params.assessmentId)) return res.status(404).json({ error: "Assessment not found" });
 
     const items = (db as any).$client.prepare(
       "SELECT * FROM competency_assessment_items WHERE assessment_id = ?"

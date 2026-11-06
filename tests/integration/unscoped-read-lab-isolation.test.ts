@@ -123,11 +123,23 @@ async function main() {
     member(labB, OUTSTAFF.id); seat(OUT.id, labB, OUTSTAFF, "staff_portal", '{"mode":"view_all"}', outRow);
     sqlite.prepare("UPDATE users SET default_lab_id = ? WHERE id IN (?, ?, ?)").run(labB, OUT.id, OUTSEAT.id, OUTSTAFF.id);
     sqlite.prepare("UPDATE users SET default_lab_id = ? WHERE id IN (?, ?, ?, ?)").run(labA, OWNER.id, EDITOR.id, STAFF.id, PLAIN.id);
-    const outsiders = [["owner of another lab", OUT], ["editor seat in another lab", OUTSEAT], ["Staff login in another lab", OUTSTAFF], ["no lab and no plan", FREE]] as const;
+    // The sister lab: same owner as lab A, a different lab (Michael Q191 = 1). Their seats match the owner of every row here, and that no longer counts.
+    const SISEDIT = await register("Sisedit"), SISSTAFF = await register("Sisstaff");
+    const labC = Number(sqlite.prepare("INSERT INTO labs (lab_name, owner_user_id, plan, subscription_status, subscription_expires_at, created_at, updated_at) SELECT 'Lab C', owner_user_id, plan, subscription_status, subscription_expires_at, ?, ? FROM labs WHERE id = ?").run(now, now, labA).lastInsertRowid);
+    member(labC, OWNER.id, "owner");
+    await call("POST", `/api/labs/${labC}/staff/lab`, { labName: "Lab C", cliaNumber: "11D7654392", accreditationBody: "CLIA_ONLY", complexity: "moderate" }, OWNER.token);
+    const sisRow = Number((await call("POST", `/api/labs/${labC}/staff/employees`, { lastName: "Sister", firstName: "Sage", highestComplexity: "M", performsTesting: true, hireDate: "2019-03-01" }, OWNER.token)).j.id);
+    member(labC, SISEDIT.id); seat(OWNER.id, labC, SISEDIT, "active", '{"mode":"edit_all"}', null);
+    member(labC, SISSTAFF.id); seat(OWNER.id, labC, SISSTAFF, "staff_portal", '{"mode":"view_all"}', sisRow);
+    sqlite.prepare("UPDATE users SET default_lab_id = ? WHERE id IN (?, ?)").run(labC, SISEDIT.id, SISSTAFF.id);
+    sqlite.prepare("UPDATE users SET default_lab_id = ? WHERE id = ?").run(labA, OWNER.id); // working in lab C just moved it
+    const SISTERS = new Set<number>([SISEDIT.id, SISSTAFF.id]);
+    const outsiders =[["owner of another lab", OUT], ["editor seat in another lab", OUTSEAT], ["Staff login in another lab", OUTSTAFF], ["no lab and no plan", FREE], ["editor seat in a sister lab", SISEDIT], ["Staff login in a sister lab", SISSTAFF]] as const;
 
     // ── Every route of the shape: [route as registered, url, method, body, what an outsider gets, statuses for someone who belongs] ──
     const OWN_LAB_ONLY = "own-lab";
-    type Row = { route: string; url: string; method?: string; body?: unknown; outsider?: "denied" | typeof OWN_LAB_ONLY; belongs?: number[]; belongsToken?: string };
+    // noLabOnRow: the row has no lab on it, so the owner match still counts and a sister-lab seat reads it (Michael Q191 = 1).
+    type Row = { route: string; url: string; method?: string; body?: unknown; outsider?: "denied" | typeof OWN_LAB_ONLY; belongs?: number[]; belongsToken?: string; noLabOnRow?: boolean };
     const q = quiz, a = assessment, f = finding;
     const routes: Row[] = [
       { route: "/api/studies/:id", url: `/api/studies/${study}` },
@@ -173,7 +185,7 @@ async function main() {
       { route: "/api/staffing-studies/:id", url: `/api/staffing-studies/${staffing}` },
       { route: "/api/staffing-studies/:id/export", url: `/api/staffing-studies/${staffing}/export` },
       { route: "/api/veritaops/studies/:id", url: `/api/veritaops/studies/${costStudy}` },
-      { route: "/api/pi/metrics", url: `/api/pi/metrics?department_id=${department}`, outsider: OWN_LAB_ONLY },
+      { route: "/api/pi/metrics", url: `/api/pi/metrics?department_id=${department}`, outsider: OWN_LAB_ONLY, noLabOnRow: true },
       { route: "/api/inventory/count-history", url: `/api/inventory/count-history?item_id=${item}`, outsider: OWN_LAB_ONLY },
       // Reads that happen to be POST: a PDF or a workbook of one lab's row.
       { route: "POST /api/veritamap/maps/:id/excel", method: "POST", url: `/api/veritamap/maps/${mapId}/excel`, body: {}, belongs: [200, 400] },
@@ -182,7 +194,7 @@ async function main() {
       { route: "POST /api/competency/pdf/:assessmentId", method: "POST", url: `/api/competency/pdf/${a}`, body: {}, belongs: [200, 400] },
       { route: "POST /api/veritacheck/cumsum/trackers/:id/pdf", method: "POST", url: `/api/veritacheck/cumsum/trackers/${tracker}/pdf`, body: {}, belongs: [200, 400] },
       { route: "POST /api/veritacheck/verifications/:id/pdf", method: "POST", url: `/api/veritacheck/verifications/${verification}/pdf`, body: {}, belongs: [200, 400] },
-      { route: "POST /api/pi/metrics/:metricId/report", method: "POST", url: `/api/pi/metrics/${metric}/report`, body: {}, belongs: [200, 400] },
+      { route: "POST /api/pi/metrics/:metricId/report", method: "POST", url: `/api/pi/metrics/${metric}/report`, body: {}, belongs: [200, 400], noLabOnRow: true },
       { route: "POST /api/veritaops/studies/:id/pdf", method: "POST", url: `/api/veritaops/studies/${costStudy}/pdf`, body: {}, belongs: [200, 400] },
     ];
 
@@ -192,6 +204,7 @@ async function main() {
       const results: string[] = [];
       let leaked = false;
       for (const [who, u] of outsiders) {
+        if (r.noLabOnRow && SISTERS.has(u.id)) continue;
         const got = await call(method, r.url, r.body, u.token);
         const shows = MARKER.test(got.text);
         // A PDF or workbook comes back as a token or a file, with no marker to look for, so a 200 there is a leak by status alone.
@@ -203,6 +216,11 @@ async function main() {
       // Naming lab A in the active-lab header must not get anyone in.
       const named = await call(method, r.url, r.body, OUT.token, { "X-Active-Lab-Id": String(labA) });
       if (MARKER.test(named.text) || (r.outsider !== OWN_LAB_ONLY && named.s === 200)) { leaked = true; results.push(`header naming lab A ${named.s}`); }
+      for (const [who, u] of [["sister editor", SISEDIT], ["sister Staff login", SISSTAFF]] as const) {
+        if (r.noLabOnRow) continue;
+        const sisterNamed = await call(method, r.url, r.body, u.token, { "X-Active-Lab-Id": String(labA) });
+        if (MARKER.test(sisterNamed.text) || (r.outsider !== OWN_LAB_ONLY && sisterNamed.s === 200)) { leaked = true; results.push(`${who} header naming lab A ${sisterNamed.s}`); }
+      }
       // And nothing here opens with no sign-in at all.
       const anon = await fetch(base + r.url, { method, headers: { "Content-Type": "application/json" }, body: r.body === undefined ? undefined : JSON.stringify(r.body) });
       if (anon.status === 200) { leaked = true; results.push(`no sign-in ${anon.status}`); }
@@ -305,6 +323,30 @@ async function main() {
       }
     }
     console.log(`SCOPED  ${scopedCount} tried; the owner sees lab A's data on ${scopedReached} of them; leaks: ${scopedLeaks.join(" | ") || "none"}`);
+    // ── Lists: a sister-lab seat, in its own lab, with and without naming lab A (Michael Q191 = 1) ──
+    // pi/departments is by account with no lab on the row, so the owner match still counts there.
+    const NO_LAB_ON_ROWS = new Set(["/api/pi/departments"]);
+    const listUrls: string[] = [];
+    for (const layer of (app as any).router.stack) {
+      const r = layer.route;
+      if (!r?.methods?.get) continue;
+      for (const p of Array.isArray(r.path) ? r.path : [r.path]) {
+        if (typeof p !== "string" || !p.startsWith("/api/") || NO_LAB_ON_ROWS.has(p) || /^\/api\/(admin|demo|pdf|zip|scheduling|surveyor|export-all|seats\/invite)/.test(p)) continue;
+        if (p.replace(":labId", "").includes(":")) continue;
+        listUrls.push(p.replace(":labId", String(labC)));
+      }
+    }
+    const listLeaks: string[] = [];
+    for (const url of listUrls) {
+      for (const [who, u] of [["sister editor", SISEDIT], ["sister Staff login", SISSTAFF]] as const) {
+        const plain = await call("GET", url, undefined, u.token);
+        if (MARKER.test(plain.text)) listLeaks.push(`${who} ${plain.s} ${url}`);
+        const named = await call("GET", url, undefined, u.token, { "X-Active-Lab-Id": String(labA) });
+        if (MARKER.test(named.text)) listLeaks.push(`${who} naming lab A ${named.s} ${url}`);
+      }
+    }
+    check(`7. no list (${listUrls.length} tried) shows a sister-lab seat lab A's rows, with or without naming lab A`, listUrls.length > 100 && listLeaks.length === 0, listLeaks.join(" | "));
+
     check(`6. a lab-scoped read (${scopedCount} tried, ${scopedReached} showing the owner data) never returns lab A's row to someone scoped to lab B`, scopedCount > 50 && scopedReached > 10 && scopedLeaks.length === 0, scopedLeaks.join(" | "));
   } finally {
     server.close();

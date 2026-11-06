@@ -83,22 +83,39 @@ async function main() {
     const pending = user("pending"); seat("pending", pending, labA, "staff_portal", "pending");
     const off = user("off"); seat("off", off, labA, "active", "deactivated");
 
+    // Older seats still under the older rule (Michael Q191 = 1): one with no lab, one whose holder has no membership anywhere. The rest don't count.
+    const OLD = "2026-03-01T12:00:00.000Z";
+    const oldSeat = (tag: string, userId: number, labId: number | null) => sqlite.prepare(
+      `INSERT INTO user_seats (owner_user_id, seat_email, seat_user_id, invited_at, accepted_at, status, permissions, invite_token, lab_id, seat_type) VALUES (?, ?, ?, ?, ?, 'active', '{}', ?, ?, 'active')`
+    ).run(owner, `zaudit-seat-${tag}-${stamp}@example.test`, userId, OLD, OLD, `zaudit-${tag}-${stamp}`, labId);
+    const oldNoLab = user("oldnolab"); member(labA, oldNoLab); oldSeat("oldnolab", oldNoLab, null);
+    const oldBare = user("oldbare"); oldSeat("oldbare", oldBare, labA);
+    const oldMember = user("oldmember"); member(labA, oldMember); oldSeat("oldmember", oldMember, labA);
+    // Counts go by the same rule as access: an older date written another way is still older.
+    const oldOdd = user("oldodd");
+    sqlite.prepare(
+      `INSERT INTO user_seats (owner_user_id, seat_email, seat_user_id, invited_at, accepted_at, status, permissions, invite_token, lab_id, seat_type) VALUES (?, ?, ?, ?, ?, 'active', '{}', ?, ?, 'active')`
+    ).run(owner, `zaudit-seat-oldodd-${stamp}@example.test`, oldOdd, "Thu Jun 04 2026", "Thu Jun 04 2026", `zaudit-oldodd-${stamp}`, labA);
+
     // ── Exact counts ──────────────────────────────────────────────────────────
     const after = await asAdmin();
     const seats = after.j.activeSeatsWithNoActiveMembership;
     const added = (type: string) => (seats.bySeatType[type] || 0) - (startSeats.bySeatType[type] || 0);
     check("2. studies with no owner: NULL and 0 both count, one with an owner doesn't", after.j.studiesWithNoOwner - before.j.studiesWithNoOwner === 3, `${before.j.studiesWithNoOwner} -> ${after.j.studiesWithNoOwner}`);
-    check("3. active seats with no active membership: the total is exact", seats.total - startSeats.total === 5, `${startSeats.total} -> ${seats.total}`);
-    check("4. per seat type: exact", added("staff_portal") === 2 && added("active") === 2 && added("view_only") === 1, JSON.stringify(seats.bySeatType));
+    check("3. active seats with no active membership: the total is exact", seats.total - startSeats.total === 8, `${startSeats.total} -> ${seats.total}`);
+    check("4. per seat type: exact", added("staff_portal") === 2 && added("active") === 5 && added("view_only") === 1, JSON.stringify(seats.bySeatType));
     check("5. the per-type numbers add up to the total", Object.values(seats.bySeatType as Record<string, number>).reduce((a, b) => a + b, 0) === seats.total);
-    check("6. seats with no lab on them are shown apart", seats.withNoLabOnSeat - startSeats.withNoLabOnSeat === 1, `${seats.withNoLabOnSeat}`);
+    check("6. seats with no lab on them are shown apart", seats.withNoLabOnSeat - startSeats.withNoLabOnSeat === 2, `${seats.withNoLabOnSeat}`);
     check("7. seats nobody has claimed are shown apart", seats.withNoUserOnSeat - startSeats.withNoUserOnSeat === 1, `${seats.withNoUserOnSeat}`);
+
+    const olderNow = after.j.olderSeatsKeepingOwnerReach, olderBefore = before.j.olderSeatsKeepingOwnerReach;
+    check("7b. older seats under the older rule: exact, and a new seat with no lab or no membership isn't one", olderNow.withNoLab - olderBefore.withNoLab === 1 && olderNow.holderHasNoMembership - olderBefore.holderHasNoMembership === 2, JSON.stringify(olderNow));
 
     // ── Numbers only ──────────────────────────────────────────────────────────
     check("8. no email, name, lab name, analyst or test name in the answer", !/zaudit|example\.test|@/i.test(after.text), after.text.slice(0, 300));
     const leaves = (v: unknown): unknown[] => (v && typeof v === "object" ? Object.values(v as object).flatMap(leaves) : [v]);
     check("9. every value is a number", leaves(after.j).length > 0 && leaves(after.j).every((v) => typeof v === "number"), after.text.slice(0, 300));
-    check("10. the only keys are the counts and the seat types", Object.keys(after.j).sort().join() === "activeSeatsWithNoActiveMembership,studiesWithNoOwner" && Object.keys(seats).sort().join() === "bySeatType,total,withNoLabOnSeat,withNoUserOnSeat" && Object.keys(seats.bySeatType).every((k) => ["active", "staff_portal", "view_only"].includes(k)), after.text.slice(0, 300));
+    check("10. the only keys are the counts and the seat types", Object.keys(after.j).sort().join() === "activeSeatsWithNoActiveMembership,olderSeatsKeepingOwnerReach,studiesWithNoOwner" && Object.keys(seats).sort().join() === "bySeatType,total,withNoLabOnSeat,withNoUserOnSeat" && Object.keys(seats.bySeatType).every((k) => ["active", "staff_portal", "view_only"].includes(k)), after.text.slice(0, 300));
 
     // ── Read-only ─────────────────────────────────────────────────────────────
     const changes = () => Number((sqlite.prepare("SELECT total_changes() AS n").get() as any).n);

@@ -73,6 +73,47 @@ export interface ResolveOptions {
   extraParams?: any[];
 }
 
+/**
+ * Sister labs (Michael 2026-11-06, Q191 = 1). A seat used to reach every record its owner holds, in any of the owner's labs, so a
+ * Staff login in lab A could open lab B's assessment. Matching the record's owner now counts only for:
+ *   - the owner themself
+ *   - a record with no lab on it
+ *   - a seat in that record's lab
+ *   - an older seat with no lab on it
+ *   - an older seat whose holder has no active lab membership anywhere. Those seats have no lab switcher and no lab-scoped routes,
+ *     so the owner match is all they work through; they keep it, as Michael chose. Seats listed on the PR.
+ * "Older" means accepted, or failing that invited, before OLDER_SEAT_BEFORE, or with neither date (those columns came later and
+ * every path that creates a seat now stamps one). A seat from that date on, or one re-accepted, is never older, so a new seat with
+ * no membership or no lab can't fall into the last two cases. This is the only place the rule lives.
+ */
+export const OLDER_SEAT_BEFORE = "2026-11-06";
+
+/** Dates compare as dates: older rows aren't all written one way, and an unreadable one predates the paths that stamp them. */
+export function isOlderSeatDate(since: unknown): boolean {
+  if (since == null || since === "") return true;
+  const t = Date.parse(String(since));
+  return !Number.isFinite(t) || t < Date.parse(OLDER_SEAT_BEFORE);
+}
+
+export function ownerMatchCounts(sqlite: SqliteLike, userId: unknown, ownerId: unknown, rowLabId: unknown): boolean {
+  const uid = Number(userId), oid = Number(ownerId);
+  if (uid === oid || !rowLabId) return true;
+  const seats = sqlite.prepare(
+    "SELECT lab_id, COALESCE(accepted_at, invited_at) AS since FROM user_seats WHERE seat_user_id = ? AND owner_user_id = ? AND status = 'active'"
+  ).all(uid, oid) as Array<{ lab_id: number | null; since: string | null }>;
+  if (seats.some((s) => s.lab_id != null && Number(s.lab_id) === Number(rowLabId))) return true;
+  const older = seats.filter((s) => isOlderSeatDate(s.since));
+  if (older.length === 0) return false;
+  if (older.some((s) => s.lab_id == null)) return true;
+  return !sqlite.prepare("SELECT 1 FROM lab_members WHERE user_id = ? AND status = 'active' LIMIT 1").get(uid);
+}
+
+/** For a route that has already matched the record's owner in its own query: the rule above, or an active membership in the record's lab. */
+export function ownerRowInReach(sqlite: SqliteLike, userId: unknown, ownerId: unknown, rowLabId: unknown): boolean {
+  if (ownerMatchCounts(sqlite, userId, ownerId, rowLabId)) return true;
+  return !!sqlite.prepare("SELECT 1 FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active' LIMIT 1").get(rowLabId, userId);
+}
+
 export function resolveRowForMutation<T = any>(
   sqlite: SqliteLike,
   table: string,
@@ -91,8 +132,8 @@ export function resolveRowForMutation<T = any>(
   const ownerId = req.ownerUserId ?? userId;
   if (userId == null) return { row: null, status: 403 };
 
-  // Legacy direct ownership: row[ownerColumn] matches the requester
-  if (row[ownerCol] != null && row[ownerCol] === ownerId) {
+  // Legacy direct ownership: row[ownerColumn] matches the requester, and the owner match counts for this row's lab
+  if (row[ownerCol] != null && row[ownerCol] === ownerId && ownerMatchCounts(sqlite, userId, ownerId, row.lab_id)) {
     return { row: row as T, status: 200 };
   }
 
@@ -154,7 +195,7 @@ export function resolveLegacyLabId(
              UNION
              SELECT 1 AS ok FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active'`
           ).get(requested, seatOwner.owner_user_id, requested, seatOwner.owner_user_id) as any;
-          if (seatMem) return requested;
+          if (seatMem && ownerMatchCounts(sqlite, userId, seatOwner.owner_user_id, requested)) return requested; // Q191
         }
       } catch {}
     }
