@@ -1,7 +1,7 @@
 -- scripts/count-nontechnical-clearance.sql
 --
--- Read-only. Counts, with no names and no lab ids, what a non-technical record already did before these paths were closed on 2026-11-06. The fix leaves every
--- one of these rows as it is, so nobody's status moves at deploy; these are the numbers for Michael to decide what, if anything, happens to them.
+-- Read-only. Counts, with no names and no lab ids, what a non-technical record already did before these paths were closed on 2026-11-06. The fix rewrites none of
+-- these rows and nobody's clearance moves at deploy; these are the numbers for Michael to decide what, if anything, happens to them.
 -- tests/integration/competency-clearance-program-type.test.ts runs this exact file against made-up rows, so the definitions are proved.
 --
 -- No admin route gives these. Running it on production takes a counts-only admin route or Michael's OK for a read; nothing has run it there.
@@ -14,6 +14,8 @@
 --   people_with_clock_from_nontechnical_date   they do have testing competency on file, but a date on the record filled by those paths matches a non-technical
 --                                         record and no technical or waived one, so their technical clock runs from the wrong record.
 --   duty_change_events_closed_by_nontechnical   an analyzer added to a person, closed by a non-technical Duty Change record. Possible since 2026-06-06.
+--   open_duty_change_events_nontechnical_would_have_closed   the one figure that moves with the fix: still open, with a non-technical Duty Change record that the next read of
+--                                         the list would have closed them with. They now stay open and on the list until a technical or waived record or a person closes them.
 --   records_with_stored_type_not_the_programs   competency_assessments.competency_type disagrees with the program. Nothing decides on the stored value any more.
 WITH
 filled_from_records AS (
@@ -67,6 +69,14 @@ SELECT
      JOIN competency_assessments a ON a.id = ev.resolved_assessment_id
      JOIN competency_programs p ON p.id = a.program_id
     WHERE p.type = 'nontechnical') AS duty_change_events_closed_by_nontechnical,
+  (SELECT COUNT(*)
+     FROM staff_duty_change_events ev
+    WHERE ev.resolved_at IS NULL
+      AND EXISTS (SELECT 1 FROM competency_assessments a JOIN competency_employees ce ON ce.id = a.employee_id JOIN competency_programs p ON p.id = a.program_id
+                   WHERE ce.staff_employee_id = ev.employee_id AND a.assessment_type = 'duty_change' AND date(a.assessment_date) >= date(ev.detected_at) AND p.type = 'nontechnical')
+      AND NOT EXISTS (SELECT 1 FROM competency_assessments a JOIN competency_employees ce ON ce.id = a.employee_id JOIN competency_programs p ON p.id = a.program_id
+                       WHERE ce.staff_employee_id = ev.employee_id AND a.assessment_type = 'duty_change' AND date(a.assessment_date) >= date(ev.detected_at) AND p.type IN ('technical', 'waived'))
+  ) AS open_duty_change_events_nontechnical_would_have_closed,
   (SELECT COUNT(*)
      FROM competency_assessments a
      JOIN competency_programs p ON p.id = a.program_id
