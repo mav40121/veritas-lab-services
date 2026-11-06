@@ -149,6 +149,13 @@ jobs:
         # Michael 2026-11-06, Q184 = 1: a program holding competency records can't be deleted, on either route: 409 with the count, nothing removed. An empty
         # program still deletes with its setup. The count never reaches someone who can't delete there.
         run: npm run test:competency-program-delete
+      - name: Non-technical competency frequency math
+        # Michael 2026-11-04, Q216 = 1: the due date from a person's signed records, the status at each boundary, and the technical dates on the same known inputs.
+        run: npx tsx scripts/verify-nontechnical-frequency.mts
+      - name: Run non-technical competency frequency integration test
+        # A site sets how often non-technical competency comes due; owner or admin only; blank leaves records with no due date. Every technical reader answers the
+        # same at every setting, a save rewrites no record, reminders follow it and clearing it restores them, and a Staff login sees only their own rows.
+        run: npm run test:competency-nontechnical-frequency
       - name: Run admin access audit counts integration test
         # 2026-11-06: GET /api/admin/access-audit-counts gives numbers only, for sizing the access work. Exact counts on made-up rows, no names, emails or
         # lab ids in the answer, writes nothing, and refuses with no secret, a wrong secret, a secret in the URL, or no secret set on the server.

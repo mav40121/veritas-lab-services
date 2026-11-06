@@ -22,6 +22,7 @@
 import { db } from "./db";
 import { labToday, labTimeZoneById } from "./dateLocal";
 import { loadLabMethodClocks, type PersonMethodClock } from "./competencyMethodClock";
+import { nontechnicalReminderItems } from "./competencyNontechnicalDue";
 import { MILESTONE_LABEL } from "@shared/competencySignoff";
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -349,7 +350,8 @@ export function planCompetencyReminders(sqlite: any, labId: number, cfg: Compete
   }
   if (!directors.length) { directors = ownerList; dirSource = "lab owner; no escalation list or medical director set"; }
 
-  const all = computeCompetencyDue(sqlite, labId, todayIso);
+  // Non-technical due dates join the same emails when the lab has set a frequency (server/competencyNontechnicalDue.ts); blank adds nothing.
+  const all = [...computeCompetencyDue(sqlite, labId, todayIso), ...nontechnicalReminderItems(sqlite, labId, todayIso)];
   const overdue = all.filter((i) => i.daysUntil < 0).sort((a, b) => a.daysUntil - b.daysUntil);
   const coming = all.filter((i) => i.daysUntil >= 0 && i.daysUntil <= cfg.lead_days).sort((a, b) => a.daysUntil - b.daysUntil);
   const lastSent = (kind: ReminderKind) => (sqlite.prepare(
