@@ -1650,7 +1650,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   app.get("/api/admin/report", (req, res) => {
     const secret = (req.headers["x-admin-secret"] || req.query.secret) as string | undefined;
     const { plan, status } = req.query as { plan?: string; status?: string };
-    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    if (!secret || secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
 
     // Multi-Lab Tier 2: report renders one row per (user, lab membership) pair.
     // A user with active memberships on N labs appears in N rows (one per lab
@@ -2022,7 +2022,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   // Read-only. Auth: x-admin-secret header or ?secret= query param.
   app.get("/api/admin/users/:userId/activity", (req, res) => {
     const secret = (req.headers["x-admin-secret"] || req.query.secret) as string | undefined;
-    if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    if (!secret || secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
     const userId = parseInt(req.params.userId);
     if (!Number.isFinite(userId)) return res.status(400).json({ error: "Invalid userId" });
     const sqlite = (db as any).$client;
