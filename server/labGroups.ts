@@ -181,6 +181,9 @@ export function registerLabGroupRoutes(app: any, opts: {
           WHERE s.approver_group_id = ? AND s.archived_at IS NULL AND w.archived_at IS NULL LIMIT 1`
       ).get(group.id) as any;
       if (onRoute) return res.status(409).json({ error: `This group signs a step on the approval route "${onRoute.name}". Take it off the route first.`, code: "GROUP_ON_ROUTE" });
+      // Retiring it would quietly stop everyone in it owing the documents assigned to it.
+      const reads = sqlite.prepare("SELECT COUNT(*) AS n FROM policy_read_sign_assignments WHERE group_id = ? AND removed_at IS NULL").get(group.id) as any;
+      if (reads?.n) return res.status(409).json({ error: `This group is assigned read-and-sign on ${reads.n} document${reads.n === 1 ? "" : "s"} or manual${reads.n === 1 ? "" : "s"}. Take it off those first.`, code: "GROUP_ON_READ_SIGN" });
     }
     sqlite.prepare("UPDATE lab_groups SET name = ?, retired = ?, updated_at = datetime('now') WHERE id = ?").run(wantName, wantRetired ? 1 : 0, group.id);
     if (wantName !== group.name) audit(req, "group_renamed", `${group.name} -> ${wantName}`);

@@ -4,6 +4,7 @@ import * as schema from "@shared/schema";
 import { OWNER_EMAIL, OWNER_CLIA } from "./constants";
 import { existsSync as _dbExistsSync } from "fs";
 import { classifyExistingNoPhiAcknowledgments } from "./noPhiAcknowledgment";
+import { seedLabsAlreadyWorkingTheOldWay } from "./policyReadSignSeed";
 
 // Use /data volume if available (Railway persistent volume), otherwise local
 const DB_PATH = process.env.DB_PATH || (_dbExistsSync('/data') ? '/data/veritas.db' : 'veritas.db');
@@ -8325,6 +8326,67 @@ try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS uq_spps_doc_version_employe
 {
   const sppsCols = (sqlite.prepare("PRAGMA table_info(staff_portal_policy_signatures)").all() as { name: string }[]).map((c) => c.name);
   void sppsCols;
+}
+
+// ─── VeritaDC read-and-sign assignments (Step D, 2026-11-06) ─────────────
+//
+// Who a document, a manual (with its sub-manuals) or the whole lab goes to for read-and-sign: a lab group (lab_groups, there is
+// no second group table), a roster person, or everyone in the lab. A rule, not a row per person per document: server/policyReadSign.ts
+// works out who owes what when it is read, so a new document in the manual and a new member of the group are covered on their own.
+// removed_at keeps the history of an assignment taken off. Assigning sends no email.
+{
+  const existed = !!sqlite.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'policy_read_sign_assignments'").get();
+  try {
+    sqlite.transaction(() => {
+      sqlite.exec(`
+        CREATE TABLE IF NOT EXISTS policy_read_sign_assignments (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          lab_id INTEGER NOT NULL,
+          scope_type TEXT NOT NULL,   -- 'document', 'manual' or 'lab'
+          document_id INTEGER,
+          manual_id INTEGER,
+          target_type TEXT NOT NULL,  -- 'group', 'person' or 'everyone'
+          group_id INTEGER,
+          employee_id INTEGER,
+          assigned_by INTEGER,
+          assigned_at TEXT NOT NULL DEFAULT (datetime('now')),
+          origin TEXT NOT NULL DEFAULT 'editor',  -- 'editor', or 'kept_as_it_was' for the one-time seed below
+          removed_at TEXT,
+          removed_by INTEGER
+        )
+      `);
+      // New DB Table rule: a table that predates this block still gains every column on the live server.
+      const cols = (sqlite.prepare("PRAGMA table_info(policy_read_sign_assignments)").all() as { name: string }[]).map((c) => c.name);
+      for (const [col, ddl] of [
+        ["document_id", "INTEGER"],
+        ["manual_id", "INTEGER"],
+        ["group_id", "INTEGER"],
+        ["employee_id", "INTEGER"],
+        ["assigned_by", "INTEGER"],
+        ["assigned_at", "TEXT"],
+        ["origin", "TEXT NOT NULL DEFAULT 'editor'"],
+        ["removed_at", "TEXT"],
+        ["removed_by", "INTEGER"],
+      ] as const) {
+        if (!cols.includes(col)) sqlite.exec(`ALTER TABLE policy_read_sign_assignments ADD COLUMN ${col} ${ddl}`);
+      }
+      sqlite.exec(`
+        CREATE INDEX IF NOT EXISTS idx_prs_lab ON policy_read_sign_assignments(lab_id, removed_at);
+        CREATE INDEX IF NOT EXISTS idx_prs_document ON policy_read_sign_assignments(document_id);
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_prs_active ON policy_read_sign_assignments(
+          lab_id, scope_type, COALESCE(document_id, 0), COALESCE(manual_id, 0), target_type, COALESCE(group_id, 0), COALESCE(employee_id, 0)
+        ) WHERE removed_at IS NULL;
+      `);
+      // Once only: the boot that creates the table. A lab whose staff already work from every approved document keeps that.
+      if (!existed) {
+        const kept = seedLabsAlreadyWorkingTheOldWay(sqlite);
+        if (kept) console.log(`[migration] VeritaDC read-and-sign: ${kept} lab(s) kept as they were (everyone in the lab, all documents)`);
+      }
+    })();
+  } catch (err: any) {
+    // Rolled back whole, so the next boot tries the table and the seed again.
+    console.error("[migration] policy_read_sign_assignments failed:", err?.message || err);
+  }
 }
 
 // ─── Staff Portal competency sign-offs (Wave K8, 2026-06-08) ─────────────

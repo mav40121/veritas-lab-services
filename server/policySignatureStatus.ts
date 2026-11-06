@@ -9,8 +9,12 @@
 //
 // A signature closes an assignment only for the same person, and only on the version assigned or a later one (or an earlier minor
 // revision, in a lab that carries those forward). A lab's passing-quiz gate still holds: a signature doesn't answer a required quiz.
+//
+// Who a document is assigned to comes from server/policyReadSign.ts (Step D): a person owes it when a rule reaches them or an older
+// per-person assignment is open. Everyone on the roster still shows, signed or not; a person nobody assigned reads Not assigned and isn't chased.
 import { versionLabel } from "../shared/policyVersion";
 import { signatureStillCurrent, carriedStaffSignature } from "./policyMinorRevision";
+import { assignedDocumentIds, documentAudience } from "./policyReadSign";
 import { writeAuditLog } from "./veritapolicyApproval";
 
 export type RosterSignStatus = "signed" | "older_version" | "not_signed";
@@ -69,8 +73,17 @@ export function attestationStillCurrent(sqlite: any, labId: number, documentId: 
   return rows.find((r) => signatureStillCurrent(sqlite, labId, r.version_id, currentVersionId)) ?? null;
 }
 
-/** Approved documents a Staff login still has to sign, by the same rules as their My sign-offs list. */
+/** Whether a Staff login's signature or attestation answers this version, by the same rule as their My sign-offs list. */
+export function staffHasSignedCurrent(sqlite: any, labId: number, documentId: number, currentVersionId: number | null, staffEmployeeId: number, userId: number): boolean {
+  if (currentVersionId == null) return false;
+  const exact = sqlite.prepare("SELECT 1 FROM staff_portal_policy_signatures WHERE document_id = ? AND version_id = ? AND staff_employee_id = ? LIMIT 1").get(documentId, currentVersionId, staffEmployeeId);
+  return !!exact || !!carriedStaffSignature(sqlite, labId, documentId, staffEmployeeId, currentVersionId) || !!attestationStillCurrent(sqlite, labId, documentId, userId, currentVersionId);
+}
+
+/** Approved documents assigned to a Staff login that they still have to sign, by the same rules as their My sign-offs list. */
 export function unsignedDocumentsForStaff(sqlite: any, labId: number, staffEmployeeId: number, userId: number): Array<{ document_id: number; title: string; effective_date: string | null }> {
+  const assigned = assignedDocumentIds(sqlite, labId, { employeeId: staffEmployeeId, userId });
+  if (!assigned.size) return [];
   const rows = sqlite.prepare(
     `SELECT d.id AS document_id, d.title, d.effective_date, d.current_version_id
        FROM policy_documents d
@@ -80,13 +93,14 @@ export function unsignedDocumentsForStaff(sqlite: any, labId: number, staffEmplo
       ORDER BY d.title`
   ).all(labId, staffEmployeeId) as any[];
   return rows
+    .filter((d) => assigned.has(d.document_id))
     .filter((d) => !carriedStaffSignature(sqlite, labId, d.document_id, staffEmployeeId, d.current_version_id) && !attestationStillCurrent(sqlite, labId, d.document_id, userId, d.current_version_id))
     .slice(0, 100)
     .map((d) => ({ document_id: d.document_id, title: d.title, effective_date: d.effective_date }));
 }
 
-/** Every active roster person and where they stand on this document's current version. Not signed first, then by name. */
-export function documentSignatureStatus(sqlite: any, labId: number, doc: { id: number; current_version_id: number | null }, staffLabId: number | null) {
+/** Every active roster person, where they stand on this document's current version, and who owes it. Not signed first, then who owes it, then by name. */
+export function documentSignatureStatus(sqlite: any, labId: number, doc: { id: number; current_version_id: number | null; manual_id?: number | null }, staffLabId: number | null) {
   const employees = staffLabId == null ? [] : sqlite.prepare(
     "SELECT id, first_name, last_name, middle_initial, title, login_user_id FROM staff_employees WHERE lab_id = ? AND status = 'active'"
   ).all(staffLabId) as any[];
@@ -99,6 +113,10 @@ export function documentSignatureStatus(sqlite: any, labId: number, doc: { id: n
     const v = sqlite.prepare("SELECT version_number, version_major, version_minor FROM policy_versions WHERE id = ?").get(versionId) as any;
     return v ? versionLabel(v) : null;
   };
+  // An older per-person assignment counts as assigned while it is open, or when it sits on this version.
+  const namedUsers = new Set<number>((sqlite.prepare(
+    "SELECT assigned_to_user_id AS u FROM policy_attestations WHERE document_id = ? AND (completed_at IS NULL OR version_id = ?)"
+  ).all(doc.id, doc.current_version_id) as any[]).map((r) => r.u));
   const people = employees.map((e) => {
     const users = [e.login_user_id, seatBy.get(e.id)].filter((u): u is number => u != null);
     const signed = (sqlite.prepare(
@@ -122,13 +140,26 @@ export function documentSignatureStatus(sqlite: any, labId: number, doc: { id: n
       version_label: labelFor(newest?.version_id ?? null),
       carried_forward: !!current && current.version_id !== doc.current_version_id,
       how: newest?.how ?? null,
+      named: users.some((u) => namedUsers.has(u)),
     };
   });
+  const standing = new Map<number, RosterSignStatus>(people.map((p) => [p.employee_id, p.status]));
+  const manualId = doc.manual_id !== undefined ? doc.manual_id : (sqlite.prepare("SELECT manual_id FROM policy_documents WHERE id = ?").get(doc.id) as any)?.manual_id ?? null;
+  const audience = documentAudience(sqlite, labId, { id: doc.id, manual_id: manualId, current_version_id: doc.current_version_id }, (emp) => standing.get(emp) === "signed");
+  const withAssignment = people.map(({ named, ...p }) => {
+    const assigned = named || audience.assigned.has(p.employee_id);
+    return { ...p, assigned, owes: assigned && p.status !== "signed", groups: audience.groupsOf(p.employee_id), group_ids: audience.groupIdsOf(p.employee_id) };
+  });
   const rank: Record<RosterSignStatus, number> = { not_signed: 0, older_version: 1, signed: 2 };
-  people.sort((a, b) => rank[a.status] - rank[b.status] || a.name.localeCompare(b.name));
+  withAssignment.sort((a, b) => rank[a.status] - rank[b.status] || Number(b.assigned) - Number(a.assigned) || a.name.localeCompare(b.name));
   return {
-    people,
+    people: withAssignment,
+    groups: audience.groups,
+    assigned_to: audience.labels,
     summary: {
+      assigned: withAssignment.filter((p) => p.assigned).length,
+      assigned_signed: withAssignment.filter((p) => p.assigned && p.status === "signed").length,
+      owes: withAssignment.filter((p) => p.owes).length,
       total: people.length,
       signed: people.filter((p) => p.status === "signed").length,
       older_version: people.filter((p) => p.status === "older_version").length,

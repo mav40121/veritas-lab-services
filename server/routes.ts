@@ -233,7 +233,8 @@ import { orderManualTree, manualMoveProblem, MAX_MANUAL_DEPTH } from "../shared/
 import { versionLabel, nextVersionParts, cleanDocNumber, docNumberKey, DOC_NUMBER_MAX } from "../shared/policyVersion";
 import { isPolicyDocType, docTypeRules, DOC_TYPE_REVIEW_MONTHS } from "../shared/policyDocTypes";
 import { labCarriesMinorRevisions, signatureStillCurrent, carriedStaffSignature } from "./policyMinorRevision";
-import { attestationStillCurrent, closeAttestationsCoveredByStaffSignatures, documentSignatureStatus, unsignedDocumentsForStaff } from "./policySignatureStatus";
+import { attestationStillCurrent, closeAttestationsCoveredByStaffSignatures, documentSignatureStatus, staffHasSignedCurrent, unsignedDocumentsForStaff } from "./policySignatureStatus";
+import { assignedDocumentIds, loadReadSignContext, logStaffDocumentView, lookupDocuments, registerReadSignRoutes, rulesForDocument, targetLabels, veritaDcStaffGuard } from "./policyReadSign";
 import { assessmentTypeLabel, assessmentTypeProblem, isEvaluationProgram, normalizeRecordKind } from "@shared/competencyEvaluation";
 import { normalizeSpecimen, normalizeReportableField, specimenLabel } from "@shared/veritamapSpecimen";
 import { buildCompetencyRegisterRows, generateCompetencyRegisterExcel } from "./competencyRegisterExcel";
@@ -7712,6 +7713,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         const own = holdsStaffSeat ? staffOwnScope((db as any).$client, req.userId, m.lab_id) : null;
         return { competencyOwnOnly: !!own, ownEmployeeId: own?.employeeId ?? null };
       })(),
+      // Step D: in VeritaDC this person sees only what's assigned to them, plus a read-only lookup (server/policyReadSign.ts). The same rule as the routes.
+      documentsOwnOnly: holdsStaffSeat ? !!staffOwnScope((db as any).$client, req.userId, m.lab_id, "veritapolicy") : false,
       permissions: (() => { try { return JSON.parse(m.permissions_json || '{}'); } catch { return {}; } })(),
       isPrimaryLab: !!m.is_primary_lab,
       isAccountHomeLab: homeLabId != null && Number(m.lab_id) === homeLabId,
@@ -8216,11 +8219,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   });
 
   // GET /api/staff-portal-session/policies?employee_id=N
-  //   Authed via staffPortalAuthMiddleware. Returns the lab's approved
-  //   policies plus, for the given staff employee, whether they've
-  //   signed the current version. Policies are universal for every
-  //   employee on the VeritaStaff roster — no per-employee gate flag
-  //   needed here (policies are by-everyone-on-roster, by design).
+  //   Authed via staffPortalAuthMiddleware. Returns the approved documents
+  //   assigned to this staff member (server/policyReadSign.ts) and whether
+  //   they've signed the current version. Documents not assigned to them
+  //   aren't listed (Step D, 2026-11-06).
   app.get("/api/staff-portal-session/policies", staffPortalAuthMiddleware, (req: any, res) => {
     try {
       const labId = req.staffPortalLabId;
@@ -8247,6 +8249,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         `SELECT d.id AS document_id,
                 d.title,
                 d.description,
+                d.manual_id,
                 d.current_version_id,
                 d.effective_date,
                 d.next_review_date,
@@ -8268,9 +8271,11 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
                             WHERE ts.lab_id = d.lab_id AND ts.doc_type = d.doc_type AND ts.requires_read_and_sign = 0)
          ORDER BY d.title`
       ).all(employeeId, labId) as any[];
+      const assigned = assignedDocumentIds(sqlite, labId, { employeeId, userId: req.staffPortalUserId });
+      const staffManualPath = new Map(orderManualTree(sqlite.prepare("SELECT id, parent_id, name, display_order FROM policy_manuals WHERE lab_id = ?").all(labId) as any[]).map((m: any) => [m.id, m.path]));
 
       res.json({
-        policies: policies.map((p: any) => {
+        policies: policies.filter((p: any) => assigned.has(p.document_id)).map((p: any) => {
           // Minor revisions (Q154): in a lab that carries them forward, a signature on an earlier version with the same
           // major number still counts, and the list says the document changed since (server/policyMinorRevision.ts).
           const carried = p.signature_id == null ? carriedStaffSignature(sqlite, labId, p.document_id, employeeId, p.current_version_id) : null;
@@ -8284,6 +8289,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
             version_number: p.version_number,
             version_label: versionLabel(p),
             doc_number: p.doc_number ?? null,
+            manual_path: p.manual_id != null ? staffManualPath.get(p.manual_id) ?? null : null,
             effective_date: p.effective_date,
             next_review_date: p.next_review_date,
             signed: p.signature_id != null || !!carried || !!attested,
@@ -8297,6 +8303,34 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     } catch (err: any) {
       console.error("[staff-portal-session/policies GET] error:", err);
       return res.status(500).json({ error: err.message || "policies_fetch_failed" });
+    }
+  });
+
+  // GET /api/staff-portal-session/policies/lookup?q=
+  //   Read-only lookup of any approved document by title, number or description (server/policyReadSign.ts says why). A search, not a
+  //   list: under two characters it returns nothing. It carries no signature status for anyone but this person.
+  app.get("/api/staff-portal-session/policies/lookup", staffPortalAuthMiddleware, (req: any, res) => {
+    try {
+      const labId = req.staffPortalLabId;
+      const sqlite = (db as any).$client;
+      const assigned = assignedDocumentIds(sqlite, labId, { employeeId: req.staffPortalStaffEmployeeId, userId: req.staffPortalUserId });
+      const results = lookupDocuments(sqlite, labId, String(req.query.q ?? "")).map((d: any) => ({
+        document_id: d.document_id,
+        title: d.title,
+        description: d.description,
+        doc_number: d.doc_number ?? null,
+        status: d.status,
+        version_id: d.current_version_id,
+        version_number: d.version_number,
+        version_label: versionLabel(d),
+        effective_date: d.effective_date,
+        next_review_date: d.next_review_date,
+        assigned: assigned.has(d.document_id),
+      }));
+      res.json({ results });
+    } catch (err: any) {
+      console.error("[staff-portal-session/policies lookup] error:", err);
+      return res.status(500).json({ error: err.message || "policy_lookup_failed" });
     }
   });
 
@@ -8317,14 +8351,14 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       }
       const sqlite = (db as any).$client;
       const doc = sqlite.prepare(
-        `SELECT id, title, description, current_version_id, effective_date, next_review_date
+        `SELECT id, title, description, status, current_version_id, effective_date, next_review_date
          FROM policy_documents
-         WHERE id = ? AND lab_id = ? AND status = 'approved' AND archived_at IS NULL`
+         WHERE id = ? AND lab_id = ? AND status IN ('approved', 'expired') AND archived_at IS NULL`
       ).get(documentId, labId) as any;
       if (!doc) return res.status(404).json({ error: "Policy not found or not approved" });
 
       const version = sqlite.prepare(
-        `SELECT id, version_number, file_format, file_hash_sha256, uploaded_at
+        `SELECT id, version_number, version_major, version_minor, file_format, file_hash_sha256, uploaded_at
          FROM policy_versions WHERE id = ?`
       ).get(doc.current_version_id) as any;
       if (!version) return res.status(404).json({ error: "Policy version not found" });
@@ -8333,10 +8367,14 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         document_id: doc.id,
         title: doc.title,
         description: doc.description,
+        status: doc.status,
+        // False for a document looked up read-only: there is nothing for this person to sign.
+        assigned: assignedDocumentIds(sqlite, labId, { employeeId: req.staffPortalStaffEmployeeId, userId: req.staffPortalUserId }).has(doc.id),
         effective_date: doc.effective_date,
         next_review_date: doc.next_review_date,
         version_id: version.id,
         version_number: version.version_number,
+        version_label: versionLabel(version),
         file_format: version.file_format,
         file_hash: version.file_hash_sha256,
         version_uploaded_at: version.uploaded_at,
@@ -8397,10 +8435,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         `SELECT v.id AS version_id, v.file_path, v.file_format, v.file_hash_sha256 AS expected_hash
          FROM policy_documents d
          JOIN policy_versions v ON v.id = d.current_version_id
-         WHERE d.id = ? AND d.lab_id = ? AND d.status = 'approved' AND d.archived_at IS NULL`
+         WHERE d.id = ? AND d.lab_id = ? AND d.status IN ('approved', 'expired') AND d.archived_at IS NULL`
       ).get(documentId, labId) as any;
       if (!row) return res.status(404).json({ error: "Not found" });
 
+      // Shows on the document's trail and as "opened" on the tracker, as a read in the main app does.
+      logStaffDocumentView(sqlite, labId, documentId, req.staffPortalUserId, req);
       return await sendStaffVersion(res, row);
     } catch (err: any) {
       console.error("[staff-portal-session/policies render] error:", err);
@@ -8450,6 +8490,16 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       if (doc.current_version_id !== versionId) {
         return res.status(409).json({ error: "Policy revised since you started reading. Please reload and re-read.", expected_version_id: doc.current_version_id });
       }
+      // Staff sign only what's assigned to them (Step D). Anything else they may read, but there is nothing to sign.
+      if (!assignedDocumentIds(sqlite, labId, { employeeId, userId: req.staffPortalUserId }).has(documentId)) {
+        return res.status(403).json({ error: "This document isn't assigned to you, so there's nothing to sign.", code: "NOT_ASSIGNED" });
+      }
+      // A manual's assignment can cover a form or job aid the lab set to no read-and-sign. That stays readable, with nothing to sign.
+      const noSign = sqlite.prepare(
+        `SELECT 1 FROM policy_documents d JOIN policy_doc_type_settings ts ON ts.lab_id = d.lab_id AND ts.doc_type = d.doc_type
+          WHERE d.id = ? AND ts.requires_read_and_sign = 0`
+      ).get(documentId);
+      if (noSign) return res.status(409).json({ error: "This document type doesn't need read-and-sign in this lab.", code: "TYPE_NO_READ_AND_SIGN" });
 
       const ip = (req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "").toString().split(",")[0].trim() || null;
       const ua = (req.headers["user-agent"] || "").toString().slice(0, 500) || null;
@@ -38964,6 +39014,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // are infrequent download paths whose lab-scoped variants land in cleanup
   // once a multi-lab user actually requests them.
 
+  // In front of every /api/labs/:labId/veritapolicy route below, so a route added later is covered too: what a limited Staff login may reach (Step D).
+  app.use("/api/labs/:labId/veritapolicy", veritaDcStaffGuard((db as any).$client));
+
   // GET /api/labs/:labId/veritapolicy/settings
   app.get('/api/labs/:labId/veritapolicy/settings', authMiddleware, labScopeMiddleware, (req: any, res) => {
     const sqlite = db.$client;
@@ -40254,6 +40307,11 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           WHERE l.to_document_id = ? AND l.lab_id = ? AND d.archived_at IS NULL
           ORDER BY d.title`
       ).all(id, req.scope.labId) as any[];
+      // A limited Staff login follows links to approved documents; the picker of everything linkable, drafts included, is the editor's.
+      if (req.dcStaff) {
+        const readable = (r: any) => r.status === "approved" || r.status === "expired";
+        return res.json({ references: references.filter(readable), referencedBy: referencedBy.filter(readable), candidates: [] });
+      }
       const linkedIds = new Set(references.map((r) => r.document_id));
       const candidates = (sqlite.prepare(
         `SELECT id, title, status FROM policy_documents WHERE lab_id = ? AND id != ? AND archived_at IS NULL ORDER BY title`
@@ -40412,8 +40470,26 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         .all(req.scope.labId) as any[];
       // Sub-manuals: manual_path names the manual by its full path ("Parent › Child"); manual_name stays the leaf name.
       const manualPath = new Map(labManualTree(sqlite, req.scope.labId).map((m) => [m.id, m.path]));
+      // A limited Staff login's list holds only the approved documents assigned to them, each with where they stand (server/policyReadSign.ts).
+      if (req.dcStaff) {
+        const mine = assignedDocumentIds(sqlite, req.scope.labId, req.dcStaff);
+        const noSign = new Set(labDocTypeRules(sqlite, req.scope.labId).filter((r) => !r.requires_read_and_sign).map((r) => r.doc_type as string));
+        const own = rows.filter((r) => r.status === "approved" && mine.has(r.id)).map((r) => ({
+          ...r,
+          manual_path: r.manual_id != null ? manualPath.get(r.manual_id) ?? r.manual_name ?? null : null,
+          my_read_sign: r.doc_type && noSign.has(r.doc_type) ? "none"
+            : req.dcStaff.employeeId != null && staffHasSignedCurrent(sqlite, req.scope.labId, r.id, r.current_version_id, req.dcStaff.employeeId, req.dcStaff.userId) ? "signed" : "to_sign",
+        }));
+        return res.json({ documents: withVersionLabel(own) });
+      }
+      // For the editor's list: who each approved document goes to, or nobody yet.
+      const readSign = loadReadSignContext(sqlite, req.scope.labId);
       const enriched = rows.map((row) => {
-        const doc = { ...row, manual_path: row.manual_id != null ? manualPath.get(row.manual_id) ?? row.manual_name ?? null : null };
+        const doc = {
+          ...row,
+          manual_path: row.manual_id != null ? manualPath.get(row.manual_id) ?? row.manual_name ?? null : null,
+          read_sign_targets: row.status === "approved" ? targetLabels(readSign, rulesForDocument(readSign, row)) : [],
+        };
         if (doc.status !== "in_review") return doc;
         const pending = getCurrentPendingStep(sqlite, doc.id);
         if (!pending.step) return doc;
@@ -40631,7 +40707,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         .all(id);
       res.json({
         document: withVersionLabel(withManualTree(sqlite, req.scope.labId, [row]))[0],
-        versions: (versions as any[]).map((v) => ({ ...v, version_label: versionLabel(v) })),
+        // A limited Staff login reads the current version only.
+        versions: (versions as any[]).filter((v) => !req.dcStaff || v.id === row.current_version_id).map((v) => ({ ...v, version_label: versionLabel(v) })),
         // History carried over from the lab's prior system, or null (server/veritadcBulkLoad.ts).
         carried: carriedRecordFor(sqlite, id),
       });
@@ -41462,6 +41539,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         "policy_quiz_questions",
         "staff_portal_policy_signatures",
         "policy_attestations",
+        "policy_read_sign_assignments",
         "policy_review_reminders",
         "policy_carried_records",
         "policy_signoffs",
@@ -42563,6 +42641,15 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const q = String(req.query.q || "").trim();
       if (q.length < 2) return res.json({ results: [] });
       const sqlite = (db as any).$client;
+      // A limited Staff login's read-only lookup: approved documents only, saying which are assigned to them.
+      if (req.dcStaff) {
+        const mine = assignedDocumentIds(sqlite, req.scope.labId, req.dcStaff);
+        const found = lookupDocuments(sqlite, req.scope.labId, q).map((d: any) => ({
+          ...d, id: d.document_id, assigned: mine.has(d.document_id),
+          current_version_number: d.version_number, current_version_major: d.version_major, current_version_minor: d.version_minor,
+        }));
+        return res.json({ results: withVersionLabel(withManualTree(sqlite, req.scope.labId, found)) });
+      }
       const pattern = `%${q}%`;
       const rows = sqlite
         .prepare(
@@ -44001,6 +44088,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           attestations,
           staffSignatures,
           roster: roster.people,
+          rosterGroups: roster.groups,
           carried: carriedRecordFor(sqlite, id),
         },
         { labName: labRow?.lab_name || "Laboratory", cliaNumber: labRow?.clia_number || "Not on file" }
@@ -44196,6 +44284,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       res.json({ pending });
     }
   );
+
+  // VeritaDC read-and-sign by group (Step D; server/policyReadSign.ts).
+  registerReadSignRoutes(app, { sqlite: () => (db as any).$client, authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit, hasModuleEditAccess });
 
   // VeritaTrack routes
   const { registerVeritaTrackRoutes } = await import('./veritatrack');

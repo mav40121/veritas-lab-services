@@ -81,6 +81,9 @@ async function main() {
     sqlite.prepare("INSERT INTO user_seats (owner_user_id, seat_email, seat_user_id, status, seat_type, lab_id, staff_employee_id) VALUES (?, ?, ?, 'active', 'staff_portal', ?, ?)").run(owner.owner_user_id, staffEmail, staffUid, A.labId, emp);
     const staffTok = issueSession(sqlite, staffUid, { headers: { "user-agent": "minor-rev-test" }, ip: "127.0.0.1" }).token;
 
+    // Since Step D a Staff login sees only what's assigned; this test is about what happens to what they see, so everything goes to everyone.
+    await call("POST", `/api/labs/${A.labId}/veritapolicy/read-sign`, { scope: "lab", everyone: true }, A.token);
+
     // A made-up document at 1.0, approved; the staff member signs, the owner attests
     const doc = await upload(A, { title: "Made-up critical results policy" });
     const id = doc.body.id as number;
