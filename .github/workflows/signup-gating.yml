@@ -199,6 +199,10 @@ jobs:
         # Michael 2026-11-04 (Q161 = 1): the roster shows who signed by either path; a Staff login signature closes their assignment,
         # but not a required quiz or a newer version; the bell lists what is left; the Excel report carries the roster.
         run: npm run test:veritadc-signature-status
+      - name: Run VeritaDC signature history carry-over integration test
+        # Michael 2026-11-06 (Q207 = 1): a read-and-sign from the prior system keeps its original date and counts as signed for that version.
+        # Nothing reads as signed in VeritaAssure; no email, assignment or login; a person is never guessed; the script is safe to rerun.
+        run: npm run test:veritadc-history-load
       - name: Run VeritaDC read-and-sign by group integration test
         # Step D of Heywood's move: a Staff login sees and signs only what's assigned to them. A document, manual or the whole lab goes to groups,
         # named people or everyone; new documents and new group members follow; assigning sends no email; coworkers' status stays hidden.

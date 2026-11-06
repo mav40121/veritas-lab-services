@@ -314,6 +314,8 @@ export function bulkLoadStatus(sqlite: any, labId: number) {
       attestations: n(`SELECT COUNT(*) AS n FROM policy_attestations WHERE document_id IN ${carriedDocs}`, labId),
       staffSignatures: n(`SELECT COUNT(*) AS n FROM staff_portal_policy_signatures WHERE document_id IN ${carriedDocs}`, labId),
       reminders: n(`SELECT COUNT(*) AS n FROM policy_review_reminders WHERE document_id IN ${carriedDocs}`, labId),
+      // Read-and-sign history carried over afterward (server/veritadcHistoryLoad.ts): not a signature in VeritaAssure, so the three above stay 0.
+      priorSignatures: n(`SELECT COUNT(*) AS n FROM policy_prior_signatures WHERE document_id IN ${carriedDocs}`, labId),
     },
     carriedNumbers: (sqlite.prepare("SELECT source_number FROM policy_carried_records WHERE lab_id = ? ORDER BY source_number").all(labId) as any[]).map((r) => r.source_number),
     volume: volumeSpace(),

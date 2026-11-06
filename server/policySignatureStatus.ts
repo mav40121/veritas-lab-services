@@ -15,6 +15,7 @@
 import { versionLabel } from "../shared/policyVersion";
 import { signatureStillCurrent, carriedStaffSignature } from "./policyMinorRevision";
 import { assignedDocumentIds, documentAudience } from "./policyReadSign";
+import { priorHow, priorSignatureStillCurrent, priorSignaturesOfDocument, priorSignaturesOfPerson } from "./policyPriorSignature";
 import { writeAuditLog } from "./veritapolicyApproval";
 
 export type RosterSignStatus = "signed" | "older_version" | "not_signed";
@@ -77,7 +78,8 @@ export function attestationStillCurrent(sqlite: any, labId: number, documentId: 
 export function staffHasSignedCurrent(sqlite: any, labId: number, documentId: number, currentVersionId: number | null, staffEmployeeId: number, userId: number): boolean {
   if (currentVersionId == null) return false;
   const exact = sqlite.prepare("SELECT 1 FROM staff_portal_policy_signatures WHERE document_id = ? AND version_id = ? AND staff_employee_id = ? LIMIT 1").get(documentId, currentVersionId, staffEmployeeId);
-  return !!exact || !!carriedStaffSignature(sqlite, labId, documentId, staffEmployeeId, currentVersionId) || !!attestationStillCurrent(sqlite, labId, documentId, userId, currentVersionId);
+  return !!exact || !!carriedStaffSignature(sqlite, labId, documentId, staffEmployeeId, currentVersionId) || !!attestationStillCurrent(sqlite, labId, documentId, userId, currentVersionId)
+    || !!priorSignatureStillCurrent(sqlite, labId, documentId, staffEmployeeId, currentVersionId);
 }
 
 /** Approved documents assigned to a Staff login that they still have to sign, by the same rules as their My sign-offs list. */
@@ -95,6 +97,7 @@ export function unsignedDocumentsForStaff(sqlite: any, labId: number, staffEmplo
   return rows
     .filter((d) => assigned.has(d.document_id))
     .filter((d) => !carriedStaffSignature(sqlite, labId, d.document_id, staffEmployeeId, d.current_version_id) && !attestationStillCurrent(sqlite, labId, d.document_id, userId, d.current_version_id))
+    .filter((d) => !priorSignatureStillCurrent(sqlite, labId, d.document_id, staffEmployeeId, d.current_version_id))
     .slice(0, 100)
     .map((d) => ({ document_id: d.document_id, title: d.title, effective_date: d.effective_date }));
 }
@@ -121,12 +124,17 @@ export function documentSignatureStatus(sqlite: any, labId: number, doc: { id: n
     const users = [e.login_user_id, seatBy.get(e.id)].filter((u): u is number => u != null);
     const signed = (sqlite.prepare(
       "SELECT version_id, signed_at FROM staff_portal_policy_signatures WHERE lab_id = ? AND document_id = ? AND staff_employee_id = ?"
-    ).all(labId, doc.id, e.id) as any[]).map((s) => ({ version_id: s.version_id, at: s.signed_at, how: "Staff login" }));
+    ).all(labId, doc.id, e.id) as any[]).map((s) => ({ version_id: s.version_id, at: s.signed_at, how: "Staff login", label: null as string | null, prior: null as { system: string; version: string; signed_on: string } | null }));
     const attested = users.flatMap((u) => (sqlite.prepare(
       "SELECT version_id, completed_at FROM policy_attestations WHERE document_id = ? AND assigned_to_user_id = ? AND completed_at IS NOT NULL"
-    ).all(doc.id, u) as any[]).map((a) => ({ version_id: a.version_id, at: a.completed_at, how: "Attestation" })));
+    ).all(doc.id, u) as any[]).map((a) => ({ version_id: a.version_id, at: a.completed_at, how: "Attestation", label: null as string | null, prior: null as { system: string; version: string; signed_on: string } | null })));
+    // Signed in the prior system. The label is the version the report names, and the record says where it happened (Q207).
+    const carriedOver = priorSignaturesOfPerson(sqlite, labId, doc.id, e.id).map((p) => ({
+      version_id: p.version_id as number, at: p.signed_on, how: priorHow(p.source_system), label: p.source_version as string | null,
+      prior: { system: p.source_system, version: p.source_version, signed_on: p.signed_on } as { system: string; version: string; signed_on: string } | null,
+    }));
     // A Staff login signature that closed an assignment appears in both; it is the same act, so the signature wins the tie.
-    const all = [...signed, ...attested].sort((a, b) => String(b.at).localeCompare(String(a.at)));
+    const all = [...signed, ...attested, ...carriedOver].sort((a, b) => String(b.at).localeCompare(String(a.at)));
     const current = all.find((x) => signatureStillCurrent(sqlite, labId, x.version_id, doc.current_version_id));
     const newest = current ?? all[0] ?? null;
     const status: RosterSignStatus = current ? "signed" : newest ? "older_version" : "not_signed";
@@ -137,9 +145,10 @@ export function documentSignatureStatus(sqlite: any, labId: number, doc: { id: n
       has_login: users.length > 0,
       status,
       signed_at: newest?.at ?? null,
-      version_label: labelFor(newest?.version_id ?? null),
+      version_label: newest?.label ?? labelFor(newest?.version_id ?? null),
       carried_forward: !!current && current.version_id !== doc.current_version_id,
       how: newest?.how ?? null,
+      prior_system: newest?.prior ?? null,
       named: users.some((u) => namedUsers.has(u)),
     };
   });
@@ -152,8 +161,14 @@ export function documentSignatureStatus(sqlite: any, labId: number, doc: { id: n
   });
   const rank: Record<RosterSignStatus, number> = { not_signed: 0, older_version: 1, signed: 2 };
   withAssignment.sort((a, b) => rank[a.status] - rank[b.status] || Number(b.assigned) - Number(a.assigned) || a.name.localeCompare(b.name));
+  // Signed in the prior system by someone not on the active roster: history, owing nothing, and no login behind it (Q207).
+  const onRoster = new Set<number>(employees.map((e) => e.id));
+  const priorHistory = priorSignaturesOfDocument(sqlite, labId, doc.id)
+    .filter((p) => p.staff_employee_id == null || !onRoster.has(p.staff_employee_id))
+    .map((p) => ({ name: p.source_name, credentials: p.source_credentials, version: p.source_version, signed_on: p.signed_on, system: p.source_system, state: p.person_state }));
   return {
     people: withAssignment,
+    prior_history: priorHistory,
     groups: audience.groups,
     assigned_to: audience.labels,
     summary: {
