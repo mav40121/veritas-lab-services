@@ -134,12 +134,14 @@ export default function LabMembersPage() {
   const isOwner = myRole === "owner";
   const canManage = myRole === "owner" || myRole === "admin";
 
-  const { data, isLoading } = useQuery<{ members: LabMember[]; pendingInvites?: PendingInvite[]; seatLimits?: SeatLimits; seatCounts?: SeatCounts; staffPortal?: { band: "small" | "medium" | "large" | null; maxStaff: number | null; used: number } | null; medicalDirector?: { email: string; name: string | null } | null }>({
+  const { data, isLoading } = useQuery<{ ownOnly?: boolean; members: LabMember[]; pendingInvites?: PendingInvite[]; seatLimits?: SeatLimits; seatCounts?: SeatCounts; staffPortal?: { band: "small" | "medium" | "large" | null; maxStaff: number | null; used: number } | null; medicalDirector?: { email: string; name: string | null } | null }>({
     queryKey: [`/api/labs/${activeLabId}/members`],
     queryFn: getQueryFn({ on401: "throw" }),
     enabled: !!activeLabId,
   });
   const members = data?.members || [];
+  // Michael Q192 = 1: a Staff login sees its own row. The server decides, so a Staff seat with edit on the module keeps the list.
+  const ownOnly = !!data?.ownOnly;
   const pendingInvites = data?.pendingInvites || [];
   const seatLimits = data?.seatLimits;
   const seatCounts = data?.seatCounts;
@@ -332,9 +334,17 @@ export default function LabMembersPage() {
         <h1 className="text-2xl font-bold">Lab Members</h1>
         <p className="text-sm text-muted-foreground">
           Your role on this lab: {roleBadge(myRole)}{myRole === "owner" && <> {roleBadge("admin")}</>}
-          {!canManage && " — read-only view. Only the owner or an admin can invite or remove members."}
+          {!canManage && !ownOnly && " — read-only view. Only the owner or an admin can invite or remove members."}
         </p>
       </div>
+
+      {ownOnly && (
+        <Card data-testid="members-own-only">
+          <CardContent className="p-4 text-sm text-muted-foreground">
+            This is your own entry. To see who else is on this lab, or to change anything here, ask your lab director or supervisor.
+          </CardContent>
+        </Card>
+      )}
 
       {seatLimits && seatCounts && (
         <Card>
@@ -449,9 +459,9 @@ export default function LabMembersPage() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">
-            Members ({members.length}{pendingInvites.length > 0 && (
+            {ownOnly ? "Your entry" : <>Members ({members.length}{pendingInvites.length > 0 && (
               <span className="ml-1 text-xs font-normal text-muted-foreground">+ {pendingInvites.length} pending</span>
-            )})
+            )})</>}
           </CardTitle>
         </CardHeader>
         <CardContent>
