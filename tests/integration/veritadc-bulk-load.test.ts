@@ -374,6 +374,8 @@ async function main() {
     put(`${faces}/ZZ 10_Has A Label.html`, FACE("ZZ 10", "Has A Label"));
     put(`North/Chem/ZZ 11_Slides.ppt`, legacySlides);
     put(`${faces}/ZZ 11_Slides.html`, FACE("ZZ 11", "Slides"));
+    put(`North/Chem/ZZ 0_Refused By Server.docx`, docx);
+    put(`${faces}/ZZ 0_Refused By Server.html`, FACE("ZZ 0", "Refused By Server"));
     // A cached conversion stands in for Word so this runs on any machine.
     const sha = (b: Buffer) => hashBuffer(b);
     fs.mkdirSync(path.join(work, "converted"), { recursive: true });
@@ -383,6 +385,8 @@ async function main() {
     fs.writeFileSync(path.join(work, "converted", `${sha(legacySlides)}.json`), JSON.stringify({ kind: "ppt", before: { slides: 1 }, after: {} }));
     const manifestRows = [
       ["number", "title", "version", "status", "effective_date", "last_approval_or_review", "next_review_due", "author", "signature_rows", "approval_rows", "review_rows", "versions", "face_page", "manual_paths", "files"],
+      // First on purpose: the server refuses it during the real run, and everything after it must still load.
+      ["ZZ 0", "Refused By Server", "1.0", "approved and current", "1/5/2024", "1/5/2026", "1/5/2027", "Made Up", "1", "1", "0", "1", `${faces}/ZZ 0_Refused By Server.html`, "North / Chem", "ZZ 0_Refused By Server.docx"],
       ["ZZ 1", "Plain Policy-file", "1.0", "approved and current", "1/15/2024", "1/15/2026", "1/15/2027", "Made Up", "2", "1", "1", "1", `${faces}/ZZ 1_Plain Policy.html`, "North / Chem", "ZZ 1_Plain Policy (1).docx"],
       ["ZZ 2", "Filed Twice", "2.1", "approved and current", "2/1/2024", "2/1/2026", "2/1/2027", "Made Up", "1", "1", "0", "3", `${faces}/ZZ 2_Filed Twice.html`, "North / Chem || South / Spec", "ZZ 2_Filed Twice.docx || ZZ 2_Filed Twice.docx"],
       ["ZZ 3", "Legacy Fails", "1.0", "approved and current", "3/1/2024", "3/1/2026", "3/1/2027", "Made Up", "1", "1", "0", "1", `${faces}/ZZ 3_Legacy Fails.html`, "North / Chem", "ZZ 3_Legacy Fails.doc"],
@@ -450,12 +454,20 @@ async function main() {
     const refusedGo = await runLoad([...argsFor(`${scriptLabOne.labId},${scriptLabTwo.labId}`, "https://www.veritaslabservices.com"), "--apply"]);
     check("12n. a real load against production without the go is refused before anything", refusedGo.code === 1 && /needs --go/.test(refusedGo.out), refusedGo.out.slice(0, 200));
 
+    // The lab already holds this number, so the server refuses this one document during the real run.
+    const fdTaken = new FormData();
+    fdTaken.append("file", new Blob([TEXT_DOC("the lab's own")]), "own.txt");
+    fdTaken.append("doc_number", "ZZ 0");
+    fdTaken.append("title", "The lab's own document");
+    const takenDoc = ((await (await fetch(`${base}/api/labs/${scriptLabOne.labId}/veritapolicy/documents`, { method: "POST", headers: { Authorization: `Bearer ${scriptLabOne.token}` }, body: fdTaken })).json()) as any).id as number;
+
     const real = await runLoad([...common, "--apply", "--reminders-start-on", iso(5)]);
     const realRows = await parse(latest("load_results_"));
     const realBy = (num: string) => realRows.filter((r) => r.number === num);
-    check("12o. the real run ends non-zero only if something failed to send; here all sendable ones loaded", real.code === 0, real.out.slice(-400));
-    check("12p. one result row per document, per lab", realRows.length === 1 + 2 + 1 + 1 + 1 + 1 + 1 + 2 + 1 + 1, String(realRows.length));
-    check("12q. the good ones loaded, the bad and held ones didn't stop them",
+    check("12o. a run with a failure says so in its exit code", real.code === 2, `${real.code} ${real.out.slice(-300)}`);
+    check("12o2. the server's refusal is recorded against that one document", realBy("ZZ 0")[0]?.result === "failed" && /NUMBER_TAKEN/.test(realBy("ZZ 0")[0]?.detail), JSON.stringify(realBy("ZZ 0")[0]));
+    check("12p. one result row per document, per lab", realRows.length === 1 + 1 + 2 + 1 + 1 + 1 + 1 + 1 + 2 + 1 + 1, String(realRows.length));
+    check("12q. everything after the failure still loaded, and the bad and held ones didn't stop them",
       ["ZZ 1", "ZZ 4", "ZZ 7", "ZZ 11"].every((x) => realBy(x)[0]?.result === "loaded") && realBy("ZZ 2").every((r) => r.result === "loaded") && realBy("ZZ 9").every((r) => r.result === "loaded") && ["ZZ 3", "ZZ 5", "ZZ 6", "ZZ 10"].every((x) => realBy(x)[0]?.result === "not_loaded"),
       JSON.stringify(realRows.map((r) => [r.number, r.result])));
     const north = (await call("GET", `/api/admin/veritadc/bulk-load/status?labId=${scriptLabOne.labId}`, undefined, undefined, { "x-admin-secret": ADMIN })).body;
@@ -473,19 +485,21 @@ async function main() {
     const startOn = (sqlite.prepare("SELECT DISTINCT reminders_start_on AS s FROM policy_carried_records WHERE lab_id = ?").all(scriptLabOne.labId) as any[]).map((r) => r.s);
     check("12y. the start date given holds every document", startOn.join() === iso(5), startOn.join());
 
+    // The lab clears the conflict; a rerun loads what failed and leaves the rest alone.
+    sqlite.prepare("UPDATE policy_documents SET archived_at = datetime('now') WHERE id = ?").run(takenDoc);
     const filesBeforeRerunScript = filesUnder(ROOT).length;
     const rerun = await runLoad([...common, "--apply", "--reminders-start-on", iso(5)]);
     const rerunRows = await parse(latest("load_results_"));
-    check("12z. a rerun recognizes all of them and adds nothing",
-      rerun.code === 0 && rerunRows.filter((r) => r.result === "already_loaded").length === 8 && filesUnder(ROOT).length === filesBeforeRerunScript
-      && (await call("GET", `/api/admin/veritadc/bulk-load/status?labId=${scriptLabOne.labId}`, undefined, undefined, { "x-admin-secret": ADMIN })).body.documents.carried === 6,
-      JSON.stringify(rerunRows.map((r) => [r.number, r.result])));
+    check("12z. a rerun recognizes all of them, adds only the one that failed, and ends clean",
+      rerun.code === 0 && rerunRows.filter((r) => r.result === "already_loaded").length === 8 && rerunRows.find((r) => r.number === "ZZ 0")?.result === "loaded" && filesUnder(ROOT).length === filesBeforeRerunScript + 2
+      && (await call("GET", `/api/admin/veritadc/bulk-load/status?labId=${scriptLabOne.labId}`, undefined, undefined, { "x-admin-secret": ADMIN })).body.documents.carried === 7,
+      `${rerun.code} ${JSON.stringify(rerunRows.map((r) => [r.number, r.result]))}`);
     const dryAfter = await runLoad(common);
     const dryAfterRows = await parse(latest("dryrun_results_"));
-    check("12aa. a dry run after the load says they would be skipped", dryAfter.code === 0 && dryAfterRows.filter((r) => r.result === "would_skip_already_loaded").length === 8);
+    check("12aa. a dry run after the load says they would be skipped", dryAfter.code === 0 && dryAfterRows.filter((r) => r.result === "would_skip_already_loaded").length === 9);
     const cleared = await runLoad([...common, "--apply", "--reminders-start-on", iso(5), "--clear-phi", "ZZ 10"]);
     const clearedRows = await parse(latest("load_results_"));
-    check("12ab. once a person clears it by number, a later run loads it and leaves the rest", cleared.code === 0 && clearedRows.find((r) => r.number === "ZZ 10")?.result === "loaded" && clearedRows.filter((r) => r.result === "already_loaded").length === 8, JSON.stringify(clearedRows.map((r) => [r.number, r.result])));
+    check("12ab. once a person clears it by number, a later run loads it and leaves the rest", cleared.code === 0 && clearedRows.find((r) => r.number === "ZZ 10")?.result === "loaded" && clearedRows.filter((r) => r.result === "already_loaded").length === 9, JSON.stringify(clearedRows.map((r) => [r.number, r.result])));
 
     // 13. Containment
     check("13a. the load left the other lab alone", n("SELECT COUNT(*) AS n FROM policy_documents WHERE lab_id = ?", otherLab.labId) === 1);
