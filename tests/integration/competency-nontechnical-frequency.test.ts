@@ -180,6 +180,8 @@ async function main() {
       snap.due.some((d: any) => d.employeeId === tessStaff) && !!tessInSnap?.competencyStatus?.nextDue && snap.owed.employees?.some((e: any) => e.employeeId === tessStaff) && typeof snap.dash.overdue === "number"
       && snap.person?.length === 4 && snap.register.byMethod.length >= 5 && snap.register.people.length >= 5 && snap.schedules.length >= 1 && snap.signoffs.length === 8,
       technicalBlank.slice(0, 300));
+    const technicalLine = "First annual competency due (Made-up High)";
+    check("1g. the technical line is in the emails, so comparing them later means something too", plan().every((p) => p.items.some((i) => i.reason === technicalLine)), technicalPlanBlank.slice(0, 300));
 
     // ── Who may change it ────────────────────────────────────────────────────
     member(labId, ADMINUSER.id, "admin");
@@ -307,7 +309,7 @@ async function main() {
     check("7f. the nightly run plans the same lines and sends nothing on a dry run", dry.emailsSent === 0 && JSON.stringify(dry.plans).includes("Non-technical competency due (Made-up Safety)"), JSON.stringify(dry).slice(0, 200));
     const preview = await call("GET", `${L}/competency/reminder-preview`, undefined, OWNER.token);
     check("7g. the settings preview shows them too", preview.s === 200 && preview.text.includes("Non-technical competency due (Made-up Safety)"), preview.text.slice(0, 200));
-    check("7h. technical lines in the emails don't change at any setting", technicalItems() === technicalPlanBlank && [12, 36].every((m) => { dueAt(m); return technicalItems() === technicalPlanBlank; }), technicalItems().slice(0, 300));
+    check("7h. technical lines in the emails don't change at any setting", plan().every((p) => p.items.some((i) => i.reason === technicalLine)) && technicalItems() === technicalPlanBlank && [12, 36].every((m) => { dueAt(m); return technicalItems() === technicalPlanBlank; }), technicalItems().slice(0, 300));
     dueAt(24);
 
     // ── Technical timing doesn't change, at any setting ──────────────────────
