@@ -200,7 +200,7 @@ return (
           <p><strong>The intercept (b)</strong> should be as close to zero as possible. A significant intercept indicates constant systematic error: the instrument consistently adds or subtracts a fixed amount regardless of the true value.</p>
           <p><strong>The slope (m)</strong> reveals proportional bias. A slope significantly different from 1.0 indicates that error increases proportionally with concentration, a sign of calibration drift across the analytical range.</p>
           <p>
-            The <a href="https://www.adlm.org" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Association for Diagnostics & Laboratory Medicine (ADLM)</a> recommends performance goals at half of the CLIA allowable error, providing a safety margin.
+            CLIA sets no internal goal; the laboratory sets its own criterion. Some laboratories budget a fraction of allowable total error for a given study, and rules of thumb differ: Westgard uses one-third of TEa for bias on calibration verification, and Data Innovations recommends 25 to 50 percent for systematic error. The medical director or designee decides and should document why.
           </p>
 
           <h2 className="font-serif text-2xl font-bold mt-10 mb-3">The TJC Six-Month-Plus-Twenty-Day Window: The Most Underused Compliance Tool</h2>
@@ -289,7 +289,6 @@ return (
               <li>The Joint Commission. TJC standard for laboratory accreditation.</li>
               <li>Centers for Medicare & Medicaid Services. (2006). Calibration and Calibration Verification: CLIA Brochure. <a href="https://www.cms.gov/files/document/clia-brochure-calibration-and-calibration-verification-april-2006.pdf" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">cms.gov</a></li>
               <li>Code of Federal Regulations. (2024). Title 42, Part 493: Laboratory Requirements. <a href="https://www.ecfr.gov/current/title-42/chapter-IV/subchapter-G/part-493" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">ecfr.gov</a></li>
-              <li>Association for Diagnostics & Laboratory Medicine. (2024). Quality Management Guidelines for Clinical Laboratories. <a href="https://www.adlm.org" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">adlm.org</a></li>
             </ol>
           </div>
 

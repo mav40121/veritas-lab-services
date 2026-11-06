@@ -157,9 +157,8 @@ export default function ArticlePrecisionInterpretationPage() {
               of it, as the precision verification acceptance criterion, and should document why it fits the clinical need. CMS said in the preamble
               to CMS-3355-F (87 FR 41194, July 11, 2022) that PT limits were written to grade proficiency testing and weren't intended as performance
               goals, and that goals for accuracy and precision should rest on clinical needs and the manufacturer's labeling. That is preamble text,
-              not regulation text. A common convention, often attributed to the Association for Diagnostics &amp; Laboratory Medicine (ADLM), is to use
-              half of TEa for precision and the other half for bias. VeritaCheck evaluates against the criterion set for the study: selecting an
-              analyte preset fills in the published PT limit, and the report additionally surfaces the ADLM internal goal alongside it.
+              not regulation text. CLIA sets no internal goal; the laboratory sets its own criterion. Some laboratories budget a fraction of allowable total error for a given study, and rules of thumb differ: Westgard uses one-third of TEa for bias on calibration verification, and Data Innovations recommends 25 to 50 percent for systematic error. The medical director or designee decides and should document why.
+              VeritaCheck® evaluates against the criterion set for the study: selecting an analyte preset fills in the published PT limit.
             </p>
             <p>
               <strong>Vendor SD.</strong> The within-run SD claim published by the instrument manufacturer in the package insert. Optional;
@@ -207,7 +206,7 @@ export default function ArticlePrecisionInterpretationPage() {
             <p><strong>Key Statistics Summary (page 1).</strong> Mean, SD, CV, 95% CI for both, observed 2 SD range, and overall pass / fail.
               When a vendor SD goal is supplied, an additional Vendor SD Goal / Vendor Verdict row appears, color-coded by verdict. When a
               target mean is supplied, a Target Mean / Bias row appears.</p>
-            <p><strong>Study Narrative Summary.</strong> Plain-language methodology paragraph, regulatory determination citing the relevant CFR section, ADLM internal goal context, and a closing sentence reminding that final acceptance is the laboratory director's or designee's responsibility.</p>
+            <p><strong>Study Narrative Summary.</strong> Plain-language methodology paragraph, regulatory determination citing the relevant CFR section, and a closing sentence reminding that final acceptance is the laboratory director's or designee's responsibility.</p>
             <p><strong>Regulatory Compliance References.</strong> Cross-references to CAP, CLSI, and 42 CFR §493 sections. Citations only; the underlying standards are referenced by identifier and are not reproduced.</p>
             <p><strong>Laboratory Director or Designee Review.</strong> Signature block with Accepted / Not accepted checkboxes, signature line, date, print name, and title. Placed on page 1 so the regulatory determination is visible on the same page as the verdict.</p>
             <p><strong>Confidence Intervals and Distribution (page 2).</strong> Per-level table of 95% CI for SD, 95% CI for mean, observed 2 SD range, and (when populated) bias, percent bias, vendor SD goal, and vendor verdict.</p>
@@ -235,9 +234,6 @@ export default function ArticlePrecisionInterpretationPage() {
             </p>
             <p>
               <strong>CLSI EP15-A3: User Verification of Precision and Estimation of Bias; Approved Guideline.</strong> Published by the Clinical and Laboratory Standards Institute. The procedural standard most laboratories adopt for the verification activity, including the 5-day × 5-replicate design referenced in advanced mode.
-            </p>
-            <p>
-              <strong>ADLM: Association for Diagnostics &amp; Laboratory Medicine.</strong> Professional society whose published recommendations on splitting allowable total error into systematic and random error budgets inform the "ADLM internal goal" surfaced alongside the CLIA TEa in VeritaCheck narratives.
             </p>
             <p>
               Standards bodies own their respective documents; VeritaCheck references them by identifier only and does not reproduce their content.
