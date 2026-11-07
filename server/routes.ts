@@ -2059,10 +2059,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const userId = parseInt(req.params.userId);
     if (!Number.isFinite(userId)) return res.status(400).json({ error: "Invalid userId" });
     const sqlite = (db as any).$client;
-    const user = sqlite.prepare("SELECT id, email, name, created_at FROM users WHERE id = ?").get(userId) as any;
+    // failed_login_count: wrong passwords since the last good sign-in or password change. ended_reason: why a session ended (server/sessionAuth.ts).
+    const user = sqlite.prepare("SELECT id, email, name, created_at, failed_login_count, locked_at FROM users WHERE id = ?").get(userId) as any;
     if (!user) return res.status(404).json({ error: "User not found" });
     const sessions = sqlite.prepare(
-      "SELECT id, created_at, last_active, is_active, device_info FROM user_sessions WHERE user_id = ? ORDER BY id DESC LIMIT 20"
+      "SELECT id, created_at, last_active, is_active, ended_at, ended_reason, device_info FROM user_sessions WHERE user_id = ? ORDER BY id DESC LIMIT 20"
     ).all(userId);
     const audit = sqlite.prepare(
       "SELECT id, module, action, entity_type, entity_label, entity_id, ip_address, created_at FROM audit_log WHERE user_id = ? ORDER BY id DESC LIMIT 50"
