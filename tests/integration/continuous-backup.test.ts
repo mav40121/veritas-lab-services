@@ -169,7 +169,8 @@ async function main() {
     const ins = sqlite.prepare("INSERT INTO studies (name) VALUES (?)");
     for (let i = 0; i < 500; i++) ins.run(`study ${i}`);
     sqlite.prepare("INSERT INTO users (email) VALUES (?)").run("it@example.com");
-    const env = { ...process.env, CONTINUOUS_BACKUP: "1", RAILWAY_SERVICE_NAME: tag };
+    // A 5 s snapshot interval (tests only) so the replica holds level-9 snapshots before 4g resets, as R2 did (BUG-111).
+    const env = { ...process.env, CONTINUOUS_BACKUP: "1", RAILWAY_SERVICE_NAME: tag, LITESTREAM_SNAPSHOT_INTERVAL: fileReplica ? "5s" : "" };
     try {
       const st = startContinuousBackup(sqlite, env);
       check("4a. it starts, switches the database to WAL and replicates under a throwaway folder", st.enabled && String(sqlite.pragma("journal_mode", { simple: true })) === "wal" && st.replicaPath === `${tag}/litestream/g2/veritas.db` && st.generation === 2, `${st.reason} ${st.replicaPath} v${st.version}`);
@@ -193,6 +194,9 @@ async function main() {
       if (fileReplica) {
         const ltx0 = path.join(dir, ".veritas.db-litestream", "ltx", "0");
         const files = fs.existsSync(ltx0) ? fs.readdirSync(ltx0).filter((f) => f.endsWith(".ltx")).sort() : [];
+        const l9 = path.join(fileReplica, `${tag}/litestream/g2/veritas.db`, "0009");
+        const snapshots = fs.existsSync(l9) ? fs.readdirSync(l9).filter((f) => f.endsWith(".ltx")).length : 0;
+        check("4g0. precondition: the kept replica holds level-9 snapshots (as R2 did on 2026-10-27)", snapshots > 0, `snapshots=${snapshots}`);
         if (files[0]) fs.rmSync(path.join(ltx0, files[0]));
         _clearResetClockForTests();
         const before = continuousBackupStatus().resets;
@@ -208,7 +212,7 @@ async function main() {
         }
         const s4 = continuousBackupStatus();
         const how = s4.generation > genBefore ? `moved to generation ${s4.generation} after ${s4.resets > before ? "a reset" : "no reset"}` : "stayed on the same generation";
-        check("4g. BUG-111: after a restart with the replica kept and the first local LTX file missing, a later change is in a restored copy", ok,
+        check("4g. BUG-111: after a restart with the replica kept (snapshots above the reset) and the first local LTX file missing, replication moves to a new generation and a later change is in a restored copy", ok && s4.generation > genBefore,
           JSON.stringify({ removedLtx: files[0] || null, how, path: s4.replicaPath, verdict: last?.verdict, notes: last?.notes, log: s4.log.slice(-6) }));
         await stopContinuousBackup();
       }

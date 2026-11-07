@@ -68,7 +68,9 @@ function writeGeneration(dbPath: string, n: number) {
 
 // fileReplicaDir (tests only, LITESTREAM_FILE_REPLICA): replicate to a local folder instead of R2, so CI can run the
 // real Litestream round trip on Linux without R2 credentials.
-export function litestreamConfig(dbPath: string, replicaPath: string, fileReplicaDir?: string): string {
+// snapshotInterval: tests only (LITESTREAM_SNAPSHOT_INTERVAL with a folder replica), so a short test can take the level-9
+// snapshot that, in production, sat above a reset chain (BUG-111). Production always uses 6h.
+export function litestreamConfig(dbPath: string, replicaPath: string, fileReplicaDir?: string, snapshotInterval = "6h"): string {
   const replica = fileReplicaDir
     ? ["    replica:", "      type: file", `      path: ${JSON.stringify(path.join(fileReplicaDir, replicaPath))}`, "      auto-recover: true"]
     : [
@@ -88,7 +90,7 @@ export function litestreamConfig(dbPath: string, replicaPath: string, fileReplic
     "logging:",
     "  level: warn",
     "snapshot:",
-    "  interval: 6h",
+    `  interval: ${snapshotInterval}`,
     "  retention: 72h",
     "dbs:",
     `  - path: ${JSON.stringify(dbPath)}`,
@@ -125,6 +127,7 @@ const state: State = {
   running: false, pid: null, startedAt: null, restarts: 0, lastExit: null, resets: 0, lastReset: null, generation: 0, log: [],
 };
 let fileReplicaDir: string | undefined;
+let snapshotInterval = "6h";
 let child: ChildProcess | null = null;
 let stopping = false;
 let quickFailures = 0;
@@ -163,7 +166,7 @@ function useGeneration(n: number, env: NodeJS.ProcessEnv = process.env) {
   state.generation = n;
   writeGeneration(state.dbPath!, n);
   state.replicaPath = continuousBackupReplicaPath(env, n);
-  fs.writeFileSync(state.configPath!, litestreamConfig(state.dbPath!, state.replicaPath, fileReplicaDir));
+  fs.writeFileSync(state.configPath!, litestreamConfig(state.dbPath!, state.replicaPath, fileReplicaDir, snapshotInterval));
 }
 
 async function resetAndRelaunch() {
@@ -253,6 +256,8 @@ export function startContinuousBackup(sqlite: Database.Database, env: NodeJS.Pro
   state.dbPath = path.resolve(sqlite.name);
   state.configPath = path.join(os.tmpdir(), "veritas-litestream.yml");
   fileReplicaDir = String(env.LITESTREAM_FILE_REPLICA ?? "").trim() || undefined;
+  const testInterval = String(env.LITESTREAM_SNAPSHOT_INTERVAL ?? "").trim();
+  snapshotInterval = fileReplicaDir && /^\d+[smh]$/.test(testInterval) ? testInterval : "6h";
   const stored = readGeneration(state.dbPath);
   const generation = Math.max(stored, GENERATION_FLOOR);
   useGeneration(generation, env);
