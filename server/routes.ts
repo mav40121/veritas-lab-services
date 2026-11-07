@@ -33003,6 +33003,13 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     return ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "clinic", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(plan);
   }
 
+  // A certificate field the request sends replaces the stored value, and a blank clears it: the screen sends null for an
+  // empty box. A field the request leaves out stays as it is.
+  function certField(sent: any, stored: any) {
+    if (sent === undefined) return stored;
+    return sent === "" ? null : sent;
+  }
+
   function scheduleReminders(certId: number, userId: number, expirationDate: string) {
     // The new schedule (none without a valid expiration date), worked out before anything is written.
     const rows: { type: string; date: string }[] = [];
@@ -33120,22 +33127,19 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     ).run(
       cert_type ?? existing.cert_type,
       cert_name?.trim() ?? existing.cert_name,
-      cert_number ?? existing.cert_number,
-      issuing_body ?? existing.issuing_body,
-      issued_date ?? existing.issued_date,
-      expiration_date ?? existing.expiration_date,
-      lab_director ?? existing.lab_director,
-      notes ?? existing.notes,
+      certField(cert_number, existing.cert_number),
+      certField(issuing_body, existing.issuing_body),
+      certField(issued_date, existing.issued_date),
+      certField(expiration_date, existing.expiration_date),
+      certField(lab_director, existing.lab_director),
+      certField(notes, existing.notes),
       now,
       req.params.id
     );
     (db as any).$client.prepare("UPDATE lab_certificates SET link_url = ?, clia_certificate_type = ? WHERE id = ?").run(extras.link_url, extras.clia_certificate_type, req.params.id);
 
-    // Reschedule reminders if expiration_date changed
-    const newExp = expiration_date ?? existing.expiration_date;
-    if (newExp) {
-      scheduleReminders(Number(req.params.id), req.userId, newExp);
-    }
+    // Reschedule reminders from the date now on the certificate; with no date, none stay waiting.
+    scheduleReminders(Number(req.params.id), req.userId, certField(expiration_date, existing.expiration_date) || "");
 
     const cert = (db as any).$client.prepare("SELECT * FROM lab_certificates WHERE id = ?").get(req.params.id);
     res.json(cert);
@@ -33211,18 +33215,17 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     ).run(
       cert_type ?? existing.cert_type,
       cert_name?.trim() ?? existing.cert_name,
-      cert_number ?? existing.cert_number,
-      issuing_body ?? existing.issuing_body,
-      issued_date ?? existing.issued_date,
-      expiration_date ?? existing.expiration_date,
-      lab_director ?? existing.lab_director,
-      notes ?? existing.notes,
+      certField(cert_number, existing.cert_number),
+      certField(issuing_body, existing.issuing_body),
+      certField(issued_date, existing.issued_date),
+      certField(expiration_date, existing.expiration_date),
+      certField(lab_director, existing.lab_director),
+      certField(notes, existing.notes),
       now,
       req.params.id
     );
     (db as any).$client.prepare("UPDATE lab_certificates SET link_url = ?, clia_certificate_type = ? WHERE id = ?").run(extras.link_url, extras.clia_certificate_type, req.params.id);
-    const newExp = expiration_date ?? existing.expiration_date;
-    if (newExp) scheduleReminders(Number(req.params.id), existing.user_id, newExp);
+    scheduleReminders(Number(req.params.id), existing.user_id, certField(expiration_date, existing.expiration_date) || "");
     const cert = (db as any).$client.prepare("SELECT * FROM lab_certificates WHERE id = ?").get(req.params.id);
     res.json(cert);
   });
