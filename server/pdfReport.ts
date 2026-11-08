@@ -2818,8 +2818,8 @@ function buildRefIntervalHTML(study: Study, results: any): string {
   const verdictText = overallPass ? "Meets CLSI EP28-A3c criteria" : "Does not meet CLSI EP28-A3c criteria";
 
   const cliaStatement = overallPass
-    ? `<b>The reference range verification for ${analyte} meets the criteria per 42 CFR \u00A7493.1253(b)(2) and CLSI EP28-A3c.</b> Final approval and clinical determination must be made by the laboratory director or designee.`
-    : `<b>The reference range verification for ${analyte} does not meet the criteria per 42 CFR \u00A7493.1253(b)(2) and CLSI EP28-A3c.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
+    ? `<b>The reference range verification for ${analyte} meets the criteria per 42 CFR \u00A7493.1253(b)(1)(ii) and CLSI EP28-A3c.</b> Final approval and clinical determination must be made by the laboratory director or designee.`
+    : `<b>The reference range verification for ${analyte} does not meet the criteria per 42 CFR \u00A7493.1253(b)(1)(ii) and CLSI EP28-A3c.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
 
   const specimens = (results.specimens || []) as { specimenId: string; value: number; inRange: boolean }[];
   const dataRows = specimens.map((s, i) => {
@@ -3352,7 +3352,7 @@ function reportableRangeChartSVG(
     </div>`;
 }
 
-function buildLinearityHTML(study: Study, results: any): string {
+export function buildLinearityHTML(study: Study, results: any): string {
   const analyte = results.analyte || study.testName;
   const units = results.units || "";
   const levels = (results.levels || []) as Array<{
@@ -3362,6 +3362,7 @@ function buildLinearityHTML(study: Study, results: any): string {
     mean: number | null;
     sd: number | null;
     pctRecovery: number | null;
+    absBias?: number | null;
     verdict: "pass" | "fail" | "incomplete";
   }>;
   const overallPass = !!results.overallPass;
@@ -3369,8 +3370,8 @@ function buildLinearityHTML(study: Study, results: any): string {
   const verdictText = overallPass ? "Meets CLSI EP06 criteria" : "Does not meet CLSI EP06 criteria";
 
   const cliaStatement = overallPass
-    ? `<b>The Linearity verification for ${analyte} meets the criteria per 42 CFR §493.1253(b)(1)(ii) and CLSI EP06.</b> Final approval and clinical determination must be made by the laboratory director or designee.`
-    : `<b>The Linearity verification for ${analyte} does not meet the criteria per 42 CFR §493.1253(b)(1)(ii) and CLSI EP06.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
+    ? `<b>The Linearity verification for ${analyte} meets the criteria per 42 CFR §493.1253(b)(1)(i)(C) and CLSI EP06.</b> Final approval and clinical determination must be made by the laboratory director or designee.`
+    : `<b>The Linearity verification for ${analyte} does not meet the criteria per 42 CFR §493.1253(b)(1)(i)(C) and CLSI EP06.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
 
   const slope = Number(results.slope ?? 0);
   const intercept = Number(results.intercept ?? 0);
@@ -3390,6 +3391,7 @@ function buildLinearityHTML(study: Study, results: any): string {
       <td class="text-right">${l.mean === null ? "-" : sf(l.mean, 3)}</td>
       <td class="text-right">${l.sd === null ? "-" : sf(l.sd, 4)}</td>
       <td class="text-right">${l.pctRecovery === null ? "-" : sf(l.pctRecovery, 2) + "%"}</td>
+      ${teaIsPercentage ? "" : `<td class="text-right">${l.absBias === null || l.absBias === undefined ? "-" : sf(l.absBias, 3)}</td>`}
       <td class="text-right ${pfClass}">${verdictLabel}</td>
     </tr>`;
   }).join("");
@@ -3453,7 +3455,9 @@ function buildLinearityHTML(study: Study, results: any): string {
   ${directorReviewHTML(study)}
   <div class="page-break"></div>
   <div class="section-heading">Per-Level Linearity Results</div>
-  <p style="font-size:8pt;color:#666;margin:0 0 8px;">EP06: linearity of the analytical measurement range. Acceptance: |slope - 1| × 100 ≤ TEa% AND r² ≥ 0.95. Per-level verdict reflects bias against TEa at the level mean.</p>
+  <p style="font-size:8pt;color:#666;margin:0 0 8px;">${teaIsPercentage
+    ? "EP06: linearity of the analytical measurement range. Acceptance: |slope - 1| × 100 ≤ TEa% AND r² ≥ 0.95. Per-level verdict reflects bias against TEa at the level mean."
+    : `EP06: linearity of the analytical measurement range. Acceptance for a limit in units: every level's mean within ±${teaPctTxt} of its assigned value AND r² ≥ 0.95.`}</p>
   ${linearityChartSVG(
     levels.filter(l => l.assigned_value !== null && l.mean !== null).map(l => ({ x: l.assigned_value as number, y: l.mean as number, verdict: l.verdict, name: l.name })),
     slope,
@@ -3469,6 +3473,7 @@ function buildLinearityHTML(study: Study, results: any): string {
       <th class="text-right">Mean</th>
       <th class="text-right">SD</th>
       <th class="text-right">% Recovery</th>
+      ${teaIsPercentage ? "" : `<th class="text-right">|Mean - Assigned|${units ? " (" + units + ")" : ""}</th>`}
       <th class="text-right">Verdict</th>
     </tr></thead>
     <tbody>${dataRows}</tbody>

@@ -2119,10 +2119,7 @@ export default function VeritaCheckPage() {
       const intercept = meanY - slope * meanX;
       const r2 = (ssXX > 0 && ssYY > 0) ? (ssXY * ssXY) / (ssXX * ssYY) : 0;
       const slopeBiasPct = Math.abs(slope - 1) * 100;
-      const teaPct = presetIsPercentage ? tea * 100 : 100;
-      const slopePass = slopeBiasPct <= teaPct + FP_EPS;
       const r2Pass = r2 >= 0.95 - FP_EPS;
-      const overallPass = slopePass && r2Pass;
       // Per-level rows: mean, SD, %recovery, individual verdict against TEa
       const perLevel = builtLevels.map(lv => {
         const reps = lv.replicates;
@@ -2142,7 +2139,13 @@ export default function VeritaCheckPage() {
         const pass = absBias <= allowance + FP_EPS;
         return { name: lv.name, assigned_value: assigned, n: nReps, mean: meanV, sd: sdv, pctRecovery, absBias, allowance, verdict: pass ? "pass" as const : "fail" as const };
       });
-      const teaTxt = presetIsPercentage ? `${(tea * 100).toFixed(1)}%` : `${tea} ${presetAbsUnit || ""}`.trim();
+      // A percent limit judges |slope - 1| x 100; a limit in units judges every level's mean against it (Q240 = 1,
+      // 2026-11-08), as studyResults.ts and the server's computeStudyStatus do.
+      const levelsFailed = perLevel.filter(l => l.verdict === "fail").length;
+      const slopePass = presetIsPercentage ? slopeBiasPct <= tea * 100 + FP_EPS : levelsFailed === 0;
+      const overallPass = slopePass && r2Pass;
+      const linCritUnit = presetIsPercentage ? "" : (teaUnit !== "%" ? teaUnit : "") || linUnits.trim();
+      const teaTxt = presetIsPercentage ? `${(tea * 100).toFixed(1)}%` : `±${tea}${linCritUnit ? ` ${linCritUnit}` : ""}`;
       // Coverage Summary computation (only when both bounds present). Verdict
       // logic is untouched -- this is informational only, surfacing the gap
       // between the verified range and the manufacturer's claimed AMR so the
@@ -2194,9 +2197,11 @@ export default function VeritaCheckPage() {
         claimed_range_low: linCL,
         claimed_range_high: linCH,
         coverage,
-        summary: overallPass
-          ? `Linearity verified across ${pts.length} levels: |slope - 1| × 100 = ${slopeBiasPct.toFixed(2)}% (within TEa ${teaTxt}) and r² = ${r2.toFixed(4)} (≥ 0.95).`
-          : `Linearity not verified: |slope - 1| × 100 = ${slopeBiasPct.toFixed(2)}% ${slopePass ? "within" : "exceeds"} TEa ${teaTxt}; r² = ${r2.toFixed(4)} ${r2Pass ? "meets" : "below"} 0.95.`,
+        summary: !presetIsPercentage
+          ? `Linearity ${overallPass ? "verified" : "not verified"}: ${levelsFailed} of ${perLevel.filter(l => l.verdict !== "incomplete").length} level means differ from the assigned value by more than ${teaTxt}; r² = ${r2.toFixed(4)} ${r2Pass ? "meets" : "below"} 0.95.`
+          : overallPass
+            ? `Linearity verified across ${pts.length} levels: |slope - 1| × 100 = ${slopeBiasPct.toFixed(2)}% (within TEa ${teaTxt}) and r² = ${r2.toFixed(4)} (≥ 0.95).`
+            : `Linearity not verified: |slope - 1| × 100 = ${slopeBiasPct.toFixed(2)}% ${slopePass ? "within" : "exceeds"} TEa ${teaTxt}; r² = ${r2.toFixed(4)} ${r2Pass ? "meets" : "below"} 0.95.`,
       };
       const study: InsertStudy = {
         testName: testName.trim() || linAnalyte.trim(),

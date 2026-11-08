@@ -95,6 +95,12 @@ ok("compliance score tile: competency current and duty changes cite (b)(9); posi
     && /positionDescriptionsOnFile"[^}]*493\.1445\(e\)\(15\) \/ §493\.1407\(e\)\(14\)/.test(tile) && /reassessmentsResolved"[^}]*493\.1445\(e\)\(13\) \/ §493\.1407\(e\)\(12\)/.test(tile));
 const pdf = fs.readFileSync(path.join(ROOT, "server", "pdfReport.ts"), "utf8");
 ok("VeritaComp PDF: element anchors are 493.1451(b)(8)(i)-(vi) / 493.1413(b)(8)(i)-(vi)", /&sect;493\.1451\(b\)\(8\)\(\$\{\["i", "ii", "iii", "iv", "v", "vi"\]/.test(pdf) && !/493\.1235\(a\)/.test(pdf));
+// 2026-11-08 (eCFR 2026-11-03): reportable range is 493.1253(b)(1)(i)(C) and reference intervals (b)(1)(ii); each printed
+// determination now cites what its own reference block cites.
+ok("VeritaCheck PDF: linearity determination cites 493.1253(b)(1)(i)(C) (PASS and FAIL), never (b)(1)(ii)",
+  (pdf.match(/criteria per 42 CFR §493\.1253\(b\)\(1\)\(i\)\(C\) and CLSI EP06/g) || []).length === 2 && !/1253\(b\)\(1\)\(ii\) and CLSI EP06/.test(pdf));
+ok("VeritaCheck PDF: reference range determination cites 493.1253(b)(1)(ii) (PASS and FAIL), not (b)(2)",
+  (pdf.match(/criteria per 42 CFR \\u00A7493\.1253\(b\)\(1\)\(ii\) and CLSI EP28-A3c/g) || []).length === 2 && !/1253\(b\)\(2\) and CLSI EP28/.test(pdf));
 
 const guide = fs.readFileSync(path.join(ROOT, "client", "src", "pages", "StudyGuidePage.tsx"), "utf8");
 ok("Study Guide: reportable range cites 493.1253(b)(1)(i)(C) (twice)", (guide.match(/493\.1253\(b\)\(1\)\(i\)\(C\)/g) || []).length === 2);

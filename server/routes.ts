@@ -727,8 +727,23 @@ export function computeStudyStatus(studyType: string, dataPointsJson: string, in
       const slope = ssXY / ssXX;
       const r2 = (ssXY * ssXY) / (ssXX * ssYY);
       const slopeBiasPct = Math.abs(slope - 1) * 100;
-      const teaPct = teaIsPercentage ? cliaAllowableError * 100 : 100;
-      return (slopeBiasPct <= teaPct && r2 >= 0.95) ? "pass" : "fail";
+      if (teaIsPercentage) return (slopeBiasPct <= cliaAllowableError * 100 && r2 >= 0.95) ? "pass" : "fail";
+      // A limit in units (Michael 2026-11-08, Q240 = 1): every level's mean within the limit of its assigned value,
+      // and r² >= 0.95, on the levels the results screen uses (assigned value present and not 0; studyResults.ts).
+      // Before this, a units limit was compared as 100% slope error, so r² alone decided.
+      const FP_EPS = 1e-9;
+      const used = pts.filter((p) => p.x !== 0);
+      if (used.length < 3) return "fail";
+      const k = used.length;
+      const mX = used.reduce((s, p) => s + p.x, 0) / k;
+      const mY = used.reduce((s, p) => s + p.y, 0) / k;
+      const sXX = used.reduce((s, p) => s + (p.x - mX) ** 2, 0);
+      const sYY = used.reduce((s, p) => s + (p.y - mY) ** 2, 0);
+      const sXY = used.reduce((s, p) => s + (p.x - mX) * (p.y - mY), 0);
+      if (sXX === 0 || sYY === 0) return "fail";
+      const r2Used = (sXY * sXY) / (sXX * sYY);
+      const levelsPass = used.every((p) => Math.abs(p.y - p.x) <= cliaAllowableError + FP_EPS);
+      return (levelsPass && r2Used >= 0.95 - FP_EPS) ? "pass" : "fail";
     }
     if (studyType === "reportable_range") {
       // Reportable Range / AMR Verification per CLIA 493.1255. Lab declares
@@ -794,10 +809,11 @@ function dataPointsHaveExclusions(dataPointsJson: string): boolean {
 // Q239 = 1 (Michael 2026-11-08): precision and lot-to-lot studies whose criterion is stored in units were judged as a
 // percent (Sodium ±4 mmol/L as 400%) until the rule changed. Their saved verdicts stay as saved until Michael has the
 // count from GET /api/admin/veritacheck/units-limit-counts and decides; the boot recompute must not rewrite them.
+// Q240 = 1 (same day): linearity with a units limit, judged until then on r² alone, joins them.
 export function isUnitsRuleStudy(study: { studyType?: string; study_type?: string; teaIsPercentage?: number | null; tea_is_percentage?: number | null }): boolean {
   const type = study.studyType ?? study.study_type;
   const isPct = (study.teaIsPercentage ?? study.tea_is_percentage) !== 0;
-  return !isPct && (type === "precision" || type === "lot_to_lot");
+  return !isPct && (type === "precision" || type === "lot_to_lot" || type === "linearity");
 }
 
 // Recompute and fix status for all existing studies
@@ -35386,7 +35402,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     res.json({ labId, count: enriched.length, maps: enriched });
   });
 
-  // ── ADMIN: units-criterion precision and lot-to-lot studies, counts only (Q239 = 1, 2026-11-08) ──
+  // ── ADMIN: units-criterion precision, lot-to-lot and linearity studies, counts only (Q239 = 1, Q240 = 1, 2026-11-08) ──
   // How many saved studies hold a criterion in units, and how many saved verdicts the corrected rule would change.
   // Read-only: nothing is written, and the boot recompute skips these rows (isUnitsRuleStudy). Answers counts,
   // lab ids and the preset name only; no study ids, test names typed by the lab, analysts or values.
@@ -35395,10 +35411,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const sqlite = (db as any).$client;
     const rows = sqlite.prepare(
       `SELECT lab_id, study_type, status, lifecycle_state, clia_allowable_error, clia_absolute_floor, data_points, instruments, censoring_policy, clia_preset_label
-         FROM studies WHERE tea_is_percentage = 0 AND study_type IN ('precision', 'lot_to_lot')`
+         FROM studies WHERE tea_is_percentage = 0 AND study_type IN ('precision', 'lot_to_lot', 'linearity')`
     ).all() as any[];
     const blank = () => ({ total: 0, drafts: 0, savedPass: 0, savedFail: 0, newRulePass: 0, newRuleFail: 0, wouldChange: 0, passToFail: 0, failToPass: 0, finalizedWouldChange: 0, notEvaluable: 0, withExclusions: 0 });
-    const byType: Record<string, ReturnType<typeof blank>> = { precision: blank(), lot_to_lot: blank() };
+    const byType: Record<string, ReturnType<typeof blank>> = { precision: blank(), lot_to_lot: blank(), linearity: blank() };
     const byLab: Record<string, { total: number; wouldChange: number }> = {};
     const byPreset: Record<string, number> = {};
     for (const r of rows) {

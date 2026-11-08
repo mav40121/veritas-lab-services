@@ -1808,15 +1808,17 @@ function reportableRangeChartSVG(
 }
 
 // ─── LINEARITY (CLSI EP06) results ─────────────────────────────────────────
-// OLS regression of per-level means vs assigned targets. Acceptance:
-// |slope - 1| × 100 ≤ TEa% AND r² ≥ 0.95. Per-level table shows the same
-// recovery / bias breakdown as accuracy_bias for clinical readability.
+// OLS regression of per-level means vs assigned targets. Acceptance with a
+// percent limit: |slope - 1| × 100 ≤ TEa% AND r² ≥ 0.95. With a limit in units
+// (Q240 = 1, 2026-11-08): every level's mean within the limit of its assigned
+// value AND r² ≥ 0.95, so the table adds each level's difference in units.
 function LinearityReport({ study, results }: { study: Study; results: any }) {
   const fmt = (n: any, d = 3) => (n === null || n === undefined || isNaN(n)) ? "-" : Number(n).toFixed(d);
   const fmtPct = (n: any, d = 2) => (n === null || n === undefined || isNaN(n)) ? "-" : `${Number(n).toFixed(d)}%`;
-  const levels = (results.levels || []) as Array<{ name: string; assigned_value: number | null; n: number; mean: number | null; sd: number | null; pctRecovery: number | null; verdict: "pass" | "fail" | "incomplete" }>;
+  const levels = (results.levels || []) as Array<{ name: string; assigned_value: number | null; n: number; mean: number | null; sd: number | null; pctRecovery: number | null; absBias?: number | null; verdict: "pass" | "fail" | "incomplete" }>;
   const units = results.units || "";
   const overallPass = !!results.overallPass;
+  const levelRule = results.teaIsPercentage === false;
   const slope = Number(results.slope) || 0;
   const intercept = Number(results.intercept) || 0;
   const r2 = Number(results.r2) || 0;
@@ -1854,6 +1856,11 @@ function LinearityReport({ study, results }: { study: Study; results: any }) {
           {results.summary && (
             <div className="mt-4 text-xs text-muted-foreground leading-relaxed">{results.summary}</div>
           )}
+          <div className="mt-2 text-xs text-muted-foreground" data-testid="linearity-acceptance">
+            {levelRule
+              ? `Acceptance for a limit in units: every level's mean within ${formatTeaDisplay(study)} of its assigned value, and r² ≥ 0.95.`
+              : "Acceptance: |slope - 1| × 100 within the TEa percent, and r² ≥ 0.95."}
+          </div>
         </CardContent>
       </Card>
 
@@ -1884,6 +1891,7 @@ function LinearityReport({ study, results }: { study: Study; results: any }) {
                 <th className="text-right py-2 pr-3 text-muted-foreground font-medium">Mean</th>
                 <th className="text-right py-2 pr-3 text-muted-foreground font-medium">SD</th>
                 <th className="text-right py-2 pr-3 text-muted-foreground font-medium">% Recovery</th>
+                {levelRule && <th className="text-right py-2 pr-3 text-muted-foreground font-medium">|Mean - Assigned|</th>}
                 <th className="text-left py-2 pr-3 text-muted-foreground font-medium">Verdict</th>
               </tr></thead>
               <tbody>
@@ -1895,6 +1903,7 @@ function LinearityReport({ study, results }: { study: Study; results: any }) {
                     <td className="text-right py-2 pr-3 font-mono">{fmt(lv.mean)} {units}</td>
                     <td className="text-right py-2 pr-3 font-mono">{fmt(lv.sd, 4)} {units}</td>
                     <td className="text-right py-2 pr-3 font-mono">{fmtPct(lv.pctRecovery)}</td>
+                    {levelRule && <td className="text-right py-2 pr-3 font-mono">{fmt(lv.absBias)} {units}</td>}
                     <td className={`py-2 pr-3 font-medium ${lv.verdict === "pass" ? "text-green-600 dark:text-green-400" : lv.verdict === "fail" ? "text-red-600 dark:text-red-400" : "text-muted-foreground"}`}>{lv.verdict.toUpperCase()}</td>
                   </tr>
                 ))}

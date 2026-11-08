@@ -15,7 +15,7 @@
 import { calculateStudy, calculatePrecision, calculateQualitative, calculateLotToLot, type DataPoint } from "../client/src/lib/calculations";
 import { generateNarrative, CLOSING_SENTENCE } from "../client/src/lib/studyNarrative";
 import { computeStudyResults } from "../client/src/lib/studyResults";
-import { buildCalVerHTML, buildPrecisionHTML, buildMethodCompHTML, buildLotToLotHTML } from "../server/pdfReport";
+import { buildCalVerHTML, buildPrecisionHTML, buildMethodCompHTML, buildLotToLotHTML, buildLinearityHTML } from "../server/pdfReport";
 
 let failures = 0;
 function check(name: string, ok: boolean, detail = "") {
@@ -174,6 +174,26 @@ const pts = (rows: Array<[number, Record<string, number>]>): DataPoint[] =>
   check("Sodium cal ver + correlation: both halves' summaries read ±4 mmol/L", cc.calVer.summary.includes("±4 mmol/L.") && cc.correlation.summary.includes("±4 mmol/L."), `${cc.calVer.summary} | ${cc.correlation.summary}`);
   const pctOnly = computeStudyResults(study({ testName: "Albumin", cliaAllowableError: 0.08, teaIsPercentage: 1, teaUnit: "%", dataPoints: calPts }));
   check("Albumin (percent, no floor) summary unchanged: '±8.0%.'", pctOnly.summary.includes("was ±8.0%."), pctOnly.summary);
+}
+
+// 11. Q240 = 1: Linearity (EP06) with a units limit is judged level by level, on screen and on paper; the printed
+// determination cites 493.1253(b)(1)(i)(C), as the report's reference block does.
+{
+  const linData = (means: number[]) => JSON.stringify({ analyte: "Sodium", units: "mmol/L",
+    levels: [110, 130, 150, 170].map((a, i) => ({ name: `L${i + 1}`, assigned_value: a, replicates: [means[i] - 0.5, means[i], means[i] + 0.5] })) });
+  const s = study({ studyType: "linearity", status: "fail", dataPoints: linData([115.5, 136.5, 157.5, 178.5]) });
+  const r = computeStudyResults(s) as any;
+  check("Sodium linearity, slope 1.05: FAIL with a units limit (r² is 1.0000)", r.overallPass === false && r.r2 > 0.9999, r.summary);
+  check("Sodium linearity screen summary: level means against ±4 mmol/L, no slope percent", r.summary.includes("by more than ±4 mmol/L") && !r.summary.includes("|slope - 1| × 100"), r.summary);
+  const t = text(buildLinearityHTML(s, r));
+  check("Sodium linearity PDF: acceptance for a limit in units", t.includes("Acceptance for a limit in units: every level's mean within ±4 mmol/L of its assigned value AND r² ≥ 0.95."), t.slice(0, 400));
+  check("Sodium linearity PDF: level table has |Mean - Assigned| (mmol/L) with 5.500 for L1", t.includes("|Mean - Assigned| (mmol/L)") && t.includes("5.500"));
+  check("Sodium linearity PDF: cites 493.1253(b)(1)(i)(C), never (b)(1)(ii)", t.includes("does not meet the criteria per 42 CFR §493.1253(b)(1)(i)(C) and CLSI EP06") && !t.includes("1253(b)(1)(ii)"));
+  const pct = study({ testName: "Albumin", studyType: "linearity", cliaAllowableError: 0.08, teaIsPercentage: 1, teaUnit: "%", dataPoints: linData([115.5, 136.5, 157.5, 178.5]) });
+  const rp = computeStudyResults(pct) as any;
+  const tp = text(buildLinearityHTML(pct, rp));
+  check("Albumin linearity ±8%, slope 1.05: PASS on the slope test, no difference column (null branch)",
+    rp.overallPass === true && rp.summary.includes("|slope - 1| × 100 = 5.00%") && tp.includes("Acceptance: |slope - 1| × 100 ≤ TEa% AND r² ≥ 0.95.") && !tp.includes("|Mean - Assigned|"), rp.summary);
 }
 
 console.log(failures ? `\n${failures} check(s) failed` : "\nall checks passed");

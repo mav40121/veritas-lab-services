@@ -15,6 +15,11 @@
 //      rows as saved, and still corrects a percent row
 //   4. GET /api/admin/veritacheck/units-limit-counts refuses without the
 //      secret and answers counts, lab ids and preset names only
+//   5. Q240 = 1 (same day): linearity (EP06) with a units limit passes when every
+//      level's mean is within the limit of its assigned value and r² >= 0.95, on
+//      the server and the screen; before, it was judged as 100% slope error, so
+//      r² alone decided. A percent limit keeps the slope test. Saved units
+//      linearity rows stay as saved, and the counts read includes them.
 //
 // Run: rm -f .tmp-units.db && DB_PATH=.tmp-units.db JWT_SECRET=test-jwt-secret ADMIN_SECRET=test-admin-secret STRIPE_SECRET_KEY=sk_test_dummy STRIPE_WEBHOOK_SECRET=whsec_dummy npx tsx tests/integration/units-limit-rule.test.ts
 import http from "node:http";
@@ -74,6 +79,31 @@ async function main() {
   const lotRes = calculateLotToLot(lotBad.data as any, 4, "normal", false, null, "mmol/L");
   check("lot summary speaks in mmol/L, no 400.0%", lotRes.summary.includes("±4 mmol/L") && lotRes.summary.includes("Mean |Diff| = 5.60 mmol/L") && !lotRes.summary.includes("400.0%"), lotRes.summary);
 
+  // ── 5: linearity (Q240 = 1) ──
+  const { computeStudyResults } = await import("../../client/src/lib/studyResults");
+  const lin = (means: number[], assigned = [110, 130, 150, 170]) => ({
+    analyte: "Sodium", units: "mmol/L",
+    levels: assigned.map((a, i) => ({ name: `L${i + 1}`, assigned_value: a, replicates: [means[i] - 0.5, means[i], means[i] + 0.5] })),
+  });
+  const linOk = lin([111, 131.5, 151, 172]);           // every level within 4 mmol/L
+  const linSlope = lin([115.5, 136.5, 157.5, 178.5]);  // slope 1.05: 5.5 to 8.5 mmol/L off, r² 1
+  const linOffset = lin([115, 135, 155, 175]);         // slope 1.00, a constant 5 mmol/L offset
+  const linSrv = (d: any, tea: number, isPct: boolean) => computeStudyStatus("linearity", JSON.stringify(d), "[\"A\"]", tea, isPct, null);
+  const linScr = (d: any, tea: number, isPct: number, unit = "mmol/L") => (computeStudyResults({
+    id: 1, testName: "Sodium", studyType: "linearity", cliaAllowableError: tea, teaIsPercentage: isPct, teaUnit: isPct ? "%" : unit,
+    cliaAbsoluteFloor: null, cliaAbsoluteUnit: null, dataPoints: JSON.stringify(d), instruments: "[\"A\"]",
+  } as any) as any);
+  check("linearity Sodium ±4 mmol/L, every level within 4: pass on server and screen", linSrv(linOk, 4, false) === "pass" && linScr(linOk, 4, 0).overallPass === true);
+  check("linearity Sodium ±4 mmol/L, slope 1.05: fail on server and screen", linSrv(linSlope, 4, false) === "fail" && linScr(linSlope, 4, 0).overallPass === false);
+  check("linearity Sodium ±4 mmol/L, constant 5 mmol/L offset: fail on server and screen", linSrv(linOffset, 4, false) === "fail" && linScr(linOffset, 4, 0).overallPass === false);
+  check("linearity Sodium, the old reading (slope error allowed to 100%, r² alone) would have passed both", linSrv(linSlope, 1.0, true) === "pass" && linSrv(linOffset, 1.0, true) === "pass");
+  const linRes = linScr(linSlope, 4, 0);
+  check("linearity summary speaks in mmol/L: 4 of 4 level means outside ±4 mmol/L, largest difference 8.500",
+    linRes.summary.includes("4 of 4 level means differ from the assigned value by more than ±4 mmol/L") && linRes.summary.includes("largest difference 8.500 mmol/L"), linRes.summary);
+  check("linearity percent limit keeps the slope test: Albumin ±8%, slope 1.05 pass and slope 1.10 fail, server and screen",
+    linSrv(linSlope, 0.08, true) === "pass" && linScr(linSlope, 0.08, 1).overallPass === true
+      && linSrv(lin([121, 143, 165, 187]), 0.08, true) === "fail" && linScr(lin([121, 143, 165, 187]), 0.08, 1).overallPass === false);
+
   // ── 3: the boot recompute leaves saved units rows alone ──
   const ins = sqlite.prepare(
     `INSERT INTO studies (user_id, lab_id, test_name, instrument, analyst, date, study_type, clia_allowable_error, tea_is_percentage, tea_unit, data_points, instruments, status, created_at, clia_preset_label)
@@ -85,6 +115,7 @@ async function main() {
   const savedLot = Number(ins.run(902, "Sodium", "lot_to_lot", 4, 0, "mmol/L", JSON.stringify(lotBad), "pass", "Sodium (±4 mmol/L)").lastInsertRowid);
   const savedOkLot = Number(ins.run(902, "Sodium", "lot_to_lot", 4, 0, "mmol/L", JSON.stringify(lotOk), "pass", "Sodium (±4 mmol/L)").lastInsertRowid);
   const percentRow = Number(ins.run(903, "Albumin", "precision", 0.08, 1, "%", JSON.stringify([{ level: 1, levelName: "Level 1", values: reps(4, 0.05) }]), "fail", "Albumin (±8%)").lastInsertRowid);
+  const savedLin = Number(ins.run(904, "Sodium", "linearity", 4, 0, "mmol/L", JSON.stringify(linSlope), "pass", "Sodium (±4 mmol/L)").lastInsertRowid);
   sqlite.pragma("foreign_keys = ON");
   const status = (id: number) => (sqlite.prepare("SELECT status FROM studies WHERE id = ?").get(id) as any)?.status;
   check("isUnitsRuleStudy: units precision yes, percent precision no, units cal ver no",
@@ -93,6 +124,8 @@ async function main() {
   check("boot recompute leaves a saved units precision study as saved (pass)", status(savedPrecision) === "pass", status(savedPrecision));
   check("boot recompute leaves a saved units lot study as saved (pass)", status(savedLot) === "pass", status(savedLot));
   check("boot recompute still corrects a percent row (fail -> pass)", status(percentRow) === "pass", status(percentRow));
+  check("isUnitsRuleStudy: units linearity yes, percent linearity no", isUnitsRuleStudy({ studyType: "linearity", teaIsPercentage: 0 }) && !isUnitsRuleStudy({ studyType: "linearity", teaIsPercentage: 1 }));
+  check("boot recompute leaves a saved units linearity study as saved (pass)", status(savedLin) === "pass", status(savedLin));
 
   // ── 4: the counts read ──
   const app = express();
@@ -111,9 +144,11 @@ async function main() {
     j.byType?.precision?.total === 1 && j.byType.precision.savedPass === 1 && j.byType.precision.wouldChange === 1 && j.byType.precision.passToFail === 1, JSON.stringify(j.byType?.precision));
   check("counts: 2 lot studies, 1 would change", j.byType?.lot_to_lot?.total === 2 && j.byType.lot_to_lot.wouldChange === 1 && j.byType.lot_to_lot.newRulePass === 1, JSON.stringify(j.byType?.lot_to_lot));
   check("counts by lab id: 901 has 1 changing, 902 has 1 of 2", j.byLab?.["901"]?.wouldChange === 1 && j.byLab?.["902"]?.total === 2 && j.byLab["902"].wouldChange === 1, JSON.stringify(j.byLab));
+  check("counts: 1 linearity study, saved pass, would change pass -> fail, lab 904",
+    j.byType?.linearity?.total === 1 && j.byType.linearity.savedPass === 1 && j.byType.linearity.passToFail === 1 && j.byLab?.["904"]?.wouldChange === 1, JSON.stringify(j.byType?.linearity));
   const text = JSON.stringify(j);
   check("counts read carries no study id, analyst or values", !text.includes(`"id"`) && !text.includes("made-up") && !text.includes("140") && !/"Sodium"(?! \()/.test(text), text);
-  check("the counts read wrote nothing", status(savedPrecision) === "pass" && status(savedLot) === "pass" && status(savedOkLot) === "pass");
+  check("the counts read wrote nothing", status(savedPrecision) === "pass" && status(savedLot) === "pass" && status(savedOkLot) === "pass" && status(savedLin) === "pass");
   server.close();
 
   console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILED`);
