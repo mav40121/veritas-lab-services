@@ -204,6 +204,7 @@ export function heparinRangeChartSVG(res: HeparinRangeResult, width = 330, heigh
     ? `<line x1="${X(0).toFixed(1)}" y1="${Y(res.intercept).toFixed(1)}" x2="${X(xMax).toFixed(1)}" y2="${Y(res.intercept + res.slope * xMax).toFixed(1)}" stroke="#14141e" stroke-width="1.2"/>` : "";
   const dots = pts.map((s) => `<circle cx="${X(s.antiXa).toFixed(1)}" cy="${Y(s.aptt).toFixed(1)}" r="3" fill="${s.included ? "#0e8a82" : "none"}" stroke="${s.included ? "#0e8a82" : "#c8323c"}" stroke-width="1.2"/>`).join("");
   return `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="aPTT versus anti-Xa scatter with regression line">
+  <rect x="0" y="0" width="${width}" height="${height}" fill="#fff" rx="4"/>
   <rect x="${L}" y="${T}" width="${width - L - R}" height="${height - B - T}" fill="#fff" stroke="#d2d7dc"/>${grid}<clipPath id="hr-clip"><rect x="${L}" y="${T}" width="${width - L - R}" height="${height - B - T}"/></clipPath><g clip-path="url(#hr-clip)">${line}</g>${guide(res.targetLow, res.rangeLow)}${guide(res.targetHigh, res.rangeHigh)}${dots}
   <text x="${(L + width - R) / 2}" y="${height - 4}" font-size="7.5" text-anchor="middle" fill="#14141e">Anti-Xa (IU/mL)</text>
   <text x="10" y="${(T + height - B) / 2}" font-size="7.5" text-anchor="middle" fill="#14141e" transform="rotate(-90 10 ${(T + height - B) / 2})">aPTT (seconds)</text>

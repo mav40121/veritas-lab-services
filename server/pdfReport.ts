@@ -3225,7 +3225,7 @@ function linearityChartSVG(
   ).join("");
 
   const legend = `
-    <g transform="translate(${padL + plotW - 180}, ${padT + 8})">
+    <g transform="translate(${padL + plotW - 180}, ${padT + plotH - 72})">
       <rect x="0" y="0" width="170" height="64" fill="white" fill-opacity="0.9" stroke="#D4D1CA" stroke-width="1" rx="3"/>
       <line x1="8" y1="14" x2="28" y2="14" stroke="#01696F" stroke-width="2"/><text x="34" y="17" font-size="10" font-family="Arial" fill="#28251D">Regression line</text>
       <line x1="8" y1="30" x2="28" y2="30" stroke="#7A7974" stroke-width="1.2" stroke-dasharray="4,3"/><text x="34" y="33" font-size="10" font-family="Arial" fill="#28251D">Identity (y = x)</text>
@@ -3328,7 +3328,7 @@ function reportableRangeChartSVG(
     ? `±${(tea * 100).toFixed(1)}%${absoluteFloor ? ` or ±${absoluteFloor} ${absoluteUnit}` : ""}`
     : `±${tea} ${absoluteUnit}`;
   const legend = `
-    <g transform="translate(${padL + plotW - 190}, ${padT + 8})">
+    <g transform="translate(${padL + plotW - 190}, ${padT + plotH - 70})">
       <rect x="0" y="0" width="180" height="62" fill="white" fill-opacity="0.92" stroke="#D4D1CA" stroke-width="1" rx="3"/>
       <rect x="8" y="6" width="20" height="10" fill="#01696F" fill-opacity="0.10" stroke="#01696F" stroke-width="0.5"/><text x="34" y="15" font-size="10" font-family="Arial" fill="#28251D">TEa band: ${teaLabel}</text>
       <line x1="8" y1="30" x2="28" y2="30" stroke="#964219" stroke-width="1.2" stroke-dasharray="2,3"/><text x="34" y="33" font-size="10" font-family="Arial" fill="#28251D">Claimed range</text>
