@@ -68,14 +68,18 @@ async function main() {
     { name: "Thyroxine", from: { tea: 0.5 }, to: { clia_allowable_error: 0.2, clia_absolute_floor: 1, clia_absolute_unit: "mcg/dL" } },
     { name: "FREE T4", from: { tea: 0.5 }, to: { clia_allowable_error: 0.15, clia_absolute_floor: 0.3, clia_absolute_unit: "ng/dL" } },
     { name: "Vancomycin", from: { tea: 0.5 }, to: { clia_allowable_error: 0.15, clia_absolute_floor: 2, clia_absolute_unit: "mcg/mL" } },
-    // Three things the pass does today that are not what anyone would choose. They are wrong, and fixing them would change saved studies, so they stay
-    // until someone decides that. Pinned so a change here is a decision, not an accident (see the PR for this fix).
+    // Two things the pass still does to a row with NO preset label (saved before 2026-06-04) that are not what anyone would choose. Fixing them
+    // would change saved studies, so they stay until someone decides that. Pinned so a change here is a decision, not an accident.
     { name: "Urine Creatinine", from: { tea: 0.5 }, to: { clia_allowable_error: 0.1, clia_absolute_floor: 0.2 } }, // free text collapses onto serum creatinine
     { name: "IgE", from: { tea: 0.2 }, to: { clia_allowable_error: 0.2, clia_absolute_floor: 0.2, clia_absolute_unit: "ng/mL" } }, // "ige" is inside "antigen": the PSA row
-    { name: "Creatinine", from: { tea: 0.05, preset: "Lab-defined" }, to: { clia_allowable_error: 0.05, clia_absolute_floor: 0.2, clia_absolute_unit: "mg/dL" } }, // Pass 1 ignores the preset label
   ];
   const healIds = heals.map((h) => add(h.name, h.from));
   const skipped = [
+    // BUG-139 (Q241 = 1, 2026-11-08): Pass 1 skips a row with a preset label, as Pass 2 does. These four gained a floor here before.
+    add("Creatinine", { tea: 0.05, preset: "Lab-defined" }),
+    add("IgE", { tea: 0.2, preset: "Lab-defined" }),
+    add("Creatinine Clearance", { tea: 0.15, preset: "Lab-defined" }),
+    add("Urine Creatinine", { tea: 0.1, preset: "Lab-defined" }),
     add("Creatinine", { tea: 0.05, floor: 1, floorUnit: "mg/dL", preset: "Lab-defined" }),
     add("Hemoglobin", { tea: 0.04, preset: "Hemoglobin (±4%)" }),
     add("Glucose", { tea: 0.15, floor: 6, floorUnit: "U/L", preset: "ALT/SGPT (±15% or ±6 U/L)" }),

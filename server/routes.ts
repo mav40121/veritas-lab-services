@@ -7,6 +7,7 @@ import path from "path";
 import fs from "fs";
 import os from "os";
 import { storage } from "./storage";
+import { resolveFloor } from "./backfillAbsoluteFloor";
 import { blockNonOperatorSeat } from "./seatAccess";
 import { isDelegationPosition, isDelegationComplexity, sanitizeResponsibilities, DELEGATION_CATALOG, DELEGATION_POSITIONS, DELEGATION_COMPLEXITIES } from "./directorDelegation";
 import { mayAttestAsDirectorOrDesignee, complexityForAnalyte, labHighestComplexity, isLabOwnerUser } from "./delegationGate";
@@ -35439,6 +35440,63 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       }
     }
     res.json({ studies: rows.length, byType, byLab, byPreset });
+  });
+
+  // ── ADMIN: studies the startup floor backfill changed, counts only (BUG-139, Q241 = 1, 2026-11-08) ──
+  // Pass 1 of backfillAbsoluteFloorOnStartup gave a floor to any study with none whose name loosely matched a floor analyte,
+  // whatever criterion the lab picked; it now skips a study with a preset label. Those rows were left as they are. This
+  // finds the labeled rows whose floor equals the one the pass would give and that their own criterion doesn't carry:
+  //   presetWithoutFloor: a preset whose label has no "or ±" term. The form saves no floor for it, so the pass added it.
+  //   labDefined: "Lab-defined". The lab may have typed that floor itself, so these are possible, not certain.
+  // floorDecides counts saved, evaluable studies whose verdict differs with and without that floor. Read-only; answers
+  // counts, lab ids, preset labels and floor values only (no study ids, test names typed by the lab, analysts or data).
+  app.get("/api/admin/veritacheck/floor-backfill-counts", (req, res) => {
+    if (!ADMIN_SECRET || req.headers["x-admin-secret"] !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    const sqlite = (db as any).$client;
+    const rows = sqlite.prepare(
+      `SELECT lab_id, study_type, status, lifecycle_state, test_name, clia_allowable_error, tea_is_percentage, clia_absolute_floor, clia_absolute_unit,
+              clia_preset_label, data_points, instruments, censoring_policy
+         FROM studies
+        WHERE clia_absolute_floor IS NOT NULL AND clia_preset_label IS NOT NULL AND TRIM(clia_preset_label) <> ''`
+    ).all() as any[];
+    const blank = () => ({ total: 0, drafts: 0, savedPass: 0, savedFail: 0, floorDecides: 0, passOnlyWithFloor: 0, finalizedFloorDecides: 0, notEvaluable: 0 });
+    const byKind: Record<string, ReturnType<typeof blank>> = { presetWithoutFloor: blank(), labDefined: blank() };
+    const byLab: Record<string, { total: number; floorDecides: number }> = {};
+    const byPreset: Record<string, number> = {};
+    const byFloor: Record<string, number> = {};
+    let candidates = 0;
+    for (const r of rows) {
+      const label = String(r.clia_preset_label).trim();
+      const kind = label === "Lab-defined" ? "labDefined" : /\bor\s*±/.test(label) ? null : "presetWithoutFloor";
+      if (!kind) continue;
+      const would = resolveFloor(String(r.test_name ?? ""));
+      if (!would || Math.abs(Number(r.clia_absolute_floor) - would.value) > 1e-9) continue;
+      if (String(r.clia_absolute_unit ?? "").trim().toLowerCase() !== would.unit.trim().toLowerCase()) continue;
+      candidates++;
+      const t = byKind[kind];
+      t.total++;
+      const lab = String(r.lab_id ?? "none");
+      byLab[lab] = byLab[lab] || { total: 0, floorDecides: 0 };
+      byLab[lab].total++;
+      byPreset[label] = (byPreset[label] || 0) + 1;
+      const floorKey = `${would.value} ${would.unit}`;
+      byFloor[floorKey] = (byFloor[floorKey] || 0) + 1;
+      if (r.status === "draft") { t.drafts++; continue; }
+      if (r.status === "pass") t.savedPass++; else if (r.status === "fail") t.savedFail++;
+      const isPct = r.tea_is_percentage !== 0;
+      const policy = r.censoring_policy ?? "exclude";
+      const withFloor = computeStudyStatus(r.study_type, r.data_points, r.instruments, r.clia_allowable_error, isPct, Number(r.clia_absolute_floor), policy);
+      const errWith = lastStudyStatusWasError();
+      const withoutFloor = computeStudyStatus(r.study_type, r.data_points, r.instruments, r.clia_allowable_error, isPct, null, policy);
+      if (errWith || lastStudyStatusWasError()) { t.notEvaluable++; continue; }
+      if (withFloor !== withoutFloor) {
+        t.floorDecides++;
+        byLab[lab].floorDecides++;
+        if (withFloor === "pass") t.passOnlyWithFloor++;
+        if (r.lifecycle_state === "finalized") t.finalizedFloorDecides++;
+      }
+    }
+    res.json({ studies: candidates, byKind, byLab, byPreset, byFloor });
   });
 
   // ── ADMIN: Read-only VeritaCheck/VeritaMap diagnostic probe ─────────────

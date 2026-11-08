@@ -234,10 +234,15 @@ export function backfillAbsoluteFloorOnStartup(): void {
   try {
     const sqlite = (db as any).$client;
 
-    // Pass 1: legacy floor backfill where the column is NULL
+    // Pass 1: legacy floor backfill where the column is NULL, for rows saved before the preset label existed (2026-06-04).
+    // BUG-139 (Michael 2026-11-08, Q241 = 1): a row with a preset label holds the criterion the lab picked, "Lab-defined"
+    // included, so it is skipped here as Pass 2 skips it. Before, a lab-defined Creatinine at 5% gained a ±0.2 mg/dL
+    // floor on the next deploy, and a no-floor preset on "IgE" or "Urine Creatinine" took another analyte's floor
+    // through the substring match. Rows it changed before stay as they are; GET /api/admin/veritacheck/floor-backfill-counts
+    // counts them for Michael.
     const missingFloor = sqlite
       .prepare(
-        "SELECT id, test_name FROM studies WHERE clia_absolute_floor IS NULL"
+        "SELECT id, test_name FROM studies WHERE clia_absolute_floor IS NULL AND (clia_preset_label IS NULL OR TRIM(clia_preset_label) = '')"
       )
       .all() as Array<{ id: number; test_name: string }>;
 
