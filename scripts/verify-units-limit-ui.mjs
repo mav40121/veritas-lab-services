@@ -5,6 +5,8 @@
 // studies (it registers an owner, provisions a lab and writes to SCRATCH_DB, so never point it at production):
 //   PW_BASE=http://localhost:5199 SCRATCH_DB=<scratch db> OUT=<dir> node scripts/verify-units-limit-ui.mjs
 // In a real browser: each study's results page (narrative, criterion, table), then Download PDF, saved to OUT.
+// 2026-11-08 follow-up (Q240 = 1): linearity with a units limit is judged level by level (and a percent limit keeps
+// the slope test), the calibration summary names the unit, and Save draft on the study form keeps a units preset.
 import { createRequire } from "node:module";
 import fs from "node:fs";
 const require = createRequire(import.meta.url);
@@ -38,7 +40,7 @@ const cal = (names, offs) => [118, 130, 142, 153, 165].map((v, i) => ({ level: i
 const reps = (m, d, n = 20) => Array.from({ length: n }, (_, i) => +(m + (i % 2 ? d : -d)).toFixed(4));
 const CASES = [
   { file: "sodium-calver", type: "cal_ver", names: [A], ...sodium, status: "pass", points: cal([A], [1, -1, 0.5, -0.5, 2]),
-    has: ["±4 mmol/L", "§493.1255(b)(2) and §493.1253(b)(3)"], closing: true },
+    has: ["±4 mmol/L", "§493.1255(b)(2) and §493.1253(b)(3)", "Adopted Acceptance Criterion (TEa) was ±4 mmol/L."], closing: true },
   { file: "sodium-calver-two-analyzers", type: "cal_ver", names: [A, B], ...sodium, status: "pass", points: cal([A, B], [1, -1, 0.5, -0.5, 2]),
     has: ["5 calibration levels for Sodium were run on 2 analyzers", "maximum observed error"], hasNot: ["This instrument", "All 10"], closing: true },
   { file: "sodium-precision-fail", type: "precision", names: [A], ...sodium, status: "fail", points: [{ level: 1, levelName: "Level 1", values: reps(140, 2.5) }],
@@ -55,6 +57,12 @@ const CASES = [
   { file: "sodium-accuracy", type: "accuracy_bias", names: [A], ...sodium, status: "pass",
     points: { analyte: "Sodium", units: "mmol/L", levels: [{ name: "Low", assigned_value: 120, replicates: [121, 120.5, 121.5] }, { name: "High", assigned_value: 160, replicates: [161, 159.5, 160.5] }] },
     has: ["±4 mmol/L"] },
+  { file: "sodium-linearity-fail", type: "linearity", names: [A], ...sodium, status: "fail",
+    points: { analyte: "Sodium", units: "mmol/L", levels: [[110, 115.5], [130, 136.5], [150, 157.5], [170, 178.5]].map(([a, m], i) => ({ name: `L${i + 1}`, assigned_value: a, replicates: [m - 0.5, m, m + 0.5] })) },
+    has: ["Acceptance for a limit in units: every level's mean within ±4 mmol/L of its assigned value, and r² ≥ 0.95.", "|Mean - Assigned|", "4 of 4 level means differ from the assigned value by more than ±4 mmol/L", "largest difference 8.500 mmol/L"], verdict: "FAIL", dark: "|Mean - Assigned|" },
+  { file: "albumin-linearity-percent", type: "linearity", names: [A], test: "Albumin", tea: 0.08, pct: true, unit: "%", preset: "Albumin (±8%)", status: "pass",
+    points: { analyte: "Albumin", units: "g/dL", levels: [[1.0, 1.05], [2.0, 2.1], [3.0, 3.15], [4.0, 4.2]].map(([a, m], i) => ({ name: `L${i + 1}`, assigned_value: a, replicates: [m - 0.01, m, m + 0.01] })) },
+    has: ["Acceptance: |slope - 1| × 100 within the TEa percent, and r² ≥ 0.95.", "|slope - 1| × 100 = 5.00%"], hasNot: ["|Mean - Assigned|"], verdict: "PASS" },
 ];
 
 const browser = await chromium.launch();
@@ -85,10 +93,10 @@ for (const c of CASES) {
     await page.evaluate(() => window.scrollBy(0, -360));
   }
   await page.screenshot({ path: `${OUT}/${c.file}.png` });
-  if (c.file === "sodium-precision-fail") {
+  if (c.file === "sodium-precision-fail" || c.dark) {
     await page.evaluate(() => document.documentElement.classList.add("dark"));
     await page.waitForTimeout(200);
-    await page.getByText("2 SD / Limit").first().scrollIntoViewIfNeeded();
+    await page.getByText(c.dark || "2 SD / Limit").first().scrollIntoViewIfNeeded();
     await page.screenshot({ path: `${OUT}/${c.file}-dark.png` });
     await page.evaluate(() => document.documentElement.classList.remove("dark"));
   }
@@ -97,6 +105,21 @@ for (const c of CASES) {
   const bytes = fs.readFileSync(`${OUT}/${c.file}.pdf`);
   check(`${c.file}: Download PDF delivered a PDF (${dl.suggestedFilename()})`, bytes.subarray(0, 4).toString() === "%PDF");
 }
+
+// Save draft on the study form with the Sodium preset: the row keeps the limit in units (it was stored as a percent).
+await page.goto(`${BASE}/labs/${labId}/study/new`, { waitUntil: "networkidle" });
+await page.getByTestId("input-test-name").fill("Sodium draft check");
+const teaCard = page.getByText("Adopted Acceptance Criterion (TEa)", { exact: true }).first().locator("xpath=ancestor::div[contains(@class,'rounded')][1]");
+await teaCard.getByRole("combobox").first().click();
+await page.getByRole("option", { name: "Sodium (±4 mmol/L)" }).click();
+const activeTea = (await teaCard.innerText()).replace(/\s+/g, " ");
+check("study form: Sodium preset picked, Active TEa ±4 mmol/L", activeTea.includes("Active TEa: ±4 mmol/L"), activeTea.slice(0, 200));
+await page.getByTestId("button-save-draft").click();
+let draft = null;
+for (let i = 0; i < 40 && !draft; i++) { await page.waitForTimeout(250); draft = sdb.prepare("SELECT status, clia_allowable_error AS tea, tea_is_percentage AS pct, tea_unit AS unit, clia_preset_label AS preset FROM studies WHERE test_name = 'Sodium draft check'").get(); }
+check("Save draft: the row is a draft with ±4 kept in mmol/L (teaIsPercentage 0, teaUnit mmol/L)",
+  !!draft && draft.status === "draft" && draft.tea === 4 && draft.pct === 0 && draft.unit === "mmol/L" && draft.preset === "Sodium (±4 mmol/L)", JSON.stringify(draft));
+await page.screenshot({ path: `${OUT}/sodium-draft-saved.png` });
 
 check("no page errors", pageErrors.length === 0, pageErrors.slice(0, 2).join(" | "));
 await browser.close();
