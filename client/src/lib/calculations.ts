@@ -275,7 +275,8 @@ export function calculateCalVer(
   instrumentNames: string[],
   cliaError: number,
   teaIsPercentage: boolean = true,
-  cliaAbsoluteFloor: number | null = null
+  cliaAbsoluteFloor: number | null = null,
+  unit: string | null = null       // the limit's unit (teaIsPercentage false) or its floor's unit (true), for the summary
 ): CalVerResults {
   // VeritaCheck Phase 2 parity (2026-06-15): drop director-excluded points so
   // the verdict, regression, and per-point table honor documented exclusions
@@ -373,6 +374,8 @@ export function calculateCalVer(
     isPercentage: teaIsPercentage,
     value: cliaError,
     absoluteFloor: cliaAbsoluteFloor,
+    absoluteUnit: teaIsPercentage ? unit : null,
+    valueUnit: teaIsPercentage ? null : unit,
   });
   const maxDev = levelResults.length ? Math.max(...levelResults.map((r) => Math.abs(r.pctRecovery - 100))) : 0;
   const summary =
@@ -429,7 +432,8 @@ export function calculateMethodComparison(
   instrumentNames: string[],
   cliaError: number,
   teaIsPercentage: boolean = true,
-  cliaAbsoluteFloor: number | null = null
+  cliaAbsoluteFloor: number | null = null,
+  unit: string | null = null       // as calculateCalVer: the limit's unit, or its floor's unit
 ): MethodCompResults {
   // Phase 2 parity: honor director-excluded points (see calculateCalVer).
   dataPoints = dataPoints.filter((dp: any) => !(dp && dp.excluded));
@@ -516,7 +520,10 @@ export function calculateMethodComparison(
   const overallPass = passCount === totalCount && totalCount > 0;
   // Use the shared TEa formatter so absolute-TEa analytes (e.g. Sodium +/-4 mmol/L) read
   // correctly instead of "+/-400.0%". Mirrors the cal-ver path's formatTeaCriterion use.
-  const teaCriterion = formatTeaCriterion({ isPercentage: teaIsPercentage, value: cliaError, absoluteFloor: cliaAbsoluteFloor });
+  const teaCriterion = formatTeaCriterion({
+    isPercentage: teaIsPercentage, value: cliaError, absoluteFloor: cliaAbsoluteFloor,
+    absoluteUnit: teaIsPercentage ? unit : null, valueUnit: teaIsPercentage ? null : unit,
+  });
 
   const regLines = Object.entries(regression)
     .map(([name, reg]) => `${name}: slope=${reg.slope.toFixed(3)}, intercept=${reg.intercept.toFixed(3)}, R²=${reg.r2.toFixed(4)}`)
@@ -1681,9 +1688,10 @@ export function calculateCalVerCorrelation(
   instrumentNames: string[],
   cliaError: number,
   teaIsPercentage: boolean = true,
-  cliaAbsoluteFloor: number | null = null
+  cliaAbsoluteFloor: number | null = null,
+  unit: string | null = null
 ): CalVerCorrelationResults {
-  const calVer = calculateCalVer(dataPoints, instrumentNames, cliaError, teaIsPercentage, cliaAbsoluteFloor);
+  const calVer = calculateCalVer(dataPoints, instrumentNames, cliaError, teaIsPercentage, cliaAbsoluteFloor, unit);
   const [primary, ...comps] = instrumentNames;
   // Same remap the results page uses for a correlation: the primary's reading is the reference value. Excluded flags
   // ride along so calculateMethodComparison drops the same points calculateCalVer dropped.
@@ -1692,7 +1700,7 @@ export function calculateCalVerCorrelation(
     expectedValue: dp.instrumentValues?.[primary] ?? null,
     instrumentValues: Object.fromEntries(comps.map((n) => [n, dp.instrumentValues?.[n] ?? null])),
   }));
-  const correlation = comps.length ? calculateMethodComparison(mapped, comps, cliaError, teaIsPercentage, cliaAbsoluteFloor) : null;
+  const correlation = comps.length ? calculateMethodComparison(mapped, comps, cliaError, teaIsPercentage, cliaAbsoluteFloor, unit) : null;
   return {
     type: "cal_ver_correlation",
     primary: primary ?? "",
@@ -1717,12 +1725,13 @@ export function calculateStudy(
   cliaError: number,
   studyType: "cal_ver" | "method_comparison" = "cal_ver",
   teaIsPercentage: boolean = true,
-  cliaAbsoluteFloor: number | null = null
+  cliaAbsoluteFloor: number | null = null,
+  unit: string | null = null
 ): CalVerResults | MethodCompResults {
   if (studyType === "method_comparison") {
-    return calculateMethodComparison(dataPoints, instrumentNames, cliaError, teaIsPercentage, cliaAbsoluteFloor);
+    return calculateMethodComparison(dataPoints, instrumentNames, cliaError, teaIsPercentage, cliaAbsoluteFloor, unit);
   }
-  return calculateCalVer(dataPoints, instrumentNames, cliaError, teaIsPercentage, cliaAbsoluteFloor);
+  return calculateCalVer(dataPoints, instrumentNames, cliaError, teaIsPercentage, cliaAbsoluteFloor, unit);
 }
 
 // ─── Export Deming for reuse ──────────────────────────────────────────────────

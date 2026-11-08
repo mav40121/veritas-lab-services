@@ -217,7 +217,8 @@ export function computeStudyResults(study: Study): StudyResults {
       if (!pass) allPass = false;
       return { name: lv.name, assigned_value: assigned, n, mean, sd: sdv, pctRecovery, absBiasPct, absBias, allowance, verdict: pass ? "pass" : "fail" };
     });
-    const teaPctTxt = teaIsPercentage ? `${(tea * 100).toFixed(1)}%` : `${tea} ${absUnit || ""}`.trim();
+    // A limit in units names its own unit (teaUnit), which cliaAbsoluteUnit (a floor's unit) doesn't carry.
+    const teaPctTxt = teaIsPercentage ? `${(tea * 100).toFixed(1)}%` : `${tea} ${criterionForm(study).unit || units || ""}`.trim();
     const floorTxt = teaIsPercentage && absFloor ? ` or ${absFloor} ${absUnit || ""}, whichever is greater` : "";
     results = {
       type: "accuracy_bias",
@@ -283,11 +284,19 @@ export function computeStudyResults(study: Study): StudyResults {
       r2 = (ssXX > 0 && ssYY > 0) ? (ssXY * ssXY) / (ssXX * ssYY) : 0;
       slopeBiasPct = Math.abs(slope - 1) * 100;
     }
-    const teaPct = teaIsPercentage ? tea * 100 : 100;
-    const slopePass = slopeBiasPct <= teaPct + FP_EPS;
+    // A percent limit: |slope - 1| x 100 within the percent. A limit in units (Michael 2026-11-08, Q240 = 1): every
+    // usable level's mean within the limit of its assigned value, the test calibration verification already applies to a
+    // units limit; there's no slope percent to compare a number in units with. r² >= 0.95 either way. Server:
+    // computeStudyStatus, same rule.
     const r2Pass = r2 >= 0.95 - FP_EPS;
+    const judged = perLevel.filter(l => l.verdict === "pass" || l.verdict === "fail");
+    const levelsFailed = judged.filter(l => l.verdict === "fail").length;
+    const maxAbsBias = judged.length ? Math.max(...judged.map(l => l.absBias as number)) : 0;
+    const slopePass = teaIsPercentage ? slopeBiasPct <= tea * 100 + FP_EPS : levelsFailed === 0;
     const overallPass = usablePts.length >= 3 && slopePass && r2Pass;
-    const teaTxt = teaIsPercentage ? `${(tea * 100).toFixed(1)}%${absFloor ? ` or ${absFloor} ${absUnit || ""}` : ""}` : `${tea} ${absUnit || ""}`.trim();
+    const critUnit = criterionForm(study).unit || units || "";
+    const teaTxt = teaIsPercentage ? `${(tea * 100).toFixed(1)}%${absFloor ? ` or ${absFloor} ${absUnit || ""}` : ""}` : `±${tea}${critUnit ? ` ${critUnit}` : ""}`;
+    const levelTxt = `largest difference ${maxAbsBias.toFixed(3)}${critUnit ? ` ${critUnit}` : ""}`;
     results = {
       type: "linearity",
       analyte: analyte || study.testName,
@@ -302,9 +311,16 @@ export function computeStudyResults(study: Study): StudyResults {
       slopeBiasPct,
       levels: perLevel,
       overallPass,
-      summary: overallPass
-        ? `Linearity verified across ${usablePts.length} levels: |slope - 1| × 100 = ${slopeBiasPct.toFixed(2)}% (within TEa ${teaTxt}) and r² = ${r2.toFixed(4)} (≥ 0.95).`
-        : `Linearity not verified: |slope - 1| × 100 = ${slopeBiasPct.toFixed(2)}% ${slopePass ? "within" : "exceeds"} TEa ${teaTxt}; r² = ${r2.toFixed(4)} ${r2Pass ? "meets" : "below"} 0.95.`,
+      levelRule: !teaIsPercentage,
+      levelsFailed,
+      maxAbsBias,
+      summary: !teaIsPercentage
+        ? (overallPass
+          ? `Linearity verified across ${usablePts.length} levels: every level's mean is within ${teaTxt} of its assigned value (${levelTxt}) and r² = ${r2.toFixed(4)} (≥ 0.95).`
+          : `Linearity not verified: ${levelsFailed === 0 ? `every level's mean is within ${teaTxt} of its assigned value` : `${levelsFailed} of ${judged.length} level means differ from the assigned value by more than ${teaTxt}`} (${levelTxt}); r² = ${r2.toFixed(4)} ${r2Pass ? "meets" : "below"} 0.95.`)
+        : overallPass
+          ? `Linearity verified across ${usablePts.length} levels: |slope - 1| × 100 = ${slopeBiasPct.toFixed(2)}% (within TEa ${teaTxt}) and r² = ${r2.toFixed(4)} (≥ 0.95).`
+          : `Linearity not verified: |slope - 1| × 100 = ${slopeBiasPct.toFixed(2)}% ${slopePass ? "within" : "exceeds"} TEa ${teaTxt}; r² = ${r2.toFixed(4)} ${r2Pass ? "meets" : "below"} 0.95.`,
     } as any;
   } else if (study.studyType === "reportable_range") {
     // CLIA §493.1255 AMR verification. Per-level dual-criterion bias against
@@ -345,7 +361,7 @@ export function computeStudyResults(study: Study): StudyResults {
       if (!pass) allPass = false;
       return { name: lv.name, assigned_value: assigned, n, mean, sd: sdv, pctRecovery, absBiasPct, absBias, allowance, verdict: pass ? "pass" : "fail" };
     });
-    const teaPctTxt = teaIsPercentage ? `${(tea * 100).toFixed(1)}%` : `${tea} ${absUnit || ""}`.trim();
+    const teaPctTxt = teaIsPercentage ? `${(tea * 100).toFixed(1)}%` : `${tea} ${criterionForm(study).unit || units || ""}`.trim();
     const floorTxt = teaIsPercentage && absFloor ? ` or ${absFloor} ${absUnit || ""}, whichever is greater` : "";
     const rangeTxt = (claimed_range_low !== null && claimed_range_low !== undefined && claimed_range_high !== null && claimed_range_high !== undefined)
       ? ` for a claimed reportable range of ${claimed_range_low} to ${claimed_range_high} ${units || "units"}`
@@ -404,14 +420,12 @@ export function computeStudyResults(study: Study): StudyResults {
           expectedValue: d.instrumentValues[primaryName] ?? null,
           instrumentValues: Object.fromEntries(comparisonNames.map(n => [n, d.instrumentValues[n] ?? null])),
         }));
-        const isPercentage = (study as any).teaIsPercentage !== 0;
-        const absFloor = (study as any).cliaAbsoluteFloor ?? null;
-        results = calculateMethodComparison(mappedPoints, comparisonNames, study.cliaAllowableError, isPercentage, absFloor);
+        const f = criterionForm(study);
+        results = calculateMethodComparison(mappedPoints, comparisonNames, study.cliaAllowableError, f.teaIsPercentage, f.absoluteFloor, f.unit);
       } else {
         const comparisonNames = instrumentNames.filter(n => n in (dp[0]?.instrumentValues || {}));
-        const isPercentage = (study as any).teaIsPercentage !== 0;
-        const absFloor = (study as any).cliaAbsoluteFloor ?? null;
-        results = calculateMethodComparison(dp, comparisonNames.length > 0 ? comparisonNames : instrumentNames, study.cliaAllowableError, isPercentage, absFloor);
+        const f = criterionForm(study);
+        results = calculateMethodComparison(dp, comparisonNames.length > 0 ? comparisonNames : instrumentNames, study.cliaAllowableError, f.teaIsPercentage, f.absoluteFloor, f.unit);
         // BUG-085 (2026-10-27, Michael Q18 = 1): when NONE of the listed analyzers has values in the data (the list was
         // changed after the data was entered), the math above runs on empty columns and reads as FAIL. That is not a
         // verdict, so say what is wrong instead; the page, the PDF route and the records export all honor it.
@@ -424,13 +438,11 @@ export function computeStudyResults(study: Study): StudyResults {
     }
   } else if (study.studyType === "cal_ver_correlation") {
     // Calibration Verification + Correlation: both halves from the one data entry (first analyzer = primary).
-    const isPercentage = (study as any).teaIsPercentage !== 0;
-    const absFloor = (study as any).cliaAbsoluteFloor ?? null;
-    results = calculateCalVerCorrelation(rawDataPoints as DataPoint[], instrumentNames, study.cliaAllowableError, isPercentage, absFloor);
+    const f = criterionForm(study);
+    results = calculateCalVerCorrelation(rawDataPoints as DataPoint[], instrumentNames, study.cliaAllowableError, f.teaIsPercentage, f.absoluteFloor, f.unit);
   } else {
-    const isPercentage = (study as any).teaIsPercentage !== 0;
-    const absFloor = (study as any).cliaAbsoluteFloor ?? null;
-    results = calculateStudy(rawDataPoints as DataPoint[], instrumentNames, study.cliaAllowableError, study.studyType as "cal_ver" | "method_comparison", isPercentage, absFloor);
+    const f = criterionForm(study);
+    results = calculateStudy(rawDataPoints as DataPoint[], instrumentNames, study.cliaAllowableError, study.studyType as "cal_ver" | "method_comparison", f.teaIsPercentage, f.absoluteFloor, f.unit);
   }
   return results;
 }
