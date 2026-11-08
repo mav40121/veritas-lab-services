@@ -1747,7 +1747,7 @@ export default function VeritaCheckPage() {
       const allData = lotSampleType === "both" ? [...lotData, ...lotDataAbnormal] : lotData;
       const validData = allData.filter(dp => dp.currentLot !== null && dp.newLot !== null);
       if (validData.length < 3) { toast({ title: "Please enter at least 3 specimen pairs", variant: "destructive" }); return; }
-      const results = calculateLotToLot(allData, cliaValue, lotSampleType);
+      const results = calculateLotToLot(allData, cliaValue, lotSampleType, teaIsPercentage, cliaAbsoluteFloor ?? null, teaIsPercentage ? cliaAbsoluteUnit : (teaUnit || cliaAbsoluteUnit));
       const study: InsertStudy = {
         testName: testName.trim(), instrument: instrumentNames[0] || "-", analyst: analyst.trim() || "-",
         date, studyType: "lot_to_lot", cliaAllowableError: cliaValue,
@@ -2439,6 +2439,9 @@ export default function VeritaCheckPage() {
         vendorSDConcentration: vendorSdConcNum ?? undefined,
         targetMean: targetMeanNum ?? undefined,
         targetCV: targetCvNum ?? undefined,
+        teaIsPercentage,
+        absoluteFloor: cliaAbsoluteFloor ?? null,
+        unit: teaIsPercentage ? cliaAbsoluteUnit : (teaUnit || cliaAbsoluteUnit),
       });
       // EE Day 2 QC traceability: trim each, omit empties.
       const trimOrNull = (s: string) => {

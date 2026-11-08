@@ -755,7 +755,13 @@ export interface PrecisionLevelResult {
   mean: number;
   sd: number;
   cv: number;
+  // The CV limit in percent. NaN when the criterion is stored in units
+  // (Sodium ±4 mmol/L), which is judged as 2 SD within the limit instead.
   allowableCV: number;
+  // 2 SD must be within this, in the result's units: the whole criterion when
+  // it is stored in units, the absolute floor of a percent criterion
+  // (Glucose ±8% or ±6 mg/dL), or null when neither applies.
+  allowableTwoSD?: number | null;
   passFail: "Pass" | "Fail";
   // Phase 1 parity additions (2026-05-20). Present on every simple-mode
   // result with n >= 2; advanced-mode also populates them for the aggregate
@@ -797,6 +803,14 @@ export interface PrecisionOptions {
   // calculator emits bias / percentBias per level. Does not affect verdict.
   targetMean?: number;
   targetCV?: number;
+  // The study's criterion as stored (Q239 = 1, Michael 2026-11-08). false =
+  // the number is in units (Sodium ±4 mmol/L): a level passes when 2 SD is
+  // within it. A percent criterion with an absolute floor passes a level when
+  // its CV is within the percent OR 2 SD is within the floor. Both are the
+  // rule server/routes.ts computeStudyStatus stores as the study's verdict.
+  teaIsPercentage?: boolean;
+  absoluteFloor?: number | null;
+  unit?: string | null;
 }
 
 export interface PrecisionResults {
@@ -814,6 +828,8 @@ export interface PrecisionResults {
   vendorSDConcentration?: number;
   targetMean?: number;
   targetCV?: number;
+  teaIsPercentage?: boolean;
+  unit?: string | null;
 }
 
 export interface PrecisionDataPoint {
@@ -834,7 +850,14 @@ export function calculatePrecision(
 ): PrecisionResults {
   // Phase 2 parity: honor director-excluded levels (see calculateCalVer).
   dataPoints = dataPoints.filter((dp: any) => !(dp && dp.excluded));
-  const allowableCV = cliaAllowableImprecision * 100;
+  const unitsLimit = opts.teaIsPercentage === false;
+  const allowableCV = unitsLimit ? NaN : cliaAllowableImprecision * 100;
+  const floor = !unitsLimit && (opts.absoluteFloor ?? 0) > 0 ? (opts.absoluteFloor as number) : null;
+  const allowableTwoSD = unitsLimit ? cliaAllowableImprecision : floor;
+  // Same comparisons as computeStudyStatus, so the screen and the stored verdict agree.
+  const levelPasses = (cv: number, sd: number): boolean =>
+    unitsLimit ? sd <= cliaAllowableImprecision / 2 : (cv <= allowableCV || (floor !== null && sd <= floor / 2));
+  const unitText = String(opts.unit ?? "").trim();
 
   // Compute the parity statistics (CIs, 2 SD range, bias, vendor verdict)
   // around an already-derived mean/SD/n. Pulled out so both the simple and
@@ -881,7 +904,7 @@ export function calculatePrecision(
     if (allVals.length < 2) {
       return {
         level: dp.level, levelName: dp.levelName, n: 0, mean: 0, sd: 0, cv: 0,
-        allowableCV, passFail: "Fail" as const
+        allowableCV, allowableTwoSD, passFail: "Fail" as const
       };
     }
 
@@ -894,7 +917,7 @@ export function calculatePrecision(
     if (mode === "simple") {
       return {
         level: dp.level, levelName: dp.levelName, n, mean: meanVal, sd: sdVal,
-        cv: cvVal, allowableCV, passFail: cvVal <= allowableCV ? "Pass" : "Fail",
+        cv: cvVal, allowableCV, allowableTwoSD, passFail: levelPasses(cvVal, sdVal) ? "Pass" : "Fail",
         ...parityStats(n, meanVal, sdVal),
       };
     }
@@ -948,8 +971,8 @@ export function calculatePrecision(
 
     return {
       level: dp.level, levelName: dp.levelName, n, mean: meanVal, sd: sdVal,
-      cv: cvVal, allowableCV,
-      passFail: cvVal <= allowableCV ? "Pass" : "Fail",
+      cv: cvVal, allowableCV, allowableTwoSD,
+      passFail: levelPasses(cvVal, sdVal) ? "Pass" : "Fail",
       ...parityStats(n, meanVal, sdVal),
       withinRunSD: Math.sqrt(varWithinRun), withinRunCV: toCV(varWithinRun),
       betweenRunSD: Math.sqrt(varBetweenRun), betweenRunCV: toCV(varBetweenRun),
@@ -961,9 +984,11 @@ export function calculatePrecision(
   const passCount = levelResults.filter(r => r.passFail === "Pass").length;
   const totalCount = levelResults.length;
   const overallPass = passCount === totalCount && totalCount > 0;
-  const cliaStr = allowableCV.toFixed(1);
+  const criterionText = unitsLimit
+    ? `Adopted Precision Acceptance Criterion was ±${cliaAllowableImprecision}${unitText ? ` ${unitText}` : ""}, met at a level when 2 SD is within it. `
+    : `Adopted Precision Acceptance Criterion (CV) was ±${allowableCV.toFixed(1)}%${floor !== null ? `, or 2 SD within ±${floor}${unitText ? ` ${unitText}` : ""}` : ""}. `;
   const summary = `Precision Verification was performed on ${totalCount} control level${totalCount !== 1 ? "s" : ""}. ` +
-    `Adopted Precision Acceptance Criterion (CV) was ±${cliaStr}%. ` +
+    criterionText +
     `${passCount} of ${totalCount} levels met the adopted precision criterion. ` +
     `The precision study ${overallPass ? "PASSED" : "FAILED"} the adopted acceptance criterion.`;
 
@@ -973,6 +998,8 @@ export function calculatePrecision(
     vendorSDConcentration: opts.vendorSDConcentration,
     targetMean: opts.targetMean,
     targetCV: opts.targetCV,
+    teaIsPercentage: !unitsLimit,
+    unit: unitText || null,
   };
 }
 
@@ -984,6 +1011,8 @@ export interface LotToLotSpecimen {
   newLot: number;
   pctDifference: number;
   absPctDifference: number;
+  // New minus current, in the result's units.
+  difference: number;
   passFail: "Pass" | "Fail";
 }
 
@@ -995,6 +1024,9 @@ export interface LotToLotCohortResult {
   sdPctDiff: number;
   meanAbsPctDiff: number;
   maxAbsPctDiff: number;
+  // In the result's units; the cohort rule reads these when the criterion is stored in units.
+  meanAbsDiff: number;
+  maxAbsDiff: number;
   coverage: number; // % of specimens within TEa
   pass: boolean;
 }
@@ -1006,6 +1038,9 @@ export interface LotToLotResults {
   passCount: number;
   totalCount: number;
   tea: number;
+  // false = tea is in units (Sodium ±4 mmol/L), not a fraction.
+  teaIsPercentage?: boolean;
+  unit?: string | null;
   summary: string;
 }
 
@@ -1018,9 +1053,20 @@ export interface LotToLotDataPoint {
 
 export function calculateLotToLot(
   dataPoints: LotToLotDataPoint[],
-  tea: number, // fraction, e.g. 0.10 for 10%
-  sampleType: "normal" | "abnormal" | "both"
+  tea: number, // fraction, e.g. 0.10 for 10%, or the limit in units when teaIsPercentage is false
+  sampleType: "normal" | "abnormal" | "both",
+  // Q239 = 1 (Michael 2026-11-08), and the rule computeStudyStatus stores: a
+  // criterion in units compares each pair's difference, and the cohort's mean
+  // absolute difference, in units; a percent criterion's absolute floor lets a
+  // pair pass within the greater of the percent or the floor.
+  teaIsPercentage: boolean = true,
+  absoluteFloor: number | null = null,
+  unit: string | null = null,
 ): LotToLotResults {
+  const floor = teaIsPercentage ? (absoluteFloor ?? 0) : 0;
+  const unitText = String(unit ?? "").trim();
+  const pairPasses = (current: number, diff: number) =>
+    teaIsPercentage ? Math.abs(diff) <= Math.max(Math.abs(current) * tea, floor) : Math.abs(diff) <= tea;
   const cohorts: ("Normal" | "Abnormal")[] = sampleType === "both" ? ["Normal", "Abnormal"] : [sampleType === "normal" ? "Normal" : "Abnormal"];
 
   const cohortResults: LotToLotCohortResult[] = cohorts.map(cohort => {
@@ -1028,13 +1074,15 @@ export function calculateLotToLot(
     const specimens: LotToLotSpecimen[] = valid.map(dp => {
       const pctDiff = dp.currentLot !== 0 ? ((dp.newLot! - dp.currentLot!) / dp.currentLot!) * 100 : 0;
       const absPct = Math.abs(pctDiff);
+      const diff = dp.newLot! - dp.currentLot!;
       return {
         specimenId: dp.specimenId,
         currentLot: dp.currentLot!,
         newLot: dp.newLot!,
         pctDifference: pctDiff,
         absPctDifference: absPct,
-        passFail: absPct <= tea * 100 ? "Pass" : "Fail",
+        difference: diff,
+        passFail: pairPasses(dp.currentLot!, diff) ? "Pass" : "Fail",
       };
     });
     const pctDiffs = specimens.map(s => s.pctDifference);
@@ -1044,17 +1092,23 @@ export function calculateLotToLot(
     const sdPctDiff = n > 1 ? stddev(pctDiffs) : 0;
     const meanAbsPctDiff = n > 0 ? mean(absPctDiffs) : 0;
     const maxAbsPctDiff = n > 0 ? Math.max(...absPctDiffs) : 0;
+    const absDiffs = specimens.map(s => Math.abs(s.difference));
+    const meanAbsDiff = n > 0 ? mean(absDiffs) : 0;
+    const maxAbsDiff = n > 0 ? Math.max(...absDiffs) : 0;
     const withinTea = specimens.filter(s => s.passFail === "Pass").length;
     const coverage = n > 0 ? (withinTea / n) * 100 : 0;
-    const pass = meanAbsPctDiff <= tea * 100 && coverage >= 90;
+    const pass = (teaIsPercentage ? meanAbsPctDiff <= tea * 100 : meanAbsDiff <= tea) && coverage >= 90;
 
-    return { cohort, n, specimens, meanPctDiff, sdPctDiff, meanAbsPctDiff, maxAbsPctDiff, coverage, pass };
+    return { cohort, n, specimens, meanPctDiff, sdPctDiff, meanAbsPctDiff, maxAbsPctDiff, meanAbsDiff, maxAbsDiff, coverage, pass };
   });
 
   const totalSpecimens = cohortResults.reduce((s, c) => s + c.n, 0);
   const totalPass = cohortResults.reduce((s, c) => s + c.specimens.filter(sp => sp.passFail === "Pass").length, 0);
   const overallPass = cohortResults.every(c => c.pass);
   const teaPct = (tea * 100).toFixed(1);
+  const limitText = teaIsPercentage
+    ? `±${teaPct}%${floor > 0 ? ` or ±${floor}${unitText ? ` ${unitText}` : ""} (greater)` : ""}`
+    : `±${tea}${unitText ? ` ${unitText}` : ""}`;
 
   // Methodology note prepended to the narrative so the printed and on-screen
   // report names CLSI EP26 explicitly. The pass rule used here is the
@@ -1064,12 +1118,16 @@ export function calculateLotToLot(
   // for routine clinical chemistry (per Loh 2020 and
   // Thompson 2017 evaluations) and the TEa rule is what most labs use in
   // practice.
-  const methodology = `Methodology: CLSI EP26, 2nd Edition (User Evaluation of Acceptability of a Reagent Lot Change). Patient samples are tested on both the current reagent lot and the new reagent lot; per-specimen percent difference is evaluated against the adopted total allowable error (TEa). Pass criterion: mean absolute percent difference within TEa AND at least 90% of paired specimens within TEa.`;
+  const methodology = teaIsPercentage
+    ? `Methodology: CLSI EP26, 2nd Edition (User Evaluation of Acceptability of a Reagent Lot Change). Patient samples are tested on both the current reagent lot and the new reagent lot; per-specimen percent difference is evaluated against the adopted total allowable error (TEa). Pass criterion: mean absolute percent difference within TEa AND at least 90% of paired specimens within TEa.`
+    : `Methodology: CLSI EP26, 2nd Edition (User Evaluation of Acceptability of a Reagent Lot Change). Patient samples are tested on both the current reagent lot and the new reagent lot; the adopted total allowable error (TEa) is stated in ${unitText || "the result's units"}, so each specimen's difference is evaluated in those units. Pass criterion: mean absolute difference within TEa AND at least 90% of paired specimens within TEa.`;
   const summary = methodology + " " + cohortResults.map(c =>
-    `${c.cohort} cohort (N=${c.n}): Mean |%Diff| = ${c.meanAbsPctDiff.toFixed(1)}%, Coverage = ${c.coverage.toFixed(0)}% within TEa of ±${teaPct}%. ${c.pass ? "PASS" : "FAIL"}.`
+    teaIsPercentage
+      ? `${c.cohort} cohort (N=${c.n}): Mean |%Diff| = ${c.meanAbsPctDiff.toFixed(1)}%, Coverage = ${c.coverage.toFixed(0)}% within TEa of ${limitText}. ${c.pass ? "PASS" : "FAIL"}.`
+      : `${c.cohort} cohort (N=${c.n}): Mean |Diff| = ${c.meanAbsDiff.toFixed(2)}${unitText ? ` ${unitText}` : ""}, Coverage = ${c.coverage.toFixed(0)}% within TEa of ${limitText}. ${c.pass ? "PASS" : "FAIL"}.`
   ).join(" ") + ` Overall: ${overallPass ? "PASS" : "FAIL"}: ${totalPass}/${totalSpecimens} specimens within TEa.`;
 
-  return { type: "lot_to_lot", cohorts: cohortResults, overallPass, passCount: totalPass, totalCount: totalSpecimens, tea, summary };
+  return { type: "lot_to_lot", cohorts: cohortResults, overallPass, passCount: totalPass, totalCount: totalSpecimens, tea, teaIsPercentage, unit: unitText || null, summary };
 }
 
 // ─── PT/COAG NEW LOT VALIDATION ──────────────────────────────────────────────

@@ -1236,7 +1236,9 @@ function PrecisionReport({ study, results }: { study: Study; results: PrecisionR
         {[
           { label: "Control Levels", value: results.levelResults.length },
           { label: "Levels Passing", value: results.passCount, className: "text-green-400" },
-          { label: "Allowable CV", value: `±${(study.cliaAllowableError * 100).toFixed(1)}%` },
+          isUnitsCriterion(study)
+            ? { label: "Limit (2 SD within)", value: formatTeaDisplay(study) }
+            : { label: "Allowable CV", value: `±${(study.cliaAllowableError * 100).toFixed(1)}%` },
         ].map(({ label, value, className }) => (
           <Card key={label}><CardContent className="p-4 text-center">
             <div className={`text-2xl font-bold ${className || ""}`}>{value}</div>
@@ -1258,7 +1260,7 @@ function PrecisionReport({ study, results }: { study: Study; results: PrecisionR
                   <th className="text-right py-2 pr-3 text-muted-foreground font-medium">Mean</th>
                   <th className="text-right py-2 pr-3 text-muted-foreground font-medium">SD</th>
                   <th className="text-right py-2 pr-3 text-muted-foreground font-medium">CV%</th>
-                  <th className="text-right py-2 pr-3 text-muted-foreground font-medium">Allow CV%</th>
+                  <th className="text-right py-2 pr-3 text-muted-foreground font-medium">{isUnitsCriterion(study) ? "2 SD / Limit" : "Allow CV%"}</th>
                   <th className="text-right py-2 pr-3 text-muted-foreground font-medium">Pass?</th>
                 </tr>
               </thead>
@@ -1270,7 +1272,9 @@ function PrecisionReport({ study, results }: { study: Study; results: PrecisionR
                     <td className="text-right py-2 pr-3 font-mono">{r.mean.toFixed(3)}</td>
                     <td className="text-right py-2 pr-3 font-mono">{r.sd.toFixed(3)}</td>
                     <td className="text-right py-2 pr-3 font-mono">{r.cv.toFixed(2)}%</td>
-                    <td className="text-right py-2 pr-3 font-mono">±{r.allowableCV.toFixed(1)}%</td>
+                    <td className="text-right py-2 pr-3 font-mono">{isUnitsCriterion(study)
+                      ? `${(2 * r.sd).toFixed(3)} / ${formatTeaDisplay(study)}`
+                      : <>±{r.allowableCV.toFixed(1)}%{r.allowableTwoSD != null ? <span className="text-muted-foreground"> or 2 SD ≤ {r.allowableTwoSD}</span> : null}</>}</td>
                     <td className="text-right py-2 pr-3">
                       <span className={r.passFail === "Pass" ? "pass-badge" : "fail-badge"}>{r.passFail}</span>
                     </td>
@@ -1344,7 +1348,10 @@ function PrecisionReport({ study, results }: { study: Study; results: PrecisionR
 
 // ─── LOT-TO-LOT VERIFICATION results ────────────────────────────────────────
 function LotToLotReport({ study, results }: { study: Study; results: LotToLotResults }) {
-  const teaPct = (results.tea * 100).toFixed(1);
+  // Q239 = 1: a criterion stored in units (Sodium ±4 mmol/L) is judged on the difference in units.
+  const units = isUnitsCriterion(study);
+  const unit = String(results.unit || (study as any).teaUnit || "").trim();
+  const u = (v: number, d = 2) => `${v.toFixed(d)}${unit ? ` ${unit}` : ""}`;
 
   return (
     <>
@@ -1352,7 +1359,7 @@ function LotToLotReport({ study, results }: { study: Study; results: LotToLotRes
         {[
           { label: "Total Specimens", value: results.totalCount },
           { label: "Specimens Passing", value: `${results.passCount} / ${results.totalCount}` },
-          { label: "TEa", value: `±${teaPct}%` },
+          { label: "TEa", value: formatTeaDisplay(study) },
           { label: "Cohorts", value: results.cohorts.length },
         ].map(({ label, value }) => (
           <Card key={label}><CardContent className="p-4">
@@ -1371,8 +1378,13 @@ function LotToLotReport({ study, results }: { study: Study; results: LotToLotRes
                 <div><span className="text-muted-foreground">N: </span><span className="font-mono">{cohort.n}</span></div>
                 <div><span className="text-muted-foreground">Mean Bias: </span><span className="font-mono">{cohort.meanPctDiff.toFixed(2)}%</span></div>
                 <div><span className="text-muted-foreground">SD: </span><span className="font-mono">{cohort.sdPctDiff.toFixed(2)}%</span></div>
+                {units ? <>
+                <div><span className="text-muted-foreground">Mean |Diff|: </span><span className="font-mono">{u(cohort.meanAbsDiff ?? 0)}</span></div>
+                <div><span className="text-muted-foreground">Max |Diff|: </span><span className="font-mono">{u(cohort.maxAbsDiff ?? 0)}</span></div>
+                </> : <>
                 <div><span className="text-muted-foreground">Mean |%Diff|: </span><span className="font-mono">{cohort.meanAbsPctDiff.toFixed(2)}%</span></div>
                 <div><span className="text-muted-foreground">Max |%Diff|: </span><span className="font-mono">{cohort.maxAbsPctDiff.toFixed(2)}%</span></div>
+                </>}
                 <div><span className="text-muted-foreground">Coverage: </span><span className={`font-mono font-semibold ${cohort.coverage >= 90 ? "text-green-400" : "text-red-400"}`}>{cohort.coverage.toFixed(0)}%</span></div>
               </div>
               <div className="overflow-x-auto">
@@ -1381,7 +1393,7 @@ function LotToLotReport({ study, results }: { study: Study; results: LotToLotRes
                     <th className="text-left py-2 pr-3 text-muted-foreground font-medium">Specimen</th>
                     <th className="text-right py-2 pr-3 text-muted-foreground font-medium">Current Lot</th>
                     <th className="text-right py-2 pr-3 text-muted-foreground font-medium">New Lot</th>
-                    <th className="text-right py-2 pr-3 text-muted-foreground font-medium">% Diff</th>
+                    <th className="text-right py-2 pr-3 text-muted-foreground font-medium">{units ? `Diff${unit ? ` (${unit})` : ""}` : "% Diff"}</th>
                     <th className="text-right py-2 pr-3 text-muted-foreground font-medium">Pass?</th>
                   </tr></thead>
                   <tbody>
@@ -1390,7 +1402,7 @@ function LotToLotReport({ study, results }: { study: Study; results: LotToLotRes
                         <td className="py-2 pr-3 font-mono">{s.specimenId}</td>
                         <td className="text-right py-2 pr-3 font-mono">{s.currentLot.toFixed(3)}</td>
                         <td className="text-right py-2 pr-3 font-mono">{s.newLot.toFixed(3)}</td>
-                        <td className="text-right py-2 pr-3 font-mono">{s.pctDifference.toFixed(2)}%</td>
+                        <td className="text-right py-2 pr-3 font-mono">{units ? (s.difference ?? (s.newLot - s.currentLot)).toFixed(3) : `${s.pctDifference.toFixed(2)}%`}</td>
                         <td className="text-right py-2 pr-3"><span className={s.passFail === "Pass" ? "pass-badge" : "fail-badge"}>{s.passFail}</span></td>
                       </tr>
                     ))}
@@ -1549,7 +1561,6 @@ function AccuracyBiasReport({ study, results }: { study: Study; results: any }) 
   const levels = (results.levels || []) as Array<{ name: string; assigned_value: number | null; n: number; mean: number | null; sd: number | null; pctRecovery: number | null; absBiasPct: number | null; verdict: "pass" | "fail" | "incomplete" }>;
   const units = results.units || "";
   const overallPass = !!results.overallPass;
-  const teaPct = (Number(results.tea) || 0) * 100;
   const recoveries = levels.map(l => l.pctRecovery).filter((v): v is number => v !== null && !isNaN(v));
   const maxRec = recoveries.length ? Math.max(...recoveries) : null;
   const minRec = recoveries.length ? Math.min(...recoveries) : null;
@@ -1576,7 +1587,7 @@ function AccuracyBiasReport({ study, results }: { study: Study; results: any }) 
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 text-xs">
             <div><div className="text-muted-foreground">Analyte</div><div className="font-mono">{results.analyte || study.testName}</div></div>
             <div><div className="text-muted-foreground">Units</div><div className="font-mono">{units || "-"}</div></div>
-            <div><div className="text-muted-foreground">{teaLabelFor(study.testName, study as any)}</div><div className="font-mono">{fmtPct(teaPct, 1)}{results.absoluteFloor ? ` or ${results.absoluteFloor} ${results.absoluteUnit || ""}` : ""}{(study as any).cliaPresetLabel ? ` (${(study as any).cliaPresetLabel})` : ""}</div></div>
+            <div><div className="text-muted-foreground">{teaLabelFor(study.testName, study as any)}</div><div className="font-mono">{formatTeaDisplay(study)}{(study as any).cliaPresetLabel ? ` (${(study as any).cliaPresetLabel})` : ""}</div></div>
             <div><div className="text-muted-foreground">Levels</div><div className="font-mono">{levels.length}</div></div>
             <div><div className="text-muted-foreground">Min % Recovery</div><div className="font-mono">{minRec !== null ? fmtPct(minRec) : "-"}</div></div>
             <div><div className="text-muted-foreground">Max % Recovery</div><div className="font-mono">{maxRec !== null ? fmtPct(maxRec) : "-"}</div></div>
@@ -1806,7 +1817,6 @@ function LinearityReport({ study, results }: { study: Study; results: any }) {
   const levels = (results.levels || []) as Array<{ name: string; assigned_value: number | null; n: number; mean: number | null; sd: number | null; pctRecovery: number | null; verdict: "pass" | "fail" | "incomplete" }>;
   const units = results.units || "";
   const overallPass = !!results.overallPass;
-  const teaPct = (Number(results.tea) || 0) * 100;
   const slope = Number(results.slope) || 0;
   const intercept = Number(results.intercept) || 0;
   const r2 = Number(results.r2) || 0;
@@ -1839,7 +1849,7 @@ function LinearityReport({ study, results }: { study: Study; results: any }) {
             <div><div className="text-muted-foreground">Intercept</div><div className="font-mono">{fmt(intercept, 3)}</div></div>
             <div><div className="text-muted-foreground">r²</div><div className="font-mono">{fmt(r2, 4)}</div></div>
             <div><div className="text-muted-foreground">|Slope - 1|</div><div className="font-mono">{fmtPct(slopeBiasPct)}</div></div>
-            <div><div className="text-muted-foreground">{teaLabelFor(study.testName, study as any)}</div><div className="font-mono">{fmtPct(teaPct, 1)}{results.absoluteFloor ? ` or ${results.absoluteFloor} ${results.absoluteUnit || ""}` : ""}{(study as any).cliaPresetLabel ? ` (${(study as any).cliaPresetLabel})` : ""}</div></div>
+            <div><div className="text-muted-foreground">{teaLabelFor(study.testName, study as any)}</div><div className="font-mono">{formatTeaDisplay(study)}{(study as any).cliaPresetLabel ? ` (${(study as any).cliaPresetLabel})` : ""}</div></div>
           </div>
           {results.summary && (
             <div className="mt-4 text-xs text-muted-foreground leading-relaxed">{results.summary}</div>
@@ -1906,7 +1916,6 @@ function ReportableRangeReport({ study, results }: { study: Study; results: any 
   const levels = (results.levels || []) as Array<{ name: string; assigned_value: number | null; n: number; mean: number | null; sd: number | null; pctRecovery: number | null; absBiasPct: number | null; verdict: "pass" | "fail" | "incomplete" }>;
   const units = results.units || "";
   const overallPass = !!results.overallPass;
-  const teaPct = (Number(results.tea) || 0) * 100;
   const cl = results.claimed_range_low;
   const ch = results.claimed_range_high;
   const claimedTxt = (cl !== null && cl !== undefined && ch !== null && ch !== undefined)
@@ -1936,7 +1945,7 @@ function ReportableRangeReport({ study, results }: { study: Study; results: any 
             <div><div className="text-muted-foreground">Analyte</div><div className="font-mono">{results.analyte || study.testName}</div></div>
             <div><div className="text-muted-foreground">Units</div><div className="font-mono">{units || "-"}</div></div>
             <div><div className="text-muted-foreground">Claimed Range</div><div className="font-mono">{claimedTxt}</div></div>
-            <div><div className="text-muted-foreground">{teaLabelFor(study.testName, study as any)}</div><div className="font-mono">{fmtPct(teaPct, 1)}{results.absoluteFloor ? ` or ${results.absoluteFloor} ${results.absoluteUnit || ""}` : ""}{(study as any).cliaPresetLabel ? ` (${(study as any).cliaPresetLabel})` : ""}</div></div>
+            <div><div className="text-muted-foreground">{teaLabelFor(study.testName, study as any)}</div><div className="font-mono">{formatTeaDisplay(study)}{(study as any).cliaPresetLabel ? ` (${(study as any).cliaPresetLabel})` : ""}</div></div>
             <div><div className="text-muted-foreground">Levels</div><div className="font-mono">{levels.length}</div></div>
           </div>
           {results.summary && (

@@ -178,10 +178,18 @@ export function generateNarrative(results: StudyResults, study: Study): string {
     const methodologyNote = isAdvanced
       ? `Methodology: CLSI EP15-A3 Advanced (ANOVA-decomposed precision). The study estimates within-run, between-day, and total CV across multiple days, runs, and replicates per run. `
       : `Methodology: CLSI EP15-A3 Simple (aggregate precision). For each level, mean and standard deviation (n-1) are computed across all replicates, and the coefficient of variation (CV) is calculated as SD divided by mean, expressed as a percent. `;
-    // The precision criterion is read as a CV percent (calculatePrecision); a
-    // criterion stored in units is a separate question for Michael, so this
-    // still prints what the calculation used.
-    if (pr.overallPass) {
+    // Q239 = 1 (Michael 2026-11-08): a criterion stored in units is met at a
+    // level when 2 SD is within it, so the narrative speaks in SD, not CV.
+    if (units) {
+      const unit = String((study as any).teaUnit || "").trim();
+      const maxTwoSD = Math.max(...pr.levelResults.map(r => 2 * (r.sd ?? 0)));
+      const twoSDStr = `${maxTwoSD.toFixed(3)}${unit ? ` ${unit}` : ""}`;
+      const src = `§493 PT TEa for this analyte, stated in ${unit || "units"}, met at a level when 2 SD is within it; adopted under 42 CFR §493.1253(b)(1)(i)(B)`;
+      narrative = methodologyNote;
+      narrative += pr.overallPass
+        ? `The precision study for ${study.testName} demonstrated a largest 2 SD of ${twoSDStr} (maximum observed CV ${maxCV.toFixed(2)}%), which is within the adopted precision acceptance criterion of ${teaLabel} (${src}). ${CLOSING_SENTENCE}`
+        : `The precision study for ${study.testName} did not meet the adopted acceptance criterion. The largest 2 SD of ${twoSDStr} (maximum observed CV ${maxCV.toFixed(2)}%) exceeds the adopted precision acceptance criterion of ${teaLabel} (${src}). ${CLOSING_SENTENCE}`;
+    } else if (pr.overallPass) {
       narrative = methodologyNote;
       narrative += `The precision study for ${study.testName} demonstrated a maximum observed CV of ${maxCV.toFixed(2)}%, which is within the adopted precision acceptance criterion of ±${cliaPct}% (§493 PT TEa for this analyte; adopted under 42 CFR §493.1253(b)(1)(i)(B)). `;
       if (isAdvanced && (pr.levelResults[0] as any)?.withinRunCV !== undefined) {
