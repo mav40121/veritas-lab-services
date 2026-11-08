@@ -8,6 +8,7 @@ import { StudyCensoringPolicyDialog } from "@/components/StudyCensoringPolicyDia
 import { StudyArchiveDialog } from "@/components/StudyArchiveDialog";
 import { StudyNotes } from "@/components/StudyNotes";
 import { hasRunDetails, runDetailRows } from "@shared/studyRunDetails";
+import { generateNarrative, studyTeaDisplay as formatTeaDisplay, isUnitsCriterion } from "@/lib/studyNarrative";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -57,7 +58,6 @@ import {
   calculateSensitivity,
   type SensitivityResults,
   type SensitivityInput,
-  formatTeaCriterion,
 } from "@/lib/calculations";
 import type { Study } from "@shared/schema";
 import { isCensored, censorValueForMath, type CensoringPolicy } from "@shared/censoring";
@@ -198,127 +198,6 @@ function StudyHeader({ study, results }: { study: Study; results: StudyResults }
       </div>
     </div>
   );
-}
-
-function generateNarrative(results: StudyResults, study: Study): string {
-  // BUG-085: a study that cannot be evaluated gets no narrative (it would read as a FAIL); the summary says why.
-  if ((results as any).notEvaluable) return "";
-  const cliaPct = (study.cliaAllowableError * 100).toFixed(1);
-  let narrative = "";
-
-  if (isCalVerCorrelation(results)) {
-    const cv = results.calVer, mc = results.correlation;
-    let nAnalyzers = 0;
-    try { nAnalyzers = (typeof study.instruments === "string" ? JSON.parse(study.instruments) : (study.instruments as any) || []).length; } catch { nAnalyzers = 0; }
-    const material = String((study as any).material || "").trim() || "calibration verification material with assigned values";
-    narrative = `${cv.levelResults.length} known-value samples for ${study.testName} were run on ${nAnalyzers} analyzers. `
-      + `Calibration verification: ${cv.overallPass ? "all levels on every analyzer were within" : "one or more levels were outside"} the adopted acceptance criterion against the assigned values (${cv.passCount}/${cv.totalCount}). `
-      + (mc && mc.totalCount > 0 ? `Correlation against ${results.primary}: ${mc.overallPass ? "all samples on every comparison analyzer were within" : "one or more samples were outside"} the same criterion (${mc.passCount}/${mc.totalCount}). ` : `Correlation against ${results.primary}: no comparison analyzer readings were entered. `)
-      + `The comparison used ${material}, not patient specimens. Final approval and clinical determination must be made by the laboratory director or designee.`;
-    return narrative;
-  }
-
-  if (isCalVer(results)) {
-    const cv = results as CalVerResults;
-    const slope = Object.values(cv.regression)[0];
-    const slopeVal = slope?.slope ?? 1;
-    const interceptVal = slope?.intercept ?? 0;
-    const slopeInterp = Math.abs(slopeVal - 1) < 0.02
-      ? "minimal proportional bias"
-      : slopeVal > 1
-        ? `a ${((slopeVal - 1) * 100).toFixed(1)}% upward proportional bias, results trend slightly high at upper concentrations`
-        : `a ${((1 - slopeVal) * 100).toFixed(1)}% downward proportional bias, results trend slightly low at upper concentrations`;
-    const interceptInterp = Math.abs(interceptVal) < study.cliaAllowableError * 100 * 0.1
-      ? "a negligible constant offset"
-      : interceptVal > 0
-        ? `a small positive constant offset of ${Math.abs(interceptVal).toFixed(3)} units at low concentrations`
-        : `a small negative constant offset of ${Math.abs(interceptVal).toFixed(3)} units at low concentrations`;
-    if (cv.overallPass) {
-      narrative = `All ${cv.totalCount} calibration levels for ${study.testName} fell within the adopted calibration verification acceptance criterion of ±${cliaPct}% (§493 PT TEa for this analyte; adopted under 42 CFR §493.1255(b)(2) and §493.1253(b)(3)). `;
-      narrative += `The regression slope of ${slopeVal.toFixed(3)} (ideal: 1.000) and intercept of ${interceptVal.toFixed(3)} (ideal: 0) indicate ${slopeInterp} and ${interceptInterp}. This instrument is performing within the adopted limits across its reportable range.`;
-    } else {
-      const failCount = cv.totalCount - cv.passCount;
-      narrative = `${failCount} of ${cv.totalCount} calibration level${failCount > 1 ? "s" : ""} for ${study.testName} exceeded the adopted calibration verification acceptance criterion of ±${cliaPct}% (§493 PT TEa for this analyte; adopted under 42 CFR §493.1255(b)(2) and §493.1253(b)(3)). The regression slope of ${slopeVal.toFixed(3)} and intercept of ${interceptVal.toFixed(3)} suggest ${slopeInterp} and ${interceptInterp}. Review calibration, reagent lot, and instrument maintenance records. Final approval and clinical determination must be made by the laboratory director or designee.`;
-    }
-  } else if (isQualitative(results)) {
-    const qr = results as QualitativeResults;
-    const kappaInterp = qr.cohensKappa < 0.20 ? "Poor" : qr.cohensKappa <= 0.40 ? "Fair" : qr.cohensKappa <= 0.60 ? "Moderate" : qr.cohensKappa <= 0.80 ? "Substantial" : "Almost Perfect";
-    if (qr.overallPass) {
-      narrative = `Qualitative method comparison for ${study.testName} demonstrated ${qr.percentAgreement.toFixed(1)}% overall agreement (${qr.totalSamples} samples). ` +
-        `Cohen's kappa = ${qr.cohensKappa.toFixed(3)} (${kappaInterp}). ` +
-        (qr.sensitivity > 0 ? `Sensitivity = ${qr.sensitivity.toFixed(1)}%, Specificity = ${qr.specificity.toFixed(1)}%. ` : "") +
-        `The acceptance criterion of >=${(qr.passThreshold * 100).toFixed(0)}% agreement was met. Final approval and clinical determination must be made by the laboratory director or designee.`;
-    } else {
-      narrative = `Qualitative method comparison for ${study.testName} demonstrated ${qr.percentAgreement.toFixed(1)}% overall agreement, which does not meet the acceptance criterion of >=${(qr.passThreshold * 100).toFixed(0)}% agreement. ` +
-        `Cohen's kappa = ${qr.cohensKappa.toFixed(3)} (${kappaInterp}). Review discordant specimens and investigate potential causes.`;
-    }
-  } else if (isSemiQuant(results)) {
-    const sq = results as SemiQuantResults;
-    const kappaInterp = sq.weightedKappa < 0.20 ? "Poor" : sq.weightedKappa <= 0.40 ? "Fair" : sq.weightedKappa <= 0.60 ? "Moderate" : sq.weightedKappa <= 0.80 ? "Substantial" : "Almost Perfect";
-    if (sq.overallPass) {
-      narrative = `Semi-quantitative method comparison for ${study.testName} demonstrated ${sq.percentWithinOneGrade.toFixed(1)}% agreement within +/-1 grade (${sq.totalSamples} samples). ` +
-        `Exact agreement: ${sq.percentExactAgreement.toFixed(1)}%. Weighted kappa = ${sq.weightedKappa.toFixed(3)} (${kappaInterp}). ` +
-        `Maximum discrepancy: ${sq.maxDiscrepancy} grade${sq.maxDiscrepancy !== 1 ? "s" : ""}. ` +
-        `The acceptance criterion of >=${(sq.passThreshold * 100).toFixed(0)}% within +/-1 grade was met. Final approval and clinical determination must be made by the laboratory director or designee.`;
-    } else {
-      narrative = `Semi-quantitative method comparison for ${study.testName} demonstrated ${sq.percentWithinOneGrade.toFixed(1)}% agreement within +/-1 grade, which does not meet the acceptance criterion of >=${(sq.passThreshold * 100).toFixed(0)}%. ` +
-        `Maximum discrepancy: ${sq.maxDiscrepancy} grade${sq.maxDiscrepancy !== 1 ? "s" : ""}. Weighted kappa = ${sq.weightedKappa.toFixed(3)} (${kappaInterp}). ` +
-        `Review discrepant samples and investigate potential causes.`;
-    }
-  } else if (isMethodComp(results)) {
-    const mc = results as MethodCompResults;
-    const firstReg = Object.values(mc.regression).find(r => (r as any).regressionType === "Deming") || Object.values(mc.regression)[0];
-    const slopeVal = firstReg?.slope ?? 1;
-    const r2Val = firstReg?.r2 ?? 1;
-    const rVal = Math.sqrt(r2Val);
-    const ba = mc.blandAltman ? Object.values(mc.blandAltman)[0] : null;
-    const meanBiasPct: number = (ba as any)?.pctMeanDiff ?? (ba as any)?.meanPctBias ?? 0;
-    const correlationInterp = rVal >= 0.99 ? "excellent" : rVal >= 0.975 ? "acceptable" : "borderline, review carefully";
-    const slopeInterp = Math.abs(slopeVal - 1) < 0.02
-      ? "minimal proportional bias between methods"
-      : slopeVal > 1
-        ? `a ${((slopeVal - 1) * 100).toFixed(1)}% upward proportional difference, the comparison method reads slightly higher than the primary at upper concentrations`
-        : `a ${((1 - slopeVal) * 100).toFixed(1)}% downward proportional difference, the comparison method reads slightly lower than the primary at upper concentrations`;
-    const teaLabel = formatTeaDisplay(study);
-    const biasInterp = Math.abs(meanBiasPct) <= study.cliaAllowableError * 100
-      ? `within the adopted method comparison acceptance criterion of ${teaLabel}`
-      : `exceeds the adopted method comparison acceptance criterion of ${teaLabel} and requires investigation`;
-    if (mc.overallPass) {
-      narrative = `The Pearson correlation coefficient of ${rVal.toFixed(3)} indicates ${correlationInterp} agreement between the two methods for ${study.testName}. The Deming regression slope of ${slopeVal.toFixed(3)} (ideal: 1.000) indicates ${slopeInterp}. The mean bias of ${meanBiasPct >= 0 ? "+" : ""}${meanBiasPct.toFixed(1)}% is ${biasInterp}. The Bland-Altman analysis confirms no clinically significant systematic difference between methods. Final approval and clinical determination must be made by the laboratory director or designee.`;
-    } else {
-      narrative = `The method comparison for ${study.testName} did not meet the adopted acceptance criterion. The correlation of ${rVal.toFixed(3)} and a mean bias of ${meanBiasPct >= 0 ? "+" : ""}${meanBiasPct.toFixed(1)}% (adopted limit: \u00B1${cliaPct}%; §493 PT TEa for this analyte; adopted under 42 CFR §493.1281(a)) indicate unacceptable agreement between methods. Final approval and clinical determination must be made by the laboratory director or designee.`;
-    }
-  } else if (isPrecision(results)) {
-    const pr = results as PrecisionResults;
-    const maxCV = Math.max(...pr.levelResults.map(r => (r as any).totalCV ?? r.cv ?? 0));
-    const isAdvanced = (pr as any).mode === "advanced";
-    // Methodology note shared between pass and fail narratives. Names the
-    // path (Simple vs Advanced EP15), cites EP15-A3 alongside the existing
-    // §493 cite, and surfaces the CV formula so the reader does not have
-    // to consult a separate document to interpret the result.
-    const methodologyNote = isAdvanced
-      ? `Methodology: CLSI EP15-A3 Advanced (ANOVA-decomposed precision). The study estimates within-run, between-day, and total CV across multiple days, runs, and replicates per run. `
-      : `Methodology: CLSI EP15-A3 Simple (aggregate precision). For each level, mean and standard deviation (n-1) are computed across all replicates, and the coefficient of variation (CV) is calculated as SD divided by mean, expressed as a percent. `;
-    if (pr.overallPass) {
-      narrative = methodologyNote;
-      narrative += `The precision study for ${study.testName} demonstrated a maximum observed CV of ${maxCV.toFixed(2)}%, which is within the adopted precision acceptance criterion of ±${cliaPct}% (§493 PT TEa for this analyte; adopted under 42 CFR §493.1253(b)(1)(i)(B)). `;
-      if (isAdvanced && (pr.levelResults[0] as any)?.withinRunCV !== undefined) {
-        const wrCV = ((pr.levelResults[0] as any).withinRunCV ?? 0).toFixed(2);
-        const bdCV = ((pr.levelResults[0] as any).betweenDayCV ?? 0).toFixed(2);
-        narrative += `ANOVA components show within-run CV of ${wrCV}% and between-day CV of ${bdCV}%, indicating a stable analytical system. `;
-      }
-      narrative += `Manufacturer precision claims are verified. This instrument is performing with acceptable reproducibility.`;
-    } else {
-      narrative = methodologyNote;
-      narrative += `The precision study for ${study.testName} did not meet the adopted acceptance criterion. The maximum observed CV of ${maxCV.toFixed(2)}% exceeds the adopted precision acceptance criterion of ±${cliaPct}% (§493 PT TEa for this analyte; adopted under 42 CFR §493.1253(b)(1)(i)(B)). Review reagent lot, instrument maintenance, and QC trends for contributing factors. Final approval and clinical determination must be made by the laboratory director or designee.`;
-    }
-  }
-  // Append dual-criterion methodology note when applicable
-  const absFloor = (study as any).cliaAbsoluteFloor;
-  if (absFloor != null && narrative) {
-    narrative += " TEa pass/fail uses the 42 CFR §493 dual-criterion rule: pass when the absolute difference is within the greater of the percent or absolute term.";
-  }
-  return narrative;
 }
 
 function QCRangeReport({ study, results }: { study: Study; results: QCRangeResults }) {
@@ -621,16 +500,6 @@ function EvalBox({ results, study }: { results: StudyResults; study: Study }) {
   );
 }
 
-function formatTeaDisplay(study: Study): string {
-  return formatTeaCriterion({
-    isPercentage: (study as any).teaIsPercentage !== 0,
-    value: study.cliaAllowableError,
-    absoluteFloor: (study as any).cliaAbsoluteFloor,
-    absoluteUnit: (study as any).cliaAbsoluteUnit,
-    valueUnit: (study as any).teaUnit,
-  });
-}
-
 function UserSpecs({ study, instrumentNames }: { study: Study; instrumentNames: string[] }) {
   const teaDisplay = formatTeaDisplay(study);
   // Append the picked CLIA preset name to the criterion row so a preset
@@ -745,8 +614,8 @@ function CalVerReport({ study, results }: { study: Study; results: CalVerResults
                 />
                 <Tooltip formatter={(v: number) => `${v.toFixed(2)}%`} />
                 <ReferenceLine y={100} stroke="#888" strokeDasharray="4 2" label={{ value: "100%", fontSize: 9, fill: "#888" }} />
-                <ReferenceLine y={upperBound} stroke="#ef4444" strokeDasharray="4 2" label={{ value: `+${cliaPercent}%`, fontSize: 9, fill: "#ef4444" }} />
-                <ReferenceLine y={lowerBound} stroke="#ef4444" strokeDasharray="4 2" label={{ value: `-${cliaPercent}%`, fontSize: 9, fill: "#ef4444" }} />
+                {!isUnitsCriterion(study) && <ReferenceLine y={upperBound} stroke="#ef4444" strokeDasharray="4 2" label={{ value: `+${cliaPercent}%`, fontSize: 9, fill: "#ef4444" }} />}
+                {!isUnitsCriterion(study) && <ReferenceLine y={lowerBound} stroke="#ef4444" strokeDasharray="4 2" label={{ value: `-${cliaPercent}%`, fontSize: 9, fill: "#ef4444" }} />}
                 <Line type="monotone" dataKey="recovery" name="% Recovery" stroke={CHART_COLORS[0]} strokeWidth={2} dot={{ fill: CHART_COLORS[0], r: 4 }} />
               </LineChart>
             </ResponsiveContainer>
@@ -1191,8 +1060,8 @@ function MethodCompReport({ study, results }: { study: Study; results: MethodCom
                     <YAxis dataKey="pctDiff" name="% Diff" type="number" label={{ value: "% Difference", angle: -90, position: "insideLeft", fontSize: 10 }} />
                     <Tooltip formatter={(v: number, name: string) => name === "% Diff" ? `${v.toFixed(2)}%` : v} cursor={{ strokeDasharray: "3 3" }} />
                     <ReferenceLine y={0} stroke="#888" strokeDasharray="4 2" />
-                    <ReferenceLine y={parseFloat(cliaPercent)} stroke="#ef4444" strokeDasharray="4 2" label={{ value: `+${cliaPercent}%`, fontSize: 8, fill: "#ef4444" }} />
-                    <ReferenceLine y={-parseFloat(cliaPercent)} stroke="#ef4444" strokeDasharray="4 2" label={{ value: `-${cliaPercent}%`, fontSize: 8, fill: "#ef4444" }} />
+                    {!isUnitsCriterion(study) && <ReferenceLine y={parseFloat(cliaPercent)} stroke="#ef4444" strokeDasharray="4 2" label={{ value: `+${cliaPercent}%`, fontSize: 8, fill: "#ef4444" }} />}
+                    {!isUnitsCriterion(study) && <ReferenceLine y={-parseFloat(cliaPercent)} stroke="#ef4444" strokeDasharray="4 2" label={{ value: `-${cliaPercent}%`, fontSize: 8, fill: "#ef4444" }} />}
                     <Scatter
                       name={compName}
                       data={baPlotData.filter((d) => d.instrument === compName)}
@@ -1248,7 +1117,7 @@ function MethodCompReport({ study, results }: { study: Study; results: MethodCom
                         </td>
                         <td className="text-right py-2 pr-3 font-mono">
                           {r.instruments[n]
-                            ? <span className={Math.abs(r.instruments[n].pctDifference) < study.cliaAllowableError * 100 ? "text-green-400" : "text-red-400"}>
+                            ? <span className={r.instruments[n].passFail === "Pass" ? "text-green-400" : "text-red-400"}>
                                 {r.instruments[n].pctDifference.toFixed(2)}%
                               </span>
                             : "---"}
@@ -1340,7 +1209,7 @@ function MethodCompReport({ study, results }: { study: Study; results: MethodCom
                     <td className="py-2 pr-3 font-medium">{name}</td>
                     <td className="text-right py-2 pr-3 font-mono">{ba.meanDiff.toFixed(4)}</td>
                     <td className="text-right py-2 pr-3 font-mono">
-                      <span className={Math.abs(ba.pctMeanDiff) < study.cliaAllowableError * 100 ? "text-green-400" : "text-red-400"}>
+                      <span className={(isUnitsCriterion(study) ? Math.abs(ba.meanDiff) <= study.cliaAllowableError : Math.abs(ba.pctMeanDiff) < study.cliaAllowableError * 100) ? "text-green-400" : "text-red-400"}>
                         {ba.pctMeanDiff.toFixed(2)}%
                       </span>
                     </td>
