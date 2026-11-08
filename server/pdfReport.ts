@@ -1440,7 +1440,7 @@ function narrativeHTML(
     // instead of the mean of all analyzers, which can hide one analyzer's error behind another's.
     const unit = ((study as any)?.teaUnit || (study as any)?.tea_unit || "").trim();
     const calAdj = criterionAdjective(analyteName, study);
-    const calSource = criterionSourcePhrase(analyteName, "42 CFR §493.1255(b)(3) and §493.1253(b)(2)", study);
+    const calSource = criterionSourcePhrase(analyteName, "42 CFR §493.1255(b)(2) and §493.1253(b)(3)", study);
     const calAuthority = criterionAuthorityPhrase(analyteName, cfrSection, study);
     const calLabel = criterionLabel(analyteName, study);
     const nLevels = (results.levelResults || []).length;
@@ -1467,14 +1467,15 @@ function narrativeHTML(
       : slopeVal > 1
         ? `a ${sf((slopeVal - 1) * 100, 1)}% upward proportional bias - results trend slightly high at upper concentrations`
         : `a ${sf((1 - slopeVal) * 100, 1)}% downward proportional bias - results trend slightly low at upper concentrations`;
-    const interceptInterp = Math.abs(interceptVal) < cliaError * 100 * 0.1
+    const negligibleOffset = isAbsolute ? cliaError * 0.1 : cliaError * 100 * 0.1;
+    const interceptInterp = Math.abs(interceptVal) < negligibleOffset
       ? "a negligible constant offset"
       : interceptVal > 0
         ? `a small positive constant offset of ${sf(Math.abs(interceptVal), 3)} units at low concentrations`
         : `a small negative constant offset of ${sf(Math.abs(interceptVal), 3)} units at low concentrations`;
 
     const calAdj = criterionAdjective(analyteName, study);
-    const calSource = criterionSourcePhrase(analyteName, "42 CFR §493.1255(b)(3) and §493.1253(b)(2)", study);
+    const calSource = criterionSourcePhrase(analyteName, "42 CFR §493.1255(b)(2) and §493.1253(b)(3)", study);
     const calAuthority = criterionAuthorityPhrase(analyteName, cfrSection, study);
     const calLabel = criterionLabel(analyteName, study);
     if (results.overallPass) {
@@ -1494,7 +1495,7 @@ function narrativeHTML(
     const comps = Object.keys(results.levelResults[0].instruments);
     const unit = (study as any)?.teaUnit || (study as any)?.tea_unit || "";
     const mcAdj = criterionAdjective(analyteName, study);
-    const mcSource = criterionSourcePhrase(analyteName, "42 CFR §493.1253(b)(2)", study);
+    const mcSource = criterionSourcePhrase(analyteName, "42 CFR §493.1281(a)", study);
     const mcAuthority = criterionAuthorityPhrase(analyteName, cfrSection, study);
     const mcLabel = criterionLabel(analyteName, study);
     const failing: string[] = [];
@@ -1540,7 +1541,7 @@ function narrativeHTML(
       ? `${meanBiasAbs >= 0 ? "+" : ""}${sf(meanBiasAbs, 2)} ${(study as any)?.teaUnit || (study as any)?.tea_unit || ''}`
       : `${meanBiasPct >= 0 ? "+" : ""}${sf(meanBiasPct, 1)}%`;
     const mcAdj = criterionAdjective(analyteName, study);
-    const mcSource = criterionSourcePhrase(analyteName, "42 CFR §493.1253(b)(2)", study);
+    const mcSource = criterionSourcePhrase(analyteName, "42 CFR §493.1281(a)", study);
     const mcAuthority = criterionAuthorityPhrase(analyteName, cfrSection, study);
     const mcLabel = criterionLabel(analyteName, study);
 
@@ -1577,7 +1578,7 @@ function narrativeHTML(
     const isAdvanced = results.mode === "advanced";
 
     const prAdj = criterionAdjective(analyteName, study);
-    const prSource = criterionSourcePhrase(analyteName, "42 CFR §493.1253(b)(2)(ii)", study);
+    const prSource = criterionSourcePhrase(analyteName, "42 CFR §493.1253(b)(1)(i)(B)", study);
     const prAuthority = criterionAuthorityPhrase(analyteName, cfrSection, study);
     const prLabel = criterionLabel(analyteName, study);
     // Methodology note prepended to both pass and fail narratives so the
@@ -1595,7 +1596,6 @@ function narrativeHTML(
         const bdCV = levels[0].betweenDayCV?.toFixed(2) ?? "-";
         narrative += `ANOVA components show within-run CV of ${wrCV}% and between-day CV of ${bdCV}%, indicating a stable analytical system with consistent day-to-day performance. `;
       }
-      narrative += `Manufacturer precision claims are verified. This instrument is performing with acceptable reproducibility. `;
       narrative += `<b>Each precision level was individually evaluated against the ${prAdj} acceptance criterion (${prLabel}) of ${teaStr} ${prAuthority}. All levels satisfied this criterion.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
     } else {
       narrative = methodologyNote;

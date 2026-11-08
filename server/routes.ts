@@ -21358,7 +21358,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           passCount,
           totalCount: levelResults.length,
           summary: overallPass
-            ? `All ${levelResults.length} precision levels passed within the ${acceptanceCriterionLabel(studyRow.test_name, study)} of ${_teaDisplay}. Manufacturer precision claims verified.`
+            ? `All ${levelResults.length} precision levels passed within the ${acceptanceCriterionLabel(studyRow.test_name, study)} of ${_teaDisplay}.`
             : `${levelResults.length - passCount} of ${levelResults.length} precision levels exceeded the ${acceptanceCriterionLabel(studyRow.test_name, study)} of ${_teaDisplay}.`,
         };
         const pdfBuffer = await generatePDFBuffer(study as any, results, "22D0999999", null, licenseCtxFromReq(req));
