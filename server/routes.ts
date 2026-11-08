@@ -301,7 +301,7 @@ export const LAB_SETUP_BY_STAFF_MESSAGE = "Your lab is set up by the Veritas Lab
 // studies instead of writing FAIL over a stored verdict (#69, 2026-10-07).
 let lastComputeStudyStatusError: unknown = null;
 
-function computeStudyStatus(studyType: string, dataPointsJson: string, instrumentsJson: string, cliaAllowableError: number, teaIsPercentage: boolean = true, cliaAbsoluteFloor: number | null = null, censoringPolicy: CensoringPolicy = "exclude"): "pass" | "fail" {
+export function computeStudyStatus(studyType: string, dataPointsJson: string, instrumentsJson: string, cliaAllowableError: number, teaIsPercentage: boolean = true, cliaAbsoluteFloor: number | null = null, censoringPolicy: CensoringPolicy = "exclude"): "pass" | "fail" {
   lastComputeStudyStatusError = null;
   try {
     let rawData = safeJsonParse(dataPointsJson, null);
@@ -537,11 +537,13 @@ function computeStudyStatus(studyType: string, dataPointsJson: string, instrumen
       // a single measurement at the level mean (k=2 coverage), the standard reading for
       // EP15 precision when an analyte's PT TEa includes an absolute floor (e.g. Glucose
       // +/- 8% or +/- 6 mg/dL whichever is greater).
+      // A criterion stored in units (Sodium ±4 mmol/L) is not a fraction: a level passes when 2 SD is within it
+      // (Q239 = 1, Michael 2026-11-08; the same k=2 reading as the floor above). It used to be read as a 400% CV.
       const dataPoints = rawData as { level: number; levelName: string; values: number[]; days?: number[][] }[];
-      const allowableCV = cliaAllowableError * 100;
-      const sdFloor = teaIsPercentage && (cliaAbsoluteFloor ?? 0) > 0
-        ? (cliaAbsoluteFloor as number) / 2
-        : null;
+      const allowableCV = teaIsPercentage ? cliaAllowableError * 100 : -1;
+      const sdFloor = teaIsPercentage
+        ? ((cliaAbsoluteFloor ?? 0) > 0 ? (cliaAbsoluteFloor as number) / 2 : null)
+        : cliaAllowableError / 2;
       let passCount = 0, totalCount = 0;
       for (const dp of dataPoints) {
         const allVals = dp.days ? dp.days.flat().filter(v => v !== null && !isNaN(v)) : dp.values.filter(v => v !== null && !isNaN(v));
@@ -552,7 +554,7 @@ function computeStudyStatus(studyType: string, dataPointsJson: string, instrumen
         const variance = allVals.reduce((s, v) => s + (v - m) ** 2, 0) / (n - 1);
         const sd = Math.sqrt(variance);
         const cv = m !== 0 ? (sd / m) * 100 : 0;
-        const passPct = cv <= allowableCV;
+        const passPct = teaIsPercentage && cv <= allowableCV;
         const passAbs = sdFloor !== null && sd <= sdFloor;
         if (passPct || passAbs) passCount++;
       }
@@ -576,16 +578,21 @@ function computeStudyStatus(studyType: string, dataPointsJson: string, instrumen
         // Per-pair pass status under dual rule
         const pairPasses = valid.map((dp: any) => {
           const diff = Math.abs(dp.newLot - dp.currentLot);
+          if (!teaIsPercentage) return diff <= tea;
           const pctAllowance = Math.abs(dp.currentLot) * tea;
           const allowance = Math.max(pctAllowance, absFloor);
           return diff <= allowance;
         });
         const n = absPcts.length;
         if (n === 0) return "fail";
-        const meanAbsPct = meanFn(absPcts);
         const withinTea = pairPasses.filter((p: boolean) => p).length;
         const coverage = (withinTea / n) * 100;
-        if (!(meanAbsPct <= tea * 100 && coverage >= 90)) return "fail";
+        // Q239 = 1: a criterion stored in units (Sodium ±4 mmol/L) compares the mean absolute difference in units;
+        // it used to be read as 400%. The pairs above already use it as units (absFloor is 0, tea is the limit).
+        const meanWithin = teaIsPercentage
+          ? meanFn(absPcts) <= tea * 100
+          : meanFn(valid.map((dp: any) => Math.abs(dp.newLot - dp.currentLot))) <= tea;
+        if (!(meanWithin && coverage >= 90)) return "fail";
       }
       return "pass";
     }
@@ -784,6 +791,15 @@ function dataPointsHaveExclusions(dataPointsJson: string): boolean {
   return Array.isArray(parsed) && parsed.some((p: any) => p && p.excluded);
 }
 
+// Q239 = 1 (Michael 2026-11-08): precision and lot-to-lot studies whose criterion is stored in units were judged as a
+// percent (Sodium ±4 mmol/L as 400%) until the rule changed. Their saved verdicts stay as saved until Michael has the
+// count from GET /api/admin/veritacheck/units-limit-counts and decides; the boot recompute must not rewrite them.
+export function isUnitsRuleStudy(study: { studyType?: string; study_type?: string; teaIsPercentage?: number | null; tea_is_percentage?: number | null }): boolean {
+  const type = study.studyType ?? study.study_type;
+  const isPct = (study.teaIsPercentage ?? study.tea_is_percentage) !== 0;
+  return !isPct && (type === "precision" || type === "lot_to_lot");
+}
+
 // Recompute and fix status for all existing studies
 export function recomputeAllStudyStatuses(): { fixed: number; skipped: number } {
   const allStudies = storage.getAllStudies();
@@ -798,6 +814,7 @@ export function recomputeAllStudyStatuses(): { fixed: number; skipped: number } 
     // cascading-write footgun. Exclusion-driven verdict changes happen only
     // through the controlled exclusion endpoint, which captures that decision.
     if (dataPointsHaveExclusions(study.dataPoints)) continue;
+    if (isUnitsRuleStudy(study as any)) continue;
     const computed = computeStudyStatus(study.studyType, study.dataPoints, study.instruments, study.cliaAllowableError, (study as any).teaIsPercentage !== 0, (study as any).cliaAbsoluteFloor ?? null, (study as any).censoringPolicy ?? "exclude");
     // #69 (2026-10-07): an exception inside computeStudyStatus returns the
     // fail-safe "fail", not a verdict. Writing that over a stored status at
@@ -35367,6 +35384,45 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       test_count: (sqlite.prepare("SELECT COUNT(*) AS n FROM veritamap_tests WHERE map_id = ?").get(m.id) as { n: number }).n,
     }));
     res.json({ labId, count: enriched.length, maps: enriched });
+  });
+
+  // ── ADMIN: units-criterion precision and lot-to-lot studies, counts only (Q239 = 1, 2026-11-08) ──
+  // How many saved studies hold a criterion in units, and how many saved verdicts the corrected rule would change.
+  // Read-only: nothing is written, and the boot recompute skips these rows (isUnitsRuleStudy). Answers counts,
+  // lab ids and the preset name only; no study ids, test names typed by the lab, analysts or values.
+  app.get("/api/admin/veritacheck/units-limit-counts", (req, res) => {
+    if (!ADMIN_SECRET || req.headers["x-admin-secret"] !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    const sqlite = (db as any).$client;
+    const rows = sqlite.prepare(
+      `SELECT lab_id, study_type, status, lifecycle_state, clia_allowable_error, clia_absolute_floor, data_points, instruments, censoring_policy, clia_preset_label
+         FROM studies WHERE tea_is_percentage = 0 AND study_type IN ('precision', 'lot_to_lot')`
+    ).all() as any[];
+    const blank = () => ({ total: 0, drafts: 0, savedPass: 0, savedFail: 0, newRulePass: 0, newRuleFail: 0, wouldChange: 0, passToFail: 0, failToPass: 0, finalizedWouldChange: 0, notEvaluable: 0, withExclusions: 0 });
+    const byType: Record<string, ReturnType<typeof blank>> = { precision: blank(), lot_to_lot: blank() };
+    const byLab: Record<string, { total: number; wouldChange: number }> = {};
+    const byPreset: Record<string, number> = {};
+    for (const r of rows) {
+      const t = byType[r.study_type];
+      t.total++;
+      const lab = String(r.lab_id ?? "none");
+      byLab[lab] = byLab[lab] || { total: 0, wouldChange: 0 };
+      byLab[lab].total++;
+      const preset = r.clia_preset_label || "(custom)";
+      byPreset[preset] = (byPreset[preset] || 0) + 1;
+      if (r.status === "draft") { t.drafts++; continue; }
+      if (r.status === "pass") t.savedPass++; else if (r.status === "fail") t.savedFail++;
+      if (dataPointsHaveExclusions(r.data_points)) t.withExclusions++;
+      const next = computeStudyStatus(r.study_type, r.data_points, r.instruments, r.clia_allowable_error, false, r.clia_absolute_floor ?? null, r.censoring_policy ?? "exclude");
+      if (lastStudyStatusWasError()) { t.notEvaluable++; continue; }
+      if (next === "pass") t.newRulePass++; else t.newRuleFail++;
+      if (next !== r.status) {
+        t.wouldChange++;
+        byLab[lab].wouldChange++;
+        if (r.status === "pass") t.passToFail++; else t.failToPass++;
+        if (r.lifecycle_state === "finalized") t.finalizedWouldChange++;
+      }
+    }
+    res.json({ studies: rows.length, byType, byLab, byPreset });
   });
 
   // ── ADMIN: Read-only VeritaCheck/VeritaMap diagnostic probe ─────────────

@@ -12,9 +12,9 @@
 // 493.1255(b)(2) and 493.1253(b)(3) for calibration verification limits,
 // 493.1253(b)(1)(i)(B) for precision, 493.1281(a) for method comparison);
 // no "Manufacturer precision claims are verified" without a vendor claim.
-import { calculateStudy, calculatePrecision, calculateQualitative, type DataPoint } from "../client/src/lib/calculations";
+import { calculateStudy, calculatePrecision, calculateQualitative, calculateLotToLot, type DataPoint } from "../client/src/lib/calculations";
 import { generateNarrative, CLOSING_SENTENCE } from "../client/src/lib/studyNarrative";
-import { buildCalVerHTML, buildPrecisionHTML, buildMethodCompHTML } from "../server/pdfReport";
+import { buildCalVerHTML, buildPrecisionHTML, buildMethodCompHTML, buildLotToLotHTML } from "../server/pdfReport";
 
 let failures = 0;
 function check(name: string, ok: boolean, detail = "") {
@@ -126,6 +126,33 @@ const pts = (rows: Array<[number, Record<string, number>]>): DataPoint[] =>
   const r = calculateQualitative(rows, ["New"], cats, 0.9);
   const n = generateNarrative(r as any, s);
   check("Qualitative FAIL screen: no 'Review discordant' instruction, ends with the closing line", !/\bReview\b/.test(n) && n.endsWith(CLOSING_SENTENCE), n);
+}
+
+// 8. Q239 = 1: Sodium precision in units, judged as 2 SD within ±4 mmol/L, on screen and on paper.
+{
+  const s = study({ studyType: "precision", status: "fail" });
+  const vals = Array.from({ length: 20 }, (_, i) => 140 + (i % 2 ? 2.5 : -2.5)); // 2 SD about 5.1 mmol/L, CV 1.8%
+  const r = calculatePrecision([{ level: 1, levelName: "Level 1", values: vals }], 4, "simple", { teaIsPercentage: false, unit: "mmol/L" });
+  const n = generateNarrative(r as any, s);
+  check("Sodium precision: FAIL under 2 SD within ±4 mmol/L (the old 400% CV reading passed it)", !r.overallPass, r.summary);
+  check("Sodium precision screen: speaks in 2 SD and ±4 mmol/L, no 400.0%", n.includes("largest 2 SD of 5.130 mmol/L") && n.includes("±4 mmol/L") && !n.includes("400.0%"), n);
+  check("Sodium precision screen: ends with the closing line", n.endsWith(CLOSING_SENTENCE), n);
+  const html = buildPrecisionHTML(s, r);
+  const p = narrativeOf(html);
+  check("Sodium precision PDF: speaks in 2 SD and ±4 mmol/L, no 400.0%", p.includes("largest 2 SD of 5.130 mmol/L") && p.includes("±4 mmol/L") && !text(html).includes("400.0%"), p);
+  check("Sodium precision PDF table: '2 SD / Limit' with 5.130 / ±4 mmol/L", text(html).includes("2 SD / Limit") && text(html).includes("5.130 / ±4 mmol/L"));
+}
+
+// 9. Q239 = 1: Sodium lot-to-lot in units, on paper; and its citation is the reference block's 493.1255(b)(3)(i).
+{
+  const s = study({ studyType: "lot_to_lot", status: "fail" });
+  const data = [[138, 144], [140, 146], [142, 147], [135, 141], [145, 150]].map(([c, nw], i) => ({ specimenId: `S${i + 1}`, currentLot: c, newLot: nw, cohort: "Normal" as const }));
+  s.dataPoints = JSON.stringify({ data, sampleType: "normal", analyte: "Sodium", units: "mmol/L" });
+  const r = calculateLotToLot(data, 4, "normal", false, null, "mmol/L");
+  const html = buildLotToLotHTML(s, r);
+  const t = text(html);
+  check("Sodium lot PDF: FAIL, differences in mmol/L, no 400.0% anywhere", !r.overallPass && t.includes("Diff (mmol/L)") && t.includes("Mean |Diff|") && t.includes("5.60 mmol/L") && !t.includes("400.0%"), t.slice(0, 600));
+  check("Sodium lot PDF: cites 493.1255(b)(3)(i), not 493.1253(b)(2)", t.includes("adopted under 42 CFR §493.1255(b)(3)(i)") && !t.includes("adopted under 42 CFR §493.1253(b)(2)"));
 }
 
 console.log(failures ? `\n${failures} check(s) failed` : "\nall checks passed");
