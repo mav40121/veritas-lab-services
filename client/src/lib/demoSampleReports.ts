@@ -373,7 +373,7 @@ function buildCalVerSample() {
     { level: 4, expectedValue: 402, instrumentValues: { "Roche Cobas 8000": 396 } },
     { level: 5, expectedValue: 548, instrumentValues: { "Roche Cobas 8000": 557 } },
   ];
-  const results = calculateCalVer(dataPoints, ["Roche Cobas 8000"], 0.08, true, 6);
+  const results = calculateCalVer(dataPoints, ["Roche Cobas 8000"], 0.08, true, 6, "mg/dL");
 
   const study = {
     id: -6, userId: -1, createdByUserId: -1,
@@ -409,7 +409,7 @@ function buildMethodComparisonSample() {
     level: i + 1, expectedValue: x,
     instrumentValues: { [COMP]: Math.round((x * 0.99 + 2 + rnd() * 2) * 10) / 10 },
   }));
-  const results = calculateMethodComparison(dataPoints, [COMP], 0.08, true, 6);
+  const results = calculateMethodComparison(dataPoints, [COMP], 0.08, true, 6, "mg/dL");
 
   const study = {
     id: -7, userId: -1, createdByUserId: -1,

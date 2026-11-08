@@ -1732,8 +1732,12 @@ export default function VeritaCheckPage() {
       cliaAllowableError: cliaValue,
       dataPoints: JSON.stringify(dataPoints),
       instruments: JSON.stringify(instrumentNames),
-      teaIsPercentage: 1,
-      teaUnit: "%",
+      // Store the criterion the way handleSubmit does: a units preset (Sodium ±4 mmol/L) keeps teaIsPercentage 0
+      // and its unit, so the value saved beside it (cliaValue, the number itself) isn't read as a fraction.
+      teaIsPercentage: teaIsPercentage ? 1 : 0,
+      teaUnit,
+      cliaAbsoluteFloor,
+      cliaAbsoluteUnit,
       cliaPresetLabel,
       status: "draft",
     };

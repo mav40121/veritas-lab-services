@@ -404,14 +404,12 @@ export function computeStudyResults(study: Study): StudyResults {
           expectedValue: d.instrumentValues[primaryName] ?? null,
           instrumentValues: Object.fromEntries(comparisonNames.map(n => [n, d.instrumentValues[n] ?? null])),
         }));
-        const isPercentage = (study as any).teaIsPercentage !== 0;
-        const absFloor = (study as any).cliaAbsoluteFloor ?? null;
-        results = calculateMethodComparison(mappedPoints, comparisonNames, study.cliaAllowableError, isPercentage, absFloor);
+        const f = criterionForm(study);
+        results = calculateMethodComparison(mappedPoints, comparisonNames, study.cliaAllowableError, f.teaIsPercentage, f.absoluteFloor, f.unit);
       } else {
         const comparisonNames = instrumentNames.filter(n => n in (dp[0]?.instrumentValues || {}));
-        const isPercentage = (study as any).teaIsPercentage !== 0;
-        const absFloor = (study as any).cliaAbsoluteFloor ?? null;
-        results = calculateMethodComparison(dp, comparisonNames.length > 0 ? comparisonNames : instrumentNames, study.cliaAllowableError, isPercentage, absFloor);
+        const f = criterionForm(study);
+        results = calculateMethodComparison(dp, comparisonNames.length > 0 ? comparisonNames : instrumentNames, study.cliaAllowableError, f.teaIsPercentage, f.absoluteFloor, f.unit);
         // BUG-085 (2026-10-27, Michael Q18 = 1): when NONE of the listed analyzers has values in the data (the list was
         // changed after the data was entered), the math above runs on empty columns and reads as FAIL. That is not a
         // verdict, so say what is wrong instead; the page, the PDF route and the records export all honor it.
@@ -424,13 +422,11 @@ export function computeStudyResults(study: Study): StudyResults {
     }
   } else if (study.studyType === "cal_ver_correlation") {
     // Calibration Verification + Correlation: both halves from the one data entry (first analyzer = primary).
-    const isPercentage = (study as any).teaIsPercentage !== 0;
-    const absFloor = (study as any).cliaAbsoluteFloor ?? null;
-    results = calculateCalVerCorrelation(rawDataPoints as DataPoint[], instrumentNames, study.cliaAllowableError, isPercentage, absFloor);
+    const f = criterionForm(study);
+    results = calculateCalVerCorrelation(rawDataPoints as DataPoint[], instrumentNames, study.cliaAllowableError, f.teaIsPercentage, f.absoluteFloor, f.unit);
   } else {
-    const isPercentage = (study as any).teaIsPercentage !== 0;
-    const absFloor = (study as any).cliaAbsoluteFloor ?? null;
-    results = calculateStudy(rawDataPoints as DataPoint[], instrumentNames, study.cliaAllowableError, study.studyType as "cal_ver" | "method_comparison", isPercentage, absFloor);
+    const f = criterionForm(study);
+    results = calculateStudy(rawDataPoints as DataPoint[], instrumentNames, study.cliaAllowableError, study.studyType as "cal_ver" | "method_comparison", f.teaIsPercentage, f.absoluteFloor, f.unit);
   }
   return results;
 }

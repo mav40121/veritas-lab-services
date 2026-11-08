@@ -14,6 +14,7 @@
 // no "Manufacturer precision claims are verified" without a vendor claim.
 import { calculateStudy, calculatePrecision, calculateQualitative, calculateLotToLot, type DataPoint } from "../client/src/lib/calculations";
 import { generateNarrative, CLOSING_SENTENCE } from "../client/src/lib/studyNarrative";
+import { computeStudyResults } from "../client/src/lib/studyResults";
 import { buildCalVerHTML, buildPrecisionHTML, buildMethodCompHTML, buildLotToLotHTML } from "../server/pdfReport";
 
 let failures = 0;
@@ -153,6 +154,26 @@ const pts = (rows: Array<[number, Record<string, number>]>): DataPoint[] =>
   const t = text(html);
   check("Sodium lot PDF: FAIL, differences in mmol/L, no 400.0% anywhere", !r.overallPass && t.includes("Diff (mmol/L)") && t.includes("Mean |Diff|") && t.includes("5.60 mmol/L") && !t.includes("400.0%"), t.slice(0, 600));
   check("Sodium lot PDF: cites 493.1255(b)(3)(i), not 493.1253(b)(2)", t.includes("adopted under 42 CFR §493.1255(b)(3)(i)") && !t.includes("adopted under 42 CFR §493.1253(b)(2)"));
+}
+
+// 10. The summary line names the unit (2026-11-08 follow-up): computeStudyResults is what the results screen and the
+// PDF request use, and it reads the stored criterion through criterionForm.
+{
+  const calPts = JSON.stringify(pts([[120, { "Analyzer A": 122 }], [140, { "Analyzer A": 142 }], [160, { "Analyzer A": 162 }]]));
+  const cal = computeStudyResults(study({ dataPoints: calPts }));
+  check("Sodium cal ver summary: 'Adopted Acceptance Criterion (TEa) was ±4 mmol/L.'", cal.summary.includes("Adopted Acceptance Criterion (TEa) was ±4 mmol/L."), cal.summary);
+  const mcRows = JSON.stringify([120, 130, 140, 150, 160].map((v, i) => ({ level: i + 1, expectedValue: v, instrumentValues: { Comparison: v + 1 } })));
+  const mc = computeStudyResults(study({ studyType: "method_comparison", dataPoints: mcRows, instruments: JSON.stringify(["Comparison"]) }));
+  check("Sodium method comparison summary: 'criterion (TEa) of ±4 mmol/L'", mc.summary.includes("acceptance criterion (TEa) of ±4 mmol/L."), mc.summary);
+  const glu = computeStudyResults(study({ testName: "Glucose", cliaAllowableError: 0.08, teaIsPercentage: 1, teaUnit: "%", cliaAbsoluteFloor: 6, cliaAbsoluteUnit: "mg/dL",
+    dataPoints: JSON.stringify(pts([[50, { "Analyzer A": 53 }], [150, { "Analyzer A": 152 }], [300, { "Analyzer A": 305 }]])) }));
+  check("Glucose cal ver summary: '±8.0% or ±6 mg/dL (greater)'", glu.summary.includes("was ±8.0% or ±6 mg/dL (greater)."), glu.summary);
+  const two = ["Analyzer A", "Analyzer B"];
+  const cc = computeStudyResults(study({ studyType: "cal_ver_correlation", instruments: JSON.stringify(two),
+    dataPoints: JSON.stringify(pts([120, 140, 160].map((v) => [v, { "Analyzer A": v + 1, "Analyzer B": v + 2 }]))) })) as any;
+  check("Sodium cal ver + correlation: both halves' summaries read ±4 mmol/L", cc.calVer.summary.includes("±4 mmol/L.") && cc.correlation.summary.includes("±4 mmol/L."), `${cc.calVer.summary} | ${cc.correlation.summary}`);
+  const pctOnly = computeStudyResults(study({ testName: "Albumin", cliaAllowableError: 0.08, teaIsPercentage: 1, teaUnit: "%", dataPoints: calPts }));
+  check("Albumin (percent, no floor) summary unchanged: '±8.0%.'", pctOnly.summary.includes("was ±8.0%."), pctOnly.summary);
 }
 
 console.log(failures ? `\n${failures} check(s) failed` : "\nall checks passed");
