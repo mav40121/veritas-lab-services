@@ -40,6 +40,15 @@ export function deepResolveCensored(obj: any, policy: CensoringPolicy): any {
   return obj;
 }
 
+// How a study's criterion is stored: a fraction, or a number in units (teaIsPercentage 0: Sodium ±4 mmol/L), with the
+// unit the limit or its floor is in.
+export function criterionForm(study: Study): { teaIsPercentage: boolean; absoluteFloor: number | null; unit: string | null } {
+  const teaIsPercentage = (study as any).teaIsPercentage !== 0;
+  const absoluteFloor = ((study as any).cliaAbsoluteFloor ?? null) as number | null;
+  const unit = (teaIsPercentage ? (study as any).cliaAbsoluteUnit : ((study as any).teaUnit || (study as any).cliaAbsoluteUnit)) ?? null;
+  return { teaIsPercentage, absoluteFloor, unit: unit ? String(unit) : null };
+}
+
 export function computeStudyResults(study: Study): StudyResults {
   if (study.studyType === "sensitivity") {
     return calculateSensitivity((JSON.parse(study.dataPoints) as { input: any }).input) as unknown as StudyResults;
@@ -75,11 +84,14 @@ export function computeStudyResults(study: Study): StudyResults {
         vendorSDConcentration: (study as any).vendorSdConcentration ?? undefined,
         targetMean: (study as any).targetMean ?? undefined,
         targetCV: (study as any).targetCv ?? undefined,
+        // Q239 = 1: a criterion stored in units, and a percent criterion's floor.
+        ...criterionForm(study),
       },
     );
   } else if (study.studyType === "lot_to_lot") {
     const { data, sampleType } = rawDataPoints;
-    results = calculateLotToLot(data, study.cliaAllowableError, sampleType);
+    const f = criterionForm(study);
+    results = calculateLotToLot(data, study.cliaAllowableError, sampleType, f.teaIsPercentage, f.absoluteFloor, f.unit);
   } else if (study.studyType === "pt_coag") {
     const { module1, module1Instruments, module2, module3: m3Raw } = rawDataPoints;
     // Symmetric multi-instrument: module1Instruments[] is the new shape. Legacy

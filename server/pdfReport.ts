@@ -1440,7 +1440,7 @@ function narrativeHTML(
     // instead of the mean of all analyzers, which can hide one analyzer's error behind another's.
     const unit = ((study as any)?.teaUnit || (study as any)?.tea_unit || "").trim();
     const calAdj = criterionAdjective(analyteName, study);
-    const calSource = criterionSourcePhrase(analyteName, "42 CFR §493.1255(b)(3) and §493.1253(b)(2)", study);
+    const calSource = criterionSourcePhrase(analyteName, "42 CFR §493.1255(b)(2) and §493.1253(b)(3)", study);
     const calAuthority = criterionAuthorityPhrase(analyteName, cfrSection, study);
     const calLabel = criterionLabel(analyteName, study);
     const nLevels = (results.levelResults || []).length;
@@ -1467,14 +1467,15 @@ function narrativeHTML(
       : slopeVal > 1
         ? `a ${sf((slopeVal - 1) * 100, 1)}% upward proportional bias - results trend slightly high at upper concentrations`
         : `a ${sf((1 - slopeVal) * 100, 1)}% downward proportional bias - results trend slightly low at upper concentrations`;
-    const interceptInterp = Math.abs(interceptVal) < cliaError * 100 * 0.1
+    const negligibleOffset = isAbsolute ? cliaError * 0.1 : cliaError * 100 * 0.1;
+    const interceptInterp = Math.abs(interceptVal) < negligibleOffset
       ? "a negligible constant offset"
       : interceptVal > 0
         ? `a small positive constant offset of ${sf(Math.abs(interceptVal), 3)} units at low concentrations`
         : `a small negative constant offset of ${sf(Math.abs(interceptVal), 3)} units at low concentrations`;
 
     const calAdj = criterionAdjective(analyteName, study);
-    const calSource = criterionSourcePhrase(analyteName, "42 CFR §493.1255(b)(3) and §493.1253(b)(2)", study);
+    const calSource = criterionSourcePhrase(analyteName, "42 CFR §493.1255(b)(2) and §493.1253(b)(3)", study);
     const calAuthority = criterionAuthorityPhrase(analyteName, cfrSection, study);
     const calLabel = criterionLabel(analyteName, study);
     if (results.overallPass) {
@@ -1494,7 +1495,7 @@ function narrativeHTML(
     const comps = Object.keys(results.levelResults[0].instruments);
     const unit = (study as any)?.teaUnit || (study as any)?.tea_unit || "";
     const mcAdj = criterionAdjective(analyteName, study);
-    const mcSource = criterionSourcePhrase(analyteName, "42 CFR §493.1253(b)(2)", study);
+    const mcSource = criterionSourcePhrase(analyteName, "42 CFR §493.1281(a)", study);
     const mcAuthority = criterionAuthorityPhrase(analyteName, cfrSection, study);
     const mcLabel = criterionLabel(analyteName, study);
     const failing: string[] = [];
@@ -1540,7 +1541,7 @@ function narrativeHTML(
       ? `${meanBiasAbs >= 0 ? "+" : ""}${sf(meanBiasAbs, 2)} ${(study as any)?.teaUnit || (study as any)?.tea_unit || ''}`
       : `${meanBiasPct >= 0 ? "+" : ""}${sf(meanBiasPct, 1)}%`;
     const mcAdj = criterionAdjective(analyteName, study);
-    const mcSource = criterionSourcePhrase(analyteName, "42 CFR §493.1253(b)(2)", study);
+    const mcSource = criterionSourcePhrase(analyteName, "42 CFR §493.1281(a)", study);
     const mcAuthority = criterionAuthorityPhrase(analyteName, cfrSection, study);
     const mcLabel = criterionLabel(analyteName, study);
 
@@ -1577,7 +1578,7 @@ function narrativeHTML(
     const isAdvanced = results.mode === "advanced";
 
     const prAdj = criterionAdjective(analyteName, study);
-    const prSource = criterionSourcePhrase(analyteName, "42 CFR §493.1253(b)(2)(ii)", study);
+    const prSource = criterionSourcePhrase(analyteName, "42 CFR §493.1253(b)(1)(i)(B)", study);
     const prAuthority = criterionAuthorityPhrase(analyteName, cfrSection, study);
     const prLabel = criterionLabel(analyteName, study);
     // Methodology note prepended to both pass and fail narratives so the
@@ -1587,7 +1588,19 @@ function narrativeHTML(
     const methodologyNote = isAdvanced
       ? `Methodology: CLSI EP15-A3 Advanced (ANOVA-decomposed precision). The study estimates within-run, between-day, and total CV across multiple days, runs, and replicates per run. `
       : `Methodology: CLSI EP15-A3 Simple (aggregate precision). For each level, mean and standard deviation (n-1) are computed across all replicates, and the coefficient of variation (CV) is calculated as SD divided by mean, expressed as a percent. `;
-    if (results.overallPass) {
+    if (isAbsolute) {
+      // Q239 = 1 (Michael 2026-11-08): a criterion stored in units is met at a level when 2 SD is within it.
+      const unit = ((study as any)?.teaUnit || (study as any)?.tea_unit || "").trim();
+      const maxTwoSD = levels.length > 0 ? Math.max(...levels.map((r: any) => 2 * (r.sd ?? 0))) : 0;
+      const twoSDStr = `${sf(maxTwoSD, 3)}${unit ? ` ${unit}` : ""}`;
+      narrative = methodologyNote;
+      narrative += results.overallPass
+        ? `The precision study for ${analyteName} demonstrated a largest 2 SD of ${twoSDStr} (maximum observed CV ${sf(maxCV, 2)}%), which is within the ${prAdj} precision acceptance criterion of ${teaStr} (${prSource}), met at a level when 2 SD is within it. `
+        : `The precision study for ${analyteName} did not meet the ${prAdj} acceptance criterion. The largest 2 SD of ${twoSDStr} (maximum observed CV ${sf(maxCV, 2)}%) exceeds the ${prAdj} precision acceptance criterion of ${teaStr} (${prSource}), met at a level when 2 SD is within it. `;
+      narrative += results.overallPass
+        ? `<b>Each precision level was individually evaluated against the ${prAdj} acceptance criterion (${prLabel}) of ${teaStr} ${prAuthority}. All levels satisfied this criterion.</b> Final approval and clinical determination must be made by the laboratory director or designee.`
+        : `<b>Each precision level was individually evaluated against the ${prAdj} acceptance criterion (${prLabel}) of ${teaStr} ${prAuthority}. One or more levels did not satisfy this criterion; see the per-level table for details.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
+    } else if (results.overallPass) {
       narrative = methodologyNote;
       narrative += `The precision study for ${analyteName} demonstrated a maximum observed CV of ${sf(maxCV, 2)}%, which is within the ${prAdj} precision acceptance criterion of ±${cliaPct}% (${prSource}). `;
       if (isAdvanced && levels[0]?.withinRunCV !== undefined) {
@@ -1595,7 +1608,6 @@ function narrativeHTML(
         const bdCV = levels[0].betweenDayCV?.toFixed(2) ?? "-";
         narrative += `ANOVA components show within-run CV of ${wrCV}% and between-day CV of ${bdCV}%, indicating a stable analytical system with consistent day-to-day performance. `;
       }
-      narrative += `Manufacturer precision claims are verified. This instrument is performing with acceptable reproducibility. `;
       narrative += `<b>Each precision level was individually evaluated against the ${prAdj} acceptance criterion (${prLabel}) of ${teaStr} ${prAuthority}. All levels satisfied this criterion.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
     } else {
       narrative = methodologyNote;
@@ -2473,12 +2485,16 @@ export function buildPrecisionHTML(study: Study, results: any): string {
   const _absUnit  = (study as any).cliaAbsoluteUnit ?? (study as any).clia_absolute_unit ?? '';
   const hasDual = _absFloor != null && _absUnit;
   const teaStrFull = teaDisplayStr(study);
-  const allowCVHeader = hasDual ? `Allow CV% / Floor` : `Allow CV%`;
+  // Q239 = 1: a criterion stored in units is judged as 2 SD within it.
+  const unitsLimit = isAbsoluteTea(study);
+  const allowCVHeader = unitsLimit ? `2 SD / Limit` : hasDual ? `Allow CV% / Floor` : `Allow CV%`;
 
   const summaryRows = levelResults.map((r: any, i: number) => {
     const pfClass = r.passFail === "Pass" ? "pass" : "fail";
     // For dual-criterion analytes, show both the percent rule and the absolute floor as an SD threshold (k=2)
-    const allowCellHTML = hasDual
+    const allowCellHTML = unitsLimit
+      ? `${sf(2 * (r.sd ?? 0), 3)} / ${teaStrFull}`
+      : hasDual
       ? `±${cliaCV}%<br><span style="color:${MUTED};font-size:7pt">or SD≤${(((_absFloor as number)/2)).toFixed(3)} ${_absUnit}</span>`
       : `±${cliaCV}%`;
     return `<tr class="${i % 2 === 1 ? "stripe" : ""}">
@@ -2755,12 +2771,14 @@ function errorIndexSVG(
 
 // ─── Difference Plot SVG (for Lot-to-Lot) ────────────────────────────────────
 function differencePlotSVG(
-  specimens: number[], pctDiffs: number[], tea: number, w = 320, h = 220, title = "Difference Plot"
+  specimens: number[], pctDiffs: number[], tea: number, w = 320, h = 220, title = "Difference Plot",
+  // Q239 = 1: when the criterion is stored in units, pctDiffs are differences in those units and tea is the limit itself.
+  unitLabel: string | null = null,
 ): string {
   if (!specimens.length) return `<svg width="${w}" height="${h}"></svg>`;
   const ml = 48, mr = 16, mt = 28, mb = 36;
   const pw = w - ml - mr, ph = h - mt - mb;
-  const teaPct = tea * 100;
+  const teaPct = unitLabel !== null ? tea : tea * 100;
   const minY = Math.min(...pctDiffs, -teaPct - 2), maxY = Math.max(...pctDiffs, teaPct + 2);
   const cx = (v: number) => ml + ((v - 0.5) / (specimens.length + 0.5)) * pw;
   const cy = (v: number) => mt + ph - ((v - minY) / (maxY - minY)) * ph;
@@ -2781,7 +2799,7 @@ function differencePlotSVG(
   <rect x="${ml}" y="${mt}" width="${pw}" height="${ph}" fill="white" stroke="#cdd1d6" stroke-width="0.5"/>
   ${grid}${zeroLine}${upper}${lower}${dots}
   <text x="${ml + pw / 2}" y="${h - 4}" text-anchor="middle" font-size="9" fill="#646e78">Specimen Number</text>
-  <text x="10" y="${mt + ph / 2}" text-anchor="middle" font-size="9" fill="#646e78" transform="rotate(-90,10,${mt + ph / 2})">% Diff</text>
+  <text x="10" y="${mt + ph / 2}" text-anchor="middle" font-size="9" fill="#646e78" transform="rotate(-90,10,${mt + ph / 2})">${unitLabel !== null ? `Diff${unitLabel ? ` (${unitLabel})` : ""}` : "% Diff"}</text>
 </svg>`;
 }
 
@@ -3748,7 +3766,10 @@ function buildSensitivityHTML(study: Study, results: any): string {
 export function buildLotToLotHTML(study: Study, results: any): string {
   const instrumentNames: string[] = safeJsonParse(study.instruments) || [];
   const rawData = safeJsonParse(study.dataPoints) || {};
-  const teaPct = (study.cliaAllowableError * 100).toFixed(1);
+  // Q239 = 1: a criterion stored in units (Sodium ±4 mmol/L) is judged on the difference in units.
+  const l2lUnits = isAbsoluteTea(study);
+  const l2lUnit = String(results.unit || (study as any).teaUnit || (study as any).tea_unit || "").trim();
+  const l2lU = (v: number, d = 2) => `${sf(v, d)}${l2lUnit ? ` ${l2lUnit}` : ""}`;
 
   // Split cohort sections: page 1 gets charts + compact summary, page 2 gets full data tables
   // Compress the charts when there are 2 cohorts so the director review block stays on page 1 (CLAUDE.md §5). The rows
@@ -3763,11 +3784,11 @@ export function buildLotToLotHTML(study: Study, results: any): string {
     const specimens = cohort.specimens || [];
     const currentVals = specimens.map((s: any) => s.currentLot);
     const newVals = specimens.map((s: any) => s.newLot);
-    const pctDiffs = specimens.map((s: any) => s.pctDifference);
+    const pctDiffs = specimens.map((s: any) => l2lUnits ? (s.difference ?? (s.newLot - s.currentLot)) : s.pctDifference);
     const specimenNums = specimens.map((_: any, i: number) => i + 1);
 
     const scatter = scatterSVG(currentVals, newVals, "Current Lot", "New Lot", `${cohort.cohort} - Scatter`, true, chartW, chartH);
-    const diffPlot = differencePlotSVG(specimenNums, pctDiffs, study.cliaAllowableError, chartW, chartH, twoCohorts ? `${cohort.cohort} - Difference Plot` : undefined);
+    const diffPlot = differencePlotSVG(specimenNums, pctDiffs, study.cliaAllowableError, chartW, chartH, twoCohorts ? `${cohort.cohort} - Difference Plot` : undefined, l2lUnits ? l2lUnit : null);
 
     const dataRows = specimens.map((s: any, i: number) => {
       const pfClass = s.passFail === "Pass" ? "pass" : "fail";
@@ -3775,7 +3796,7 @@ export function buildLotToLotHTML(study: Study, results: any): string {
         <td>${s.specimenId}</td>
         <td class="text-right">${sf(s.currentLot, 3)}</td>
         <td class="text-right">${sf(s.newLot, 3)}</td>
-        <td class="text-right">${sf(s.pctDifference, 2)}%</td>
+        <td class="text-right">${l2lUnits ? sf(s.difference ?? (s.newLot - s.currentLot), 3) : `${sf(s.pctDifference, 2)}%`}</td>
         <td class="text-right ${pfClass}">${s.passFail}</td>
       </tr>`;
     }).join("");
@@ -3790,7 +3811,7 @@ export function buildLotToLotHTML(study: Study, results: any): string {
     cohortDataSections += `
       <div class="section-label">${cohort.cohort} Cohort - Individual Results</div>
       <table>
-        <thead><tr><th>Specimen</th><th class="text-right">Current Lot</th><th class="text-right">New Lot</th><th class="text-right">% Diff</th><th class="text-right">Pass?</th></tr></thead>
+        <thead><tr><th>Specimen</th><th class="text-right">Current Lot</th><th class="text-right">New Lot</th><th class="text-right">${l2lUnits ? `Diff${l2lUnit ? ` (${l2lUnit})` : ""}` : "% Diff"}</th><th class="text-right">Pass?</th></tr></thead>
         <tbody>${dataRows}</tbody>
       </table>
     `;
@@ -3800,8 +3821,8 @@ export function buildLotToLotHTML(study: Study, results: any): string {
 
   // Compact key stats for page 1
   const firstCohort = (results.cohorts || [])[0];
-  const l2lMeanPctDiff = firstCohort ? sf(firstCohort.meanPctDiff, 2) + "%" : "---";
-  const l2lMaxAbsPctDiff = firstCohort ? sf(firstCohort.maxAbsPctDiff, 2) + "%" : "---";
+  const l2lMeanPctDiff = !firstCohort ? "---" : l2lUnits ? l2lU(firstCohort.meanAbsDiff ?? 0) : sf(firstCohort.meanPctDiff, 2) + "%";
+  const l2lMaxAbsPctDiff = !firstCohort ? "---" : l2lUnits ? l2lU(firstCohort.maxAbsDiff ?? 0) : sf(firstCohort.maxAbsPctDiff, 2) + "%";
   const l2lPassCount = `${results.passCount}/${results.totalCount}`;
 
   const l2lTeaStr = teaDisplayStr(study);
@@ -3809,15 +3830,17 @@ export function buildLotToLotHTML(study: Study, results: any): string {
   const l2lAdj = criterionAdjective(study.testName, study);
   const l2lLabel = criterionLabel(study.testName, study);
   const l2lAuthority = criterionAuthorityPhrase(study.testName, l2lCfr, study);
-  const l2lSource = criterionSourcePhrase(study.testName, "42 CFR §493.1253(b)(2)", study);
+  // 42 CFR 493.1255(b)(3)(i): a complete change of reagents, unless the lab demonstrates the lot change has no effect;
+  // the report's reference block cites it. Was 1253(b)(2), establishing specifications for a modified test.
+  const l2lSource = criterionSourcePhrase(study.testName, "42 CFR §493.1255(b)(3)(i)", study);
   // The lot-to-lot pass rule (calculations.ts:821) requires both: mean absolute
   // percent difference within TEa AND at least 90% of paired specimens within
   // TEa. The narrative must describe the actual rule; a prior wording said "All
   // specimens satisfied" on PASS, which over-stated the test (the rule allows
   // up to 10% of specimens to fall outside TEa on a PASS).
   const cliaStatement = results.overallPass
-    ? `<b>The lot-to-lot comparison met the ${l2lAdj} acceptance criterion (${l2lLabel}) of ${l2lTeaStr} ${l2lAuthority} (${l2lSource}): the mean absolute percent difference did not exceed the criterion, and at least 90% of paired specimens fell within it. Specimens outside the criterion, if any, are documented in the per-sample table.</b> Final approval and clinical determination must be made by the laboratory director or designee.`
-    : `<b>The lot-to-lot comparison did not meet the ${l2lAdj} acceptance criterion (${l2lLabel}) of ${l2lTeaStr} ${l2lAuthority} (${l2lSource}): either the mean absolute percent difference exceeded the criterion or fewer than 90% of paired specimens fell within it. See the per-sample table for the failure pattern.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
+    ? `<b>The lot-to-lot comparison met the ${l2lAdj} acceptance criterion (${l2lLabel}) of ${l2lTeaStr} ${l2lAuthority} (${l2lSource}): the mean absolute ${l2lUnits ? "" : "percent "}difference did not exceed the criterion, and at least 90% of paired specimens fell within it. Specimens outside the criterion, if any, are documented in the per-sample table.</b> Final approval and clinical determination must be made by the laboratory director or designee.`
+    : `<b>The lot-to-lot comparison did not meet the ${l2lAdj} acceptance criterion (${l2lLabel}) of ${l2lTeaStr} ${l2lAuthority} (${l2lSource}): either the mean absolute ${l2lUnits ? "" : "percent "}difference exceeded the criterion or fewer than 90% of paired specimens fell within it. See the per-sample table for the failure pattern.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
 
   const narrative = `<div style="margin-top:12px;padding:10px 12px;background:#F7F6F2;border:1px solid #D4D1CA;border-radius:5px;">
     <div style="font-size:7.5pt;font-weight:700;color:#01696F;margin-bottom:4px;letter-spacing:0.04em;text-transform:uppercase;">Study Narrative Summary</div>
@@ -3836,8 +3859,8 @@ export function buildLotToLotHTML(study: Study, results: any): string {
   <div class="section-label">Key Statistics Summary</div>
   <table style="font-size:8pt;margin-bottom:6px">
     <tbody>
-      <tr><td style="color:${MUTED};font-weight:700;width:25%">Mean % Diff</td><td style="width:25%">${l2lMeanPctDiff}</td>
-          <td style="color:${MUTED};font-weight:700;width:25%">Max |% Diff|</td><td style="width:25%">${l2lMaxAbsPctDiff}</td></tr>
+      <tr><td style="color:${MUTED};font-weight:700;width:25%">${l2lUnits ? "Mean |Diff|" : "Mean % Diff"}</td><td style="width:25%">${l2lMeanPctDiff}</td>
+          <td style="color:${MUTED};font-weight:700;width:25%">${l2lUnits ? "Max |Diff|" : "Max |% Diff|"}</td><td style="width:25%">${l2lMaxAbsPctDiff}</td></tr>
       <tr><td style="color:${MUTED};font-weight:700">Points Passing</td><td>${l2lPassCount}</td>
           <td style="color:${MUTED};font-weight:700">Overall</td><td class="${results.overallPass ? "pass" : "fail"}">${results.overallPass ? "PASS" : "FAIL"}</td></tr>
     </tbody>
@@ -4056,7 +4079,7 @@ function buildPTCoagHTML(study: Study, results: any): string {
   const ptCoagAdj = criterionAdjective(study.testName, study);
   const ptCoagLabel = criterionLabel(study.testName, study);
   const ptCoagAuthority = criterionAuthorityPhrase(study.testName, ptCoagCfr, study);
-  const ptCoagSource = criterionSourcePhrase(study.testName, "42 CFR §493.1253(b)(2)", study);
+  const ptCoagSource = criterionSourcePhrase(study.testName, "42 CFR §493.1255(b)(3)(i)", study);
   const ptCoagCliaStatement = results.overallPass
     ? `<b>Each module was individually evaluated against the ${ptCoagAdj} acceptance criterion (${ptCoagLabel}) of ${ptCoagTeaStr} ${ptCoagAuthority} (${ptCoagSource}). All modules satisfied this criterion.</b> Final approval and clinical determination must be made by the laboratory director or designee.`
     : `<b>Each module was individually evaluated against the ${ptCoagAdj} acceptance criterion (${ptCoagLabel}) of ${ptCoagTeaStr} ${ptCoagAuthority} (${ptCoagSource}). One or more modules did not satisfy this criterion; see the module results for details.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;

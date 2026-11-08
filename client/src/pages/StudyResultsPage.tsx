@@ -8,6 +8,7 @@ import { StudyCensoringPolicyDialog } from "@/components/StudyCensoringPolicyDia
 import { StudyArchiveDialog } from "@/components/StudyArchiveDialog";
 import { StudyNotes } from "@/components/StudyNotes";
 import { hasRunDetails, runDetailRows } from "@shared/studyRunDetails";
+import { generateNarrative, studyTeaDisplay as formatTeaDisplay, isUnitsCriterion } from "@/lib/studyNarrative";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -57,7 +58,6 @@ import {
   calculateSensitivity,
   type SensitivityResults,
   type SensitivityInput,
-  formatTeaCriterion,
 } from "@/lib/calculations";
 import type { Study } from "@shared/schema";
 import { isCensored, censorValueForMath, type CensoringPolicy } from "@shared/censoring";
@@ -198,127 +198,6 @@ function StudyHeader({ study, results }: { study: Study; results: StudyResults }
       </div>
     </div>
   );
-}
-
-function generateNarrative(results: StudyResults, study: Study): string {
-  // BUG-085: a study that cannot be evaluated gets no narrative (it would read as a FAIL); the summary says why.
-  if ((results as any).notEvaluable) return "";
-  const cliaPct = (study.cliaAllowableError * 100).toFixed(1);
-  let narrative = "";
-
-  if (isCalVerCorrelation(results)) {
-    const cv = results.calVer, mc = results.correlation;
-    let nAnalyzers = 0;
-    try { nAnalyzers = (typeof study.instruments === "string" ? JSON.parse(study.instruments) : (study.instruments as any) || []).length; } catch { nAnalyzers = 0; }
-    const material = String((study as any).material || "").trim() || "calibration verification material with assigned values";
-    narrative = `${cv.levelResults.length} known-value samples for ${study.testName} were run on ${nAnalyzers} analyzers. `
-      + `Calibration verification: ${cv.overallPass ? "all levels on every analyzer were within" : "one or more levels were outside"} the adopted acceptance criterion against the assigned values (${cv.passCount}/${cv.totalCount}). `
-      + (mc && mc.totalCount > 0 ? `Correlation against ${results.primary}: ${mc.overallPass ? "all samples on every comparison analyzer were within" : "one or more samples were outside"} the same criterion (${mc.passCount}/${mc.totalCount}). ` : `Correlation against ${results.primary}: no comparison analyzer readings were entered. `)
-      + `The comparison used ${material}, not patient specimens. Final approval and clinical determination must be made by the laboratory director or designee.`;
-    return narrative;
-  }
-
-  if (isCalVer(results)) {
-    const cv = results as CalVerResults;
-    const slope = Object.values(cv.regression)[0];
-    const slopeVal = slope?.slope ?? 1;
-    const interceptVal = slope?.intercept ?? 0;
-    const slopeInterp = Math.abs(slopeVal - 1) < 0.02
-      ? "minimal proportional bias"
-      : slopeVal > 1
-        ? `a ${((slopeVal - 1) * 100).toFixed(1)}% upward proportional bias, results trend slightly high at upper concentrations`
-        : `a ${((1 - slopeVal) * 100).toFixed(1)}% downward proportional bias, results trend slightly low at upper concentrations`;
-    const interceptInterp = Math.abs(interceptVal) < study.cliaAllowableError * 100 * 0.1
-      ? "a negligible constant offset"
-      : interceptVal > 0
-        ? `a small positive constant offset of ${Math.abs(interceptVal).toFixed(3)} units at low concentrations`
-        : `a small negative constant offset of ${Math.abs(interceptVal).toFixed(3)} units at low concentrations`;
-    if (cv.overallPass) {
-      narrative = `All ${cv.totalCount} calibration levels for ${study.testName} fell within the adopted calibration verification acceptance criterion of ±${cliaPct}% (§493 PT TEa for this analyte; adopted under 42 CFR §493.1255(b)(2) and §493.1253(b)(3)). `;
-      narrative += `The regression slope of ${slopeVal.toFixed(3)} (ideal: 1.000) and intercept of ${interceptVal.toFixed(3)} (ideal: 0) indicate ${slopeInterp} and ${interceptInterp}. This instrument is performing within the adopted limits across its reportable range.`;
-    } else {
-      const failCount = cv.totalCount - cv.passCount;
-      narrative = `${failCount} of ${cv.totalCount} calibration level${failCount > 1 ? "s" : ""} for ${study.testName} exceeded the adopted calibration verification acceptance criterion of ±${cliaPct}% (§493 PT TEa for this analyte; adopted under 42 CFR §493.1255(b)(2) and §493.1253(b)(3)). The regression slope of ${slopeVal.toFixed(3)} and intercept of ${interceptVal.toFixed(3)} suggest ${slopeInterp} and ${interceptInterp}. Review calibration, reagent lot, and instrument maintenance records. Final approval and clinical determination must be made by the laboratory director or designee.`;
-    }
-  } else if (isQualitative(results)) {
-    const qr = results as QualitativeResults;
-    const kappaInterp = qr.cohensKappa < 0.20 ? "Poor" : qr.cohensKappa <= 0.40 ? "Fair" : qr.cohensKappa <= 0.60 ? "Moderate" : qr.cohensKappa <= 0.80 ? "Substantial" : "Almost Perfect";
-    if (qr.overallPass) {
-      narrative = `Qualitative method comparison for ${study.testName} demonstrated ${qr.percentAgreement.toFixed(1)}% overall agreement (${qr.totalSamples} samples). ` +
-        `Cohen's kappa = ${qr.cohensKappa.toFixed(3)} (${kappaInterp}). ` +
-        (qr.sensitivity > 0 ? `Sensitivity = ${qr.sensitivity.toFixed(1)}%, Specificity = ${qr.specificity.toFixed(1)}%. ` : "") +
-        `The acceptance criterion of >=${(qr.passThreshold * 100).toFixed(0)}% agreement was met. Final approval and clinical determination must be made by the laboratory director or designee.`;
-    } else {
-      narrative = `Qualitative method comparison for ${study.testName} demonstrated ${qr.percentAgreement.toFixed(1)}% overall agreement, which does not meet the acceptance criterion of >=${(qr.passThreshold * 100).toFixed(0)}% agreement. ` +
-        `Cohen's kappa = ${qr.cohensKappa.toFixed(3)} (${kappaInterp}). Review discordant specimens and investigate potential causes.`;
-    }
-  } else if (isSemiQuant(results)) {
-    const sq = results as SemiQuantResults;
-    const kappaInterp = sq.weightedKappa < 0.20 ? "Poor" : sq.weightedKappa <= 0.40 ? "Fair" : sq.weightedKappa <= 0.60 ? "Moderate" : sq.weightedKappa <= 0.80 ? "Substantial" : "Almost Perfect";
-    if (sq.overallPass) {
-      narrative = `Semi-quantitative method comparison for ${study.testName} demonstrated ${sq.percentWithinOneGrade.toFixed(1)}% agreement within +/-1 grade (${sq.totalSamples} samples). ` +
-        `Exact agreement: ${sq.percentExactAgreement.toFixed(1)}%. Weighted kappa = ${sq.weightedKappa.toFixed(3)} (${kappaInterp}). ` +
-        `Maximum discrepancy: ${sq.maxDiscrepancy} grade${sq.maxDiscrepancy !== 1 ? "s" : ""}. ` +
-        `The acceptance criterion of >=${(sq.passThreshold * 100).toFixed(0)}% within +/-1 grade was met. Final approval and clinical determination must be made by the laboratory director or designee.`;
-    } else {
-      narrative = `Semi-quantitative method comparison for ${study.testName} demonstrated ${sq.percentWithinOneGrade.toFixed(1)}% agreement within +/-1 grade, which does not meet the acceptance criterion of >=${(sq.passThreshold * 100).toFixed(0)}%. ` +
-        `Maximum discrepancy: ${sq.maxDiscrepancy} grade${sq.maxDiscrepancy !== 1 ? "s" : ""}. Weighted kappa = ${sq.weightedKappa.toFixed(3)} (${kappaInterp}). ` +
-        `Review discrepant samples and investigate potential causes.`;
-    }
-  } else if (isMethodComp(results)) {
-    const mc = results as MethodCompResults;
-    const firstReg = Object.values(mc.regression).find(r => (r as any).regressionType === "Deming") || Object.values(mc.regression)[0];
-    const slopeVal = firstReg?.slope ?? 1;
-    const r2Val = firstReg?.r2 ?? 1;
-    const rVal = Math.sqrt(r2Val);
-    const ba = mc.blandAltman ? Object.values(mc.blandAltman)[0] : null;
-    const meanBiasPct: number = (ba as any)?.pctMeanDiff ?? (ba as any)?.meanPctBias ?? 0;
-    const correlationInterp = rVal >= 0.99 ? "excellent" : rVal >= 0.975 ? "acceptable" : "borderline, review carefully";
-    const slopeInterp = Math.abs(slopeVal - 1) < 0.02
-      ? "minimal proportional bias between methods"
-      : slopeVal > 1
-        ? `a ${((slopeVal - 1) * 100).toFixed(1)}% upward proportional difference, the comparison method reads slightly higher than the primary at upper concentrations`
-        : `a ${((1 - slopeVal) * 100).toFixed(1)}% downward proportional difference, the comparison method reads slightly lower than the primary at upper concentrations`;
-    const teaLabel = formatTeaDisplay(study);
-    const biasInterp = Math.abs(meanBiasPct) <= study.cliaAllowableError * 100
-      ? `within the adopted method comparison acceptance criterion of ${teaLabel}`
-      : `exceeds the adopted method comparison acceptance criterion of ${teaLabel} and requires investigation`;
-    if (mc.overallPass) {
-      narrative = `The Pearson correlation coefficient of ${rVal.toFixed(3)} indicates ${correlationInterp} agreement between the two methods for ${study.testName}. The Deming regression slope of ${slopeVal.toFixed(3)} (ideal: 1.000) indicates ${slopeInterp}. The mean bias of ${meanBiasPct >= 0 ? "+" : ""}${meanBiasPct.toFixed(1)}% is ${biasInterp}. The Bland-Altman analysis confirms no clinically significant systematic difference between methods. Final approval and clinical determination must be made by the laboratory director or designee.`;
-    } else {
-      narrative = `The method comparison for ${study.testName} did not meet the adopted acceptance criterion. The correlation of ${rVal.toFixed(3)} and a mean bias of ${meanBiasPct >= 0 ? "+" : ""}${meanBiasPct.toFixed(1)}% (adopted limit: \u00B1${cliaPct}%; §493 PT TEa for this analyte; adopted under 42 CFR §493.1281(a)) indicate unacceptable agreement between methods. Final approval and clinical determination must be made by the laboratory director or designee.`;
-    }
-  } else if (isPrecision(results)) {
-    const pr = results as PrecisionResults;
-    const maxCV = Math.max(...pr.levelResults.map(r => (r as any).totalCV ?? r.cv ?? 0));
-    const isAdvanced = (pr as any).mode === "advanced";
-    // Methodology note shared between pass and fail narratives. Names the
-    // path (Simple vs Advanced EP15), cites EP15-A3 alongside the existing
-    // §493 cite, and surfaces the CV formula so the reader does not have
-    // to consult a separate document to interpret the result.
-    const methodologyNote = isAdvanced
-      ? `Methodology: CLSI EP15-A3 Advanced (ANOVA-decomposed precision). The study estimates within-run, between-day, and total CV across multiple days, runs, and replicates per run. `
-      : `Methodology: CLSI EP15-A3 Simple (aggregate precision). For each level, mean and standard deviation (n-1) are computed across all replicates, and the coefficient of variation (CV) is calculated as SD divided by mean, expressed as a percent. `;
-    if (pr.overallPass) {
-      narrative = methodologyNote;
-      narrative += `The precision study for ${study.testName} demonstrated a maximum observed CV of ${maxCV.toFixed(2)}%, which is within the adopted precision acceptance criterion of ±${cliaPct}% (§493 PT TEa for this analyte; adopted under 42 CFR §493.1253(b)(1)(i)(B)). `;
-      if (isAdvanced && (pr.levelResults[0] as any)?.withinRunCV !== undefined) {
-        const wrCV = ((pr.levelResults[0] as any).withinRunCV ?? 0).toFixed(2);
-        const bdCV = ((pr.levelResults[0] as any).betweenDayCV ?? 0).toFixed(2);
-        narrative += `ANOVA components show within-run CV of ${wrCV}% and between-day CV of ${bdCV}%, indicating a stable analytical system. `;
-      }
-      narrative += `Manufacturer precision claims are verified. This instrument is performing with acceptable reproducibility.`;
-    } else {
-      narrative = methodologyNote;
-      narrative += `The precision study for ${study.testName} did not meet the adopted acceptance criterion. The maximum observed CV of ${maxCV.toFixed(2)}% exceeds the adopted precision acceptance criterion of ±${cliaPct}% (§493 PT TEa for this analyte; adopted under 42 CFR §493.1253(b)(1)(i)(B)). Review reagent lot, instrument maintenance, and QC trends for contributing factors. Final approval and clinical determination must be made by the laboratory director or designee.`;
-    }
-  }
-  // Append dual-criterion methodology note when applicable
-  const absFloor = (study as any).cliaAbsoluteFloor;
-  if (absFloor != null && narrative) {
-    narrative += " TEa pass/fail uses the 42 CFR §493 dual-criterion rule: pass when the absolute difference is within the greater of the percent or absolute term.";
-  }
-  return narrative;
 }
 
 function QCRangeReport({ study, results }: { study: Study; results: QCRangeResults }) {
@@ -621,16 +500,6 @@ function EvalBox({ results, study }: { results: StudyResults; study: Study }) {
   );
 }
 
-function formatTeaDisplay(study: Study): string {
-  return formatTeaCriterion({
-    isPercentage: (study as any).teaIsPercentage !== 0,
-    value: study.cliaAllowableError,
-    absoluteFloor: (study as any).cliaAbsoluteFloor,
-    absoluteUnit: (study as any).cliaAbsoluteUnit,
-    valueUnit: (study as any).teaUnit,
-  });
-}
-
 function UserSpecs({ study, instrumentNames }: { study: Study; instrumentNames: string[] }) {
   const teaDisplay = formatTeaDisplay(study);
   // Append the picked CLIA preset name to the criterion row so a preset
@@ -745,8 +614,8 @@ function CalVerReport({ study, results }: { study: Study; results: CalVerResults
                 />
                 <Tooltip formatter={(v: number) => `${v.toFixed(2)}%`} />
                 <ReferenceLine y={100} stroke="#888" strokeDasharray="4 2" label={{ value: "100%", fontSize: 9, fill: "#888" }} />
-                <ReferenceLine y={upperBound} stroke="#ef4444" strokeDasharray="4 2" label={{ value: `+${cliaPercent}%`, fontSize: 9, fill: "#ef4444" }} />
-                <ReferenceLine y={lowerBound} stroke="#ef4444" strokeDasharray="4 2" label={{ value: `-${cliaPercent}%`, fontSize: 9, fill: "#ef4444" }} />
+                {!isUnitsCriterion(study) && <ReferenceLine y={upperBound} stroke="#ef4444" strokeDasharray="4 2" label={{ value: `+${cliaPercent}%`, fontSize: 9, fill: "#ef4444" }} />}
+                {!isUnitsCriterion(study) && <ReferenceLine y={lowerBound} stroke="#ef4444" strokeDasharray="4 2" label={{ value: `-${cliaPercent}%`, fontSize: 9, fill: "#ef4444" }} />}
                 <Line type="monotone" dataKey="recovery" name="% Recovery" stroke={CHART_COLORS[0]} strokeWidth={2} dot={{ fill: CHART_COLORS[0], r: 4 }} />
               </LineChart>
             </ResponsiveContainer>
@@ -1191,8 +1060,8 @@ function MethodCompReport({ study, results }: { study: Study; results: MethodCom
                     <YAxis dataKey="pctDiff" name="% Diff" type="number" label={{ value: "% Difference", angle: -90, position: "insideLeft", fontSize: 10 }} />
                     <Tooltip formatter={(v: number, name: string) => name === "% Diff" ? `${v.toFixed(2)}%` : v} cursor={{ strokeDasharray: "3 3" }} />
                     <ReferenceLine y={0} stroke="#888" strokeDasharray="4 2" />
-                    <ReferenceLine y={parseFloat(cliaPercent)} stroke="#ef4444" strokeDasharray="4 2" label={{ value: `+${cliaPercent}%`, fontSize: 8, fill: "#ef4444" }} />
-                    <ReferenceLine y={-parseFloat(cliaPercent)} stroke="#ef4444" strokeDasharray="4 2" label={{ value: `-${cliaPercent}%`, fontSize: 8, fill: "#ef4444" }} />
+                    {!isUnitsCriterion(study) && <ReferenceLine y={parseFloat(cliaPercent)} stroke="#ef4444" strokeDasharray="4 2" label={{ value: `+${cliaPercent}%`, fontSize: 8, fill: "#ef4444" }} />}
+                    {!isUnitsCriterion(study) && <ReferenceLine y={-parseFloat(cliaPercent)} stroke="#ef4444" strokeDasharray="4 2" label={{ value: `-${cliaPercent}%`, fontSize: 8, fill: "#ef4444" }} />}
                     <Scatter
                       name={compName}
                       data={baPlotData.filter((d) => d.instrument === compName)}
@@ -1248,7 +1117,7 @@ function MethodCompReport({ study, results }: { study: Study; results: MethodCom
                         </td>
                         <td className="text-right py-2 pr-3 font-mono">
                           {r.instruments[n]
-                            ? <span className={Math.abs(r.instruments[n].pctDifference) < study.cliaAllowableError * 100 ? "text-green-400" : "text-red-400"}>
+                            ? <span className={r.instruments[n].passFail === "Pass" ? "text-green-400" : "text-red-400"}>
                                 {r.instruments[n].pctDifference.toFixed(2)}%
                               </span>
                             : "---"}
@@ -1340,7 +1209,7 @@ function MethodCompReport({ study, results }: { study: Study; results: MethodCom
                     <td className="py-2 pr-3 font-medium">{name}</td>
                     <td className="text-right py-2 pr-3 font-mono">{ba.meanDiff.toFixed(4)}</td>
                     <td className="text-right py-2 pr-3 font-mono">
-                      <span className={Math.abs(ba.pctMeanDiff) < study.cliaAllowableError * 100 ? "text-green-400" : "text-red-400"}>
+                      <span className={(isUnitsCriterion(study) ? Math.abs(ba.meanDiff) <= study.cliaAllowableError : Math.abs(ba.pctMeanDiff) < study.cliaAllowableError * 100) ? "text-green-400" : "text-red-400"}>
                         {ba.pctMeanDiff.toFixed(2)}%
                       </span>
                     </td>
@@ -1367,7 +1236,9 @@ function PrecisionReport({ study, results }: { study: Study; results: PrecisionR
         {[
           { label: "Control Levels", value: results.levelResults.length },
           { label: "Levels Passing", value: results.passCount, className: "text-green-400" },
-          { label: "Allowable CV", value: `±${(study.cliaAllowableError * 100).toFixed(1)}%` },
+          isUnitsCriterion(study)
+            ? { label: "Limit (2 SD within)", value: formatTeaDisplay(study) }
+            : { label: "Allowable CV", value: `±${(study.cliaAllowableError * 100).toFixed(1)}%` },
         ].map(({ label, value, className }) => (
           <Card key={label}><CardContent className="p-4 text-center">
             <div className={`text-2xl font-bold ${className || ""}`}>{value}</div>
@@ -1389,7 +1260,7 @@ function PrecisionReport({ study, results }: { study: Study; results: PrecisionR
                   <th className="text-right py-2 pr-3 text-muted-foreground font-medium">Mean</th>
                   <th className="text-right py-2 pr-3 text-muted-foreground font-medium">SD</th>
                   <th className="text-right py-2 pr-3 text-muted-foreground font-medium">CV%</th>
-                  <th className="text-right py-2 pr-3 text-muted-foreground font-medium">Allow CV%</th>
+                  <th className="text-right py-2 pr-3 text-muted-foreground font-medium">{isUnitsCriterion(study) ? "2 SD / Limit" : "Allow CV%"}</th>
                   <th className="text-right py-2 pr-3 text-muted-foreground font-medium">Pass?</th>
                 </tr>
               </thead>
@@ -1401,7 +1272,9 @@ function PrecisionReport({ study, results }: { study: Study; results: PrecisionR
                     <td className="text-right py-2 pr-3 font-mono">{r.mean.toFixed(3)}</td>
                     <td className="text-right py-2 pr-3 font-mono">{r.sd.toFixed(3)}</td>
                     <td className="text-right py-2 pr-3 font-mono">{r.cv.toFixed(2)}%</td>
-                    <td className="text-right py-2 pr-3 font-mono">±{r.allowableCV.toFixed(1)}%</td>
+                    <td className="text-right py-2 pr-3 font-mono">{isUnitsCriterion(study)
+                      ? `${(2 * r.sd).toFixed(3)} / ${formatTeaDisplay(study)}`
+                      : <>±{r.allowableCV.toFixed(1)}%{r.allowableTwoSD != null ? <span className="text-muted-foreground"> or 2 SD ≤ {r.allowableTwoSD}</span> : null}</>}</td>
                     <td className="text-right py-2 pr-3">
                       <span className={r.passFail === "Pass" ? "pass-badge" : "fail-badge"}>{r.passFail}</span>
                     </td>
@@ -1475,7 +1348,10 @@ function PrecisionReport({ study, results }: { study: Study; results: PrecisionR
 
 // ─── LOT-TO-LOT VERIFICATION results ────────────────────────────────────────
 function LotToLotReport({ study, results }: { study: Study; results: LotToLotResults }) {
-  const teaPct = (results.tea * 100).toFixed(1);
+  // Q239 = 1: a criterion stored in units (Sodium ±4 mmol/L) is judged on the difference in units.
+  const units = isUnitsCriterion(study);
+  const unit = String(results.unit || (study as any).teaUnit || "").trim();
+  const u = (v: number, d = 2) => `${v.toFixed(d)}${unit ? ` ${unit}` : ""}`;
 
   return (
     <>
@@ -1483,7 +1359,7 @@ function LotToLotReport({ study, results }: { study: Study; results: LotToLotRes
         {[
           { label: "Total Specimens", value: results.totalCount },
           { label: "Specimens Passing", value: `${results.passCount} / ${results.totalCount}` },
-          { label: "TEa", value: `±${teaPct}%` },
+          { label: "TEa", value: formatTeaDisplay(study) },
           { label: "Cohorts", value: results.cohorts.length },
         ].map(({ label, value }) => (
           <Card key={label}><CardContent className="p-4">
@@ -1502,8 +1378,13 @@ function LotToLotReport({ study, results }: { study: Study; results: LotToLotRes
                 <div><span className="text-muted-foreground">N: </span><span className="font-mono">{cohort.n}</span></div>
                 <div><span className="text-muted-foreground">Mean Bias: </span><span className="font-mono">{cohort.meanPctDiff.toFixed(2)}%</span></div>
                 <div><span className="text-muted-foreground">SD: </span><span className="font-mono">{cohort.sdPctDiff.toFixed(2)}%</span></div>
+                {units ? <>
+                <div><span className="text-muted-foreground">Mean |Diff|: </span><span className="font-mono">{u(cohort.meanAbsDiff ?? 0)}</span></div>
+                <div><span className="text-muted-foreground">Max |Diff|: </span><span className="font-mono">{u(cohort.maxAbsDiff ?? 0)}</span></div>
+                </> : <>
                 <div><span className="text-muted-foreground">Mean |%Diff|: </span><span className="font-mono">{cohort.meanAbsPctDiff.toFixed(2)}%</span></div>
                 <div><span className="text-muted-foreground">Max |%Diff|: </span><span className="font-mono">{cohort.maxAbsPctDiff.toFixed(2)}%</span></div>
+                </>}
                 <div><span className="text-muted-foreground">Coverage: </span><span className={`font-mono font-semibold ${cohort.coverage >= 90 ? "text-green-400" : "text-red-400"}`}>{cohort.coverage.toFixed(0)}%</span></div>
               </div>
               <div className="overflow-x-auto">
@@ -1512,7 +1393,7 @@ function LotToLotReport({ study, results }: { study: Study; results: LotToLotRes
                     <th className="text-left py-2 pr-3 text-muted-foreground font-medium">Specimen</th>
                     <th className="text-right py-2 pr-3 text-muted-foreground font-medium">Current Lot</th>
                     <th className="text-right py-2 pr-3 text-muted-foreground font-medium">New Lot</th>
-                    <th className="text-right py-2 pr-3 text-muted-foreground font-medium">% Diff</th>
+                    <th className="text-right py-2 pr-3 text-muted-foreground font-medium">{units ? `Diff${unit ? ` (${unit})` : ""}` : "% Diff"}</th>
                     <th className="text-right py-2 pr-3 text-muted-foreground font-medium">Pass?</th>
                   </tr></thead>
                   <tbody>
@@ -1521,7 +1402,7 @@ function LotToLotReport({ study, results }: { study: Study; results: LotToLotRes
                         <td className="py-2 pr-3 font-mono">{s.specimenId}</td>
                         <td className="text-right py-2 pr-3 font-mono">{s.currentLot.toFixed(3)}</td>
                         <td className="text-right py-2 pr-3 font-mono">{s.newLot.toFixed(3)}</td>
-                        <td className="text-right py-2 pr-3 font-mono">{s.pctDifference.toFixed(2)}%</td>
+                        <td className="text-right py-2 pr-3 font-mono">{units ? (s.difference ?? (s.newLot - s.currentLot)).toFixed(3) : `${s.pctDifference.toFixed(2)}%`}</td>
                         <td className="text-right py-2 pr-3"><span className={s.passFail === "Pass" ? "pass-badge" : "fail-badge"}>{s.passFail}</span></td>
                       </tr>
                     ))}
@@ -1680,7 +1561,6 @@ function AccuracyBiasReport({ study, results }: { study: Study; results: any }) 
   const levels = (results.levels || []) as Array<{ name: string; assigned_value: number | null; n: number; mean: number | null; sd: number | null; pctRecovery: number | null; absBiasPct: number | null; verdict: "pass" | "fail" | "incomplete" }>;
   const units = results.units || "";
   const overallPass = !!results.overallPass;
-  const teaPct = (Number(results.tea) || 0) * 100;
   const recoveries = levels.map(l => l.pctRecovery).filter((v): v is number => v !== null && !isNaN(v));
   const maxRec = recoveries.length ? Math.max(...recoveries) : null;
   const minRec = recoveries.length ? Math.min(...recoveries) : null;
@@ -1707,7 +1587,7 @@ function AccuracyBiasReport({ study, results }: { study: Study; results: any }) 
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 text-xs">
             <div><div className="text-muted-foreground">Analyte</div><div className="font-mono">{results.analyte || study.testName}</div></div>
             <div><div className="text-muted-foreground">Units</div><div className="font-mono">{units || "-"}</div></div>
-            <div><div className="text-muted-foreground">{teaLabelFor(study.testName, study as any)}</div><div className="font-mono">{fmtPct(teaPct, 1)}{results.absoluteFloor ? ` or ${results.absoluteFloor} ${results.absoluteUnit || ""}` : ""}{(study as any).cliaPresetLabel ? ` (${(study as any).cliaPresetLabel})` : ""}</div></div>
+            <div><div className="text-muted-foreground">{teaLabelFor(study.testName, study as any)}</div><div className="font-mono">{formatTeaDisplay(study)}{(study as any).cliaPresetLabel ? ` (${(study as any).cliaPresetLabel})` : ""}</div></div>
             <div><div className="text-muted-foreground">Levels</div><div className="font-mono">{levels.length}</div></div>
             <div><div className="text-muted-foreground">Min % Recovery</div><div className="font-mono">{minRec !== null ? fmtPct(minRec) : "-"}</div></div>
             <div><div className="text-muted-foreground">Max % Recovery</div><div className="font-mono">{maxRec !== null ? fmtPct(maxRec) : "-"}</div></div>
@@ -1937,7 +1817,6 @@ function LinearityReport({ study, results }: { study: Study; results: any }) {
   const levels = (results.levels || []) as Array<{ name: string; assigned_value: number | null; n: number; mean: number | null; sd: number | null; pctRecovery: number | null; verdict: "pass" | "fail" | "incomplete" }>;
   const units = results.units || "";
   const overallPass = !!results.overallPass;
-  const teaPct = (Number(results.tea) || 0) * 100;
   const slope = Number(results.slope) || 0;
   const intercept = Number(results.intercept) || 0;
   const r2 = Number(results.r2) || 0;
@@ -1970,7 +1849,7 @@ function LinearityReport({ study, results }: { study: Study; results: any }) {
             <div><div className="text-muted-foreground">Intercept</div><div className="font-mono">{fmt(intercept, 3)}</div></div>
             <div><div className="text-muted-foreground">r²</div><div className="font-mono">{fmt(r2, 4)}</div></div>
             <div><div className="text-muted-foreground">|Slope - 1|</div><div className="font-mono">{fmtPct(slopeBiasPct)}</div></div>
-            <div><div className="text-muted-foreground">{teaLabelFor(study.testName, study as any)}</div><div className="font-mono">{fmtPct(teaPct, 1)}{results.absoluteFloor ? ` or ${results.absoluteFloor} ${results.absoluteUnit || ""}` : ""}{(study as any).cliaPresetLabel ? ` (${(study as any).cliaPresetLabel})` : ""}</div></div>
+            <div><div className="text-muted-foreground">{teaLabelFor(study.testName, study as any)}</div><div className="font-mono">{formatTeaDisplay(study)}{(study as any).cliaPresetLabel ? ` (${(study as any).cliaPresetLabel})` : ""}</div></div>
           </div>
           {results.summary && (
             <div className="mt-4 text-xs text-muted-foreground leading-relaxed">{results.summary}</div>
@@ -2037,7 +1916,6 @@ function ReportableRangeReport({ study, results }: { study: Study; results: any 
   const levels = (results.levels || []) as Array<{ name: string; assigned_value: number | null; n: number; mean: number | null; sd: number | null; pctRecovery: number | null; absBiasPct: number | null; verdict: "pass" | "fail" | "incomplete" }>;
   const units = results.units || "";
   const overallPass = !!results.overallPass;
-  const teaPct = (Number(results.tea) || 0) * 100;
   const cl = results.claimed_range_low;
   const ch = results.claimed_range_high;
   const claimedTxt = (cl !== null && cl !== undefined && ch !== null && ch !== undefined)
@@ -2067,7 +1945,7 @@ function ReportableRangeReport({ study, results }: { study: Study; results: any 
             <div><div className="text-muted-foreground">Analyte</div><div className="font-mono">{results.analyte || study.testName}</div></div>
             <div><div className="text-muted-foreground">Units</div><div className="font-mono">{units || "-"}</div></div>
             <div><div className="text-muted-foreground">Claimed Range</div><div className="font-mono">{claimedTxt}</div></div>
-            <div><div className="text-muted-foreground">{teaLabelFor(study.testName, study as any)}</div><div className="font-mono">{fmtPct(teaPct, 1)}{results.absoluteFloor ? ` or ${results.absoluteFloor} ${results.absoluteUnit || ""}` : ""}{(study as any).cliaPresetLabel ? ` (${(study as any).cliaPresetLabel})` : ""}</div></div>
+            <div><div className="text-muted-foreground">{teaLabelFor(study.testName, study as any)}</div><div className="font-mono">{formatTeaDisplay(study)}{(study as any).cliaPresetLabel ? ` (${(study as any).cliaPresetLabel})` : ""}</div></div>
             <div><div className="text-muted-foreground">Levels</div><div className="font-mono">{levels.length}</div></div>
           </div>
           {results.summary && (
