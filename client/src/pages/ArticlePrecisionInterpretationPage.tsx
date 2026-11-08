@@ -43,8 +43,8 @@ function TocLink({ href, children }: { href: string; children: React.ReactNode }
 
 export default function ArticlePrecisionInterpretationPage() {
   useSEO({
-    title: "Precision Verification Report Interpretation Guide | VeritaCheck",
-    description: "Plain-language guide to reading a VeritaCheck precision verification report: what mean, SD, CV, 95% CI, Pass/Fail/Uncertain, and vendor SD comparisons actually mean and how they map to 42 CFR §493 and CLSI EP15-A3 requirements.",
+    title: "Precision Verification Report Interpretation Guide | VeritaCheck®",
+    description: "Plain-language guide to reading a VeritaCheck® precision verification report: what mean, SD, CV, 95% CI, Pass/Fail/Uncertain, and vendor SD comparisons actually mean and how they map to 42 CFR §493 and CLSI EP15-A3 requirements.",
   });
   return (
     <div className="min-h-screen bg-background">
@@ -54,14 +54,14 @@ export default function ArticlePrecisionInterpretationPage() {
           <div className="flex items-center gap-2 text-xs text-muted-foreground mb-4">
             <Link href="/resources" className="hover:text-primary transition-colors">Resources</Link>
             <span>/</span>
-            <span>VeritaCheck Reports</span>
+            <span>VeritaCheck® Reports</span>
           </div>
-          <Badge variant="outline" className="mb-4 text-primary border-primary/30 bg-primary/5">VeritaCheck Reports</Badge>
+          <Badge variant="outline" className="mb-4 text-primary border-primary/30 bg-primary/5">VeritaCheck® Reports</Badge>
           <h1 className="font-serif text-3xl sm:text-4xl font-bold tracking-tight mb-4 leading-tight">
             Precision Verification Report Interpretation Guide
           </h1>
           <p className="text-base text-muted-foreground leading-relaxed">
-            How to read every field, table, and chart on a VeritaCheck precision verification report,
+            How to read every field, table, and chart on a VeritaCheck® precision verification report,
             and how each one maps to 42 CFR §493 and CLSI EP15-A3.
           </p>
         </div>
@@ -80,7 +80,7 @@ export default function ArticlePrecisionInterpretationPage() {
               <TocLink href="#advanced">Advanced (EP15) mode and ANOVA components</TocLink>
               <TocLink href="#goals">Precision verification goal modes</TocLink>
               <TocLink href="#verdict">Pass, Fail, and Uncertain</TocLink>
-              <TocLink href="#report">Reading the VeritaCheck report</TocLink>
+              <TocLink href="#report">Reading the VeritaCheck® report</TocLink>
               <TocLink href="#references">References</TocLink>
             </CardContent>
           </Card>
@@ -129,7 +129,7 @@ export default function ArticlePrecisionInterpretationPage() {
             <p><strong>Mean.</strong> The arithmetic average of all replicate measurements. Sum of replicate values divided by the count of replicates.</p>
             <p><strong>Standard deviation (SD).</strong> A measure of how widely individual replicates spread around the mean. Computed with the n−1 (sample) formula, which is the standard for laboratory precision work. Larger SD means looser precision; smaller SD means tighter.</p>
             <p><strong>Coefficient of variation (CV).</strong> The SD expressed as a percent of the mean: CV = (SD ÷ mean) × 100. CV is the preferred precision metric when the SD scales with concentration, which is common in clinical chemistry. A CV of 5 percent means the SD is one-twentieth of the mean.</p>
-            <p><strong>Bias and percent bias.</strong> When a target mean is supplied (for example, the assigned value of a control material from the package insert), bias is the observed mean minus the target mean. Percent bias expresses that difference as a fraction of the target. Bias is an accuracy metric, not a precision metric, but VeritaCheck surfaces it when a target is available because it is useful context.</p>
+            <p><strong>Bias and percent bias.</strong> When a target mean is supplied (for example, the assigned value of a control material from the package insert), bias is the observed mean minus the target mean. Percent bias expresses that difference as a fraction of the target. Bias is an accuracy metric, not a precision metric, but VeritaCheck® surfaces it when a target is available because it is useful context.</p>
             <p><strong>Number of replicates (N).</strong> The count of measurements that contributed to the precision estimate. CLSI EP15-A3 uses a 5-day by 5-replicate design at two or more concentrations. With fewer replicates, the confidence interval around SD widens and the estimate is less trustworthy.</p>
             <p><strong>95% confidence interval for SD.</strong> A range that has a 95 percent chance of containing the true population SD given the data observed. Computed from the chi-square distribution with N−1 degrees of freedom. As N grows, the interval narrows. At N = 20 the interval is roughly 0.76 to 1.46 times the observed SD; at N = 50 it tightens to roughly 0.84 to 1.24 times.</p>
             <p><strong>95% confidence interval for mean.</strong> The same idea applied to the mean. Computed from the Student t distribution with N−1 degrees of freedom. Width depends on SD and N together.</p>
@@ -138,7 +138,7 @@ export default function ArticlePrecisionInterpretationPage() {
 
           <Section id="advanced" title="Advanced (EP15) mode and ANOVA components">
             <p>
-              When the data is collected across a structured design, typically 5 days of 5 replicates each, VeritaCheck’s advanced mode uses analysis of variance, on the design CLSI EP15-A3 describes, to decompose the total observed variability into three components:
+              When the data is collected across a structured design, typically 5 days of 5 replicates each, VeritaCheck®’s advanced mode uses analysis of variance, on the design CLSI EP15-A3 describes, to decompose the total observed variability into three components:
             </p>
             <p><strong>Within-run SD.</strong> Variability among replicates measured back-to-back in the same run, on the same day, by the same operator. This is the tightest layer.</p>
             <p><strong>Between-run SD.</strong> Variability added when multiple runs are performed within a day. Captures small drifts in calibration or environment that accumulate between runs. With one run per day, as in the 5-day by 5-replicate design, this component cannot be separated and reports as zero.</p>
@@ -150,7 +150,7 @@ export default function ArticlePrecisionInterpretationPage() {
           </Section>
 
           <Section id="goals" title="Precision verification goal modes">
-            <p>VeritaCheck supports two complementary acceptance criteria. They can be evaluated together; the report shows whichever is populated.</p>
+            <p>VeritaCheck® supports two complementary acceptance criteria. They can be evaluated together; the report shows whichever is populated.</p>
             <p>
               <strong>CLIA total allowable error (TEa).</strong> Federal regulation 42 CFR §493.927 through §493.959 publishes the limits
               proficiency testing programs use to grade each regulated analyte. A medical director or designee may adopt a PT limit, or a fraction
@@ -202,7 +202,7 @@ export default function ArticlePrecisionInterpretationPage() {
             </Callout>
           </Section>
 
-          <Section id="report" title="Reading the VeritaCheck report">
+          <Section id="report" title="Reading the VeritaCheck® report">
             <p><strong>Key Statistics Summary (page 1).</strong> Mean, SD, CV, 95% CI for both, observed 2 SD range, and overall pass / fail.
               When a vendor SD goal is supplied, an additional Vendor SD Goal / Vendor Verdict row appears, color-coded by verdict. When a
               target mean is supplied, a Target Mean / Bias row appears.</p>
@@ -236,12 +236,12 @@ export default function ArticlePrecisionInterpretationPage() {
               <strong>CLSI EP15-A3: User Verification of Precision and Estimation of Bias; Approved Guideline.</strong> Published by the Clinical and Laboratory Standards Institute. The procedural standard most laboratories adopt for the verification activity, including the 5-day × 5-replicate design referenced in advanced mode.
             </p>
             <p>
-              Standards bodies own their respective documents; VeritaCheck references them by identifier only and does not reproduce their content.
+              Standards bodies own their respective documents; VeritaCheck® references them by identifier only and does not reproduce their content.
             </p>
           </Section>
 
           <div className="text-xs text-muted-foreground border-t border-border pt-6">
-            This guide is for VeritaCheck users and prospective customers. It is an educational summary of the precision verification activity, not a
+            This guide is for VeritaCheck® users and prospective customers. It is an educational summary of the precision verification activity, not a
             substitute for the underlying standards or for the laboratory director's professional judgment. © 2026 Veritas Lab Services, LLC.
           </div>
         </div>
