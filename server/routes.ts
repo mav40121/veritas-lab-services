@@ -8,6 +8,7 @@ import fs from "fs";
 import os from "os";
 import { storage } from "./storage";
 import { resolveFloor } from "./backfillAbsoluteFloor";
+import { isReservedTestAddress } from "./newsletterGuards";
 import { blockNonOperatorSeat } from "./seatAccess";
 import { isDelegationPosition, isDelegationComplexity, sanitizeResponsibilities, DELEGATION_CATALOG, DELEGATION_POSITIONS, DELEGATION_COMPLEXITIES } from "./directorDelegation";
 import { mayAttestAsDirectorOrDesignee, complexityForAnalyte, labHighestComplexity, isLabOwnerUser } from "./delegationGate";
@@ -19830,6 +19831,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   app.post("/api/newsletter/subscribe", async (req, res) => {
     const { email, name, source } = req.body;
     if (!email || !email.includes("@")) return res.status(400).json({ error: "Valid email required" });
+    // A reserved test address (example.com, .test, ...) is never a real mailbox: answer success, store nothing, send
+    // nothing. Our own Playwright spec posted one to production on every smoke run (2026-11-09; server/newsletterGuards.ts).
+    if (isReservedTestAddress(email)) return res.json({ success: true, message: "subscribed" });
 
     const sqlite = (db as any).session?.client || require("better-sqlite3");
     try {
