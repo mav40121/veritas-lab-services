@@ -4252,7 +4252,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // existed. Advance-only: never overwrite a newer date already on the map
       // (e.g. one entered by hand). Field names come from CATEGORY_TO_MAP_FIELD, all
       // of which are in MAP_SIGNOFF_FIELDS, but re-check before interpolating.
-      const latestSignoff = sqlite.prepare("SELECT MAX(completed_date) AS d FROM veritatrack_signoffs WHERE task_id = ?");
+      // A voided sign-off (2026-11-09) is not a real completion, so it never dates the map.
+      const latestSignoff = sqlite.prepare("SELECT MAX(completed_date) AS d FROM veritatrack_signoffs WHERE task_id = ? AND voided_at IS NULL");
       let mapCellsDated = 0;
       const dateSamples: Array<{ id: number; analyte: string; field: string; date: string; rows: number }> = [];
       const plannedStamps: Array<{ field: string; date: string; mapIds: number[]; analyte: string }> = [];

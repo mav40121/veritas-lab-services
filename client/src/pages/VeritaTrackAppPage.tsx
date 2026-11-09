@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { DecimalInput } from "@/components/ui/decimal-input";
 import { Badge } from "@/components/ui/badge";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -18,7 +18,7 @@ import {
 import {
   CheckCircle2, Plus, Download, Upload,
   ChevronDown, ChevronRight, Pencil, Trash2, CalendarDays, List, Settings, History,
-  AlertTriangle, Bell, Mail, Tag,
+  AlertTriangle, Bell, Mail, Tag, ClipboardList, Printer,
 } from "lucide-react";
 import { DEFAULT_TRACK_CATEGORIES, TRACK_FREQUENCIES, CATEGORY_NAME_MAX } from "@shared/veritatrackCategories";
 import { useAuth } from "@/components/AuthContext";
@@ -243,7 +243,7 @@ function SignoffDialog({ task, onDone, tasksKey, dashKey }: {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="sm" className="h-6 text-[11px] px-2 shrink-0">
+        <Button size="sm" className="h-6 text-[11px] px-2 shrink-0" data-testid="signoff-button">
           <CheckCircle2 size={10} className="mr-1" />
           Sign Off
         </Button>
@@ -255,21 +255,21 @@ function SignoffDialog({ task, onDone, tasksKey, dashKey }: {
         <div className="space-y-3 mt-2">
           <div>
             <label className="text-xs text-muted-foreground font-medium block mb-1">Completion Date *</label>
-            <Input type="date" value={date} onChange={e => setDate(e.target.value)} className="h-8 text-sm" />
+            <Input type="date" value={date} onChange={e => setDate(e.target.value)} className="h-8 text-sm" data-testid="signoff-date" />
           </div>
           <div>
             <label className="text-xs text-muted-foreground font-medium block mb-1">Initials</label>
-            <Input placeholder="e.g. MV" value={initials} onChange={e => setInitials(e.target.value)} className="h-8 text-sm" />
+            <Input placeholder="e.g. MV" value={initials} onChange={e => setInitials(e.target.value)} className="h-8 text-sm" data-testid="signoff-initials" />
           </div>
           <div>
             <label className="text-xs text-muted-foreground font-medium block mb-1">Performed By</label>
-            <Input placeholder="Name" value={performer} onChange={e => setPerformer(e.target.value)} className="h-8 text-sm" />
+            <Input placeholder="Name" value={performer} onChange={e => setPerformer(e.target.value)} className="h-8 text-sm" data-testid="signoff-performer" />
           </div>
           <div>
             <label className="text-xs text-muted-foreground font-medium block mb-1">Notes</label>
-            <Input placeholder="Optional" value={notes} onChange={e => setNotes(e.target.value)} className="h-8 text-sm" />
+            <Input placeholder="Optional" value={notes} onChange={e => setNotes(e.target.value)} className="h-8 text-sm" data-testid="signoff-notes" />
           </div>
-          <Button className="w-full" disabled={!date || mut.isPending} onClick={() => mut.mutate()}>
+          <Button className="w-full" disabled={!date || mut.isPending} onClick={() => mut.mutate()} data-testid="signoff-save">
             {mut.isPending ? "Saving..." : "Save Sign-Off"}
           </Button>
         </div>
@@ -545,7 +545,8 @@ const AUDIT_LABELS: Record<string, string> = {
   task_updated: "Task edited",
   task_deactivated: "Task removed",
   signoff_recorded: "Sign-off recorded",
-  signoff_deleted: "Sign-off deleted",
+  signoff_deleted: "Sign-off deleted (before the void rule)",
+  signoff_voided: "Sign-off voided",
 };
 function HistoryDialog({ task }: { task: Task }) {
   const [open, setOpen] = useState(false);
@@ -568,7 +569,7 @@ function HistoryDialog({ task }: { task: Task }) {
           <DialogTitle>History: {task.name}</DialogTitle>
         </DialogHeader>
         <p className="text-xs text-muted-foreground">
-          Append-only audit trail. Sign-off deletions and task changes are recorded here so the record survives an edit.
+          Append-only audit trail of this task's changes, sign-offs and voids, kept since June 12, 2026. Every sign-off for this task, older ones included, is on the Sign-off log.
         </p>
         <div className="max-h-80 overflow-y-auto divide-y divide-border/50">
           {isLoading ? (
@@ -576,7 +577,7 @@ function HistoryDialog({ task }: { task: Task }) {
           ) : !events || events.length === 0 ? (
             <p className="text-sm text-muted-foreground py-4">No recorded events yet.</p>
           ) : events.map(e => {
-            const isDelete = e.event === "signoff_deleted" || e.event === "task_deactivated";
+            const isDelete = e.event === "signoff_deleted" || e.event === "signoff_voided" || e.event === "task_deactivated";
             return (
               <div key={e.id} className="py-2 flex items-start gap-2 text-xs">
                 <span className={`mt-0.5 w-2 h-2 rounded-full shrink-0 ${isDelete ? "bg-red-500" : "bg-emerald-500"}`} />
@@ -676,12 +677,12 @@ function CompactTaskRow({ task, onRefresh, trackApi, tasksKey, dashKey }: {
           dashKey={dashKey}
         />}
         {!isReadOnly && <ConfirmDialog
-          title="Delete Task?"
-          message={`Delete "${task.name}"? This will remove all sign-off history for this task.`}
-          confirmLabel="Delete"
+          title="Remove Task?"
+          message={`Remove "${task.name}" from the active list? Its sign-off history stays on the Sign-off log, where the task is marked Removed.`}
+          confirmLabel="Remove"
           onConfirm={() => deleteTask.mutate()}
         >
-          <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-muted-foreground hover:text-red-500">
+          <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-muted-foreground hover:text-red-500" title="Remove task" aria-label="Remove task" data-testid="task-remove-button">
             <Trash2 size={10} />
           </Button>
         </ConfirmDialog>}
@@ -853,6 +854,378 @@ function CalendarView({ tasks }: { tasks: Task[] }) {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+// ── Sign-off log (Michael 2026-11-09) ─────────────────────────────────────────
+// Every sign-off the lab has recorded: removed tasks, voided sign-offs and, from the audit trail, sign-offs deleted
+// before they could be voided (server/veritatrackSignoffLog.ts). The server decides who may read it (the task detail's
+// reach); a refusal shows its sentence here. Voiding needs VeritaTrack edit, as deleting did.
+interface SignoffLogRow {
+  key: string;
+  entry: "recorded" | "voided" | "deleted_before_void_rule";
+  entry_label: string;
+  signoff_id: number | null;
+  task_id: number | null;
+  task_name: string | null;
+  category: string | null;
+  frequency: string | null;
+  task_state: "Active" | "Removed" | null;
+  completed_date: string | null;
+  performed_by: string | null;
+  initials: string | null;
+  notes: string | null;
+  recorded_by: string | null;
+  recorded_at: string | null;
+  voided_at: string | null;
+  voided_by: string | null;
+  void_reason: string | null;
+  deleted_at: string | null;
+  deleted_by: string | null;
+}
+interface SignoffLogData {
+  lab: { id: number; name: string; clia: string; time_zone: string };
+  today: string;
+  counts: { rows: number; recorded: number; voided: number; deleted_before_void_rule: number };
+  rows: SignoffLogRow[];
+  tasks: { id: number; name: string; category: string; active: boolean }[];
+  categories: string[];
+}
+
+// The server sends lab-local "YYYY-MM-DD HH:MM".
+function fmtStamp(s?: string | null): string {
+  if (!s) return "";
+  const [d, t] = s.split(" ");
+  return `${fmtDate(d)}${t ? ` ${t}` : ""}`;
+}
+function refusalText(err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err ?? "");
+  try { const j = JSON.parse(raw); return j?.message || j?.error || raw; } catch { return raw; }
+}
+function voidLine(r: SignoffLogRow): string {
+  if (r.entry === "voided") return `Voided ${fmtStamp(r.voided_at)}${r.voided_by ? ` by ${r.voided_by}` : ""}. Reason: ${r.void_reason ?? ""}`;
+  if (r.entry === "deleted_before_void_rule") return `Deleted ${fmtStamp(r.deleted_at)}${r.deleted_by ? ` by ${r.deleted_by}` : ""}, before sign-offs could be voided. Taken from the audit trail.`;
+  return "";
+}
+
+// Printed page styles: black on white, whatever the screen theme.
+const LOG_P = {
+  page: { color: "#000", background: "#fff", fontFamily: "Calibri, Arial, sans-serif", fontSize: "10px" } as const,
+  h1: { fontSize: "16px", fontWeight: 700, margin: 0, color: "#000" } as const,
+  sub: { fontSize: "10px", margin: "2px 0 6px", color: "#000" } as const,
+  table: { width: "100%", borderCollapse: "collapse" as const, tableLayout: "fixed" as const, color: "#000" },
+  th: { border: "1px solid #555", padding: "2px 3px", fontWeight: 700, textAlign: "left" as const, fontSize: "9px", background: "#eee", color: "#000" },
+  td: { border: "1px solid #555", padding: "2px 3px", textAlign: "left" as const, fontSize: "9px", color: "#000", wordBreak: "break-word" as const, verticalAlign: "top" as const },
+  line: { fontSize: "9px", margin: "4px 0 0", color: "#000" } as const,
+};
+
+function EntryBadge({ r }: { r: SignoffLogRow }) {
+  if (r.entry === "voided") {
+    return <Badge className="text-[10px] px-1.5 py-0 border-0 bg-muted text-muted-foreground" data-testid="log-voided-badge">Voided</Badge>;
+  }
+  if (r.entry === "deleted_before_void_rule") {
+    return <Badge className="text-[10px] px-1.5 py-0 border-0 bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300" data-testid="log-deleted-badge">Deleted before the void rule</Badge>;
+  }
+  return <Badge className="text-[10px] px-1.5 py-0 border-0 bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">Recorded</Badge>;
+}
+function RemovedBadge({ r }: { r: SignoffLogRow }) {
+  if (r.task_state !== "Removed") return null;
+  return <Badge variant="outline" className="text-[10px] px-1.5 py-0 ml-1 text-muted-foreground" data-testid="log-removed-badge">Removed</Badge>;
+}
+
+function SignoffLogPanel({ activeLabId, isReadOnly, tasksKey, dashKey }: {
+  activeLabId: number | null; isReadOnly: boolean; tasksKey: string; dashKey: string;
+}) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [taskId, setTaskId] = useState("all");
+  const [category, setCategory] = useState("all");
+  const [voidFor, setVoidFor] = useState<SignoffLogRow | null>(null);
+  const [reason, setReason] = useState("");
+  const [exporting, setExporting] = useState(false);
+  const logPath = `/api/labs/${activeLabId}/veritatrack/signoff-log`;
+  const params = useMemo(() => {
+    const p = new URLSearchParams();
+    if (from) p.set("from", from);
+    if (to) p.set("to", to);
+    if (taskId !== "all") p.set("task_id", taskId);
+    if (category !== "all") p.set("category", category);
+    return p.toString();
+  }, [from, to, taskId, category]);
+
+  const { data, isLoading, error } = useQuery<SignoffLogData>({
+    queryKey: [logPath, params],
+    enabled: !!activeLabId,
+    staleTime: 0,
+    refetchOnMount: "always",
+    queryFn: async () => {
+      const r = await fetch(`${API_BASE}${logPath}${params ? `?${params}` : ""}`, { headers: authHeaders() });
+      if (!r.ok) throw new Error(await r.text());
+      return r.json();
+    },
+  });
+
+  const voidMut = useMutation({
+    mutationFn: async (row: SignoffLogRow) => {
+      const r = await fetch(`${API_BASE}/api/veritatrack/signoffs/${row.signoff_id}/void`, {
+        method: "POST",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: reason.trim() }),
+      });
+      if (!r.ok) throw new Error(await r.text());
+      return r.json();
+    },
+    onSuccess: (_d, row) => {
+      qc.invalidateQueries({ queryKey: [logPath] });
+      qc.invalidateQueries({ queryKey: [tasksKey] });
+      qc.invalidateQueries({ queryKey: [dashKey] });
+      qc.invalidateQueries({ queryKey: [`/api/labs/${activeLabId}/veritatrack/worklist`] });
+      qc.invalidateQueries({ queryKey: [`/api/veritatrack/tasks/${row.task_id}/audit`] });
+      setVoidFor(null);
+      toast({ title: "Sign-off voided", description: "It stays on the Sign-off log with your reason and no longer counts toward the task's due date." });
+    },
+    onError: (e) => toast({ title: "Could not void the sign-off", description: errorText(e), variant: "destructive" }),
+  });
+
+  const exportExcel = async () => {
+    setExporting(true);
+    try {
+      const r = await fetch(`${API_BASE}${logPath}/excel${params ? `?${params}` : ""}`, { headers: authHeaders() });
+      if (!r.ok) { toast({ title: "Could not export the sign-off log", description: refusalText(new Error(await r.text())), variant: "destructive" }); return; }
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `VeritaTrack_Signoff_Log_${data?.today ?? labTodayIso()}.xlsx`;
+      a.click(); URL.revokeObjectURL(url);
+    } finally { setExporting(false); }
+  };
+
+  if (!activeLabId) {
+    return <p className="text-sm text-muted-foreground py-8 text-center">Choose a lab to see its sign-off log.</p>;
+  }
+  const rows = data?.rows ?? [];
+  const filtersOn = !!(from || to || taskId !== "all" || category !== "all");
+  const filterText = [
+    from || to ? `Completed ${from ? fmtDate(from) : "any date"} to ${to ? fmtDate(to) : "any date"}` : "All dates",
+    taskId !== "all" ? `Task: ${data?.tasks.find(t => String(t.id) === taskId)?.name ?? ""}` : "All tasks",
+    category !== "all" ? `Category: ${category}` : "All categories",
+  ].join(" | ");
+
+  return (
+    <div data-testid="signoff-log-panel">
+      {/* While the log is open, printing runs landscape; index.css prints only #compliance-print-area. */}
+      <style>{"@media print { @page { size: letter landscape; margin: 0.35in; } header, footer { display: none !important; } .min-h-screen { min-height: 0 !important; } }"}</style>
+
+      <div className="rounded-xl border border-border bg-card p-4 mb-4">
+        <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
+          <div className="min-w-0">
+            <h2 className="font-semibold text-sm text-foreground flex items-center gap-2"><ClipboardList size={14} className="text-primary" />Sign-off log</h2>
+            <p className="text-xs text-muted-foreground mt-1 max-w-2xl">
+              Every sign-off recorded in VeritaTrack for this lab, newest first, including tasks removed from the active list and voided sign-offs. Sign-offs deleted before they could be voided show from the audit trail, which began June 12, 2026. Times are the lab's local time.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={() => window.print()} disabled={!data} data-testid="log-print">
+              <Printer size={12} />Print
+            </Button>
+            <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={exportExcel} disabled={!data || exporting} data-testid="log-export">
+              <Download size={12} />{exporting ? "Exporting..." : "Export Excel"}
+            </Button>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+          <div>
+            <label className="text-[11px] text-muted-foreground font-medium block mb-1" htmlFor="log-from">Completed from</label>
+            <Input id="log-from" type="date" value={from} onChange={e => setFrom(e.target.value)} className="h-8 text-sm" data-testid="log-from" />
+          </div>
+          <div>
+            <label className="text-[11px] text-muted-foreground font-medium block mb-1" htmlFor="log-to">Completed to</label>
+            <Input id="log-to" type="date" value={to} onChange={e => setTo(e.target.value)} className="h-8 text-sm" data-testid="log-to" />
+          </div>
+          <div>
+            <span className="text-[11px] text-muted-foreground font-medium block mb-1">Task</span>
+            <Select value={taskId} onValueChange={setTaskId}>
+              <SelectTrigger className="h-8 text-xs" data-testid="log-task"><SelectValue placeholder="All tasks" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All tasks</SelectItem>
+                {(data?.tasks ?? []).map(t => <SelectItem key={t.id} value={String(t.id)}>{t.name}{t.active ? "" : " (Removed)"}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <span className="text-[11px] text-muted-foreground font-medium block mb-1">Category</span>
+            <Select value={category} onValueChange={setCategory}>
+              <SelectTrigger className="h-8 text-xs" data-testid="log-category"><SelectValue placeholder="All categories" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All categories</SelectItem>
+                {(data?.categories ?? []).map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <div className="flex items-center gap-3 mt-3 flex-wrap text-xs">
+          {data && (
+            <span className="text-muted-foreground" data-testid="log-counts">
+              {data.counts.rows} {data.counts.rows === 1 ? "entry" : "entries"}: {data.counts.recorded} recorded, {data.counts.voided} voided, {data.counts.deleted_before_void_rule} deleted before the void rule
+            </span>
+          )}
+          {filtersOn && (
+            <button className="text-primary hover:underline" onClick={() => { setFrom(""); setTo(""); setTaskId("all"); setCategory("all"); }} data-testid="log-clear">
+              Clear filters
+            </button>
+          )}
+        </div>
+      </div>
+
+      {isLoading && <p className="text-sm text-muted-foreground py-6 text-center">Loading...</p>}
+      {error && (
+        <div className="text-center py-10 border border-dashed border-destructive/40 rounded-2xl" data-testid="log-error">
+          <AlertTriangle size={28} className="mx-auto text-destructive mb-2" />
+          <p className="text-sm text-foreground max-w-md mx-auto px-4">{refusalText(error)}</p>
+        </div>
+      )}
+      {data && rows.length === 0 && (
+        <p className="text-sm text-muted-foreground py-10 text-center border border-dashed border-border rounded-2xl" data-testid="log-empty">
+          {filtersOn ? "No sign-offs match these filters." : "No sign-offs have been recorded for this lab yet."}
+        </p>
+      )}
+
+      {data && rows.length > 0 && (
+        <>
+          {/* Wider screens: one table */}
+          <div className="hidden md:block rounded-xl border border-border bg-card overflow-x-auto">
+            <table className="w-full text-xs" data-testid="log-table">
+              <thead>
+                <tr className="bg-muted/40 text-[10px] uppercase tracking-wider text-muted-foreground text-left">
+                  <th className="px-3 py-2 font-semibold">Completed</th>
+                  <th className="px-3 py-2 font-semibold">Task</th>
+                  <th className="px-3 py-2 font-semibold">Performed by</th>
+                  <th className="px-3 py-2 font-semibold">Notes</th>
+                  <th className="px-3 py-2 font-semibold">Recorded</th>
+                  <th className="px-3 py-2 font-semibold">Entry</th>
+                  {!isReadOnly && <th className="px-3 py-2" />}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map(r => (
+                  <tr key={r.key} className={`border-t border-border/60 align-top ${r.entry !== "recorded" ? "bg-muted/20" : ""}`} data-testid={`log-row-${r.key}`}>
+                    <td className={`px-3 py-2 whitespace-nowrap font-medium ${r.entry === "recorded" ? "text-foreground" : "text-muted-foreground line-through"}`}>{fmtDate(r.completed_date)}</td>
+                    <td className="px-3 py-2 min-w-[12rem]">
+                      <span className="font-medium text-foreground">{r.task_name ?? "Task no longer on file"}</span><RemovedBadge r={r} />
+                      <div className="text-[10px] text-muted-foreground">{[r.category, r.frequency].filter(Boolean).join(" | ")}</div>
+                    </td>
+                    <td className="px-3 py-2 text-foreground">
+                      {r.performed_by || ""}{r.initials ? <span className="text-muted-foreground">{r.performed_by ? " " : ""}({r.initials})</span> : null}
+                    </td>
+                    <td className="px-3 py-2 text-foreground max-w-[14rem] break-words">{r.notes || ""}</td>
+                    <td className="px-3 py-2 text-muted-foreground">
+                      {r.recorded_by && <div className="text-foreground">{r.recorded_by}</div>}
+                      {r.recorded_at && <div className="text-[10px]">{fmtStamp(r.recorded_at)}</div>}
+                    </td>
+                    <td className="px-3 py-2 min-w-[11rem]">
+                      <EntryBadge r={r} />
+                      {r.entry !== "recorded" && <div className="text-[10px] text-muted-foreground mt-1 break-words" data-testid="log-entry-detail">{voidLine(r)}</div>}
+                    </td>
+                    {!isReadOnly && (
+                      <td className="px-3 py-2 text-right">
+                        {r.entry === "recorded" && r.signoff_id != null && (
+                          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setReason(""); setVoidFor(r); }} data-testid={`log-void-${r.signoff_id}`}>Void</Button>
+                        )}
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Phones: one card per entry */}
+          <div className="md:hidden space-y-2" data-testid="log-cards">
+            {rows.map(r => (
+              <div key={r.key} className={`rounded-xl border border-border p-3 text-xs ${r.entry !== "recorded" ? "bg-muted/30" : "bg-card"}`}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="font-medium text-foreground break-words">{r.task_name ?? "Task no longer on file"}<RemovedBadge r={r} /></div>
+                    <div className="text-[10px] text-muted-foreground">{[r.category, r.frequency].filter(Boolean).join(" | ")}</div>
+                  </div>
+                  <div className={`shrink-0 font-medium ${r.entry === "recorded" ? "text-foreground" : "text-muted-foreground line-through"}`}>{fmtDate(r.completed_date)}</div>
+                </div>
+                <div className="mt-1.5 text-foreground">
+                  {r.performed_by || r.initials ? <>Performed by {r.performed_by || ""}{r.initials ? ` (${r.initials})` : ""}</> : null}
+                </div>
+                {r.notes && <div className="text-muted-foreground break-words">{r.notes}</div>}
+                {(r.recorded_by || r.recorded_at) && <div className="text-[10px] text-muted-foreground mt-1">Recorded {r.recorded_by ? `by ${r.recorded_by} ` : ""}{fmtStamp(r.recorded_at)}</div>}
+                <div className="flex items-center justify-between gap-2 mt-2">
+                  <EntryBadge r={r} />
+                  {!isReadOnly && r.entry === "recorded" && r.signoff_id != null && (
+                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => { setReason(""); setVoidFor(r); }}>Void</Button>
+                  )}
+                </div>
+                {r.entry !== "recorded" && <div className="text-[10px] text-muted-foreground mt-1 break-words">{voidLine(r)}</div>}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* The printed page: the same rows, laid out for paper. Only this part prints. */}
+      {data && (
+        <div id="compliance-print-area" className="hidden print:block" style={LOG_P.page} data-testid="log-print-area">
+          <h1 style={LOG_P.h1}>VeritaTrack&#8482; Sign-off Log</h1>
+          <p style={LOG_P.sub}>{data.lab.name} | CLIA: {data.lab.clia} | {filterText} | {data.counts.rows} entries ({data.counts.recorded} recorded, {data.counts.voided} voided, {data.counts.deleted_before_void_rule} deleted before the void rule) | Times: {data.lab.time_zone}</p>
+          <table style={LOG_P.table}>
+            <colgroup>
+              <col style={{ width: "0.75in" }} /><col style={{ width: "1.9in" }} /><col style={{ width: "0.95in" }} /><col style={{ width: "0.7in" }} />
+              <col style={{ width: "1.1in" }} /><col style={{ width: "0.45in" }} /><col /><col style={{ width: "1.1in" }} /><col style={{ width: "1.6in" }} />
+            </colgroup>
+            <thead>
+              <tr>{["Completed", "Task", "Category", "Frequency", "Performed by", "Initials", "Notes", "Recorded", "Entry"].map(h => <th key={h} style={LOG_P.th}>{h}</th>)}</tr>
+            </thead>
+            <tbody>
+              {rows.length === 0 && <tr><td colSpan={9} style={LOG_P.td}>No sign-offs match these filters.</td></tr>}
+              {rows.map(r => (
+                <tr key={r.key}>
+                  <td style={LOG_P.td}>{fmtDate(r.completed_date)}</td>
+                  <td style={LOG_P.td}>{r.task_name ?? "Task no longer on file"}{r.task_state === "Removed" ? " (Removed)" : ""}</td>
+                  <td style={LOG_P.td}>{r.category ?? ""}</td>
+                  <td style={LOG_P.td}>{r.frequency ?? ""}</td>
+                  <td style={LOG_P.td}>{r.performed_by ?? ""}</td>
+                  <td style={LOG_P.td}>{r.initials ?? ""}</td>
+                  <td style={LOG_P.td}>{r.notes ?? ""}</td>
+                  <td style={LOG_P.td}>{r.recorded_by ?? ""}{r.recorded_at ? ` ${fmtStamp(r.recorded_at)}` : ""}</td>
+                  <td style={LOG_P.td}><strong>{r.entry_label}</strong>{r.entry !== "recorded" ? `. ${voidLine(r)}` : ""}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p style={LOG_P.line}>A voided sign-off stays on this log and does not count toward the task's due date. VeritaAssure&reg; | VeritaTrack&#8482; | Confidential, for internal lab use only | Printed {fmtDate(data.today)}</p>
+        </div>
+      )}
+
+      {/* Void */}
+      <Dialog open={!!voidFor} onOpenChange={(o) => { if (!o) setVoidFor(null); }}>
+        <DialogContent className="max-w-md" data-testid="void-dialog">
+          <DialogHeader>
+            <DialogTitle>Void this sign-off</DialogTitle>
+            <DialogDescription>
+              {voidFor ? `${voidFor.task_name ?? "Task"}, completed ${fmtDate(voidFor.completed_date)}${voidFor.performed_by ? ` by ${voidFor.performed_by}` : ""}.` : ""} It stays on the Sign-off log, marked voided with your reason, and no longer counts toward the task's due date.
+            </DialogDescription>
+          </DialogHeader>
+          <div>
+            <label htmlFor="void-reason" className="text-xs text-muted-foreground font-medium block mb-1">Why <span className="text-red-600">*</span></label>
+            <Input id="void-reason" value={reason} maxLength={500} onChange={e => setReason(e.target.value)} placeholder="e.g. Entered on the wrong task" data-testid="void-reason" />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" size="sm" onClick={() => setVoidFor(null)} disabled={voidMut.isPending}>Cancel</Button>
+            <Button size="sm" variant="destructive" disabled={!reason.trim() || voidMut.isPending} onClick={() => voidFor && voidMut.mutate(voidFor)} data-testid="void-save">
+              {voidMut.isPending ? "Saving..." : "Void sign-off"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -1079,7 +1452,8 @@ export default function VeritaTrackAppPage() {
   const isReadOnly = useIsReadOnly("veritatrack");
   const { user } = useAuth();
   const qc = useQueryClient();
-  const [view, setView] = useState<"list" | "calendar" | "reminders">("list");
+  const [view, setView] = useState<"list" | "calendar" | "reminders" | "log">("list");
+  const taskView = view === "list" || view === "calendar";
   const [filterCategory, setFilterCategory] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
   const [importLoading, setImportLoading] = useState(false);
@@ -1288,6 +1662,7 @@ export default function VeritaTrackAppPage() {
           "Add ad-hoc tasks (equipment service, contract renewals, accreditor application deadlines).",
           "Sign off tasks as complete with initials, date, and reviewer name.",
           "Export to Excel in the regulatory-calendar format your lab already uses.",
+          "Open the Sign-off log for every sign-off on record, including voided ones and removed tasks; print it or export it to Excel.",
           "Review the calendar weekly; track overdue items to closure with the medical director or designee."
         ]}
       />
@@ -1486,9 +1861,13 @@ export default function VeritaTrackAppPage() {
             className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium transition-colors ${view === "reminders" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}>
             <Bell size={12} /> Reminders
           </button>}
+          <button onClick={() => setView("log")} data-testid="signoff-log-tab"
+            className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium transition-colors ${view === "log" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}>
+            <ClipboardList size={12} /> Sign-off log
+          </button>
         </div>
 
-        {view !== "reminders" && (
+        {taskView && (
           <>
             <Select value={filterCategory} onValueChange={setFilterCategory}>
               <SelectTrigger className="h-8 text-xs w-48">
@@ -1521,8 +1900,11 @@ export default function VeritaTrackAppPage() {
       {/* Reminders panel */}
       {view === "reminders" && !isReadOnly && <RemindersPanel trackApi={trackApi} cfgKey={cfgKey} />}
 
+      {/* Sign-off log: every sign-off, including removed tasks, so it shows even when no task is active */}
+      {view === "log" && <SignoffLogPanel activeLabId={activeLabId} isReadOnly={isReadOnly} tasksKey={tasksKey} dashKey={dashKey} />}
+
       {/* Error state: a failed load must not read as an empty calendar */}
-      {view !== "reminders" && !isLoading && tasksError && (
+      {taskView && !isLoading && tasksError && (
         <div className="text-center py-16 border border-dashed border-destructive/40 rounded-2xl">
           <AlertTriangle size={36} className="mx-auto text-destructive mb-3" />
           <h3 className="font-semibold text-foreground mb-1">Couldn't load your calendar</h3>
@@ -1536,7 +1918,7 @@ export default function VeritaTrackAppPage() {
       )}
 
       {/* Empty state */}
-      {view !== "reminders" && !isLoading && !tasksError && tasks.length === 0 && (
+      {taskView && !isLoading && !tasksError && tasks.length === 0 && (
         <div className="text-center py-16 border border-dashed border-border rounded-2xl">
           <CalendarDays size={36} className="mx-auto text-muted-foreground mb-3" />
           <h3 className="font-semibold text-foreground mb-1">No tasks yet</h3>

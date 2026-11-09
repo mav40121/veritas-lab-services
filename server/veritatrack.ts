@@ -3,7 +3,8 @@ import crypto from "crypto";
 import { db } from "./db";
 import { applyLicenseToExcelJS } from "./licenseStamp";
 import type { LicenseContext } from "@shared/licenseText";
-import { resolveRowForMutation, resolveLegacyLabId } from "./labAccessGuard";
+import { resolveRowForMutation, resolveLegacyLabId, ownerMatchCounts } from "./labAccessGuard";
+import { buildSignoffLog, parseSignoffLogFilters, buildSignoffLogWorkbook } from "./veritatrackSignoffLog";
 import { blockNonOperatorSeat } from "./seatAccess";
 import { preserveMapLink, applyMapSignoffWriteback, deriveMapLink, analyteFromTaskName } from "./veritatrackMapSync";
 import { labLocalDate, labToday, addLabDays, labTimeZoneById, setRequestLabTz } from "./dateLocal";
@@ -79,6 +80,11 @@ export function daysUntilDateOnly(dateStr: string, todayStr: string = labToday()
   // The lab's day (per-lab time zone, 2026-10-26), not the UTC day.
   return Math.round((Date.parse(dateStr + "T00:00:00Z") - Date.parse(todayStr + "T00:00:00Z")) / 86400000);
 }
+
+// Michael 2026-11-09: a sign-off is never removed. A mistaken one is voided with a reason and stays on the Sign-off log,
+// but it no longer counts: every read that picks a task's last sign-off (status, next due, worklist, dashboard, the
+// calendar export, the nightly reminders in veritatrackReminders.ts, the map-link backfill in routes.ts) adds this.
+export const LIVE_SIGNOFF = "voided_at IS NULL";
 
 function taskStatus(nextDueDate: string, soonDays = 30): "overdue" | "due_soon" | "current" | "not_started" {
   const daysUntil = daysUntilDateOnly(nextDueDate);
@@ -269,7 +275,7 @@ export function registerVeritaTrackRoutes(
       const buckets: any = { overdue: [], due_today: [], due_this_week: [], due_next_30: [] };
       for (const t of tasks) {
         const last = sqlite.prepare(
-          "SELECT * FROM veritatrack_signoffs WHERE task_id = ? ORDER BY completed_date DESC LIMIT 1"
+          `SELECT * FROM veritatrack_signoffs WHERE task_id = ? AND ${LIVE_SIGNOFF} ORDER BY completed_date DESC LIMIT 1`
         ).get(t.id) as any;
         const nextDueDate = last ? nextDue(last.completed_date, t.frequency_months, t.frequency_days) : null;
         // Not-started tasks (no signoff yet) appear as overdue so the
@@ -527,7 +533,7 @@ export function registerVeritaTrackRoutes(
     ).all(labId) as any[];
     const result = tasks.map((t: any) => {
       const last = sqlite.prepare(
-        "SELECT * FROM veritatrack_signoffs WHERE task_id = ? ORDER BY completed_date DESC LIMIT 1"
+        `SELECT * FROM veritatrack_signoffs WHERE task_id = ? AND ${LIVE_SIGNOFF} ORDER BY completed_date DESC LIMIT 1`
       ).get(t.id) as any;
       const nextDueDate = last ? nextDue(last.completed_date, t.frequency_months, t.frequency_days) : null;
       const status = last ? taskStatus(nextDueDate!, dueSoonWindow(t)) : "not_started";
@@ -546,10 +552,11 @@ export function registerVeritaTrackRoutes(
       return res.status(404).json({ error: "Task not found" });
     }
     labDayFor(task.lab_id);
+    // Every sign-off, voided ones too (marked, with who voided it); the last one that counts is the newest live one.
     const signoffs = sqlite.prepare(
-      "SELECT * FROM veritatrack_signoffs WHERE task_id = ? ORDER BY completed_date DESC"
-    ).all(task.id);
-    const last = (signoffs as any[])[0] || null;
+      "SELECT s.*, vu.name AS voided_by_name FROM veritatrack_signoffs s LEFT JOIN users vu ON vu.id = s.voided_by_user_id WHERE s.task_id = ? ORDER BY s.completed_date DESC"
+    ).all(task.id) as any[];
+    const last = signoffs.find((s) => !s.voided_at) || null;
     const nextDueDate = last ? nextDue(last.completed_date, task.frequency_months, task.frequency_days) : null;
     res.json({ ...task, signoffs, next_due: nextDueDate, status: last ? taskStatus(nextDueDate!, dueSoonWindow(task)) : "not_started" });
   });
@@ -721,29 +728,43 @@ export function registerVeritaTrackRoutes(
     res.json({ ...(signoff as any), map_sync: mapSync });
   });
 
-  // DELETE a sign-off \u2014 Shape A guard via resolveRowForMutation.
-  app.delete("/api/veritatrack/signoffs/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritatrack'), (req: any, res) => {
+  // Void a sign-off (Michael 2026-11-09). A sign-off is never removed: the row stays, marked with who voided it, when and
+  // why, and drops out of the task's status and next due date (LIVE_SIGNOFF); the Sign-off log still shows it. A reason
+  // is required. Access is the TASK's (resolveRowForMutation on veritatrack_tasks, the same as the task detail read), not
+  // the sign-off's own lab_id, which the VeritaMap import left empty and the boot backfill set to the owner's home lab.
+  // The old hard DELETE wrote "signoff_deleted" audit rows; those stay and show on the log as deleted before this rule.
+  const voidSignoff = (req: any, res: any) => {
     if (!hasTrackAccess(req.user, trackLab(req))) return res.status(403).json({ error: "VeritaTrack\u2122 subscription required" });
     const signoffId = Number(req.params.id);
-    const { row: existing, status } = resolveRowForMutation((db as any).$client, "veritatrack_signoffs", signoffId, req);
-    if (!existing) {
+    const so = Number.isInteger(signoffId) ? sqlite.prepare("SELECT * FROM veritatrack_signoffs WHERE id = ?").get(signoffId) as any : null;
+    if (!so) return res.status(404).json({ error: "Signoff not found" });
+    const { row: task, status } = resolveRowForMutation<any>(sqlite, "veritatrack_tasks", so.task_id, req);
+    if (!task) {
       if (status === 403) return res.status(403).json({ error: "You don't have access to this signoff's lab" });
       return res.status(404).json({ error: "Signoff not found" });
     }
-    sqlite.prepare("DELETE FROM veritatrack_signoffs WHERE id = ?").run(signoffId);
-    // Wave B3: a deleted completion record is the highest-risk audit event.
-    // Capture it (with the date it claimed) BEFORE the row is gone -- already
-    // read into `existing` by resolveRowForMutation above.
+    if (so.voided_at) return res.status(409).json({ error: "That sign-off is already voided", code: "ALREADY_VOIDED" });
+    const reason = String(req.body?.reason ?? "").trim();
+    if (!reason) return res.status(400).json({ error: "Enter why this sign-off is being voided", code: "VOID_REASON_REQUIRED" });
+    if (reason.length > 500) return res.status(400).json({ error: "The reason is too long (500 characters at most)", code: "TOO_LONG" });
+    const byUserId = req.user?.userId ?? null;
+    const done = sqlite.prepare(
+      "UPDATE veritatrack_signoffs SET voided_at = ?, voided_by_user_id = ?, void_reason = ? WHERE id = ? AND voided_at IS NULL"
+    ).run(new Date().toISOString(), byUserId, reason, signoffId);
+    if (done.changes === 0) return res.status(409).json({ error: "That sign-off is already voided", code: "ALREADY_VOIDED" });
     trackAudit({
-      labId: (existing as any).lab_id ?? null,
-      taskId: (existing as any).task_id ?? null,
+      labId: task.lab_id ?? so.lab_id ?? null,
+      taskId: task.id,
       signoffId,
-      event: "signoff_deleted",
-      detail: `Removed sign-off dated ${(existing as any).completed_date}${(existing as any).performed_by ? ` (${(existing as any).performed_by})` : ""}`,
-      byUserId: req.user?.userId ?? null,
+      event: "signoff_voided",
+      detail: `Voided sign-off dated ${so.completed_date}${so.performed_by ? ` (${so.performed_by})` : so.initials ? ` (${so.initials})` : ""}. Reason: ${reason}`,
+      byUserId,
     });
-    res.json({ ok: true });
-  });
+    res.json({ ok: true, signoff: sqlite.prepare("SELECT * FROM veritatrack_signoffs WHERE id = ?").get(signoffId) });
+  };
+  app.post("/api/veritatrack/signoffs/:id/void", authMiddleware, requireWriteAccess, requireModuleEdit('veritatrack'), voidSignoff);
+  // Older clients: the same path as before, now a void with the same reason rule. Nothing is deleted.
+  app.delete("/api/veritatrack/signoffs/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritatrack'), voidSignoff);
 
   // GET audit trail for a task (Wave B3). Lab-scoped read: resolves the task
   // through the same ownership guard the mutations use, then returns the
@@ -892,7 +913,7 @@ export function registerVeritaTrackRoutes(
     const overdueItems: any[] = [], dueThisMonthItems: any[] = [], dueSoonItems: any[] = [];
     for (const t of tasks) {
       const last = sqlite.prepare(
-        "SELECT completed_date FROM veritatrack_signoffs WHERE task_id = ? ORDER BY completed_date DESC LIMIT 1"
+        `SELECT completed_date FROM veritatrack_signoffs WHERE task_id = ? AND ${LIVE_SIGNOFF} ORDER BY completed_date DESC LIMIT 1`
       ).get(t.id) as any;
       if (!last) { notStarted++; continue; }
       const nextDueDate = nextDue(last.completed_date, t.frequency_months, t.frequency_days);
@@ -1055,13 +1076,13 @@ export function registerVeritaTrackRoutes(
     };
     const aboutBlank = () => { about.getRow(aboutRow).height = 8; aboutRow += 1; };
     aboutSection("About this product");
-    aboutBody("This workbook is a snapshot of the laboratory's recurring regulatory and quality tasks tracked in VeritaTrack: daily, weekly, monthly, quarterly, semiannual, and annual checks tied to CLIA, CAP, TJC, AABB, FDA, OSHA, and state requirements. Each row shows what the task is, which instrument or category it covers, the last documented sign-off, when it is next due, and a status flag (Current / Due Soon / Overdue / Not Started) computed from the frequency and the most recent sign-off date.");
+    aboutBody("This workbook is a snapshot of the laboratory's recurring regulatory and quality tasks tracked in VeritaTrack: daily, weekly, monthly, quarterly, semiannual, and annual checks tied to CLIA, CAP, TJC, AABB, FDA, OSHA, and state requirements. Each row shows what the task is, which instrument or category it covers, the last documented sign-off, when it is next due, and a status flag (Current / Due Soon / Overdue / Not Started) computed from the frequency and the most recent sign-off date. This calendar shows each active task's latest sign-off only. Every recorded sign-off, including voided ones and those on tasks removed from the active list, is on the Sign-off log in VeritaTrack, which has its own Excel export.");
     aboutBlank();
     aboutSection("How to use this workbook");
     aboutBody("The Regulatory Calendar tab is grouped by Frequency (Daily, Weekly, Monthly, Quarterly, Semiannual, Annual) and then by Category. Sort or filter the Status column to triage what needs immediate attention: Overdue first, then Due Soon (within 14 days). The Days Until Due column shows the gap between today and the next due date and turns magenta when overdue. The Performed By column captures the initials or full name recorded at the time of the last sign-off; this is the audit trail for who attests the task was done. Notes carry instrument-specific or procedure-specific reminders set by the lab.");
     aboutBlank();
     aboutSection("Disclaimer");
-    aboutBody("This workbook is an internal tracking aid, not an audit-grade compliance attestation, not a regulatory submission, and not a substitute for the lab's procedure manual or the underlying signed records. Status (Current / Due Soon / Overdue / Not Started) is calculated mechanically from the frequency_months value and the most recent completed_date in VeritaTrack. It does not confirm that the work was actually performed competently, that the recorded initials belong to the named person, or that the procedure followed the lab's SOP. The signed sign-off record (paper logs, instrument printouts, LIS records, validation files) is the audit-grade evidence; if there is a conflict between this calendar and those records, the underlying records govern. Due dates assume the frequency value is correct and that no regulatory or accreditation change has shortened the interval; the lab director is responsible for keeping intervals current with the latest CMS, CAP, TJC, AABB, FDA, OSHA, and state guidance. VeritaAssure does not certify regulatory compliance, does not advise on whether a given task satisfies a specific accreditation standard, does not file or report on the lab's behalf, and does not warrant that completing every row in this workbook will satisfy any inspector.");
+    aboutBody("This workbook is an internal tracking aid, not an audit-grade compliance attestation, not a regulatory submission, and not a substitute for the lab's procedure manual or the underlying signed records. Status (Current / Due Soon / Overdue / Not Started) is calculated mechanically from the frequency_months value and the most recent completed_date in VeritaTrack; a voided sign-off is not counted. It does not confirm that the work was actually performed competently, that the recorded initials belong to the named person, or that the procedure followed the lab's SOP. The signed sign-off record (paper logs, instrument printouts, LIS records, validation files) is the audit-grade evidence; if there is a conflict between this calendar and those records, the underlying records govern. Due dates assume the frequency value is correct and that no regulatory or accreditation change has shortened the interval; the lab director is responsible for keeping intervals current with the latest CMS, CAP, TJC, AABB, FDA, OSHA, and state guidance. VeritaAssure does not certify regulatory compliance, does not advise on whether a given task satisfies a specific accreditation standard, does not file or report on the lab's behalf, and does not warrant that completing every row in this workbook will satisfy any inspector.");
     aboutBlank();
     aboutSection("Lab identity");
     aboutBody(`This workbook was prepared for ${labName} (CLIA ${cliaNumber}). The lab name and CLIA appear on every printed page header and footer.`);
@@ -1100,7 +1121,7 @@ export function registerVeritaTrackRoutes(
     let lastFreq = "";
     for (const t of tasks) {
       const last = sqlite.prepare(
-        "SELECT * FROM veritatrack_signoffs WHERE task_id = ? ORDER BY completed_date DESC LIMIT 1"
+        `SELECT * FROM veritatrack_signoffs WHERE task_id = ? AND ${LIVE_SIGNOFF} ORDER BY completed_date DESC LIMIT 1`
       ).get(t.id) as any;
       const nextDueDate = last ? nextDue(last.completed_date, t.frequency_months, t.frequency_days) : null;
       const status = last ? taskStatus(nextDueDate!, dueSoonWindow(t)) : "not_started";
@@ -1284,7 +1305,7 @@ export function registerVeritaTrackRoutes(
       ).all(req.scope.labId) as any[];
       const result = tasks.map((t: any) => {
         const last = sqlite.prepare(
-          "SELECT * FROM veritatrack_signoffs WHERE task_id = ? ORDER BY completed_date DESC LIMIT 1"
+          `SELECT * FROM veritatrack_signoffs WHERE task_id = ? AND ${LIVE_SIGNOFF} ORDER BY completed_date DESC LIMIT 1`
         ).get(t.id) as any;
         const nextDueDate = last ? nextDue(last.completed_date, t.frequency_months, t.frequency_days) : null;
         const status = last ? taskStatus(nextDueDate!, dueSoonWindow(t)) : "not_started";
@@ -1346,7 +1367,7 @@ export function registerVeritaTrackRoutes(
       const overdueItems: any[] = [], dueThisMonthItems: any[] = [], dueSoonItems: any[] = [];
       for (const t of tasks) {
         const last = sqlite.prepare(
-          "SELECT completed_date FROM veritatrack_signoffs WHERE task_id = ? ORDER BY completed_date DESC LIMIT 1"
+          `SELECT completed_date FROM veritatrack_signoffs WHERE task_id = ? AND ${LIVE_SIGNOFF} ORDER BY completed_date DESC LIMIT 1`
         ).get(t.id) as any;
         if (!last) { notStarted++; continue; }
         const nextDueDate = nextDue(last.completed_date, t.frequency_months, t.frequency_days);
@@ -1357,6 +1378,46 @@ export function registerVeritaTrackRoutes(
         else { current++; }
       }
       res.json({ overdue, dueThisMonth, dueSoon, current, notStarted, total: tasks.length, overdueItems, dueThisMonthItems, dueSoonItems });
+    });
+
+    // ── Sign-off log (Michael 2026-11-09): every sign-off the lab has recorded (server/veritatrackSignoffLog.ts). ──
+    // Reach is the task detail read's (GET /api/veritatrack/tasks/:id), never wider: blockNonOperatorSeat (so a view-only
+    // or Staff seat is refused there and here), the plan, and resolveRowForMutation's rule for a task in this lab, which is
+    // the lab owner's own account (or a seat whose owner match counts for this lab, ownerMatchCounts) or an active
+    // membership in the lab. labScopeMiddleware alone also admits an org admin with no membership and Veritas support,
+    // whom the task detail refuses, so they are refused here too. Sign-off performers are lab records, not a personnel
+    // file, so CLAUDE.md section 5's staff own-data limit does not narrow this; a member with a Staff role reads it as
+    // they read the task detail and its history.
+    const trackRecordReach = (req: any, labId: number): boolean => {
+      const userId = req.user?.userId ?? req.userId;
+      if (userId == null) return false;
+      const ownerId = req.ownerUserId ?? userId;
+      const lab = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(labId) as any;
+      if (lab && Number(lab.owner_user_id) === Number(ownerId) && ownerMatchCounts(sqlite, userId, ownerId, labId)) return true;
+      return !!sqlite.prepare("SELECT 1 FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active' LIMIT 1").get(labId, userId);
+    };
+    const signoffLogFor = (req: any, res: any) => {
+      if (blockNonOperatorSeat(req, res)) return null;
+      if (!hasTrackAccess(req.user, trackLab(req))) { res.status(403).json({ error: "VeritaTrack™ subscription required" }); return null; }
+      if (!trackRecordReach(req, req.scope.labId)) {
+        res.status(403).json({ error: "You don't have access to this lab's VeritaTrack records", code: "NO_TRACK_RECORD_ACCESS" });
+        return null;
+      }
+      const parsed = parseSignoffLogFilters(req.query);
+      if ("error" in parsed) { res.status(400).json({ error: parsed.error, code: "BAD_FILTER" }); return null; }
+      return buildSignoffLog(sqlite, req.scope.labId, parsed.filters);
+    };
+    app.get("/api/labs/:labId/veritatrack/signoff-log", authMiddleware, labScopeMiddleware, (req: any, res) => {
+      const log = signoffLogFor(req, res);
+      if (log) res.json(log);
+    });
+    app.get("/api/labs/:labId/veritatrack/signoff-log/excel", authMiddleware, labScopeMiddleware, async (req: any, res) => {
+      const log = signoffLogFor(req, res);
+      if (!log) return;
+      const buf = await buildSignoffLogWorkbook(log, (wb) => applyLicenseToExcelJS(wb, { ...trackLicenseCtx(req), isDemo: !!req.scope?.lab?.is_demo }));
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", `attachment; filename="VeritaTrack_Signoff_Log_${log.today}.xlsx"`);
+      res.send(buf);
     });
 
     // Reminder config, lab-prefixed variant (the path the client uses). Scoped
