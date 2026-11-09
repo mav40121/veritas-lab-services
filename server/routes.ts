@@ -294,7 +294,7 @@ import { insertStudySchema, insertContactSchema, registerSchema, loginSchema, ty
 // Mirrors the client calculation logic so the stored status is always correct.
 // Each study type has its own pass/fail rule derived from the raw dataPoints.
 import { isCensored, censorValueForMath, type CensoringPolicy } from "@shared/censoring";
-import { computePTCoagStatus } from "./ptCoagVerdict";
+import { computePTCoagStatus, ptCoagStatusByResultsPageRule } from "./ptCoagVerdict";
 // Shown wherever a self-serve path used to create a lab (2026-10-14, Michael Q195 = 1).
 export const LAB_SETUP_BY_STAFF_MESSAGE = "Your lab is set up by the Veritas Lab Services team after a short call. Reach us at www.veritaslabservices.com/contact or info@veritaslabservices.com.";
 
@@ -833,6 +833,9 @@ export function recomputeAllStudyStatuses(): { fixed: number; skipped: number } 
     // through the controlled exclusion endpoint, which captures that decision.
     if (dataPointsHaveExclusions(study.dataPoints)) continue;
     if (isUnitsRuleStudy(study as any)) continue;
+    // BUG-150 (2026-11-09): a saved draft has no verdict yet. Without this, every deploy turned every draft into a PASS or FAIL
+    // and the dashboard stopped listing it as a draft. It gets its verdict when it is finished.
+    if (study.status === "draft") continue;
     const computed = computeStudyStatus(study.studyType, study.dataPoints, study.instruments, study.cliaAllowableError, (study as any).teaIsPercentage !== 0, (study as any).cliaAbsoluteFloor ?? null, (study as any).censoringPolicy ?? "exclude");
     // #69 (2026-10-07): an exception inside computeStudyStatus returns the
     // fail-safe "fail", not a verdict. Writing that over a stored status at
@@ -35548,6 +35551,42 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       }
     }
     res.json({ studies: candidates, byKind, byLab, byPreset, byFloor });
+  });
+
+  // ── ADMIN: PT/INR studies stored FAIL only for an empty comparison module, counts only (SCAHC report 2026-11-09) ──
+  // Until the 2026-11-09 fix the PT/INR form saved an untouched Module 3 as { data: [] }; the stored verdict counts it
+  // as a run module with no pair within TEa, so a study whose normals all passed reads FAIL on the dashboard while
+  // the results page and PDF read PASS. failToPass counts saved FAIL rows that pass under the results page's rule
+  // (a Module 2 or 3 with fewer than 3 complete pairs was not run; ptCoagStatusByResultsPageRule). Read-only: nothing
+  // is written and the boot recompute leaves these rows as saved until Michael decides. Counts and lab ids only.
+  app.get("/api/admin/veritacheck/ptcoag-empty-module-counts", (req, res) => {
+    if (!ADMIN_SECRET || req.headers["x-admin-secret"] !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    const sqlite = (db as any).$client;
+    const rows = sqlite.prepare(
+      `SELECT s.lab_id, s.status, s.lifecycle_state, s.data_points, l.is_demo
+         FROM studies s LEFT JOIN labs l ON l.id = s.lab_id
+        WHERE s.study_type = 'pt_coag'`
+    ).all() as any[];
+    const totals = { studies: rows.length, drafts: 0, savedPass: 0, savedFail: 0, failToPass: 0, finalizedFailToPass: 0, notEvaluable: 0 };
+    const byLab: Record<string, { isDemo: boolean | null; studies: number; drafts: number; savedFail: number; failToPass: number }> = {};
+    for (const r of rows) {
+      const lab = String(r.lab_id ?? "none");
+      byLab[lab] = byLab[lab] || { isDemo: r.lab_id == null || r.is_demo == null ? null : r.is_demo === 1, studies: 0, drafts: 0, savedFail: 0, failToPass: 0 };
+      const b = byLab[lab];
+      b.studies++;
+      if (r.status === "draft") { totals.drafts++; b.drafts++; continue; }
+      if (r.status === "pass") { totals.savedPass++; continue; }
+      if (r.status !== "fail") continue;
+      totals.savedFail++; b.savedFail++;
+      let raw: any;
+      try { raw = JSON.parse(r.data_points); } catch { totals.notEvaluable++; continue; }
+      if (!raw || typeof raw !== "object" || Array.isArray(raw)) { totals.notEvaluable++; continue; }
+      if (ptCoagStatusByResultsPageRule(raw) === "pass") {
+        totals.failToPass++; b.failToPass++;
+        if (r.lifecycle_state === "finalized") totals.finalizedFailToPass++;
+      }
+    }
+    res.json({ ...totals, byLab });
   });
 
   // ── ADMIN: Read-only VeritaCheck/VeritaMap diagnostic probe ─────────────
