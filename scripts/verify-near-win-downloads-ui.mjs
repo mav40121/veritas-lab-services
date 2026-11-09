@@ -82,6 +82,23 @@ const PAGES = [
     below: (p) => p.getByText("In twenty-three years of clinical laboratory work", { exact: false }),
     belowName: "the lede",
   },
+  {
+    // Michael 2026-11-09, Q252 = 1 (SEO handoff Part 2): the method comparison worksheet joins the batch.
+    key: "methodcomp",
+    path: "/resources/how-to-perform-method-comparison-study",
+    title: "How to Perform a Method Comparison Study (Clinical Lab, CLIA)",
+    desc: "How to run a method comparison study under CLIA: when it is required, how many specimens, and how to judge bias against your criterion. Free Excel worksheet.",
+    published: "2026-04-25",
+    source: "upgrade-methodcomp-worksheet",
+    asset: "/method-comparison-worksheet.xlsx",
+    assetName: "Method-Comparison-Worksheet.xlsx",
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    boxTitle: "Download the method comparison worksheet (Excel)",
+    boxDesc: "Enter paired results from two instruments or methods. It checks each pair against the criterion you set and calculates bias and limits of agreement. Free.",
+    button: "Get the free Excel worksheet",
+    label: "Excel worksheet",
+    below: (p) => p.getByText("Key Takeaways", { exact: true }),
+  },
 ];
 
 let failures = 0, passes = 0;

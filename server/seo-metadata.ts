@@ -462,13 +462,14 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
   },
   "/resources/how-to-perform-method-comparison-study": {
     title: "How to Perform a Method Comparison Study (Clinical Lab, CLIA)",
-    description: "Step-by-step guide to performing a method comparison study under CLIA, including sample requirements, statistical analysis, and acceptable bias thresholds.",
+    description: "How to run a method comparison study under CLIA: when it is required, how many specimens, and how to judge bias against your criterion. Free Excel worksheet.",
     jsonLd: articleJsonLd({
       headline: "How to Perform a Method Comparison Study in Your Clinical Laboratory",
-      description: "Step-by-step guide to performing a method comparison study under CLIA, including sample requirements, statistical analysis, and acceptable bias thresholds.",
+      description: "How to run a method comparison study under CLIA: when it is required, how many specimens, and how to judge bias against your criterion. Free Excel worksheet.",
       articleBody: "A method comparison study, also called a Correlation study, is required twice a year when your laboratory runs the same test on different instruments or methods (42 CFR 493.1281(a)). It is also a common way to verify accuracy when a new test method goes in (42 CFR 493.1253(b)(1)(i)(A)), and TJC requires one when a method is replaced. Done correctly, it provides documented evidence that the new method produces results comparable to your existing method across the full analytical range. Done incorrectly or incompletely, it is a finding waiting to appear on your CAP or TJC inspection report. CLIA requires method comparison twice a year when two instruments or methods run the same test. It is also a common way to verify accuracy at introduction, and TJC requires one when a method is replaced. CLSI EP09c suggests about 40 patient specimens spanning the measuring range; CLIA and TJC set no minimum, and the laboratory director decides. Define your acceptance criteria before running the study, not after. VeritaCheck® handles regression calculations and generates an inspector-ready report automatically. Sections: When a Method Comparison Is Required; Specimen Requirements; Running the Study; What Pass or Fail Means; Common Mistakes; Documentation for Your Inspection File.",
       path: "/resources/how-to-perform-method-comparison-study",
       datePublished: "2026-04-25",
+      dateModified: "2026-11-09",
     }),
   },
   "/resources/tjc-laboratory-inspection-what-to-expect": {
