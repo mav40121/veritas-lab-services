@@ -43,8 +43,8 @@ function TocLink({ href, children }: { href: string; children: React.ReactNode }
 
 export default function ArticlePrecisionInterpretationPage() {
   useSEO({
-    title: "Precision Verification Report Interpretation Guide | VeritaCheck®",
-    description: "Plain-language guide to reading a VeritaCheck® precision verification report: what mean, SD, CV, 95% CI, Pass/Fail/Uncertain, and vendor SD comparisons actually mean and how they map to 42 CFR §493 and CLSI EP15-A3 requirements.",
+    title: "Interpret EP15 Precision Reports | Veritas Lab Services",
+    description: "How to interpret EP15-A3 precision verification reports for CLIA compliance: SD, CV, total imprecision, and what surveyors look for in your documentation.",
   });
   return (
     <div className="min-h-screen bg-background">

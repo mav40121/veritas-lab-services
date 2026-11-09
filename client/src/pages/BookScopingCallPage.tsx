@@ -102,7 +102,7 @@ export default function BookScopingCallPage() {
   useSEO({
     title: "Book a 50-Minute Scoping Call | Veritas Lab Services",
     description:
-      "Schedule a no-cost 50-minute scoping call with Michael Veri, MS, MBA, MLS(ASCP), CPHQ, former TJC Laboratory Surveyor with 200+ surveys conducted. Confirms engagement fit, scope, and price before any paper changes hands.",
+      "Schedule a no-cost 50-minute scoping call with Michael Veri to confirm engagement fit, scope, and price before any paper changes hands.",
   });
 
   const [eventType, setEventType] = useState<EventType | null>(null);

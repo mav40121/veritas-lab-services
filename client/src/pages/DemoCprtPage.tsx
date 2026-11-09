@@ -94,7 +94,7 @@ export default function DemoCprtPage() {
   useSEO({
     title: "VeritaOps™ CPRT Demo: Cost Per Reportable Test",
     description:
-      "Live demonstration of four-layer cost-per-reportable-test calculation. CLSI GP11-A conceptual model. Built for clinical lab directors and CFOs.",
+      "Interactive demo of the CPRT (Cost-Per-Reportable-Test) four-layer framework built on CLSI GP11-A. Lab director and CFO perspective in one workspace.",
   });
 
   const [volume, setVolume] = useState(180);

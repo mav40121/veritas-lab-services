@@ -29,8 +29,8 @@ export default function ArticleWhyVeritaCheckPage() {
   const { toast } = useToast();
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   useSEO({
-    title: "Why VeritaCheck® vs. Legacy Verification Software | VeritaAssure",
-    description: "How VeritaCheck® compares to legacy verification software on cost, time-to-first-study, integration breadth, and compliance defensibility. Authored for lab directors evaluating a tool change.",
+    title: "VeritaCheck® vs Legacy Verification | Veritas Lab Services",
+    description: "How VeritaCheck® improves on legacy EP15, EP09, calibration verification, and method comparison workflows. CFR-cited PDF output, director sign-off.",
   });
 
   async function handleDownloadPdf() {

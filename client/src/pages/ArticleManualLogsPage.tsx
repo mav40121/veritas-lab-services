@@ -8,7 +8,7 @@ import { MANUAL_LOGS_FAQ } from "@/lib/faqContent";
 
 export default function ArticleManualLogsPage() {
   useSEO({
-    title: "Manual Logs: Why We Used Them, and Why Most Labs Should Stop | Veritas Lab Services",
+    title: "Manual Logs: Why Most Labs Should Stop | Veritas Lab Services",
     description:
       "Manual logs were invented to solve a memory problem in labs that had one or two computers. In 2026, the log is the source of the error that transcribed-result review was designed to catch. Here is when to retire it.",
   });

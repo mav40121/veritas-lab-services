@@ -366,7 +366,7 @@ export default function VeritaPacePage() {
 
   const facilityBenchmark = currentMonth ? BENCHMARKS[currentMonth.facility_type] : BENCHMARKS.community;
 
-  useSEO({ title: "VeritaPace\u2122 | Monthly Lab Productivity Tracker | VeritaAssure\u00AE", description: "Track monthly lab productivity with VeritaPace\u2122. Productive hours per billable test against published facility-type reference ranges, FTE and overtime analysis, and year-over-year trend. Included with VeritaAssure\u00AE Suite plans." });
+  useSEO({ title: "VeritaPace\u2122 | Monthly Lab Productivity Tracker | VeritaAssure\u00AE", description: "Track monthly lab productivity with VeritaPace\u2122. Productive hours per billable test against facility-type ranges, FTE and overtime analysis, and year-over-year trend. Included with VeritaAssure\u00AE Suite plans." });
 
   // Unauthenticated gate - marketing landing
   if (!isLoggedIn) {

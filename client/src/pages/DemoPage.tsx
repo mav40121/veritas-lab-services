@@ -1012,8 +1012,8 @@ function InventorySection() {
 
 export default function DemoPage() {
   useSEO({
-    title: "Demo | VeritaAssure\u00AE Lab Compliance & Operations Software",
-    description: "Explore VeritaAssure\u00AE in action. Choose from operations tools (productivity, staffing) or the full compliance suite (method verification, inspection readiness, competency tracking).",
+    title: "Operations Demo - Lab Productivity & Staffing Tools | VeritaAssure\u00AE",
+    description: "See the operations modules in action. Interactive VeritaBench\u2122 scorecard, VeritaPace\u2122 monthly tracking, VeritaShift\u2122 by-hour staffing, VeritaStock\u2122 inventory, and VeritaOps\u2122 cost per reportable test.",
   });
   const [activeSection, setActiveSection] = useState("calculator");
 

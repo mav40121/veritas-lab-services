@@ -10,7 +10,7 @@ import {
 
 
 export default function FAQPage() {
-    useSEO({ title: "FAQ | VeritaAssure® Lab Compliance Software", description: "Frequently asked questions about VeritaAssure®, CLIA compliance software, method verification, and laboratory inspection readiness tools." });
+    useSEO({ title: "FAQ | VeritaAssure® Lab Compliance Software", description: "Frequently asked questions about VeritaAssure®, CLIA compliance software, performance verification, and laboratory inspection readiness tools." });
 return (
     <div className="min-h-screen bg-background">
       {/* Hero */}
