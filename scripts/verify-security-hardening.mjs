@@ -9,9 +9,10 @@ let pass = 0, fail = 0;
 const check = (n, c) => { if (c) { pass++; console.log("PASS  " + n); } else { fail++; console.log("FAIL  " + n); } };
 
 // ── A) Request log (identical to server/logRedact.ts): no response body, and no credential in the path ──
-const TOKEN_IN_PATH = /^(\/api\/(?:surveyor|seats\/invite|pdf|zip|export-all\/file|scheduling\/booking)\/)[^/]+/;
+const TOKEN_IN_PATH = /^(\/api\/(?:surveyor|public\/policy-share|seats\/invite|pdf|zip|export-all\/file|scheduling\/booking)\/)[^/]+/;
 const requestLogLine = (method, path, status, ms) => `${method} ${path.replace(TOKEN_IN_PATH, "$1[REDACTED]")} ${status} in ${ms}ms`;
 check("the log line masks a token in the path", requestLogLine("GET", "/api/surveyor/TOK/policies", 200, 5) === "GET /api/surveyor/[REDACTED]/policies 200 in 5ms");
+check("the log line masks a document share link token", requestLogLine("GET", "/api/public/policy-share/TOK/file", 200, 5) === "GET /api/public/policy-share/[REDACTED]/file 200 in 5ms");
 check("the log line leaves other paths alone", requestLogLine("GET", "/api/labs/3/members", 200, 5) === "GET /api/labs/3/members 200 in 5ms");
 
 // ── B) Login rate limiter (mirror of server/routes.ts, now injectable) ─────

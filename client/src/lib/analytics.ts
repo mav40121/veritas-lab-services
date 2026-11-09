@@ -36,7 +36,8 @@ function isSignedIn(): boolean {
 
 // Sign-in, invite, password and app pages are workforce pages even before anyone signs in (Google's automatic
 // form events fired on the sign-in form), so GA stays off them too. Marketing and resource pages keep it.
-const APP_PATH = /^\/(login|signin|signup|register|join|invite|accept|reset|forgot|sso|two-factor|mfa|labs\/|account|staff|my-signoffs|admin|onboarding)/i;
+// A share or surveyor link carries its credential in the path, so GA never sees those pages either (2026-11-09).
+const APP_PATH = /^\/(login|signin|signup|register|join|invite|accept|reset|forgot|sso|two-factor|mfa|labs\/|account|staff|my-signoffs|admin|onboarding|policy\/|surveyor\/)/i;
 
 // Real visitors on the production sites only (2026-11-09, SEO session): GA4 was counting our own test runs, about
 // 64,000 sessions from local builds (hostname localhost) and most of the rest from Playwright on CI runners (1280x720,

@@ -29,6 +29,7 @@ import { ApprovalRoutesDialog } from "@/components/ApprovalRoutesDialog";
 import { CarriedOverPanel, type CarriedRecord } from "@/components/CarriedOverPanel";
 import { DocumentSignatureRoster } from "@/components/DocumentSignatureRoster";
 import { ReadSignDialog, type ReadSignScopeRef } from "@/components/ReadSignDialog";
+import { PolicyShareLinks } from "@/components/PolicyShareLinks";
 import { useStaffDocScope } from "@/hooks/useStaffLogin";
 import {
   Dialog,
@@ -2571,6 +2572,10 @@ export default function VeritaPolicyMyPoliciesPage() {
                 ))}
               </ul>
             </div>
+          )}
+          {/* A link to this document's current approved version, for people outside the lab. VeritaDC editors only. */}
+          {viewDoc && activeLabId && !isReadOnly && !staffOwnDocs && (
+            <PolicyShareLinks labId={activeLabId} documentId={viewDoc.id} />
           )}
           {viewDoc && (
             <div className="rounded border bg-muted/20 p-2 text-xs space-y-2" data-testid="related-policies">

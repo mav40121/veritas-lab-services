@@ -41917,6 +41917,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         "policy_prior_signatures",
         "policy_review_reminders",
         "policy_carried_records",
+        "policy_share_links",
         "policy_signoffs",
         "policy_versions",
       ];
@@ -42847,6 +42848,11 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   registerBulkLoadRoutes(app, { adminSecret: ADMIN_SECRET, authMiddleware, labScopeMiddleware, resolveSurveyorToken });
   const { registerHistoryLoadRoutes } = await import("./veritadcHistoryLoad");
   registerHistoryLoadRoutes(app, { adminSecret: ADMIN_SECRET });
+  // A share link for one document's current approved version, opened without a login (server/policyShareLinks.ts).
+  const { registerPolicyShareLinkRoutes } = await import("./policyShareLinks");
+  registerPolicyShareLinkRoutes(app, {
+    sqlite: () => (db as any).$client, authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit, frontendUrl: FRONTEND_URL,
+  });
 
   // ── Phase 7: new-version upload + history + search ─────────────────────
 
