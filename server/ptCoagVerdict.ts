@@ -85,6 +85,23 @@ function comparisonPasses(mod: { data?: PtCoagPair[]; tea?: number } | null | un
   return (withinTea / n) * 100 >= 90;
 }
 
+// The verdict the results page and PDF show (client/src/lib/studyResults.ts): a Module 2 or 3 with fewer than 3
+// complete pairs was not run. The form saves nothing else since the 2026-11-09 fix (client/src/lib/ptCoagPayload.ts),
+// but rows saved before it can hold an untouched Module 3 as { data: [] }, which computePTCoagStatus below counts as
+// a run module with no pair within TEa (stored FAIL while the results page read PASS). Used only by the read-only
+// count GET /api/admin/veritacheck/ptcoag-empty-module-counts; the stored verdict and the boot recompute still use
+// computePTCoagStatus, so no saved row changes until Michael decides.
+export const PT_MIN_COMPARISON_PAIRS = 3;
+export function ptCoagStatusByResultsPageRule(rawData: PtCoagRawData | null | undefined): "pass" | "fail" {
+  const rd = rawData || {};
+  const run = (mod: PtCoagRawData["module2"]) => {
+    if (!mod || typeof mod !== "object" || !Array.isArray(mod.data)) return null;
+    const complete = mod.data.filter(d => d && typeof d.x === "number" && !isNaN(d.x) && typeof d.y === "number" && !isNaN(d.y));
+    return complete.length >= PT_MIN_COMPARISON_PAIRS ? mod : null;
+  };
+  return computePTCoagStatus({ ...rd, module2: run(rd.module2), module3: run(rd.module3) });
+}
+
 export function computePTCoagStatus(rawData: PtCoagRawData | null | undefined): "pass" | "fail" {
   const rd = rawData || {};
   const blocks: PtCoagModule1Block[] = Array.isArray(rd.module1Instruments) && rd.module1Instruments.length > 0

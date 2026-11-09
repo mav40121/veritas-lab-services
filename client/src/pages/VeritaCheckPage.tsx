@@ -29,6 +29,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { calculateStudy, calculateCalVerCorrelation, calculatePrecision, calculateLotToLot, calculatePTCoag, calculateQCRange, calculateMultiAnalyteCoag, calculateRefInterval, calculateQualitative, calculateSemiQuant, calculateSensitivity, type DataPoint, type PrecisionDataPoint, type LotToLotDataPoint, type QCRangeDataPoint, type RefIntervalDataPoint, type SensitivityInput, calculateINR, formatTeaCriterion } from "@/lib/calculations";
+import { buildPtCoagPayload, type PtCoagForm } from "@/lib/ptCoagPayload";
 import { teaData } from "@/lib/cliaTeaData";
 import { useAuth } from "@/components/AuthContext";
 import { triggerStudyCreditsExhausted } from "@/components/StudyCreditsModal";
@@ -1072,6 +1073,13 @@ export default function VeritaCheckPage() {
   const [ptModule3Data, setPtModule3Data] = useState<{ id: string; x: number | null; y: number | null }[]>(
     Array.from({ length: 20 }, (_, i) => ({ id: `S${String(i + 1).padStart(5, "0")}`, x: null, y: null }))
   );
+  // The PT/INR form as buildPtCoagPayload reads it (Run Study and Save Draft).
+  const ptCoagForm = (): PtCoagForm => ({
+    instrument1: { name: ptInstrumentName, reagentLot: ptReagentLot, reagentExp: ptReagentExp, isi: ptISI, ptRILow, ptRIHigh, inrRILow: ptINRRILow, inrRIHigh: ptINRRIHigh, ptValues: ptModule1Data },
+    addlInstruments: ptAddlInstruments,
+    instrument2Name: ptInstrument2Name, module2Rows: ptModule2Data, module2TEa: ptModule2TEa,
+    skipModule3: ptSkipModule3, module3Rows: ptModule3Data, module3TEa: ptModule3TEa, oldLotNum: ptOldLotNum,
+  });
 
   // QC Lot Verification state. Default to empty so a fresh study reads as
   // analyte-agnostic; the user adds whatever analyte(s) apply (chemistry,
@@ -1741,6 +1749,17 @@ export default function VeritaCheckPage() {
       cliaPresetLabel,
       status: "draft",
     };
+    // The PT/INR form keeps its own entries (the grid above is calibration verification's); save those, as typed,
+    // with the instrument and criterion Run Study stores, so the draft reopens as it was left.
+    if (studyType === "pt_coag") {
+      Object.assign(draft, {
+        instrument: ptInstrumentName,
+        cliaAllowableError: ptModule2TEa,
+        teaIsPercentage: 1, teaUnit: "%", cliaAbsoluteFloor: null, cliaAbsoluteUnit: null,
+        dataPoints: JSON.stringify(buildPtCoagPayload(ptCoagForm(), { draft: true }).dataPoints),
+        instruments: JSON.stringify([ptInstrumentName, ptInstrument2Name]),
+      });
+    }
     saveMutation.mutate(draft as InsertStudy);
   };
 
@@ -1766,45 +1785,18 @@ export default function VeritaCheckPage() {
     }
 
     if (studyType === "pt_coag") {
-      const m1Valid = ptModule1Data.filter(v => v !== null && !isNaN(v));
-      if (m1Valid.length < 3) { toast({ title: "Please enter at least 3 PT values for Instrument 1 (Module 1)", variant: "destructive" }); return; }
-      // Per-instrument Module-1 blocks: instrument 1 (singular state) plus any
-      // additional instruments. Each analyzer needs >= 3 normal PT values.
-      const addlBlocks = ptAddlInstruments.map((b, i) => ({
-        i,
-        name: b.name.trim() || `Instrument ${i + 2}`,
-        ptValues: b.ptValues.filter(v => v !== null && !isNaN(v as number)) as number[],
-        isi: b.isi, ptRI: { low: b.ptRILow, high: b.ptRIHigh }, inrRI: { low: b.inrRILow, high: b.inrRIHigh },
-        reagentLot: b.reagentLot, reagentExp: b.reagentExp,
-      }));
-      const shortAddl = addlBlocks.find(b => b.ptValues.length < 3);
-      if (shortAddl) { toast({ title: `Please enter at least 3 PT values for Instrument ${shortAddl.i + 2}`, variant: "destructive" }); return; }
-      const module1Instruments = [
-        { name: ptInstrumentName, ptValues: m1Valid, isi: ptISI, ptRI: { low: ptRILow, high: ptRIHigh }, inrRI: { low: ptINRRILow, high: ptINRRIHigh }, reagentLot: ptReagentLot, reagentExp: ptReagentExp },
-        ...addlBlocks.map(({ i, ...rest }) => rest),
-      ];
-      // Module 2 (two-instrument comparison) is optional; include only if entered.
-      const m2Valid = ptModule2Data.filter(d => d.x !== null && d.y !== null);
-      const m2Data = m2Valid.length >= 3
-        ? { xValues: m2Valid.map(d => d.x!), yValues: m2Valid.map(d => d.y!), specimenIds: m2Valid.map(d => d.id), tea: ptModule2TEa }
-        : null;
-      const module3Data = ptSkipModule3 ? null : (() => {
-        const m3Valid = ptModule3Data.filter(d => d.x !== null && d.y !== null);
-        if (m3Valid.length < 3) return null;
-        return { xValues: m3Valid.map(d => d.x!), yValues: m3Valid.map(d => d.y!), specimenIds: m3Valid.map(d => d.id), tea: ptModule3TEa };
-      })();
-      const results = calculatePTCoag(module1Instruments, m2Data, module3Data);
+      // Each analyzer needs >= 3 normal PT values; Module 2 and Module 3 count only with >= 3 complete pairs.
+      const payload = buildPtCoagPayload(ptCoagForm());
+      const [m1First, ...m1Addl] = payload.module1Instruments;
+      if (m1First.ptValues.length < 3) { toast({ title: "Please enter at least 3 PT values for Instrument 1 (Module 1)", variant: "destructive" }); return; }
+      const shortAddl = m1Addl.findIndex(b => b.ptValues.length < 3);
+      if (shortAddl >= 0) { toast({ title: `Please enter at least 3 PT values for Instrument ${shortAddl + 2}`, variant: "destructive" }); return; }
+      const results = calculatePTCoag(payload.module1Instruments, payload.m2Data, payload.m3Data);
       const study: InsertStudy = {
         testName: testName.trim(), instrument: ptInstrumentName, analyst: analyst.trim() || "-",
         date, studyType: "pt_coag", cliaAllowableError: ptModule2TEa,
         teaIsPercentage: 1, teaUnit: '%', cliaAbsoluteFloor: null, cliaAbsoluteUnit: null, cliaPresetLabel,
-        dataPoints: JSON.stringify({
-          module1Instruments,
-          module1: { ptValues: m1Valid, isi: ptISI, ptRI: { low: ptRILow, high: ptRIHigh }, inrRI: { low: ptINRRILow, high: ptINRRIHigh } },
-          module2: m2Data ? { data: m2Valid, tea: ptModule2TEa, inst1: ptInstrumentName, inst2: ptInstrument2Name } : null,
-          module3: ptSkipModule3 ? null : { data: ptModule3Data.filter(d => d.x !== null && d.y !== null), tea: ptModule3TEa, oldLot: ptOldLotNum, newLot: ptReagentLot },
-          instrument: ptInstrumentName, reagentLot: ptReagentLot, reagentExp: ptReagentExp
-        }),
+        dataPoints: JSON.stringify(payload.dataPoints),
         instruments: JSON.stringify([ptInstrumentName, ptInstrument2Name]),
         status: results.overallPass ? "pass" : "fail",
         createdAt: new Date().toISOString(),
