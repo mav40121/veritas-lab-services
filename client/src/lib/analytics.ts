@@ -38,8 +38,19 @@ function isSignedIn(): boolean {
 // form events fired on the sign-in form), so GA stays off them too. Marketing and resource pages keep it.
 const APP_PATH = /^\/(login|signin|signup|register|join|invite|accept|reset|forgot|sso|two-factor|mfa|labs\/|account|staff|my-signoffs|admin|onboarding)/i;
 
+// Real visitors on the production sites only (2026-11-09, SEO session): GA4 was counting our own test runs, about
+// 64,000 sessions from local builds (hostname localhost) and most of the rest from Playwright on CI runners (1280x720,
+// Azure regions). Two rules: the page must be on a production host (the same bundle serves veritastock.com), and a
+// browser driven by automation (navigator.webdriver is true under Playwright, Puppeteer and Selenium) never loads GA.
+export const PRODUCTION_HOSTS = ['www.veritaslabservices.com', 'veritastock.com', 'www.veritastock.com'];
+
+export function analyticsHostAllowed(hostname: string, webdriver: boolean | undefined): boolean {
+  return PRODUCTION_HOSTS.includes(String(hostname || '').toLowerCase()) && webdriver !== true;
+}
+
 export function analyticsAllowed(): boolean {
   if (typeof window === 'undefined' || isSignedIn()) return false;
+  if (!analyticsHostAllowed(window.location.hostname, typeof navigator !== 'undefined' ? navigator.webdriver : undefined)) return false;
   return !APP_PATH.test(window.location.pathname || '/');
 }
 

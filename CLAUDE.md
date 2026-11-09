@@ -411,7 +411,7 @@ You do NOT ask Michael to paste operational secrets in chat. He does not type `A
 - Newsletter test addresses (2026-11-09): `POST /api/newsletter/subscribe` answers a reserved test address (example.com/.net/.org and their subdomains, .test, .invalid, .example, .localhost; server/newsletterGuards.ts) with success and stores nothing and sends nothing. A smoke spec had posted one to production on every run (914 rows, each with a welcome email from info@). A live spec that writes to production must use a reserved address or clean up after itself. tests/integration/newsletter-reserved-domain.test.ts pins it.
 - Stripe: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` in Railway env.
 - JWT: `JWT_SECRET` in Railway env.
-- GA4: Measurement ID `G-M3TB43ZX4E`; Property ID 503314560.
+- GA4: Measurement ID `G-M3TB43ZX4E`; Property ID 503314560. GA loads only for a signed-out visitor on a marketing page of a production host (www.veritaslabservices.com, veritastock.com, www.veritastock.com), and never when `navigator.webdriver` is true (Playwright, Puppeteer, Selenium): client/src/lib/analytics.ts analyticsAllowed (2026-11-09; our own test runs had been most of GA4's sessions). scripts/verify-ga-production-only-ui.mts pins it (run with `UI_RUNNER="npx tsx"`).
 - Chase Stripe payout: ••••5726.
 
 ---
