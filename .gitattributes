@@ -1,0 +1,17 @@
+# Binary files: never convert line endings or diff as text. Without this, git guessed per file, and a PDF with no NUL byte
+# early on was stored as text (2026-11-09, client/public/cost-per-reportable-test-framework.pdf); with core.autocrlf on, a
+# Windows checkout would add carriage returns and corrupt it.
+*.pdf binary
+*.xlsx binary
+*.xlsm binary
+*.docx binary
+*.pptx binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.zip binary
