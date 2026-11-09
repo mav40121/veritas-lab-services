@@ -26,6 +26,11 @@ const yn = (v: unknown) => (v === 1 ? "Yes" : v === 0 ? "No" : "");
 const stateLabel = (s: string) => TISSUE_STATE_LABELS[s as TissueState] || s;
 const dt = (d: string | null | undefined, t: string | null | undefined) => [d, t].filter(Boolean).join(" ");
 const storedAt = (u: any) => [u.storage_unit_name, u.storage_location].filter(Boolean).join(", ");
+// A return to storage moves its issue off the unit's row; server/tissue.ts returnsUnusedByUnit puts each one still standing on
+// the row as returns_unused, so the log still shows the unit went out and came back.
+const returnText = (r: any) =>
+  `${dt(r.returned_date, r.returned_time)}: issued ${dt(r.issued_date, r.issued_time)}${r.delivered_to ? ` to ${r.delivered_to}` : ""}, brought back by ${r.returned_by ?? ""}, received by ${r.received_back_by ?? ""}. Storage conditions maintained: ${yn(r.storage_ok)}. Package integrity acceptable: ${yn(r.package_ok_on_return)}.`;
+const returnsUnused = (u: any) => (Array.isArray(u.returns_unused) ? u.returns_unused.map(returnText).join("\n") : "");
 
 const COLUMNS: { header: string; width: number; value: (u: any) => string }[] = [
   { header: "Tissue ID", width: 22, value: (u) => u.source_id },
@@ -44,6 +49,7 @@ const COLUMNS: { header: string; width: number; value: (u: any) => string }[] = 
   { header: "Package integrity acceptable", width: 12, value: (u) => yn(u.package_ok) },
   { header: "Action taken at receipt", width: 28, value: (u) => u.transport_action ?? "" },
   { header: "Stored at", width: 24, value: storedAt },
+  { header: "Returned unused to blood bank", width: 40, value: returnsUnused },
   { header: "Issued: date", width: 12, value: (u) => u.issued_date ?? "" },
   { header: "Issued: time", width: 9, value: (u) => u.issued_time ?? "" },
   { header: "Requesting physician", width: 20, value: (u) => u.requesting_physician ?? "" },
@@ -114,7 +120,7 @@ export async function generateTissueLogExcel(rows: any[], ctx: TissueLogContext)
   section("No patient information");
   body("This log never holds a patient's name or medical record number. A lookback runs tissue ID, then this record, then the hospital's chart, where the link to the patient stays. The supplier's tissue usage card is filled in on paper by the hospital; this log records only that it was completed and returned, and the date.");
   section("How to use it");
-  body("Filter the Perpetual Log sheet by tissue ID, supplier or status. A status other than Implanted, Wasted, Returned or Expired means the unit has no final disposition yet and is open. To change a record, correct it on the VeritaStock™ tissue page, which keeps the history; this workbook is a read-only copy.");
+  body("Filter the Perpetual Log sheet by tissue ID, supplier or status. A status other than Implanted, Wasted, Returned to supplier or Expired means the unit has no final disposition yet and is open. A unit issued and brought back to the blood bank without being implanted shows each return in the Returned unused to blood bank column; the Issued columns hold only its current issue. To change a record, correct it on the VeritaStock™ tissue page, which keeps the history; this workbook is a read-only copy.");
   section("Source");
   body(`Recorded by this lab in VeritaStock™. The tissue ID is the supplier's "${TISSUE_CFR_CODE_QUOTE}" (${TISSUE_CFR_CODE_CITATION}). ${TISSUE_CFR_TRACKING_CITATION}: a tracking system that "${TISSUE_CFR_TRACKING_QUOTE}". Text read from eCFR, current as of 2026-11-04.`);
   section("Disclaimer");
@@ -162,7 +168,7 @@ export function buildTissueLogHTML(rows: any[], ctx: TissueLogContext): string {
       <td style="white-space:nowrap">${esc(u.expiration_date)}</td>
       <td>${line("MM", [dt(u.received_mm_date, u.received_mm_time), u.received_mm_by].filter(Boolean).join(", "))}${line("BB", [dt(u.received_bb_date, u.received_bb_time), u.received_bb_by].filter(Boolean).join(", "))}${line("Stored", storedAt(u))}</td>
       <td>${u.received_bb_date ? `${line("Temp", yn(u.transport_temp_ok))}${line("Package", yn(u.package_ok))}${line("Action", u.transport_action)}` : ""}</td>
-      <td>${u.issued_date ? `${line("Issued", dt(u.issued_date, u.issued_time))}${line("Physician", u.requesting_physician)}${line("To", u.issued_to)}${line("Tech", u.issued_by_tech)}${line("Delivered to", u.delivered_to)}` : ""}</td>
+      <td>${Array.isArray(u.returns_unused) ? u.returns_unused.map((r: any) => line("Returned unused", returnText(r))).join("") : ""}${u.issued_date ? `${line("Issued", dt(u.issued_date, u.issued_time))}${line("Physician", u.requesting_physician)}${line("To", u.issued_to)}${line("Tech", u.issued_by_tech)}${line("Delivered to", u.delivered_to)}` : ""}</td>
       <td>${u.issued_date ? `${line("ID", yn(u.readback_id_ok))}${line("Exp", yn(u.readback_expiration_ok))}${line("Integrity", yn(u.readback_integrity_ok))}` : ""}</td>
       <td>${final}${u.notes ? line("Notes", u.notes) : ""}</td>
       <td><strong>${esc(stateLabel(u.state))}</strong></td>
