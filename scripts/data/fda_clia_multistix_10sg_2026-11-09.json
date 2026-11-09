@@ -1,0 +1,21 @@
+{
+  "_source": "FDA CLIA database (accessdata.fda.gov/scripts/cdrh/cfdocs/cfClia), Test System Name contains 'multistix 10 sg', read 2026-11-09. Detail record ID 2757 read in full: 510(k) K992257, Bayer Corp., decision 11/24/1999, product code JIR.",
+  "Siemens MULTISTIX 10 SG Reagent Strips": [
+    {"ID": 2751, "DOCUMENT_NUMBER": "K992257", "ANALYTE_NAME": "Urine qualitative dipstick ketone", "SPECIALTY": "Urinalysis", "COMPLEXITY": "WAIVED", "EFFECTIVE_DATE": "2010-05-10"},
+    {"ID": 2752, "DOCUMENT_NUMBER": "K992257", "ANALYTE_NAME": "Urine qualitative dipstick bilirubin", "SPECIALTY": "Urinalysis", "COMPLEXITY": "WAIVED", "EFFECTIVE_DATE": "2010-05-10"},
+    {"ID": 2753, "DOCUMENT_NUMBER": "K992257", "ANALYTE_NAME": "Urine qualitative dipstick blood", "SPECIALTY": "Urinalysis", "COMPLEXITY": "WAIVED", "EFFECTIVE_DATE": "2010-05-10"},
+    {"ID": 2754, "DOCUMENT_NUMBER": "K992257", "ANALYTE_NAME": "Urine qualitative dipstick glucose", "SPECIALTY": "Urinalysis", "COMPLEXITY": "WAIVED", "EFFECTIVE_DATE": "2010-05-10"},
+    {"ID": 2755, "DOCUMENT_NUMBER": "K992257", "ANALYTE_NAME": "Urine qualitative dipstick leukocytes", "SPECIALTY": "Urinalysis", "COMPLEXITY": "WAIVED", "EFFECTIVE_DATE": "2010-05-10"},
+    {"ID": 2756, "DOCUMENT_NUMBER": "K992257", "ANALYTE_NAME": "Urine qualitative dipstick nitrite", "SPECIALTY": "Urinalysis", "COMPLEXITY": "WAIVED", "EFFECTIVE_DATE": "2010-05-10"},
+    {"ID": 2757, "DOCUMENT_NUMBER": "K992257", "ANALYTE_NAME": "Urine qualitative dipstick Ph", "SPECIALTY": "Urinalysis", "COMPLEXITY": "WAIVED", "EFFECTIVE_DATE": "2010-05-10"},
+    {"ID": 2758, "DOCUMENT_NUMBER": "K992257", "ANALYTE_NAME": "Urine qualitative dipstick protein", "SPECIALTY": "Urinalysis", "COMPLEXITY": "WAIVED", "EFFECTIVE_DATE": "2010-05-10"},
+    {"ID": 2759, "DOCUMENT_NUMBER": "K992257", "ANALYTE_NAME": "Urine qualitative dipstick urobilinogen", "SPECIALTY": "Urinalysis", "COMPLEXITY": "WAIVED", "EFFECTIVE_DATE": "2010-05-10"},
+    {"ID": 2760, "DOCUMENT_NUMBER": "K992257", "ANALYTE_NAME": "Urine qualitative dipstick specific gravity", "SPECIALTY": "Urinalysis", "COMPLEXITY": "WAIVED", "EFFECTIVE_DATE": "2010-05-10"}
+  ],
+  "Bayer MULTISTIX 10 SG Reagent Strips": [
+    {"DOCUMENT_NUMBER": "", "ANALYTE_NAME": "Urine dipstick or tablet analytes, nonautomated", "SPECIALTY": "Urinalysis", "COMPLEXITY": "WAIVED", "EFFECTIVE_DATE": "1997-05-02"}
+  ],
+  "Ames MULTISTIX 10 SG": [
+    {"DOCUMENT_NUMBER": "", "ANALYTE_NAME": "Urine dipstick or tablet analytes, nonautomated", "SPECIALTY": "Urinalysis", "COMPLEXITY": "WAIVED", "EFFECTIVE_DATE": "1993-07-26"}
+  ]
+}
