@@ -2,7 +2,7 @@
 // Gate 3 receipt for the near-win downloads batch (SEO handoff 2026-11-09, Michael's go Q251 = 1). Local build only:
 //   PW_BASE=http://localhost:5196 OUT=<dir> node scripts/verify-near-win-downloads-ui.mjs
 // (vls-ops/ui_run_repo_port.sh builds, serves a scratch DB on UI_PORT, and runs this.)
-// For each of the two download pages (mock inspection, EP26 lot verification):
+// For each of the three pages (mock inspection, EP26 lot verification, cost per reportable test):
 //   1. served HTML (what a crawler reads): the new description in the meta tag and the Article JSON-LD, dateModified
 //      2026-11-09, the server title unchanged
 //   2. the download file answers 200 with its content type, and its length and bytes equal client/public's copy
@@ -14,8 +14,6 @@
 //   4. no em or en dash on the page; no page errors; light, dark and phone width (no sideways scroll), with screenshots
 // The mock inspection page also carries the "Book a scoping call" block, before the newsletter signup, linking
 // /book/scoping-call; the EP26 page offers no copy of the CLSI EP26 standard; the TEa box keeps "Get the free PDF".
-// The cost per reportable test page (download held out of this batch) is checked only for title parity: after render,
-// document.title and the meta description equal the served ones; no download box; no em or en dash.
 import { createRequire } from "node:module";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
@@ -66,14 +64,25 @@ const PAGES = [
     label: "Excel log",
     below: (p) => p.getByText("Key Takeaways", { exact: true }),
   },
+  {
+    key: "cprt",
+    path: "/resources/cost-per-reportable-test-four-layer-framework",
+    title: "Cost Per Reportable Test: The Four-Layer CPRT Framework",
+    desc: "Calculate your true cost per reportable test with a four-layer model: reagents, labor, equipment, and overhead, built on CLSI GP11-A. Free PDF of the framework.",
+    published: "2026-05-28",
+    source: "upgrade-cprt-framework",
+    asset: "/cost-per-reportable-test-framework.pdf",
+    assetName: "Cost-Per-Reportable-Test-Framework.pdf",
+    type: "application/pdf",
+    boxTitle: "Download the four-layer CPRT framework (PDF)",
+    boxDesc: "The full cost-per-reportable-test framework, layer by layer, in a printable PDF for budget and capital meetings. Free.",
+    button: "Get the free PDF",
+    label: "PDF",
+    // No Key Takeaways on this page: the box opens the body, above the lede.
+    below: (p) => p.getByText("In twenty-three years of clinical laboratory work", { exact: false }),
+    belowName: "the lede",
+  },
 ];
-// The CPRT download is held out of this batch (coordinator 2026-11-09: its PDF is being rebuilt). The page keeps only the
-// title-parity fix, so it is checked for that, for having no download box, and for no em or en dash.
-const CPRT = {
-  path: "/resources/cost-per-reportable-test-four-layer-framework",
-  title: "Cost Per Reportable Test: The Four-Layer CPRT Framework",
-  desc: "Calculate your true cost per reportable test with a four-layer model: reagents, labor, equipment, and overhead, built on CLSI GP11-A. For budgets, capital, and contracts.",
-};
 
 let failures = 0, passes = 0;
 const check = (name, cond, detail = "") => {
@@ -141,7 +150,7 @@ for (const P of PAGES) {
   const h1Box = await page.locator("h1").first().boundingBox();
   const uBox = await box.boundingBox();
   const belowBox = await P.below(page).first().boundingBox();
-  check(`${P.key} 3g. box sits under the header and above Key Takeaways`, !!h1Box && !!uBox && !!belowBox && h1Box.y + h1Box.height <= uBox.y && uBox.y + uBox.height <= belowBox.y, JSON.stringify({ h1: h1Box && Math.round(h1Box.y + h1Box.height), box: uBox && [Math.round(uBox.y), Math.round(uBox.y + uBox.height)], next: belowBox && Math.round(belowBox.y) }));
+  check(`${P.key} 3g. box sits under the header and above ${P.belowName || "Key Takeaways"}`, !!h1Box && !!uBox && !!belowBox && h1Box.y + h1Box.height <= uBox.y && uBox.y + uBox.height <= belowBox.y, JSON.stringify({ h1: h1Box && Math.round(h1Box.y + h1Box.height), box: uBox && [Math.round(uBox.y), Math.round(uBox.y + uBox.height)], next: belowBox && Math.round(belowBox.y) }));
   // Hidden field
   const hp = box.locator('form input[name="website"]');
   const hpWrap = box.locator('form [data-testid="newsletter-honeypot"]');
@@ -277,33 +286,6 @@ for (const P of PAGES) {
     shots.push(pShot);
   }
   await pctx.close();
-}
-
-// Cost per reportable test: title parity only, no download box
-{
-  console.log(`\n=== cprt  ${CPRT.path}`);
-  const res = await fetch(`${BASE}${CPRT.path}`);
-  const raw = await res.text();
-  const servedTitle = unesc((raw.match(/<title>([^<]*)<\/title>/) || [])[1] || "");
-  const servedDesc = unesc((raw.match(/<meta[^>]+name="description"[^>]+content="([^"]*)"/i) || [])[1] || "");
-  check("cprt 1a. page answers 200", res.status === 200, String(res.status));
-  check("cprt 1b. served title and description are the server map's (origin/main)", servedTitle === CPRT.title && servedDesc === CPRT.desc, `${servedTitle} | ${servedDesc}`);
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
-  const page = await ctx.newPage();
-  const errors = [];
-  page.on("pageerror", (e) => errors.push(String(e)));
-  await page.goto(`${BASE}${CPRT.path}`, { waitUntil: "networkidle" });
-  check("cprt 2a. after render, document.title equals the served <title>", (await page.title()) === servedTitle, await page.title());
-  const liveDesc = await page.locator('meta[name="description"]').getAttribute("content");
-  check("cprt 2b. after render, the meta description equals the served one", liveDesc === servedDesc, liveDesc);
-  check("cprt 2c. no download box on the page", (await page.locator('[data-testid^="content-upgrade"]').count()) === 0 && (await page.locator('a[href$=".pdf"]').count()) === 0);
-  const body = await page.locator("body").innerText();
-  check("cprt 2d. no em or en dash on the page", !/[—–]/.test(body), (body.match(/.{0,40}[—–].{0,40}/) || [""])[0]);
-  check("cprt 2e. no page errors", errors.length === 0, errors.slice(0, 2).join(" | "));
-  const shot = path.join(OUT, "cprt-light-top.png");
-  await page.screenshot({ path: shot, clip: { x: 0, y: 0, width: 1280, height: 900 } });
-  shots.push(shot);
-  await ctx.close();
 }
 
 // The TEa box, which shares the component, still says PDF
