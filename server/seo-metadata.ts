@@ -498,10 +498,10 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
   },
   "/resources/veritacheck-vs-ep-evaluator": {
     title: "VeritaCheck® vs EP Evaluator: CLIA Verification Compared",
-    description: "How VeritaCheck and EP Evaluator compare for CLIA performance verification: statistical study coverage, 42 CFR citation, whole-menu coverage, reporting, and pricing. An honest side-by-side from a former Joint Commission surveyor.",
+    description: "How VeritaCheck® and EP Evaluator compare for CLIA performance verification: statistical study coverage, 42 CFR citation, whole-menu coverage, reporting, and pricing. An honest side-by-side from a former Joint Commission surveyor.",
     jsonLd: articleJsonLd({
       headline: "VeritaCheck vs EP Evaluator: CLIA Verification Compared",
-      description: "How VeritaCheck and EP Evaluator compare for CLIA performance verification: statistical study coverage, 42 CFR citation, whole-menu coverage, reporting, and pricing. An honest side-by-side from a former Joint Commission surveyor.",
+      description: "How VeritaCheck® and EP Evaluator compare for CLIA performance verification: statistical study coverage, 42 CFR citation, whole-menu coverage, reporting, and pricing. An honest side-by-side from a former Joint Commission surveyor.",
       articleBody: "EP Evaluator, by Data Innovations, is the long-established statistical engine many laboratories use for performance verification. VeritaCheck is the verification module inside VeritaAssure. Both run the CLSI studies a CLIA laboratory needs, calibration verification and linearity, precision, and method comparison, and both evaluate results against total allowable error and CLIA proficiency testing limits. They differ in what happens around the statistics. EP Evaluator has the broader pure-statistics library, roughly thirty modules, and goes deeper on advanced statistics than VeritaCheck's fourteen study types. VeritaCheck is built around the survey: it sits on the VeritaMap whole-lab menu and reports, per analyte and instrument, what is covered, what needs review, what is missing, and what is exempt; EP Evaluator's public materials show no test-menu coverage view. Each VeritaCheck study produces a report that states the regulatory determination, cites the exact 42 CFR section inline, and carries a laboratory director or designee signature block on the results page. VeritaCheck is included in the Clinic, Community, and Hospital plans at published prices; EP Evaluator is sold by subscription, and its product page lists no price. Sections: what they share; where EP Evaluator is stronger; where VeritaCheck is different; comparison; which to choose; frequently asked questions.",
       path: "/resources/veritacheck-vs-ep-evaluator",
       datePublished: "2026-10-06",
@@ -593,7 +593,7 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
     description: "How VeritaAssure\u00AE protects your laboratory data: hosting, encryption, multi-lab isolation, PHI-free design, subprocessors, and HIPAA BAA availability.",
   },
   "/book/scoping-call": {
-    title: "Book a Scoping Call | Veritas Lab Services",
+    title: "Book a 50-Minute Scoping Call | Veritas Lab Services",
     description: "Schedule a no-cost 50-minute scoping call with Michael Veri to confirm engagement fit, scope, and price before any paper changes hands.",
   },
   "/founding-labs": {
@@ -605,12 +605,12 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
     description: "Apply to the VeritaAssure\u00AE Founding Lab Program. Locked rate, annual at-will mutual renewal, priority support Year 1, and named recognition.",
   },
   "/demo/cprt": {
-    title: "VeritaOps\u2122 CPRT Demo | Cost Per Reportable Test",
+    title: "VeritaOps\u2122 CPRT Demo: Cost Per Reportable Test",
     description: "Interactive demo of the CPRT (Cost-Per-Reportable-Test) four-layer framework built on CLSI GP11-A. Lab director and CFO perspective in one workspace.",
   },
   "/demo/qc": {
-    title: "VeritaQC\u2122 Demo | Westgard QC + Monthly Attestation",
-    description: "See the VeritaQC\u2122 demo. Westgard QC rules, monthly attestation, daily review queue, and director sign-off built for clinical laboratories.",
+    title: "VeritaQC\u2122 Demo: Westgard QC + Monthly Attestation",
+    description: "Walkthrough of VeritaQC\u2122: daily QC entry, Westgard rule evaluation, corrective action capture, and monthly review attestation. Phase 1 preview.",
   },
   "/resources/manual-logs-why-most-labs-should-stop": {
     title: "Manual Logs: Why Most Labs Should Stop | Veritas Lab Services",

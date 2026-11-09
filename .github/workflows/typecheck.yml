@@ -44,5 +44,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Each page's useSEO title and description must equal its server/seo-metadata.ts entry, or the rendered page
+      # (what Google indexes) overwrites the served one (SEO handoff 2026-11-09). Reads files only; no network.
+      - name: SEO title parity (useSEO vs seo-metadata.ts)
+        run: node scripts/verify-seo-title-parity.mjs
+
       - name: Run tsc --noEmit
         run: npx tsc --noEmit

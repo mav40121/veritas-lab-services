@@ -36,8 +36,8 @@ function FormulaBox({ title, formula, example }: { title: string; formula: strin
 
 export default function ArticleInventoryManagementPage() {
   useSEO({
-    title: "Laboratory Inventory Management: A Practical Guide for Lab Directors | Veritas Lab Services",
-    description: "How to apply reorder point discipline to clinical lab inventory. Covers burn rate, lead time, safety stock, standing orders, and the formulas that prevent stockouts without overspending.",
+    title: "Laboratory Inventory Management Best Practices | Veritas Lab Services",
+    description: "Laboratory inventory management guide covering reagent tracking, expiration monitoring, and compliance documentation for CLIA and accreditation surveys.",
   });
 
   return (

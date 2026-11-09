@@ -212,7 +212,7 @@ for (const P of PAGES) {
     check("mock 4g. the new block has the same box classes as the existing call to action", (await cta.getAttribute("class")) === (await existing.getAttribute("class")), await cta.getAttribute("class"));
     const served = await fetch(`${BASE}/book/scoping-call`);
     const servedHtml = await served.text();
-    check("mock 4e. /book/scoping-call is a live route (200, its own title)", served.status === 200 && /<title>Book a Scoping Call/.test(servedHtml), (servedHtml.match(/<title>[^<]*/) || [""])[0]);
+    check("mock 4e. /book/scoping-call is a live route (200, its own title)", served.status === 200 && /<title>Book a [^<]*Scoping Call/.test(servedHtml), (servedHtml.match(/<title>[^<]*/) || [""])[0]);
     // Follow the link in the browser. The scheduling API is blocked so nothing reaches a calendar.
     const nav = await ctx.newPage();
     await nav.route("**/api/scheduling/**", (r) => r.abort());

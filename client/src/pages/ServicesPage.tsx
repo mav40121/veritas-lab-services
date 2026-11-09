@@ -168,7 +168,7 @@ export default function ServicesPage() {
     title:
       "Services | Veritas Lab Services Laboratory Consulting",
     description:
-      "Laboratory consulting led by Michael Veri, MS, MBA, MLS(ASCP), CPHQ, former TJC Laboratory Surveyor with 200+ surveys conducted nationally. Mock inspections, productivity analysis, CLIA director coverage, and leadership coaching.",
+      "Laboratory consulting led by Michael Veri, MS, MBA, MLS(ASCP), CPHQ, a former TJC Laboratory Surveyor. Mock inspections, productivity analysis, director coverage, and leadership coaching.",
   });
   return (
     <div>
