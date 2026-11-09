@@ -6193,7 +6193,13 @@ export function buildEmployeeCompetencyRecordHTML(input: EmployeeCompetencyRecor
     .c-amber { background:#F3EAD9; color:#964219; }
     .c-teal { background:#d8eeee; color:#01696F; }
     .legend { font-size:8.3px; color:#6b6b6b; margin:6px 2px; display:grid; grid-template-columns: 1fr 1fr; gap:1px 18px; }
-    .sign { border:1.5px solid #01696F; border-radius:4px; margin-top:10px; page-break-inside:avoid; }
+    /* BUG-144 (2026-11-09): the block used to be kept whole. With 36 methods it is taller than a page, so Chrome moved all of it
+       to page 2 and page 1 printed only the header. It now starts on page 1 and breaks between lines; a line never splits, the
+       heading stays with the first lines, and the column headings repeat on the next page. */
+    .sign { border:1.5px solid #01696F; border-radius:4px; margin-top:10px; }
+    .sign .h, .sign .attest { break-after:avoid; page-break-after:avoid; }
+    .sign thead, table.m thead { display:table-header-group; }
+    .sign tr, table.m tr { break-inside:avoid; page-break-inside:avoid; }
     .sign .h { background:#01696F; color:#fff; padding:5px 10px; font-size:10px; font-weight:700; letter-spacing:.5px; }
     .sign .body { padding:8px 10px; }
     .attest { font-size:8.5px; margin:0 0 6px; }
