@@ -18262,6 +18262,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     res.json({ ok: true });
   });
 
+  // BUG-142 (2026-11-09): a scan row as stored has created_at and updated_at, and the scan page reads createdAt and updatedAt,
+  // so it showed "Invalid Date" under the scan name. Both by-id reads add the camelCase names, as the scan list already does.
+  const withScanDates = (scan: any) => ({ ...scan, createdAt: scan.created_at, updatedAt: scan.updated_at });
+
   // Lab-scoped GET scan-by-id (URL-hygiene fix 2026-05-20). The page at
   // /labs/:labId/veritascan-app/:id should 404 when the scan is not in
   // the URL's lab, instead of silently rendering a scan from a different
@@ -18273,7 +18277,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       "SELECT * FROM veritascan_scans WHERE id = ? AND lab_id = ?"
     ).get(req.params.id, req.scope.labId);
     if (!scan) return res.status(404).json({ error: "Scan not found" });
-    res.json(scan);
+    res.json(withScanDates(scan));
   });
 
   // Lab-scoped scan items list.
@@ -18519,7 +18523,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan\u00AE subscription required" });
     const scan = userCanAccessScan(req.params.id, req);
     if (!scan) return res.status(404).json({ error: "Scan not found" });
-    res.json(scan);
+    res.json(withScanDates(scan));
   });
 
   // Get all items for a scan
