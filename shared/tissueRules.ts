@@ -16,17 +16,19 @@ export type TissueState = (typeof TISSUE_STATES)[number];
 export const OTHER_DISPOSITIONS = ["wasted", "returned", "expired"] as const;
 export type OtherDisposition = (typeof OTHER_DISPOSITIONS)[number];
 
+// "returned" is the stored value of the terminal disposition: the unit went back to the supplier. It reads "Returned to supplier"
+// so nobody takes it for a unit that came back to the blood bank unused, which is its own step ("returned_unused" below).
 export const TISSUE_STATE_LABELS: Record<TissueState, string> = {
   received_mm: "Received in Materials Management",
   stored: "In blood bank storage",
   issued: "Issued",
   implanted: "Implanted",
   wasted: "Wasted",
-  returned: "Returned",
+  returned: "Returned to supplier",
   expired: "Expired",
 };
 
-export const OTHER_DISPOSITION_LABELS: Record<OtherDisposition, string> = { wasted: "Wasted", returned: "Returned", expired: "Expired" };
+export const OTHER_DISPOSITION_LABELS: Record<OtherDisposition, string> = { wasted: "Wasted", returned: "Returned to supplier", expired: "Expired" };
 
 /** Every unit ends in exactly one of these. It's one column, so a unit can't hold two. */
 export function isFinalState(state: string | null | undefined): boolean {
@@ -143,6 +145,58 @@ export function issueRefusals(unit: { state?: string | null; expiration_date?: s
     else if (v === 0) out.push(`${label} was answered no, so the unit can't be issued.`);
   }
   return out;
+}
+
+// ── Returned unused: issued, not implanted, back in blood bank storage (Michael 2026-11-09) ──────────────
+/** The issue fields a return to storage moves off the row into its event, so the unit can be issued again. */
+export const ISSUE_ROW_FIELDS = ["issued_date", "issued_time", "requesting_physician", "issued_to", "issued_by_tech", "delivered_to", "readback_id_ok", "readback_expiration_ok", "readback_integrity_ok"] as const;
+
+export const RETURN_UNUSED_STORAGE_LABEL = "Storage conditions maintained while out of blood bank?";
+export const RETURN_UNUSED_PACKAGE_LABEL = "Package integrity acceptable on return?";
+
+/**
+ * Why a return can't put the unit back on the shelf, or null. A unit goes back to stock only when both checks are yes; a no
+ * means the tissue can't be used, so what happened to it is recorded as an Other disposition instead.
+ */
+export function returnUnusedRefusal(storageOk: unknown, packageOk: unknown): string | null {
+  const s = yesNo(storageOk);
+  const p = yesNo(packageOk);
+  if (s !== 0 && p !== 0) return null;
+  const which = s === 0 && p === 0 ? "Storage conditions and package integrity were" : s === 0 ? "Storage conditions maintained was" : "Package integrity on return was";
+  return `${which} answered no, so this unit can't go back into storage. Record what happened as an Other disposition (for example, wasted) instead.`;
+}
+
+// ── Which steps still stand on a unit, from its event chain ─────────────────────
+/** Events that record a step. Corrections and the usage card change values, not where the unit is. */
+export const TISSUE_STEP_EVENTS = ["received_mm", "received_bb", "issued", "implanted", "other_disposition", "returned_unused"] as const;
+
+export interface TissueEventLite { id: number; event_type: string; detail_json?: string | null }
+
+/**
+ * The steps still standing on a unit, oldest first: every step event less the ones an undo took back. An undo names the step it
+ * took back (detail.undid_event_id); one recorded before that field existed took back the latest standing step, which is what
+ * every undo did then. So an undone return reads as gone and can't be undone a second time.
+ */
+export function liveSteps<T extends TissueEventLite>(events: T[]): T[] {
+  const steps = new Set<string>(TISSUE_STEP_EVENTS);
+  const stack: T[] = [];
+  for (const e of [...events].sort((a, b) => a.id - b.id)) {
+    if (steps.has(e.event_type)) { stack.push(e); continue; }
+    if (e.event_type !== "undone") continue;
+    let undid: number | null = null;
+    try { undid = Number(JSON.parse(e.detail_json || "{}")?.undid_event_id) || null; } catch { /* no detail */ }
+    if (undid == null) { stack.pop(); continue; }
+    const i = stack.findIndex((s) => s.id === undid);
+    if (i >= 0) stack.splice(i, 1);
+  }
+  return stack;
+}
+
+/** The latest return to storage that still stands, or null. */
+export function lastLiveReturn<T extends TissueEventLite>(events: T[]): T | null {
+  const live = liveSteps(events);
+  for (let i = live.length - 1; i >= 0; i--) if (live[i].event_type === "returned_unused") return live[i];
+  return null;
 }
 
 // ── How a unit reads on the log ──────────────────────────────────────────────

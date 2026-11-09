@@ -24,8 +24,8 @@ import { labToday } from "./dateLocal";
 import { storePdfToken } from "./pdfTokens";
 import { generateTissueLogExcel, generateTissueLogPDF } from "./tissueLogExport";
 import {
-  OTHER_DISPOSITIONS, TISSUE_STATE_LABELS, correctableFields, findTissuePhi, isBefore, isFinalState, isHhMm, isYmd,
-  issueRefusals, tissueFlags, tissueIdKey, tissuePhiMessage, yesNo, type TissueState,
+  ISSUE_ROW_FIELDS, OTHER_DISPOSITIONS, TISSUE_STATE_LABELS, correctableFields, findTissuePhi, isBefore, isFinalState, isHhMm, isYmd,
+  issueRefusals, lastLiveReturn, liveSteps, returnUnusedRefusal, tissueFlags, tissueIdKey, tissuePhiMessage, yesNo, type TissueState,
 } from "../shared/tissueRules";
 
 const sqliteOf = () => (db as any).$client;
@@ -138,6 +138,33 @@ function usageCardFields(b: any, implantedDate: string | null, today: string): {
 }
 
 const fetchUnit = (sqlite: any, id: number, labId: number) => sqlite.prepare("SELECT * FROM tissue_units WHERE id = ? AND lab_id = ?").get(id, labId) as any;
+/** A unit's event chain, oldest first: what liveSteps reads to know which steps still stand. */
+const unitEvents = (sqlite: any, unitId: number) =>
+  sqlite.prepare("SELECT id, event_type, event_date, event_time, performed_by, detail_json FROM tissue_unit_events WHERE unit_id = ? ORDER BY id ASC").all(unitId) as any[];
+const parseDetail = (e: any): any => { try { return JSON.parse(e?.detail_json || "{}") || {}; } catch { return {}; } };
+
+/** Every return to storage still standing on each unit, oldest first, for the log's workbook and PDF. Only units that have one. */
+export function returnsUnusedByUnit(sqlite: any, labId: number): Map<number, any[]> {
+  const rows = sqlite.prepare(
+    `SELECT id, unit_id, event_type, event_date, event_time, performed_by, detail_json FROM tissue_unit_events
+      WHERE unit_id IN (SELECT DISTINCT unit_id FROM tissue_unit_events WHERE lab_id = ? AND event_type = 'returned_unused') ORDER BY id ASC`
+  ).all(labId) as any[];
+  const byUnit = new Map<number, any[]>();
+  for (const r of rows) { const list = byUnit.get(r.unit_id) || []; list.push(r); byUnit.set(r.unit_id, list); }
+  const out = new Map<number, any[]>();
+  for (const [unitId, events] of Array.from(byUnit.entries())) {
+    const returns = liveSteps(events).filter((e) => e.event_type === "returned_unused").map((e) => {
+      const d = parseDetail(e);
+      return {
+        returned_date: e.event_date, returned_time: e.event_time, returned_by: d.returned_by ?? null, received_back_by: d.received_back_by ?? e.performed_by ?? null,
+        storage_ok: d.storage_ok ?? null, package_ok_on_return: d.package_ok_on_return ?? null,
+        issued_date: d.cleared_issue?.issued_date ?? null, issued_time: d.cleared_issue?.issued_time ?? null, delivered_to: d.cleared_issue?.delivered_to ?? null,
+      };
+    });
+    if (returns.length) out.set(unitId, returns);
+  }
+  return out;
+}
 const finalRefusal = (u: any) => `This unit already has its final disposition (${TISSUE_STATE_LABELS[u.state as TissueState] || u.state}). Use Undo last step if that was a mistake.`;
 
 /** Find this lab's vendor by name, ignoring case and outer spaces, or add it. Runs inside the caller's transaction when there is one. */
@@ -346,6 +373,9 @@ export function registerTissueRoutes(
   const logContext = (req: any, filter: string) => {
     const lab = sqliteOf().prepare("SELECT lab_name, clia_number FROM labs WHERE id = ?").get(req.scope.labId) as any;
     const data = listUnits(req.scope.labId, filter);
+    // A return to storage moves the issue off the row, so the log names it from the unit's history.
+    const returns = returnsUnusedByUnit(sqliteOf(), req.scope.labId);
+    data.rows = data.rows.map((u: any) => (returns.has(u.id) ? { ...u, returns_unused: returns.get(u.id) } : u));
     return { data, ctx: { labName: lab?.lab_name ?? null, cliaNumber: lab?.clia_number ?? null, today: data.today, filter: data.filter } };
   };
 
@@ -461,6 +491,9 @@ export function registerTissueRoutes(
     if (!tech) return res.status(400).json({ error: "Enter the tech issuing." });
     if (!deliveredTo) return res.status(400).json({ error: "Enter where it was delivered: the room or department." });
     if (isBefore(b.issued_date, b.issued_time, u.received_bb_date, u.received_bb_time)) return res.status(400).json({ error: "The issue can't be earlier than the blood bank receipt." });
+    // Issued again after a return to storage: not before it came back.
+    const back = lastLiveReturn(unitEvents(sqlite, u.id));
+    if (back && isBefore(b.issued_date, b.issued_time, back.event_date, back.event_time)) return res.status(400).json({ error: "The issue can't be earlier than the unit's return to blood bank storage." });
     sqlite.transaction(() => {
       applySet(sqlite, u.id, {
         issued_date: b.issued_date, issued_time: b.issued_time, requesting_physician: physician, issued_to: issuedTo, issued_by_tech: tech, delivered_to: deliveredTo,
@@ -516,13 +549,57 @@ export function registerTissueRoutes(
     res.json(decorateTissueUnit(fetchUnit(sqlite, u.id, u.lab_id), today));
   });
 
-  // ── Other disposition: wasted, returned or expired ─────────────────────
+  // ── Returned unused (Michael 2026-11-09): issued, not implanted, and back in blood bank storage, so it can be issued again. ──
+  // Both checks must be yes; a no is a unit that can't go back on the shelf, recorded as an Other disposition instead. The issue
+  // fields move off the row into the event (the issue route and issueRefusals then take a second issue), and the receipt stays.
+  // A unit past its expiration can still be returned: that's a fact, and the issue route then refuses to issue it again.
+  app.post(`${BASE}/units/:id/return-unused`, ...record, (req: any, res: any) => {
+    const sqlite = sqliteOf();
+    const u = openUnit(req, res);
+    if (!u) return;
+    if (u.state !== "issued") return res.status(409).json({ error: "Only an issued unit can be returned to storage unused. This unit isn't out on issue.", code: "NOT_ISSUED" });
+    const b = req.body || {};
+    const today = labToday();
+    const storageOk = yesNo(b.storage_ok);
+    const packageOk = yesNo(b.package_ok_on_return);
+    if (storageOk === null) return res.status(400).json({ error: "Storage conditions maintained while out of blood bank: answer yes or no." });
+    if (packageOk === null) return res.status(400).json({ error: "Package integrity acceptable on return: answer yes or no." });
+    const refusal = returnUnusedRefusal(storageOk, packageOk);
+    if (refusal) return res.status(400).json({ error: refusal, code: "RETURN_NOT_ACCEPTABLE" });
+    const timeErr = stepTimeError(b.returned_date, b.returned_time, "Returned to blood bank", today);
+    if (timeErr) return res.status(400).json({ error: timeErr });
+    const returnedBy = cleanStr(b.returned_by);
+    const receivedBackBy = cleanStr(b.received_back_by);
+    if (!returnedBy) return res.status(400).json({ error: "Enter who brought it back." });
+    if (!receivedBackBy) return res.status(400).json({ error: "Enter who received it back in the blood bank." });
+    if (isBefore(b.returned_date, b.returned_time, u.issued_date, u.issued_time)) return res.status(400).json({ error: "The return can't be earlier than the issue." });
+    const storage = storageFields(sqlite, u.lab_id, b);
+    if (storage.error) return res.status(400).json({ error: storage.error });
+    const note = cleanStr(b.note, 1000);
+    const clearedIssue = Object.fromEntries(ISSUE_ROW_FIELDS.map((f) => [f, u[f] ?? null]));
+    const storageBefore = { storage_unit_id: u.storage_unit_id ?? null, storage_location: u.storage_location ?? null };
+    sqlite.transaction(() => {
+      applySet(sqlite, u.id, { ...Object.fromEntries(ISSUE_ROW_FIELDS.map((f) => [f, null])), ...storage.set, state: "stored" });
+      addEvent(sqlite, req, u.id, u.lab_id, "returned_unused", {
+        date: b.returned_date, time: b.returned_time, by: receivedBackBy, checks: { storage_ok: storageOk, package_ok_on_return: packageOk },
+        detail: {
+          cleared_issue: clearedIssue, storage_before: storageBefore,
+          returned_date: b.returned_date, returned_time: b.returned_time, returned_by: returnedBy, received_back_by: receivedBackBy,
+          storage_ok: storageOk, package_ok_on_return: packageOk, ...storage.set, note,
+        },
+      });
+    })();
+    audit(req, u.id, `Tissue returned unused to blood bank: ID ${u.source_id}`, { returned_date: b.returned_date, returned_time: b.returned_time, ...storage.set }, { state: "issued", ...clearedIssue });
+    res.json(decorateTissueUnit(fetchUnit(sqlite, u.id, u.lab_id), today));
+  });
+
+  // ── Other disposition: wasted, returned to supplier or expired ─────────
   app.post(`${BASE}/units/:id/dispose`, ...record, (req: any, res: any) => {
     const sqlite = sqliteOf();
     const u = openUnit(req, res);
     if (!u) return;
     const b = req.body || {};
-    if (!(OTHER_DISPOSITIONS as readonly string[]).includes(b.kind)) return res.status(400).json({ error: "Choose wasted, returned or expired." });
+    if (!(OTHER_DISPOSITIONS as readonly string[]).includes(b.kind)) return res.status(400).json({ error: "Choose wasted, returned to supplier or expired." });
     const today = labToday();
     const timeErr = stepTimeError(b.disposition_date, b.disposition_time, "Disposition", today);
     if (timeErr) return res.status(400).json({ error: timeErr });
@@ -530,8 +607,10 @@ export function registerTissueRoutes(
     const by = cleanStr(b.disposition_by);
     if (!description) return res.status(400).json({ error: "Describe the disposition." });
     if (!by) return res.status(400).json({ error: "Enter who performed it." });
-    const lastDate = u.issued_date || u.received_bb_date || u.received_mm_date;
-    const lastTime = u.issued_date ? u.issued_time : u.received_bb_date ? u.received_bb_time : u.received_mm_time;
+    // Back in storage after a return: the return is the step before this one.
+    const back = u.issued_date ? null : lastLiveReturn(unitEvents(sqlite, u.id));
+    const lastDate = u.issued_date || back?.event_date || u.received_bb_date || u.received_mm_date;
+    const lastTime = u.issued_date ? u.issued_time : back ? back.event_time : u.received_bb_date ? u.received_bb_time : u.received_mm_time;
     if (isBefore(b.disposition_date, b.disposition_time, lastDate, lastTime)) return res.status(400).json({ error: "The disposition can't be earlier than the step before it." });
     sqlite.transaction(() => {
       applySet(sqlite, u.id, { disposition_date: b.disposition_date, disposition_time: b.disposition_time, disposition_description: description, disposition_by: by, state: b.kind });
@@ -594,8 +673,10 @@ export function registerTissueRoutes(
     if (merged.issued_date && merged.issued_date > merged.expiration_date) return res.status(409).json({ error: `That would put the issue after the unit's expiration on ${merged.expiration_date}. An expired unit can't be issued.`, code: "ISSUE_REFUSED" });
     if ((merged.transport_temp_ok === 0 || merged.package_ok === 0) && !merged.transport_action) return res.status(400).json({ error: "A no at receipt needs the action taken." });
     if (merged.received_bb_date && !merged.storage_unit_id && !merged.storage_location) return res.status(400).json({ error: "Say where the unit is stored: pick a storage unit or enter a location." });
+    // A return to storage that still stands sits between the blood bank receipt and any issue after it.
+    const back = lastLiveReturn(unitEvents(sqlite, u.id));
     const order: [string | null, string | null][] = [
-      [merged.received_mm_date, merged.received_mm_time], [merged.received_bb_date, merged.received_bb_time],
+      [merged.received_mm_date, merged.received_mm_time], [merged.received_bb_date, merged.received_bb_time], [back?.event_date ?? null, back?.event_time ?? null],
       [merged.issued_date, merged.issued_time], [merged.implanted_date ?? merged.disposition_date, merged.implanted_date ? merged.implanted_time : merged.disposition_time],
     ];
     const steps = order.filter(([d]) => !!d);
@@ -616,7 +697,7 @@ export function registerTissueRoutes(
   // ── Undo last step: a step recorded by mistake, with a required reason. The history keeps what was cleared. ──────
   const UNDO: Record<string, string[]> = {
     stored: ["received_bb_date", "received_bb_time", "received_bb_by", "transport_temp_ok", "transport_action", "package_ok", "storage_unit_id", "storage_location"],
-    issued: ["issued_date", "issued_time", "requesting_physician", "issued_to", "issued_by_tech", "delivered_to", "readback_id_ok", "readback_expiration_ok", "readback_integrity_ok"],
+    issued: [...ISSUE_ROW_FIELDS],
     implanted: ["implanted_date", "implanted_time", "implanted_by", "reconstituted_time", "reconstituted_by", "reconstitution_solution", "reconstitution_lot", "reconstitution_expiration", "usage_card_returned", "usage_card_returned_on"],
     disposition: ["disposition_date", "disposition_time", "disposition_description", "disposition_by"],
   };
@@ -628,14 +709,32 @@ export function registerTissueRoutes(
     const reason = cleanStr(req.body?.reason, 500);
     if (!reason) return res.status(400).json({ error: "Undoing a step needs a reason." });
     if (u.state === "received_mm") return res.status(409).json({ error: "The first receipt can't be undone. Correct it, or record what happened to the unit as another disposition.", code: "NOTHING_TO_UNDO" });
+    const today = labToday();
+    // The step being taken back is the latest one still standing in the event chain (an undone step is gone).
+    const steps = liveSteps(unitEvents(sqlite, u.id));
+    const top = steps[steps.length - 1] || null;
+    // A return to storage: back out on issue, with the issue fields and the storage it had before, from the return's own event.
+    // Without this, undo on a stored unit would clear its blood bank receipt.
+    if (u.state === "stored" && top?.event_type === "returned_unused") {
+      const d = parseDetail(top);
+      if (!d.cleared_issue?.issued_date) return res.status(409).json({ error: "This return's record doesn't hold the issue it came back from, so it can't be undone here. Correct the record instead.", code: "RETURN_DETAIL_MISSING" });
+      const restored: Record<string, unknown> = Object.fromEntries(ISSUE_ROW_FIELDS.map((f) => [f, d.cleared_issue[f] ?? null]));
+      if (d.storage_before) Object.assign(restored, { storage_unit_id: d.storage_before.storage_unit_id ?? null, storage_location: d.storage_before.storage_location ?? null });
+      const cleared = { storage_unit_id: u.storage_unit_id ?? null, storage_location: u.storage_location ?? null };
+      sqlite.transaction(() => {
+        applySet(sqlite, u.id, { ...restored, state: "issued" });
+        addEvent(sqlite, req, u.id, u.lab_id, "undone", { detail: { reason, from_state: u.state, to_state: "issued", undid_event_id: top.id, undid: "returned_unused", cleared, restored } });
+      })();
+      audit(req, u.id, `Tissue step undone: ID ${u.source_id}`, { reason, from_state: u.state, to_state: "issued", undid: "returned_unused" });
+      return res.json(decorateTissueUnit(fetchUnit(sqlite, u.id, u.lab_id), today));
+    }
     const isOther = u.state === "wasted" || u.state === "returned" || u.state === "expired";
     const fields = isOther ? UNDO.disposition : UNDO[u.state];
     const back = u.state === "stored" ? "received_mm" : u.state === "issued" ? "stored" : u.state === "implanted" ? "issued" : u.issued_date ? "issued" : u.received_bb_date ? "stored" : "received_mm";
     const cleared = Object.fromEntries(fields.map((f) => [f, u[f] ?? null]));
-    const today = labToday();
     sqlite.transaction(() => {
       applySet(sqlite, u.id, { ...Object.fromEntries(fields.map((f) => [f, null])), state: back });
-      addEvent(sqlite, req, u.id, u.lab_id, "undone", { detail: { reason, from_state: u.state, to_state: back, cleared } });
+      addEvent(sqlite, req, u.id, u.lab_id, "undone", { detail: { reason, from_state: u.state, to_state: back, cleared, undid_event_id: top?.id ?? null } });
     })();
     audit(req, u.id, `Tissue step undone: ID ${u.source_id}`, { reason, from_state: u.state, to_state: back });
     res.json(decorateTissueUnit(fetchUnit(sqlite, u.id, u.lab_id), today));

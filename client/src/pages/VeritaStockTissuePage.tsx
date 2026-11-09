@@ -23,8 +23,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { ArrowLeft, Download, FileText, Plus, Search, ShieldCheck, Thermometer, Undo2 } from "lucide-react";
 import {
-  OTHER_DISPOSITION_LABELS, TISSUE_CFR_CODE_CITATION, TISSUE_CFR_CODE_QUOTE, TISSUE_FIELD_LABELS, TISSUE_NO_PHI_NOTICE,
-  type OtherDisposition,
+  OTHER_DISPOSITION_LABELS, RETURN_UNUSED_PACKAGE_LABEL, RETURN_UNUSED_STORAGE_LABEL, TISSUE_CFR_CODE_CITATION, TISSUE_CFR_CODE_QUOTE, TISSUE_FIELD_LABELS,
+  TISSUE_NO_PHI_NOTICE, returnUnusedRefusal, type OtherDisposition,
 } from "@shared/tissueRules";
 
 const localToday = () => new Date().toLocaleDateString("en-CA");
@@ -264,10 +264,17 @@ function BbFields({ labId, v, set }: { labId: number; v: Record<string, string>;
         <YesNo label="Package integrity acceptable?" value={v.package_ok} onChange={(x) => set("package_ok", x)} testId="package-ok" />
       </div>
       <Field label="Action taken (needed on any no)"><Textarea rows={2} value={v.transport_action} onChange={(e) => set("transport_action", e.target.value)} data-testid="transport-action" /><NoPhiNotice /></Field>
-      <div className="grid sm:grid-cols-2 gap-3">
-        <Field label="Storage unit" hint="From VeritaMaintain temperature logs."><select className={fieldClass} value={v.storage_unit_id} onChange={(e) => set("storage_unit_id", e.target.value)} data-testid="storage-unit"><option value="">Not on the temperature log</option>{units.map((u) => <option key={u.id} value={u.id}>{u.name}{u.location ? `, ${u.location}` : ""}</option>)}</select></Field>
-        <Field label="Location or shelf"><Input value={v.storage_location} onChange={(e) => set("storage_location", e.target.value)} data-testid="storage-location" /></Field>
-      </div>
+      <StorageFields units={units} v={v} set={set} />
+    </div>
+  );
+}
+
+// Where a unit is stored: the blood bank receipt and a return to storage both set it, with the same check on the server.
+function StorageFields({ units, v, set, prefix = "" }: { units: any[]; v: Record<string, string>; set: (k: string, val: string) => void; prefix?: string }) {
+  return (
+    <div className="grid sm:grid-cols-2 gap-3">
+      <Field label="Storage unit" hint="From VeritaMaintain temperature logs."><select className={fieldClass} value={v.storage_unit_id} onChange={(e) => set("storage_unit_id", e.target.value)} data-testid={`${prefix}storage-unit`}><option value="">Not on the temperature log</option>{units.map((u) => <option key={u.id} value={u.id}>{u.name}{u.location ? `, ${u.location}` : ""}</option>)}</select></Field>
+      <Field label="Location or shelf"><Input value={v.storage_location} onChange={(e) => set("storage_location", e.target.value)} data-testid={`${prefix}storage-location`} /></Field>
     </div>
   );
 }
@@ -399,7 +406,12 @@ function UnitView({ base, labId, unitId, canEdit }: { base: string; labId: numbe
       {u.state === "stored" && <IssueStep base={base} u={u} done={done} />}
       {u.state === "issued" && <ImplantStep base={base} u={u} done={done} />}
       {u.state === "implanted" && <UsageCardStep base={base} u={u} done={done} />}
-      {!final && <DisposeStep base={base} u={u} done={done} />}
+      {!final && (
+        <div className="flex flex-wrap items-start gap-2" data-testid="unit-actions">
+          {u.state === "issued" && <ReturnUnusedStep base={base} labId={labId} u={u} done={done} />}
+          <DisposeStep base={base} u={u} done={done} />
+        </div>
+      )}
       {canEdit && <CorrectionStep base={base} u={u} done={done} />}
       <History events={u.events} />
     </div>
@@ -502,14 +514,60 @@ function UsageCardStep({ base, u, done }: { base: string; u: any; done: () => vo
   );
 }
 
+// Issued, not implanted, and back in the blood bank (Michael 2026-11-09). The unit goes back into storage and can be issued again;
+// a no on either check keeps it off the shelf, so the save is held and the person is pointed to Other disposition. The server
+// re-checks all of it (server/tissue.ts return-unused).
+function ReturnUnusedStep({ base, labId, u, done }: { base: string; labId: number; u: any; done: () => void }) {
+  const units = useStorageUnits(labId);
+  const [open, setOpen] = useState(false);
+  const fresh = () => ({
+    returned_date: localToday(), returned_time: localNow(), returned_by: "", received_back_by: "", storage_ok: "", package_ok_on_return: "",
+    storage_unit_id: u.storage_unit_id ? String(u.storage_unit_id) : "", storage_location: u.storage_location || "", note: "",
+  });
+  const [v, setV] = useState<Record<string, string>>(fresh);
+  const set = (k: string, val: string) => setV((p) => ({ ...p, [k]: val }));
+  const { err, saving, post } = usePost(`${base}/units/${u.id}/return-unused`, done);
+  const refusal = returnUnusedRefusal(v.storage_ok, v.package_ok_on_return);
+  if (!open) return <Button variant="outline" size="sm" onClick={() => { setV(fresh()); setOpen(true); }} data-testid="open-return-unused">Returned unused</Button>;
+  return (
+    <Card className="w-full"><CardContent className="p-5 space-y-3" data-testid="step-return-unused">
+      <h3 className="font-semibold">Returned unused to blood bank</h3>
+      <p className="text-sm text-muted-foreground" data-testid="return-unused-help">Use this when the tissue came back to blood bank without being implanted. It goes back into storage and can be issued again. If it can't go back on the shelf, record an Other disposition instead.</p>
+      <p className={`text-sm ${u.flags.expired_on_shelf ? "text-red-700 dark:text-red-400" : "text-muted-foreground"}`} data-testid="return-unused-expiry">
+        {u.flags.expired_on_shelf ? `This unit expired on ${u.expiration_date}. It can still be returned here, but it can't be issued again.` : "A unit past its expiration date can still be returned here, but it can't be issued again."}
+      </p>
+      <p className="text-sm">Issued {dt(u.issued_date, u.issued_time)}{u.delivered_to ? ` to ${u.delivered_to}` : ""}.</p>
+      <div className="grid sm:grid-cols-2 gap-3">
+        <Field label="Date returned to blood bank"><Input type="date" value={v.returned_date} onChange={(e) => set("returned_date", e.target.value)} data-testid="return-date" /></Field>
+        <Field label="Time"><Input type="time" value={v.returned_time} onChange={(e) => set("returned_time", e.target.value)} data-testid="return-time" /></Field>
+        <Field label="Returned by" hint="Who brought it back."><Input value={v.returned_by} onChange={(e) => set("returned_by", e.target.value)} data-testid="return-by" /></Field>
+        <Field label="Received back by" hint="The blood bank tech."><Input value={v.received_back_by} onChange={(e) => set("received_back_by", e.target.value)} data-testid="return-received-by" /></Field>
+      </div>
+      <div className="grid sm:grid-cols-2 gap-3">
+        <YesNo label={RETURN_UNUSED_STORAGE_LABEL} value={v.storage_ok} onChange={(x) => set("storage_ok", x)} testId="return-storage-ok" />
+        <YesNo label={RETURN_UNUSED_PACKAGE_LABEL} value={v.package_ok_on_return} onChange={(x) => set("package_ok_on_return", x)} testId="return-package-ok" />
+      </div>
+      {refusal && <div role="alert" className="text-sm rounded-md border border-red-500/50 bg-red-500/10 text-red-800 dark:text-red-300 px-3 py-2" data-testid="return-unused-refusal">{refusal}</div>}
+      <p className="text-sm font-medium pt-1">Where it goes back</p>
+      <StorageFields units={units} v={v} set={set} prefix="return-" />
+      <Field label="Note (optional)"><Textarea rows={2} value={v.note} onChange={(e) => set("note", e.target.value)} data-testid="return-note" /><NoPhiNotice /></Field>
+      <ErrorLine text={err} />
+      <div className="flex flex-wrap gap-2">
+        <Button onClick={() => post(v)} disabled={saving || !!refusal} data-testid="save-return-unused">{saving ? "Saving..." : "Put back in storage"}</Button>
+        <Button variant="ghost" onClick={() => setOpen(false)} data-testid="cancel-return-unused">Cancel</Button>
+      </div>
+    </CardContent></Card>
+  );
+}
+
 function DisposeStep({ base, u, done }: { base: string; u: any; done: () => void }) {
   const [open, setOpen] = useState(false);
   const [v, setV] = useState<Record<string, string>>({ kind: u.flags.expired_on_shelf ? "expired" : "", disposition_date: localToday(), disposition_time: localNow(), disposition_description: "", disposition_by: "" });
   const set = (k: string, val: string) => setV((p) => ({ ...p, [k]: val }));
   const { err, saving, post } = usePost(`${base}/units/${u.id}/dispose`, done);
-  if (!open) return <Button variant="outline" size="sm" onClick={() => setOpen(true)} data-testid="open-dispose">Other disposition (wasted, returned or expired)</Button>;
+  if (!open) return <Button variant="outline" size="sm" onClick={() => setOpen(true)} data-testid="open-dispose">Other disposition (wasted, returned to supplier or expired)</Button>;
   return (
-    <Card><CardContent className="p-5 space-y-3" data-testid="step-dispose">
+    <Card className="w-full"><CardContent className="p-5 space-y-3" data-testid="step-dispose">
       <h3 className="font-semibold">Other disposition</h3>
       <div className="grid sm:grid-cols-2 gap-3">
         <Field label="Disposition"><select className={fieldClass} value={v.kind} onChange={(e) => set("kind", e.target.value)} data-testid="dispose-kind"><option value="">Choose</option>{Object.entries(OTHER_DISPOSITION_LABELS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></Field>
@@ -572,7 +630,7 @@ function CorrectionStep({ base, u, done }: { base: string; u: any; done: () => v
 
 const EVENT_LABELS: Record<string, string> = {
   received_mm: "Received in Materials Management", received_bb: "Received in blood bank", issued: "Issued", implanted: "Implanted",
-  usage_card: "Tissue usage card", other_disposition: "Other disposition", corrected: "Corrected", undone: "Step undone",
+  usage_card: "Tissue usage card", other_disposition: "Other disposition", returned_unused: "Returned unused to blood bank", corrected: "Corrected", undone: "Step undone",
 };
 
 function History({ events }: { events: any[] }) {
@@ -581,12 +639,20 @@ function History({ events }: { events: any[] }) {
       <h3 className="font-semibold mb-2">History</h3>
       <ul className="text-sm space-y-1.5" data-testid="unit-history">
         {(events || []).map((e) => {
-          let reason: string | null = null;
-          try { reason = JSON.parse(e.detail_json || "{}")?.reason ?? null; } catch { /* no detail */ }
+          let d: any = {};
+          try { d = JSON.parse(e.detail_json || "{}") || {}; } catch { /* no detail */ }
+          const reason: string | null = d.reason ?? null;
+          const label = e.event_type === "undone" && d.undid === "returned_unused" ? `Step undone (${EVENT_LABELS.returned_unused})` : EVENT_LABELS[e.event_type] || e.event_type;
           return (
-            <li key={e.id} className="break-words">
-              <span className="font-medium">{EVENT_LABELS[e.event_type] || e.event_type}</span>
-              {(e.event_date || e.performed_by) && <span>: {[dt(e.event_date, e.event_time), e.performed_by].filter(Boolean).join(", ")}</span>}
+            <li key={e.id} className="break-words" data-testid={`history-${e.event_type}`}>
+              <span className="font-medium">{label}</span>
+              {e.event_type === "returned_unused" ? (
+                <span>
+                  : {dt(e.event_date, e.event_time)}. Brought back by {d.returned_by}, received by {d.received_back_by}. Storage conditions maintained: {yn(d.storage_ok)}. Package integrity acceptable: {yn(d.package_ok_on_return)}.
+                  {d.cleared_issue?.issued_date && ` It had been issued ${dt(d.cleared_issue.issued_date, d.cleared_issue.issued_time)}${d.cleared_issue.delivered_to ? ` to ${d.cleared_issue.delivered_to}` : ""}.`}
+                  {d.note && ` Note: ${d.note}`}
+                </span>
+              ) : (e.event_date || e.performed_by) && <span>: {[dt(e.event_date, e.event_time), e.performed_by].filter(Boolean).join(", ")}</span>}
               {reason && <span>. Reason: {reason}</span>}
               <span className="text-xs text-muted-foreground"> (entered by {e.recorded_by_name || "unknown"}, {new Date(e.created_at).toLocaleString()})</span>
             </li>

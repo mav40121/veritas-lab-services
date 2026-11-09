@@ -3,7 +3,8 @@
 // eCFR's renderer API returned (https://www.ecfr.gov/api/renderer/v1/content/enhanced/2026-11-04/title-21?chapter=I&subchapter=L&part=1271&subpart=D&section=1271.290;
 // 2026-10-01 reads the same). Exits non-zero on any failure.
 import {
-  correctableFields, detectTissuePhi, findTissuePhi, isBefore, isFinalState, isHhMm, isOpenOnLog, isYmd, issueRefusals, tissueFlags, tissueIdKey, yesNo,
+  correctableFields, detectTissuePhi, findTissuePhi, isBefore, isFinalState, isHhMm, isOpenOnLog, isYmd, issueRefusals, lastLiveReturn, liveSteps, returnUnusedRefusal,
+  tissueFlags, tissueIdKey, yesNo, ISSUE_ROW_FIELDS, OTHER_DISPOSITION_LABELS, TISSUE_STATE_LABELS,
   TISSUE_CFR_CODE_CITATION, TISSUE_CFR_CODE_QUOTE, TISSUE_CFR_TRACKING_CITATION, TISSUE_CFR_TRACKING_QUOTE, TISSUE_NO_PHI_NOTICE,
 } from "../shared/tissueRules";
 
@@ -57,6 +58,31 @@ for (const k of ["readback_id", "readback_expiration", "readback_integrity"]) {
   check(`issue: ${k} unanswered is refused`, issueRefusals(stored, { ...yes, [k]: undefined }, today).length === 1);
 }
 for (const s of ["received_mm", "issued", "implanted"]) check(`issue: refused from ${s}`, issueRefusals({ ...stored, state: s }, yes, today).length === 1);
+
+// Returned unused (Michael 2026-11-09)
+check("labels: the terminal returned reads Returned to supplier, stored value unchanged", TISSUE_STATE_LABELS.returned === "Returned to supplier" && OTHER_DISPOSITION_LABELS.returned === "Returned to supplier" && isFinalState("returned"));
+check("return: both yes puts it back", returnUnusedRefusal("yes", "yes") === null && returnUnusedRefusal(1, true) === null);
+check("return: a storage no is refused, pointing to Other disposition", /Storage conditions maintained was answered no.*Other disposition/.test(returnUnusedRefusal("no", "yes") || ""));
+check("return: a package no is refused, pointing to Other disposition", /Package integrity on return was answered no.*Other disposition/.test(returnUnusedRefusal("yes", "no") || ""));
+check("return: both no names both", /Storage conditions and package integrity were answered no/.test(returnUnusedRefusal("no", "no") || ""));
+check("return: unanswered isn't a refusal here (the route asks for it)", returnUnusedRefusal("", "") === null);
+check("return: the issue fields it moves off the row include the read-backs", ISSUE_ROW_FIELDS.length === 9 && ISSUE_ROW_FIELDS.includes("readback_integrity_ok") && ISSUE_ROW_FIELDS.includes("delivered_to"));
+const ev = (id: number, event_type: string, detail?: unknown) => ({ id, event_type, detail_json: detail === undefined ? null : JSON.stringify(detail) });
+const types = (list: { event_type: string }[]) => list.map((e) => e.event_type).join(",");
+const chain = [ev(1, "received_mm"), ev(2, "received_bb"), ev(3, "issued"), ev(4, "corrected", { reason: "x" }), ev(5, "returned_unused")];
+check("steps: corrections and the usage card aren't steps", types(liveSteps(chain)) === "received_mm,received_bb,issued,returned_unused");
+check("steps: the latest standing return is found", lastLiveReturn(chain)?.id === 5);
+const undoneReturn = [...chain, ev(6, "undone", { undid_event_id: 5 })];
+check("steps: an undo naming the return takes it back", types(liveSteps(undoneReturn)) === "received_mm,received_bb,issued" && lastLiveReturn(undoneReturn) === null);
+check("steps: the next undo takes back the issue, not the return again", types(liveSteps([...undoneReturn, ev(7, "undone", { undid_event_id: 3 })])) === "received_mm,received_bb");
+check("steps: an older undo with no id takes back the latest standing step", types(liveSteps([ev(1, "received_mm"), ev(2, "received_bb"), ev(3, "issued"), ev(4, "undone", { reason: "x" })])) === "received_mm,received_bb");
+const reissued = [...chain, ev(6, "issued"), ev(7, "undone", { undid_event_id: 6 })];
+check("steps: a second issue undone leaves the return on top", liveSteps(reissued).at(-1)?.event_type === "returned_unused");
+check("steps: a disposition after the return, undone, leaves the return on top", liveSteps([...chain, ev(6, "other_disposition"), ev(7, "undone", { undid_event_id: 6 })]).at(-1)?.id === 5);
+const twoReturns = [...chain, ev(6, "issued"), ev(7, "returned_unused"), ev(8, "undone", { undid_event_id: 7 })];
+check("steps: two returns, the second undone: the first is the latest standing", lastLiveReturn(twoReturns)?.id === 5 && liveSteps(twoReturns).at(-1)?.id === 6);
+check("steps: an undo naming a step that isn't standing takes nothing", types(liveSteps([...chain, ev(6, "undone", { undid_event_id: 99 })])) === types(liveSteps(chain)));
+check("steps: out-of-order rows are read by id", types(liveSteps([ev(5, "returned_unused"), ev(1, "received_mm"), ev(3, "issued"), ev(2, "received_bb")])) === "received_mm,received_bb,issued,returned_unused");
 
 // How a unit reads on the log
 const open = tissueFlags({ state: "stored", expiration_date: "2026-11-05" }, today);
