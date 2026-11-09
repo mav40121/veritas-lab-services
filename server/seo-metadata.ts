@@ -361,12 +361,12 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
   },
   "/resources/clia-tea-what-lab-directors-dont-know": {
     title: "CLIA Total Allowable Error (TEa): 2026 Limits by Specialty",
-    description: "The current CLIA total allowable error (TEa) limits by specialty: chemistry, hematology, toxicology, and immunology, with 42 CFR §493 citations.",
+    description: "The 2026 CLIA total allowable error (TEa) limits for every regulated analyte, by specialty, with 42 CFR §493 citations. Free printable PDF table.",
     jsonLd: [{
       "@context": "https://schema.org",
       "@type": "Article",
       headline: "CLIA Allowable Error (TEa): What It Is, Where to Find It, and Why Most Lab Directors Don't Know About It",
-      description: "The current CLIA total allowable error (TEa) limits by specialty: chemistry, hematology, toxicology, and immunology, with 42 CFR §493 citations.",
+      description: "The 2026 CLIA total allowable error (TEa) limits for every regulated analyte, by specialty, with 42 CFR §493 citations. Free printable PDF table.",
       image: `${BASE_URL}/og-image.png`,
       author: {
         "@type": "Person",
@@ -376,7 +376,7 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
       },
       publisher: { "@id": `${BASE_URL}/#organization` },
       datePublished: "2026-03-01",
-      dateModified: "2026-06-14",
+      dateModified: "2026-11-09",
       mainEntityOfPage: `${BASE_URL}/resources/clia-tea-what-lab-directors-dont-know`,
     },
     faqPageJsonLd(TEA_ARTICLE_FAQ),

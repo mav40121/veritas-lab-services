@@ -40,7 +40,7 @@ const teaSampleTable = [
 ];
 
 export default function ArticleTeaPage() {
-    useSEO({ title: "CLIA Total Allowable Error (TEa): 2026 Limits by Specialty", description: "The current CLIA total allowable error (TEa) limits by specialty: chemistry, hematology, toxicology, and immunology, with 42 CFR §493 citations." });
+    useSEO({ title: "CLIA Total Allowable Error (TEa): 2026 Limits by Specialty", description: "The 2026 CLIA total allowable error (TEa) limits for every regulated analyte, by specialty, with 42 CFR §493 citations. Free printable PDF table." });
 return (
     <div className="min-h-screen bg-background">
 
@@ -62,12 +62,18 @@ return (
           <div className="flex items-center gap-5 text-xs text-muted-foreground border-t border-border pt-4">
             <span className="flex items-center gap-1.5"><User size={12} /> Michael Veri, Former Joint Commission Surveyor, CPHQ</span>
             <span className="flex items-center gap-1.5"><Clock size={12} /> 10 min read</span>
-            <span>March 2026</span>
+            <span>Published March 2026 · Updated November 2026</span>
           </div>
         </div>
       </section>
 
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10">
+
+        {/* 2026 limits at a glance (SEO refresh 2026-11-09). eCFR history checked 2026-11-09: no Subpart I acceptance
+            limit changed in substance after CMS-3355-F took effect on 2024-07-11 (493.945, gyn cytology PT, is not a TEa). */}
+        <Callout type="info">
+          <strong>Looking for the 2026 limits?</strong> The CLIA acceptable limits in effect for 2026 are the values from the CLIA proficiency testing final rule (CMS-3355-F), effective July 11, 2024. Look up any analyte in the <Link href="/resources/clia-tea-lookup" className="text-primary hover:underline">TEa Lookup</Link>, or download the full table as a PDF below.
+        </Callout>
 
         {/* Content upgrade: TEa reference table (lead-capture experiment) */}
         <ContentUpgrade
