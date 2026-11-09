@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CheckCircle2, Mail, Loader2 } from "lucide-react";
+import { NewsletterHoneypot, honeypotValue } from "@/components/NewsletterHoneypot";
 
 interface NewsletterSignupProps {
   variant?: "inline" | "card" | "banner";
@@ -14,15 +15,16 @@ export function NewsletterSignup({ variant = "card", source = "website" }: Newsl
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error" | "exists">("idle");
   const [errorMsg, setErrorMsg] = useState("");
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!email.trim()) return;
+    const website = honeypotValue(e.currentTarget);
     setStatus("loading");
     try {
       const res = await fetch("/api/newsletter/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim(), name: name.trim() || undefined, source }),
+        body: JSON.stringify({ email: email.trim(), name: name.trim() || undefined, source, website }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -91,6 +93,7 @@ export function NewsletterSignup({ variant = "card", source = "website" }: Newsl
           >
             {status === "loading" ? <Loader2 size={14} className="animate-spin" /> : "Subscribe Free"}
           </Button>
+          <NewsletterHoneypot />
         </form>
         {status === "error" && <p className="text-red-300 text-xs mt-2">{errorMsg}</p>}
         <p className="text-xs text-primary-foreground/50 mt-3">Join lab directors and quality managers across the country.</p>
@@ -121,6 +124,7 @@ export function NewsletterSignup({ variant = "card", source = "website" }: Newsl
               <Button type="submit" size="sm" disabled={status === "loading"} className="bg-primary text-primary-foreground shrink-0 h-8 text-xs">
                 {status === "loading" ? <Loader2 size={12} className="animate-spin" /> : "Subscribe"}
               </Button>
+              <NewsletterHoneypot />
             </form>
             {status === "error" && <p className="text-red-500 text-xs mt-1">{errorMsg}</p>}
           </div>
@@ -158,6 +162,7 @@ export function NewsletterSignup({ variant = "card", source = "website" }: Newsl
         <Button type="submit" disabled={status === "loading"} className="w-full bg-primary text-primary-foreground">
           {status === "loading" ? <><Loader2 size={14} className="animate-spin mr-2" /> Subscribing...</> : "Subscribe Free"}
         </Button>
+        <NewsletterHoneypot />
       </form>
       {status === "error" && <p className="text-red-500 text-xs mt-2">{errorMsg}</p>}
       <p className="text-xs text-muted-foreground text-center mt-2">Join lab directors and quality managers across the country.</p>

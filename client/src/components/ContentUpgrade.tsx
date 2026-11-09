@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CheckCircle2, Download, FileText } from "lucide-react";
 import { trackEvent } from "@/lib/analytics";
+import { NewsletterHoneypot, honeypotValue } from "@/components/NewsletterHoneypot";
 
 // Contextual, page-specific email-gated content upgrade (lead-capture
 // experiment, handoff 2026-07-29). Reuses the existing /api/newsletter/subscribe
@@ -34,15 +35,16 @@ export function ContentUpgrade({
     a.remove();
   };
 
-  const submit = async (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!email.includes("@")) { setStatus("error"); return; }
+    const website = honeypotValue(e.currentTarget);
     setStatus("loading");
     try {
       const res = await fetch("/api/newsletter/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim(), source }),
+        body: JSON.stringify({ email: email.trim(), source, website }),
       });
       if (!res.ok) throw new Error("subscribe failed");
       trackEvent("lead_capture", { source });
@@ -87,6 +89,7 @@ export function ContentUpgrade({
         <Button type="submit" disabled={status === "loading"} className="shrink-0">
           <Download size={14} className="mr-1.5" /> {status === "loading" ? "Sending…" : buttonLabel}
         </Button>
+        <NewsletterHoneypot />
       </form>
       {status === "error" && (
         <p className="text-xs text-destructive mt-2">Please enter a valid email and try again.</p>

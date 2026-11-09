@@ -8,7 +8,7 @@ import fs from "fs";
 import os from "os";
 import { storage } from "./storage";
 import { resolveFloor } from "./backfillAbsoluteFloor";
-import { isReservedTestAddress } from "./newsletterGuards";
+import { isReservedTestAddress, isHoneypotFilled, newsletterRateLimitOk, newsletterDedupeKey, isGmailAddress } from "./newsletterGuards";
 import { blockNonOperatorSeat } from "./seatAccess";
 import { isDelegationPosition, isDelegationComplexity, sanitizeResponsibilities, DELEGATION_CATALOG, DELEGATION_POSITIONS, DELEGATION_COMPLEXITIES } from "./directorDelegation";
 import { mayAttestAsDirectorOrDesignee, complexityForAnalyte, labHighestComplexity, isLabOwnerUser } from "./delegationGate";
@@ -19843,21 +19843,49 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
   // ── NEWSLETTER ────────────────────────────────────────────────────────────
   app.post("/api/newsletter/subscribe", async (req, res) => {
-    const { email, name, source } = req.body;
-    if (!email || !email.includes("@")) return res.status(400).json({ error: "Valid email required" });
+    const { email, name, source } = req.body || {};
+    // Bot guard 1 (Michael 2026-11-09, Q247 = 1): the hidden "website" field is filled. Answer exactly as a real signup
+    // does, store nothing, send nothing, and count nothing, so the bot learns nothing.
+    if (isHoneypotFilled(req.body)) return res.json({ success: true, message: "subscribed" });
+    if (typeof email !== "string" || !email.includes("@")) return res.status(400).json({ error: "Valid email required" });
     // A reserved test address (example.com, .test, ...) is never a real mailbox: answer success, store nothing, send
     // nothing. Our own Playwright spec posted one to production on every smoke run (2026-11-09; server/newsletterGuards.ts).
+    // It comes before the rate limit, so test runs that post many of them from one machine aren't counted.
     if (isReservedTestAddress(email)) return res.json({ success: true, message: "subscribed" });
+    // Bot guard 2: at most NEWSLETTER_SIGNUPS_PER_IP_PER_HOUR attempts per IP per hour. clientIp reads the first
+    // X-Forwarded-For entry (Railway's proxy; trust proxy is on in server/index.ts), then req.ip.
+    if (!newsletterRateLimitOk(clientIp(req) || "unknown")) {
+      return res.status(429).json({ error: "Too many sign-up attempts from this network. Please try again in an hour." });
+    }
 
     const sqlite = (db as any).session?.client || require("better-sqlite3");
     try {
-      // Check for existing subscriber
+      const typed = email.toLowerCase().trim();
+      // Bot guard 3: "already subscribed" compares Gmail addresses the way Gmail delivers them, so j.o.h.n+x@gmail.com
+      // matches an active john@gmail.com and gets no second row and no second welcome email. The address is stored as
+      // typed, and existing rows aren't rewritten.
+      let activeMatch = (db as any).$client.prepare(
+        "SELECT id FROM newsletter_subscribers WHERE email = ? AND active = 1"
+      ).get(typed);
+      // An existing row for this exact address is inactive here if there is one (an active one returns below).
       const existing = (db as any).$client.prepare(
         "SELECT id, active FROM newsletter_subscribers WHERE email = ?"
-      ).get(email.toLowerCase().trim());
+      ).get(typed);
+      if (!activeMatch && isGmailAddress(typed)) {
+        const key = newsletterDedupeKey(typed);
+        const gmailRows = (db as any).$client.prepare(
+          "SELECT id, email, active FROM newsletter_subscribers WHERE email LIKE '%@gmail.com%' OR email LIKE '%@googlemail.com%'"
+        ).all() as Array<{ id: number; email: string; active: number }>;
+        const sameMailbox = gmailRows.filter((r) => newsletterDedupeKey(r.email) === key);
+        activeMatch = sameMailbox.find((r) => r.active === 1);
+        // A new spelling of a mailbox that only has unsubscribed rows (the 118 dotted bot rows went inactive on 2026-11-09):
+        // a bot posting straight to this route skips the hidden field, so answer as a signup and store and send nothing.
+        // The exact address someone unsubscribed with still subscribes again below.
+        if (!activeMatch && !existing && sameMailbox.length > 0) return res.json({ success: true, message: "subscribed" });
+      }
+      if (activeMatch) return res.json({ success: true, message: "already_subscribed" });
 
       if (existing) {
-        if (existing.active) return res.json({ success: true, message: "already_subscribed" });
         // Re-subscribe if they previously unsubscribed
         (db as any).$client.prepare(
           "UPDATE newsletter_subscribers SET active = 1, unsubscribed_at = NULL, subscribed_at = ? WHERE email = ?"

@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { BookOpen, CheckCircle2, FlaskConical, Users, Award, Mic, ChevronRight } from "lucide-react";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
+import { NewsletterHoneypot, honeypotValue } from "@/components/NewsletterHoneypot";
 
 const CHAPTERS = [
   "Understanding US Lab Law",
@@ -46,10 +47,11 @@ function NotifyForm() {
           e.preventDefault();
           const input = e.currentTarget.elements.namedItem("email") as HTMLInputElement;
           const email = input.value;
+          const website = honeypotValue(e.currentTarget);
           fetch("/api/newsletter/subscribe", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ email, source: "book" }),
+            body: JSON.stringify({ email, source: "book", website }),
           }).catch(() => {});
           toast({
             title: "You're on the list!",
@@ -72,6 +74,7 @@ function NotifyForm() {
         >
           Notify Me
         </button>
+        <NewsletterHoneypot />
       </form>
     </div>
   );
