@@ -42979,5 +42979,58 @@
       }
     },
     "menuLastVerifiedAt": "2026-10-23"
+  },
+  "Siemens Multistix 10 SG Reagent Strips (visual read)": {
+    "vendor": "Siemens Healthineers",
+    "category": "Manual Procedures",
+    "aliases": [
+      "Multistix 10 SG",
+      "Bayer Multistix 10 SG Reagent Strips",
+      "Ames Multistix 10 SG"
+    ],
+    "testCount": 10,
+    "tests": {
+      "Urine qualitative dipstick ketone": {
+        "complexity": "WAIVED",
+        "specialty": "Urinalysis"
+      },
+      "Urine qualitative dipstick bilirubin": {
+        "complexity": "WAIVED",
+        "specialty": "Urinalysis"
+      },
+      "Urine qualitative dipstick blood": {
+        "complexity": "WAIVED",
+        "specialty": "Urinalysis"
+      },
+      "Urine qualitative dipstick glucose": {
+        "complexity": "WAIVED",
+        "specialty": "Urinalysis"
+      },
+      "Urine qualitative dipstick leukocytes": {
+        "complexity": "WAIVED",
+        "specialty": "Urinalysis"
+      },
+      "Urine qualitative dipstick nitrite": {
+        "complexity": "WAIVED",
+        "specialty": "Urinalysis"
+      },
+      "Urine qualitative dipstick Ph": {
+        "complexity": "WAIVED",
+        "specialty": "Urinalysis"
+      },
+      "Urine qualitative dipstick protein": {
+        "complexity": "WAIVED",
+        "specialty": "Urinalysis"
+      },
+      "Urine qualitative dipstick urobilinogen": {
+        "complexity": "WAIVED",
+        "specialty": "Urinalysis"
+      },
+      "Urine qualitative dipstick specific gravity": {
+        "complexity": "WAIVED",
+        "specialty": "Urinalysis"
+      }
+    },
+    "menuLastVerifiedAt": "2026-11-09"
   }
 }
