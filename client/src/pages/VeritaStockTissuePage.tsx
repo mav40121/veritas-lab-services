@@ -345,6 +345,7 @@ function UnitView({ base, labId, unitId, canEdit }: { base: string; labId: numbe
           <div className="flex flex-wrap items-center gap-2 mb-1"><h2 className="text-lg font-semibold break-all" data-testid="unit-source-id">{u.source_id}</h2><StateBadge unit={u} /><Flags unit={u} /></div>
           <p className="text-sm break-words">{u.tissue_type}, {u.supplier_name}</p>
           {u.state === "implanted" && <p className="text-xs text-muted-foreground mt-2">To reach the patient, find this tissue ID in the hospital's chart.</p>}
+          <RecordPdfButton base={base} u={u} />
         </CardContent>
       </Card>
 
@@ -414,6 +415,39 @@ function UnitView({ base, labId, unitId, canEdit }: { base: string; labId: numbe
       )}
       {canEdit && <CorrectionStep base={base} u={u} done={done} />}
       <History events={u.events} />
+    </div>
+  );
+}
+
+// The unit's record as a PDF (server/tissueRecordPdf.ts). The route needs the sign-in header, so the page fetches it and saves the
+// file itself, the way the Competency Register button does; a plain link would go out without the header.
+function RecordPdfButton({ base, u }: { base: string; u: any }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const download = async () => {
+    setBusy(true); setErr(null);
+    try {
+      const r = await fetch(`${API_BASE}${base}/units/${u.id}/pdf`, { headers: authHeaders() });
+      if (!r.ok) {
+        let msg = `Request failed (${r.status})`;
+        try { msg = (await r.json())?.error || msg; } catch { /* not JSON */ }
+        throw new Error(msg);
+      }
+      const name = /filename="([^"]+)"/.exec(r.headers.get("Content-Disposition") || "")?.[1] || `VeritaStock_Tissue_Record_${u.id}.pdf`;
+      const url = URL.createObjectURL(await r.blob());
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 30000);
+    } catch (e: any) { setErr(e.message); } finally { setBusy(false); }
+  };
+  return (
+    <div className="mt-3 space-y-2">
+      <Button size="sm" variant="outline" disabled={busy} onClick={download} data-testid="tissue-record-pdf"><FileText size={14} className="mr-1.5" />{busy ? "Building..." : "Print record (PDF)"}</Button>
+      <ErrorLine text={err} />
     </div>
   );
 }

@@ -23,6 +23,7 @@ import { hasOpsAccess } from "./veritabench";
 import { labToday } from "./dateLocal";
 import { storePdfToken } from "./pdfTokens";
 import { generateTissueLogExcel, generateTissueLogPDF } from "./tissueLogExport";
+import { generateTissueRecordPDF, loadTissueRecord } from "./tissueRecordPdf";
 import {
   ISSUE_ROW_FIELDS, OTHER_DISPOSITIONS, TISSUE_STATE_LABELS, correctableFields, findTissuePhi, isBefore, isFinalState, isHhMm, isYmd,
   issueRefusals, lastLiveReturn, liveSteps, returnUnusedRefusal, tissueFlags, tissueIdKey, tissuePhiMessage, yesNo, type TissueState,
@@ -111,6 +112,9 @@ function blockBbFields(sqlite: any, labId: number, b: any, unit: any, today: str
     checks: { transport_temp_ok: temp, package_ok: pack },
   };
 }
+
+/** What the blood bank receipt's event keeps besides its checks: the action taken and where the unit went, as the record's history prints it. */
+const bbEventDetail = (set: Record<string, unknown>) => ({ transport_action: set.transport_action ?? null, storage_unit_id: set.storage_unit_id ?? null, storage_location: set.storage_location ?? null });
 
 function reconstitutionFields(b: any): { error?: string; set?: Record<string, unknown> } {
   const f = {
@@ -369,6 +373,23 @@ export function registerTissueRoutes(
     res.json({ ...decorateTissueUnit(u, today), events, storage, correctable_fields: correctableFields(u) });
   });
 
+  // ── One unit's record as a PDF (Michael 2026-11-09), laid out as the Heywood mock he approved. Same reach as the unit view. ──
+  app.get(`${BASE}/units/:id/pdf`, ...read, async (req: any, res: any) => {
+    const rec = loadTissueRecord(sqliteOf(), req.scope.labId, Number(req.params.id));
+    if (!rec) return res.status(404).json({ error: "That unit isn't on this lab's log" });
+    try {
+      const buf = await generateTissueRecordPDF(rec.unit, rec.events, rec.ctx);
+      const safeId = String(rec.unit.source_id || rec.unit.id).replace(/[^A-Za-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "") || String(rec.unit.id);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="VeritaStock_Tissue_Record_${safeId}_${rec.ctx.generated}.pdf"`);
+      res.setHeader("Content-Length", buf.length);
+      res.send(buf);
+    } catch (err: any) {
+      console.error("[tissue] record PDF failed:", err?.message || err);
+      res.status(500).json({ error: "The PDF could not be built." });
+    }
+  });
+
   // ── Exports. A token the page downloads at /api/pdf/:token, like every other VeritaStock document. ────────────
   const logContext = (req: any, filter: string) => {
     const lab = sqliteOf().prepare("SELECT lab_name, clia_number FROM labs WHERE id = ?").get(req.scope.labId) as any;
@@ -437,7 +458,7 @@ export function registerTissueRoutes(
       addEvent(sqlite, req, newId, labId, "received_mm", { date: b.received_mm_date, time: b.received_mm_time, by: mmBy });
       if (bb?.set) {
         applySet(sqlite, newId, bb.set);
-        addEvent(sqlite, req, newId, labId, "received_bb", { date: b.receive_bb.received_bb_date, time: b.receive_bb.received_bb_time, by: bb.set.received_bb_by as string, checks: bb.checks });
+        addEvent(sqlite, req, newId, labId, "received_bb", { date: b.receive_bb.received_bb_date, time: b.receive_bb.received_bb_time, by: bb.set.received_bb_by as string, checks: bb.checks, detail: bbEventDetail(bb.set) });
       }
       return newId;
     })();
@@ -464,7 +485,7 @@ export function registerTissueRoutes(
     if (bb.error) return res.status(400).json({ error: bb.error });
     sqlite.transaction(() => {
       applySet(sqlite, u.id, bb.set!);
-      addEvent(sqlite, req, u.id, u.lab_id, "received_bb", { date: b.received_bb_date, time: b.received_bb_time, by: bb.set!.received_bb_by as string, checks: bb.checks });
+      addEvent(sqlite, req, u.id, u.lab_id, "received_bb", { date: b.received_bb_date, time: b.received_bb_time, by: bb.set!.received_bb_by as string, checks: bb.checks, detail: bbEventDetail(bb.set!) });
     })();
     audit(req, u.id, `Tissue received in blood bank: ID ${u.source_id}`);
     res.json(decorateTissueUnit(fetchUnit(sqlite, u.id, u.lab_id), today));

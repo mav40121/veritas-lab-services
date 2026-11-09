@@ -192,6 +192,10 @@ jobs:
         # Michael 2026-11-09: an issued graft that comes back unimplanted goes back into storage and can be issued again. Only from issued,
         # both checks yes, the issue moves into the event, and Undo restores it without clearing the blood bank receipt.
         run: npm run test:veritastock-tissue-return-unused
+      - name: Run VeritaStock tissue record PDF integration test
+        # Michael 2026-11-09: one unit's record as a PDF, laid out as the Heywood mock. Same reach as the unit view, the sections in the
+        # mock's order, the patient-chart line and no patient field, the current issue, returns and undone steps in the history.
+        run: npm run test:veritastock-tissue-record-pdf
       - name: Run quiz follows method group integration test
         # REQ-131: an analyzer grouped on the Method groups tab shows on the quiz form and card. Nothing is stored: program rows, quizzes and what a program
         # credits stay the same. The Element 6 picker's old matches still win, and a group only fills in where it found nothing.
