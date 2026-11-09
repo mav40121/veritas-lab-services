@@ -276,6 +276,7 @@ async function main() {
       [/^\/api\/export-all\/file\/:token$/, "one-time download token"],
       [/^\/api\/seats\/invite\/:token$/, "invite token"],
       [/^\/api\/surveyor\/:token\//, "surveyor link token"],
+      [/^\/api\/public\/policy-share\/:token(\/file)?$/, "document share link token; the route reads no id (server/policyShareLinks.ts, tests/integration/veritadc-share-link.test.ts)"],
       [/^\/api\/scheduling\//, "public booking page"],
       [/^\/api\/labs\/:labId\/export-all$/, "owner only, checked per lab (ownerOnly)"],
       [/^\/api\/staff-portal-session\//, "session's own lab and roster row, in server/routes.ts staffPortalAuthMiddleware"],

@@ -61,10 +61,10 @@ if (DEFAULTS) {
   process.exit(found.includes(LOG_MARKER) ? 0 : 1);
 }
 console.log(found.length ? `FAIL  personal data in the report: ${found.join(", ")}` : "PASS  no cookie, header, body, query value, IP address, console line or token in a path in the report");
-const tokenUrls = ["https://x/join?token=abc", "https://x/reset-password?token=abc", "https://x/surveyor/abcdefgh12", "/api/seats/invite/abc", "/api/surveyor/abc/policies", "/api/pdf/abc"];
+const tokenUrls = ["https://x/join?token=abc", "https://x/reset-password?token=abc", "https://x/surveyor/abcdefgh12", "/api/seats/invite/abc", "/api/surveyor/abc/policies", "/api/pdf/abc", "https://x/policy/abcdefgh12", "/api/public/policy-share/abc/file"];
 const urlsDropped = tokenUrls.every((url) => sentryBreadcrumbFilter({ category: "navigation", data: { to: url } }) === null);
 const plainKept = sentryBreadcrumbFilter({ category: "navigation", data: { to: "https://x/dashboard" } }) !== null;
-const MASKS: [string, string][] = [["https://x/join?token=abc&y=1", "https://x/join?token=[REDACTED]&y=1"], ["https://x/reset-password?token=abc", "https://x/reset-password?token=[REDACTED]"], ["https://x/surveyor/abc", "https://x/surveyor/[REDACTED]"], ["https://x/api/seats/invite/abc", "https://x/api/seats/invite/[REDACTED]"], ["https://x/api/pdf/abc", "https://x/api/pdf/[REDACTED]"], ["https://x/labs/3/dashboard", "https://x/labs/3/dashboard"]];
+const MASKS: [string, string][] = [["https://x/policy/abc", "https://x/policy/[REDACTED]"], ["https://x/api/labs/3/veritapolicy/documents/5", "https://x/api/labs/3/veritapolicy/documents/5"],["https://x/api/public/policy-share/abc/file", "https://x/api/public/policy-share/[REDACTED]/file"], ["https://x/join?token=abc&y=1", "https://x/join?token=[REDACTED]&y=1"],["https://x/reset-password?token=abc", "https://x/reset-password?token=[REDACTED]"], ["https://x/surveyor/abc", "https://x/surveyor/[REDACTED]"], ["https://x/api/seats/invite/abc", "https://x/api/seats/invite/[REDACTED]"], ["https://x/api/pdf/abc", "https://x/api/pdf/[REDACTED]"], ["https://x/labs/3/dashboard", "https://x/labs/3/dashboard"]];
 const masksOk = MASKS.every(([a, b]) => maskTokenInAddress(a) === b);
 console.log(masksOk ? "PASS  a token in a web address is masked, and an ordinary address is untouched" : "FAIL  address masking");
 console.log(urlsDropped ? "PASS  a page address carrying a token is dropped" : "FAIL  a page address carrying a token was kept");

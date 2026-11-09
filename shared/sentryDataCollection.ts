@@ -29,11 +29,11 @@ export function sentryBreadcrumbFilter<T extends { category?: string; message?: 
 }
 
 // An error report also carries the web address of the request or page. Some addresses hold a credential in the query or
-// the path (an invite, reset or surveyor link, a one-time PDF or zip, an export file, a booking), so it is masked.
+// the path (an invite, reset, surveyor or document share link, a one-time PDF or zip, an export file, a booking), so it is masked.
 export function maskTokenInAddress(address: string): string {
   return address
     .replace(/([?&][a-z_]*token=)[^&#\s]+/gi, "$1[REDACTED]")
-    .replace(/(\/(?:surveyor|seats\/invite|pdf|zip|export-all\/file|scheduling\/booking)\/)[^/?#\s]+/gi, "$1[REDACTED]");
+    .replace(/(\/(?:surveyor|policy|public\/policy-share|seats\/invite|pdf|zip|export-all\/file|scheduling\/booking)\/)[^/?#\s]+/gi, "$1[REDACTED]");
 }
 
 export function sentryEventFilter<T extends { request?: { url?: string }; transaction?: string }>(event: T): T {

@@ -8321,6 +8321,44 @@ sqlite.exec(`
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_surveyor_links_lab ON policy_surveyor_links(lab_id)`); } catch {}
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_surveyor_links_token ON policy_surveyor_links(token)`); } catch {}
 
+// VeritaDC share link for ONE document (Michael 2026-11-09; server/policyShareLinks.ts): anyone with the token reads that
+// document's current approved version without signing in, for example nursing reading the specimen collection manual.
+// The row never names a version: every read looks up the document's current version. Revoking keeps the row.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS policy_share_links (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    document_id INTEGER NOT NULL,
+    token TEXT NOT NULL UNIQUE,
+    label TEXT,
+    created_by INTEGER NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    revoked_at TEXT,
+    revoked_by INTEGER,
+    view_count INTEGER NOT NULL DEFAULT 0,
+    last_viewed_at TEXT
+  )
+`);
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(policy_share_links)").all() as { name: string }[]).map((c) => c.name);
+  for (const [col, ddl] of [
+    ["lab_id", "INTEGER"],
+    ["document_id", "INTEGER"],
+    ["token", "TEXT"],
+    ["label", "TEXT"],
+    ["created_by", "INTEGER"],
+    ["created_at", "TEXT"],
+    ["revoked_at", "TEXT"],
+    ["revoked_by", "INTEGER"],
+    ["view_count", "INTEGER NOT NULL DEFAULT 0"],
+    ["last_viewed_at", "TEXT"],
+  ] as const) {
+    if (!cols.includes(col)) sqlite.exec(`ALTER TABLE policy_share_links ADD COLUMN ${col} ${ddl}`);
+  }
+}
+try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS uq_policy_share_links_token ON policy_share_links(token)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_share_links_doc ON policy_share_links(lab_id, document_id)`); } catch {}
+
 // Migration sentinel block. Pure read of PRAGMA table_info so the next
 // ALTER TABLE for these tables lands without re-checking column presence.
 // Per CLAUDE.md feedback: NO writes, NO derived-state cascades.

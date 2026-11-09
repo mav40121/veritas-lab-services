@@ -121,6 +121,7 @@ const VeritaPolicyCompliancePage = lazy(() => import("@/pages/VeritaPolicyCompli
 const VeritaPolicyIqcpPage = lazy(() => import("@/pages/VeritaPolicyIqcpPage"));
 const VeritaPolicyCfrReferencePage = lazy(() => import("@/pages/VeritaPolicyCfrReferencePage"));
 const SurveyorViewPage = lazy(() => import("@/pages/SurveyorViewPage"));
+const PolicySharePage = lazy(() => import("@/pages/PolicySharePage"));
 const VeritaPolicyPage = lazy(() => import("@/pages/VeritaPolicyPage"));
 const CumsumPage = lazy(() => import("@/pages/CumsumPage"));
 const RoadmapPage = lazy(() => import("@/pages/RoadmapPage"));
@@ -380,6 +381,12 @@ function AppContent() {
   // Standalone admin page: no NavBar, no footer, no subscription banners
   if (location === "/admin") {
     return <Suspense fallback={<PageFallback />}><AdminReportPage /></Suspense>;
+  }
+
+  // A VeritaDC document share link (/policy/:token, no login): the document page alone, without the site's navigation,
+  // banners, onboarding or GA, for someone outside the lab such as nursing. See PolicySharePage.tsx.
+  if (/^\/policy\/[^/]+$/.test(location)) {
+    return <Suspense fallback={<PageFallback />}><PolicySharePage /></Suspense>;
   }
 
   // Phase 2c: wraps a legacy workspace page component so unauthenticated /

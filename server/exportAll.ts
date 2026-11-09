@@ -231,7 +231,7 @@ const MODULE_ABOUT: Record<string, string> = {
   "VeritaScan": "Every readiness scan and its answers, custom questions, the document library, and the links between documents and checklist items.",
   "VeritaComp": "Competency programs, assessments and every element entry, checklists, method groups, method sign-offs, quizzes and results, reminders, and letters of delegation.",
   "VeritaStaff": "The testing personnel roster, roles and specialties, assigned test systems, documents, competency schedules, duty changes, position descriptions, staff signatures, and continuing-education profiles.",
-  "VeritaDC": "Manuals, documents and every version, approval workflows and steps, sign-offs, read attestations, quizzes, notes, links, surveyor links, review reminders, and the policy master list status.",
+  "VeritaDC": "Manuals, documents and every version, approval workflows and steps, sign-offs, read attestations, quizzes, notes, links, surveyor links, document share links, review reminders, and the policy master list status.",
   "VeritaQC": "Control lots, every QC result, rule violations, corrective actions, notes, monthly reviews, rule settings, import mappings, and IQCP plans with their risk, QC plan and QA items.",
   "VeritaPT": "PT enrollments, events and results, corrective actions, reminders, and alternative assessment records.",
   "VeritaLab": "Certificates and their uploaded documents, reminders, the CMS-116 draft, director history, site contacts, test menu changes, and CLIA fee payments.",
