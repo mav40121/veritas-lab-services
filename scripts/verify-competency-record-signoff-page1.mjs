@@ -63,6 +63,11 @@ const cases = {
     ...LONG.map((n, i) => method(n, i === LONG.length - 1 ? null : longSigner(i))),
   ]),
   many24: record(Array.from({ length: 24 }, (_, i) => method(`Analyzer ${i + 1}`, signoff("Casey Tate", "TC", "CT")))),
+  // BUG-144 (2026-11-09): the live record had 36 methods, one signed, some waived. Its sign-off block was taller than a page,
+  // so the PDF moved all of it to page 2. The layout checks above can't see that (a screen layout has no pages), so
+  // scripts/verify-competency-record-pdf-pages.py reads these PDFs page by page.
+  many36: record(Array.from({ length: 36 }, (_, i) => method(`Analyzer ${String(i + 1).padStart(2, "0")}`, i === 0 ? signoff("Casey Tate", "TC", "CT") : null,
+    i % 9 === 4 ? { waived: true, waivedPassed: 0, waivedRequired: 2, waivedMethods: [], complexity: "WAIVED" } : {}))),
 };
 
 // Production page geometry (server/pdfReport.ts generateEmployeeCompetencyRecordPDF): Letter, margins 14/15/20/15 mm.
@@ -106,7 +111,8 @@ check("2a. 14 methods, long names: one sign-off line per method", l.lines === 14
 check("2b. 14 methods, long names: the whole sign-off block is on page 1", l.bottom <= PAGE_H, `bottom ${Math.round(l.bottom)} of ${PAGE_H}`);
 check("2c. 14 methods, long names: no sign-off cell spills and the table stays inside the block", l.spill === 0 && l.tableRight <= l.signRight + 1, `${l.spill} spilling cells`);
 check("3. 24 methods: the sign-off block starts on page 1", m.top < PAGE_H, `top ${Math.round(m.top)}; lines on page 1: ${m.lineTops.filter((t) => t + 20 <= PAGE_H).length} of ${m.lines}`);
-check("4a. the method table and legend still print after the sign-off", [s, l, m].every((x) => x.matrixTop > x.top && x.hasLegend));
+check("3b. 36 methods: one sign-off line per method", results.many36.lines === 36, `${results.many36.lines} lines`);
+check("4a. the method table and legend still print after the sign-off", [s, l, m, results.many36].every((x) => x.matrixTop > x.top && x.hasLegend));
 check("4b. the signed-entries section still prints on its own page", s.hasEntries && /\.entries \{ page-break-before: always; \}/.test(s.html));
 check("5. no em dash in the generated HTML", [s, l, m].every((x) => !x.html.includes("—")));
 console.log(`PDFs: ${path.resolve(OUT)}`);
