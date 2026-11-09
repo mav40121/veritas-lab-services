@@ -37,6 +37,9 @@ test.describe("Correction pass: book waitlist endpoint + VeritaOps seat gate", (
     expect(settings).toMatch(/key:\s*'veritaops'/);
   });
 
+  // 2026-11-09: this ran against production on every smoke run and left a row plus a welcome email each time (914 by
+  // 11/8). The endpoint now answers a reserved test address (example.com) with success and stores nothing, so this
+  // still proves the endpoint is reachable and writes nothing. tests/integration/newsletter-reserved-domain.test.ts pins it.
   test("live: /api/newsletter/subscribe accepts a book-source signup", async () => {
     if (!BASE) { test.skip(true, "Needs PW_BASE."); return; }
     const ctx = await pwRequest.newContext({ baseURL: BASE });

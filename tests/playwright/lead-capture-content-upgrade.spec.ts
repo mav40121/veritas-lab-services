@@ -8,8 +8,10 @@
 // Opt-in (PW_LEADCAP=1) so it does not run against not-yet-deployed prod in CI
 // and does not write throwaway subscribers on every smoke run. When enabled it
 // drives the real submit and asserts the success state and that the PDF asset
-// is reachable. If PW_ADMIN_SECRET is also set, it confirms the subscriber
-// landed with the correct `source`.
+// is reachable. If PW_ADMIN_SECRET is also set, it confirms the example.com
+// address was NOT stored: since 2026-11-09 the endpoint stores nothing and sends
+// nothing for a reserved test address. That a real address is stored with its
+// `source` is pinned by tests/integration/newsletter-reserved-domain.test.ts.
 // Run: PW_LEADCAP=1 [PW_ADMIN_SECRET=...] npx playwright test lead-capture-content-upgrade
 
 import { test, expect } from "@playwright/test";
@@ -32,7 +34,7 @@ test.describe("Lead-capture content upgrade (TEa)", () => {
   });
 
   for (const path of PAGES) {
-    test(`capture on ${path} submits, shows success, and records source`, async ({ page, request }) => {
+    test(`capture on ${path} submits, shows success, and stores no test address`, async ({ page, request }) => {
       test.skip(!ENABLED, "PW_LEADCAP=1 required (feature must be deployed)");
       const email = `pw-leadcap-${Date.now()}@example.com`;
       await page.goto(`${BASE}${path}`);
@@ -47,8 +49,7 @@ test.describe("Lead-capture content upgrade (TEa)", () => {
         expect(subs.ok()).toBeTruthy();
         const rows = await subs.json();
         const mine = (rows.subscribers || rows || []).find((r: any) => r.email === email);
-        expect(mine, "subscriber recorded").toBeTruthy();
-        expect(mine.source).toBe("upgrade-tea-table");
+        expect(mine, "a reserved test address is never stored").toBeFalsy();
       }
     });
   }
