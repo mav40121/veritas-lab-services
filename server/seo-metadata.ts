@@ -122,7 +122,7 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
   },
   "/veritaassure": {
     title: "VeritaAssure\u00AE | Lab Compliance Software Suite for Clinical Laboratories",
-    description: "The complete laboratory compliance platform. VeritaCheck®, VeritaMap®, VeritaScan®, VeritaTrack™, VeritaDC™, and more - built by a lab professional who conducted 200+ Joint Commission surveys.",
+    description: "The complete laboratory compliance platform. VeritaCheck®, VeritaMap®, VeritaScan®, VeritaTrack™, VeritaDC™, and more, built by a lab professional who conducted 200+ Joint Commission surveys.",
   },
   "/pricing": {
     title: "Pricing | VeritaAssure\u00AE Lab Compliance Software",

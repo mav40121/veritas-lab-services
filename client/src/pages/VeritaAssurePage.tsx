@@ -289,7 +289,7 @@ function ModuleGrid({ modules }: { modules: typeof COMPLIANCE_MODULES }) {
 
 export default function VeritaAssurePage() {
     const { isLoggedIn } = useAuth();
-    useSEO({ title: "VeritaAssure® | Lab Compliance Software Suite for Clinical Laboratories", description: "The complete laboratory compliance platform. VeritaCheck®, VeritaMap®, VeritaScan®, VeritaTrack™, VeritaDC™, and more - built by a lab professional who conducted 200+ Joint Commission surveys." });
+    useSEO({ title: "VeritaAssure® | Lab Compliance Software Suite for Clinical Laboratories", description: "The complete laboratory compliance platform. VeritaCheck®, VeritaMap®, VeritaScan®, VeritaTrack™, VeritaDC™, and more, built by a lab professional who conducted 200+ Joint Commission surveys." });
 return (
     <div className="min-h-screen bg-background">
 
