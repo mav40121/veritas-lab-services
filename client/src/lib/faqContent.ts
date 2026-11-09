@@ -397,7 +397,7 @@ export const FAQ_CATEGORIES: FaqCategory[] = [
       },
       {
         q: "What is VeritaScan\u00AE?",
-        a: "VeritaScan\u00AE is a 173-item inspection readiness self-assessment across 10 compliance domains, with TJC, CAP, COLA, AABB, and 42 CFR references where one applies. Saving a passing calibration verification, correlation, precision, reagent lot, or PT/INR study in VeritaCheck\u00AE marks the matching VeritaScan\u00AE items complete and links the study, unless the lab has already answered them. Built by a former TJC laboratory surveyor with 200+ facility inspections. Includes an executive summary export.",
+        a: "VeritaScan\u00AE is a 173-item inspection readiness self-assessment across 10 compliance domains, with TJC, CAP, COLA, AABB, and 42 CFR references where one applies. A passing calibration verification, correlation, precision, reagent lot, or PT/INR study in VeritaCheck\u00AE attaches itself as evidence on the matching VeritaScan\u00AE items, and the lab sets the answer. The calibration verification and correlation items are marked when VeritaCheck\u00AE Coverage shows every nonwaived test is current, unless the lab has already answered them. Built by a former TJC laboratory surveyor with 200+ facility inspections. Includes an executive summary export.",
       },
       {
         q: "What is VeritaTrack\u2122?",
@@ -445,7 +445,7 @@ export const FAQ_CATEGORIES: FaqCategory[] = [
       },
       {
         q: "Do modules work together, or are they separate?",
-        a: "They're integrated. Passing calibration verification, correlation, precision, and reagent lot studies in VeritaCheck\u00AE mark matching VeritaScan\u00AE items complete. Instruments registered in VeritaMap\u00AE feed VeritaCheck\u00AE instrument selection and VeritaComp\u2122 competency programs. Personnel in VeritaStaff\u2122 tie into VeritaComp\u2122 assessments. One subscription, one login, shared data.",
+        a: "They're integrated. Passing calibration verification, correlation, precision, and reagent lot studies in VeritaCheck\u00AE attach themselves as evidence on the matching VeritaScan\u00AE items. The calibration verification and correlation items are marked when VeritaCheck\u00AE Coverage shows every nonwaived test is current. Instruments registered in VeritaMap\u00AE feed VeritaCheck\u00AE instrument selection and VeritaComp\u2122 competency programs. Personnel in VeritaStaff\u2122 tie into VeritaComp\u2122 assessments. One subscription, one login, shared data.",
       },
     ],
   },

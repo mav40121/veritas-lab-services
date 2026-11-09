@@ -264,3 +264,9 @@ export const STATUS_COLORS: Record<ScanStatus, string> = {
   "N/A": "bg-muted text-muted-foreground border-border",
   "Not Assessed": "bg-background text-muted-foreground border-border",
 };
+
+// BUG-135: a passing VeritaCheck study is linked to an item as evidence and leaves the status to the lab. A VeritaCheck mark the
+// admin correction moved back keeps its study link too (completion_source 'admin_correction' with a /study/ link).
+export function isVeritaCheckEvidence(source?: string | null, link?: string | null): boolean {
+  return source === "veritacheck_evidence" || (source === "admin_correction" && !!link && link.startsWith("/study/"));
+}

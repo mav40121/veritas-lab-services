@@ -858,8 +858,8 @@ export function recomputeAllStudyStatuses(): { fixed: number; skipped: number } 
   }
   return { fixed, skipped };
 }
-import { autoCompleteVeritaScanItems, autoCompleteCompetencyScanItems, auditScanAutoCompletions } from "./integrations";
-import { planMarkCorrection, applyMarkCorrection, CORRECTED_SOURCE } from "./veritascanMarkCorrection";
+import { autoCompleteVeritaScanItems, autoCompleteCompetencyScanItems, auditScanAutoCompletions, linkVeritaCheckEvidence, syncCoverageScanMarks } from "./integrations";
+import { planMarkCorrection, applyMarkCorrection, CORRECTED_SOURCE, correctionKeepsLink } from "./veritascanMarkCorrection";
 import {
   UNITS_LOOKUP, REFERENCE_RANGES, AMR_LOOKUP,
   CFR_MAP as VERITAMAP_CFR_MAP, getComplianceStatus, lookupAnalyte, INSTRUCTIONS_CONTENT,
@@ -12915,8 +12915,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     res.status(201).json(study);
   });
 
-  // SCN-09 (site review 2026-11-05): a study marks its VeritaScan items when it passes. A saved draft marks nothing, so
-  // finishing one is where that happens. An edit of a study that had already passed marks nothing new.
+  // SCN-09 (site review 2026-11-05): a study reaches its VeritaScan items when it passes. A saved draft does nothing, so
+  // finishing one is where that happens. An edit of a study that had already passed adds nothing new. Since BUG-135 the study
+  // links itself as evidence and items 21 and 29 follow the lab's coverage (server/integrations.ts).
   function markScanItemsOnFirstPass(before: any, updated: any) {
     if (before?.status === "pass" || updated?.status !== "pass") return;
     try {
@@ -13623,6 +13624,19 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     }
     // BUG-060: the map's cal ver date counts only signed studies, so signing must re-stamp it.
     restampMapForStudy(studyRow, "finalize");
+    // BUG-135: signing can turn a draft into a pass, and coverage credits only signed studies, so a sign-off links the study as
+    // evidence when it newly passes and always re-checks the lab's coverage marks on VeritaScan items 21 and 29.
+    try {
+      if (studyRow.status !== "pass" && finalStatus === "pass") {
+        linkVeritaCheckEvidence({
+          id: studyRow.id, userId: studyRow.user_id, labId: studyRow.lab_id ?? null, testName: studyRow.test_name,
+          studyType: studyRow.study_type, instruments: studyRow.instruments, status: finalStatus,
+        });
+      }
+      if (studyRow.lab_id != null) syncCoverageScanMarks((db as any).$client, Number(studyRow.lab_id));
+    } catch (err: any) {
+      console.warn("[veritascan-bridge] sign-off marking failed:", err?.message);
+    }
   }
 
   // Re-stamp the VeritaMap date columns for a study's lab after a change that alters what Coverage counts
@@ -35704,7 +35718,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     res.json(auditScanAutoCompletions((db as any).$client));
   });
 
-  // One-time correction of automatic VeritaScan marks the records don't support (Michael Q189 = 1). Dry run unless dryRun is false, and
+  // One-time correction of automatic VeritaScan marks the records don't support (Michael Q189 = 1), and since BUG-135 (Q246 = 1) of
+  // marks from a passing study the coverage rule wouldn't make (veritacheck_passing; the study link stays). Dry run unless dryRun is false, and
   // then expectedTotal must name the count the dry run gave: anything else is 409 COUNT_CHANGED with nothing written. Every value in the
   // answer is a count, a flag or a lab id. The secret comes from the header only. server/veritascanMarkCorrection.ts.
   app.post("/api/admin/veritascan/correct-auto-marks", (req: any, res) => {
@@ -35725,7 +35740,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         entityType: "veritascan_item", entityId: m.id,
         entityLabel: `VeritaScan item ${m.item_id} moved back to Not Assessed: a ${m.module} automatic mark the records don't support`,
         before: { status: m.status, notes: m.notes, completion_source: m.completion_source, completion_link: m.completion_link, completion_note: m.completion_note, updated_at: m.updated_at },
-        after: { status: "Not Assessed", completion_source: CORRECTED_SOURCE, completion_link: null, scan_id: m.scan_id, lab_id: m.lab_id },
+        after: { status: "Not Assessed", completion_source: CORRECTED_SOURCE, completion_link: correctionKeepsLink(m.module) ? m.completion_link : null, scan_id: m.scan_id, lab_id: m.lab_id },
         ipAddress: req.ip,
       });
     }

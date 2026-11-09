@@ -8,7 +8,10 @@
 //   5. A VeritaCheck mark stays when a passing study in the same scope marks that item, and only in that scope.
 //   6. The scan screen's auto-save, which rewrites updated_at on every row, is not a change. It is counted, and the marks still move.
 //   7. A write needs the count the dry run gave. It moves those rows, writes the note, audits each one, leaves the rest byte for byte, and a second run changes nothing.
-//   8. A row changed after the plan stays, a failure part way changes nothing, and a later passing study can still mark a corrected item.
+//   8. A row changed after the plan stays, a failure part way changes nothing, and a later passing study can still reach a corrected
+//      item, as evidence since BUG-135.
+// BUG-135 (2026-11-09, Q246 = 1) adds the veritacheck_passing category: a22, a mark on a passing study, now moves too, keeping its study
+// link. These labs have no VeritaMap, so no coverage is complete. tests/integration/veritacheck-scan-evidence.test.ts covers the category.
 // Run: npm run test:veritascan-mark-correction
 import http from "node:http";
 import express from "express";
@@ -102,8 +105,8 @@ async function main() {
     // Two more that move until the lab acts on them, through the real route.
     const a70 = seed(A, 70, "veritacomp_auto", COMP_NOTE), a71 = seed(A, 71, "veritacomp_auto", COMP_NOTE);
 
-    const moving = [a61, a62, a63, a2_61, b64, demo66, nolab67, b68, a30, b21];
-    const staying = [a60, a65, a1, a2_65, b58, b59, b62, b63, b66, b143, a21, nolab99, b27, a22, a23];
+    const moving = [a61, a62, a63, a2_61, b64, demo66, nolab67, b68, a30, b21, a22];
+    const staying = [a60, a65, a1, a2_65, b58, b59, b62, b63, b66, b143, a21, nolab99, b27, a23];
     const row = (id: number) => sqlite.prepare("SELECT * FROM veritascan_items WHERE id = ?").get(id) as any;
     const allRows = () => JSON.stringify(sqlite.prepare("SELECT * FROM veritascan_items ORDER BY id").all());
     const scansRaw = () => JSON.stringify(sqlite.prepare("SELECT id, updated_at FROM veritascan_scans ORDER BY id").all());
@@ -112,8 +115,8 @@ async function main() {
     // 1. The secret
     check("1. no secret is refused", (await call("POST", ROUTE, {})).s === 403);
     check("1. a wrong secret is refused", (await call("POST", ROUTE, {}, { "x-admin-secret": "wrong" })).s === 403);
-    check("1. a secret in the body is refused", (await call("POST", ROUTE, { secret: SECRET, dryRun: false, expectedTotal: 12 })).s === 403);
-    check("1. a secret in the URL is refused", (await call("POST", `${ROUTE}?secret=${SECRET}`, { dryRun: false, expectedTotal: 12 })).s === 403);
+    check("1. a secret in the body is refused", (await call("POST", ROUTE, { secret: SECRET, dryRun: false, expectedTotal: 13 })).s === 403);
+    check("1. a secret in the URL is refused", (await call("POST", `${ROUTE}?secret=${SECRET}`, { dryRun: false, expectedTotal: 13 })).s === 403);
     check("1. a signed-in owner is refused", (await call("POST", ROUTE, {}, { Authorization: `Bearer ${T}` })).s === 403);
 
     // 2. The dry run
@@ -135,7 +138,8 @@ async function main() {
     const d = first.j;
     check("3. VeritaComp: the marks to move, with the two the lab hasn't touched yet", d.veritacomp?.to_move === 10, JSON.stringify(d.veritacomp));
     check("3. VeritaCheck: the marks to move", d.veritacheck?.to_move === 2, JSON.stringify(d.veritacheck));
-    check("3. the total", d.total_to_move === 12, String(d.total_to_move));
+    check("3. VeritaCheck from a passing study (BUG-135): the mark on item 22 moves", d.veritacheck_passing?.to_move === 1 && d.veritacheck_passing?.from_passing_study_still_compliant === 1 && planMarkCorrection(sqlite).toMove.some((m: any) => m.id === a22 && m.module === "veritacheck_passing"), JSON.stringify(d.veritacheck_passing));
+    check("3. the total", d.total_to_move === 13, String(d.total_to_move));
     check("3. item 60 is still in the mapping and isn't touched", JSON.stringify(COMPETENCY_SCAN_ITEMS.technical) === "[60]" && d.veritacomp?.in_current_mapping_not_touched === 1);
     check("3. a study that passed or is gone isn't touched", d.veritacheck?.study_not_draft_or_failed_not_touched === 1 && d.veritacheck?.study_not_found_not_touched === 1);
     const audit = (await call("GET", AUDIT, undefined, admin)).j;
@@ -144,7 +148,7 @@ async function main() {
     check("3. VeritaComp reconciles with the audit route: to move plus left alone is its outside-the-mapping count", audit.veritacomp?.outside_current_mapping?.still_compliant === d.veritacomp?.outside_mapping_still_compliant && d.veritacomp?.to_move + sum(lc) === d.veritacomp?.outside_mapping_still_compliant, `${audit.veritacomp?.outside_current_mapping?.still_compliant} vs ${d.veritacomp?.outside_mapping_still_compliant}`);
     check("3. VeritaCheck reconciles with the audit route's draft or failed count", audit.veritacheck?.from_draft_or_failed_study === d.veritacheck?.from_draft_or_failed_study_still_compliant && d.veritacheck?.to_move + sum(lk) === d.veritacheck?.from_draft_or_failed_study_still_compliant, `${audit.veritacheck?.from_draft_or_failed_study} vs ${d.veritacheck?.from_draft_or_failed_study_still_compliant}`);
     const lab = (j: any, id: number) => (j.by_lab ?? []).find((x: any) => x.lab_id === id) ?? {};
-    check("3. per lab: lab A", lab(d, labA).veritacomp === 6 && lab(d, labA).veritacheck === 1 && lab(d, labA).scans_with_a_mark_to_move === 2 && lab(d, labA).left_alone === 2 && lab(d, labA).is_demo === false, JSON.stringify(lab(d, labA)));
+    check("3. per lab: lab A", lab(d, labA).veritacomp === 6 && lab(d, labA).veritacheck === 1 && lab(d, labA).veritacheck_passing === 1 && lab(d, labA).scans_with_a_mark_to_move === 2 && lab(d, labA).left_alone === 2 && lab(d, labA).is_demo === false, JSON.stringify(lab(d, labA)));
     check("3. per lab: lab B", lab(d, labB).veritacomp === 2 && lab(d, labB).veritacheck === 1 && lab(d, labB).scans_with_a_mark_to_move === 1 && lab(d, labB).left_alone === 7, JSON.stringify(lab(d, labB)));
     check("3. per lab: a demo lab says so", lab(d, labDemo).veritacomp === 1 && lab(d, labDemo).is_demo === true, JSON.stringify(lab(d, labDemo)));
     check("3. scans with no lab are counted apart", d.scans_with_no_lab?.veritacomp === 1 && d.scans_with_no_lab?.left_alone === 1 && d.scans_with_no_lab?.scans_with_a_mark_to_move === 1, JSON.stringify(d.scans_with_no_lab));
@@ -170,40 +174,41 @@ async function main() {
     check("6. the screen's auto-save sends the whole scan back", saved.s === 200 && saved.j.count === onScreen.length && onScreen.length > 5, saved.text.slice(0, 120));
     check("6. setup: that rewrote updated_at on a mark nobody touched", row(a61).updated_at !== MARK_AT && row(a61).status === "Compliant" && row(a61).completion_source === "veritacomp_auto", row(a61).updated_at);
     const afterSave = await dry();
-    check("6. the marks still move: a rewritten timestamp isn't a change", afterSave.total_to_move === 12, String(afterSave.total_to_move));
-    check("6. and they're counted as sitting in a scan saved since the mark", afterSave.scan_saved_after_mark === 6, String(afterSave.scan_saved_after_mark));
+    check("6. the marks still move: a rewritten timestamp isn't a change", afterSave.total_to_move === 13, String(afterSave.total_to_move));
+    check("6. and they're counted as sitting in a scan saved since the mark", afterSave.scan_saved_after_mark === 7, String(afterSave.scan_saved_after_mark));
 
     // 4, through the real route: the lab acts on two of them.
     check("4. setup: the lab adds a note to one", (await call("PUT", `${L}/items/70`, { status: "Compliant", notes: "We checked this one" }, auth)).s === 200);
     check("4. setup: and changes the status of another", (await call("PUT", `${L}/items/71`, { status: "Needs Attention", notes: COMP_NOTE }, auth)).s === 200);
     const afterEdits = await dry();
-    check("4. both stop being marks to move", afterEdits.total_to_move === 10 && afterEdits.veritacomp.left_alone.lab_note_on_item === 3, JSON.stringify(afterEdits.veritacomp));
+    check("4. both stop being marks to move", afterEdits.total_to_move === 11 && afterEdits.veritacomp.left_alone.lab_note_on_item === 3, JSON.stringify(afterEdits.veritacomp));
     staying.push(a70, a71);
 
     // 7. The write
     const beforeWrite = allRows();
     const noCount = await call("POST", ROUTE, { dryRun: false }, admin);
-    check("7. a write with no count is refused", noCount.s === 409 && noCount.j.code === "COUNT_CHANGED" && noCount.j.total_to_move === 10, noCount.text.slice(0, 160));
-    const staleCount = await call("POST", ROUTE, { dryRun: false, expectedTotal: 12 }, admin);
+    check("7. a write with no count is refused", noCount.s === 409 && noCount.j.code === "COUNT_CHANGED" && noCount.j.total_to_move === 11, noCount.text.slice(0, 160));
+    const staleCount = await call("POST", ROUTE, { dryRun: false, expectedTotal: 13 }, admin);
     check("7. a write naming an old count is refused", staleCount.s === 409 && staleCount.j.code === "COUNT_CHANGED", staleCount.text.slice(0, 160));
-    const asText = await call("POST", ROUTE, { dryRun: false, expectedTotal: "10" }, admin);
+    const asText = await call("POST", ROUTE, { dryRun: false, expectedTotal: "11" }, admin);
     check("7. a count sent as text is refused", asText.s === 409);
     check("7. a refused write changes nothing", allRows() === beforeWrite && audits() === 0);
     const left = Object.fromEntries(staying.map((id) => [id, JSON.stringify(row(id))]));
     const auditBeforeWrite = (await call("GET", AUDIT, undefined, admin)).j;
-    const wrote = await call("POST", ROUTE, { dryRun: false, expectedTotal: 10 }, admin);
-    check("7. the write answers", wrote.s === 200 && wrote.j.dryRun === false && wrote.j.changed === 10 && wrote.j.remaining === 0, wrote.text.slice(0, 200));
+    const wrote = await call("POST", ROUTE, { dryRun: false, expectedTotal: 11 }, admin);
+    check("7. the write answers", wrote.s === 200 && wrote.j.dryRun === false && wrote.j.changed === 11 && wrote.j.remaining === 0, wrote.text.slice(0, 200));
     const today = new Date().toISOString().slice(0, 10);
-    const compMoved = moving.filter((id) => id !== a30 && id !== b21);
+    const compMoved = moving.filter((id) => id !== a30 && id !== b21 && id !== a22);
     check("7. each moved row reads Not Assessed", moving.every((id) => row(id).status === "Not Assessed"), JSON.stringify(moving.map((id) => row(id).status)));
     check("7. a VeritaComp row carries the note saying why", compMoved.every((id) => row(id).notes === correctionNote("veritacomp", today) && row(id).completion_note === row(id).notes), row(a61).notes);
     check("7. a VeritaCheck row carries its own", [a30, b21].every((id) => row(id).notes === correctionNote("veritacheck", today)), row(a30).notes);
     check("7. the notes have no em dash and the right marks", !/—/.test(correctionNote("veritacomp", today) + correctionNote("veritacheck", today)) && correctionNote("veritacomp", today).includes("VeritaComp™") && correctionNote("veritacheck", today).includes("VeritaCheck®"));
-    check("7. the source says it was corrected, and the link is gone", moving.every((id) => row(id).completion_source === CORRECTED_SOURCE && row(id).completion_link === null));
+    check("7. the source says it was corrected, and the link is gone", moving.filter((id) => id !== a22).every((id) => row(id).completion_source === CORRECTED_SOURCE && row(id).completion_link === null));
+    check("7. a mark from a passing study reads corrected and keeps its study link as evidence", row(a22).completion_source === CORRECTED_SOURCE && row(a22).completion_link === link(passA) && row(a22).notes === correctionNote("veritacheck_passing", today), JSON.stringify(row(a22)));
     check("7. every other row is byte for byte the same", staying.every((id) => JSON.stringify(row(id)) === left[id]), staying.filter((id) => JSON.stringify(row(id)) !== left[id]).join(","));
     const scanTime = (id: number) => (sqlite.prepare("SELECT updated_at AS u FROM veritascan_scans WHERE id = ?").get(id) as any).u;
     check("7. the scans it changed show it", [A2, B, DEMO, NOLAB].every((id) => scanTime(id) !== MARK_AT));
-    check("7. each moved row has an audit row", audits() === 10, String(audits()));
+    check("7. each moved row has an audit row", audits() === 11, String(audits()));
     const auditRow = sqlite.prepare("SELECT owner_user_id, before_json, after_json, entity_label FROM audit_log WHERE entity_type = 'veritascan_item' AND entity_id = ?").get(String(a61)) as any;
     const before = JSON.parse(auditRow?.before_json ?? "{}");
     check("7. the audit row holds what the row said before, so it can be read back", before.status === "Compliant" && before.notes === COMP_NOTE && before.completion_source === "veritacomp_auto" && before.completion_link === "/veritacomp-app", auditRow?.before_json);
@@ -213,7 +218,7 @@ async function main() {
     const afterWrite = allRows();
     const again = await dry();
     const secondWrite = await call("POST", ROUTE, { dryRun: false, expectedTotal: 0 }, admin);
-    check("7. a second run finds nothing and changes nothing", again.total_to_move === 0 && secondWrite.s === 200 && secondWrite.j.changed === 0 && allRows() === afterWrite && audits() === 10, secondWrite.text.slice(0, 120));
+    check("7. a second run finds nothing and changes nothing", again.total_to_move === 0 && secondWrite.s === 200 && secondWrite.j.changed === 0 && allRows() === afterWrite && audits() === 11, secondWrite.text.slice(0, 120));
 
     // 8. The edges
     const e1 = seed(DEMO, 80, "veritacomp_auto", COMP_NOTE), e2 = seed(DEMO, 81, "veritacomp_auto", COMP_NOTE);
@@ -227,8 +232,9 @@ async function main() {
     let threw = false;
     try { applyMarkCorrection(sqlite, [good, { ...good, id: {} as any }], now); } catch { threw = true; }
     check("8. a failure part way changes nothing: all of it or none of it", threw && row(e3).status === "Compliant", String(threw));
-    autoCompleteVeritaScanItems({ id: mkStudy("pass", "precision", labA), userId: ownerId, testName: "Made-up Sodium", studyType: "precision", labId: labA, status: "pass" });
-    check("8. a later passing study can still mark a corrected item", row(a30).status === "Compliant" && row(a30).completion_source === "veritacheck_auto", JSON.stringify([row(a30).status, row(a30).completion_source]));
+    const laterPass = mkStudy("pass", "precision", labA);
+    autoCompleteVeritaScanItems({ id: laterPass, userId: ownerId, testName: "Made-up Sodium", studyType: "precision", labId: labA, status: "pass" });
+    check("8. a later passing study links itself as evidence on a corrected item, and leaves the status to the lab", row(a30).status === "Not Assessed" && row(a30).completion_source === "veritacheck_evidence" && row(a30).completion_link === link(laterPass), JSON.stringify([row(a30).status, row(a30).completion_source, row(a30).completion_link]));
   } finally {
     server.close();
   }

@@ -14,7 +14,7 @@ import { API_BASE } from "@/lib/queryClient";
 import { downloadPdfToken } from "@/lib/utils";
 import { useLabRoute } from "@/hooks/useLabRoute";
 import { saveAs } from "file-saver";
-import { SCAN_ITEMS, DOMAINS, DOMAIN_COLORS, STATUS_COLORS, type ScanStatus } from "@/lib/veritaScanData";
+import { SCAN_ITEMS, DOMAINS, DOMAIN_COLORS, STATUS_COLORS, type ScanStatus, isVeritaCheckEvidence } from "@/lib/veritaScanData";
 import { SampleReportsSection } from "@/components/SampleReportsSection";
 import {
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid,
@@ -801,7 +801,7 @@ export default function DemoLabPage() {
                       const domainCompliant = domainItems.filter((i) => scanItemMap[i.id]?.status === "Compliant").length;
                       const domainPct = Math.round((domainCompliant / domainItems.length) * 100);
                       const isExpanded = expandedDomains.has(domain);
-                      const hasVcItems = domainItems.some((i) => scanItemMap[i.id]?.completion_source === "veritacheck_auto");
+                      const hasVcItems = domainItems.some((i) => scanItemMap[i.id]?.completion_source === "veritacheck_auto" || isVeritaCheckEvidence(scanItemMap[i.id]?.completion_source, scanItemMap[i.id]?.completion_link));
 
                       const visibleItems = domainItems.slice(0, DEMO_SCAN_ITEMS_PER_DOMAIN);
 
@@ -818,7 +818,7 @@ export default function DemoLabPage() {
                                   <TooltipTrigger asChild>
                                     <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-primary/10 text-primary border border-primary/20 shrink-0">VC</span>
                                   </TooltipTrigger>
-                                  <TooltipContent>Auto-completed items from VeritaCheck&#174;</TooltipContent>
+                                  <TooltipContent>Items with VeritaCheck&#174; evidence or marks</TooltipContent>
                                 </Tooltip>
                               )}
                               <span className="text-xs text-muted-foreground shrink-0">
@@ -843,7 +843,8 @@ export default function DemoLabPage() {
                               {visibleItems.map((item) => {
                                 const saved = scanItemMap[item.id];
                                 const status: ScanStatus = saved?.status || "Not Assessed";
-                                const isAutoCompleted = saved?.completion_source === "veritacheck_auto";
+                                const vcEvidence = isVeritaCheckEvidence(saved?.completion_source, saved?.completion_link);
+                                const isAutoCompleted = saved?.completion_source === "veritacheck_auto" || vcEvidence;
 
                                 return (
                                   <div key={item.id} className="px-4 py-2.5 flex items-start gap-3">
@@ -861,11 +862,11 @@ export default function DemoLabPage() {
                                         <Tooltip>
                                           <TooltipTrigger asChild>
                                             <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-primary/10 text-primary border border-primary/20">
-                                              VC
+                                              {vcEvidence ? "VC evidence" : "VC"}
                                             </span>
                                           </TooltipTrigger>
                                           <TooltipContent side="left" className="max-w-xs">
-                                            <p className="text-xs font-medium">Auto-completed by VeritaCheck&#174;</p>
+                                            <p className="text-xs font-medium">{vcEvidence ? "Evidence from VeritaCheck®" : "Auto-completed by VeritaCheck®"}</p>
                                             <p className="text-xs text-muted-foreground mt-0.5">{saved?.completion_note}</p>
                                           </TooltipContent>
                                         </Tooltip>
