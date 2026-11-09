@@ -11,7 +11,7 @@
 // date always equals the date shown on the VeritaTrack screen (no drift).
 import { db } from "./db";
 import { labToday, labTimeZoneById } from "./dateLocal";
-import { nextDue, daysUntilDateOnly } from "./veritatrack";
+import { nextDue, daysUntilDateOnly, LIVE_SIGNOFF } from "./veritatrack";
 import { resolveLabGroup, type ResolvedGroup } from "./labGroups";
 
 // Approaching-reminder ladder (days before due). Filtered to <= the lab's
@@ -174,7 +174,7 @@ export async function runVeritaTrackReminders(deps: { send?: (msg: { from: strin
     for (const t of tasks) {
       summary.tasksChecked++;
       const last = sqlite.prepare(
-        "SELECT completed_date FROM veritatrack_signoffs WHERE task_id = ? ORDER BY completed_date DESC LIMIT 1"
+        `SELECT completed_date FROM veritatrack_signoffs WHERE task_id = ? AND ${LIVE_SIGNOFF} ORDER BY completed_date DESC LIMIT 1`
       ).get(t.id) as any;
       const due = last ? nextDue(last.completed_date, t.frequency_months, t.frequency_days) : null;
       const days = due ? daysUntilDateOnly(due, today) : null;

@@ -3931,6 +3931,21 @@ sqlite.exec(`
     // fresh DB: CREATE TABLE above handled it
   }
 }
+// Michael 2026-11-09: a VeritaTrack sign-off is never removed. A mistaken one is voided with a reason and stays on the
+// Sign-off log; every read that picks a task's last sign-off skips a voided row (server/veritatrack.ts LIVE_SIGNOFF).
+// PRAGMA migration block per the New DB Table Rule (CLAUDE.md section 8). Fresh and existing databases both get the columns here.
+{
+  try {
+    const cols = (sqlite.prepare("PRAGMA table_info(veritatrack_signoffs)").all() as { name: string }[]).map(c => c.name);
+    if (cols.length > 0) {
+      if (!cols.includes("voided_at")) sqlite.exec("ALTER TABLE veritatrack_signoffs ADD COLUMN voided_at TEXT");
+      if (!cols.includes("voided_by_user_id")) sqlite.exec("ALTER TABLE veritatrack_signoffs ADD COLUMN voided_by_user_id INTEGER");
+      if (!cols.includes("void_reason")) sqlite.exec("ALTER TABLE veritatrack_signoffs ADD COLUMN void_reason TEXT");
+    }
+  } catch (err: any) {
+    console.warn("[migration] veritatrack_signoffs void columns failed (non-fatal):", err?.message);
+  }
+}
 
 // VeritaMap analyte values -- per lab, per analyte, per age/sex band.
 // Real labs stratify reference ranges and critical values by age (peds vs
