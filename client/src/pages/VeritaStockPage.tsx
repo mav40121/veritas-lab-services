@@ -325,6 +325,21 @@ function ItemFormDialog({ open, onClose, onSave, editItem, inventory, consumptio
   const defaultCategory = onStock ? "Supply" : "Reagent";
   const defaultDepartment = onStock ? "Materials Management" : "Core Lab";
 
+  // The Vendor field picks from the lab's vendor directory (Heywood, Victor 2026-11-09, REQ-137), as the recall
+  // form's vendor field already does. Typing stays allowed, so an item whose vendor isn't in the directory, or
+  // was entered before it, keeps working; the item still stores the vendor's name as text.
+  const activeLabId = useActiveLabId();
+  const [vendorDirectory, setVendorDirectory] = useState<{ id: number; name: string }[]>([]);
+  useEffect(() => {
+    if (!open || !activeLabId) return;
+    let gone = false;
+    fetch(`${API_BASE}/api/labs/${activeLabId}/veritastock/vendors`, { headers: authHeaders() })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((rows) => { if (!gone && Array.isArray(rows)) setVendorDirectory(rows); })
+      .catch(() => {});
+    return () => { gone = true; };
+  }, [open, activeLabId]);
+
   useEffect(() => {
     if (editItem) {
       setForm({ ...editItem });
@@ -450,8 +465,16 @@ function ItemFormDialog({ open, onClose, onSave, editItem, inventory, consumptio
                 <Input value={form.lot_number ?? ""} onChange={(e) => setForm({ ...form, lot_number: e.target.value })} />
               </div>
               <div className="space-y-1.5">
-                <Label>Vendor</Label>
-                <Input value={form.vendor ?? ""} onChange={(e) => setForm({ ...form, vendor: e.target.value })} />
+                <Label htmlFor="item-vendor">Vendor</Label>
+                <Input
+                  id="item-vendor"
+                  list="item-vendor-list"
+                  data-testid="item-vendor"
+                  placeholder={vendorDirectory.length ? "Pick from your vendor directory or type" : undefined}
+                  value={form.vendor ?? ""}
+                  onChange={(e) => setForm({ ...form, vendor: e.target.value })}
+                />
+                <datalist id="item-vendor-list">{vendorDirectory.map((v) => <option key={v.id} value={v.name} />)}</datalist>
               </div>
               <div className="space-y-1.5">
                 <Label>Storage Location</Label>
