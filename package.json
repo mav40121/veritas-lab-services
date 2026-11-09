@@ -126,6 +126,7 @@
     "test:competency-register": "rm -f .tmp-comp-reg.db && DB_PATH=.tmp-comp-reg.db JWT_SECRET=test-jwt-secret ADMIN_SECRET=test-admin-secret STRIPE_SECRET_KEY=sk_test_dummy STRIPE_WEBHOOK_SECRET=whsec_dummy tsx tests/integration/competency-register.test.ts",
     "test:veritascan-mark-correction": "rm -f .tmp-scan-correction.db && DB_PATH=.tmp-scan-correction.db JWT_SECRET=test-jwt-secret ADMIN_SECRET=test-admin-secret STRIPE_SECRET_KEY=sk_test_dummy STRIPE_WEBHOOK_SECRET=whsec_dummy tsx tests/integration/veritascan-mark-correction.test.ts",
     "test:competency-scan-items": "rm -f .tmp-comp-scan-items.db && DB_PATH=.tmp-comp-scan-items.db JWT_SECRET=test-jwt-secret ADMIN_SECRET=test-admin-secret STRIPE_SECRET_KEY=sk_test_dummy STRIPE_WEBHOOK_SECRET=whsec_dummy tsx tests/integration/competency-scan-items.test.ts",
+    "test:veritacheck-scan-evidence": "rm -f .tmp-vc-scan-evidence.db && DB_PATH=.tmp-vc-scan-evidence.db JWT_SECRET=test-jwt-secret ADMIN_SECRET=test-admin-secret STRIPE_SECRET_KEY=sk_test_dummy STRIPE_WEBHOOK_SECRET=whsec_dummy tsx tests/integration/veritacheck-scan-evidence.test.ts",
     "test:veritadc-readiness-report": "rm -f .tmp-dc-report.db && DB_PATH=.tmp-dc-report.db JWT_SECRET=test-jwt-secret ADMIN_SECRET=test-admin-secret STRIPE_SECRET_KEY=sk_test_dummy STRIPE_WEBHOOK_SECRET=whsec_dummy tsx tests/integration/veritadc-readiness-report.test.ts"
   },
   "dependencies": {

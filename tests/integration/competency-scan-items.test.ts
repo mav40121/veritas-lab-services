@@ -9,7 +9,8 @@
 //      first save or on the edit that fills them in.
 //   3. The mark goes to the lab's own scans, never to another lab's. The program's own type decides, not the request.
 //   4. An answer the lab changed on an auto-marked item stays, and the lab's own Compliant stays the lab's.
-//   5. Draft and failed studies mark nothing. A passing study still marks, and so does a draft finished as a pass.
+//   5. Draft and failed studies mark nothing. A passing study links itself as evidence (BUG-135: no status, the lab answers), and
+//      so does a draft finished as a pass. tests/integration/veritacheck-scan-evidence.test.ts covers the coverage marks on 21 and 29.
 //   6. GET /api/admin/veritascan/auto-completion-audit needs the admin secret, returns counts only and writes nothing.
 //
 // Boots the REAL routes against a throwaway SQLite DB (made-up rows only). Run: npm run test:competency-scan-items
@@ -273,11 +274,11 @@ async function main() {
     const failStudy = await marksFrom(() => call("POST", S, study(bad), T, labA));
     check("5a. a failed study marks nothing", failStudy.r.status === 200 && statusOf(failStudy.r.body.id) === "fail" && failStudy.ids.length === 0, `HTTP ${failStudy.r.status} ${statusOf(failStudy.r.body.id)} items=${failStudy.ids}`);
     const passStudy = await marksFrom(() => call("POST", S, study(good), T, labA));
-    check("5b. a passing study still marks its items", passStudy.r.status === 200 && statusOf(passStudy.r.body.id) === "pass" && passStudy.ids.length > 0 && rowsOf(passStudy.scan).every((r) => r.status === "Compliant" && r.completion_source === "veritacheck_auto" && r.completion_link === `/study/${passStudy.r.body.id}/results`), `HTTP ${passStudy.r.status} items=${passStudy.ids}`);
+    check("5b. a passing study links itself as evidence on its items and marks none Compliant", passStudy.r.status === 200 && statusOf(passStudy.r.body.id) === "pass" && passStudy.ids.length > 0 && rowsOf(passStudy.scan).every((r) => r.status === "Not Assessed" && r.completion_source === "veritacheck_evidence" && r.completion_link === `/study/${passStudy.r.body.id}/results`), `HTTP ${passStudy.r.status} items=${passStudy.ids}`);
     const finished = await marksFrom(() => call("PUT", `${S}/${draft.r.body.id}`, study(good), T, labA));
-    check("5c. a draft finished as a pass marks its items then", finished.r.status === 200 && statusOf(draft.r.body.id) === "pass" && finished.ids.length > 0, `HTTP ${finished.r.status} ${finished.r.body.error ?? ""} items=${finished.ids}`);
+    check("5c. a draft finished as a pass links its items then", finished.r.status === 200 && statusOf(draft.r.body.id) === "pass" && finished.ids.length > 0, `HTTP ${finished.r.status} ${finished.r.body.error ?? ""} items=${finished.ids}`);
     const reEdit = await marksFrom(() => call("PUT", `${S}/${draft.r.body.id}`, study(good), T, labA));
-    check("5c. editing a study that had already passed doesn't mark again", reEdit.r.status === 200 && reEdit.ids.length === 0, `items=${reEdit.ids}`);
+    check("5c. editing a study that had already passed doesn't link again", reEdit.r.status === 200 && reEdit.ids.length === 0, `items=${reEdit.ids}`);
     const failEdit = await marksFrom(() => call("PUT", `${S}/${failStudy.r.body.id}`, study(bad), T, labA));
     check("5c. a failed study saved again as a fail marks nothing", failEdit.r.status === 200 && failEdit.ids.length === 0, `items=${failEdit.ids}`);
     const legacyDraft = await marksFrom(() => call("POST", "/api/studies", { status: "draft", testName: "Made-up Sodium", studyType: "cal_ver" }, T, labA));
@@ -285,9 +286,10 @@ async function main() {
     const legacyFail = await marksFrom(() => call("POST", "/api/studies", study(bad), T, labA));
     check("5d. a failed study marks nothing", legacyFail.r.status < 300 && legacyFail.ids.length === 0, `HTTP ${legacyFail.r.status} items=${legacyFail.ids}`);
     const legacyPass = await marksFrom(() => call("POST", "/api/studies", study(good), T, labA));
-    check("5d. a passing study marks its items", legacyPass.r.status < 300 && legacyPass.ids.length > 0, `HTTP ${legacyPass.r.status} ${JSON.stringify(legacyPass.r.body.error ?? "")} items=${legacyPass.ids}`);
+    const evidenceOnly = (scan: number) => rowsOf(scan).every((r) => r.status === "Not Assessed" && r.completion_source === "veritacheck_evidence");
+    check("5d. a passing study links its items as evidence", legacyPass.r.status < 300 && legacyPass.ids.length > 0 && evidenceOnly(legacyPass.scan), `HTTP ${legacyPass.r.status} ${JSON.stringify(legacyPass.r.body.error ?? "")} items=${legacyPass.ids}`);
     const legacyFinish = await marksFrom(() => call("PUT", `/api/studies/${legacyDraft.r.body.id}`, study(good), T, labA));
-    check("5d. a draft finished as a pass marks its items", legacyFinish.r.status === 200 && legacyFinish.ids.length > 0, `HTTP ${legacyFinish.r.status} ${JSON.stringify(legacyFinish.r.body.error ?? "")} items=${legacyFinish.ids}`);
+    check("5d. a draft finished as a pass links its items as evidence", legacyFinish.r.status === 200 && legacyFinish.ids.length > 0 && evidenceOnly(legacyFinish.scan), `HTTP ${legacyFinish.r.status} ${JSON.stringify(legacyFinish.r.body.error ?? "")} items=${legacyFinish.ids}`);
   } finally {
     server.close();
   }

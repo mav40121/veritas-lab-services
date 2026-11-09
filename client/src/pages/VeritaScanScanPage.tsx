@@ -28,6 +28,7 @@ import {
   type ScanItem,
   type ScanDomain,
   type ScanStatus,
+  isVeritaCheckEvidence,
 } from "@/lib/veritaScanData";
 import {
   ArrowLeft,
@@ -511,6 +512,7 @@ function ItemRow({
 
   const showDueDate =
     state.status === "Needs Attention" || state.status === "Immediate Action";
+  const vcEvidence = isVeritaCheckEvidence(state.completionSource, state.completionLink);
 
   return (
     <div
@@ -544,21 +546,21 @@ function ItemRow({
           {/* Citation badges */}
           <CitationRow item={item} expanded={citExpanded} accreditationChoice={accreditationChoice} />
 
-          {/* VC auto-completion badge */}
-          {state.completionSource === "veritacheck_auto" && (
+          {/* VC badge: a VeritaCheck mark, or a study linked as evidence (BUG-135; a corrected mark keeps its study link) */}
+          {(state.completionSource === "veritacheck_auto" || vcEvidence) && (
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span className="inline-flex items-center px-1.5 py-0.5 mt-1 rounded text-[9px] font-bold bg-primary/10 text-primary border border-primary/20 cursor-help">
-                    VC
+                    {vcEvidence ? "VC evidence" : "VC"}
                   </span>
                 </TooltipTrigger>
                 <TooltipContent side="right" className="max-w-xs">
-                  <p className="text-xs font-medium">Auto-completed by VeritaCheck&#174;</p>
+                  <p className="text-xs font-medium">{vcEvidence ? "Evidence from VeritaCheck®" : "Auto-completed by VeritaCheck®"}</p>
                   {state.completionNote && <p className="text-xs text-muted-foreground mt-0.5">{state.completionNote}</p>}
                   {state.completionLink && (
                     <Link href={state.completionLink} className="text-xs text-primary mt-1 block hover:underline">
-                      Click to view study &rarr;
+                      {state.completionLink.startsWith("/study/") ? "Click to view study" : "Click to view coverage"} &rarr;
                     </Link>
                   )}
                 </TooltipContent>

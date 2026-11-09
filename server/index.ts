@@ -342,6 +342,29 @@ app.use((req, res, next) => {
     console.error("[competency-reminders] Scheduler setup error:", err.message);
   }
 
+  // BUG-135 (Michael 2026-11-09, Q246 = 1): VeritaScan items 21 and 29 read Compliant from VeritaCheck Coverage only while the
+  // whole lab is current. Every pass and sign-off re-checks; this daily run at midnight UTC catches what no save does, a signed
+  // study passing its 6 months. Only labs holding a coverage mark; each lab on its own calendar day (server/integrations.ts).
+  try {
+    const { recheckCoverageScanMarks } = await import("./integrations");
+    const runScanCoverage = () => {
+      try {
+        const r = recheckCoverageScanMarks();
+        console.log(`[scan-coverage] labs=${r.labs} lapsed=${r.lapsed} marked=${r.marked} errors=${r.errors}`);
+      } catch (err: any) {
+        console.error("[scan-coverage] Run failed:", err?.message || err);
+      }
+    };
+    const now = new Date();
+    const midnight = new Date(now);
+    midnight.setUTCHours(24, 0, 0, 0);
+    const ms = midnight.getTime() - now.getTime();
+    setTimeout(() => { runScanCoverage(); setInterval(runScanCoverage, 24 * 60 * 60 * 1000); }, ms);
+    console.log(`[scan-coverage] Daily re-check scheduled in ${Math.round(ms / 60000)} minutes`);
+  } catch (err: any) {
+    console.error("[scan-coverage] Scheduler setup error:", err.message);
+  }
+
   // Schedule daily VeritaTrack due-date reminder dispatch at midnight UTC.
   // Mirrors the finding/policy reminder schedulers. Per-lab opt-in
   // (veritatrack_reminder_config.enabled); idempotent via

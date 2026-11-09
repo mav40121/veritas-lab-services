@@ -9,6 +9,7 @@
 //   VeritaCheck: Compliant, completion_source still veritacheck_auto, linked to a study that is a draft or failed, unless a passing
 //   study in the same scope marks the same item. The link holds only the study that touched the row last, so a draft saved after a
 //   pass can sit on a mark that a real study does support.
+//   VeritaCheck from a passing study (BUG-135): see below.
 //
 // "Nothing has changed since" is read from the row's content, never its updated_at. The scan screen's auto-save sends every item in
 // the scan on each edit, so one edit rewrites updated_at on every row, including marks nobody looked at. A timestamp test would
@@ -17,7 +18,13 @@
 // Compliant leaves no trace, so scan_saved_after_mark says how many marks to move sit in a scan saved after the mark.
 //
 // Each changed row gets an audit row holding its values from before, so a correction can be read back or undone by hand.
-import { COMPETENCY_SCAN_ITEMS, scanItemsForPassingStudy } from "./integrations";
+//
+// BUG-135 (Michael 2026-11-09, Q246 = 1) adds a third category, veritacheck_passing: Compliant, completion_source still
+// veritacheck_auto, linked to a study that passed, on an item the new rule wouldn't mark. That is every item other than 21 and 29,
+// and 21 or 29 when the scan has no lab or its lab's VeritaCheck Coverage isn't complete. Same "nothing has changed since" test.
+// A moved row reads Not Assessed and admin_correction like the others, but keeps its study link, because a passing study is real
+// evidence for the item; the scan screen shows it as VeritaCheck evidence. The first two categories are unchanged.
+import { COMPETENCY_SCAN_ITEMS, COVERAGE_ITEMS, labCoverageForScan, scanItemsForPassingStudy } from "./integrations";
 
 export const CORRECTED_SOURCE = "admin_correction";
 
@@ -27,7 +34,7 @@ const NOTE_DATE = / on (\d{4}-\d{2}-\d{2})(?: documents all 6 CLIA procedures)?$
 const STUDY_LINK = /^\/study\/(\d+)\/results$/;
 const blank = (v: unknown) => v == null || String(v).trim() === "";
 
-type Module = "veritacomp" | "veritacheck";
+type Module = "veritacomp" | "veritacheck" | "veritacheck_passing";
 type LeftReason = "lab_note_on_item" | "owner_due_or_teaching_note_set" | "evidence_linked" | "source_not_automatic" | "another_passing_study_supports";
 type Row = {
   id: number; scan_id: number; item_id: number; status: string; notes: string | null; owner: string | null; due_date: string | null;
@@ -37,10 +44,13 @@ type Row = {
 export type PlannedMark = Row & { module: Module; savedAfterMark: boolean };
 
 export function correctionNote(module: Module, date: string): string {
-  return module === "veritacomp"
-    ? `Veritas Lab Services moved this item back to Not Assessed on ${date}. VeritaComp™ had marked it Compliant automatically from a competency assessment, and one person's assessment doesn't answer this question. Please review it and enter your answer.`
-    : `Veritas Lab Services moved this item back to Not Assessed on ${date}. VeritaCheck® had marked it Compliant automatically from a study that was a draft or did not pass, so that study doesn't support it. Please review it and enter your answer.`;
+  if (module === "veritacomp") return `Veritas Lab Services moved this item back to Not Assessed on ${date}. VeritaComp™ had marked it Compliant automatically from a competency assessment, and one person's assessment doesn't answer this question. Please review it and enter your answer.`;
+  if (module === "veritacheck") return `Veritas Lab Services moved this item back to Not Assessed on ${date}. VeritaCheck® had marked it Compliant automatically from a study that was a draft or did not pass, so that study doesn't support it. Please review it and enter your answer.`;
+  return `Veritas Lab Services moved this item back to Not Assessed on ${date}. VeritaCheck® had marked it Compliant automatically from one passing study, which doesn't answer this question for the whole lab. The study stays linked as evidence. Please review it and enter your answer.`;
 }
+
+/** A corrected row keeps its study link only in the passing-study category: there the study is real evidence for the item. */
+export const correctionKeepsLink = (module: Module): boolean => module === "veritacheck_passing";
 
 /** Reads only. Works out which marks move and why the others stay. */
 export function planMarkCorrection(sqlite: any) {
@@ -67,6 +77,7 @@ export function planMarkCorrection(sqlite: any) {
   const left = (): Record<LeftReason, number> => ({ lab_note_on_item: 0, owner_due_or_teaching_note_set: 0, evidence_linked: 0, source_not_automatic: 0, another_passing_study_supports: 0 });
   const comp = { outside_mapping_still_compliant: 0, to_move: 0, left_alone: left(), in_current_mapping_not_touched: 0 };
   const check = { from_draft_or_failed_study_still_compliant: 0, to_move: 0, left_alone: left(), study_not_draft_or_failed_not_touched: 0, study_not_found_not_touched: 0 };
+  const passing = { from_passing_study_still_compliant: 0, to_move: 0, left_alone: left(), item_21_or_29_lab_coverage_complete_not_touched: 0 };
   const inMapping = new Set(Object.values(COMPETENCY_SCAN_ITEMS).flat());
   const moving = new Map<number, PlannedMark>();
   const leftPerRow = new Map<number, Row>();
@@ -74,13 +85,32 @@ export function planMarkCorrection(sqlite: any) {
     const markDate = String(r.completion_note ?? r.notes ?? "").match(NOTE_DATE)?.[1];
     moving.set(r.id, { ...r, module, savedAfterMark: !!markDate && String(r.updated_at ?? "").slice(0, 10) > markDate });
   };
+  const coverageByLab = new Map<number, Record<21 | 29, boolean>>();
+  const coverageComplete = (labId: number | null, itemId: number): boolean => {
+    if (labId == null || !(COVERAGE_ITEMS as readonly number[]).includes(itemId)) return false;
+    if (!coverageByLab.has(labId)) coverageByLab.set(labId, labCoverageForScan(sqlite, labId).complete);
+    return coverageByLab.get(labId)![itemId as 21 | 29];
+  };
+  // BUG-135: a mark from a passing study stays only where the new rule would make it, items 21 and 29 on a lab whose coverage is complete.
+  const planPassing = (r: Row) => {
+    passing.from_passing_study_still_compliant++;
+    if (coverageComplete(r.lab_id, r.item_id)) { passing.item_21_or_29_lab_coverage_complete_not_touched++; return; }
+    const reason = changedBy(r);
+    if (reason) { passing.left_alone[reason]++; leftPerRow.set(r.id, r); return; }
+    passing.to_move++;
+    plan(r, "veritacheck_passing");
+  };
 
   for (const r of rows) {
     if (r.completion_source === "veritacheck_auto") {
       const studyId = String(r.completion_link ?? "").match(STUDY_LINK)?.[1];
       const study = studyId ? (studyStmt.get(Number(studyId)) as { status: string } | undefined) : undefined;
       if (!study) { check.study_not_found_not_touched++; continue; }
-      if (study.status !== "draft" && study.status !== "fail") { check.study_not_draft_or_failed_not_touched++; continue; }
+      if (study.status !== "draft" && study.status !== "fail") {
+        check.study_not_draft_or_failed_not_touched++;
+        if (study.status === "pass") planPassing(r);
+        continue;
+      }
       check.from_draft_or_failed_study_still_compliant++;
       const supported = (passingStmt.all(r.lab_id, r.scan_user_id) as Array<{ test_name: string; study_type: string }>)
         .some((s) => scanItemsForPassingStudy(s.study_type, s.test_name).includes(r.item_id));
@@ -99,35 +129,38 @@ export function planMarkCorrection(sqlite: any) {
   }
 
   const toMove = Array.from(moving.values());
-  type Tally = { scans: Set<number>; veritacomp: number; veritacheck: number; left_alone: number; is_demo: boolean };
+  type Tally = { scans: Set<number>; veritacomp: number; veritacheck: number; veritacheck_passing: number; left_alone: number; is_demo: boolean };
+  const emptyTally = (isDemo: number): Tally => ({ scans: new Set(), veritacomp: 0, veritacheck: 0, veritacheck_passing: 0, left_alone: 0, is_demo: !!isDemo });
   const tallies = new Map<number | null, Tally>();
   const tally = (labId: number | null, isDemo: number): Tally => {
-    if (!tallies.has(labId)) tallies.set(labId, { scans: new Set(), veritacomp: 0, veritacheck: 0, left_alone: 0, is_demo: !!isDemo });
+    if (!tallies.has(labId)) tallies.set(labId, emptyTally(isDemo));
     return tallies.get(labId)!;
   };
   for (const m of toMove) { const t = tally(m.lab_id, m.is_demo); t.scans.add(m.scan_id); t[m.module]++; }
   for (const r of Array.from(leftPerRow.values())) tally(r.lab_id, r.is_demo).left_alone++;
-  const counts = (t: Tally) => ({ scans_with_a_mark_to_move: t.scans.size, veritacomp: t.veritacomp, veritacheck: t.veritacheck, left_alone: t.left_alone });
+  const counts = (t: Tally) => ({ scans_with_a_mark_to_move: t.scans.size, veritacomp: t.veritacomp, veritacheck: t.veritacheck, veritacheck_passing: t.veritacheck_passing, left_alone: t.left_alone });
   const report = {
     total_to_move: toMove.length,
     scan_saved_after_mark: toMove.filter((m) => m.savedAfterMark).length,
     veritacomp: comp,
     veritacheck: check,
+    veritacheck_passing: passing,
     by_lab: Array.from(tallies.entries()).filter(([labId]) => labId != null).sort((a, b) => Number(a[0]) - Number(b[0]))
       .map(([labId, t]) => ({ lab_id: Number(labId), is_demo: t.is_demo, ...counts(t) })),
-    scans_with_no_lab: counts(tallies.get(null) ?? { scans: new Set(), veritacomp: 0, veritacheck: 0, left_alone: 0, is_demo: false }),
+    scans_with_no_lab: counts(tallies.get(null) ?? emptyTally(0)),
   };
   return { toMove, report };
 }
 
 /**
  * All of it or none of it. Each update repeats what the row held in the plan, so a row someone changed after the plan stays as it
- * is and isn't returned. The note replaces the auto note, which the plan has shown holds none of the lab's words.
+ * is and isn't returned. The note replaces the auto note, which the plan has shown holds none of the lab's words. The link is
+ * cleared, except on a passing-study mark (correctionKeepsLink), where it stays as the item's evidence.
  */
 export function applyMarkCorrection(sqlite: any, toMove: PlannedMark[], nowIso: string): PlannedMark[] {
   const date = nowIso.slice(0, 10);
   const update = sqlite.prepare(
-    `UPDATE veritascan_items SET status = 'Not Assessed', notes = ?, completion_source = ?, completion_link = NULL, completion_note = ?, updated_at = ?
+    `UPDATE veritascan_items SET status = 'Not Assessed', notes = ?, completion_source = ?, completion_link = CASE WHEN ? = 1 THEN completion_link ELSE NULL END, completion_note = ?, updated_at = ?
      WHERE id = ? AND status = 'Compliant' AND completion_source = ? AND COALESCE(notes, '') = COALESCE(?, '') AND COALESCE(owner, '') = COALESCE(?, '')
        AND COALESCE(due_date, '') = COALESCE(?, '') AND COALESCE(teaching_note, '') = COALESCE(?, '') AND COALESCE(completion_link, '') = COALESCE(?, '')`
   );
@@ -135,7 +168,7 @@ export function applyMarkCorrection(sqlite: any, toMove: PlannedMark[], nowIso: 
   return sqlite.transaction(() => {
     const changed = toMove.filter((m) => {
       const note = correctionNote(m.module, date);
-      return update.run(note, CORRECTED_SOURCE, note, nowIso, m.id, m.completion_source, m.notes, m.owner, m.due_date, m.teaching_note, m.completion_link).changes === 1;
+      return update.run(note, CORRECTED_SOURCE, correctionKeepsLink(m.module) ? 1 : 0, note, nowIso, m.id, m.completion_source, m.notes, m.owner, m.due_date, m.teaching_note, m.completion_link).changes === 1;
     });
     for (const scanId of Array.from(new Set(changed.map((m) => m.scan_id)))) touchScan.run(nowIso, scanId);
     return changed;
