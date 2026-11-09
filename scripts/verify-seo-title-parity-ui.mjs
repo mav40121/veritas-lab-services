@@ -109,6 +109,17 @@ for (const R of ROUTES) {
   check(`${key} 3a. no page errors`, errors.length === 0, errors.slice(0, 2).join(" | "));
   check(`${key} 3b. no em or en dash in the title or description`, !/[—–]/.test(servedTitle + servedDesc));
   summary.push({ path: R.path, servedTitle, servedDesc, renderedTitle: liveTitle, renderedDesc: metas[0] ?? null, titleWrites: writes.title, descWrites: writes.desc.length, errors });
+  // A picture for the PR: the rendered page with its live title and description read back into a banner at the top.
+  // Taken after every check above, so the banner can't affect them.
+  if (["/veritaassure", "/book/scoping-call"].includes(R.path)) {
+    await page.evaluate(([t, d]) => {
+      const b = document.createElement("div");
+      b.setAttribute("style", "position:fixed;top:0;left:0;right:0;z-index:99999;background:#0A3A3D;color:#fff;font:13px/1.4 system-ui;padding:8px 12px");
+      b.textContent = `document.title: ${t}  |  meta description: ${d}`;
+      document.body.appendChild(b);
+    }, [liveTitle, metas[0] ?? ""]);
+    await page.screenshot({ path: path.join(OUT, `seo-title-parity${R.path.replace(/\//g, "-")}.png`) });
+  }
   await ctx.close();
 }
 
