@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { CheckCircle2, ChevronRight, FlaskConical, AlertTriangle } from "lucide-react";
 import { CPRT_FAQ } from "@/lib/faqContent";
+import { ContentUpgrade } from "@/components/ContentUpgrade";
 
 function Callout({ children, type = "info" }: { children: React.ReactNode; type?: "info" | "warning" | "tip" }) {
   const styles = {
@@ -44,8 +45,8 @@ function TocLink({ href, children }: { href: string; children: React.ReactNode }
 
 export default function ArticleCostPerReportablePage() {
   useSEO({
-    title: "What Your Tests Actually Cost: A Four-Layer CPRT Framework for Clinical Laboratories",
-    description: "The CLSI GP11-A four-layer cost-per-reportable-test (CPRT) framework: reagents, labor, equipment, overhead. Which layer answers which question, how to compare configurations honestly, and what to do this quarter.",
+    title: "Cost Per Reportable Test: The Four-Layer CPRT Framework",
+    description: "Calculate your true cost per reportable test with a four-layer model: reagents, labor, equipment, and overhead, built on CLSI GP11-A. Free PDF of the framework.",
   });
   return (
     <div className="min-h-screen bg-background">
@@ -71,6 +72,16 @@ export default function ArticleCostPerReportablePage() {
       {/* Body */}
       <section className="py-12 sm:py-16">
         <div className="max-w-3xl mx-auto px-4 sm:px-6">
+          {/* Content upgrade: the framework as a PDF (SEO handoff 2026-11-09, same pattern as the TEa page). This page
+              has no Key Takeaways, so the box opens the body, right after the header. */}
+          <ContentUpgrade
+            source="upgrade-cprt-framework"
+            assetUrl="/cost-per-reportable-test-framework.pdf"
+            assetName="Cost-Per-Reportable-Test-Framework.pdf"
+            title="Download the four-layer CPRT framework (PDF)"
+            description="The full cost-per-reportable-test framework, layer by layer, in a printable PDF for budget and capital meetings. Free."
+          />
+
           {/* Lede */}
           <div className="prose-styles space-y-4 text-[15px] leading-relaxed mb-10">
             <p>

@@ -5,10 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { CheckCircle2, ChevronRight, Clock, FlaskConical, User, ExternalLink } from "lucide-react";
 import { NewsletterSignup } from "@/components/NewsletterSignup";
+import { ContentUpgrade } from "@/components/ContentUpgrade";
 import { MOCK_INSPECTION_FAQ } from "@/lib/faqContent";
 
 export default function ArticleMockInspectionPage() {
-  useSEO({ title: "What Happens During a TJC Laboratory Inspection, 2026 Guide | Veritas Lab Services", description: "A former Joint Commission surveyor walks through a laboratory survey phase by phase, the tour, PT review, records, tracers, personnel, and procedures, and how to rehearse it with a mock inspection." });
+  useSEO({ title: "Laboratory Mock Inspection: A Joint Commission Survey Walkthrough", description: "Rehearse a Joint Commission lab survey before it is real. A former TJC surveyor (200+ inspections) walks each phase. Free mock inspection checklist (PDF)." });
   return (
     <div className="min-h-screen bg-background">
       <section className="border-b border-border bg-gradient-to-br from-primary/5 via-transparent to-transparent">
@@ -34,6 +35,15 @@ export default function ArticleMockInspectionPage() {
       </section>
 
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10">
+        {/* Content upgrade: mock inspection checklist (SEO handoff 2026-11-09, same pattern as the TEa page) */}
+        <ContentUpgrade
+          source="upgrade-mock-checklist"
+          assetUrl="/laboratory-mock-inspection-checklist.pdf"
+          assetName="Laboratory-Mock-Inspection-Checklist.pdf"
+          title="Download the Laboratory Mock Inspection Checklist (PDF)"
+          description="Every phase of a Joint Commission laboratory survey as a printable checklist: scope, PT, records, tracers, personnel, and close-out. Free."
+        />
+
         <Card className="border-primary/20 bg-primary/5 mb-10">
           <CardContent className="p-5">
             <div className="font-semibold text-sm text-primary mb-3">Key Takeaways</div>
@@ -136,6 +146,22 @@ export default function ArticleMockInspectionPage() {
               <p className="text-muted-foreground text-sm leading-relaxed">{a}</p>
             </div>
           ))}
+
+          {/* The consulting service itself (SEO handoff 2026-11-09); styled like the VeritaAssure box above */}
+          <div className="rounded-xl border-2 border-primary/20 bg-primary/5 p-6 my-8" data-testid="mock-inspection-scoping-call">
+            <div className="flex items-start gap-3">
+              <FlaskConical size={20} className="text-primary shrink-0 mt-0.5" />
+              <div>
+                <div className="font-semibold text-sm mb-1">Want an independent reviewer?</div>
+                <p className="text-sm text-muted-foreground mb-3">
+                  Veritas Lab Services runs full mock inspections, phase by phase, the way a surveyor does.
+                </p>
+                <Button asChild size="sm" className="bg-primary text-primary-foreground">
+                  <Link href="/book/scoping-call">Book a scoping call <ChevronRight size={13} className="ml-1" /></Link>
+                </Button>
+              </div>
+            </div>
+          </div>
 
           <NewsletterSignup variant="inline" source="article-mock-inspection" />
 

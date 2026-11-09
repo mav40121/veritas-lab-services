@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { CheckCircle2, ChevronRight, Clock, FlaskConical, User, AlertTriangle, ExternalLink } from "lucide-react";
 import { NewsletterSignup } from "@/components/NewsletterSignup";
 import { METHODCOMP_FAQ } from "@/lib/faqContent";
+import { ContentUpgrade } from "@/components/ContentUpgrade";
 
 function Callout({ children, type = "info" }: { children: React.ReactNode; type?: "info" | "warning" | "tip" }) {
   const styles = {
@@ -27,7 +28,7 @@ function Callout({ children, type = "info" }: { children: React.ReactNode; type?
 }
 
 export default function ArticleMethodComparisonPage() {
-    useSEO({ title: "How to Perform a Method Comparison Study for CLIA | Veritas Lab Services", description: "Step-by-step guide to performing a method comparison study under CLIA, including sample requirements, statistical analysis, and acceptable bias thresholds." });
+    useSEO({ title: "How to Perform a Method Comparison Study (Clinical Lab, CLIA)", description: "How to run a method comparison study under CLIA: when it is required, how many specimens, and how to judge bias against your criterion. Free Excel worksheet." });
 return (
     <div className="min-h-screen bg-background">
 
@@ -56,6 +57,15 @@ return (
 
       {/* Article body */}
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10">
+
+        <ContentUpgrade
+          source="upgrade-methodcomp-worksheet"
+          assetUrl="/method-comparison-worksheet.xlsx"
+          assetName="Method-Comparison-Worksheet.xlsx"
+          assetLabel="Excel worksheet"
+          title="Download the method comparison worksheet (Excel)"
+          description="Enter paired results from two instruments or methods. It checks each pair against the criterion you set and calculates bias and limits of agreement. Free."
+        />
 
         {/* Key Takeaways */}
         <Card className="border-primary/20 bg-primary/5 mb-10">

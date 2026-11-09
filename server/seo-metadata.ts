@@ -318,13 +318,13 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
   },
   "/resources/ep26-reagent-lot-verification": {
     title: "CLSI EP26 Reagent Lot Verification: Protocol and How-To Guide",
-    description: "How clinical laboratories verify a new reagent lot under CLSI EP26 (2nd edition, 2022). The protocol, sample requirements, acceptance criteria, and documentation for lot-to-lot verification.",
+    description: "How to verify a new reagent lot under CLSI EP26 (2nd edition): sample count, acceptance criteria, and documentation. Free lot verification log template.",
     jsonLd: [
       {
         "@context": "https://schema.org",
         "@type": "Article",
         headline: "CLSI EP26 Reagent Lot Verification: A Working Protocol for Clinical Laboratories",
-        description: "How clinical laboratories verify a new reagent lot under CLSI EP26 (2nd edition, 2022): the protocol, sample requirements, acceptance criteria, and documentation for lot-to-lot verification.",
+        description: "How to verify a new reagent lot under CLSI EP26 (2nd edition): sample count, acceptance criteria, and documentation. Free lot verification log template.",
         image: `${BASE_URL}/og-image.png`,
         author: {
           "@type": "Person",
@@ -334,7 +334,7 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
         },
         publisher: { "@id": `${BASE_URL}/#organization` },
         datePublished: "2026-06-16",
-        dateModified: "2026-06-16",
+        dateModified: "2026-11-09",
         mainEntityOfPage: `${BASE_URL}/resources/ep26-reagent-lot-verification`,
       },
       {
@@ -462,24 +462,26 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
   },
   "/resources/how-to-perform-method-comparison-study": {
     title: "How to Perform a Method Comparison Study (Clinical Lab, CLIA)",
-    description: "Step-by-step guide to performing a method comparison study under CLIA, including sample requirements, statistical analysis, and acceptable bias thresholds.",
+    description: "How to run a method comparison study under CLIA: when it is required, how many specimens, and how to judge bias against your criterion. Free Excel worksheet.",
     jsonLd: articleJsonLd({
       headline: "How to Perform a Method Comparison Study in Your Clinical Laboratory",
-      description: "Step-by-step guide to performing a method comparison study under CLIA, including sample requirements, statistical analysis, and acceptable bias thresholds.",
+      description: "How to run a method comparison study under CLIA: when it is required, how many specimens, and how to judge bias against your criterion. Free Excel worksheet.",
       articleBody: "A method comparison study, also called a Correlation study, is required twice a year when your laboratory runs the same test on different instruments or methods (42 CFR 493.1281(a)). It is also a common way to verify accuracy when a new test method goes in (42 CFR 493.1253(b)(1)(i)(A)), and TJC requires one when a method is replaced. Done correctly, it provides documented evidence that the new method produces results comparable to your existing method across the full analytical range. Done incorrectly or incompletely, it is a finding waiting to appear on your CAP or TJC inspection report. CLIA requires method comparison twice a year when two instruments or methods run the same test. It is also a common way to verify accuracy at introduction, and TJC requires one when a method is replaced. CLSI EP09c suggests about 40 patient specimens spanning the measuring range; CLIA and TJC set no minimum, and the laboratory director decides. Define your acceptance criteria before running the study, not after. VeritaCheck® handles regression calculations and generates an inspector-ready report automatically. Sections: When a Method Comparison Is Required; Specimen Requirements; Running the Study; What Pass or Fail Means; Common Mistakes; Documentation for Your Inspection File.",
       path: "/resources/how-to-perform-method-comparison-study",
       datePublished: "2026-04-25",
+      dateModified: "2026-11-09",
     }),
   },
   "/resources/tjc-laboratory-inspection-what-to-expect": {
     title: "Laboratory Mock Inspection: A Joint Commission Survey Walkthrough",
-    description: "Rehearse a Joint Commission laboratory survey before it is real. A former TJC surveyor (200+ inspections) walks each phase, PT, tracers, personnel, and how to run your own mock inspection.",
+    description: "Rehearse a Joint Commission lab survey before it is real. A former TJC surveyor (200+ inspections) walks each phase. Free mock inspection checklist (PDF).",
     jsonLd: articleJsonLd({
       headline: "The Anatomy of a Joint Commission Laboratory Survey",
-      description: "A former Joint Commission surveyor walks through a laboratory survey phase by phase, the tour, PT review, records, tracers, personnel, and procedures, and how to rehearse it with a mock inspection.",
+      description: "Rehearse a Joint Commission lab survey before it is real. A former TJC surveyor (200+ inspections) walks each phase. Free mock inspection checklist (PDF).",
       articleBody: "A former surveyor walks through the survey, phase by phase, and shows how to turn it into a mock inspection that finds your gaps first. Sections: Key takeaways; What the survey actually is; The survey, phase by phase; How to run your own mock inspection; From finding to corrective action; Frequently asked questions; About the author.",
       path: "/resources/tjc-laboratory-inspection-what-to-expect",
       datePublished: "2026-07-20",
+      dateModified: "2026-11-09",
       about: [
         { "@id": `${BASE_URL}/#term-laboratory-mock-inspection` },
         { "@id": `${BASE_URL}/#term-tracer-methodology` },
@@ -634,13 +636,14 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
   },
   "/resources/cost-per-reportable-test-four-layer-framework": {
     title: "Cost Per Reportable Test: The Four-Layer CPRT Framework",
-    description: "Calculate your true cost per reportable test with a four-layer model: reagents, labor, equipment, and overhead, built on CLSI GP11-A. For budgets, capital, and contracts.",
+    description: "Calculate your true cost per reportable test with a four-layer model: reagents, labor, equipment, and overhead, built on CLSI GP11-A. Free PDF of the framework.",
     jsonLd: articleJsonLd({
       headline: "What Your Tests Actually Cost: A Four-Layer CPRT Framework for Clinical Laboratories",
-      description: "The CPRT four-layer framework (reagents, labor, equipment, overhead) built on CLSI GP11-A. How to use it for budget, capital, and contract negotiations.",
+      description: "Calculate your true cost per reportable test with a four-layer model: reagents, labor, equipment, and overhead, built on CLSI GP11-A. Free PDF of the framework.",
       articleBody: "The CLSI GP11-A four-layer framework for cost-per-reportable-test, which question each layer answers, the discipline required to compare two configurations honestly, and the moves a laboratory director can make this quarter. In twenty-three years of clinical laboratory work and more than two hundred surveys with The Joint Commission, the single most common pattern I have seen at the intersection of the lab director's office and the CFO's office is this. When finance asks what a test costs, the laboratory gives a number that does not match the question being asked. The number is usually right. The question being answered is the wrong one. The decision that follows is made on a wrong premise. The clinical laboratory industry has had a defensible framework for cost-per-reportable-test (CPRT) since the late 1990s, in the form of NCCLS document GP11-A, later continued under CLSI. The framework separates the cost of a single reportable result into four layers, each of which answers a different financial question. The framework is conceptually unchanged in the years since. It is also rarely operationalized inside the laboratories that need it most. This article walks through the four layers, the question each one answers, the discipline required to compare two configurations honestly, and the specific operational moves a laboratory director can make this quarter to put the framework in front of a finance team. Sections: 1. Why most laboratories cannot answer the cost question well; 2. The four-layer model from CLSI GP11-A; 3. Matching the layer to the question; 4. Worked example: sodium under two configurations; 5. What to do this quarter; 6. The CLIA context; 7. Closing: VeritaOps™ and the next step.",
       path: "/resources/cost-per-reportable-test-four-layer-framework",
       datePublished: "2026-05-28",
+      dateModified: "2026-11-09",
     }),
   },
   "/resources/why-veritacheck-vs-legacy-verification": {
