@@ -12,15 +12,18 @@ import { NewsletterHoneypot, honeypotValue } from "@/components/NewsletterHoneyp
 // `lead_capture` event. Deliberately NOT a forced modal; a clean inline offer.
 interface ContentUpgradeProps {
   source: string;       // distinct per page, e.g. "upgrade-tea-table"
-  assetUrl: string;     // public PDF path, e.g. "/clia-tea-reference-2026.pdf"
+  assetUrl: string;     // public file path, e.g. "/clia-tea-reference-2026.pdf"
   assetName: string;    // download filename
   title: string;
   description: string;
+  // What the file is, in the button and the "click here to download the ..." line. "PDF" unless the file isn't one
+  // (the EP26 page offers an Excel log, 2026-11-09).
+  assetLabel?: string;
   buttonLabel?: string;
 }
 
 export function ContentUpgrade({
-  source, assetUrl, assetName, title, description, buttonLabel = "Get the free PDF",
+  source, assetUrl, assetName, title, description, assetLabel = "PDF", buttonLabel = `Get the free ${assetLabel}`,
 }: ContentUpgradeProps) {
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
@@ -63,7 +66,7 @@ export function ContentUpgrade({
         </p>
         <p className="text-sm text-muted-foreground mt-1">
           If it did not begin,{" "}
-          <a href={assetUrl} download={assetName} className="text-primary underline">click here to download the PDF</a>.
+          <a href={assetUrl} download={assetName} className="text-primary underline">click here to download the {assetLabel}</a>.
           We also emailed you a short welcome with a couple more free resources.
         </p>
       </div>

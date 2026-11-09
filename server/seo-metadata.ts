@@ -318,13 +318,13 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
   },
   "/resources/ep26-reagent-lot-verification": {
     title: "CLSI EP26 Reagent Lot Verification: Protocol and How-To Guide",
-    description: "How clinical laboratories verify a new reagent lot under CLSI EP26 (2nd edition, 2022). The protocol, sample requirements, acceptance criteria, and documentation for lot-to-lot verification.",
+    description: "How to verify a new reagent lot under CLSI EP26 (2nd edition): sample count, acceptance criteria, and documentation. Free lot verification log template.",
     jsonLd: [
       {
         "@context": "https://schema.org",
         "@type": "Article",
         headline: "CLSI EP26 Reagent Lot Verification: A Working Protocol for Clinical Laboratories",
-        description: "How clinical laboratories verify a new reagent lot under CLSI EP26 (2nd edition, 2022): the protocol, sample requirements, acceptance criteria, and documentation for lot-to-lot verification.",
+        description: "How to verify a new reagent lot under CLSI EP26 (2nd edition): sample count, acceptance criteria, and documentation. Free lot verification log template.",
         image: `${BASE_URL}/og-image.png`,
         author: {
           "@type": "Person",
@@ -334,7 +334,7 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
         },
         publisher: { "@id": `${BASE_URL}/#organization` },
         datePublished: "2026-06-16",
-        dateModified: "2026-06-16",
+        dateModified: "2026-11-09",
         mainEntityOfPage: `${BASE_URL}/resources/ep26-reagent-lot-verification`,
       },
       {
@@ -473,13 +473,14 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
   },
   "/resources/tjc-laboratory-inspection-what-to-expect": {
     title: "Laboratory Mock Inspection: A Joint Commission Survey Walkthrough",
-    description: "Rehearse a Joint Commission laboratory survey before it is real. A former TJC surveyor (200+ inspections) walks each phase, PT, tracers, personnel, and how to run your own mock inspection.",
+    description: "Rehearse a Joint Commission lab survey before it is real. A former TJC surveyor (200+ inspections) walks each phase. Free mock inspection checklist (PDF).",
     jsonLd: articleJsonLd({
       headline: "The Anatomy of a Joint Commission Laboratory Survey",
-      description: "A former Joint Commission surveyor walks through a laboratory survey phase by phase, the tour, PT review, records, tracers, personnel, and procedures, and how to rehearse it with a mock inspection.",
+      description: "Rehearse a Joint Commission lab survey before it is real. A former TJC surveyor (200+ inspections) walks each phase. Free mock inspection checklist (PDF).",
       articleBody: "A former surveyor walks through the survey, phase by phase, and shows how to turn it into a mock inspection that finds your gaps first. Sections: Key takeaways; What the survey actually is; The survey, phase by phase; How to run your own mock inspection; From finding to corrective action; Frequently asked questions; About the author.",
       path: "/resources/tjc-laboratory-inspection-what-to-expect",
       datePublished: "2026-07-20",
+      dateModified: "2026-11-09",
       about: [
         { "@id": `${BASE_URL}/#term-laboratory-mock-inspection` },
         { "@id": `${BASE_URL}/#term-tracer-methodology` },

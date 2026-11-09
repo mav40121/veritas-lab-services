@@ -44,8 +44,8 @@ function TocLink({ href, children }: { href: string; children: React.ReactNode }
 
 export default function ArticleCostPerReportablePage() {
   useSEO({
-    title: "What Your Tests Actually Cost: A Four-Layer CPRT Framework for Clinical Laboratories",
-    description: "The CLSI GP11-A four-layer cost-per-reportable-test (CPRT) framework: reagents, labor, equipment, overhead. Which layer answers which question, how to compare configurations honestly, and what to do this quarter.",
+    title: "Cost Per Reportable Test: The Four-Layer CPRT Framework",
+    description: "Calculate your true cost per reportable test with a four-layer model: reagents, labor, equipment, and overhead, built on CLSI GP11-A. For budgets, capital, and contracts.",
   });
   return (
     <div className="min-h-screen bg-background">

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { CheckCircle2, ChevronRight, Clock, FlaskConical, User, AlertTriangle, ExternalLink } from "lucide-react";
 import { NewsletterSignup } from "@/components/NewsletterSignup";
+import { ContentUpgrade } from "@/components/ContentUpgrade";
 
 function Callout({ children, type = "info" }: { children: React.ReactNode; type?: "info" | "warning" | "tip" }) {
   const styles = {
@@ -29,7 +30,7 @@ function Callout({ children, type = "info" }: { children: React.ReactNode; type?
 export default function ArticleEP26Page() {
   useSEO({
     title: "CLSI EP26 Reagent Lot Verification: Protocol and How-To Guide",
-    description: "How clinical laboratories verify a new reagent lot under CLSI EP26 (2nd edition, 2022). The protocol, sample requirements, acceptance criteria, and documentation for lot-to-lot verification.",
+    description: "How to verify a new reagent lot under CLSI EP26 (2nd edition): sample count, acceptance criteria, and documentation. Free lot verification log template.",
   });
   return (
     <div className="min-h-screen bg-background">
@@ -59,6 +60,17 @@ export default function ArticleEP26Page() {
 
       {/* Article body */}
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-10">
+
+        {/* Content upgrade: lot verification log (SEO handoff 2026-11-09, same pattern as the TEa page). Our own
+            template only; never the CLSI EP26 document, which is CLSI's copyrighted standard. */}
+        <ContentUpgrade
+          source="upgrade-lot-log"
+          assetUrl="/reagent-control-lot-verification-log.xlsx"
+          assetName="Reagent-Control-Lot-Verification-Log.xlsx"
+          assetLabel="Excel log"
+          title="Download the reagent and control lot verification log (Excel)"
+          description="A ready-to-use log for every new lot: prior lot, new lot, acceptance criterion set in advance, pass or fail, and sign-off. Free."
+        />
 
         {/* Key Takeaways */}
         <Card className="border-primary/20 bg-primary/5 mb-10">
