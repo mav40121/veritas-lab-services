@@ -925,7 +925,44 @@ function headerHTML(study: Study, cliaNumber?: string): string {
 // BUG-022 follow-up (2026-10-10, Michael Q63): qualitative and semi-quantitative correlations are judged on agreement,
 // not on a TEa, so their spec block states the study's own acceptance rule and scale instead of the quantitative rows.
 type AgreementSpec = { kind: "qualitative" | "semi_quantitative"; thresholdPct: number; scale: string[] };
-function supportingPageHTML(study: Study, instrumentNames: string[], agreement?: AgreementSpec): string {
+// The Supporting Data page's Study Type row. It was a ternary chain with no pt_coag, qc_range or multi_analyte_coag
+// entry, so those three printed the last branch, "Method Comparison: Multi-Instrument Correlation" (BUG-147, PT/INR PDF
+// page 4). Existing labels are kept word for word; the three use the header's names, and an unmapped type gets the
+// header's neutral name instead of another study's.
+const SUPPORTING_STUDY_TYPE_LABEL: Record<string, string> = {
+  cal_ver_correlation: "Calibration Verification / Linearity + Correlation / Method Comparison (CLSI EP06 + EP09)",
+  cal_ver: "Calibration Verification (CLSI EP06)",
+  precision: "Precision Verification (EP15)",
+  lot_to_lot: "Reagent Lot Verification (CLSI EP26)",
+  ref_interval: "Reference Range Verification",
+  sensitivity: "Analytical Sensitivity (CLSI EP17-A2)",
+  accuracy_bias: "Accuracy / Bias: Single Instrument vs Target (CLSI EP15-A3)",
+  linearity: "Linearity (CLSI EP06)",
+  reportable_range: "Reportable Range (CLIA §493.1255)",
+  manual_diff: "Manual Differential (Rümke 95% CI, CLSI H20)",
+  method_comparison: "Method Comparison: Multi-Instrument Correlation (CLSI EP09 + EP15-A3)",
+  pt_coag: "PT/INR Geometric Mean Calculator (CLSI H47)",
+  qc_range: "QC Lot Verification (CLSI C24-Ed4)",
+  multi_analyte_coag: "Multi-Analyte Lot Comparison (Coag)",
+};
+
+// Study types whose form sets its own criterion and never reads the shared criterion picker: PT/INR (a TEa per
+// comparison module), QC Lot Verification, multi-analyte coag, reference range, carryover and sensitivity. The
+// cliaPresetLabel saved with them is whatever the picker held, ALT/SGPT (the first preset) unless someone changed it,
+// so it names a criterion they never used and is not printed (BUG-147).
+const OWN_CRITERION_STUDY_TYPES = new Set(["pt_coag", "qc_range", "multi_analyte_coag", "ref_interval", "carryover", "sensitivity"]);
+
+// The criterion a PT/INR study used: each comparison module that ran, with its own TEa. Module 1 verifies the
+// reference intervals and uses none, so a study with no comparison module used none.
+function ptCoagCriterionText(module2: any, module3: any): string {
+  const pct = (t: unknown) => (typeof t === "number" && Number.isFinite(t) ? `±${(t * 100).toFixed(1)}%` : "-");
+  const used = [module2 ? `Module 2: ${pct(module2.tea)}` : "", module3 ? `Module 3: ${pct(module3.tea)}` : ""].filter(Boolean);
+  return used.length ? used.join("; ") : "None: no comparison module was performed (Module 1 verifies the reference intervals)";
+}
+
+// ownCriterion: the criterion a study type that sets its own reports it used (PT/INR); it replaces the saved TEa and
+// its preset label, and the Allowable Systematic Error row, which such a study does not have.
+function supportingPageHTML(study: Study, instrumentNames: string[], agreement?: AgreementSpec, ownCriterion?: string): string {
   const teaStr = teaDisplayStr(study);
   // Same resolution as the narrative: explicit study.cfr override, else the
   // analyte's CLIA subspecialty section (hematology -> §493.941), else §493.931.
@@ -953,14 +990,14 @@ function supportingPageHTML(study: Study, instrumentNames: string[], agreement?:
   // crosswire (e.g. picking pCO2 8% / 5 mm Hg thinking it was Carbon Dioxide
   // 20%) is visible at report-review time. Customer report 2026-06-04.
   // NULL on legacy studies = render the value alone (the old way).
-  const presetLabel: string | null = (study as any).cliaPresetLabel ?? null;
+  const presetLabel: string | null = OWN_CRITERION_STUDY_TYPES.has(study.studyType) ? null : ((study as any).cliaPresetLabel ?? null);
   const teaStrWithPreset = presetLabel ? `${teaStr} (${presetLabel})` : teaStr;
   const specs: any[][] = [
-    ["Study Type", study.studyType === "cal_ver_correlation" ? "Calibration Verification / Linearity + Correlation / Method Comparison (CLSI EP06 + EP09)" : study.studyType === "cal_ver" ? "Calibration Verification (CLSI EP06)" : study.studyType === "precision" ? "Precision Verification (EP15)" : study.studyType === "lot_to_lot" ? "Reagent Lot Verification (CLSI EP26)" : study.studyType === "ref_interval" ? "Reference Range Verification" : study.studyType === "sensitivity" ? "Analytical Sensitivity (CLSI EP17-A2)" : study.studyType === "accuracy_bias" ? "Accuracy / Bias: Single Instrument vs Target (CLSI EP15-A3)" : study.studyType === "linearity" ? "Linearity (CLSI EP06)" : study.studyType === "reportable_range" ? "Reportable Range (CLIA §493.1255)" : study.studyType === "manual_diff" ? "Manual Differential (Rümke 95% CI, CLSI H20)" : "Method Comparison: Multi-Instrument Correlation (CLSI EP09 + EP15-A3)"],
+    ["Study Type", SUPPORTING_STUDY_TYPE_LABEL[study.studyType] || "VeritaCheck Verification Study"],
     ["Test Name", study.testName],
-    [criterionRowLabel, teaStrWithPreset],
+    [criterionRowLabel, ownCriterion ?? teaStrWithPreset],
     [cfrReferenceLabel, cfrReferenceValue],
-    ["Allowable Systematic Error", teaStr],
+    ...(ownCriterion === undefined ? [["Allowable Systematic Error", teaStr]] : []),
   ];
   if (agreement) {
     const semi = agreement.kind === "semi_quantitative";
@@ -3892,7 +3929,7 @@ function geometricMean(values: number[]): number {
   return Math.exp(logSum / values.length);
 }
 
-function buildPTCoagHTML(study: Study, results: any): string {
+export function buildPTCoagHTML(study: Study, results: any): string {
   const instrumentNames: string[] = safeJsonParse(study.instruments) || [];
   const rawData = safeJsonParse(study.dataPoints) || {};
   // Symmetric multi-instrument: results.module1s is one Module-1 result per
@@ -4159,7 +4196,7 @@ function buildPTCoagHTML(study: Study, results: any): string {
     ${verdictHtml}
   </div>
 
-  ${supportingPageHTML(study, instrumentNames)}
+  ${supportingPageHTML(study, instrumentNames, undefined, ptCoagCriterionText(module2, module3))}
   </body></html>`;
 }
 
@@ -4189,7 +4226,7 @@ const FOOTER_TEMPLATE = `
 </div>`;
 
 // ─── QC RANGE ESTABLISHMENT HTML ──────────────────────────────────────────────
-function buildQCRangeHTML(study: Study, results: any): string {
+export function buildQCRangeHTML(study: Study, results: any): string {
   const r = results;
   const analytes = Array.from(new Set((r.levelResults || []).map((lr: any) => lr.analyte)));
   const anyBias = (r.levelResults || []).some((lr: any) => lr.biasCheck);
@@ -4294,7 +4331,7 @@ function buildQCRangeHTML(study: Study, results: any): string {
 }
 
 // ─── MULTI-ANALYTE LOT COMPARISON HTML ────────────────────────────────────────
-function buildMultiAnalyteCoagHTML(study: Study, results: any): string {
+export function buildMultiAnalyteCoagHTML(study: Study, results: any): string {
   const r = results;
   const rawDP = safeJsonParse(study.dataPoints);
   // Defensive dual-criterion handling: if a per-analyte floor is provided on the result object
