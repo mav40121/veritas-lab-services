@@ -1,3 +1,6 @@
+// Relative import: the server bundles this file (studyResults.ts, computeStudyStatus).
+import { lotCohortsFor, pairInCohort } from "../../../shared/lotToLotCohort";
+
 // ─── Shared types ────────────────────────────────────────────────────────────
 
 export interface DataPoint {
@@ -1074,10 +1077,11 @@ export function calculateLotToLot(
   const unitText = String(unit ?? "").trim();
   const pairPasses = (current: number, diff: number) =>
     teaIsPercentage ? Math.abs(diff) <= Math.max(Math.abs(current) * tea, floor) : Math.abs(diff) <= tea;
-  const cohorts: ("Normal" | "Abnormal")[] = sampleType === "both" ? ["Normal", "Abnormal"] : [sampleType === "normal" ? "Normal" : "Abnormal"];
+  const cohorts = lotCohortsFor(sampleType);
 
   const cohortResults: LotToLotCohortResult[] = cohorts.map(cohort => {
-    const valid = dataPoints.filter(dp => dp.cohort === cohort && dp.currentLot !== null && dp.newLot !== null);
+    // BUG-157: a one-cohort study counts every pair it holds (the Abnormal Only form saved its pairs labeled Normal).
+    const valid = dataPoints.filter(dp => pairInCohort(dp.cohort, cohort, sampleType) && dp.currentLot !== null && dp.newLot !== null);
     const specimens: LotToLotSpecimen[] = valid.map(dp => {
       const pctDiff = dp.currentLot !== 0 ? ((dp.newLot! - dp.currentLot!) / dp.currentLot!) * 100 : 0;
       const absPct = Math.abs(pctDiff);

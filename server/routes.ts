@@ -295,6 +295,8 @@ import { insertStudySchema, insertContactSchema, registerSchema, loginSchema, ty
 // Mirrors the client calculation logic so the stored status is always correct.
 // Each study type has its own pass/fail rule derived from the raw dataPoints.
 import { isCensored, censorValueForMath, type CensoringPolicy } from "@shared/censoring";
+import { lotCohortsFor, pairInCohort } from "@shared/lotToLotCohort";
+import { heldForVerdictRuleDecision } from "./verdictRuleHold";
 import { computePTCoagStatus, ptCoagStatusByResultsPageRule } from "./ptCoagVerdict";
 // Shown wherever a self-serve path used to create a lab (2026-10-14, Michael Q195 = 1).
 export const LAB_SETUP_BY_STAFF_MESSAGE = "Your lab is set up by the Veritas Lab Services team after a short call. Reach us at www.veritaslabservices.com/contact or info@veritaslabservices.com.";
@@ -570,10 +572,11 @@ export function computeStudyStatus(studyType: string, dataPointsJson: string, in
       const { data, sampleType } = rawData;
       const tea = cliaAllowableError;
       const absFloor = teaIsPercentage ? (cliaAbsoluteFloor ?? 0) : 0;
-      const cohorts: string[] = sampleType === "both" ? ["Normal", "Abnormal"] : [sampleType === "normal" ? "Normal" : "Abnormal"];
+      const cohorts = lotCohortsFor(sampleType);
       const meanFn = (arr: number[]) => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
       for (const cohort of cohorts) {
-        const valid = data.filter((dp: any) => dp.cohort === cohort && dp.currentLot !== null && dp.newLot !== null);
+        // BUG-157: the results page's rule (shared/lotToLotCohort.ts): a one-cohort study counts every pair it holds.
+        const valid = data.filter((dp: any) => pairInCohort(dp.cohort, cohort, sampleType) && dp.currentLot !== null && dp.newLot !== null);
         const absPcts = valid.map((dp: any) => {
           const pctDiff = dp.currentLot !== 0 ? ((dp.newLot - dp.currentLot) / dp.currentLot) * 100 : 0;
           return Math.abs(pctDiff);
@@ -834,6 +837,9 @@ export function recomputeAllStudyStatuses(): { fixed: number; skipped: number } 
     // through the controlled exclusion endpoint, which captures that decision.
     if (dataPointsHaveExclusions(study.dataPoints)) continue;
     if (isUnitsRuleStudy(study as any)) continue;
+    // BUG-157 (2026-11-10): a one-cohort lot-to-lot row the corrected cohort rule reads differently stays as saved until
+    // Michael has GET /api/admin/veritacheck/lot-abnormal-refrange-counts and decides (server/verdictRuleHold.ts).
+    if (heldForVerdictRuleDecision(study as any)) continue;
     // BUG-150 (2026-11-09): a saved draft has no verdict yet. Without this, every deploy turned every draft into a PASS or FAIL
     // and the dashboard stopped listing it as a draft. It gets its verdict when it is finished.
     if (study.status === "draft") continue;
@@ -21491,13 +21497,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         const _absUnit: string = studyRow.clia_absolute_unit ?? '';
         const rawLot: any = dp;
         const sampleType: string = rawLot?.sampleType || "both";
-        const cohortNames: string[] = sampleType === "both"
-          ? ["Normal", "Abnormal"]
-          : [sampleType === "normal" ? "Normal" : "Abnormal"];
+        const cohortNames = lotCohortsFor(sampleType);
         const allPairs: any[] = (rawLot?.data || []).filter((p: any) => p && p.currentLot != null && p.newLot != null);
         let totalCount = 0, passCount = 0;
-        const cohorts = cohortNames.map((cName: string) => {
-          const specs = allPairs.filter((p: any) => (p.cohort || "Normal") === cName).map((p: any) => {
+        const cohorts = cohortNames.map((cName) => {
+          // BUG-157: a one-cohort study counts every pair it holds (shared/lotToLotCohort.ts).
+          const specs = allPairs.filter((p: any) => pairInCohort(p.cohort || "Normal", cName, sampleType)).map((p: any) => {
             const pctDiff = p.currentLot !== 0 ? ((p.newLot - p.currentLot) / p.currentLot) * 100 : 0;
             // Dual-criterion S493: pass if |diff| <= max(pct_allowance, absolute_floor)
             const absDiff = Math.abs(p.newLot - p.currentLot);
@@ -35616,6 +35621,50 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       }
     }
     res.json({ ...totals, byLab });
+  });
+
+  // ── ADMIN: saved verdicts the corrected lot-to-lot cohort rule would change, counts only (BUG-157, 2026-11-10) ──
+  // The boot recompute holds the rows server/verdictRuleHold.ts names: a one-cohort lot-to-lot study holding pairs
+  // labeled other than its cohort (the Abnormal Only form saved its pairs labeled Normal, so the old rule counted none
+  // and stored FAIL). This says how many there are and how many saved verdicts the current rule would change, so
+  // Michael decides. Read-only: nothing is written. Counts and lab ids only (no study ids, test names, analysts or values).
+  app.get("/api/admin/veritacheck/lot-abnormal-refrange-counts", (req, res) => {
+    if (!ADMIN_SECRET || req.headers["x-admin-secret"] !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    const sqlite = (db as any).$client;
+    const rows = sqlite.prepare(
+      `SELECT s.lab_id, s.study_type, s.status, s.lifecycle_state, s.clia_allowable_error, s.tea_is_percentage, s.clia_absolute_floor,
+              s.data_points, s.instruments, s.censoring_policy, l.is_demo
+         FROM studies s LEFT JOIN labs l ON l.id = s.lab_id
+        WHERE s.study_type IN ('lot_to_lot', 'ref_interval')`
+    ).all() as any[];
+    const blank = () => ({ studies: 0, drafts: 0, savedPass: 0, savedFail: 0, newRulePass: 0, newRuleFail: 0, wouldChange: 0, passToFail: 0, failToPass: 0, finalizedWouldChange: 0, notEvaluable: 0 });
+    // alsoUnitsRule: rows the units-criterion hold (isUnitsRuleStudy) keeps as saved too.
+    const lotToLot = { ...blank(), alsoUnitsRule: 0, bySampleType: { abnormal: 0, normal: 0, missing: 0 } as Record<string, number> };
+    const byLab: Record<string, { isDemo: boolean | null; lotToLot: number; wouldChange: number }> = {};
+    for (const r of rows) {
+      const hold = heldForVerdictRuleDecision(r);
+      if (hold !== "lot_to_lot_one_cohort") continue;
+      const lab = String(r.lab_id ?? "none");
+      byLab[lab] = byLab[lab] || { isDemo: r.lab_id == null || r.is_demo == null ? null : r.is_demo === 1, lotToLot: 0, wouldChange: 0 };
+      const t = lotToLot;
+      t.studies++;
+      byLab[lab].lotToLot++;
+      const sampleType = safeJsonParse(r.data_points, {})?.sampleType;
+      lotToLot.bySampleType[sampleType === "abnormal" || sampleType === "normal" ? sampleType : "missing"]++;
+      if (r.tea_is_percentage === 0) lotToLot.alsoUnitsRule++;
+      if (r.status === "draft") { t.drafts++; continue; }
+      if (r.status === "pass") t.savedPass++; else if (r.status === "fail") t.savedFail++;
+      const next = computeStudyStatus(r.study_type, r.data_points, r.instruments, r.clia_allowable_error, r.tea_is_percentage !== 0, r.clia_absolute_floor ?? null, r.censoring_policy ?? "exclude");
+      if (lastStudyStatusWasError()) { t.notEvaluable++; continue; }
+      if (next === "pass") t.newRulePass++; else t.newRuleFail++;
+      if (next !== r.status) {
+        t.wouldChange++;
+        byLab[lab].wouldChange++;
+        if (r.status === "pass") t.passToFail++; else if (r.status === "fail") t.failToPass++;
+        if (r.lifecycle_state === "finalized") t.finalizedWouldChange++;
+      }
+    }
+    res.json({ lotToLot, byLab });
   });
 
   // ── ADMIN: Read-only VeritaCheck/VeritaMap diagnostic probe ─────────────
