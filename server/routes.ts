@@ -35050,6 +35050,29 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     res.json({ labId, count: enriched.length, maps: enriched });
   });
 
+  // ── ADMIN: a lab's VeritaPT enrollments (read-only; REQ-143, SCAHC's 2027 move to CAP PT, 2026-11-10) ──
+  // What the PT Enrollment page holds for one lab, read without a lab-scoped GET: those write a record_views row
+  // (server/recordViews.ts), so checking a client's enrollment record from here would add to its access log. Both
+  // stores: pt_enrollments_v2 (discipline level: vendor, program, PT category, year; what the recommendation engine
+  // nets) and pt_enrollments (analyte level, older). Program and analyte names only: no user ids, names or emails.
+  app.get("/api/admin/labs/:labId/pt-enrollments", (req, res) => {
+    if (!ADMIN_SECRET || req.headers["x-admin-secret"] !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    const labId = Number(req.params.labId);
+    if (!Number.isInteger(labId) || labId <= 0) return res.status(400).json({ error: "labId required" });
+    const sqlite = (db as any).$client;
+    const lab = sqlite.prepare("SELECT id FROM labs WHERE id = ?").get(labId);
+    if (!lab) return res.status(404).json({ error: `lab ${labId} not found` });
+    const disciplines = sqlite.prepare(
+      "SELECT id, vendor, program_name, pt_category, year_enrolled, created_at FROM pt_enrollments_v2 WHERE lab_id = ? ORDER BY year_enrolled DESC, vendor, pt_category, program_name"
+    ).all(labId) as any[];
+    const analytes = sqlite.prepare(
+      "SELECT id, analyte, specialty, pt_provider, program_code, enrollment_year, status FROM pt_enrollments WHERE lab_id = ? ORDER BY enrollment_year DESC, pt_provider, analyte"
+    ).all(labId) as any[];
+    const byVendorYear: Record<string, number> = {};
+    for (const d of disciplines) byVendorYear[`${d.vendor} ${d.year_enrolled}`] = (byVendorYear[`${d.vendor} ${d.year_enrolled}`] || 0) + 1;
+    res.json({ labId, disciplineCount: disciplines.length, byVendorYear, disciplines, analyteCount: analytes.length, analytes });
+  });
+
   // ── ADMIN: units-criterion precision, lot-to-lot and linearity studies, counts only (Q239 = 1, Q240 = 1, 2026-11-08) ──
   // How many saved studies hold a criterion in units, and how many saved verdicts the corrected rule would change.
   // Read-only: nothing is written, and the boot recompute skips these rows (isUnitsRuleStudy). Answers counts,
