@@ -12971,6 +12971,30 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     }
   };
 
+  // BUG-154 (2026-11-10): the edit statements below write the criterion's value and preset label but not whether it is
+  // a percent or a units criterion, its unit, or its absolute floor, so a criterion changed in Edit was saved half
+  // changed (Glucose 8% or 6 mg/dL changed to Sodium 4 mmol/L read as 400% with the 6 mg/dL floor) while the verdict
+  // was judged on the whole new one. Written when the body carries them, as the POSTs store them; a body that doesn't
+  // leaves them as they are. teaIsPercentage is stored 0 or 1, read as the verdict reads it (only 0 is units).
+  const writeCriterionColumns = (studyId: number, body: any) => {
+    const set = (col: string, v: unknown) => (db as any).$client.prepare(`UPDATE studies SET ${col} = ? WHERE id = ?`).run(v, studyId);
+    const pct = body?.teaIsPercentage;
+    if (typeof pct === "number" && Number.isFinite(pct)) set("tea_is_percentage", pct === 0 ? 0 : 1);
+    const floor = body?.cliaAbsoluteFloor;
+    if (floor === null || (typeof floor === "number" && Number.isFinite(floor))) set("clia_absolute_floor", floor);
+    for (const [key, col] of [["teaUnit", "tea_unit"], ["cliaAbsoluteUnit", "clia_absolute_unit"]] as const) {
+      const v = body?.[key];
+      if (typeof v !== "string" && v !== null) continue;
+      set(col, typeof v === "string" ? (v.trim() || null) : null);
+    }
+  };
+  // A draft re-save wrote no preset label (NULL), and the startup floor backfill treats an unlabeled row as one saved
+  // before labels (BUG-139). A draft body that doesn't carry the label keeps the one on file.
+  const draftPresetLabel = (body: any, existing: any): string | null =>
+    typeof body?.cliaPresetLabel === "string" ? (body.cliaPresetLabel.trim() || null)
+      : body?.cliaPresetLabel === null ? null
+      : (existing?.clia_preset_label ?? null);
+
   // PUT /api/studies/:id — update an existing study. Used by the edit-existing
   // flow (drafts and completed studies). Drafts skip strict validation; a
   // status transition to 'completed' triggers the same pass/fail recompute as
@@ -13005,6 +13029,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         cliaAllowableError: Number(req.body.cliaAllowableError ?? existing.clia_allowable_error) || 0,
         dataPoints: req.body.dataPoints ?? JSON.parse(existing.data_points || '[]'),
         instruments: req.body.instruments ?? JSON.parse(existing.instruments || '[]'),
+        cliaPresetLabel: draftPresetLabel(req.body, existing),
       };
     } else {
       const parsed = insertStudySchema.safeParse(req.body);
@@ -13054,6 +13079,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       (db as any).$client.prepare(`UPDATE studies SET ${col} = ? WHERE id = ?`).run(key === "runDetails" ? serializeRunDetails(parseRunDetails(raw)) : raw, studyId);
     }
     writePrecisionEntryColumns(studyId, req.body);
+    writeCriterionColumns(studyId, req.body);
     autoAttributeCoverageAnalyte(studyId, payload.cliaPresetLabel);
     const updated = (db as any).$client.prepare("SELECT * FROM studies WHERE id = ?").get(studyId) as any;
     markScanItemsOnFirstPass(existing, updated);
@@ -13339,6 +13365,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         cliaAllowableError: Number(req.body.cliaAllowableError ?? existing.clia_allowable_error) || 0,
         dataPoints: req.body.dataPoints ?? JSON.parse(existing.data_points || '[]'),
         instruments: req.body.instruments ?? JSON.parse(existing.instruments || '[]'),
+        cliaPresetLabel: draftPresetLabel(req.body, existing),
       };
     } else {
       const parsed = insertStudySchema.safeParse(req.body);
@@ -13386,6 +13413,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       (db as any).$client.prepare(`UPDATE studies SET ${col} = ? WHERE id = ?`).run(key === "runDetails" ? serializeRunDetails(parseRunDetails(raw)) : raw, studyId);
     }
     writePrecisionEntryColumns(studyId, req.body);
+    writeCriterionColumns(studyId, req.body);
     autoAttributeCoverageAnalyte(studyId, payload.cliaPresetLabel);
     const updated = (db as any).$client.prepare("SELECT * FROM studies WHERE id = ?").get(studyId) as any;
     markScanItemsOnFirstPass(existing, updated);
