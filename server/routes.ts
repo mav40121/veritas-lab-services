@@ -32,6 +32,8 @@ import { storePdfToken, claimPdfToken } from "./pdfTokens";
 import { labLocalDate, labToday, addLabDays, labClockMiddleware, setRequestLabTz, labTimeZoneOf, labTimeZoneById } from "./dateLocal";
 import { labTimeZoneInfo, isValidLabTimeZone, TIME_ZONE_CHOICES } from "@shared/labTimeZone";
 import { parseRunDetails, serializeRunDetails } from "@shared/studyRunDetails";
+import { CLIA_PRESETS } from "@shared/cliaPresets";
+import { classifyCriterion } from "@shared/studyCriterion";
 import { sanitizeTypeDetails, parseTypeDetails, FINDING_SOURCE_TYPES } from "@shared/findingTypes";
 import { PT_ROOT_CAUSE_CATEGORIES } from "@shared/ptFailure";
 import { studyRowToClient, resolveInstrumentDisplay } from "./studyPdf";
@@ -12971,6 +12973,30 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     }
   };
 
+  // BUG-154 (2026-11-10): the edit statements below write the criterion's value and preset label but not whether it is
+  // a percent or a units criterion, its unit, or its absolute floor, so a criterion changed in Edit was saved half
+  // changed (Glucose 8% or 6 mg/dL changed to Sodium 4 mmol/L read as 400% with the 6 mg/dL floor) while the verdict
+  // was judged on the whole new one. Written when the body carries them, as the POSTs store them; a body that doesn't
+  // leaves them as they are. teaIsPercentage is stored 0 or 1, read as the verdict reads it (only 0 is units).
+  const writeCriterionColumns = (studyId: number, body: any) => {
+    const set = (col: string, v: unknown) => (db as any).$client.prepare(`UPDATE studies SET ${col} = ? WHERE id = ?`).run(v, studyId);
+    const pct = body?.teaIsPercentage;
+    if (typeof pct === "number" && Number.isFinite(pct)) set("tea_is_percentage", pct === 0 ? 0 : 1);
+    const floor = body?.cliaAbsoluteFloor;
+    if (floor === null || (typeof floor === "number" && Number.isFinite(floor))) set("clia_absolute_floor", floor);
+    for (const [key, col] of [["teaUnit", "tea_unit"], ["cliaAbsoluteUnit", "clia_absolute_unit"]] as const) {
+      const v = body?.[key];
+      if (typeof v !== "string" && v !== null) continue;
+      set(col, typeof v === "string" ? (v.trim() || null) : null);
+    }
+  };
+  // A draft re-save wrote no preset label (NULL), and the startup floor backfill treats an unlabeled row as one saved
+  // before labels (BUG-139). A draft body that doesn't carry the label keeps the one on file.
+  const draftPresetLabel = (body: any, existing: any): string | null =>
+    typeof body?.cliaPresetLabel === "string" ? (body.cliaPresetLabel.trim() || null)
+      : body?.cliaPresetLabel === null ? null
+      : (existing?.clia_preset_label ?? null);
+
   // PUT /api/studies/:id — update an existing study. Used by the edit-existing
   // flow (drafts and completed studies). Drafts skip strict validation; a
   // status transition to 'completed' triggers the same pass/fail recompute as
@@ -13005,6 +13031,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         cliaAllowableError: Number(req.body.cliaAllowableError ?? existing.clia_allowable_error) || 0,
         dataPoints: req.body.dataPoints ?? JSON.parse(existing.data_points || '[]'),
         instruments: req.body.instruments ?? JSON.parse(existing.instruments || '[]'),
+        cliaPresetLabel: draftPresetLabel(req.body, existing),
       };
     } else {
       const parsed = insertStudySchema.safeParse(req.body);
@@ -13054,6 +13081,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       (db as any).$client.prepare(`UPDATE studies SET ${col} = ? WHERE id = ?`).run(key === "runDetails" ? serializeRunDetails(parseRunDetails(raw)) : raw, studyId);
     }
     writePrecisionEntryColumns(studyId, req.body);
+    writeCriterionColumns(studyId, req.body);
     autoAttributeCoverageAnalyte(studyId, payload.cliaPresetLabel);
     const updated = (db as any).$client.prepare("SELECT * FROM studies WHERE id = ?").get(studyId) as any;
     markScanItemsOnFirstPass(existing, updated);
@@ -13339,6 +13367,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         cliaAllowableError: Number(req.body.cliaAllowableError ?? existing.clia_allowable_error) || 0,
         dataPoints: req.body.dataPoints ?? JSON.parse(existing.data_points || '[]'),
         instruments: req.body.instruments ?? JSON.parse(existing.instruments || '[]'),
+        cliaPresetLabel: draftPresetLabel(req.body, existing),
       };
     } else {
       const parsed = insertStudySchema.safeParse(req.body);
@@ -13386,6 +13415,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       (db as any).$client.prepare(`UPDATE studies SET ${col} = ? WHERE id = ?`).run(key === "runDetails" ? serializeRunDetails(parseRunDetails(raw)) : raw, studyId);
     }
     writePrecisionEntryColumns(studyId, req.body);
+    writeCriterionColumns(studyId, req.body);
     autoAttributeCoverageAnalyte(studyId, payload.cliaPresetLabel);
     const updated = (db as any).$client.prepare("SELECT * FROM studies WHERE id = ?").get(studyId) as any;
     markScanItemsOnFirstPass(existing, updated);
@@ -35683,6 +35713,48 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       }
     }
     res.json({ lotToLot, refInterval, byLab });
+  });
+
+  // ── ADMIN: saved studies whose criterion isn't the one their preset label names, counts only (BUG-153/154, 2026-11-10) ──
+  // Before the fix, a re-run from Edit was saved on the picker's first preset (ALT/SGPT), and the study PUTs didn't write
+  // a changed criterion's units or floor, so a row can carry an ALT label over a units criterion, or a label whose
+  // preset value, units or floor differ from the stored ones. classifyCriterion (shared/studyCriterion.ts) is the check
+  // Edit uses: such a row now opens in Edit held "as saved". The same mark also comes from BUG-139's earlier floor
+  // backfill on labeled rows (reason floor; floor-backfill-counts counts those) and one-off admin corrections; byReason
+  // tells them apart (units can only come from a save). Types that store their own fixed criterion only carry the label
+  // and are never counted. Read-only: nothing is written. Counts, lab ids and preset labels only.
+  // A re-save isn't recorded (studies has no updated_at and the PUTs write no audit row), so resaved is null.
+  app.get("/api/admin/veritacheck/criterion-mismatch-counts", (req, res) => {
+    if (!ADMIN_SECRET || req.headers["x-admin-secret"] !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    const sqlite = (db as any).$client;
+    const rows = sqlite.prepare(
+      `SELECT s.lab_id, s.study_type, s.status, s.lifecycle_state, s.clia_allowable_error, s.tea_is_percentage, s.tea_unit,
+              s.clia_absolute_floor, s.clia_absolute_unit, s.clia_preset_label, l.is_demo
+         FROM studies s LEFT JOIN labs l ON l.id = s.lab_id`
+    ).all() as any[];
+    const totals = { studies: rows.length, matches: 0, mismatched: 0, fixedType: 0, noLabel: 0, unknownLabel: 0, mismatchedDrafts: 0, mismatchedFinalized: 0 };
+    const byReason = { value: 0, units: 0, floor: 0, floorUnit: 0 };
+    const byType: Record<string, { studies: number; mismatched: number }> = {};
+    const byLab: Record<string, { isDemo: boolean | null; studies: number; mismatched: number; mismatchedFinalized: number }> = {};
+    const byPreset: Record<string, number> = {};
+    for (const r of rows) {
+      const type = String(r.study_type ?? "unknown");
+      const lab = String(r.lab_id ?? "none");
+      byType[type] = byType[type] || { studies: 0, mismatched: 0 };
+      byLab[lab] = byLab[lab] || { isDemo: r.lab_id == null || r.is_demo == null ? null : r.is_demo === 1, studies: 0, mismatched: 0, mismatchedFinalized: 0 };
+      byType[type].studies++;
+      byLab[lab].studies++;
+      const k = classifyCriterion(r, CLIA_PRESETS);
+      if (k.kind !== "mismatch") { totals[k.kind]++; continue; }
+      totals.mismatched++;
+      byType[type].mismatched++;
+      byLab[lab].mismatched++;
+      for (const reason of k.reasons) byReason[reason]++;
+      if (k.saved.label) byPreset[k.saved.label] = (byPreset[k.saved.label] || 0) + 1;
+      if (r.status === "draft") totals.mismatchedDrafts++;
+      if (r.lifecycle_state === "finalized") { totals.mismatchedFinalized++; byLab[lab].mismatchedFinalized++; }
+    }
+    res.json({ ...totals, resaved: null, byReason, byType, byLab, byPreset });
   });
 
   // ── ADMIN: Read-only VeritaCheck/VeritaMap diagnostic probe ─────────────

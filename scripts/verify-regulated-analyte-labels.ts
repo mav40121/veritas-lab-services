@@ -91,7 +91,8 @@ const PRESET_ANALYTE: Record<string, string> = {
   "Alcohol, Blood": "Alcohol, Blood (Ethanol)", "Blood Lead": "Blood Lead", "Carbamazepine": "Carbamazepine", "Digoxin": "Digoxin", "Gentamicin": "Gentamicin", "Lithium": "Lithium", "Phenobarbital": "Phenobarbital", "Phenytoin": "Phenytoin (Dilantin)", "Salicylate": "Salicylate", "Theophylline": "Theophylline", "Tobramycin": "Tobramycin", "Valproic Acid, Total": "Valproic Acid, Total",
   "Vancomycin": "Vancomycin", "Erythrocyte Count / RBC": "CBC - RBC (Red Blood Cell Count)", "Fibrinogen": "Fibrinogen", "Hematocrit": "CBC - Hematocrit", "Hemoglobin": "CBC - Hemoglobin", "Leukocyte Count / WBC": "CBC - WBC (White Blood Cell Count)", "Partial Thromboplastin Time": "Partial Thromboplastin Time (PTT/aPTT)", "Platelet Count": "CBC - Platelet Count", "Prothrombin Time / PT": "Prothrombin Time (PT)",
 };
-const page = readFileSync(new URL("../client/src/pages/VeritaCheckPage.tsx", import.meta.url), "utf-8");
+// The presets live in shared/cliaPresets.ts since 2026-11-10 (the page imports them; the server reads them too).
+const page = readFileSync(new URL("../shared/cliaPresets.ts", import.meta.url), "utf-8");
 const presetBlock = page.match(/const CLIA_PRESETS = \[([\s\S]*?)\n\];/)![1];
 let presetCount = 0;
 for (const line of presetBlock.split(/\r?\n/)) {

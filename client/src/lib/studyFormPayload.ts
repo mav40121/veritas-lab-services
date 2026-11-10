@@ -557,6 +557,12 @@ function readGrid(dp: unknown, studyType: string): GridRead | null {
   };
 }
 
+// ── The acceptance criterion picker ─────────────────────────────────────────
+// BUG-153: criterionOf (what the page saves from the picker) and readCriterionForm (what Edit puts back in it) live in
+// shared/studyCriterion.ts, so the server's criterion-mismatch count reads a saved criterion the same way.
+export { criterionOf, readCriterionForm, classifyCriterion, LAB_DEFINED_LABEL } from "@shared/studyCriterion";
+export type { CriterionPreset, SavedCriterion, CriterionPick, Criterion } from "@shared/studyCriterion";
+
 // ── Save Draft and Edit ─────────────────────────────────────────────────────
 export interface StudyForms {
   precision: PrecisionForm;

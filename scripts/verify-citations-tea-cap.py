@@ -187,7 +187,8 @@ def parse_criteria(c):
 # ── 3. Presets ───────────────────────────────────────────────────────────────
 print("== CLIA_PRESETS against the same set")
 page = read("client/src/pages/VeritaCheckPage.tsx")
-block = re.search(r"const CLIA_PRESETS = \[(.*?)\n\];", page, re.S).group(1)
+# The presets live in shared/cliaPresets.ts since 2026-11-10; the page still renders the dropdown (checked below).
+block = re.search(r"const CLIA_PRESETS = \[(.*?)\n\];", read("shared/cliaPresets.ts"), re.S).group(1)
 presets = []
 for line in block.split("\n"):
     m = re.match(r'\s*\{ label: "([^"]+)",\s*value: ([\d.]+)', line)
