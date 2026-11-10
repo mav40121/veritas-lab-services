@@ -605,60 +605,6 @@ _(item #88 closed 2026-10-08; see C91 below)_
 
 ---
 
-### 116. VeritaCheck results screen and PDF say different things about the same study
-
-**Effort:** S (1-3 days; one narrative shared by the screen and the PDF)
-**Importance:** High. A director reads the screen and signs the PDF, and they disagree on the criterion, the CFR paragraph and the analyzer count.
-
-**What:** The results screen writes its own narrative (client/src/pages/StudyResultsPage.tsx, from line 205) instead of using the PDF's (server/pdfReport.ts, from line 1425), and the two have drifted. The screen breaks narrative rules the PDF follows (CLAUDE.md section 5). One shared narrative would end the drift instead of fixing each sentence twice. Line numbers are from main at 9c701920.
-- Absolute criterion printed as a percent. cliaPct multiplies the stored value by 100 (line 206), so Sodium ±4 mmol/L reads ±400.0% on calibration verification and precision (lines 237, 241, 304, 313) and on a failed method comparison (line 289). The PDF prints ±4 mmol/L, except in its precision narrative, which has the same percent sentence (pdfReport.ts lines 1592, 1602).
-- CFR paragraphs differ. Calibration verification: §493.1255(b)(2) and §493.1253(b)(3) on the screen, §493.1255(b)(3) and §493.1253(b)(2) on the PDF. Precision: §493.1253(b)(1)(i)(B) on the screen, §493.1253(b)(2)(ii) on the PDF. Method comparison: §493.1281(a) on the screen's failed result, §493.1253(b)(2) on the PDF. scripts/verify-cfr-paragraph-citations.mjs checks that a paragraph exists, not which one fits, so it doesn't catch this. Which paragraph each study cites has to be settled against the eCFR before the fix.
-- PASS has no closing sentence. Calibration verification and precision PASS on the screen stop before "Final approval and clinical determination must be made by the laboratory director or designee." (lines 238, 310). FAIL and the PDF have it.
-- Two analyzers. The screen counts levels times analyzers and reads "All 10 calibration levels" and "This instrument" (lines 237, 238). The PDF got this fix in BUG-058 (pdfReport.ts line 1439).
-- FAIL tells the reader to review records. "Review calibration, reagent lot, and instrument maintenance records" (line 241) and "Review reagent lot, instrument maintenance, and QC trends" (line 313). The PDF doesn't say this.
-- Precision PASS claims more than was tested. "Manufacturer precision claims are verified." prints with no vendor SD entered, on the screen (line 310) and the PDF (pdfReport.ts line 1598). The vendor SD is optional on the form (client/src/pages/VeritaCheckPage.tsx line 2433), and the sentence before it judges the study against the adopted criterion.
-
-**Source:** found while removing the ADLM claim, 2026-11-06 (build queue); each line read on main at 9c701920. Parked on Michael's Q216 = 1.
-**Status:** Open. Not scheduled. Which CFR paragraph each study cites is Michael's to confirm.
-
----
-
-### 117. VeritaScan shows "Invalid Date" under the scan title
-
-**Effort:** XS (under a day)
-**Importance:** Medium. Every scan opens with "Invalid Date" under its title. No data or score is affected.
-
-**What:** client/src/pages/VeritaScanScanPage.tsx line 1340 builds the date from scanMeta.updatedAt or createdAt, but the single-scan routes (server/routes.ts lines 18216 and 18464) send the row as stored, with updated_at and created_at. Both names the page reads are undefined, so it formats an empty date and prints "Invalid Date" at lines 1376 and 1504. The scan list is fine because its route sends both spellings (line 18168). Fix: send both from the single-scan routes or read updated_at on the page, with a browser test.
-
-**Source:** read on main at 9c701920, 2026-11-06. Parked on Michael's Q216 = 1.
-**Status:** Open. Not scheduled.
-
----
-
-### 118. VeritaLab can't clear a certificate's expiration date
-
-**Effort:** XS (under a day)
-**Importance:** Medium. A lab can't remove a wrong expiration date, and reminders keep scheduling on it.
-
-**What:** Both certificate edit routes write expiration_date ?? existing.expiration_date (server/routes.ts lines 33071 and 33162). The form sends null for a blank date (client/src/pages/VeritaLabAppPage.tsx line 236), so the old date stays, the save answers 200, and scheduleReminders runs again on the old date (lines 33080, 33169). Cert number, issuing body, issued date, director and notes follow the same pattern (lines 33068-33073 and 33159-33164). Fix: treat a sent null as a clear and keep the old value only when the field is left out of the request, with a test on both routes.
-
-**Source:** found 2026-11-06 when Splice's certificate row needed its date removed (build queue). Parked on Michael's Q216 = 1.
-**Status:** Open. Goes with the next VeritaLab change.
-
----
-
-### 119. Precision guide: 12 lines say VeritaCheck with no ®
-
-**Effort:** XS (under a day)
-**Importance:** Low. Mark use on one public article; VeritaCheck has been registered since 2026-10-27.
-
-**What:** client/src/pages/ArticlePrecisionInterpretationPage.tsx names VeritaCheck on 13 lines and only line 161 has the ®. The other 12 are lines 46, 47, 57, 59, 64, 83, 132, 141, 153, 205, 239 and 244, including the page title and meta description. server/seo-metadata.ts line 630 repeats the opening sentence without it. CLAUDE.md section 3 has registered marks use ® in public copy, and script/audit.py doesn't flag the bare name. Fix: add the mark on those lines.
-
-**Source:** found while removing the ADLM claim, 2026-11-06 (build queue); counted on main at 9c701920. Parked on Michael's Q216 = 1.
-**Status:** Open. Not scheduled.
-
----
-
 ### 120. Homepage says "nothing for a breach, or an inspector, to expose" while staff records are held
 
 **Effort:** XS (one line of copy once Michael decides)
@@ -672,6 +618,30 @@ _(item #88 closed 2026-10-08; see C91 below)_
 ---
 
 ## CLOSED (audit trail)
+
+### C117. Precision guide: 12 lines said VeritaCheck with no ® (was #119)
+
+**Effort:** was XS / **Importance:** Low.
+
+**Closure evidence:** On main at 057c3808, client/src/pages/ArticlePrecisionInterpretationPage.tsx has no bare "VeritaCheck" left. The two left in the page's structured data (server/seo-metadata.ts, the guide's articleBody) get the ® in this change. Closed 2026-11-10 after checking main.
+
+### C116. VeritaLab can't clear a certificate's expiration date (was #118)
+
+**Effort:** was XS / **Importance:** Medium.
+
+**Closure evidence:** PR #1847 merged 2026-11-07 (19095c99), "Emptying a box on a VeritaLab certificate clears it, and no expiration date leaves no reminders waiting". Closed 2026-11-10 after checking main.
+
+### C115. VeritaScan showed "Invalid Date" under the scan title (was #117)
+
+**Effort:** was XS / **Importance:** Medium.
+
+**Closure evidence:** BUG-142, PR #1857 merged 2026-11-09 (9eaa2c2d), live on production 2026-11-09. Closed 2026-11-10 after checking main.
+
+### C114. VeritaCheck results screen and PDF said different things about the same study (was #116)
+
+**Effort:** was S / **Importance:** High.
+
+**Closure evidence:** PR #1848 (0962e20c, 2026-11-08), "VeritaCheck units limits (Q239 = 1), CFR paragraphs and narrative wording on screen and PDF", and PR #1849 (2a5bbde2). The results screen now takes its narrative from client/src/lib/studyNarrative.ts, kept in step with server/pdfReport.ts narrativeHTML and pinned by scripts/verify-study-narrative.mts (CLAUDE.md section 5): a units criterion prints in units, the CFR paragraphs match, and "Manufacturer precision claims are verified" needs a vendor claim. Checked on main at 057c3808: StudyResultsPage imports the shared narrative, and its one remaining "x 100" sits behind isUnitsCriterion. Closed 2026-11-10 after checking main.
 
 ### C113. VeritaMap's SOP review column reads VeritaDC (was #93)
 

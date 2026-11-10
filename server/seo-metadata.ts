@@ -629,7 +629,7 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
     jsonLd: articleJsonLd({
       headline: "Precision Verification Report Interpretation Guide",
       description: "How to interpret EP15-A3 precision verification reports for CLIA compliance: SD, CV, total imprecision, and what surveyors look for in your documentation.",
-      articleBody: "How to read every field, table, and chart on a VeritaCheck precision verification report, and how each one maps to 42 CFR §493 and CLSI EP15-A3. Sections: Why precision verification is required; What the simple precision study does; Statistical definitions; Advanced (EP15) mode and ANOVA components; Precision verification goal modes; Pass, Fail, and Uncertain; Reading the VeritaCheck report; References.",
+      articleBody: "How to read every field, table, and chart on a VeritaCheck\u00AE precision verification report, and how each one maps to 42 CFR §493 and CLSI EP15-A3. Sections: Why precision verification is required; What the simple precision study does; Statistical definitions; Advanced (EP15) mode and ANOVA components; Precision verification goal modes; Pass, Fail, and Uncertain; Reading the VeritaCheck\u00AE report; References.",
       path: "/resources/precision-verification-report-interpretation-guide",
       datePublished: "2026-05-20",
     }),
