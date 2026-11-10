@@ -12944,6 +12944,22 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     }
   }
 
+  // BUG-146 (2026-11-09): precision's optional entries (vendor SD claim, target, control and reagent lots) sit in
+  // columns the edit statements below don't name, so a re-save from Edit, draft or finished, kept the old values.
+  // Written when the body carries them; a body that doesn't (every other study type) leaves them as they are.
+  const writePrecisionEntryColumns = (studyId: number, body: any) => {
+    for (const [key, col] of [["vendorSd", "vendor_sd"], ["vendorSdConcentration", "vendor_sd_concentration"], ["targetMean", "target_mean"], ["targetCv", "target_cv"]] as const) {
+      const v = body?.[key];
+      if (v !== null && !(typeof v === "number" && Number.isFinite(v))) continue;
+      (db as any).$client.prepare(`UPDATE studies SET ${col} = ? WHERE id = ?`).run(v, studyId);
+    }
+    for (const [key, col] of [["controlLot", "control_lot"], ["reagentLot", "reagent_lot"]] as const) {
+      const v = body?.[key];
+      if (typeof v !== "string" && v !== null) continue;
+      (db as any).$client.prepare(`UPDATE studies SET ${col} = ? WHERE id = ?`).run(typeof v === "string" ? (v.trim() || null) : null, studyId);
+    }
+  };
+
   // PUT /api/studies/:id — update an existing study. Used by the edit-existing
   // flow (drafts and completed studies). Drafts skip strict validation; a
   // status transition to 'completed' triggers the same pass/fail recompute as
@@ -13026,6 +13042,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const raw = typeof req.body[key] === "string" ? (req.body[key].trim() || null) : null;
       (db as any).$client.prepare(`UPDATE studies SET ${col} = ? WHERE id = ?`).run(key === "runDetails" ? serializeRunDetails(parseRunDetails(raw)) : raw, studyId);
     }
+    writePrecisionEntryColumns(studyId, req.body);
     autoAttributeCoverageAnalyte(studyId, payload.cliaPresetLabel);
     const updated = (db as any).$client.prepare("SELECT * FROM studies WHERE id = ?").get(studyId) as any;
     markScanItemsOnFirstPass(existing, updated);
@@ -13357,6 +13374,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const raw = typeof req.body[key] === "string" ? (req.body[key].trim() || null) : null;
       (db as any).$client.prepare(`UPDATE studies SET ${col} = ? WHERE id = ?`).run(key === "runDetails" ? serializeRunDetails(parseRunDetails(raw)) : raw, studyId);
     }
+    writePrecisionEntryColumns(studyId, req.body);
     autoAttributeCoverageAnalyte(studyId, payload.cliaPresetLabel);
     const updated = (db as any).$client.prepare("SELECT * FROM studies WHERE id = ?").get(studyId) as any;
     markScanItemsOnFirstPass(existing, updated);
