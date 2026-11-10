@@ -51,6 +51,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { REVISION_IN_PROGRESS_NOTE } from "@shared/policyApprovedVersion";
 import {
   Select,
   SelectContent,
@@ -108,6 +109,8 @@ interface SopLink {
   next_review: string | null;
   overdue: boolean;
   reason: string | null;
+  // BUG-165: a newer revision is a draft or in review; the approved version still stands, so the link is current.
+  revision_in_progress?: boolean;
 }
 // The SOP date a sort or a count should use: the linked policy's last review, else the hand-entered date.
 const sopDate = (t: { sop_link?: SopLink | null; last_sop_review?: string | null }) => (t.sop_link ? t.sop_link.last_review : t.last_sop_review) ?? null;
@@ -1849,7 +1852,7 @@ function TestRow({ test, onChange, onChangeMany, onRowMount, analyteBands, amrVa
       {/* SOP Review: a linked VeritaDC policy (#93), else the hand-entered date */}
       <td className="px-3 py-2 whitespace-nowrap" data-testid={`sop-cell-${test.analyte}`}>
         {test.sop_link ? (
-          <div className="min-w-[150px] max-w-[220px]" title={test.sop_link.reason || undefined}>
+          <div className="min-w-[150px] max-w-[220px]" title={test.sop_link.reason || (test.sop_link.revision_in_progress ? REVISION_IN_PROGRESS_NOTE : undefined)}>
             <div className="flex items-center gap-1.5">
               <FileText size={11} className="text-primary shrink-0" />
               <span className="text-xs font-medium truncate" data-testid="sop-link-title">{test.sop_link.title || "Policy not found"}</span>
@@ -1865,6 +1868,9 @@ function TestRow({ test, onChange, onChangeMany, onRowMount, analyteBands, amrVa
                 {test.sop_link.last_review ? `Reviewed ${test.sop_link.last_review}` : "No approval yet"}
               </span>
             </div>
+            {test.sop_link.revision_in_progress && (
+              <div className="text-[10px] text-amber-700 dark:text-amber-300 mt-0.5" data-testid="sop-link-revision">Revision in progress</div>
+            )}
             {!readOnly && onSopLink && (
               <button type="button" className="text-[10px] text-primary hover:underline mt-0.5" onClick={() => onSopLink(test)} data-testid="sop-link-change">
                 Change link

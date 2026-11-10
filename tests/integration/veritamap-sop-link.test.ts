@@ -99,6 +99,23 @@ async function main() {
   check("3a. a policy in review reads Overdue with the reason", s3a?.overdue === true && /in review/.test(s3a?.reason || ""), JSON.stringify(s3a));
   check("3b. a policy past its next review date reads Overdue", s3b?.overdue === true && /2026-01-01/.test(s3b?.reason || "") && s3b?.last_review === "2024-01-01", JSON.stringify(s3b));
 
+  // 3c-3f. BUG-165: a revision in progress over a recorded approved version (BUG-151's approved_version_id) still has its
+  // approved procedure, so the link reads Current with revision_in_progress, in draft and in review. Made-up rows: an approved
+  // document whose current version became a newer draft, the earlier version recorded as approved.
+  const revised = mkDoc(A.labId, A.userId, "Revised Procedure", "draft", "2028-03-01");
+  sign(revised, A.userId, "approved", "2026-03-01 09:00:00");
+  sqlite.prepare("UPDATE policy_documents SET current_version_id = 902, approved_version_id = 901 WHERE id = ?").run(revised);
+  await call(A, "PUT", `/api/labs/${A.labId}/veritamap/maps/${map.id}/sop-link`, { analytes: [t3], documentId: revised });
+  const s3c = row(await detail(), t3)?.sop_link;
+  check("3c. a revision in draft over an approved version reads Current, not 'draft, not approved'", s3c?.overdue === false && s3c?.reason === null && s3c?.revision_in_progress === true && s3c?.last_review === "2026-03-01", JSON.stringify(s3c));
+  sqlite.prepare("UPDATE policy_documents SET status = 'in_review' WHERE id = ?").run(revised);
+  const s3d = row(await detail(), t3)?.sop_link;
+  check("3d. the same revision in review still reads Current with revision_in_progress", s3d?.overdue === false && s3d?.revision_in_progress === true, JSON.stringify(s3d));
+  sqlite.prepare("UPDATE policy_documents SET next_review_date = '2026-01-15' WHERE id = ?").run(revised);
+  const s3e = row(await detail(), t3)?.sop_link;
+  check("3e. a revision in progress whose approved version is past its review date reads Overdue for that reason", s3e?.overdue === true && /2026-01-15/.test(s3e?.reason || "") && s3e?.revision_in_progress === true, JSON.stringify(s3e));
+  check("3f. an approved policy and one in review with no approved version recorded carry revision_in_progress false", l1?.revision_in_progress === false && s3a?.revision_in_progress === false, JSON.stringify({ l1: l1?.revision_in_progress, s3a: s3a?.revision_in_progress }));
+
   // 4. refusals
   const cross = await call(A, "PUT", `/api/labs/${A.labId}/veritamap/maps/${map.id}/sop-link`, { analytes: [t1], documentId: otherLab });
   const arch = await call(A, "PUT", `/api/labs/${A.labId}/veritamap/maps/${map.id}/sop-link`, { analytes: [t1], documentId: archived });
