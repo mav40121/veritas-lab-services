@@ -20,6 +20,7 @@ import { StaffOwnHome, StaffOwnProgram } from "@/components/StaffOwnCompetency";
 import { downloadPdfToken } from "@/lib/utils";
 import { checklistLabel, matchSavedChecklistRows, checklistItemsForType, CHECKLIST_STAGES, CHECKLIST_MAX_ITEMS, CHECKLIST_MAX_DESCRIPTION } from "@shared/competencyChecklist";
 import { assessmentTypeLabel, evaluationDueDate } from "@shared/competencyEvaluation";
+import { documentSections, documentsByElement } from "@shared/competencyDocuments";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -3181,6 +3182,7 @@ function AssessmentsTab({ program, onNewAssessment, onEdit }: { program: Program
       {docsAssessmentId !== null && (
         <AssessmentDocumentsDialog
           assessmentId={docsAssessmentId}
+          programType={program.type}
           onClose={() => setDocsAssessmentId(null)}
         />
       )}
@@ -3284,7 +3286,7 @@ const ELEMENT_NAMES: Record<number, string> = {
   6: "Problem-Solving Assessment (Quiz)",
 };
 
-function AssessmentDocumentsDialog({ assessmentId, onClose }: { assessmentId: number; onClose: () => void }) {
+function AssessmentDocumentsDialog({ assessmentId, programType, onClose }: { assessmentId: number; programType: string; onClose: () => void }) {
   // #84 Phase 3: VeritaComp writes need VeritaComp edit (server-enforced).
   const isReadOnly = useIsReadOnly("veritacomp");
   const queryClient = useQueryClient();
@@ -3337,7 +3339,9 @@ function AssessmentDocumentsDialog({ assessmentId, onClose }: { assessmentId: nu
   }
 
   const docTypeLabel = (v: string) => COMP_DOC_TYPES.find(t => t.value === v)?.label || v;
-  const byElement = (n: number) => (docs ?? []).filter(d => d.element_number === n);
+  // BUG-116: a technical record's documents go with its six elements; a waived or non-technical record has one list.
+  const byElement = documentsByElement(programType);
+  const sections = documentSections(programType, docs ?? [], ELEMENT_NAMES);
 
   return (
     <>
@@ -3347,17 +3351,18 @@ function AssessmentDocumentsDialog({ assessmentId, onClose }: { assessmentId: nu
             <DialogTitle>Linked Documents</DialogTitle>
           </DialogHeader>
           <p className="text-xs text-muted-foreground">
-            Link evidence per CLIA element. Quiz scans, observation notes, QC records: anything a surveyor would ask to see. VeritaAssure stores only the URL; your file stays in your SharePoint, Drive, or other lab-controlled storage.
+            {byElement ? "Link evidence per CLIA element." : "Link evidence for this record."} Quiz scans, observation notes, QC records: anything a surveyor would ask to see. VeritaAssure stores only the URL; your file stays in your SharePoint, Drive, or other lab-controlled storage.
           </p>
           <div className="space-y-4 pt-2">
-            {[1, 2, 3, 4, 5, 6].map(n => {
-              const list = byElement(n);
+            {sections.map(sec => {
+              const n = sec.element;
+              const list = sec.docs;
               return (
-                <div key={n} className="border border-border rounded-md p-3">
+                <div key={sec.heading} className="border border-border rounded-md p-3" data-testid={byElement ? `docs-element-${n}` : "docs-record"}>
                   <div className="flex items-center justify-between gap-2 mb-2">
                     <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-xs font-semibold text-muted-foreground shrink-0">Element {n}</span>
-                      <span className="text-xs truncate">{ELEMENT_NAMES[n]}</span>
+                      <span className="text-xs font-semibold text-muted-foreground shrink-0">{sec.heading}</span>
+                      <span className="text-xs truncate">{sec.subheading}</span>
                     </div>
                     <Button variant="outline" size="sm" className="shrink-0" onClick={() => setLinkElement(n)} hidden={isReadOnly}>
                       <Plus size={12} className="mr-1" /> Link
@@ -3397,7 +3402,7 @@ function AssessmentDocumentsDialog({ assessmentId, onClose }: { assessmentId: nu
       <DocumentLinkDialog
         open={linkElement !== null}
         onOpenChange={(v) => { if (!v) setLinkElement(null); }}
-        title={linkElement !== null ? `Link Document: Element ${linkElement}` : "Link Document"}
+        title={linkElement !== null && byElement ? `Link Document: Element ${linkElement}` : "Link Document"}
         docTypes={COMP_DOC_TYPES}
         onSubmit={createDoc}
       />

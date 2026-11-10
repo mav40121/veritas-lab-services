@@ -5302,6 +5302,30 @@ function esc(s: string | null | undefined): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
+// PR C+ (2026-06-05): a competency record's linked documents, a surveyor-defensible citation chain. URL-pointer
+// architecture only: the file is never embedded, only its URL printed. Nothing when there are none. A technical record
+// prints it under each element; a waived or non-technical record, which has no elements, after its table (BUG-116).
+function linkedDocsHTML(docs: CompetencyElementDocument[]): string {
+  if (docs.length === 0) return "";
+  let out = `<div style="margin-top:6px;">
+          <div style="font-size:7.5pt;font-weight:600;color:#555;margin-bottom:3px;">Linked documents (${docs.length})</div>
+          <table style="font-size:7.5pt;">
+            <tr><th style="width:20%;">Type</th><th style="width:30%;">Title</th><th>URL</th></tr>`;
+  for (const d of docs) {
+    const typeLabel = COMP_DOC_TYPE_LABELS[d.doc_type] || d.doc_type;
+    const titleText = d.title && d.title.trim() ? d.title.trim() : "(no title)";
+    // Title truncated visually to 80 chars; word-break on the URL cell so a long SharePoint link wraps inside the
+    // cell without overflowing the page width.
+    const titleDisplay = titleText.length > 80 ? titleText.slice(0, 77) + "..." : titleText;
+    out += `<tr>
+            <td>${esc(typeLabel)}</td>
+            <td title="${esc(titleText)}">${esc(titleDisplay)}</td>
+            <td style="word-break:break-all;font-family:monospace;font-size:7pt;"><a href="${esc(d.url)}" style="color:#01696F;text-decoration:underline;">${esc(d.url)}</a></td>
+          </tr>`;
+  }
+  return out + `</table></div>`;
+}
+
 // Prior approval (2026-07-06): an assessment item was actually scored if it
 // carries a pass flag, a date, initials, or evidence. A competency signed on
 // paper and entered as an overall determination has element rows that default
@@ -5795,30 +5819,8 @@ export function buildCompetencyHTML(input: CompetencyPDFInput): string {
       // Surveyor-defensible citation chain. URL-pointer architecture only;
       // the file content is never embedded, only its URL is printed.
       // Hidden when this element has zero linked docs.
-      const elDocs = elementDocuments
-        .filter(d => d.element_number === elDef.num)
-        .slice()
-        .sort((a, b) => 0); // server already sorts by created_at; preserve.
-      if (elDocs.length > 0) {
-        html += `<div style="margin-top:6px;">
-          <div style="font-size:7.5pt;font-weight:600;color:#555;margin-bottom:3px;">Linked documents (${elDocs.length})</div>
-          <table style="font-size:7.5pt;">
-            <tr><th style="width:20%;">Type</th><th style="width:30%;">Title</th><th>URL</th></tr>`;
-        for (const d of elDocs) {
-          const typeLabel = COMP_DOC_TYPE_LABELS[d.doc_type] || d.doc_type;
-          const titleText = d.title && d.title.trim() ? d.title.trim() : "(no title)";
-          // Title truncated visually to 80 chars; word-break on the URL
-          // cell so a long SharePoint link wraps inside the cell without
-          // overflowing the page width.
-          const titleDisplay = titleText.length > 80 ? titleText.slice(0, 77) + "..." : titleText;
-          html += `<tr>
-            <td>${esc(typeLabel)}</td>
-            <td title="${esc(titleText)}">${esc(titleDisplay)}</td>
-            <td style="word-break:break-all;font-family:monospace;font-size:7pt;"><a href="${esc(d.url)}" style="color:#01696F;text-decoration:underline;">${esc(d.url)}</a></td>
-          </tr>`;
-        }
-        html += `</table></div>`;
-      }
+      // The server already sorts by created_at.
+      html += linkedDocsHTML(elementDocuments.filter(d => d.element_number === elDef.num));
 
       html += `</div>`;
     }
@@ -5877,7 +5879,10 @@ export function buildCompetencyHTML(input: CompetencyPDFInput): string {
         </tr>`;
       }
     }
-    html += `</table></div>`;
+    html += `</table>`;
+    // BUG-116: a waived record's links (it has no elements) print after its table; the technical branch prints them per element.
+    if (!input.blank) html += linkedDocsHTML(elementDocuments);
+    html += `</div>`;
 
   } else {
     // Non-technical checklist
@@ -5919,7 +5924,10 @@ export function buildCompetencyHTML(input: CompetencyPDFInput): string {
         </tr>`;
       }
     }
-    html += `</table></div>`;
+    html += `</table>`;
+    // BUG-116: a non-technical record's links (it has no elements) print after its checklist.
+    if (!input.blank) html += linkedDocsHTML(elementDocuments);
+    html += `</div>`;
   }
 
   // ─── EVALUATOR SIGN-OFF ───
