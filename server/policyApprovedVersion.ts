@@ -57,6 +57,33 @@ export function revisionInProgressSql(a = "d"): string {
   return `(CASE WHEN ${a}.archived_at IS NULL AND ${a}.status IN ('draft', 'in_review') AND ${a}.approved_version_id IS NOT NULL THEN 1 ELSE 0 END)`;
 }
 
+// An inspector's surveyor link (BUG-152, 2026-11-10; routes.ts "Phase 8" and the carried face page in veritadcBulkLoad.ts).
+// It always showed an approved document's current version, and still does. Before this fix a document dropped out of the
+// inspector's view from the moment a new version was uploaded until that revision was approved, though the earlier version
+// was still the approved procedure. Now, while a newer revision is a draft or in review, it shows the version recorded as
+// approved, as the share link and a limited Staff login do. Left as it was: a review-overdue ('expired') document isn't in
+// the surveyor view (the other readers show it), and an approved document's reads don't check archived_at. A draft or in-review
+// document with no recorded approved version still shows nothing.
+
+/** True when the surveyor link shows this document. */
+export function surveyorReads(doc: ApprovedReadDoc | null | undefined): boolean {
+  return !!doc && (doc.status === "approved" || revisionInProgress(doc));
+}
+
+/** The version the surveyor link shows for this document, or null. */
+export function surveyorReadVersionId(doc: ApprovedReadDoc | null | undefined): number | null {
+  if (!doc) return null;
+  if (doc.status === "approved") return doc.current_version_id ?? null;
+  return revisionInProgress(doc) ? doc.approved_version_id ?? null : null;
+}
+
+/** The same rule in SQL, for a policy_documents row aliased `a`: the version id the surveyor link shows, or NULL. */
+export function surveyorReadVersionSql(a = "d"): string {
+  return `(CASE WHEN ${a}.status = 'approved' THEN ${a}.current_version_id
+               WHEN ${revisionInProgressSql(a)} = 1 THEN ${a}.approved_version_id
+               ELSE NULL END)`;
+}
+
 /**
  * The one-time backfill, run in the step that adds the column. A document approved or review-overdue right now records its
  * current version. Documents in draft or review are counted, never guessed: `withEarlierVersion` is how many of those have

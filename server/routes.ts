@@ -243,7 +243,7 @@ import { labCarriesMinorRevisions, signatureStillCurrent, carriedStaffSignature 
 import { attestationStillCurrent, closeAttestationsCoveredByStaffSignatures, documentSignatureStatus, staffHasSignedCurrent, unsignedDocumentsForStaff } from "./policySignatureStatus";
 import { priorCountsByPerson, priorHow, priorSignatureStillCurrent, priorSignaturesOfDocument } from "./policyPriorSignature";
 import { assignedDocumentIds, loadReadSignContext, logStaffDocumentView, lookupDocuments, registerReadSignRoutes, rulesForDocument, targetLabels, veritaDcStaffGuard } from "./policyReadSign";
-import { approvedReadVersionId, approvedReadVersionSql, revisionInProgress } from "./policyApprovedVersion";
+import { approvedReadVersionId, approvedReadVersionSql, revisionInProgress, revisionInProgressSql, surveyorReadVersionId, surveyorReadVersionSql, surveyorReads } from "./policyApprovedVersion";
 import { assessmentTypeLabel, assessmentTypeProblem, isEvaluationProgram, normalizeRecordKind } from "@shared/competencyEvaluation";
 import { normalizeSpecimen, normalizeReportableField, specimenLabel } from "@shared/veritamapSpecimen";
 import { buildCompetencyRegisterRows, generateCompetencyRegisterExcel } from "./competencyRegisterExcel";
@@ -42873,7 +42873,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     return { ok: true, labId: row.lab_id, linkId: row.id };
   }
 
-  // GET /api/surveyor/:token/policies — list approved policies in this lab.
+  // GET /api/surveyor/:token/policies — list approved policies in this lab. A document whose newer revision is a draft or in
+  // review is listed at its approved version, with revision_in_progress (BUG-152; surveyorReadVersionSql in
+  // server/policyApprovedVersion.ts). The current_version_* fields are the version shown.
   app.get("/api/surveyor/:token/policies", (req: any, res) => {
     const r = resolveSurveyorToken(String(req.params.token || ""));
     if (!r.ok) return res.status(r.status).json({ error: r.error });
@@ -42881,18 +42883,19 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const lab = sqlite
       .prepare("SELECT lab_name, clia_number FROM labs WHERE id = ?")
       .get(r.labId) as { lab_name: string | null; clia_number: string | null } | undefined;
-    const docs = sqlite
+    const docs = (sqlite
       .prepare(
         `SELECT d.id, d.title, d.description, d.effective_date, d.next_review_date,
                 d.review_interval_months, v.version_number AS current_version_number, v.version_major AS current_version_major, v.version_minor AS current_version_minor, d.doc_number, d.doc_type,
-                v.file_format AS current_file_format, d.manual_id, m.name AS manual_name
+                v.file_format AS current_file_format, d.manual_id, m.name AS manual_name,
+                ${revisionInProgressSql("d")} AS revision_in_progress
            FROM policy_documents d
-           LEFT JOIN policy_versions v ON v.id = d.current_version_id
+           LEFT JOIN policy_versions v ON v.id = ${surveyorReadVersionSql("d")} AND v.document_id = d.id
            LEFT JOIN policy_manuals m ON m.id = d.manual_id
-          WHERE d.lab_id = ? AND d.status = 'approved' AND d.archived_at IS NULL
+          WHERE d.lab_id = ? AND d.archived_at IS NULL AND (d.status = 'approved' OR ${revisionInProgressSql("d")} = 1)
           ORDER BY m.display_order ASC, m.name ASC, d.title ASC`
       )
-      .all(r.labId) as any[];
+      .all(r.labId) as any[]).map((d) => ({ ...d, revision_in_progress: d.revision_in_progress === 1 }));
     // Sub-manuals: the inspector sees the lab's manual tree, each document under its manual's full path.
     res.json({ lab, documents: withManualTree(sqlite, r.labId, withVersionLabel(docs), true) });
   });
@@ -42905,18 +42908,18 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const id = Number(req.params.id);
     if (!Number.isFinite(id)) return res.status(400).json({ error: "Bad id" });
     const sqlite = (db as any).$client;
-    const row = sqlite
-      .prepare(
-        `SELECT d.lab_id, d.status, v.file_path, v.file_format,
-                v.file_hash_sha256 AS expected_hash
-           FROM policy_documents d
-           JOIN policy_versions v ON v.id = d.current_version_id
-          WHERE d.id = ?`
-      )
+    const doc = sqlite
+      .prepare("SELECT lab_id, status, archived_at, current_version_id, approved_version_id FROM policy_documents WHERE id = ?")
       .get(id) as any;
+    if (!doc) return res.status(404).json({ error: "Not found" });
+    if (doc.lab_id !== r.labId) return res.status(403).json({ error: "Wrong lab" });
+    // BUG-152: while a newer revision is a draft or in review, the approved version, never the revision's file.
+    if (!surveyorReads(doc)) return res.status(403).json({ error: "Not approved" });
+    const versionId = surveyorReadVersionId(doc);
+    const row = versionId == null ? undefined : (sqlite
+      .prepare("SELECT file_path, file_format, file_hash_sha256 AS expected_hash FROM policy_versions WHERE id = ? AND document_id = ?")
+      .get(versionId, id) as any);
     if (!row) return res.status(404).json({ error: "Not found" });
-    if (row.lab_id !== r.labId) return res.status(403).json({ error: "Wrong lab" });
-    if (row.status !== "approved") return res.status(403).json({ error: "Not approved" });
     let buffer: Buffer;
     try {
       buffer = readVersionBuffer(row.file_path);
@@ -42997,11 +43000,14 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (!Number.isFinite(id)) return res.status(400).json({ error: "Bad id" });
     const sqlite = (db as any).$client;
     const doc = sqlite
-      .prepare("SELECT lab_id, status FROM policy_documents WHERE id = ?")
+      .prepare("SELECT lab_id, status, archived_at, current_version_id, approved_version_id FROM policy_documents WHERE id = ?")
       .get(id) as any;
     if (!doc) return res.status(404).json({ error: "Not found" });
     if (doc.lab_id !== r.labId) return res.status(403).json({ error: "Wrong lab" });
-    if (doc.status !== "approved") return res.status(403).json({ error: "Not approved" });
+    if (!surveyorReads(doc)) return res.status(403).json({ error: "Not approved" });
+    // BUG-152: while a newer revision is a draft or in review, its own steps (submitted, rejected) aren't the approved
+    // version's history, so they are left out; every earlier version's signatures stay, as before.
+    const revisionVersionId = revisionInProgress(doc) ? doc.current_version_id : null;
     const rows = sqlite
       .prepare(
         `SELECT s.id, s.action, s.comment, s.typed_signature,
@@ -43012,9 +43018,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
            JOIN users u ON u.id = s.user_id
            LEFT JOIN policy_approval_steps st ON st.id = s.workflow_step_id
           WHERE s.document_id = ?
+            AND (? IS NULL OR s.version_id IS NULL OR s.version_id <> ?)
           ORDER BY s.signed_at ASC`
       )
-      .all(id);
+      .all(id, revisionVersionId, revisionVersionId);
     // LHF-1: include bench-staff kiosk signatures alongside the approval chain
     // so a surveyor sees who actually read-and-signed, not just the approvers.
     const staffSignatures = staffPolicySignaturesForDoc(sqlite, doc.lab_id, id);

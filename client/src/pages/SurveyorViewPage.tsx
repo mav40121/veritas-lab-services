@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader2, FileText, ShieldCheck, XCircle, Eye } from "lucide-react";
 import { labLocaleDate } from "@/lib/labDate";
+import { REVISION_IN_PROGRESS_NOTE } from "@shared/policyApprovedVersion";
 import { CarriedOverPanel, type CarriedRecord } from "@/components/CarriedOverPanel";
 
 interface SurveyorDoc {
@@ -30,6 +31,8 @@ interface SurveyorDoc {
   // Sub-manuals: the server sends documents in tree order with each manual's full path and depth.
   manual_path?: string | null;
   manual_depth?: number;
+  // True while a newer revision is a draft or in review; the link shows the approved version (BUG-152).
+  revision_in_progress?: boolean;
 }
 
 interface SurveyorListResponse {
@@ -227,6 +230,12 @@ export default function SurveyorViewPage() {
                         {d.doc_number ? `${d.doc_number} · ` : ""}v{d.current_version_label ?? d.current_version_number} {d.current_file_format?.toUpperCase()} ·
                         effective {fmtDate(d.effective_date)} · next review {fmtDate(d.next_review_date)}
                       </div>
+                      {/* BUG-152: while the laboratory revises the document, the link shows the approved version. */}
+                      {d.revision_in_progress && (
+                        <div className="mt-1 inline-block rounded border border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-200 px-2 py-0.5 text-[11px]" data-testid={`surveyor-revision-note-${d.id}`}>
+                          {REVISION_IN_PROGRESS_NOTE}
+                        </div>
+                      )}
                     </div>
                     <Button size="sm" variant="outline" onClick={() => openView(d)}>
                       <Eye size={12} className="mr-1" /> View
@@ -253,6 +262,11 @@ export default function SurveyorViewPage() {
                 Close
               </Button>
             </div>
+            {viewDoc.revision_in_progress && (
+              <div className="rounded border border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-200 px-2 py-1 text-xs mb-2" data-testid="surveyor-view-revision-note">
+                {REVISION_IN_PROGRESS_NOTE} Version {viewDoc.current_version_label ?? viewDoc.current_version_number}.
+              </div>
+            )}
             {viewTampered && (
               <div className="rounded border border-red-300 bg-red-50 text-red-900 p-2 text-xs mb-2">
                 <div className="font-medium flex items-center gap-1">

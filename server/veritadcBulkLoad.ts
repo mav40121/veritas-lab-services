@@ -29,6 +29,7 @@ import {
   writeVersionBuffer,
 } from "./veritapolicyApproval";
 import { checkUploadForPhi } from "./phiUploadCheck";
+import { surveyorReads } from "./policyApprovedVersion";
 
 // Stop before the volume fills: the database lives on the same volume, so a full disk would stop every customer.
 export const DEFAULT_MIN_FREE_BYTES = 100 * 1024 * 1024;
@@ -368,7 +369,7 @@ const carriedFileRow = (sqlite: any, documentId: number) =>
   sqlite
     .prepare(
       `SELECT c.face_page_path, c.face_page_sha256, c.original_path, c.original_sha256, c.original_filename,
-              d.lab_id, d.status, d.owner_user_id
+              d.lab_id, d.status, d.owner_user_id, d.archived_at, d.current_version_id, d.approved_version_id
          FROM policy_carried_records c JOIN policy_documents d ON d.id = c.document_id
         WHERE c.document_id = ?`
     )
@@ -448,7 +449,8 @@ export function registerBulkLoadRoutes(
     });
   }
 
-  // The inspector link: the face page of an approved document in the link's lab.
+  // The inspector link: the face page of an approved document in the link's lab, and of one whose newer revision is a draft
+  // or in review, since the link then shows the approved version (BUG-152, surveyorReads).
   app.get("/api/surveyor/:token/policies/:id/carried/face-page", (req: any, res: any) => {
     const r = deps.resolveSurveyorToken(String(req.params.token || ""));
     if (!r.ok) return res.status(r.status).json({ error: r.error });
@@ -457,7 +459,7 @@ export function registerBulkLoadRoutes(
     const row = carriedFileRow(sqlite(), id);
     if (!row) return res.status(404).json({ error: "Not found" });
     if (row.lab_id !== r.labId) return res.status(403).json({ error: "Wrong lab" });
-    if (row.status !== "approved") return res.status(403).json({ error: "Not approved" });
+    if (!surveyorReads(row)) return res.status(403).json({ error: "Not approved" });
     return sendStored(sqlite(), res, row, "face", { labId: r.labId, documentId: id });
   });
 }
