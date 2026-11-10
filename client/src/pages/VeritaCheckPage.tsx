@@ -28,8 +28,13 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { calculateStudy, calculateCalVerCorrelation, calculatePrecision, calculateLotToLot, calculatePTCoag, calculateQCRange, calculateMultiAnalyteCoag, calculateRefInterval, calculateQualitative, calculateSemiQuant, calculateSensitivity, type DataPoint, type PrecisionDataPoint, type LotToLotDataPoint, type QCRangeDataPoint, type RefIntervalDataPoint, type SensitivityInput, calculateINR, formatTeaCriterion } from "@/lib/calculations";
+import { calculateStudy, calculateCalVerCorrelation, calculatePrecision, calculateLotToLot, calculatePTCoag, calculateQCRange, calculateMultiAnalyteCoag, calculateRefInterval, calculateQualitative, calculateSemiQuant, calculateSensitivity, type DataPoint, type PrecisionDataPoint, type LotToLotDataPoint, type RefIntervalDataPoint, type SensitivityInput, calculateINR, formatTeaCriterion } from "@/lib/calculations";
 import { buildPtCoagPayload, type PtCoagForm } from "@/lib/ptCoagPayload";
+import {
+  GRADE_PRESETS, readStudyForms, studyDraftFields, buildPrecisionPayload, buildLotToLotPayload, buildQcRangePayload,
+  buildMultiAnalyteCoagPayload, buildRefIntervalPayload, buildSensitivityInput, buildCarryoverPayload, buildLevelsPayload,
+  methodComparisonDataPoints, type StudyForms, type LevelsForm, type GridForm,
+} from "@/lib/studyFormPayload";
 import { teaData } from "@/lib/cliaTeaData";
 import { useAuth } from "@/components/AuthContext";
 import { triggerStudyCreditsExhausted } from "@/components/StudyCreditsModal";
@@ -568,9 +573,6 @@ export default function VeritaCheckPage() {
       }
       const dpRaw = editStudy.data_points ?? editStudy.dataPoints;
       const dpParsed = typeof dpRaw === "string" ? JSON.parse(dpRaw || "[]") : (dpRaw ?? []);
-      if (Array.isArray(dpParsed) && dpParsed.length > 0) {
-        setDataPoints(dpParsed);
-      }
       const tea = editStudy.clia_allowable_error ?? editStudy.cliaAllowableError;
       if (typeof tea === "number") setCustomClia(tea);
       // Rehydrate a saved dual-criterion floor so re-saving a lab-defined study
@@ -579,100 +581,84 @@ export default function VeritaCheckPage() {
       if (typeof savedAbsFloor === "number") setCustomAbsFloor(savedAbsFloor);
       const savedAbsUnit = editStudy.clia_absolute_unit ?? editStudy.cliaAbsoluteUnit;
       if (typeof savedAbsUnit === "string" && savedAbsUnit) setCustomAbsUnit(savedAbsUnit);
-      // Carryover-specific rehydration. The generic Array.isArray() guard
-      // above skips because carryover's data_points is an OBJECT shape
-      // { specimens, units }. Without this block, reopening a saved carryover
-      // study would silently land the user on an empty data-entry form.
       const studyTypeForHydrate = editStudy.study_type ?? editStudy.studyType;
-      if (studyTypeForHydrate === "carryover" && dpParsed && typeof dpParsed === "object" && Array.isArray((dpParsed as any).specimens)) {
-        const persistedSpecs = (dpParsed as any).specimens as Array<{ sequence: number; sample_type: "L" | "H"; value: number | null }>;
-        if (persistedSpecs.length > 0) {
-          setCoData(persistedSpecs.map(s => ({
-            sequence: typeof s.sequence === "number" ? s.sequence : 0,
-            sample_type: s.sample_type === "H" ? "H" : "L",
-            value: s.value === null || s.value === undefined ? null : Number(s.value),
-          })));
-        }
-        if (typeof (dpParsed as any).units === "string") setCoUnits((dpParsed as any).units);
-      }
-      // Accuracy / Bias (EP15-A3) rehydration. Persisted shape is
-      // { analyte, units, levels: [{ name, assigned_value, replicates }] }.
-      if (studyTypeForHydrate === "accuracy_bias" && dpParsed && typeof dpParsed === "object" && Array.isArray((dpParsed as any).levels)) {
-        const a = (dpParsed as any).analyte;
-        const u = (dpParsed as any).units;
-        if (typeof a === "string") setAbAnalyte(a);
-        if (typeof u === "string") setAbUnits(u);
-        const persistedLevels = (dpParsed as any).levels as Array<{ name?: string; assigned_value?: number | null; replicates?: number[] }>;
-        if (persistedLevels.length > 0) {
-          setAbLevels(persistedLevels.map((lv, i) => ({
-            name: typeof lv.name === "string" && lv.name ? lv.name : `Level ${i + 1}`,
-            assignedValue: lv.assigned_value === null || lv.assigned_value === undefined ? null : Number(lv.assigned_value),
-          })));
-          const repMap: Record<string, number[]> = {};
-          let maxReps = 0;
-          for (const lv of persistedLevels) {
-            const name = typeof lv.name === "string" && lv.name ? lv.name : "";
-            const reps = Array.isArray(lv.replicates) ? lv.replicates.map(v => Number(v)) : [];
-            if (name) repMap[name] = reps;
-            if (reps.length > maxReps) maxReps = reps.length;
-          }
-          setAbRunData(repMap);
-          if (maxReps > 0) setAbReplicatesPerLevel(maxReps);
+      // Every form but PT/INR (below) reads back through studyFormPayload.ts, for a draft or a finished study
+      // (BUG-146: Edit read only the grid, carryover, accuracy/bias, linearity and reportable range).
+      const read = readStudyForms(editStudy);
+      if (read.grid) {
+        setDataPoints(read.grid.points as EntryDataPoint[]);
+        // The row count comes with the rows, so method comparison's "default to 20 samples" step can't trim a
+        // saved study of more than 20 samples back to 20.
+        setNumLevels(read.grid.points.length);
+        const a = read.grid.assay;
+        if (a) {
+          setAssayType(a.assayType);
+          setQualCategories(a.qualCategories); setQualPassThreshold(a.qualPassThreshold);
+          setGradePreset(a.gradePreset); setCustomGrades(a.customGrades); setSemiQuantPassThreshold(a.semiQuantPassThreshold);
         }
       }
-      // Linearity (EP06) rehydration. Same persisted shape as accuracy_bias:
-      // { analyte, units, levels: [{ name, assigned_value, replicates }] }.
-      if (studyTypeForHydrate === "linearity" && dpParsed && typeof dpParsed === "object" && Array.isArray((dpParsed as any).levels)) {
-        const a = (dpParsed as any).analyte;
-        const u = (dpParsed as any).units;
-        if (typeof a === "string") setLinAnalyte(a);
-        if (typeof u === "string") setLinUnits(u);
-        const persistedLevels = (dpParsed as any).levels as Array<{ name?: string; assigned_value?: number | null; replicates?: number[] }>;
-        if (persistedLevels.length > 0) {
-          setLinLevels(persistedLevels.map((lv, i) => ({
-            name: typeof lv.name === "string" && lv.name ? lv.name : `Level ${i + 1}`,
-            assignedValue: lv.assigned_value === null || lv.assigned_value === undefined ? null : Number(lv.assigned_value),
-          })));
-          const repMap: Record<string, number[]> = {};
-          let maxReps = 0;
-          for (const lv of persistedLevels) {
-            const name = typeof lv.name === "string" && lv.name ? lv.name : "";
-            const reps = Array.isArray(lv.replicates) ? lv.replicates.map(v => Number(v)) : [];
-            if (name) repMap[name] = reps;
-            if (reps.length > maxReps) maxReps = reps.length;
-          }
-          setLinRunData(repMap);
-          if (maxReps > 0) setLinReplicatesPerLevel(maxReps);
-        }
+      if (read.precision) {
+        const p = read.precision;
+        setPrecisionMode(p.mode); setPrecisionLevels(p.levels); setPrecisionLevelNames(p.levelNames);
+        setPrecisionValues(p.values); setPrecisionReps(p.reps);
+        setPrecisionDays(p.days); setPrecisionRunsPerDay(p.runsPerDay); setPrecisionReplicatesPerRun(p.replicatesPerRun);
+        setPrecisionAdvancedData(p.advancedData);
+        setPrecisionVendorSd(p.vendorSd); setPrecisionVendorSdConc(p.vendorSdConc); setPrecisionTargetMean(p.targetMean); setPrecisionTargetCv(p.targetCv);
+        setPrecisionControlLot(p.controlLot); setPrecisionReagentLot(p.reagentLot); setPrecisionComment(p.comment); setPrecisionResultUnits(p.resultUnits);
+        setPrecisionImportSource(p.importSource);
       }
-      // Reportable Range rehydration. Persisted shape adds claimed_range_low
-      // and claimed_range_high alongside the standard analyte/units/levels.
-      if (studyTypeForHydrate === "reportable_range" && dpParsed && typeof dpParsed === "object" && Array.isArray((dpParsed as any).levels)) {
-        const a = (dpParsed as any).analyte;
-        const u = (dpParsed as any).units;
-        const cl = (dpParsed as any).claimed_range_low;
-        const ch = (dpParsed as any).claimed_range_high;
-        if (typeof a === "string") setRrAnalyte(a);
-        if (typeof u === "string") setRrUnits(u);
-        if (typeof cl === "number") setRrClaimedLow(cl);
-        if (typeof ch === "number") setRrClaimedHigh(ch);
-        const persistedLevels = (dpParsed as any).levels as Array<{ name?: string; assigned_value?: number | null; replicates?: number[] }>;
-        if (persistedLevels.length > 0) {
-          setRrLevels(persistedLevels.map((lv, i) => ({
-            name: typeof lv.name === "string" && lv.name ? lv.name : `Level ${i + 1}`,
-            assignedValue: lv.assigned_value === null || lv.assigned_value === undefined ? null : Number(lv.assigned_value),
-          })));
-          const repMap: Record<string, number[]> = {};
-          let maxReps = 0;
-          for (const lv of persistedLevels) {
-            const name = typeof lv.name === "string" && lv.name ? lv.name : "";
-            const reps = Array.isArray(lv.replicates) ? lv.replicates.map(v => Number(v)) : [];
-            if (name) repMap[name] = reps;
-            if (reps.length > maxReps) maxReps = reps.length;
-          }
-          setRrRunData(repMap);
-          if (maxReps > 0) setRrReplicatesPerLevel(maxReps);
-        }
+      if (read.lot_to_lot) {
+        const l = read.lot_to_lot;
+        setLotSampleType(l.sampleType); setLotAnalyte(l.analyte); setLotUnits(l.units);
+        setLotCurrentLotNum(l.currentLotNum); setLotCurrentLotExp(l.currentLotExp); setLotNewLotNum(l.newLotNum); setLotNewLotExp(l.newLotExp);
+        setLotNumSpecimens(l.numSpecimens); setLotData(l.data); setLotDataAbnormal(l.dataAbnormal);
+      }
+      if (read.qc_range) {
+        const q = read.qc_range;
+        setQcAnalytes(q.analytes); setQcAnalyzers(q.analyzers); setQcLevels(q.levels);
+        setQcDateStart(q.dateStart); setQcDateEnd(q.dateEnd); setQcNumRuns(q.numRuns);
+        setQcRunData(q.runData); setQcOldLotData(q.oldLotData); setQcPriorLotRuns(q.priorLotRuns); setQcVendorValues(q.vendorValues);
+        setQcShowPriorLot(q.showPriorLot); setQcShowVendor(q.showVendor); setQcRangeImportSource(q.importSource);
+      }
+      if (read.multi_analyte_coag) {
+        const m = read.multi_analyte_coag;
+        setMaInstrument(m.instrument);
+        setMaNewLotPT(m.newLotPT); setMaOldLotPT(m.oldLotPT); setMaNewLotAPTT(m.newLotAPTT); setMaOldLotAPTT(m.oldLotAPTT); setMaNewLotFib(m.newLotFib); setMaOldLotFib(m.oldLotFib);
+        setMaISI(m.isi); setMaNormalMeanPT(m.normalMeanPT); setMaSampleType(m.sampleType);
+        setMaTeaPT(m.teaPT); setMaTeaAPTT(m.teaAPTT); setMaTeaFib(m.teaFib); setMaSpecimens(m.specimens);
+      }
+      if (read.ref_interval) {
+        const r = read.ref_interval;
+        setRefAnalyte(r.analyte); setRefUnits(r.units); setRefLow(r.low); setRefHigh(r.high);
+        setRefNumSpecimens(r.numSpecimens); setRefData(r.data);
+      }
+      if (read.sensitivity) {
+        const s = read.sensitivity;
+        setSensMode(s.mode); setSensAnalyteName(s.analyteName); setSensUnits(s.units);
+        setSensBlanksText(s.blanksText); setSensLowLevelText(s.lowLevelText); setSensLoqLevels(s.loqLevels);
+        setSensCvThreshold(s.cvThreshold); setSensBiasThreshold(s.biasThreshold);
+        setSensMfgLob(s.mfgLob); setSensMfgLod(s.mfgLod); setSensMfgLoq(s.mfgLoq);
+      }
+      if (read.carryover) { setCoData(read.carryover.data); setCoUnits(read.carryover.units); }
+      if (read.accuracy_bias) {
+        const f = read.accuracy_bias;
+        setAbAnalyte(f.analyte); setAbUnits(f.units); setAbLevels(f.levels); setAbRunData(f.runData);
+        if (f.replicatesPerLevel > 0) setAbReplicatesPerLevel(f.replicatesPerLevel);
+        setAccuracyBiasImportSource(f.importSource);
+      }
+      if (read.linearity) {
+        const f = read.linearity;
+        setLinAnalyte(f.analyte); setLinUnits(f.units); setLinLevels(f.levels); setLinRunData(f.runData);
+        if (f.replicatesPerLevel > 0) setLinReplicatesPerLevel(f.replicatesPerLevel);
+        setLinClaimedLow(f.claimedLow); setLinClaimedHigh(f.claimedHigh);
+        setLinearityImportSource(f.importSource);
+      }
+      if (read.reportable_range) {
+        const f = read.reportable_range;
+        setRrAnalyte(f.analyte); setRrUnits(f.units); setRrLevels(f.levels); setRrRunData(f.runData);
+        if (f.replicatesPerLevel > 0) setRrReplicatesPerLevel(f.replicatesPerLevel);
+        setRrClaimedLow(f.claimedLow); setRrClaimedHigh(f.claimedHigh);
+        setReportableRangeImportSource(f.importSource);
       }
       // PT/INR geomean rehydration. Persisted shape is an OBJECT:
       // { module1Instruments:[{name,ptValues,isi,ptRI,inrRI,reagentLot,reagentExp}],
@@ -741,10 +727,7 @@ export default function VeritaCheckPage() {
   // Qualitative / Semi-Quantitative assay type state
   type AssayType = "quantitative" | "qualitative" | "semi_quantitative";
   const [assayType, setAssayType] = useState<AssayType>("quantitative");
-  const GRADE_PRESETS: Record<string, string[]> = {
-    plus: ["Negative", "1+", "2+", "3+", "4+"],
-    urinalysis: ["Negative", "Trace", "Small", "Moderate", "Large"],
-  };
+  // GRADE_PRESETS (plus grades, urinalysis) come from studyFormPayload.ts, which reads a saved grade scale back.
   const [gradePreset, setGradePreset] = useState<"plus" | "urinalysis" | "custom">("plus");
   const [customGrades, setCustomGrades] = useState<string[]>(["Negative", "1+", "2+", "3+", "4+"]);
   const [qualCategories, setQualCategories] = useState<string[]>(["Positive", "Negative"]);
@@ -1717,6 +1700,55 @@ export default function VeritaCheckPage() {
     },
   });
 
+  // The forms as studyFormPayload.ts reads them (Run Study and Save Draft build their saved data there; BUG-146).
+  const precisionForm = (): StudyForms["precision"] => ({
+    mode: precisionMode, levels: precisionLevels, levelNames: precisionLevelNames, values: precisionValues, reps: precisionReps,
+    days: precisionDays, runsPerDay: precisionRunsPerDay, replicatesPerRun: precisionReplicatesPerRun, advancedData: precisionAdvancedData,
+    vendorSd: precisionVendorSd, vendorSdConc: precisionVendorSdConc, targetMean: precisionTargetMean, targetCv: precisionTargetCv,
+    controlLot: precisionControlLot, reagentLot: precisionReagentLot, comment: precisionComment, resultUnits: precisionResultUnits,
+    importSource: precisionImportSource,
+  });
+  const lotToLotForm = (): StudyForms["lot_to_lot"] => ({
+    sampleType: lotSampleType, currentLotNum: lotCurrentLotNum, currentLotExp: lotCurrentLotExp, newLotNum: lotNewLotNum, newLotExp: lotNewLotExp,
+    analyte: lotAnalyte, units: lotUnits, numSpecimens: lotNumSpecimens, data: lotData, dataAbnormal: lotDataAbnormal,
+  });
+  const qcRangeForm = (): StudyForms["qc_range"] => ({
+    analytes: qcAnalytes, analyzers: qcAnalyzers, levels: qcLevels, dateStart: qcDateStart, dateEnd: qcDateEnd, runData: qcRunData,
+    oldLotData: qcOldLotData, priorLotRuns: qcPriorLotRuns, vendorValues: qcVendorValues, showPriorLot: qcShowPriorLot, showVendor: qcShowVendor,
+    numRuns: qcNumRuns, importSource: qcRangeImportSource,
+  });
+  const multiAnalyteForm = (): StudyForms["multi_analyte_coag"] => ({
+    instrument: maInstrument, newLotPT: maNewLotPT, oldLotPT: maOldLotPT, newLotAPTT: maNewLotAPTT, oldLotAPTT: maOldLotAPTT, newLotFib: maNewLotFib, oldLotFib: maOldLotFib,
+    isi: maISI, normalMeanPT: maNormalMeanPT, sampleType: maSampleType, teaPT: maTeaPT, teaAPTT: maTeaAPTT, teaFib: maTeaFib, specimens: maSpecimens,
+  });
+  const refIntervalForm = (): StudyForms["ref_interval"] => ({ analyte: refAnalyte, units: refUnits, low: refLow, high: refHigh, numSpecimens: refNumSpecimens, data: refData });
+  const sensitivityForm = (): StudyForms["sensitivity"] => ({
+    mode: sensMode, analyteName: sensAnalyteName, units: sensUnits, blanksText: sensBlanksText, lowLevelText: sensLowLevelText, loqLevels: sensLoqLevels,
+    cvThreshold: sensCvThreshold, biasThreshold: sensBiasThreshold, mfgLob: sensMfgLob, mfgLod: sensMfgLod, mfgLoq: sensMfgLoq,
+  });
+  const carryoverForm = (): StudyForms["carryover"] => ({ units: coUnits, data: coData });
+  const levelsForm = (kind: "accuracy_bias" | "linearity" | "reportable_range"): LevelsForm =>
+    kind === "accuracy_bias"
+      ? { analyte: abAnalyte, units: abUnits, levels: abLevels, replicatesPerLevel: abReplicatesPerLevel, runData: abRunData, claimedLow: "", claimedHigh: "", importSource: accuracyBiasImportSource }
+      : kind === "linearity"
+      ? { analyte: linAnalyte, units: linUnits, levels: linLevels, replicatesPerLevel: linReplicatesPerLevel, runData: linRunData, claimedLow: linClaimedLow, claimedHigh: linClaimedHigh, importSource: linearityImportSource }
+      : { analyte: rrAnalyte, units: rrUnits, levels: rrLevels, replicatesPerLevel: rrReplicatesPerLevel, runData: rrRunData, claimedLow: rrClaimedLow, claimedHigh: rrClaimedHigh, importSource: reportableRangeImportSource };
+  const gridForm = (): GridForm => ({ points: dataPoints, assayType, qualCategories, qualPassThreshold, gradePreset, customGrades, semiQuantPassThreshold });
+  const currentStudyForms = (): Partial<StudyForms> => {
+    switch (studyType) {
+      case "precision": return { precision: precisionForm() };
+      case "lot_to_lot": return { lot_to_lot: lotToLotForm() };
+      case "qc_range": return { qc_range: qcRangeForm() };
+      case "multi_analyte_coag": return { multi_analyte_coag: multiAnalyteForm() };
+      case "ref_interval": return { ref_interval: refIntervalForm() };
+      case "sensitivity": return { sensitivity: sensitivityForm() };
+      case "carryover": return { carryover: carryoverForm() };
+      case "accuracy_bias": case "linearity": case "reportable_range": return { [studyType]: levelsForm(studyType) };
+      case "method_comparison": return { method_comparison: gridForm() };
+      default: return {};
+    }
+  };
+
   // Save as draft: bypass the strict client validation in handleSubmit and
   // send the current form state to the server marked as a draft. Requires
   // at least a test name. Server-side mirrors the same minimum-fields gate.
@@ -1760,6 +1792,10 @@ export default function VeritaCheckPage() {
         instruments: JSON.stringify([ptInstrumentName, ptInstrument2Name]),
       });
     }
+    // Every other form keeps its own entries too (BUG-146: they all saved the grid above): its saved data, built as
+    // Run Study builds it, plus what the draft needs to reopen as it was left (studyFormPayload.ts).
+    const ownFields = studyDraftFields(studyType, currentStudyForms());
+    if (ownFields) Object.assign(draft, ownFields);
     saveMutation.mutate(draft as InsertStudy);
   };
 
@@ -1767,7 +1803,7 @@ export default function VeritaCheckPage() {
     if (!testName.trim()) { toast({ title: "Please enter a test name", variant: "destructive" }); return; }
 
     if (studyType === "lot_to_lot") {
-      const allData = lotSampleType === "both" ? [...lotData, ...lotDataAbnormal] : lotData;
+      const { allData, dataPoints: lotSaved } = buildLotToLotPayload(lotToLotForm());
       const validData = allData.filter(dp => dp.currentLot !== null && dp.newLot !== null);
       if (validData.length < 3) { toast({ title: "Please enter at least 3 specimen pairs", variant: "destructive" }); return; }
       const results = calculateLotToLot(allData, cliaValue, lotSampleType, teaIsPercentage, cliaAbsoluteFloor ?? null, teaIsPercentage ? cliaAbsoluteUnit : (teaUnit || cliaAbsoluteUnit));
@@ -1775,7 +1811,7 @@ export default function VeritaCheckPage() {
         testName: testName.trim(), instrument: instrumentNames[0] || "-", analyst: analyst.trim() || "-",
         date, studyType: "lot_to_lot", cliaAllowableError: cliaValue,
         teaIsPercentage: teaIsPercentage ? 1 : 0, teaUnit, cliaAbsoluteFloor, cliaAbsoluteUnit, cliaPresetLabel,
-        dataPoints: JSON.stringify({ data: allData, sampleType: lotSampleType, currentLot: lotCurrentLotNum, newLot: lotNewLotNum, analyte: lotAnalyte, units: lotUnits }),
+        dataPoints: JSON.stringify(lotSaved),
         instruments: JSON.stringify(instrumentNames.slice(0, 1)),
         status: results.overallPass ? "pass" : "fail",
         createdAt: new Date().toISOString(),
@@ -1806,50 +1842,15 @@ export default function VeritaCheckPage() {
     }
 
     if (studyType === "qc_range") {
-      const dataPoints: QCRangeDataPoint[] = [];
-      for (const analyte of qcAnalytes) {
-        for (const level of qcLevels) {
-          for (const analyzer of qcAnalyzers) {
-            const key = `${analyte}|${level}|${analyzer}`;
-            const runs = (qcRunData[key] || []).filter(v => !isNaN(v));
-            if (runs.length === 0) continue;
-            const old = qcOldLotData[key];
-            // Crossover bias check: parallel prior-lot replicates keyed
-            // identically to the new-lot grid; only attached when the
-            // section is opted in and the grid has values.
-            const priorRuns = qcShowPriorLot
-              ? (qcPriorLotRuns[key] || []).filter(v => !isNaN(v))
-              : [];
-            // Vendor SDI: method-agnostic key (analyte+level only) so
-            // the same vendor mean/SD applies across all analyzers.
-            const vendorKey = `${analyte}|${level}`;
-            const vendor = qcShowVendor ? qcVendorValues[vendorKey] : undefined;
-            dataPoints.push({
-              analyte, level, analyzer, runs,
-              oldMean: old?.mean, oldSD: old?.sd,
-              priorLotRuns: priorRuns.length > 0 ? priorRuns : undefined,
-              vendorMean: vendor?.mean ?? undefined,
-              vendorSD: vendor?.sd ?? undefined,
-            });
-          }
-        }
-      }
+      // One point per analyte, level and analyzer with runs (studyFormPayload.ts buildQcRangePayload).
+      const { points: dataPoints, dataPoints: qcSaved } = buildQcRangePayload(qcRangeForm());
       if (dataPoints.length === 0) { toast({ title: "Enter run data for at least one analyte/level", variant: "destructive" }); return; }
       const results = calculateQCRange(dataPoints, { start: qcDateStart, end: qcDateEnd });
       const study: InsertStudy = {
         testName: testName.trim(), instrument: qcAnalyzers.join(", "), analyst: analyst.trim() || "-",
         date, studyType: "qc_range", cliaAllowableError: 0.10,
         teaIsPercentage: 1, teaUnit: '%', cliaAbsoluteFloor: null, cliaAbsoluteUnit: null, cliaPresetLabel,
-        dataPoints: JSON.stringify({
-          dataPoints, analytes: qcAnalytes, analyzers: qcAnalyzers, levels: qcLevels,
-          dateRange: { start: qcDateStart, end: qcDateEnd },
-          oldLotData: qcOldLotData,
-          priorLotRuns: qcPriorLotRuns,
-          vendorValues: qcVendorValues,
-          showPriorLot: qcShowPriorLot, showVendor: qcShowVendor,
-          importedFromVeritaqc: !!qcRangeImportSource,
-          importSource: qcRangeImportSource,
-        }),
+        dataPoints: JSON.stringify(qcSaved),
         instruments: JSON.stringify(qcAnalyzers),
         status: results.overallPass ? "pass" : "fail",
         createdAt: new Date().toISOString(),
@@ -1859,27 +1860,15 @@ export default function VeritaCheckPage() {
     }
 
     if (studyType === "multi_analyte_coag") {
-      const rawSpecimens = maSpecimens.map(s => ({
-        specimenId: s.id,
-        ptNew: s.ptNew ? parseFloat(s.ptNew) : null,
-        ptOld: s.ptOld ? parseFloat(s.ptOld) : null,
-        apttNew: s.apttNew ? parseFloat(s.apttNew) : null,
-        apttOld: s.apttOld ? parseFloat(s.apttOld) : null,
-        fibNew: s.fibNew ? parseFloat(s.fibNew) : null,
-        fibOld: s.fibOld ? parseFloat(s.fibOld) : null,
-      })).filter(s => (s.ptNew != null && s.ptOld != null) || (s.apttNew != null && s.apttOld != null) || (s.fibNew != null && s.fibOld != null));
+      // The rows with at least one complete pair (studyFormPayload.ts buildMultiAnalyteCoagPayload).
+      const { rawSpecimens, dataPoints: maSaved } = buildMultiAnalyteCoagPayload(multiAnalyteForm());
       if (rawSpecimens.length < 3) { toast({ title: "Enter at least 3 specimen pairs", variant: "destructive" }); return; }
       const results = calculateMultiAnalyteCoag(rawSpecimens, maISI, maNormalMeanPT, { pt: maTeaPT, aptt: maTeaAPTT, fib: maTeaFib });
       const study: InsertStudy = {
         testName: testName.trim(), instrument: maInstrument, analyst: analyst.trim() || "-",
         date, studyType: "multi_analyte_coag", cliaAllowableError: maTeaPT,
         teaIsPercentage: 1, teaUnit: '%', cliaAbsoluteFloor: null, cliaAbsoluteUnit: null, cliaPresetLabel,
-        dataPoints: JSON.stringify({
-          specimens: rawSpecimens, isi: maISI, normalMeanPT: maNormalMeanPT,
-          teas: { pt: maTeaPT, aptt: maTeaAPTT, fib: maTeaFib },
-          lots: { ptNew: maNewLotPT, ptOld: maOldLotPT, apttNew: maNewLotAPTT, apttOld: maOldLotAPTT, fibNew: maNewLotFib, fibOld: maOldLotFib },
-          instrument: maInstrument, sampleType: maSampleType,
-        }),
+        dataPoints: JSON.stringify(maSaved),
         instruments: JSON.stringify([maInstrument]),
         status: results.overallPass ? "pass" : "fail",
         createdAt: new Date().toISOString(),
@@ -1902,7 +1891,7 @@ export default function VeritaCheckPage() {
         testName: testName.trim(), instrument: instrumentNames[0] || "-", analyst: analyst.trim() || "-",
         date, studyType: "ref_interval", cliaAllowableError: 0.1,
         teaIsPercentage: 1, teaUnit: '%', cliaAbsoluteFloor: null, cliaAbsoluteUnit: null, cliaPresetLabel,
-        dataPoints: JSON.stringify({ specimens: refData.map(d => ({ specimenId: d.specimenId, value: d.value })), refLow: lo, refHigh: hi, analyte: refAnalyte, units: refUnits }),
+        dataPoints: JSON.stringify(buildRefIntervalPayload(refIntervalForm()).dataPoints),
         instruments: JSON.stringify(instrumentNames.slice(0, 1)),
         status: results.overallPass ? "pass" : "fail",
         createdAt: new Date().toISOString(),
@@ -1912,7 +1901,7 @@ export default function VeritaCheckPage() {
     }
 
     if (studyType === "carryover") {
-      const valid = coData.filter(dp => dp.value !== null && !isNaN(dp.value as number));
+      const { valid, dataPoints: coSaved } = buildCarryoverPayload(carryoverForm());
       if (valid.length < 12) { toast({ title: `Please enter at least 12 specimen values (${valid.length} entered). EP10-A3 standard is 21.`, variant: "destructive" }); return; }
       const lValues = valid.filter(d => d.sample_type === "L").map(d => d.value as number);
       const hValues = valid.filter(d => d.sample_type === "H").map(d => d.value as number);
@@ -1968,10 +1957,7 @@ export default function VeritaCheckPage() {
         testName: testName.trim(), instrument: instrumentNames[0] || "-", analyst: analyst.trim() || "-",
         date, studyType: "carryover", cliaAllowableError: 0.01,
         teaIsPercentage: 1, teaUnit: '%', cliaAbsoluteFloor: null, cliaAbsoluteUnit: null, cliaPresetLabel,
-        dataPoints: JSON.stringify({
-          specimens: valid.map(d => ({ sequence: d.sequence, sample_type: d.sample_type, value: d.value })),
-          units: coUnits,
-        }),
+        dataPoints: JSON.stringify(coSaved),
         instruments: JSON.stringify(instrumentNames.slice(0, 1)),
         status: overallPass ? "pass" : "fail",
         createdAt: new Date().toISOString(),
@@ -1994,10 +1980,8 @@ export default function VeritaCheckPage() {
       const presetAbsFloor: number | null = presetIsPercentage ? cliaAbsoluteFloor : null;
       const presetAbsUnit: string | null = presetIsPercentage ? cliaAbsoluteUnit : null;
       const FP_EPS = 1e-9;
-      const builtLevels = abLevels.map(lv => {
-        const reps = (abRunData[lv.name] || []).filter(v => v !== undefined && v !== null && !isNaN(v));
-        return { name: lv.name, assigned_value: lv.assignedValue, replicates: reps };
-      });
+      const abSaved = buildLevelsPayload("accuracy_bias", levelsForm("accuracy_bias"));
+      const builtLevels = abSaved.builtLevels;
       const usableLevels = builtLevels.filter(lv => lv.assigned_value !== null && lv.replicates.length >= 5);
       if (usableLevels.length < 2) {
         toast({ title: `Need at least 2 levels with assigned value and 5+ replicates each (have ${usableLevels.length})`, variant: "destructive" });
@@ -2056,19 +2040,8 @@ export default function VeritaCheckPage() {
         cliaAbsoluteFloor: presetAbsFloor,
         cliaAbsoluteUnit: presetAbsUnit,
         cliaPresetLabel,
-        dataPoints: JSON.stringify({
-          analyte: abAnalyte.trim(),
-          units: abUnits.trim(),
-          levels: builtLevels,
-          // Phase B audit trail: when the user populated the form via the
-          // VeritaQC import modal, persist the provenance object so the
-          // director-review surface and any future inspection-export can
-          // surface it. Calculator + PDF builder ignore unknown keys.
-          ...(accuracyBiasImportSource ? {
-            importedFromVeritaqc: true,
-            importSource: accuracyBiasImportSource,
-          } : {}),
-        }),
+        // Analyte, units, levels and, after a VeritaQC import, its provenance (Phase B audit trail).
+        dataPoints: JSON.stringify(abSaved.dataPoints),
         instruments: JSON.stringify(instrumentNames.slice(0, 1)),
         status: allPass ? "pass" : "fail",
         createdAt: new Date().toISOString(),
@@ -2087,10 +2060,8 @@ export default function VeritaCheckPage() {
       const presetAbsFloor: number | null = presetIsPercentage ? cliaAbsoluteFloor : null;
       const presetAbsUnit: string | null = presetIsPercentage ? cliaAbsoluteUnit : null;
       const FP_EPS = 1e-9;
-      const builtLevels = linLevels.map(lv => {
-        const reps = (linRunData[lv.name] || []).filter(v => v !== undefined && v !== null && !isNaN(v));
-        return { name: lv.name, assigned_value: lv.assignedValue, replicates: reps };
-      });
+      const linSaved = buildLevelsPayload("linearity", levelsForm("linearity"));
+      const builtLevels = linSaved.builtLevels;
       const usableLevels = builtLevels.filter(lv => lv.assigned_value !== null && lv.replicates.length >= 2);
       if (usableLevels.length < 3) {
         toast({ title: `Need at least 3 levels with assigned value and 2+ replicates each (have ${usableLevels.length})`, variant: "destructive" });
@@ -2138,40 +2109,11 @@ export default function VeritaCheckPage() {
       const overallPass = slopePass && r2Pass;
       const linCritUnit = presetIsPercentage ? "" : (teaUnit !== "%" ? teaUnit : "") || linUnits.trim();
       const teaTxt = presetIsPercentage ? `${(tea * 100).toFixed(1)}%` : `±${tea}${linCritUnit ? ` ${linCritUnit}` : ""}`;
-      // Coverage Summary computation (only when both bounds present). Verdict
-      // logic is untouched -- this is informational only, surfacing the gap
-      // between the verified range and the manufacturer's claimed AMR so the
-      // director's adjudication on coverage adequacy is visible on the PDF.
-      const linCL: number | null = linClaimedLow === "" ? null : Number(linClaimedLow);
-      const linCH: number | null = linClaimedHigh === "" ? null : Number(linClaimedHigh);
-      let coverage: any = null;
-      if (linCL !== null && linCH !== null && linCH > linCL) {
-        const verifiedAssigned = usableLevels
-          .map(lv => lv.assigned_value as number)
-          .filter(v => Number.isFinite(v));
-        if (verifiedAssigned.length >= 2) {
-          const verifiedLow = Math.min(...verifiedAssigned);
-          const verifiedHigh = Math.max(...verifiedAssigned);
-          const claimedSpan = linCH - linCL;
-          // Negative gap = calibrators reached past the claimed bound; clamp to 0.
-          const upperGapAbs = Math.max(0, linCH - verifiedHigh);
-          const lowerGapAbs = Math.max(0, verifiedLow - linCL);
-          const upperGapPct = (upperGapAbs / claimedSpan) * 100;
-          const lowerGapPct = (lowerGapAbs / claimedSpan) * 100;
-          const verifiedCoveragePct = Math.max(0, 100 - upperGapPct - lowerGapPct);
-          coverage = {
-            claimed_low: linCL,
-            claimed_high: linCH,
-            verified_low: verifiedLow,
-            verified_high: verifiedHigh,
-            upper_gap_abs: upperGapAbs,
-            lower_gap_abs: lowerGapAbs,
-            upper_gap_pct: upperGapPct,
-            lower_gap_pct: lowerGapPct,
-            verified_coverage_pct: verifiedCoveragePct,
-          };
-        }
-      }
+      // Coverage Summary (only when both bounds present): informational, the verdict ignores it. It surfaces the
+      // gap between the verified range and the manufacturer's claimed AMR on the PDF (studyFormPayload.ts).
+      const linCL = linSaved.claimedLow;
+      const linCH = linSaved.claimedHigh;
+      const coverage: any = linSaved.coverage;
       const results = {
         type: "linearity",
         analyte: linAnalyte.trim(),
@@ -2207,20 +2149,8 @@ export default function VeritaCheckPage() {
         cliaAbsoluteFloor: presetAbsFloor,
         cliaAbsoluteUnit: presetAbsUnit,
         cliaPresetLabel,
-        dataPoints: JSON.stringify({
-          analyte: linAnalyte.trim(),
-          units: linUnits.trim(),
-          levels: builtLevels,
-          claimed_range_low: linCL,
-          claimed_range_high: linCH,
-          coverage,
-          // Phase C audit trail: persist VeritaQC provenance when the import
-          // path was used. Calculator + PDF ignore unknown keys.
-          ...(linearityImportSource ? {
-            importedFromVeritaqc: true,
-            importSource: linearityImportSource,
-          } : {}),
-        }),
+        // Analyte, units, levels, claimed range, coverage and, after a VeritaQC import, its provenance.
+        dataPoints: JSON.stringify(linSaved.dataPoints),
         instruments: JSON.stringify(instrumentNames.slice(0, 1)),
         status: overallPass ? "pass" : "fail",
         createdAt: new Date().toISOString(),
@@ -2239,10 +2169,8 @@ export default function VeritaCheckPage() {
       const presetAbsFloor: number | null = presetIsPercentage ? cliaAbsoluteFloor : null;
       const presetAbsUnit: string | null = presetIsPercentage ? cliaAbsoluteUnit : null;
       const FP_EPS = 1e-9;
-      const builtLevels = rrLevels.map(lv => {
-        const reps = (rrRunData[lv.name] || []).filter(v => v !== undefined && v !== null && !isNaN(v));
-        return { name: lv.name, assigned_value: lv.assignedValue, replicates: reps };
-      });
+      const rrSaved = buildLevelsPayload("reportable_range", levelsForm("reportable_range"));
+      const builtLevels = rrSaved.builtLevels;
       const usableLevels = builtLevels.filter(lv => lv.assigned_value !== null && lv.replicates.length >= 2);
       if (usableLevels.length < 2) {
         toast({ title: `Need at least 2 levels with assigned value and 2+ replicates each (have ${usableLevels.length})`, variant: "destructive" });
@@ -2275,8 +2203,8 @@ export default function VeritaCheckPage() {
           ? `${(tea * 100).toFixed(1)}%`
           : `${presetAbsFloor ?? 0} ${presetAbsUnit || ""}`.trim();
       const floorTxt = presetIsPercentage && tea > 0 && presetAbsFloor ? ` or ${presetAbsFloor} ${presetAbsUnit || ""}, whichever is greater` : "";
-      const cl: number | null = rrClaimedLow === "" ? null : Number(rrClaimedLow);
-      const ch: number | null = rrClaimedHigh === "" ? null : Number(rrClaimedHigh);
+      const cl = rrSaved.claimedLow;
+      const ch = rrSaved.claimedHigh;
       const rangeTxt = (cl !== null && ch !== null) ? ` for a claimed reportable range of ${cl} to ${ch} ${rrUnits.trim() || "units"}` : "";
       const results = {
         type: "reportable_range",
@@ -2306,19 +2234,8 @@ export default function VeritaCheckPage() {
         cliaAbsoluteFloor: presetAbsFloor,
         cliaAbsoluteUnit: presetAbsUnit,
         cliaPresetLabel,
-        dataPoints: JSON.stringify({
-          analyte: rrAnalyte.trim(),
-          units: rrUnits.trim(),
-          claimed_range_low: cl,
-          claimed_range_high: ch,
-          levels: builtLevels,
-          // Phase C audit trail: persist VeritaQC provenance when the import
-          // path was used. Calculator + PDF ignore unknown keys.
-          ...(reportableRangeImportSource ? {
-            importedFromVeritaqc: true,
-            importSource: reportableRangeImportSource,
-          } : {}),
-        }),
+        // Analyte, units, claimed range, levels and, after a VeritaQC import, its provenance.
+        dataPoints: JSON.stringify(rrSaved.dataPoints),
         instruments: JSON.stringify(instrumentNames.slice(0, 1)),
         status: allPass ? "pass" : "fail",
         createdAt: new Date().toISOString(),
@@ -2328,43 +2245,10 @@ export default function VeritaCheckPage() {
     }
 
     if (studyType === "sensitivity") {
-      // Parse a sensitivity textarea: one replicate per line, "value" or "value,lot".
-      // flatMap with [] for skips avoids the typed-predicate + null-filter dance
-      // that triggered TS2322/TS2677 against an optional-vs-undefined property.
-      const parseSens = (text: string): { value: number; lot?: string }[] =>
-        text.split(/\r?\n/).flatMap(line => {
-          const parts = line.split(/[,\t]/).map(p => p.trim()).filter(p => p.length > 0);
-          if (parts.length === 0) return [];
-          const val = parseFloat(parts[0]);
-          if (isNaN(val)) return [];
-          const lot = parts[1];
-          return [lot ? { value: val, lot } : { value: val }];
-        });
-
-      const blanks = parseSens(sensBlanksText);
-      const lowLevel = parseSens(sensLowLevelText);
-      if (blanks.length < 5) { toast({ title: "Enter at least 5 blank replicates", variant: "destructive" }); return; }
-      if (lowLevel.length < 5) { toast({ title: "Enter at least 5 low-level replicates", variant: "destructive" }); return; }
-
-      const loqLevels = sensLoqLevels
-        .map(lvl => ({ expectedConcentration: parseFloat(lvl.expectedConcentration), replicates: parseSens(lvl.repsText) }))
-        .filter(g => !isNaN(g.expectedConcentration) && g.replicates.length > 0);
-
-      const mfgClaim = sensMode === "verification" ? {
-        lob: sensMfgLob !== "" ? parseFloat(sensMfgLob) : undefined,
-        lod: sensMfgLod !== "" ? parseFloat(sensMfgLod) : undefined,
-        loq: sensMfgLoq !== "" ? parseFloat(sensMfgLoq) : undefined,
-      } : undefined;
-
-      const input: SensitivityInput = {
-        mode: sensMode,
-        blanks,
-        lowLevel,
-        loqLevels: loqLevels.length > 0 ? loqLevels : undefined,
-        cvThreshold: sensCvThreshold / 100,
-        biasThreshold: sensBiasThreshold / 100,
-        manufacturerClaim: mfgClaim,
-      };
+      // One replicate per line, "value" or "value,lot" (studyFormPayload.ts buildSensitivityInput).
+      const input: SensitivityInput = buildSensitivityInput(sensitivityForm());
+      if (input.blanks.length < 5) { toast({ title: "Enter at least 5 blank replicates", variant: "destructive" }); return; }
+      if (input.lowLevel.length < 5) { toast({ title: "Enter at least 5 low-level replicates", variant: "destructive" }); return; }
       const results = calculateSensitivity(input);
       const study: InsertStudy = {
         testName: testName.trim() || sensAnalyteName || "Sensitivity Study",
@@ -2389,21 +2273,10 @@ export default function VeritaCheckPage() {
 
     if (studyType === "precision") {
       if (filledLevels < 1) { toast({ title: "Please enter at least 3 measurements for one level", variant: "destructive" }); return; }
-      // Stored shape: KEEP censored ("<17") replicates so the server PDF
-      // renderer can resolve them per the study policy. cellFilled keeps a
-      // finite number OR a censored object; only blanks/NaN are dropped.
-      const precDataPoints: any[] = precisionLevelNames.slice(0, precisionLevels).map((name, i) => {
-        if (precisionMode === "simple") {
-          return { level: i + 1, levelName: name, values: (precisionValues[i] || []).filter(v => cellFilled(v)) };
-        } else {
-          return {
-            level: i + 1, levelName: name,
-            days: precisionAdvancedData[i] || [],
-            numDays: precisionDays, runsPerDay: precisionRunsPerDay, replicatesPerRun: precisionReplicatesPerRun,
-            values: (precisionAdvancedData[i] || []).flat().filter(v => cellFilled(v))
-          };
-        }
-      });
+      // Stored shape: KEEP censored ("<17") replicates so the server PDF renderer can resolve them per the study
+      // policy; only blanks/NaN are dropped. A VeritaQC import's provenance rides on level 0 (design doc v2 decision
+      // #5). The optional vendor claim, target and lots go in their own columns. (studyFormPayload.ts)
+      const { dataPoints: precDataPoints, columns: precColumns } = buildPrecisionPayload(precisionForm());
       // Client status calc needs numbers only: drop censored replicates
       // (default "exclude" policy), matching the server renderer's default.
       const stripReps = (arr: any[]): number[] =>
@@ -2413,42 +2286,17 @@ export default function VeritaCheckPage() {
         values: stripReps(p.values),
         ...(Array.isArray(p.days) ? { days: (p.days as any[][]).map(d => stripReps(d)) } : {}),
       }));
-      // VeritaQC Import audit trail (design doc v2 decision #5). When the
-      // tech ran "Import from VeritaQC…" earlier in this session, augment
-      // level 0 of the persisted precDataPoints with importedFromVeritaqc +
-      // importSource. The calculator and PDF builder ignore these extra
-      // keys; the director-review surface and any future inspection-export
-      // can read them off data_points. Drops to no-op if the user typed the
-      // values by hand (no import was run).
-      if (precisionImportSource && precDataPoints.length > 0) {
-        (precDataPoints[0] as any).importedFromVeritaqc = true;
-        (precDataPoints[0] as any).importSource = precisionImportSource;
-      }
-      // Phase 3 simple-precision parity: parse optional EE-style inputs from
-      // text state, omit any empty / non-numeric field so the calculator
-      // skips that branch (e.g. no targetMean -> no bias / %bias output).
-      const numOrNull = (s: string) => {
-        const n = parseFloat(s);
-        return Number.isFinite(n) ? n : null;
-      };
-      const vendorSdNum = numOrNull(precisionVendorSd);
-      const vendorSdConcNum = numOrNull(precisionVendorSdConc);
-      const targetMeanNum = numOrNull(precisionTargetMean);
-      const targetCvNum = numOrNull(precisionTargetCv);
+      // Phase 3 simple-precision parity: an empty or non-numeric optional input is null, so the calculator skips
+      // that branch (e.g. no targetMean -> no bias / %bias output).
       const results = calculatePrecision(precDataPointsForCalc, cliaValue, precisionMode, {
-        vendorSD: vendorSdNum ?? undefined,
-        vendorSDConcentration: vendorSdConcNum ?? undefined,
-        targetMean: targetMeanNum ?? undefined,
-        targetCV: targetCvNum ?? undefined,
+        vendorSD: precColumns.vendorSd ?? undefined,
+        vendorSDConcentration: precColumns.vendorSdConcentration ?? undefined,
+        targetMean: precColumns.targetMean ?? undefined,
+        targetCV: precColumns.targetCv ?? undefined,
         teaIsPercentage,
         absoluteFloor: cliaAbsoluteFloor ?? null,
         unit: teaIsPercentage ? cliaAbsoluteUnit : (teaUnit || cliaAbsoluteUnit),
       });
-      // EE Day 2 QC traceability: trim each, omit empties.
-      const trimOrNull = (s: string) => {
-        const t = s.trim();
-        return t.length > 0 ? t : null;
-      };
       const study: InsertStudy = {
         testName: testName.trim(), instrument: instrumentNames[0] || "-", analyst: analyst.trim() || "-",
         date, studyType: "precision", cliaAllowableError: cliaValue,
@@ -2457,18 +2305,9 @@ export default function VeritaCheckPage() {
         instruments: JSON.stringify(instrumentNames.slice(0, 1)),
         status: results.overallPass ? "pass" : "fail",
         createdAt: new Date().toISOString(),
-        // Persist the optional simple-precision inputs alongside the study so
-        // the server-side PDF builder can render User's Specifications and
-        // the on-screen view can re-derive CIs / bias / vendor verdict.
-        vendorSd: vendorSdNum,
-        vendorSdConcentration: vendorSdConcNum,
-        targetMean: targetMeanNum,
-        targetCv: targetCvNum,
-        // EE Day 2 QC traceability fields.
-        controlLot: trimOrNull(precisionControlLot),
-        reagentLot: trimOrNull(precisionReagentLot),
-        comment: trimOrNull(precisionComment),
-        resultUnits: trimOrNull(precisionResultUnits),
+        // The optional simple-precision inputs (the PDF's User's Specifications; the screen re-derives CIs, bias and
+        // the vendor verdict from them) and the EE Day 2 QC traceability fields.
+        ...precColumns,
       } as InsertStudy;
       saveMutation.mutate(study);
       return;
@@ -2489,7 +2328,7 @@ export default function VeritaCheckPage() {
           testName: testName.trim(), instrument: instrumentNames.join(", "), analyst: analyst.trim() || "---",
           date, studyType: "method_comparison", cliaAllowableError: cliaValue,
           teaIsPercentage: teaIsPercentage ? 1 : 0, teaUnit, cliaAbsoluteFloor, cliaAbsoluteUnit, cliaPresetLabel,
-          dataPoints: JSON.stringify({ assayType: "qualitative", categories: qualCategories, passThreshold: qualPassThreshold, points: dataPoints }),
+          dataPoints: JSON.stringify(methodComparisonDataPoints(gridForm())),
           instruments: JSON.stringify(instrumentNames), status: results.overallPass ? "pass" : "fail",
           createdAt: new Date().toISOString(),
         };
@@ -2509,7 +2348,7 @@ export default function VeritaCheckPage() {
           testName: testName.trim(), instrument: instrumentNames.join(", "), analyst: analyst.trim() || "---",
           date, studyType: "method_comparison", cliaAllowableError: cliaValue,
           teaIsPercentage: teaIsPercentage ? 1 : 0, teaUnit, cliaAbsoluteFloor, cliaAbsoluteUnit, cliaPresetLabel,
-          dataPoints: JSON.stringify({ assayType: "semi_quantitative", gradeScale: activeGradeScale, passThreshold: semiQuantPassThreshold, points: dataPoints }),
+          dataPoints: JSON.stringify(methodComparisonDataPoints(gridForm())),
           instruments: JSON.stringify(instrumentNames), status: results.overallPass ? "pass" : "fail",
           createdAt: new Date().toISOString(),
         };
