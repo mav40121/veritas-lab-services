@@ -128,8 +128,12 @@ export interface LotToLotForm {
 }
 export const lotRows = (n: number, cohort: "Normal" | "Abnormal"): LotToLotDataPoint[] =>
   Array.from({ length: n }, (_, i) => ({ specimenId: `S${String(i + 1).padStart(3, "0")}`, currentLot: null, newLot: null, cohort }));
+// Each pair is saved labeled with the cohort it was entered for. BUG-157: an Abnormal Only study's pairs are typed
+// into the one Specimen Data grid (f.data), whose rows carry "Normal", and were saved that way.
+const asCohort = (rows: LotToLotDataPoint[], cohort: "Normal" | "Abnormal") => rows.map((r) => (r.cohort === cohort ? r : { ...r, cohort }));
 export function buildLotToLotPayload(f: LotToLotForm, opts: { draft?: boolean } = {}) {
-  const allData = f.sampleType === "both" ? [...f.data, ...f.dataAbnormal] : f.data;
+  const allData = f.sampleType === "both" ? [...asCohort(f.data, "Normal"), ...asCohort(f.dataAbnormal, "Abnormal")]
+    : asCohort(f.data, f.sampleType === "abnormal" ? "Abnormal" : "Normal");
   const dataPoints = {
     data: allData, sampleType: f.sampleType, currentLot: f.currentLotNum, newLot: f.newLotNum, analyte: f.analyte, units: f.units,
     ...(opts.draft ? { currentLotExp: f.currentLotExp, newLotExp: f.newLotExp } : {}),
@@ -145,7 +149,9 @@ function readLotToLotForm(dp: unknown): LotToLotForm | null {
     newLot: isNum(r.newLot) ? r.newLot : null,
     cohort: r.cohort === "Abnormal" ? "Abnormal" : "Normal",
   }));
-  const normal = sampleType === "both" ? rows.filter((r) => r.cohort !== "Abnormal") : rows;
+  // A one-cohort study's pairs go back into the Specimen Data grid, whose rows are "Normal" whatever the study's cohort
+  // (buildLotToLotPayload labels them on save), so a switch to Both keeps them as the Normal cohort.
+  const normal = sampleType === "both" ? rows.filter((r) => r.cohort !== "Abnormal") : rows.map((r) => ({ ...r, cohort: "Normal" as const }));
   const n = Math.max(3, normal.length);
   const abnormal = sampleType === "both" ? rows.filter((r) => r.cohort === "Abnormal") : [];
   const pad = (list: LotToLotDataPoint[], cohort: "Normal" | "Abnormal") => [...list, ...lotRows(n, cohort).slice(list.length)];
