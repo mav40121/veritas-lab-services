@@ -36,7 +36,10 @@ const linData = JSON.stringify({ analyte: "HbA1c", units: "%", levels: [5, 7, 9,
 const a1c = await save({ testName: "Made-up HbA1c", studyType: "linearity", cliaAllowableError: 0.08, cliaPresetLabel: ALT, instruments: JSON.stringify(["Analyzer A"]), dataPoints: linData });
 check("0. setup: three made-up studies saved", [t3, glu, a1c].every((x) => Number.isInteger(x)), JSON.stringify([t3, glu, a1c]));
 // A PT/INR study saved as its form saves it, with the picker's ALT/SGPT label.
-const ptPoints = JSON.stringify({ module1: { data: Array.from({ length: 20 }, (_, i) => ({ id: `S${i + 1}`, pt: 11.5 + (i % 5) * 0.2 })), isi: 0.97, ptRI: { low: 10, high: 14 }, inrRI: { low: 0.9, high: 1.2 }, reagentLot: "LOT-NEW", reagentExp: "2027-06-30" } });
+// The shape client/src/lib/ptCoagPayload.ts buildPtCoagPayload saves for a Module 1 only study.
+const NORMALS = [11.4, 11.8, 12.1, 11.9, 12.3, 11.6, 12.0, 11.7, 12.2, 11.5, 12.4, 11.8, 12.0, 11.9, 12.1, 11.7, 12.2, 11.6, 12.3, 11.8];
+const m1 = { ptValues: NORMALS, isi: 0.97, ptRI: { low: 10, high: 14 }, inrRI: { low: 0.9, high: 1.2 } };
+const ptPoints = JSON.stringify({ module1Instruments: [{ name: "Analyzer A", ...m1, reagentLot: "LOT-NEW", reagentExp: "2027-06-30" }], module1: m1, module2: null, module3: null, instrument: "Analyzer A", reagentLot: "LOT-NEW", reagentExp: "2027-06-30" });
 const pt = await save({ testName: "Made-up PT", studyType: "pt_coag", cliaAllowableError: 0.2, cliaPresetLabel: ALT, instruments: JSON.stringify(["Analyzer A"]), dataPoints: ptPoints });
 
 const browser = await chromium.launch();
@@ -84,7 +87,9 @@ const body = (page) => page.locator("body").innerText();
 {
   const { page, ctx } = await open(pt);
   const text = await body(page);
-  check("S4. PT/INR saved with the picker's ALT/SGPT label: no ALT/SGPT on its results page (BUG-159)", text.length > 200 && !text.includes("ALT/SGPT"), text.slice(0, 300));
+  const row = await criterionRow(page);
+  check("S4. PT/INR saved with the picker's ALT/SGPT label: the page shows its results and User Specifications", text.includes("Geometric Mean") && row !== null, `${String(row)} | ${text.slice(0, 200)}`);
+  check("S4. ... with no ALT/SGPT on its results page (BUG-159)", !text.includes("ALT/SGPT"), String(row));
   await ctx.close();
 }
 {
