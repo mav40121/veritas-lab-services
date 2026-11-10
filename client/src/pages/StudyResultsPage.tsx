@@ -128,7 +128,8 @@ function StudyHeader({ study, results }: { study: Study; results: StudyResults }
 
   return (
     <div className="flex items-start justify-between mb-6 gap-4 flex-wrap">
-      <div>
+      {/* BUG-148: min-w-0 and a wrapping study-type badge, so a long type name (method comparison is 418px) fits a phone. */}
+      <div className="min-w-0 max-w-full">
         <div className="flex items-center gap-2 mb-1">
           <Button asChild variant="ghost" size="sm" className="text-muted-foreground -ml-2">
             <Link href={labRoute("/dashboard")}>
@@ -138,7 +139,7 @@ function StudyHeader({ study, results }: { study: Study; results: StudyResults }
         </div>
         <h1 className="text-xl font-bold">{study.testName}</h1>
         <div className="flex items-center gap-3 mt-1 flex-wrap">
-          <Badge variant="outline" className="text-xs">
+          <Badge variant="outline" className="text-xs whitespace-normal text-left max-w-full">
             {study.studyType === "cal_ver" ? "Calibration Verification (CLSI EP06)" : study.studyType === "cal_ver_correlation" ? "Calibration Verification + Correlation (CLSI EP06 + EP09)" : study.studyType === "precision" ? "Precision Verification (EP15)" : study.studyType === "lot_to_lot" ? "Reagent Lot Verification (EP26)" : study.studyType === "pt_coag" ? "PT/INR Geometric Mean Calculator (H47)" : study.studyType === "qc_range" ? "QC Lot Verification (C24-Ed4)" : study.studyType === "multi_analyte_coag" ? "Multi-Analyte Lot Comparison (Coag)" : study.studyType === "ref_interval" ? "Reference Range Verification" : study.studyType === "sensitivity" ? "Analytical Sensitivity (EP17-A2)" : study.studyType === "carryover" ? "Carryover Verification (EP10-A3)" : study.studyType === "accuracy_bias" ? "Accuracy / Bias: Single Instrument vs Target (EP15-A3)" : study.studyType === "linearity" ? "Linearity (EP06)" : study.studyType === "reportable_range" ? "Reportable Range (CLIA §493.1253(b)(1)(i)(C))" : "Method Comparison: Multi-Instrument Correlation (EP09 + EP15-A3)"}
           </Badge>
           <span className="text-sm text-muted-foreground">{study.instrument}</span>
@@ -161,7 +162,8 @@ function StudyHeader({ study, results }: { study: Study; results: StudyResults }
           ) : null}
         </div>
       </div>
-      <div className="flex items-center gap-3">
+      {/* BUG-148: wraps, so the verdict, Export CSV and Download PDF fit a phone (they forced 417px into a 390px screen). */}
+      <div className="flex items-center gap-3 flex-wrap">
         {(results as any).notEvaluable ? (
           // BUG-085: the listed analyzers have no values in the data, so there is no verdict to show.
           <Badge className="bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30 border px-3 py-1 text-sm font-semibold" data-testid="badge-not-evaluable">
