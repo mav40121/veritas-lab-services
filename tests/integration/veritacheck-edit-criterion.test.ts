@@ -308,6 +308,38 @@ async function main() {
     const heldA = editPick(await getRow(Number(mA.body?.id)));
     const heldB = editPick((await call("GET", `/api/labs/${demoLabId}/studies/${mB.body?.id}`, undefined, token, demoLabId)).body);
     check("M9. Edit holds both counted rows as saved (the picker shows them as saved, not ALT or Sodium)", pickerShows(heldA) === `As saved: ${ALT}` && pickerShows(heldB) === `As saved: ${SODIUM}`, `${pickerShows(heldA)} | ${pickerShows(heldB)}`);
+
+    // ── N: GET /api/admin/veritacheck/criterion-mismatch-list (read-only, one row per counted study; Q274 = 1) ─────────
+    const list = async (secret?: string) => {
+      const r = await fetch(`${base}/api/admin/veritacheck/criterion-mismatch-list`, { headers: secret === undefined ? {} : { "x-admin-secret": secret } });
+      let j: any = {}; try { j = await r.json(); } catch {}
+      return { status: r.status, body: j };
+    };
+    check("N0. the list route refuses without the admin header, and with a wrong one", (await list()).status === 403 && (await list("not-the-secret")).status === 403);
+    const beforeList = snapshot();
+    const n = (await list(process.env.ADMIN_SECRET)).body;
+    check("N1. it lists exactly the studies the count route counts, signed the same, and writes nothing",
+      n?.total === m2?.mismatched && n?.studies?.length === m2?.mismatched && n?.signed === m2?.mismatchedFinalized && snapshot() === beforeList,
+      JSON.stringify({ total: n?.total, counted: m2?.mismatched, signed: n?.signed, countedSigned: m2?.mismatchedFinalized }));
+    const rowA = (n?.studies || []).find((x: any) => x.studyId === Number(mA.body?.id));
+    const rowB = (n?.studies || []).find((x: any) => x.studyId === Number(mB.body?.id));
+    check("N2. the ALT-labeled Sodium row: its lab, test, type, signed, reasons, and both criteria as stored and as the label names them",
+      rowA?.labId === labId && rowA?.isDemo === false && rowA?.testName === "IT mixed: ALT label over a units criterion" && rowA?.studyType === "cal_ver" && rowA?.signed === true
+        && rowA?.label === ALT && rowA?.reasons?.includes("units")
+        && rowA?.storedCriterion?.value === 0.15 && rowA?.storedCriterion?.isPercentage === false && rowA?.storedCriterion?.unit === "mmol/L" && rowA?.storedCriterion?.floor === null
+        && rowA?.labelCriterion?.value === 0.15 && rowA?.labelCriterion?.isPercentage === true && rowA?.labelCriterion?.floor === 6 && rowA?.labelCriterion?.floorUnit === "U/L",
+      JSON.stringify(rowA));
+    check("N3. ... its verdicts: FAIL on the stored ±0.15 mmol/L, PASS on ALT's ±15%, so they differ",
+      rowA?.verdictStoredCriterion === "fail" && rowA?.verdictLabelCriterion === "pass" && rowA?.verdictsDiffer === true && n?.verdictsDiffer >= 1 && n?.signedVerdictsDiffer >= 1,
+      JSON.stringify({ stored: rowA?.verdictStoredCriterion, label: rowA?.verdictLabelCriterion, totals: [n?.verdictsDiffer, n?.signedVerdictsDiffer] }));
+    check("N4. the demo lab's Sodium-labeled precision row: flagged isDemo, not signed, reasons units and floor, the stored 4% with 6 mg/dL",
+      rowB?.labId === demoLabId && rowB?.isDemo === true && rowB?.signed === false && rowB?.label === SODIUM && rowB?.reasons?.includes("units") && rowB?.reasons?.includes("floor")
+        && rowB?.storedCriterion?.value === 4 && rowB?.storedCriterion?.isPercentage === true && rowB?.storedCriterion?.floor === 6 && rowB?.storedCriterion?.floorUnit === "mg/dL"
+        && rowB?.labelCriterion?.isPercentage === false && rowB?.labelCriterion?.value === 4,
+      JSON.stringify(rowB));
+    check("N5. every row carries both verdicts (or none for a draft), the backfill sign as true or false, and no matching row is listed",
+      (n?.studies || []).every((x: any) => (x.savedStatus === "draft" ? x.verdictStoredCriterion === null : ["pass", "fail", "notEvaluable"].includes(x.verdictStoredCriterion)) && typeof x.floorAsBackfillGives === "boolean" && x.reasons.length > 0));
+    check("N6. no person's name, email or analyst field in the answer", !/Made Up|example\.com/.test(JSON.stringify(n)) && !(n?.studies || []).some((x: any) => "analyst" in x || "finalizedBy" in x || "signature" in x));
   } finally {
     server.close();
   }
