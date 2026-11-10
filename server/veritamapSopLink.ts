@@ -9,7 +9,12 @@
 //                 'recertified'), as the lab's calendar day
 //   next_review = policy_documents.next_review_date
 //   overdue     = the policy is missing, archived or not approved, or its next review date has passed (lab day)
+// BUG-165 (2026-11-10): while a newer revision is a draft or in review over a recorded approved version (BUG-151,
+// server/policyApprovedVersion.ts revisionInProgress), the approved procedure still stands, so the link reads as approved
+// with `revision_in_progress`, not "draft, not approved". A draft or in-review policy with no approved version recorded
+// still reads overdue, as before.
 import { labLocalDate, labToday } from "./dateLocal";
+import { revisionInProgress } from "./policyApprovedVersion";
 
 export interface SopLink {
   document_id: number;
@@ -19,6 +24,7 @@ export interface SopLink {
   next_review: string | null;
   overdue: boolean;
   reason: string | null;
+  revision_in_progress: boolean;
 }
 
 // policy_signoffs.signed_at is SQLite datetime('now'), "YYYY-MM-DD HH:MM:SS" in UTC.
@@ -35,7 +41,7 @@ export function sopLinksByDocument(sqlite: any, labId: number, documentIds: numb
   if (ids.length === 0) return out;
   const ph = ids.map(() => "?").join(",");
   const docs = sqlite.prepare(
-    `SELECT id, title, status, next_review_date, archived_at FROM policy_documents WHERE lab_id = ? AND id IN (${ph})`
+    `SELECT id, title, status, next_review_date, archived_at, current_version_id, approved_version_id FROM policy_documents WHERE lab_id = ? AND id IN (${ph})`
   ).all(labId, ...ids) as any[];
   const lastByDoc = new Map<number, string | null>();
   for (const r of sqlite.prepare(
@@ -46,13 +52,14 @@ export function sopLinksByDocument(sqlite: any, labId: number, documentIds: numb
   const byId = new Map<number, any>(docs.map((d) => [Number(d.id), d]));
   for (const id of ids) {
     const d = byId.get(id);
-    if (!d) { out.set(id, { document_id: id, title: null, status: null, last_review: null, next_review: null, overdue: true, reason: "The linked policy is no longer in this lab." }); continue; }
+    if (!d) { out.set(id, { document_id: id, title: null, status: null, last_review: null, next_review: null, overdue: true, reason: "The linked policy is no longer in this lab.", revision_in_progress: false }); continue; }
     const next = d.next_review_date ? String(d.next_review_date).slice(0, 10) : null;
+    const inRevision = revisionInProgress(d);
     let reason: string | null = null;
     if (d.archived_at) reason = "The linked policy is archived.";
-    else if (d.status !== "approved") reason = `The linked policy is ${String(d.status || "not approved").replace(/_/g, " ")}, not approved.`;
+    else if (d.status !== "approved" && !inRevision) reason = `The linked policy is ${String(d.status || "not approved").replace(/_/g, " ")}, not approved.`;
     else if (next && next < today) reason = `The linked policy's review was due ${next}.`;
-    out.set(id, { document_id: id, title: d.title ?? null, status: d.status ?? null, last_review: lastByDoc.get(id) ?? null, next_review: next, overdue: !!reason, reason });
+    out.set(id, { document_id: id, title: d.title ?? null, status: d.status ?? null, last_review: lastByDoc.get(id) ?? null, next_review: next, overdue: !!reason, reason, revision_in_progress: inRevision });
   }
   return out;
 }
