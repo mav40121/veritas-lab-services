@@ -1514,12 +1514,14 @@ export default function VeritaTrackAppPage() {
   // boots before the lab switcher resolves.
   const { data: worklist } = useQuery<{
     today: string;
-    counts: { overdue: number; due_today: number; due_this_week: number; due_next_30: number; cross_module?: number };
+    // not_started (BUG-143): tasks with no live sign-off, counted on their own, never as overdue.
+    counts: { overdue: number; due_today: number; due_this_week: number; due_next_30: number; not_started?: number; cross_module?: number };
     buckets: {
       overdue: Task[];
       due_today: Task[];
       due_this_week: Task[];
       due_next_30: Task[];
+      not_started?: Task[];
     };
     cross_module?: Array<{ source: string; source_id: number; label: string; due_date: string; link: string }>;
   }>({
@@ -1701,14 +1703,14 @@ export default function VeritaTrackAppPage() {
           overdue + due-today + due-this-week + due-next-30 counts so
           the director sees what needs action without scrolling the
           full task list. Self-hides when no activeLabId. */}
-      {worklist && (worklist.counts.overdue + worklist.counts.due_today + worklist.counts.due_this_week + worklist.counts.due_next_30 + (worklist.counts.cross_module ?? 0)) > 0 && (
+      {worklist && (worklist.counts.overdue + worklist.counts.due_today + worklist.counts.due_this_week + worklist.counts.due_next_30 + (worklist.counts.not_started ?? 0) + (worklist.counts.cross_module ?? 0)) > 0 && (
         <div className="mb-6 rounded-xl border border-border bg-card p-4">
           <div className="flex items-center gap-2 mb-3">
             <CalendarDays size={16} className="text-primary" />
             <h3 className="font-semibold text-sm">Today's Worklist</h3>
             <span className="text-xs text-muted-foreground">as of {worklist.today}</span>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className={`grid grid-cols-2 gap-3 ${(worklist.counts.not_started ?? 0) > 0 ? "sm:grid-cols-5" : "sm:grid-cols-4"}`}>
             <div className={`rounded-lg p-3 ${worklist.counts.overdue > 0 ? "bg-red-50 dark:bg-red-950/30 border border-red-200/50 dark:border-red-900/40" : "bg-muted/40"}`}>
               <div className={`text-xs uppercase ${worklist.counts.overdue > 0 ? "text-red-700 dark:text-red-300" : "text-muted-foreground"}`}>Overdue</div>
               <div className={`text-2xl font-bold ${worklist.counts.overdue > 0 ? "text-red-700 dark:text-red-300" : "text-foreground"}`}>{worklist.counts.overdue}</div>
@@ -1725,6 +1727,13 @@ export default function VeritaTrackAppPage() {
               <div className="text-xs uppercase text-muted-foreground">Next 30 Days</div>
               <div className="text-2xl font-bold">{worklist.counts.due_next_30}</div>
             </div>
+            {/* BUG-143: a task with no sign-off has no due date yet; it counts here, the same as the cards below and the task list. */}
+            {(worklist.counts.not_started ?? 0) > 0 && (
+              <div className="rounded-lg p-3 bg-muted/40" data-testid="worklist-not-started">
+                <div className="text-xs uppercase text-muted-foreground">Not Started</div>
+                <div className="text-2xl font-bold">{worklist.counts.not_started}</div>
+              </div>
+            )}
           </div>
 
           {/* Wave B2 (move-3): cross-module seam list. Surfaces VeritaLab
@@ -1831,14 +1840,17 @@ export default function VeritaTrackAppPage() {
 
       {/* Dashboard summary cards */}
       {dashboard && dashboard.total > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+        <div className={`grid grid-cols-2 gap-3 mb-6 ${dashboard.notStarted > 0 ? "sm:grid-cols-5" : "sm:grid-cols-4"}`}>
           {[
             { label: "Overdue",        val: dashboard.overdue,      color: "text-red-600 dark:text-red-400",         bg: "bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800" },
             { label: "Due This Month", val: dashboard.dueThisMonth, color: "text-amber-600 dark:text-amber-400",     bg: "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800" },
             { label: "Due Soon (30d)", val: dashboard.dueSoon,      color: "text-primary",                           bg: "bg-primary/5 border-primary/20" },
             { label: "Current",        val: dashboard.current,      color: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800" },
+            // BUG-143: the server counted these all along (notStarted) but no card showed them, so a task with no sign-off
+            // was in no card while the worklist above called it overdue.
+            ...(dashboard.notStarted > 0 ? [{ label: "Not Started", val: dashboard.notStarted, color: "text-foreground", bg: "bg-muted/40 border-border" }] : []),
           ].map(card => (
-            <div key={card.label} className={`rounded-xl border px-4 py-3 ${card.bg}`}>
+            <div key={card.label} className={`rounded-xl border px-4 py-3 ${card.bg}`} data-testid={`track-card-${card.label.toLowerCase().replace(/[^a-z]+/g, "-")}`}>
               <div className={`text-2xl font-bold ${card.color}`}>{card.val}</div>
               <div className="text-xs text-muted-foreground mt-0.5">{card.label}</div>
             </div>

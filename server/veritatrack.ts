@@ -272,17 +272,18 @@ export function registerVeritaTrackRoutes(
         "SELECT * FROM veritatrack_tasks WHERE lab_id = ? AND active = 1 ORDER BY category, name"
       ).all(labId) as any[];
       const todayStr = labDayFor(labId);
-      const buckets: any = { overdue: [], due_today: [], due_this_week: [], due_next_30: [] };
+      const buckets: any = { overdue: [], due_today: [], due_this_week: [], due_next_30: [], not_started: [] };
       for (const t of tasks) {
         const last = sqlite.prepare(
           `SELECT * FROM veritatrack_signoffs WHERE task_id = ? AND ${LIVE_SIGNOFF} ORDER BY completed_date DESC LIMIT 1`
         ).get(t.id) as any;
         const nextDueDate = last ? nextDue(last.completed_date, t.frequency_months, t.frequency_days) : null;
-        // Not-started tasks (no signoff yet) appear as overdue so the
-        // director sees them immediately rather than having them sit
-        // invisible until their first signoff.
+        // Not-started tasks (no live sign-off yet) have no due date, so they get their own count and tile and the director
+        // still sees them on opening the page. BUG-143: they used to be counted as Overdue here while the dashboard cards
+        // counted them as notStarted (and showed no card for it), so a lab with one new task read "Overdue 1" above
+        // cards that counted it nowhere; the task list calls them Not Started.
         if (!last) {
-          buckets.overdue.push({ ...t, last_signoff: null, next_due: null, status: "not_started" });
+          buckets.not_started.push({ ...t, last_signoff: null, next_due: null, status: "not_started" });
           continue;
         }
         const daysUntil = daysUntilDateOnly(nextDueDate!, todayStr);
@@ -511,6 +512,7 @@ export function registerVeritaTrackRoutes(
         due_today: buckets.due_today.length,
         due_this_week: buckets.due_this_week.length,
         due_next_30: buckets.due_next_30.length,
+        not_started: buckets.not_started.length,
         cross_module: crossModule.length,
       };
       res.json({ today: todayStr, counts, buckets, cross_module: crossModule });
