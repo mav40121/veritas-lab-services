@@ -112,3 +112,17 @@ export function readCriterionForm(row: any, presets: CriterionPreset[]): { prese
   const reproduces = k.kind === "matches" || k.kind === "fixedType";
   return { presetIndex: k.presetIndex >= 0 ? k.presetIndex : 0, custom: k.custom, saved: reproduces ? null : k.saved };
 }
+
+// The preset name the results screen and the PDF print beside a study's criterion (Michael 2026-11-10, Q275 = 1). The saved
+// label, except:
+//   - a type that sets its own criterion: the picker's label there is stray (BUG-147 on the PDF, BUG-159 on the screen);
+//   - a label naming a preset whose criterion isn't the stored one (classifyCriterion "mismatch"): an Edit re-run before
+//     BUG-153 saved ALT/SGPT's name over other tests' criteria, so a signed HbA1c study printed "±8.0% (ALT/SGPT ...)".
+//     The stored criterion prints alone; the stored data is untouched.
+// A label that isn't a picker preset (manual differential's Rümke, heparin range's sample set) prints as saved.
+export function printedPresetLabel(row: any, presets: CriterionPreset[]): string | null {
+  const studyType: string = row?.studyType ?? row?.study_type ?? "";
+  if (FIXED_CRITERION_TYPES.has(studyType)) return null;
+  const k = classifyCriterion(row, presets);
+  return k.kind === "mismatch" ? null : k.saved.label;
+}
