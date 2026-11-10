@@ -19,6 +19,7 @@ import { apiRequest, queryClient, getQueryFn } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { MANUAL_PATH_SEPARATOR, descendantIds } from "@shared/manualTree";
 import { POLICY_DOC_TYPES, docTypeLabel, type DocTypeRule } from "@shared/policyDocTypes";
+import { REVISION_IN_PROGRESS_NOTE } from "@shared/policyApprovedVersion";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -216,6 +217,8 @@ interface PolicyDocument {
   // Step D (server/policyReadSign.ts): who an approved document goes to, on the editor's list; where this person stands, on a Staff login's.
   read_sign_targets?: string[];
   my_read_sign?: "signed" | "to_sign" | "none";
+  // A limited Staff login's lookup: a newer revision is a draft or in review, and this row is the approved version (BUG-151).
+  revision_in_progress?: boolean;
   // Signed in the lab's prior system and carried over, not signed in VeritaAssure.
   my_prior_system?: { system: string; version: string; signed_on: string } | null;
   created_at: string;
@@ -379,6 +382,7 @@ function StaffDocumentLookup({ labId, onView }: { labId: number; onView: (doc: P
                   {d.title}
                   {d.manual_path && <span className="block text-xs text-muted-foreground">{d.manual_path}</span>}
                   {d.status === "expired" && <span className="block text-xs text-amber-800 dark:text-amber-300">Its review is overdue</span>}
+                  {d.revision_in_progress && <span className="block text-xs text-amber-800 dark:text-amber-300" data-testid="staff-doc-lookup-revision">{REVISION_IN_PROGRESS_NOTE}</span>}
                 </span>
                 <Button size="sm" variant="outline" onClick={() => onView(d)} data-testid="staff-doc-lookup-open"><Eye size={12} className="mr-1" /> Read</Button>
               </li>
@@ -2532,6 +2536,12 @@ export default function VeritaPolicyMyPoliciesPage() {
           <DialogHeader>
             <DialogTitle>{viewDoc?.title || "Policy"}</DialogTitle>
           </DialogHeader>
+          {/* BUG-151: a limited Staff login reads the approved version while a newer revision is a draft or in review. */}
+          {staffOwnDocs && viewDoc?.revision_in_progress && (
+            <div className="rounded border border-amber-300 bg-amber-50 text-amber-900 p-2 text-xs dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-200" data-testid="view-revision-note">
+              {REVISION_IN_PROGRESS_NOTE}
+            </div>
+          )}
           {viewTampered && (
             <div className="rounded border border-red-300 bg-red-50 text-red-900 p-2 text-xs space-y-1 dark:border-red-700 dark:bg-red-950/30 dark:text-red-200">
               <div className="font-medium flex items-center gap-1">

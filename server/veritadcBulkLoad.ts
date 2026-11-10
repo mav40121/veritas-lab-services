@@ -206,7 +206,8 @@ export async function loadOneDocument(sqlite: any, meta: CarriedMeta, files: Loa
         .run(documentId, docRel, format, doc.size, docHash, `Carried over from ${meta.sourceSystem}, version ${meta.version}`, meta.ownerUserId, parts.major, parts.minor)
         .lastInsertRowid
     );
-    sqlite.prepare("UPDATE policy_documents SET current_version_id = ? WHERE id = ?").run(versionId, documentId);
+    // Loaded approved, so this version is the approved version (BUG-151, server/policyApprovedVersion.ts).
+    sqlite.prepare("UPDATE policy_documents SET current_version_id = ?, approved_version_id = ? WHERE id = ?").run(versionId, versionId, documentId);
     const faceRel = save(`${meta.labId}/${documentId}/carried/face-page.html`, face.buffer);
     let originalRel: string | null = null;
     if (files.original) {

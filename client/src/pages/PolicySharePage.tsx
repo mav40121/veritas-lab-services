@@ -14,6 +14,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Download, Loader2, XCircle } from "lucide-react";
 import { labLocaleDate } from "@/lib/labDate";
 import { useSEO } from "@/hooks/useSEO";
+import { REVISION_IN_PROGRESS_NOTE } from "@shared/policyApprovedVersion";
 
 export const SHARE_LINK_NOT_ACTIVE = "This link is not active. Contact the laboratory.";
 
@@ -25,6 +26,8 @@ interface ShareMeta {
   version: string | null;
   effective_date: string | null;
   approved_date: string | null;
+  // True while a newer revision is a draft or in review; the link shows the approved version (BUG-151).
+  revision_in_progress?: boolean;
 }
 
 type Viewer =
@@ -149,6 +152,12 @@ export default function PolicySharePage() {
             )}
           </dl>
         </header>
+        {/* BUG-151: while the laboratory revises the document, the link keeps showing the approved version. */}
+        {data.revision_in_progress && (
+          <div className="rounded-md border border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-200 px-3 py-2 text-sm" data-testid="share-revision-note">
+            {REVISION_IN_PROGRESS_NOTE}
+          </div>
+        )}
         <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm" data-testid="share-note">
           This link always shows the laboratory's current approved version. Printed copies are uncontrolled.
         </div>

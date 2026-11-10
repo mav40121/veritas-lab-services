@@ -36,7 +36,8 @@ const STATUS_TEXT: Record<ShareLinkRow["status"], { text: string; cls: string }>
 export function PolicyShareLinks({ labId, documentId }: { labId: number; documentId: number }) {
   const { toast } = useToast();
   const key = `/api/labs/${labId}/veritapolicy/documents/${documentId}/share-links`;
-  const { data, isError } = useQuery<{ shareable: boolean; links: ShareLinkRow[] }>({
+  // shows_version: the approved version's label while a revision is a draft or in review (BUG-151), else null.
+  const { data, isError } = useQuery<{ shareable: boolean; shows_version?: string | null; links: ShareLinkRow[] }>({
     queryKey: [key],
     queryFn: getQueryFn({ on401: "throw" }),
     retry: false,
@@ -85,6 +86,11 @@ export function PolicyShareLinks({ labId, documentId }: { labId: number; documen
       <p className="text-muted-foreground">
         Anyone with this link can read the current approved version of this document, without signing in. Use it for documents meant for people outside the lab, such as a specimen collection manual. Revoke it any time.
       </p>
+      {data.shareable && data.shows_version && (
+        <p className="text-amber-800 dark:text-amber-300" data-testid="share-links-shows-approved">
+          A revision is in progress. Links show the approved version, v{data.shows_version}, until the revision is approved.
+        </p>
+      )}
       {!data.shareable && (
         <p className="text-amber-800 dark:text-amber-300" data-testid="share-links-not-showing">
           This document has no approved version right now, so its links show "This link is not active" until it is approved again.

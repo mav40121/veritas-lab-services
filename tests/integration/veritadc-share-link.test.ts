@@ -8,8 +8,8 @@
 //       and approved dates, and nothing else (no signature, sign-off, audit or staff field); noindex and no-store headers.
 //   3.  The file route streams that version's file inline; ?download=1 sends it as an attachment. Only the metadata read
 //       counts a view.
-//   4.  A revision: while it is a draft or in review the link reads not active (as a Staff login's read does); once it is
-//       approved, the SAME token shows the new version and its file.
+//   4.  A revision: while it is a draft or in review the link keeps showing the approved version, flagged (BUG-151, as a
+//       Staff login's read does); once it is approved, the SAME token shows the new version and its file.
 //   5.  Not active, one identical 404 body: unknown, malformed, revoked, retired. Review-overdue still shows.
 //   6.  A token for document A never reaches document B, by any parameter, path or header, in its lab or another.
 //   7.  The editor's list: active and revoked links with views; revoke keeps the row; only editors read it.
@@ -193,9 +193,10 @@ async function main() {
 
     // 2. The public read
     const pub = await call("GET", `/api/public/policy-share/${tokenA}`);
-    const KEYS = ["approved_date", "clia_number", "doc_number", "effective_date", "lab_name", "title", "version"];
+    const KEYS = ["approved_date", "clia_number", "doc_number", "effective_date", "lab_name", "revision_in_progress", "title", "version"];
     check("2. the public read answers with no login", pub.status === 200, `HTTP ${pub.status}`);
-    check("2. it carries exactly the lab, CLIA, number, title, version and dates", JSON.stringify(Object.keys(pub.body).sort()) === JSON.stringify(KEYS), Object.keys(pub.body).join(","));
+    check("2. it carries exactly the lab, CLIA, number, title, version, dates and the revision flag", JSON.stringify(Object.keys(pub.body).sort()) === JSON.stringify(KEYS), Object.keys(pub.body).join(","));
+    check("2. with no revision in progress the flag is false", pub.body.revision_in_progress === false);
     check("2. the values are the document's", pub.body.lab_name === "Share Link Lab a" && pub.body.clia_number === "22D0000777" && pub.body.doc_number === "SC 1" && pub.body.title === "Made-up Specimen Collection Manual" && pub.body.version === "1.0", JSON.stringify(pub.body));
     check("2. the effective date is set and the approved date is version 1.0's approval", !!pub.body.effective_date && pub.body.approved_date === "2026-10-09 15:00:00", JSON.stringify(pub.body));
     const forbidden = /Made Up Signer|View Only|Zorblatt|Quinn|Owner a|sharelink-|signoff|signature|audit|hash|staff|token|email|user/i;
@@ -228,17 +229,21 @@ async function main() {
     // 4. A revision on the same link
     const rev = await newVersion(A, docA, V2, false);
     check("4. setup: a revision is uploaded", !!rev.version_id, JSON.stringify(rev));
+    // BUG-151: while the revision is a draft or in review, the link keeps showing the approved version (1.0), flagged.
     const inDraft = await call("GET", `/api/public/policy-share/${tokenA}`);
-    check("4. while the revision is a draft, the link reads not active", inDraft.status === 404 && inDraft.text === NOT_ACTIVE, `${inDraft.status} ${inDraft.text}`);
-    check("4. and the draft's file is never served", (await raw(`/api/public/policy-share/${tokenA}/file`)).status === 404);
+    check("4. while the revision is a draft, the link shows the approved version 1.0, flagged", inDraft.status === 200 && inDraft.body.version === "1.0" && inDraft.body.revision_in_progress === true && inDraft.body.approved_date === "2026-10-09 15:00:00", `${inDraft.status} ${inDraft.text}`);
+    const draftFile = await raw(`/api/public/policy-share/${tokenA}/file`);
+    check("4. and streams the approved file; the draft's file is never served", draftFile.status === 200 && draftFile.buf.equals(V1) && !draftFile.buf.equals(V2));
     const listDraft = await call("GET", `${P}/documents/${docA}/share-links`, undefined, A.token);
-    check("4. the editor's list says the link isn't showing", listDraft.body.shareable === false && listDraft.body.links.every((l: any) => l.status === "not_showing"), JSON.stringify(listDraft.body.links?.map((l: any) => l.status)));
+    check("4. the editor's list says the links show 1.0", listDraft.body.shareable === true && listDraft.body.shows_version === "1.0" && listDraft.body.links.filter((l: any) => !l.revoked_at).every((l: any) => l.status === "active"), JSON.stringify({ v: listDraft.body.shows_version, s: listDraft.body.links?.map((l: any) => l.status) }));
     await call("POST", `${P}/documents/${docA}/submit`, { workflowId: wf.body.id }, A.token);
-    check("4. while it is in review, still not active", (await call("GET", `/api/public/policy-share/${tokenA}`)).text === NOT_ACTIVE);
+    const inReviewRead = await call("GET", `/api/public/policy-share/${tokenA}`);
+    check("4. while it is in review, still the approved version 1.0", inReviewRead.status === 200 && inReviewRead.body.version === "1.0" && inReviewRead.body.revision_in_progress === true, inReviewRead.text);
+    check("4. and still its file", (await raw(`/api/public/policy-share/${tokenA}/file`)).buf.equals(V1));
     const second = await call("POST", `${P}/documents/${docA}/approve`, { typedSignature: "Made Up Signer", password: PW }, signer.token);
     check("4. setup: the revision is approved", second.body.status === "approved", JSON.stringify(second.body));
     const afterRev = await call("GET", `/api/public/policy-share/${tokenA}`);
-    check("4. the SAME token now shows the new version", afterRev.status === 200 && afterRev.body.version === "1.1", JSON.stringify(afterRev.body));
+    check("4. the SAME token now shows the new version, unflagged", afterRev.status === 200 && afterRev.body.version === "1.1" && afterRev.body.revision_in_progress === false, JSON.stringify(afterRev.body));
     const fileV2 = await raw(`/api/public/policy-share/${tokenA}/file`);
     check("4. and streams the new version's file", fileV2.buf.equals(V2) && !fileV2.buf.equals(V1));
     const v2Approved = (sqlite.prepare("SELECT MAX(signed_at) AS at FROM policy_signoffs WHERE document_id = ? AND version_id = ? AND action = 'approved'").get(docA, rev.version_id) as any).at;
