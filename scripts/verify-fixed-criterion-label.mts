@@ -11,7 +11,7 @@
 //   C. BUG-139's floor backfill leaves a fixed-type row with the label alone, where the same row with no label gets a
 //      floor (so the check would catch a blank label).
 // Run: rm -f .tmp-fixedcrit.db && DB_PATH=.tmp-fixedcrit.db JWT_SECRET=test-jwt-secret ADMIN_SECRET=test-admin-secret STRIPE_SECRET_KEY=sk_test_dummy STRIPE_WEBHOOK_SECRET=whsec_dummy npx tsx scripts/verify-fixed-criterion-label.mts
-import { FIXED_CRITERION_TYPES, FIXED_CRITERION_LABEL, savedPresetLabel, classifyCriterion } from "../shared/studyCriterion";
+import { FIXED_CRITERION_TYPES, FIXED_CRITERION_LABEL, savedPresetLabel, classifyCriterion, printedPresetLabel } from "../shared/studyCriterion";
 import { CLIA_PRESETS } from "../shared/cliaPresets";
 import { db } from "../server/db";
 import { backfillAbsoluteFloorOnStartup } from "../server/backfillAbsoluteFloor";
@@ -42,6 +42,8 @@ const onLot = classifyCriterion({ studyType: "lot_to_lot", cliaAllowableError: 0
 check("B4. ... and only on a fixed type: the same label on a lot-to-lot row is an unknown label", onLot === "unknownLabel", onLot);
 const before = classifyCriterion({ studyType: "qc_range", cliaAllowableError: 0.1, teaIsPercentage: 1, teaUnit: "%", cliaAbsoluteFloor: null, cliaAbsoluteUnit: null, cliaPresetLabel: ALT }, CLIA_PRESETS).kind;
 check("B5. a fixed-type row saved before this fix with the picker's label still reads fixedType, as it did", before === "fixedType", before);
+const printed = FIXED.map((t) => printedPresetLabel({ studyType: t, cliaAllowableError: 0.1, teaIsPercentage: 1, teaUnit: "%", cliaAbsoluteFloor: null, cliaAbsoluteUnit: null, cliaPresetLabel: FIXED_CRITERION_LABEL }, CLIA_PRESETS));
+check("B6. the label never prints beside a criterion (printedPresetLabel, Q275, gives null for every fixed type)", printed.every((p) => p === null), JSON.stringify(printed));
 
 // ── C ──
 const sqlite = (db as any).$client;
