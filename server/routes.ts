@@ -51,7 +51,7 @@ import { auditVeritamapConsistency } from "./veritamapConsistency";
 import { auditSystemOwnership } from "./systemOwnershipAudit";
 import { computeBackfillCandidates } from "./organizationBackfill";
 import { orgSeatCapForOwner } from "./organizationSeats";
-import { labSeatSummary } from "./labSeats";
+import { labSeatSummary, seatCountGaps } from "./labSeats";
 import { promoteMedicalDirectorToAdmin, medicalDirectorPromotionPreview } from "./medicalDirectorRole";
 import { EMPLOYEE_HIRE_DATE_SQL, withStaffHireDates } from "./competencyHireDate";
 import { orgRoleForUserOnLab, labRoleFromOrgRole, transferBlockedOutOfOrg, isActiveOrgMember, resolveOwnerOrgId } from "./organizationRoles";
@@ -1589,6 +1589,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const sqlite = (db as any).$client;
     const active = activeTermsVersion(sqlite);
     res.json({ activeVersion: active, currentVersion: TERMS_VERSION, ...acceptanceCounts(sqlite, active || TERMS_VERSION) });
+  });
+
+  // BUG-096: lab admins writing without a seat row, per lab, and what the seat count and the invite gate would read if
+  // they were counted (server/labSeats.ts seatCountGaps). Read-only; lab ids and counts, no names or emails. Header only.
+  app.get("/api/admin/seat-count-gaps", (req: any, res) => {
+    const secret = req.headers["x-admin-secret"] as string | undefined;
+    if (!secret || secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    res.json(seatCountGaps((db as any).$client));
   });
 
   // Read-only numbers for the access work, so a fix can be sized before it changes who can open what. Nothing but counts: no names,
