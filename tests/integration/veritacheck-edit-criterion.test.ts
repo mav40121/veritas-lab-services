@@ -30,14 +30,18 @@ function check(name: string, cond: boolean, detail = "") {
   if (!cond) failures++;
 }
 
-// The page's own preset list, read from its source (the scripts that pin it read it the same way).
-const pageSrc = readFileSync(new URL("../../client/src/pages/VeritaCheckPage.tsx", import.meta.url), "utf-8");
-const PRESETS: any[] = new Function(`return [${pageSrc.match(/const CLIA_PRESETS = \[([\s\S]*?)\n\];/)![1]}\n];`)();
+// The page's preset list: shared/cliaPresets.ts, or on main (before it moved there) the page's own source.
+let PRESETS: any[] = [];
+async function loadPresets() {
+  try { PRESETS = (await import("../../shared/cliaPresets")).CLIA_PRESETS as any[]; return; } catch { /* main: still in the page */ }
+  const pageSrc = readFileSync(new URL("../../client/src/pages/VeritaCheckPage.tsx", import.meta.url), "utf-8");
+  PRESETS = new Function(`return [${pageSrc.match(/const CLIA_PRESETS = \[([\s\S]*?)\n\];/)![1]}\n];`)();
+}
 const presetAt = (label: string) => { const i = PRESETS.findIndex((p) => p.label === label); if (i < 0) throw new Error(`no preset ${label}`); return i; };
 const SODIUM = "Sodium (±4 mmol/L)";
 const GLUCOSE = "Glucose (±8% or ±6 mg/dL)";
 const ALBUMIN = "Albumin (±8%)";
-const ALT = PRESETS[0].label;
+const ALT = "ALT/SGPT (±15% or ±6 U/L)";
 
 type Pick = { presetIndex: number; customClia: number; customAbsFloor: number | null; customAbsUnit: string; saved: any | null };
 const PAGE_DEFAULT: Pick = { presetIndex: 0, customClia: 0.15, customAbsFloor: null, customAbsUnit: "", saved: null };
@@ -83,6 +87,8 @@ const linForm = () => ({
 });
 
 async function main() {
+  await loadPresets();
+  if (PRESETS[0]?.label !== ALT) throw new Error(`preset 0 is ${PRESETS[0]?.label}`);
   const { db } = await import("../../server/db");
   const { registerRoutes, computeStudyStatus } = await import("../../server/routes");
   const lib: any = await import("../../client/src/lib/studyFormPayload");
@@ -255,6 +261,53 @@ async function main() {
       const kAfter = await getRow(kId);
       check(`K. a draft PUT that sends only a new name (${legacy ? "older" : "lab"} route) keeps the criterion and its label`, same(critOf(kAfter), critOf(kBefore)), diff(critOf(kBefore), critOf(kAfter)));
     }
+
+    // ── M: GET /api/admin/veritacheck/criterion-mismatch-counts (read-only, counts only) ─────────
+    // Rows saved before the fix that carry the mark a re-run from Edit left: an ALT label over a units criterion (main's
+    // Sodium re-run), and a Sodium label over a percent criterion with Glucose's floor (main's Glucose-to-Sodium change).
+    const counts = async (secret?: string) => {
+      const r = await fetch(`${base}/api/admin/veritacheck/criterion-mismatch-counts`, { headers: secret === undefined ? {} : { "x-admin-secret": secret } });
+      let j: any = {}; try { j = await r.json(); } catch {}
+      return { status: r.status, body: j };
+    };
+    check("M0. the count route refuses without the admin header, and with a wrong one", (await counts()).status === 403 && (await counts("not-the-secret")).status === 403);
+    const snapshot = () => JSON.stringify(sqlite.prepare("SELECT id, status, lifecycle_state, clia_allowable_error, tea_is_percentage, tea_unit, clia_absolute_floor, clia_absolute_unit, clia_preset_label FROM studies ORDER BY id").all());
+    const dbBefore = snapshot();
+    const m0 = (await counts(process.env.ADMIN_SECRET)).body;
+    check("M1. the count route answers with totals and writes nothing", typeof m0?.studies === "number" && m0.studies > 0 && typeof m0?.mismatched === "number" && snapshot() === dbBefore, JSON.stringify(m0).slice(0, 200));
+    // The rows this test saved since the fix all match (E, R, C) or are held (H): one labeled row with an extra floor
+    // (mismatch, reason floor), one with no label, and the reference range (fixed type).
+    check("M2. so far: only the Albumin row holding a floor its preset lacks is a mismatch (reason floor); the unlabeled row and the reference range aren't",
+      m0?.mismatched === 1 && m0?.byReason?.floor === 1 && m0?.byReason?.units === 0 && m0?.noLabel >= 1 && m0?.fixedType >= 1 && m0?.byPreset?.[ALBUMIN] === 1, JSON.stringify({ mismatched: m0?.mismatched, byReason: m0?.byReason, noLabel: m0?.noLabel, fixedType: m0?.fixedType, byPreset: m0?.byPreset }));
+    // A matching row isn't counted.
+    await save("POST", body("cal_ver", "IT matching Sodium after the fix", sodiumGrid, fromPreset(SODIUM)));
+    const m1 = (await counts(process.env.ADMIN_SECRET)).body;
+    check("M3. a newly saved matching Sodium study adds to matches, not to mismatched", m1?.mismatched === m0?.mismatched && m1?.matches === m0?.matches + 1 && m1?.studies === m0?.studies + 1, JSON.stringify({ before: [m0?.matches, m0?.mismatched], after: [m1?.matches, m1?.mismatched] }));
+    // Two mixed rows, in this lab and in a second lab flagged demo.
+    const mixedAlt = { cliaValue: 0.15, teaIsPercentage: false, teaUnit: "mmol/L", cliaAbsoluteFloor: null, cliaAbsoluteUnit: null, cliaPresetLabel: ALT };
+    const mixedSodium = { cliaValue: 4, teaIsPercentage: true, teaUnit: "%", cliaAbsoluteFloor: 6, cliaAbsoluteUnit: "mg/dL", cliaPresetLabel: SODIUM };
+    const mA = await save("POST", body("cal_ver", "IT mixed: ALT label over a units criterion", sodiumGrid, mixedAlt));
+    const demoLabId = Number((await call("POST", "/api/admin/provision-demo-lab", { secret: process.env.ADMIN_SECRET, ownerEmail: email, labName: "IT Edit Criterion Demo Lab", plan: "hospital" })).body?.labId);
+    sqlite.prepare("UPDATE labs SET is_demo = 1 WHERE id = ?").run(demoLabId);
+    sqlite.prepare("UPDATE labs SET is_demo = 0 WHERE id = ?").run(labId);
+    const mB = await call("POST", `/api/labs/${demoLabId}/studies`, body("precision", "IT mixed: Sodium label over a percent criterion with a floor", precisionForm([[140, 141, 139, 140, 142]]), mixedSodium), token, demoLabId);
+    // Signing a study sets lifecycle_state 'finalized'; set here on the throwaway DB.
+    sqlite.prepare("UPDATE studies SET lifecycle_state = 'finalized' WHERE id = ?").run(Number(mA.body?.id));
+    const m2r = await counts(process.env.ADMIN_SECRET);
+    const m2 = m2r.body;
+    check("M4. both mixed rows are counted, by their reasons (units and floor each)",
+      m2?.mismatched === m1?.mismatched + 2 && m2?.byReason?.units === 2 && m2?.byReason?.floor === m1?.byReason?.floor + 2 && m2?.byPreset?.[ALT] === 1 && m2?.byPreset?.[SODIUM] === 1,
+      JSON.stringify({ mismatched: m2?.mismatched, byReason: m2?.byReason, byPreset: m2?.byPreset, ids: [mA.body?.id, mB.body?.id] }));
+    check("M5. by study type: calibration verification and precision", m2?.byType?.cal_ver?.mismatched === (m1?.byType?.cal_ver?.mismatched ?? 0) + 1 && m2?.byType?.precision?.mismatched === (m1?.byType?.precision?.mismatched ?? 0) + 1, JSON.stringify(m2?.byType));
+    check("M6. by lab: the demo lab is flagged isDemo with its one mismatch; this lab is not demo",
+      m2?.byLab?.[String(demoLabId)]?.isDemo === true && m2?.byLab?.[String(demoLabId)]?.mismatched === 1 && m2?.byLab?.[String(labId)]?.isDemo === false && m2?.byLab?.[String(labId)]?.mismatched === m1?.mismatched + 1,
+      JSON.stringify({ demo: m2?.byLab?.[String(demoLabId)], lab: m2?.byLab?.[String(labId)] }));
+    check("M7. the signed (finalized) mixed row is counted as signed, in total and by lab", m2?.mismatchedFinalized === (m1?.mismatchedFinalized ?? 0) + 1 && m2?.byLab?.[String(labId)]?.mismatchedFinalized === 1, JSON.stringify({ total: m2?.mismatchedFinalized, lab: m2?.byLab?.[String(labId)]?.mismatchedFinalized }));
+    check("M8. a re-save isn't recorded, so resaved is null; the answer names no study, test or person", m2?.resaved === null && !/IT mixed|IT matching|Made Up|example\.com/.test(JSON.stringify(m2)) && !("ids" in m2) && !("studyIds" in m2));
+    // The route and Edit agree: a counted row opens in Edit held as saved.
+    const heldA = editPick(await getRow(Number(mA.body?.id)));
+    const heldB = editPick((await call("GET", `/api/labs/${demoLabId}/studies/${mB.body?.id}`, undefined, token, demoLabId)).body);
+    check("M9. Edit holds both counted rows as saved (the picker shows them as saved, not ALT or Sodium)", pickerShows(heldA) === `As saved: ${ALT}` && pickerShows(heldB) === `As saved: ${SODIUM}`, `${pickerShows(heldA)} | ${pickerShows(heldB)}`);
   } finally {
     server.close();
   }

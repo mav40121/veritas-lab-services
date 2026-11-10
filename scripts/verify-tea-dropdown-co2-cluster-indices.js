@@ -21,9 +21,12 @@ const source = fs.readFileSync(
   "utf8"
 );
 
-const arrayMatch = source.match(/const CLIA_PRESETS[^=]*=\s*\[([\s\S]*?)\];/);
+// The presets live in shared/cliaPresets.ts since 2026-11-10 (the server reads a saved criterion with them); the
+// page renders the dropdown from their indices.
+const presetsSource = fs.readFileSync(path.join(__dirname, "..", "shared", "cliaPresets.ts"), "utf8");
+const arrayMatch = presetsSource.match(/const CLIA_PRESETS[^=]*=\s*\[([\s\S]*?)\];/);
 if (!arrayMatch) {
-  console.error("FAIL  could not locate CLIA_PRESETS array in VeritaCheckPage.tsx");
+  console.error("FAIL  could not locate CLIA_PRESETS array in shared/cliaPresets.ts");
   process.exit(1);
 }
 
