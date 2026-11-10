@@ -130,5 +130,36 @@ const PT_TYPE = "Study Type PT/INR Geometric Mean Calculator (CLSI H47)";
   check("5b. method comparison keeps its label and its preset", mcPage.includes("Study Type Method Comparison: Multi-Instrument Correlation (CLSI EP09 + EP15-A3)") && mcPage.includes("(Lab-defined)"), mcPage.slice(0, 400));
 }
 
+// 6. Page 1's narrative names only the modules that ran, each with the TEa it used (BUG-161). Before, every PT/INR study read
+// "Each module was individually evaluated against ... of <saved TEa>", so a Module 1 only study cited ±20% it never applied.
+{
+  const narrativeOf = (html: string) => { const at = html.indexOf("Study Narrative Summary"); return at < 0 ? "" : text(html.slice(at, html.indexOf("</p>", at))); };
+  const CLOSE = "Final approval and clinical determination must be made by the laboratory director or designee.";
+  const M1 = "Module 1 verified the geometric-mean PT/INR and the reference intervals";
+  const only1 = narrativeOf(ptStudy("PT", ptForm(), ALT).html);
+  check("6a. Module 1 only: says what Module 1 verified and that no comparison module ran, so no TEa was applied", only1.includes(`${M1}. No comparison module was performed, so no total allowable error criterion was applied.`), only1.slice(-500));
+  check("6b. Module 1 only: cites no ±20% (or any ± value), no \"Each module\", no ALT", !/±\s*\d/.test(only1) && !only1.includes("Each module") && !only1.includes("ALT"), only1.slice(-500));
+  check("6c. Module 1 only: ends with the closing sentence", only1.trim().endsWith(CLOSE), only1.slice(-200));
+
+  const m3 = ptStudy("PT", ptForm({ m3: true, tea3: 0.15 }), ALT);
+  const m3n = narrativeOf(m3.html);
+  check("6d. Module 3 alone at 15%: names Module 3 at ±15.0% and not Module 2 or 20%", m3.results.module3?.pass === true && m3n.includes("Module 3 was evaluated against the") && m3n.includes("of ±15.0%") && !m3n.includes("Module 2 was evaluated") && !m3n.includes("20.0%"), m3n.slice(-600));
+  check("6e. ... Module 1 applies no TEa; Module 3 satisfied its criterion, then the closing sentence", m3n.includes(`${M1}; it applies no total allowable error criterion. Module 3 was evaluated`) && m3n.includes(`Module 3 satisfied its criterion. ${CLOSE}`), m3n.slice(-300));
+
+  const both = ptStudy("PT", ptForm({ m2: true, m3: true, tea2: 0.2, tea3: 0.15 }), ALT);
+  const bn = narrativeOf(both.html);
+  check("6f. Module 2 at 20% and Module 3 at 15%: each with its own TEa", bn.includes("Module 2 was evaluated against the") && bn.includes("of ±20.0%") && bn.includes("Module 3 was evaluated against the") && bn.includes("of ±15.0%"), bn.slice(-800));
+  check("6g. ... each module's standing comes from its own TEa: 20% reads laboratory-defined, 15% reads the same as Module 3 alone",
+    /Module 2 was evaluated against the laboratory-defined acceptance criterion of ±20\.0%/.test(bn) && bn.includes(m3n.slice(m3n.indexOf("Module 3 was evaluated"), m3n.indexOf("Module 3 satisfied"))), bn.slice(-800));
+  check("6h. ... both satisfied their criterion", bn.includes(`Both comparison modules satisfied their criterion. ${CLOSE}`), bn.slice(-300));
+
+  const failF = ptForm({ m3: true, tea3: 0.15 });
+  failF.module3Rows.forEach((row) => { if (row.x != null) row.y = +(row.x * 1.3).toFixed(2); });
+  const fail = ptStudy("PT", failF, ALT);
+  const fn = narrativeOf(fail.html);
+  check("6i. a failing Module 3: the same sentence with \"did not satisfy\"", fail.results.module3?.pass === false && fn.includes(`Module 3 did not satisfy its criterion; see the module results for details. ${CLOSE}`), fn.slice(-300));
+  check("6j. no narrative carries an em dash or \"Each module was individually evaluated\"", ![only1, m3n, bn, fn].some((n) => n.includes("—") ||n.includes("Each module was individually evaluated")));
+}
+
 console.log(failures === 0 ? "\nALL PASS" : `\n${failures} FAILED`);
 process.exit(failures === 0 ? 0 : 1);

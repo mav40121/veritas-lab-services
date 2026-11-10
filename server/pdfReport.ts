@@ -4116,15 +4116,28 @@ export function buildPTCoagHTML(study: Study, results: any): string {
   // Narrative
   const overallVerdict = results.overallPass ? "Meets adopted acceptance criterion" : "Does not meet adopted acceptance criterion";
   const narrativeText = results.summary;
-  const ptCoagTeaStr = teaDisplayStr(study);
   const ptCoagCfr = (study as any).cfr || "42 CFR \u00A7493.941";
-  const ptCoagAdj = criterionAdjective(study.testName, study);
-  const ptCoagLabel = criterionLabel(study.testName, study);
-  const ptCoagAuthority = criterionAuthorityPhrase(study.testName, ptCoagCfr, study);
-  const ptCoagSource = criterionSourcePhrase(study.testName, "42 CFR §493.1255(b)(3)(i)", study);
-  const ptCoagCliaStatement = results.overallPass
-    ? `<b>Each module was individually evaluated against the ${ptCoagAdj} acceptance criterion (${ptCoagLabel}) of ${ptCoagTeaStr} ${ptCoagAuthority} (${ptCoagSource}). All modules satisfied this criterion.</b> Final approval and clinical determination must be made by the laboratory director or designee.`
-    : `<b>Each module was individually evaluated against the ${ptCoagAdj} acceptance criterion (${ptCoagLabel}) of ${ptCoagTeaStr} ${ptCoagAuthority} (${ptCoagSource}). One or more modules did not satisfy this criterion; see the module results for details.</b> Final approval and clinical determination must be made by the laboratory director or designee.`;
+  const CLOSING_SENTENCE_PDF = "Final approval and clinical determination must be made by the laboratory director or designee.";
+  // BUG-161: the statement names only the comparison modules that ran, each judged by the TEa it used (module.tea, the value
+  // the Supporting Data page's criterion row prints, ptCoagCriterionText), so its adopted or laboratory-defined standing and
+  // its citation come from that TEa, not from the study's saved one. Module 1 verifies the geometric-mean PT/INR and the
+  // reference intervals and applies no TEa, so a study with no comparison module cites none. Before, every PT/INR study read
+  // "Each module was individually evaluated against ... of <saved TEa>" with the picker's stray preset label, whatever ran.
+  const ptPct = (t: unknown) => (typeof t === "number" && Number.isFinite(t) ? `±${(t * 100).toFixed(1)}%` : "its own criterion");
+  const ptRan = [module2 ? { name: "Module 2", m: module2 } : null, module3 ? { name: "Module 3", m: module3 } : null].filter(Boolean) as { name: string; m: any }[];
+  const ptModuleCriterion = (r: { name: string; m: any }) => {
+    const asStored = { cliaAllowableError: r.m.tea, teaIsPercentage: 1, cliaAbsoluteFloor: null } as any;
+    return `${r.name} was evaluated against the ${criterionAdjective(study.testName, asStored)} acceptance criterion of ${ptPct(r.m.tea)} `
+      + `${criterionAuthorityPhrase(study.testName, ptCoagCfr, asStored)} (${criterionSourcePhrase(study.testName, "42 CFR §493.1255(b)(3)(i)", asStored)})`;
+  };
+  const ptM1 = `Module 1 verified the geometric-mean PT/INR and the reference intervals${isMultiInstrument ? " on each instrument" : ""}`;
+  const ptSubject = ptRan.length > 1 ? "Both comparison modules" : ptRan[0]?.name;
+  const ptCoagCliaStatement = ptRan.length === 0
+    ? `<b>${ptM1}. No comparison module was performed, so no total allowable error criterion was applied.</b> ${CLOSING_SENTENCE_PDF}`
+    : `<b>${ptM1}; it applies no total allowable error criterion. ${ptRan.map(ptModuleCriterion).join("; ")}. `
+      + (ptRan.every((r) => r.m.pass)
+        ? `${ptSubject} satisfied ${ptRan.length > 1 ? "their" : "its"} criterion.</b> ${CLOSING_SENTENCE_PDF}`
+        : `${ptSubject} did not satisfy ${ptRan.length > 1 ? "their" : "its"} criterion; see the module results for details.</b> ${CLOSING_SENTENCE_PDF}`);
   const narrative = `<div style="margin-top:12px;padding:10px 12px;background:#F7F6F2;border:1px solid #D4D1CA;border-radius:5px;">
     <div style="font-size:7.5pt;font-weight:700;color:#01696F;margin-bottom:4px;letter-spacing:0.04em;text-transform:uppercase;">Study Narrative Summary</div>
     <p style="font-size:8pt;color:#28251D;line-height:1.55;margin:0;">${narrativeText} ${ptCoagCliaStatement}</p>
