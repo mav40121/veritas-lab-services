@@ -30,6 +30,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { calculateStudy, calculateCalVerCorrelation, calculatePrecision, calculateLotToLot, calculatePTCoag, calculateQCRange, calculateMultiAnalyteCoag, calculateRefInterval, calculateQualitative, calculateSemiQuant, calculateSensitivity, type DataPoint, type PrecisionDataPoint, type LotToLotDataPoint, type RefIntervalDataPoint, type SensitivityInput, calculateINR, formatTeaCriterion } from "@/lib/calculations";
 import { buildPtCoagPayload, type PtCoagForm } from "@/lib/ptCoagPayload";
+import { splitPastedCells, fillCellsFrom } from "@/lib/pasteCells";
 import {
   GRADE_PRESETS, readStudyForms, studyDraftFields, buildPrecisionPayload, buildLotToLotPayload, buildQcRangePayload,
   buildMultiAnalyteCoagPayload, buildRefIntervalPayload, buildSensitivityInput, buildCarryoverPayload, buildLevelsPayload,
@@ -214,6 +215,43 @@ function cellFilled(v: EntryCell): boolean {
 function parseCell(value: string): EntryCell {
   const parsed = parseCensoredInput(value);
   return parsed === null ? null : (parsed.censored ?? parsed.value ?? null);
+}
+
+const isNumCell = (v: EntryCell): v is number => typeof v === "number" && !Number.isNaN(v);
+
+// PT/INR Module 1's normal-patient PT cells, one grid per instrument (BUG-149, SCAHC 2026-11-09: the grid was a
+// fixed 20 cells and a column pasted from Excel filled only the first). A cell takes what the censoring grids take
+// ("11.8", "<9.0", parsed by parseCell either way). Pasting a column, row or block fills this cell and the ones
+// after it, adding cells as needed; Add Row adds ten. A cell keeps its raw text while focused, so "11." can be
+// typed. Run Study and Save Draft save the numbers only (ptCoagPayload.ts), so a "<9.0" is shown and left out of
+// the geometric mean, and the grid says so.
+function PtNormalsGrid({ values, onChange, testId }: { values: EntryCell[]; onChange: (next: EntryCell[]) => void; testId: string }) {
+  const [drafts, setDrafts] = useState<Record<number, string>>({});
+  const censored = values.filter(isCensored).length;
+  return (
+    <>
+      <div className="grid grid-cols-5 sm:grid-cols-10 gap-1.5" data-testid={testId}>
+        {values.map((v, i) => (
+          <Input key={i} type="text" inputMode="decimal" placeholder="-" aria-label={`Normal patient PT ${i + 1}`}
+            className="h-8 text-xs text-center"
+            value={i in drafts ? drafts[i] : String(cellDisplay(v))}
+            onChange={e => { const raw = e.target.value; setDrafts(d => ({ ...d, [i]: raw })); onChange(values.map((x, xi) => (xi === i ? parseCell(raw) : x))); }}
+            onBlur={() => setDrafts(d => { if (!(i in d)) return d; const { [i]: _drop, ...rest } = d; return rest; })}
+            onPaste={e => {
+              const cells = splitPastedCells(e.clipboardData.getData("text"));
+              if (cells.length === 0) return;
+              e.preventDefault();
+              setDrafts({});
+              onChange(fillCellsFrom(values, i, cells.map(parseCell), null));
+            }} />
+        ))}
+      </div>
+      <Button type="button" variant="outline" size="sm" onClick={() => onChange([...values, ...Array(10).fill(null)])} data-testid={`${testId}-add-row`}>
+        <PlusCircle size={12} className="mr-1" />Add Row
+      </Button>
+      {censored > 0 && <p className="text-xs text-muted-foreground">{censored === 1 ? "1 value" : `${censored} values`} entered with &lt; or &gt; {censored === 1 ? "is" : "are"} shown but not used in the geometric mean.</p>}
+    </>
+  );
 }
 
 // Reference-interval specimens widened to accept a censored value.
@@ -667,9 +705,11 @@ export default function VeritaCheckPage() {
       // map to Instrument 1. Instruments 2..N (if any) fill ptAddlInstruments.
       if (studyTypeForHydrate === "pt_coag" && dpParsed && typeof dpParsed === "object" && !Array.isArray(dpParsed)) {
         const dp = dpParsed as any;
+        // At least the 20 cells the form opens with, and every saved value: a study with more than 20 normals
+        // (BUG-149: the grid now grows) reopens with all of them, not the first 20.
         const fill20 = (src: any): (number | null)[] => {
-          const out: (number | null)[] = Array(20).fill(null);
-          if (Array.isArray(src)) src.slice(0, 20).forEach((v: any, i: number) => { out[i] = typeof v === "number" && !isNaN(v) ? v : null; });
+          const out: (number | null)[] = Array(Math.max(20, Array.isArray(src) ? src.length : 0)).fill(null);
+          if (Array.isArray(src)) src.forEach((v: any, i: number) => { out[i] = typeof v === "number" && !isNaN(v) ? v : null; });
           return out;
         };
         const insts = Array.isArray(dp.module1Instruments) && dp.module1Instruments.length > 0 ? dp.module1Instruments : null;
@@ -684,7 +724,7 @@ export default function VeritaCheckPage() {
           if (primary.ptRI && typeof primary.ptRI.high === "number") setPtRIHigh(primary.ptRI.high);
           if (primary.inrRI && typeof primary.inrRI.low === "number") setPtINRRILow(primary.inrRI.low);
           if (primary.inrRI && typeof primary.inrRI.high === "number") setPtINRRIHigh(primary.inrRI.high);
-          setPtModule1Data(fill20(primary.ptValues) as any);
+          setPtModule1Data(fill20(primary.ptValues));
         }
         if (insts && insts.length > 1) {
           setPtAddlInstruments(insts.slice(1).map((b: any) => ({
@@ -1033,15 +1073,17 @@ export default function VeritaCheckPage() {
   const [ptRIHigh, setPtRIHigh] = useState(14.0);
   const [ptINRRILow, setPtINRRILow] = useState(0.9);
   const [ptINRRIHigh, setPtINRRIHigh] = useState(1.2);
-  const [ptModule1Data, setPtModule1Data] = useState<number[]>(Array(20).fill(null));
+  // Normal-patient PT cells: 20 to start, more by paste or Add Row (BUG-149). A cell may hold a censored "<9.0".
+  const [ptModule1Data, setPtModule1Data] = useState<EntryCell[]>(Array(20).fill(null));
   // Additional instruments (symmetric multi-instrument geomean). Instrument 1 is
   // the singular pt* state above; instruments 2..N live here, each with its own
   // geomean inputs. Empty array = a single-instrument study (backward compatible).
-  type PtInstrumentBlock = { name: string; reagentLot: string; reagentExp: string; isi: number; ptRILow: number; ptRIHigh: number; inrRILow: number; inrRIHigh: number; ptValues: (number | null)[] };
+  type PtInstrumentBlock = { name: string; reagentLot: string; reagentExp: string; isi: number; ptRILow: number; ptRIHigh: number; inrRILow: number; inrRIHigh: number; ptValues: EntryCell[] };
   const [ptAddlInstruments, setPtAddlInstruments] = useState<PtInstrumentBlock[]>([]);
   const addPtInstrument = () => setPtAddlInstruments(p => [...p, { name: "", reagentLot: "", reagentExp: "", isi: 0.97, ptRILow: 10, ptRIHigh: 14, inrRILow: 0.9, inrRIHigh: 1.2, ptValues: Array(20).fill(null) }]);
   const patchPtInstrument = (i: number, patch: Partial<PtInstrumentBlock>) => setPtAddlInstruments(p => p.map((b, idx) => idx === i ? { ...b, ...patch } : b));
-  const setPtInstrumentValue = (i: number, ci: number, v: number | null) => setPtAddlInstruments(p => p.map((b, idx) => idx === i ? { ...b, ptValues: b.ptValues.map((x, xi) => xi === ci ? v : x) } : b));
+  // The payload builder takes numbers: a censored cell goes in as empty, so it is left out (the default "exclude").
+  const ptNumbers = (cells: EntryCell[]): (number | null)[] => cells.map(v => (isNumCell(v) ? v : null));
   // Module 2
   const [ptInstrument2Name, setPtInstrument2Name] = useState("ACL TOP 352");
   const [ptModule2TEa, setPtModule2TEa] = useState(0.20);
@@ -1058,8 +1100,8 @@ export default function VeritaCheckPage() {
   );
   // The PT/INR form as buildPtCoagPayload reads it (Run Study and Save Draft).
   const ptCoagForm = (): PtCoagForm => ({
-    instrument1: { name: ptInstrumentName, reagentLot: ptReagentLot, reagentExp: ptReagentExp, isi: ptISI, ptRILow, ptRIHigh, inrRILow: ptINRRILow, inrRIHigh: ptINRRIHigh, ptValues: ptModule1Data },
-    addlInstruments: ptAddlInstruments,
+    instrument1: { name: ptInstrumentName, reagentLot: ptReagentLot, reagentExp: ptReagentExp, isi: ptISI, ptRILow, ptRIHigh, inrRILow: ptINRRILow, inrRIHigh: ptINRRIHigh, ptValues: ptNumbers(ptModule1Data) },
+    addlInstruments: ptAddlInstruments.map(b => ({ ...b, ptValues: ptNumbers(b.ptValues) })),
     instrument2Name: ptInstrument2Name, module2Rows: ptModule2Data, module2TEa: ptModule2TEa,
     skipModule3: ptSkipModule3, module3Rows: ptModule3Data, module3TEa: ptModule3TEa, oldLotNum: ptOldLotNum,
   });
@@ -1540,7 +1582,7 @@ export default function VeritaCheckPage() {
     : studyType === "lot_to_lot"
     ? lotData.filter(dp => dp.currentLot !== null && dp.newLot !== null).length + (lotSampleType === "both" ? lotDataAbnormal.filter(dp => dp.currentLot !== null && dp.newLot !== null).length : 0)
     : studyType === "pt_coag"
-    ? ptModule1Data.filter(v => v !== null && !isNaN(v)).length
+    ? ptModule1Data.filter(isNumCell).length
     : studyType === "qc_range"
     ? Object.values(qcRunData).filter(arr => arr.filter(v => !isNaN(v)).length >= 3).length
     : studyType === "multi_analyte_coag"
@@ -3231,14 +3273,9 @@ return (
                       </div>
                       <div className="space-y-2">
                         <div className="text-sm font-medium">Normal Patient PT Results (seconds)</div>
-                        <div className="grid grid-cols-5 sm:grid-cols-10 gap-1.5">
-                          {ptModule1Data.map((v, i) => (
-                            <DecimalInput key={i} step="any" placeholder="-" value={v ?? NaN} fallback={NaN}
-                              onChangeNumber={n => { const d = [...ptModule1Data]; d[i] = Number.isNaN(n) ? (null as any) : n; setPtModule1Data(d); }}
-                              className="h-8 text-xs text-center" />
-                          ))}
-                        </div>
-                        {ptModule1Data.filter(v => v !== null && !isNaN(v)).length < 20 && <p className="text-xs text-amber-500">Minimum 20 normal specimens recommended</p>}
+                        <p className="text-xs text-muted-foreground">Paste a column from Excel into the first cell to fill the cells after it.</p>
+                        <PtNormalsGrid values={ptModule1Data} onChange={setPtModule1Data} testId="pt-normals-1" />
+                        {ptModule1Data.filter(isNumCell).length < 20 && <p className="text-xs text-amber-500">Minimum 20 normal specimens recommended</p>}
                       </div>
                       {/* Additional instruments: each analyzer gets its own geomean + RI verification. */}
                       {ptAddlInstruments.map((blk, ai) => (
@@ -3263,12 +3300,8 @@ return (
                           </div>
                           <div className="space-y-2">
                             <div className="text-sm font-medium">Normal Patient PT Results (seconds)</div>
-                            <div className="grid grid-cols-5 sm:grid-cols-10 gap-1.5">
-                              {blk.ptValues.map((v, ci) => (
-                                <DecimalInput key={ci} step="any" placeholder="-" value={v ?? NaN} fallback={NaN} onChangeNumber={n => setPtInstrumentValue(ai, ci, Number.isNaN(n) ? null : n)} className="h-8 text-xs text-center" />
-                              ))}
-                            </div>
-                            {blk.ptValues.filter(v => v !== null && !isNaN(v as number)).length < 20 && <p className="text-xs text-amber-500">Minimum 20 normal specimens recommended</p>}
+                            <PtNormalsGrid values={blk.ptValues} onChange={next => patchPtInstrument(ai, { ptValues: next })} testId={`pt-normals-${ai + 2}`} />
+                            {blk.ptValues.filter(isNumCell).length < 20 && <p className="text-xs text-amber-500">Minimum 20 normal specimens recommended</p>}
                           </div>
                         </div>
                       ))}
