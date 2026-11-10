@@ -34,7 +34,7 @@ import { splitPastedCells, fillCellsFrom } from "@/lib/pasteCells";
 import {
   GRADE_PRESETS, readStudyForms, studyDraftFields, buildPrecisionPayload, buildLotToLotPayload, buildQcRangePayload,
   buildMultiAnalyteCoagPayload, buildRefIntervalPayload, buildSensitivityInput, buildCarryoverPayload, buildLevelsPayload,
-  methodComparisonDataPoints, type StudyForms, type LevelsForm, type GridForm,
+  methodComparisonDataPoints, criterionOf, readCriterionForm, type StudyForms, type LevelsForm, type GridForm, type SavedCriterion,
 } from "@/lib/studyFormPayload";
 import { teaData } from "@/lib/cliaTeaData";
 import { useAuth } from "@/components/AuthContext";
@@ -580,6 +580,9 @@ export default function VeritaCheckPage() {
   // two fields give the CUSTOM path the same capability. Null floor = percent-only.
   const [customAbsFloor, setCustomAbsFloor] = useState<number | null>(null);
   const [customAbsUnit, setCustomAbsUnit] = useState("");
+  // Edit of a study whose saved criterion no preset or custom entry gives back exactly (saved before preset labels, a
+  // label no preset carries now, a floor its preset doesn't have): held as saved until the tech picks another (BUG-153).
+  const [savedCriterion, setSavedCriterion] = useState<SavedCriterion | null>(null);
   const [numLevels, setNumLevels] = useState(DEFAULT_LEVELS);
   const [dataPoints, setDataPoints] = useState<EntryDataPoint[]>(makeEmptyPoints(["Instrument 1", "Instrument 2"], DEFAULT_LEVELS));
 
@@ -611,14 +614,16 @@ export default function VeritaCheckPage() {
       }
       const dpRaw = editStudy.data_points ?? editStudy.dataPoints;
       const dpParsed = typeof dpRaw === "string" ? JSON.parse(dpRaw || "[]") : (dpRaw ?? []);
-      const tea = editStudy.clia_allowable_error ?? editStudy.cliaAllowableError;
-      if (typeof tea === "number") setCustomClia(tea);
-      // Rehydrate a saved dual-criterion floor so re-saving a lab-defined study
-      // preserves it (mirrors the customClia restore above).
-      const savedAbsFloor = editStudy.clia_absolute_floor ?? editStudy.cliaAbsoluteFloor;
-      if (typeof savedAbsFloor === "number") setCustomAbsFloor(savedAbsFloor);
-      const savedAbsUnit = editStudy.clia_absolute_unit ?? editStudy.cliaAbsoluteUnit;
-      if (typeof savedAbsUnit === "string" && savedAbsUnit) setCustomAbsUnit(savedAbsUnit);
+      // The acceptance criterion as saved (BUG-153: the picker stayed on its first preset, ALT/SGPT, and only the custom
+      // box got the saved value, so a re-run from Edit was judged on ALT). The preset its label names, Custom with the
+      // saved value and floor for "Lab-defined", or the saved criterion held as it is (studyFormPayload.ts).
+      const crit = readCriterionForm(editStudy, CLIA_PRESETS);
+      setCliaPreset(crit.presetIndex);
+      if (crit.presetIndex !== CLIA_PRESETS.length - 1) prevAnalytePresetRef.current = crit.presetIndex;
+      if (crit.custom) {
+        setCustomClia(crit.custom.clia); setCustomAbsFloor(crit.custom.absFloor); setCustomAbsUnit(crit.custom.absUnit);
+      }
+      setSavedCriterion(crit.saved);
       const studyTypeForHydrate = editStudy.study_type ?? editStudy.studyType;
       // Every form but PT/INR (below) reads back through studyFormPayload.ts, for a draft or a finished study
       // (BUG-146: Edit read only the grid, carryover, accuracy/bias, linearity and reportable range).
@@ -1448,28 +1453,18 @@ export default function VeritaCheckPage() {
     else gridRefs.current.delete(key);
   }, []);
 
-  const cliaValue = CLIA_PRESETS[cliaPreset].value !== 0 ? CLIA_PRESETS[cliaPreset].value : customClia;
-  const teaIsPercentage = (CLIA_PRESETS[cliaPreset] as any).isPercentage !== false;
-  const teaUnit = (CLIA_PRESETS[cliaPreset] as any).unit || '%';
-  const isCustomTea = cliaPreset === CLIA_PRESETS.length - 1;
-  // A custom absolute floor only "counts" when it is a positive number; empty or
-  // zero resolves to null (a 0 floor would make max(pct, 0) pass everything).
-  const customAbsFloorResolved: number | null = (isCustomTea && customAbsFloor != null && customAbsFloor > 0) ? customAbsFloor : null;
-  const cliaAbsoluteFloor: number | null = isCustomTea
-    ? customAbsFloorResolved
-    : ((CLIA_PRESETS[cliaPreset] as any).absoluteFloor ?? null);
-  const cliaAbsoluteUnit: string | null = isCustomTea
-    ? (customAbsFloorResolved != null ? (customAbsUnit.trim() || null) : null)
-    : ((CLIA_PRESETS[cliaPreset] as any).absoluteUnit ?? null);
-  // The picked CLIA preset label, frozen at study-save time. Travels with the
-  // study so the report (PDF and on-screen) can show
-  // "CLIA TEa: 8% or 5 mm Hg (pCO2, Blood Gas Analyzer)" and any
-  // adjacency-slip mistake at preset-select time becomes visible at
-  // report-review time. "Lab-defined" when the user chose the Custom branch.
-  // Customer report 2026-06-04.
-  const cliaPresetLabel: string = CLIA_PRESETS[cliaPreset].value !== 0
-    ? (CLIA_PRESETS[cliaPreset] as any).label
-    : "Lab-defined";
+  // The criterion the study is saved and judged with: the picked preset, the custom box (a custom absolute floor only
+  // counts when it is a positive number), or the saved criterion Edit is holding (studyFormPayload.ts criterionOf).
+  // The preset label is frozen at study-save time and travels with the study so the report (PDF and on-screen) can
+  // show "CLIA TEa: 8% or 5 mm Hg (pCO2, Blood Gas Analyzer)", and any adjacency-slip mistake at preset-select time
+  // becomes visible at report-review time; "Lab-defined" for the Custom branch (customer report 2026-06-04).
+  const activeCriterion = criterionOf(CLIA_PRESETS, { presetIndex: cliaPreset, customClia, customAbsFloor, customAbsUnit, saved: savedCriterion });
+  const cliaValue = activeCriterion.cliaValue;
+  const teaIsPercentage = activeCriterion.teaIsPercentage;
+  const teaUnit = activeCriterion.teaUnit;
+  const cliaAbsoluteFloor: number | null = activeCriterion.cliaAbsoluteFloor;
+  const cliaAbsoluteUnit: string | null = activeCriterion.cliaAbsoluteUnit;
+  const cliaPresetLabel: string | null = activeCriterion.cliaPresetLabel;
 
   const handleGridKeyDown = (e: React.KeyboardEvent, row: number, col: number) => {
     if (e.key !== "Tab") return;
@@ -2010,15 +2005,15 @@ export default function VeritaCheckPage() {
 
     if (studyType === "accuracy_bias") {
       if (!abAnalyte.trim()) { toast({ title: "Enter the analyte name", variant: "destructive" }); return; }
-      const selectedPreset = CLIA_PRESETS[cliaPreset];
-      const tea = selectedPreset?.value && selectedPreset.value !== 0 ? selectedPreset.value : customClia;
+      // The active criterion (the picked preset, the custom box, or the one Edit holds as saved, BUG-153).
+      const tea = cliaValue;
       // Dual-criterion S493: when the selected CLIA preset carries an absolute
       // floor (e.g. Sodium ±4 mmol/L, ALT/SGPT ±15% or ±6 U/L), persist it so
       // the server evaluator + screen render + PDF can apply
       // max(percent_allowance, absolute_floor) at every level.
-      const presetIsPercentage = (selectedPreset as any)?.isPercentage !== false;
+      const presetIsPercentage = teaIsPercentage;
       // cliaAbsoluteFloor/Unit already fold in the custom (lab-defined) dual
-      // criterion; for a preset they equal selectedPreset's own floor/unit.
+      // criterion; for a preset they equal the preset's own floor/unit.
       const presetAbsFloor: number | null = presetIsPercentage ? cliaAbsoluteFloor : null;
       const presetAbsUnit: string | null = presetIsPercentage ? cliaAbsoluteUnit : null;
       const FP_EPS = 1e-9;
@@ -2094,11 +2089,11 @@ export default function VeritaCheckPage() {
 
     if (studyType === "linearity") {
       if (!linAnalyte.trim()) { toast({ title: "Enter the analyte name", variant: "destructive" }); return; }
-      const selectedPreset = CLIA_PRESETS[cliaPreset];
-      const tea = selectedPreset?.value && selectedPreset.value !== 0 ? selectedPreset.value : customClia;
-      const presetIsPercentage = (selectedPreset as any)?.isPercentage !== false;
+      // The active criterion (the picked preset, the custom box, or the one Edit holds as saved, BUG-153).
+      const tea = cliaValue;
+      const presetIsPercentage = teaIsPercentage;
       // cliaAbsoluteFloor/Unit already fold in the custom (lab-defined) dual
-      // criterion; for a preset they equal selectedPreset's own floor/unit.
+      // criterion; for a preset they equal the preset's own floor/unit.
       const presetAbsFloor: number | null = presetIsPercentage ? cliaAbsoluteFloor : null;
       const presetAbsUnit: string | null = presetIsPercentage ? cliaAbsoluteUnit : null;
       const FP_EPS = 1e-9;
@@ -2203,11 +2198,11 @@ export default function VeritaCheckPage() {
 
     if (studyType === "reportable_range") {
       if (!rrAnalyte.trim()) { toast({ title: "Enter the analyte name", variant: "destructive" }); return; }
-      const selectedPreset = CLIA_PRESETS[cliaPreset];
-      const tea = selectedPreset?.value && selectedPreset.value !== 0 ? selectedPreset.value : customClia;
-      const presetIsPercentage = (selectedPreset as any)?.isPercentage !== false;
+      // The active criterion (the picked preset, the custom box, or the one Edit holds as saved, BUG-153).
+      const tea = cliaValue;
+      const presetIsPercentage = teaIsPercentage;
       // cliaAbsoluteFloor/Unit already fold in the custom (lab-defined) dual
-      // criterion; for a preset they equal selectedPreset's own floor/unit.
+      // criterion; for a preset they equal the preset's own floor/unit.
       const presetAbsFloor: number | null = presetIsPercentage ? cliaAbsoluteFloor : null;
       const presetAbsUnit: string | null = presetIsPercentage ? cliaAbsoluteUnit : null;
       const FP_EPS = 1e-9;
@@ -3008,16 +3003,25 @@ return (
                     // unchecking the box returns the user to their prior analyte rather than dropping them
                     // at the default.
                     const customIdx = CLIA_PRESETS.length - 1;
-                    const customMode = cliaPreset === customIdx;
+                    // While Edit holds the saved criterion (BUG-153), the picker shows it as its own entry; picking any
+                    // preset or the custom box replaces it.
+                    const customMode = !savedCriterion && cliaPreset === customIdx;
                     return (
                       <>
                         <Select
-                          value={String(cliaPreset)}
-                          onValueChange={v => { const i = parseInt(v); prevAnalytePresetRef.current = i; setCliaPreset(i); }}
+                          value={savedCriterion ? "saved" : String(cliaPreset)}
+                          onValueChange={v => { if (v === "saved") return; const i = parseInt(v); prevAnalytePresetRef.current = i; setSavedCriterion(null); setCliaPreset(i); }}
                           disabled={customMode}
                         >
-                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectTrigger data-testid="tea-preset-trigger"><SelectValue /></SelectTrigger>
                           <SelectContent>
+                            {savedCriterion && (
+                              <SelectGroup><SelectLabel className="text-xs text-muted-foreground">As saved with this study</SelectLabel>
+                                <SelectItem value="saved" data-testid="tea-as-saved">
+                                  {`${savedCriterion.label ?? "No preset named"}: ${formatTeaCriterion({ isPercentage: savedCriterion.isPercentage, value: savedCriterion.value, absoluteFloor: savedCriterion.absoluteFloor, absoluteUnit: savedCriterion.absoluteUnit, valueUnit: savedCriterion.unit })}`}
+                                </SelectItem>
+                              </SelectGroup>
+                            )}
                             <SelectGroup><SelectLabel className="text-xs text-muted-foreground">Routine Chemistry §493.931</SelectLabel>
                               {/*
                                * Adjacency-slip mitigation (Tier 2, 2026-06-04). The CO2 cluster at
@@ -3052,6 +3056,9 @@ return (
                             </SelectGroup>
                           </SelectContent>
                         </Select>
+                        {savedCriterion && (
+                          <p className="text-xs text-muted-foreground" data-testid="tea-as-saved-note">This study keeps the criterion it was saved with. Pick a preset or check the box below to change it.</p>
+                        )}
                         <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-700/50 px-3 py-2.5">
                           <p className="text-sm text-amber-900 dark:text-amber-200 leading-snug">
                             <strong>Don&apos;t see your analyte?</strong> Not every analyte has a preset. Some that are not listed still have a CLIA PT limit in 42 CFR Part 493, Subpart I (for example, the general immunology analytes in {"§"}493.927), and others have none. Check the box below and enter your lab-defined goal.
@@ -3063,7 +3070,8 @@ return (
                             checked={customMode}
                             onCheckedChange={(checked) => {
                               if (checked) {
-                                if (cliaPreset !== customIdx) prevAnalytePresetRef.current = cliaPreset;
+                                if (!savedCriterion && cliaPreset !== customIdx) prevAnalytePresetRef.current = cliaPreset;
+                                setSavedCriterion(null);
                                 setCliaPreset(customIdx);
                               } else {
                                 const restore = prevAnalytePresetRef.current === customIdx ? 0 : prevAnalytePresetRef.current;
@@ -3113,7 +3121,7 @@ return (
                       </>
                     );
                   })()}
-                  {CLIA_PRESETS[cliaPreset].cfr && <p className="text-xs text-muted-foreground">Reference: {CLIA_PRESETS[cliaPreset].cfr}</p>}
+                  {(!savedCriterion || savedCriterion.label === CLIA_PRESETS[cliaPreset].label) && CLIA_PRESETS[cliaPreset].cfr && <p className="text-xs text-muted-foreground">Reference: {CLIA_PRESETS[cliaPreset].cfr}</p>}
                   <div className="rounded-md bg-primary/5 border border-primary/20 p-3">
                     <p className="text-xs text-primary font-medium">Active TEa: {formatTeaCriterion({ isPercentage: teaIsPercentage, value: cliaValue, absoluteFloor: cliaAbsoluteFloor, absoluteUnit: cliaAbsoluteUnit, valueUnit: teaUnit })}</p>
                   </div>
@@ -4737,7 +4745,7 @@ return (
                   setTestName("GC1 CREAT"); setAnalyst("SED"); setDate("2025-02-06");
                   // Creatinine preset (index 19): ±10% or ±0.2 mg/dL, dual-criterion (greater).
                   // Was previously setCliaPreset(0) which loaded ALT/SGPT (±15%) by mistake.
-                  const names = ["ATELLICA 2 Run 1", "ATELLICA 2 Run 2"]; setInstrumentNames(names); setCliaPreset(19);
+                  const names = ["ATELLICA 2 Run 1", "ATELLICA 2 Run 2"]; setInstrumentNames(names); setSavedCriterion(null); setCliaPreset(19);
                 const demoData = [
                     { level: 1, expectedValue: 0.3, instrumentValues: { "ATELLICA 2 Run 1": 0.31, "ATELLICA 2 Run 2": 0.29 } },
                     { level: 2, expectedValue: 7.0, instrumentValues: { "ATELLICA 2 Run 1": 7.37, "ATELLICA 2 Run 2": 7.37 } },

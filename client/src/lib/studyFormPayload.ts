@@ -557,6 +557,92 @@ function readGrid(dp: unknown, studyType: string): GridRead | null {
   };
 }
 
+// ── The acceptance criterion picker ─────────────────────────────────────────
+// BUG-153 (found 2026-11-10 while fixing BUG-146): Edit put the saved value in the custom box and left the picker on
+// its first preset (ALT/SGPT, ±15% or ±6 U/L), so a re-run from Edit was judged on ALT unless the tech picked the
+// criterion again. readCriterionForm puts the saved criterion back; criterionOf is what the page saves from the picker.
+// The presets stay in VeritaCheckPage.tsx (scripts pin their order there) and are passed in.
+export interface CriterionPreset { label: string; value: number; isPercentage?: boolean; unit?: string; absoluteFloor?: number; absoluteUnit?: string }
+// A criterion as stored: value is a fraction when isPercentage, else the number itself in its unit (Sodium 4 mmol/L).
+export interface SavedCriterion { value: number; isPercentage: boolean; unit: string | null; absoluteFloor: number | null; absoluteUnit: string | null; label: string | null }
+export interface CriterionPick {
+  presetIndex: number;
+  customClia: number; customAbsFloor: number | null; customAbsUnit: string;
+  saved: SavedCriterion | null;   // Edit holds the saved criterion as it is until the tech picks another
+}
+export interface Criterion {
+  cliaValue: number; teaIsPercentage: boolean; teaUnit: string;
+  cliaAbsoluteFloor: number | null; cliaAbsoluteUnit: string | null; cliaPresetLabel: string | null;
+}
+export const LAB_DEFINED_LABEL = "Lab-defined";
+// The study types whose Run Study stores its own fixed criterion and takes only the label from the picker.
+const FIXED_CRITERION_TYPES = new Set(["qc_range", "multi_analyte_coag", "ref_interval", "carryover", "pt_coag", "sensitivity"]);
+
+// What the page saves from the picker: the preset's criterion, the custom box (the last preset, "Custom"; a lab-set
+// preset with no CLIA value also reads the box), or the saved criterion Edit is holding.
+export function criterionOf(presets: CriterionPreset[], s: CriterionPick): Criterion {
+  if (s.saved) {
+    const v = s.saved;
+    return { cliaValue: v.value, teaIsPercentage: v.isPercentage, teaUnit: v.unit ?? (v.isPercentage ? "%" : ""), cliaAbsoluteFloor: v.absoluteFloor, cliaAbsoluteUnit: v.absoluteUnit, cliaPresetLabel: v.label };
+  }
+  const p = presets[s.presetIndex] ?? presets[0];
+  const isCustom = s.presetIndex === presets.length - 1;
+  // A custom floor counts only when it is a positive number (a 0 floor would make max(pct, 0) pass everything).
+  const floor = isCustom && s.customAbsFloor != null && s.customAbsFloor > 0 ? s.customAbsFloor : null;
+  return {
+    cliaValue: p.value !== 0 ? p.value : s.customClia,
+    teaIsPercentage: p.isPercentage !== false,
+    teaUnit: p.unit || "%",
+    cliaAbsoluteFloor: isCustom ? floor : (p.absoluteFloor ?? null),
+    cliaAbsoluteUnit: isCustom ? (floor != null ? (s.customAbsUnit.trim() || null) : null) : (p.absoluteUnit ?? null),
+    cliaPresetLabel: p.value !== 0 ? p.label : LAB_DEFINED_LABEL,
+  };
+}
+
+// What Edit puts in the picker for a saved draft or finished study: the preset its label names, or Custom with the
+// saved value and floor for "Lab-defined". When that pick doesn't give back the saved value, percent or units, and
+// floor (a row saved before preset labels, a label no preset carries now, or a floor its preset doesn't have), Edit
+// holds the saved criterion as it is (`saved`), so nothing changes unless the tech picks another criterion. A type
+// that stores its own fixed criterion only needs its label back. The value's unit (teaUnit) isn't compared: Run Study
+// writes it from the preset, or for accuracy/bias, linearity and reportable range from the form's units, as it did.
+export function readCriterionForm(row: any, presets: CriterionPreset[]): { presetIndex: number; custom: { clia: number; absFloor: number | null; absUnit: string } | null; saved: SavedCriterion | null } {
+  const studyType: string = row?.studyType ?? row?.study_type ?? "";
+  const rawValue = row?.cliaAllowableError ?? row?.clia_allowable_error;
+  const pct = row?.teaIsPercentage ?? row?.tea_is_percentage;
+  const unit = row?.teaUnit ?? row?.tea_unit;
+  const floor = row?.cliaAbsoluteFloor ?? row?.clia_absolute_floor;
+  const floorUnit = row?.cliaAbsoluteUnit ?? row?.clia_absolute_unit;
+  const label = row?.cliaPresetLabel ?? row?.clia_preset_label;
+  const saved: SavedCriterion = {
+    value: isNum(rawValue) ? rawValue : 0,
+    isPercentage: pct !== 0,   // as the server reads it: only 0 is a units criterion
+    unit: typeof unit === "string" ? unit : null,
+    absoluteFloor: isNum(floor) ? floor : null,
+    absoluteUnit: typeof floorUnit === "string" && floorUnit ? floorUnit : null,
+    label: typeof label === "string" && label.trim() ? label.trim() : null,
+  };
+  const customIdx = presets.length - 1;
+  let presetIndex = -1;
+  let custom: { clia: number; absFloor: number | null; absUnit: string } | null = null;
+  if (saved.label === LAB_DEFINED_LABEL) {
+    presetIndex = customIdx;
+    custom = { clia: saved.value, absFloor: saved.absoluteFloor, absUnit: saved.absoluteUnit ?? "" };
+  } else if (saved.label) {
+    presetIndex = presets.findIndex((p, i) => i !== customIdx && p.value !== 0 && p.label === saved.label);
+  }
+  const found = presetIndex >= 0;
+  let reproduces = found;
+  if (found && !FIXED_CRITERION_TYPES.has(studyType)) {
+    const c = criterionOf(presets, { presetIndex, customClia: custom?.clia ?? 0, customAbsFloor: custom?.absFloor ?? null, customAbsUnit: custom?.absUnit ?? "", saved: null });
+    const unitKey = (u: string | null) => (u ?? "").replace(/\s+/g, "").toLowerCase();
+    reproduces = Math.abs(c.cliaValue - saved.value) < 1e-9
+      && c.teaIsPercentage === saved.isPercentage
+      && (c.cliaAbsoluteFloor ?? null) === (saved.absoluteFloor != null && saved.absoluteFloor > 0 ? saved.absoluteFloor : null)
+      && (c.cliaAbsoluteFloor == null || unitKey(c.cliaAbsoluteUnit) === unitKey(saved.absoluteUnit));
+  }
+  return { presetIndex: found ? presetIndex : 0, custom, saved: reproduces ? null : saved };
+}
+
 // ── Save Draft and Edit ─────────────────────────────────────────────────────
 export interface StudyForms {
   precision: PrecisionForm;
