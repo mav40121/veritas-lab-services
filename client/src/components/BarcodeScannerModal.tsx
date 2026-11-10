@@ -40,6 +40,24 @@ const SCANNER_ELEMENT_ID = "vls-barcode-scanner";
 const FILE_SCAN_ELEMENT_ID = "vls-file-scan-container";
 const DUPLICATE_SCAN_COOLDOWN_MS = 1500;
 
+// BUG-166 (2026-11-10): html5-qrcode's stop() THROWS, synchronously and as a string ("Cannot stop, scanner is not
+// running or paused."), when the camera isn't running: it never started (refused, unsupported, no camera) or is still
+// starting. Called bare in the effect cleanup on close, the throw reached the error boundary and replaced the page with
+// "Something went wrong". Every stop on close goes through here. A scanner still starting is stopped by init() once its
+// start() resolves (the `cancelled` check), so nothing is left holding the camera.
+function stopScannerQuietly(s: any): void {
+  if (!s || typeof s.stop !== "function") return;
+  let stopping: unknown;
+  try {
+    stopping = s.stop();
+  } catch {
+    return; // not running: nothing holds the camera
+  }
+  Promise.resolve(stopping)
+    .then(() => { try { s.clear?.(); } catch { /* element already gone */ } })
+    .catch(() => {});
+}
+
 export type ScanAction = "decrement" | "increment" | "lookup_only" | "correction";
 
 interface InventoryLite {
@@ -288,9 +306,8 @@ export default function BarcodeScannerModal({
           () => {} // ignore per-frame decode failures
         );
         if (cancelled) {
-          await scanner.stop().catch(() => {});
-          scanner.clear();
-          scannerRef.current = null;
+          // Closed while starting. The cleanup already cleared scannerRef; leave it alone so a reopen's scanner stays.
+          stopScannerQuietly(scanner);
           return;
         }
         setIsStarting(false);
@@ -305,9 +322,7 @@ export default function BarcodeScannerModal({
       cancelled = true;
       const s = scannerRef.current;
       scannerRef.current = null;
-      if (s && typeof s.stop === "function") {
-        s.stop().then(() => s.clear?.()).catch(() => {});
-      }
+      stopScannerQuietly(s);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
