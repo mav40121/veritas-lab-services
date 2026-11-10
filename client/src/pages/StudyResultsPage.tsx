@@ -8,6 +8,7 @@ import { StudyCensoringPolicyDialog } from "@/components/StudyCensoringPolicyDia
 import { StudyArchiveDialog } from "@/components/StudyArchiveDialog";
 import { StudyNotes } from "@/components/StudyNotes";
 import { hasRunDetails, runDetailRows } from "@shared/studyRunDetails";
+import { studyLotRows } from "@shared/studyLotRows";
 import { generateNarrative, studyTeaDisplay as formatTeaDisplay, isUnitsCriterion } from "@/lib/studyNarrative";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -531,6 +532,8 @@ function UserSpecs({ study, instrumentNames }: { study: Study; instrumentNames: 
             ["Instruments / Methods", instrumentNames.join(", ")],
             // Correlation run details (2026-10-26): specimen type, units, each analyzer's lots and date run, comment.
             ...(hasRunDetails(study.studyType) ? runDetailRows(study as any, instrumentNames) : []),
+            // BUG-158: the lots a lot-to-lot or PT/INR Module 3 study was run on, with their expiration dates.
+            ...studyLotRows(study as any),
           ].map(([label, value]) => (
             <div key={label} className="flex justify-between py-1.5 border-b border-border/40">
               <span className="text-muted-foreground">{label}</span>
