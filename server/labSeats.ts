@@ -99,3 +99,85 @@ export function labSeatSummary(sqlite: any, labId: number): LabSeatSummary | nul
   }
   return { activeIncluded, activeUsed: active + 1, medicalDirectorUsed: md, pooled: false, ...staff };
 }
+
+// BUG-096 (found 2026-10-25): measuring before deciding. Seats are counted from user_seats rows, so a lab admin who
+// holds no seat row is never counted: Heywood's original owner became an admin when ownership moved to its medical
+// director and was never given one, so the Members page read 1 of 10 with two people writing. Counting such people
+// would also change the invite gate (it refuses a writer invite once activeUsed + 1 > activeIncluded), so this
+// counts, per lab, the active owner or admin members who are writing without a seat row (not the lab's owner, not a
+// Veritas support account, not a medical director, who sits on the free seat) and what the count and the gate would
+// read with them. It changes nothing. GET /api/admin/seat-count-gaps sends it; lab ids and counts only, no names.
+export type SeatCountGapRow = {
+  labId: number; isDemo: boolean; pooled: boolean;
+  activeIncluded: number; activeUsed: number; uncountedAdmins: number; usedIfCounted: number;
+  overNow: boolean; overIfCounted: boolean;
+  nextInviteRefusedNow: boolean; nextInviteRefusedIfCounted: boolean;
+};
+
+export function seatCountGaps(sqlite: any): { totals: Record<string, number>; labs: SeatCountGapRow[] } {
+  const labs = sqlite.prepare("SELECT id, owner_user_id, organization_id, medical_director_email, COALESCE(is_demo, 0) AS is_demo FROM labs ORDER BY id").all() as any[];
+  const mdByOwner = new Map<number, Set<string>>();
+  for (const l of labs) {
+    const e = String(l.medical_director_email || "").trim().toLowerCase();
+    if (!e) continue;
+    if (!mdByOwner.has(l.owner_user_id)) mdByOwner.set(l.owner_user_id, new Set());
+    mdByOwner.get(l.owner_user_id)!.add(e);
+  }
+  const membersOf = sqlite.prepare(
+    `SELECT m.user_id AS u, lower(u.email) AS e FROM lab_members m JOIN users u ON u.id = m.user_id
+      WHERE m.lab_id = ? AND m.status = 'active' AND m.role IN ('owner', 'admin') AND COALESCE(u.vls_support, 0) = 0`
+  );
+  const seatsByLab = sqlite.prepare("SELECT seat_user_id AS u, lower(seat_email) AS e FROM user_seats WHERE lab_id = ? AND status != 'deactivated' AND COALESCE(seat_type, 'active') = 'active'");
+  const seatsByOwner = sqlite.prepare("SELECT seat_user_id AS u, lower(seat_email) AS e FROM user_seats WHERE owner_user_id = ? AND status != 'deactivated' AND COALESCE(seat_type, 'active') = 'active'");
+
+  // The people writing without a seat row in one lab: user ids, never shown.
+  const uncountedIn = (l: any): number[] => {
+    const pooled = l.organization_id != null;
+    const seats = (pooled ? seatsByOwner.all(l.owner_user_id) : seatsByLab.all(l.id)) as { u: number | null; e: string | null }[];
+    const seatUsers = new Set(seats.map((s) => s.u).filter((u) => u != null));
+    const seatEmails = new Set(seats.map((s) => s.e).filter(Boolean));
+    const mdEmails = pooled ? (mdByOwner.get(l.owner_user_id) ?? new Set<string>())
+      : new Set([String(l.medical_director_email || "").trim().toLowerCase()].filter(Boolean));
+    return (membersOf.all(l.id) as { u: number; e: string }[])
+      .filter((m) => m.u !== l.owner_user_id && !seatUsers.has(m.u) && !(m.e && seatEmails.has(m.e)) && !(m.e && mdEmails.has(m.e)))
+      .map((m) => m.u);
+  };
+
+  // An org-linked lab's count is pooled across the owner's labs, so its uncounted people are pooled the same way:
+  // one person admin in two labs of a system is one more seat, not two.
+  const pooledUncounted = new Map<number, Set<number>>();
+  for (const l of labs) {
+    if (l.organization_id == null) continue;
+    if (!pooledUncounted.has(l.owner_user_id)) pooledUncounted.set(l.owner_user_id, new Set());
+    for (const u of uncountedIn(l)) pooledUncounted.get(l.owner_user_id)!.add(u);
+  }
+
+  const rows: SeatCountGapRow[] = [];
+  const people = new Set<string>();
+  for (const l of labs) {
+    const summary = labSeatSummary(sqlite, l.id);
+    if (!summary) continue;
+    const pooled = l.organization_id != null;
+    const own = uncountedIn(l);
+    const add = pooled ? (pooledUncounted.get(l.owner_user_id)?.size ?? 0) : own.length;
+    for (const u of own) people.add(pooled ? `o${l.owner_user_id}:${u}` : `l${l.id}:${u}`);
+    if (own.length === 0) continue;
+    const usedIfCounted = summary.activeUsed + add;
+    rows.push({
+      labId: l.id, isDemo: Number(l.is_demo) === 1, pooled,
+      activeIncluded: summary.activeIncluded, activeUsed: summary.activeUsed, uncountedAdmins: own.length, usedIfCounted,
+      overNow: summary.activeUsed > summary.activeIncluded, overIfCounted: usedIfCounted > summary.activeIncluded,
+      nextInviteRefusedNow: summary.activeUsed + 1 > summary.activeIncluded, nextInviteRefusedIfCounted: usedIfCounted + 1 > summary.activeIncluded,
+    });
+  }
+  const totals = {
+    labs: labs.length,
+    labsWithUncountedAdmins: rows.length,
+    uncountedAdmins: people.size,
+    labsOverIfCounted: rows.filter((r) => r.overIfCounted).length,
+    labsNewlyOverIfCounted: rows.filter((r) => r.overIfCounted && !r.overNow).length,
+    labsWhoseNextInviteWouldBeRefused: rows.filter((r) => r.nextInviteRefusedIfCounted && !r.nextInviteRefusedNow).length,
+    demoLabsAmongThem: rows.filter((r) => r.isDemo).length,
+  };
+  return { totals, labs: rows };
+}
