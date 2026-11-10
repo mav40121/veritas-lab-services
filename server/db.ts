@@ -5,6 +5,7 @@ import { OWNER_EMAIL, OWNER_CLIA } from "./constants";
 import { existsSync as _dbExistsSync } from "fs";
 import { classifyExistingNoPhiAcknowledgments } from "./noPhiAcknowledgment";
 import { seedLabsAlreadyWorkingTheOldWay } from "./policyReadSignSeed";
+import { backfillApprovedVersions } from "./policyApprovedVersion";
 
 // Use /data volume if available (Railway persistent volume), otherwise local
 const DB_PATH = process.env.DB_PATH || (_dbExistsSync('/data') ? '/data/veritas.db' : 'veritas.db');
@@ -8387,6 +8388,22 @@ try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_share_links_doc ON poli
   if (!versionsCols.includes("version_minor")) sqlite.exec("ALTER TABLE policy_versions ADD COLUMN version_minor INTEGER");
   // Document types (2026-11-03; shared/policyDocTypes.ts): NULL = no type, which behaves as before.
   if (!docsCols.includes("doc_type")) sqlite.exec("ALTER TABLE policy_documents ADD COLUMN doc_type TEXT");
+  // BUG-151 (2026-11-09; server/policyApprovedVersion.ts): which version is the approved one, so a limited Staff login and a
+  // share link keep reading it while a newer revision is a draft or in review. NULL = none recorded, which reads as before.
+  // Backfilled ONCE, in the same step that adds the column, so a later boot never re-derives it: a document approved or
+  // review-overdue right now records its current version; one in draft or review is only counted.
+  if (!docsCols.includes("approved_version_id")) {
+    try {
+      sqlite.transaction(() => {
+        sqlite.exec("ALTER TABLE policy_documents ADD COLUMN approved_version_id INTEGER");
+        const r = backfillApprovedVersions(sqlite);
+        console.log(`[migration] VeritaDC approved_version_id added: ${r.recorded} approved or review-overdue document(s) recorded their current version; ${r.inRevision} in draft or review left unrecorded (${r.withEarlierVersion} of them with an earlier version)`);
+      })();
+    } catch (e: any) {
+      // Rolled back whole, so the next boot adds the column and backfills again.
+      console.error("[migration] policy_documents.approved_version_id:", e?.message || e);
+    }
+  }
   const workflowsCols = (sqlite.prepare("PRAGMA table_info(policy_approval_workflows)").all() as { name: string }[]).map((c) => c.name);
   void workflowsCols;
   const stepsCols = (sqlite.prepare("PRAGMA table_info(policy_approval_steps)").all() as { name: string }[]).map((c) => c.name);

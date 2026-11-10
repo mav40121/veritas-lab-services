@@ -27,6 +27,7 @@ import { QuizQuestionImage } from "@/components/QuizQuestionImage";
 import { StaffApprovalsView } from "@/components/StaffApprovalsView";
 import { WaivedSpecimenRows } from "@/components/WaivedSpecimenRows";
 import type { WaivedSpecimen } from "@shared/competencyWaivedSpecimens";
+import { REVISION_IN_PROGRESS_NOTE } from "@shared/policyApprovedVersion";
 import { clearAuth } from "@/lib/auth";
 import { useAuth } from "@/components/AuthContext";
 import { useLabRoute } from "@/hooks/useLabRoute";
@@ -445,6 +446,8 @@ interface PortalPolicy {
   // Opened from the lookup and not assigned to this person: there is nothing to sign.
   read_only?: boolean;
   status?: string;
+  // A newer revision is a draft or in review; this is the approved version (BUG-151).
+  revision_in_progress?: boolean;
 }
 
 interface PortalLookupRow {
@@ -459,6 +462,7 @@ interface PortalLookupRow {
   effective_date: string | null;
   next_review_date: string | null;
   assigned: boolean;
+  revision_in_progress?: boolean;
 }
 
 interface PortalPolicyRender {
@@ -472,6 +476,7 @@ interface PortalPolicyRender {
   version_label?: string | null;
   file_format: "docx" | "pdf" | "html" | "xlsx" | "xls" | "png" | "jpg" | "txt";
   file_hash: string;
+  revision_in_progress?: boolean;
 }
 
 function StaffPortalPoliciesView({
@@ -518,7 +523,7 @@ function StaffPortalPoliciesView({
       document_id: row.document_id, title: row.title, description: row.description, version_id: row.version_id,
       version_number: row.version_number, version_label: row.version_label, effective_date: row.effective_date,
       next_review_date: row.next_review_date, signed: false, signed_at: null, typed_signature: null, doc_number: row.doc_number,
-      read_only: true, status: row.status,
+      read_only: true, status: row.status, revision_in_progress: row.revision_in_progress,
     });
   }
 
@@ -656,6 +661,12 @@ function StaffPortalPoliciesView({
               {meta?.effective_date && <>&middot; Effective {meta.effective_date}{" "}</>}
               {meta?.next_review_date && <>&middot; Review due {meta.next_review_date}</>}
             </div>
+            {/* BUG-151: while a newer revision is a draft or in review, this is the approved version. */}
+            {(meta?.revision_in_progress || active.revision_in_progress) && (
+              <div className="mt-2 rounded border border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-200 px-2 py-1 text-xs" data-testid="sp-policies-revision-note">
+                {REVISION_IN_PROGRESS_NOTE}
+              </div>
+            )}
           </div>
 
           <div className="border border-border rounded-lg bg-card p-4 mb-4 min-h-[300px]">
@@ -700,7 +711,9 @@ function StaffPortalPoliciesView({
 
           {active.read_only ? (
             <div className="border border-border rounded-lg bg-card p-4 text-sm text-muted-foreground" data-testid="sp-policies-read-only">
-              {active.status === "expired"
+              {meta?.revision_in_progress || active.revision_in_progress
+                ? "A revision is in progress, so there's nothing to sign right now. You're reading the approved version."
+                : active.status === "expired"
                 ? "This document's review is overdue, so it can't be signed right now. You're reading the current version."
                 : "This document isn't assigned to you, so there's nothing to sign. You're reading the current version."}
             </div>

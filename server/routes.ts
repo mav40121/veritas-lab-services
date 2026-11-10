@@ -241,6 +241,7 @@ import { labCarriesMinorRevisions, signatureStillCurrent, carriedStaffSignature 
 import { attestationStillCurrent, closeAttestationsCoveredByStaffSignatures, documentSignatureStatus, staffHasSignedCurrent, unsignedDocumentsForStaff } from "./policySignatureStatus";
 import { priorCountsByPerson, priorHow, priorSignatureStillCurrent, priorSignaturesOfDocument } from "./policyPriorSignature";
 import { assignedDocumentIds, loadReadSignContext, logStaffDocumentView, lookupDocuments, registerReadSignRoutes, rulesForDocument, targetLabels, veritaDcStaffGuard } from "./policyReadSign";
+import { approvedReadVersionId, approvedReadVersionSql, revisionInProgress } from "./policyApprovedVersion";
 import { assessmentTypeLabel, assessmentTypeProblem, isEvaluationProgram, normalizeRecordKind } from "@shared/competencyEvaluation";
 import { normalizeSpecimen, normalizeReportableField, specimenLabel } from "@shared/veritamapSpecimen";
 import { buildCompetencyRegisterRows, generateCompetencyRegisterExcel } from "./competencyRegisterExcel";
@@ -8396,7 +8397,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         description: d.description,
         doc_number: d.doc_number ?? null,
         status: d.status,
+        // The approved version's id; a revision in progress reads as approved, with this flag (BUG-151).
         version_id: d.current_version_id,
+        revision_in_progress: !!d.revision_in_progress,
         version_number: d.version_number,
         version_label: versionLabel(d),
         effective_date: d.effective_date,
@@ -8426,24 +8429,30 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         return res.status(400).json({ error: "Bad documentId" });
       }
       const sqlite = (db as any).$client;
+      // The approved version: the current one while approved or review-overdue, or while a newer revision is a draft or in
+      // review, the version recorded as approved (BUG-151, server/policyApprovedVersion.ts).
       const doc = sqlite.prepare(
-        `SELECT id, title, description, status, current_version_id, effective_date, next_review_date
+        `SELECT id, title, description, status, archived_at, current_version_id, approved_version_id, effective_date, next_review_date
          FROM policy_documents
-         WHERE id = ? AND lab_id = ? AND status IN ('approved', 'expired') AND archived_at IS NULL`
+         WHERE id = ? AND lab_id = ? AND archived_at IS NULL`
       ).get(documentId, labId) as any;
-      if (!doc) return res.status(404).json({ error: "Policy not found or not approved" });
+      const readVersionId = approvedReadVersionId(doc);
+      if (!doc || readVersionId == null) return res.status(404).json({ error: "Policy not found or not approved" });
+      const inRevision = revisionInProgress(doc);
 
       const version = sqlite.prepare(
         `SELECT id, version_number, version_major, version_minor, file_format, file_hash_sha256, uploaded_at
-         FROM policy_versions WHERE id = ?`
-      ).get(doc.current_version_id) as any;
+         FROM policy_versions WHERE id = ? AND document_id = ?`
+      ).get(readVersionId, doc.id) as any;
       if (!version) return res.status(404).json({ error: "Policy version not found" });
 
       res.json({
         document_id: doc.id,
         title: doc.title,
         description: doc.description,
-        status: doc.status,
+        // A revision in progress reads as the approved document it still is, with the note's flag.
+        status: inRevision ? "approved" : doc.status,
+        revision_in_progress: inRevision,
         // False for a document looked up read-only: there is nothing for this person to sign.
         assigned: assignedDocumentIds(sqlite, labId, { employeeId: req.staffPortalStaffEmployeeId, userId: req.staffPortalUserId }).has(doc.id),
         effective_date: doc.effective_date,
@@ -8507,11 +8516,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         return res.status(400).json({ error: "Bad documentId" });
       }
       const sqlite = (db as any).$client;
+      // The approved version, as the metadata read above picks it (BUG-151).
       const row = sqlite.prepare(
         `SELECT v.id AS version_id, v.file_path, v.file_format, v.file_hash_sha256 AS expected_hash
          FROM policy_documents d
-         JOIN policy_versions v ON v.id = d.current_version_id
-         WHERE d.id = ? AND d.lab_id = ? AND d.status IN ('approved', 'expired') AND d.archived_at IS NULL`
+         JOIN policy_versions v ON v.id = ${approvedReadVersionSql("d")} AND v.document_id = d.id
+         WHERE d.id = ? AND d.lab_id = ? AND d.archived_at IS NULL`
       ).get(documentId, labId) as any;
       if (!row) return res.status(404).json({ error: "Not found" });
 
@@ -14841,7 +14851,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
              (document_id, version_number, file_path, file_format, file_size_bytes, file_hash_sha256, change_summary, is_major_revision, uploaded_by, uploaded_at)
            VALUES (?, 1, ?, 'pdf', ?, ?, 'IQCP completed and approved', 1, ?, datetime('now'))`
         ).run(docId, rel, pdf.length, hashBuffer(pdf), req.userId);
-        sqlite.prepare("UPDATE policy_documents SET current_version_id = ? WHERE id = ?").run(Number(verIns.lastInsertRowid), docId);
+        // Registered approved, so version 1 is the approved version (BUG-151, server/policyApprovedVersion.ts).
+        sqlite.prepare("UPDATE policy_documents SET current_version_id = ?, approved_version_id = ? WHERE id = ?").run(Number(verIns.lastInsertRowid), Number(verIns.lastInsertRowid), docId);
         const nrRow = sqlite.prepare("SELECT next_review_date FROM policy_documents WHERE id = ?").get(docId) as any;
         sqlite.prepare("UPDATE iqcp_plans SET document_id = ?, next_review = ? WHERE id = ?").run(docId, nrRow?.next_review_date || null, updated.id);
       } catch (e: any) {
@@ -40669,21 +40680,23 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       if (!doc) return res.status(404).json({ error: "Not found" });
       if (doc.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
       const references = sqlite.prepare(
-        `SELECT l.id AS link_id, l.note, d.id AS document_id, d.title, d.status
+        `SELECT l.id AS link_id, l.note, d.id AS document_id, d.title, d.status, d.current_version_id, d.approved_version_id
            FROM policy_document_links l JOIN policy_documents d ON d.id = l.to_document_id
           WHERE l.from_document_id = ? AND l.lab_id = ? AND d.archived_at IS NULL
           ORDER BY d.title`
       ).all(id, req.scope.labId) as any[];
       const referencedBy = sqlite.prepare(
-        `SELECT l.id AS link_id, l.note, d.id AS document_id, d.title, d.status
+        `SELECT l.id AS link_id, l.note, d.id AS document_id, d.title, d.status, d.current_version_id, d.approved_version_id
            FROM policy_document_links l JOIN policy_documents d ON d.id = l.from_document_id
           WHERE l.to_document_id = ? AND l.lab_id = ? AND d.archived_at IS NULL
           ORDER BY d.title`
       ).all(id, req.scope.labId) as any[];
-      // A limited Staff login follows links to approved documents; the picker of everything linkable, drafts included, is the editor's.
+      // A limited Staff login follows links to documents with an approved version (BUG-151: one whose revision is a draft or
+      // in review keeps its approved version, and reads as approved); the picker of everything linkable is the editor's.
       if (req.dcStaff) {
-        const readable = (r: any) => r.status === "approved" || r.status === "expired";
-        return res.json({ references: references.filter(readable), referencedBy: referencedBy.filter(readable), candidates: [] });
+        const readable = (rows: any[]) => rows.filter((r) => approvedReadVersionId(r) != null)
+          .map(({ current_version_id, approved_version_id, ...r }) => (revisionInProgress({ ...r, current_version_id, approved_version_id }) ? { ...r, status: "approved", revision_in_progress: true } : r));
+        return res.json({ references: readable(references), referencedBy: readable(referencedBy), candidates: [] });
       }
       const linkedIds = new Set(references.map((r) => r.document_id));
       const candidates = (sqlite.prepare(
@@ -41057,6 +41070,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const id = Number(req.params.id);
       if (!Number.isFinite(id)) return res.status(400).json({ error: "Bad id" });
       const sqlite = (db as any).$client;
+      // A limited Staff login reads the approved version (veritaDcStaffGuard sets it; BUG-151): while a revision is a draft
+      // or in review, that is the version recorded as approved, shown to them as the document's version.
+      const staffRead = req.dcStaff ? req.dcStaffRead : null;
       const row = sqlite
         .prepare(
           `SELECT d.*, v.version_number AS current_version_number, v.version_major AS current_version_major, v.version_minor AS current_version_minor,
@@ -41066,13 +41082,14 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
                   v.uploaded_at AS current_uploaded_at,
                   m.name AS manual_name
              FROM policy_documents d
-             LEFT JOIN policy_versions v ON v.id = d.current_version_id
+             LEFT JOIN policy_versions v ON v.id = COALESCE(?, d.current_version_id)
              LEFT JOIN policy_manuals m ON m.id = d.manual_id
             WHERE d.id = ?`
         )
-        .get(id) as any;
+        .get(staffRead?.versionId ?? null, id) as any;
       if (!row) return res.status(404).json({ error: "Not found" });
       if (row.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
+      if (staffRead?.revisionInProgress) Object.assign(row, { current_version_id: staffRead.versionId, status: "approved", revision_in_progress: true });
       const versions = sqlite
         .prepare(
           `SELECT id, version_number, version_major, version_minor, file_format, file_size_bytes,
@@ -41109,10 +41126,11 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           `SELECT d.lab_id, d.title, v.file_path, v.file_format,
                   v.file_hash_sha256 AS expected_hash
              FROM policy_documents d
-             JOIN policy_versions v ON v.id = d.current_version_id
+             JOIN policy_versions v ON v.id = COALESCE(?, d.current_version_id) AND v.document_id = d.id
             WHERE d.id = ?`
         )
-        .get(id) as any;
+        // A limited Staff login gets the approved version (BUG-151); everyone else the current one, as before.
+        .get(req.dcStaff ? req.dcStaffRead?.versionId ?? null : null, id) as any;
       if (!row) return res.status(404).json({ error: "Not found" });
       if (row.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
       let buffer: Buffer;
@@ -41176,10 +41194,11 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           `SELECT d.lab_id, v.file_path, v.file_format,
                   v.file_hash_sha256 AS expected_hash
              FROM policy_documents d
-             JOIN policy_versions v ON v.id = d.current_version_id
+             JOIN policy_versions v ON v.id = COALESCE(?, d.current_version_id) AND v.document_id = d.id
             WHERE d.id = ?`
         )
-        .get(id) as any;
+        // A limited Staff login reads the approved version (BUG-151); everyone else the current one, as before.
+        .get(req.dcStaff ? req.dcStaffRead?.versionId ?? null : null, id) as any;
       if (!row) return res.status(404).json({ error: "Not found" });
       if (row.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
       let buffer: Buffer;
@@ -42184,6 +42203,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         .prepare(
           `UPDATE policy_documents
              SET status = 'approved',
+                 -- BUG-151: the version just approved is the one Staff and share links read during the next revision.
+                 approved_version_id = current_version_id,
                  effective_date = COALESCE(effective_date, date(?)),
                  next_review_date = CASE WHEN review_interval_months IS NULL OR review_interval_months <= 0 OR ${NO_REVIEW_TYPE_SQL}
                                          THEN NULL

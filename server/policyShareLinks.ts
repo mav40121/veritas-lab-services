@@ -6,11 +6,13 @@
 //
 // The rules:
 //   - An editor (VeritaDC edit, write access, the lab's own document) creates a link with an optional label. The token is
-//     crypto.randomUUID(). A document with no approved current version (a draft, one in review, or retired) is refused 409.
-//   - The link never pins a version. Every public read looks up the document's CURRENT version at request time, and shows
-//     it only while the document is approved or review-overdue ('expired') and not retired, the same rule a limited Staff
-//     login reads by (server/policyReadSign.ts veritaDcStaffGuard). So a newly approved revision shows on the same link,
-//     and while a revision sits in draft or review the link reads as not active.
+//     crypto.randomUUID(). A document with no approved version to show (retired, or a draft or in review that was never
+//     approved) is refused 409. One whose revision is in progress over an approved version can be shared.
+//   - The link never pins a version. Every public read looks up the document's approved version at request time, the same
+//     rule a limited Staff login reads by (server/policyApprovedVersion.ts): the current version while the document is
+//     approved or review-overdue ('expired') and not retired, and while a newer revision sits in draft or review, the version
+//     recorded as approved (BUG-151; before that fix the link read as not active then). So a newly approved revision shows on
+//     the same link, and nursing keeps reading the approved procedure while it is being revised.
 //   - Unknown, revoked, or a document with no approved version right now: one identical 404 body, so a token can't be
 //     probed. The public routes take only the token: no document id, version id or lab id is read from the request.
 //   - The public answers carry the lab's name and CLIA, the document's number, title, version, effective date and approval
@@ -28,10 +30,9 @@ import {
   renderDocxToHtml,
   writeAuditLog,
 } from "./veritapolicyApproval";
+import { approvedReadVersionSql, revisionInProgressSql } from "./policyApprovedVersion";
 
 export const SHARE_LINK_NOT_ACTIVE = "This link is not active. Contact the laboratory.";
-// Document states a share link shows: approved, or approved with its review overdue. Draft, in review and retired never.
-export const SHARE_LINK_STATUSES = ["approved", "expired"] as const;
 const LABEL_MAX = 120;
 
 type SharedVersion = {
@@ -49,25 +50,28 @@ type SharedVersion = {
   expected_hash: string | null;
   lab_name: string | null;
   clia_number: string | null;
+  // True while a newer revision is a draft or in review and the link shows the approved version (BUG-151).
+  revision_in_progress: boolean;
 };
 
 /** The version a share link shows for this document right now, or null when it shows nothing. Read at request time. */
 export function sharedVersionFor(sqlite: any, documentId: number, labId: number): SharedVersion | null {
-  return (
-    (sqlite
-      .prepare(
-        `SELECT d.id AS document_id, d.lab_id, d.title, d.doc_number, d.effective_date,
-                v.id AS version_id, v.version_number, v.version_major, v.version_minor, v.file_path, v.file_format,
-                v.file_hash_sha256 AS expected_hash,
-                l.lab_name, l.clia_number
-           FROM policy_documents d
-           JOIN policy_versions v ON v.id = d.current_version_id AND v.document_id = d.id
-           JOIN labs l ON l.id = d.lab_id
-          WHERE d.id = ? AND d.lab_id = ? AND d.archived_at IS NULL
-            AND d.status IN (${SHARE_LINK_STATUSES.map(() => "?").join(", ")})`
-      )
-      .get(documentId, labId, ...SHARE_LINK_STATUSES) as SharedVersion | undefined) ?? null
-  );
+  // approvedReadVersionSql: the current version while approved or review-overdue; the recorded approved version while a
+  // newer revision is a draft or in review (BUG-151); nothing when retired or never approved.
+  const row = sqlite
+    .prepare(
+      `SELECT d.id AS document_id, d.lab_id, d.title, d.doc_number, d.effective_date,
+              v.id AS version_id, v.version_number, v.version_major, v.version_minor, v.file_path, v.file_format,
+              v.file_hash_sha256 AS expected_hash,
+              ${revisionInProgressSql("d")} AS revision_in_progress,
+              l.lab_name, l.clia_number
+         FROM policy_documents d
+         JOIN policy_versions v ON v.id = ${approvedReadVersionSql("d")} AND v.document_id = d.id
+         JOIN labs l ON l.id = d.lab_id
+        WHERE d.id = ? AND d.lab_id = ? AND d.archived_at IS NULL`
+    )
+    .get(documentId, labId) as (Omit<SharedVersion, "revision_in_progress"> & { revision_in_progress: number }) | undefined;
+  return row ? { ...row, revision_in_progress: row.revision_in_progress === 1 } : null;
 }
 
 /** The live link and the version it shows, or null for an unknown token, a revoked link, or no approved version now. */
@@ -166,7 +170,8 @@ export function registerPolicyShareLinkRoutes(app: any, deps: {
   app.get(BASE, authMiddleware, labScopeMiddleware, requireModuleEdit("veritapolicy"), (req: any, res: any) => {
     const doc = docInLab(req);
     if (!doc) return res.status(404).json({ error: "Not found" });
-    const shareable = !!sharedVersionFor(sqlite(), doc.id, doc.lab_id);
+    const shown = sharedVersionFor(sqlite(), doc.id, doc.lab_id);
+    const shareable = !!shown;
     const rows = sqlite()
       .prepare(
         `SELECT s.id, s.token, s.label, s.created_at, s.revoked_at, s.view_count, s.last_viewed_at,
@@ -180,6 +185,8 @@ export function registerPolicyShareLinkRoutes(app: any, deps: {
       .all(doc.lab_id, doc.id) as any[];
     res.json({
       shareable,
+      // While a revision is a draft or in review, the approved version the links show (BUG-151), so the editor knows.
+      shows_version: shown?.revision_in_progress ? versionLabel(shown) : null,
       links: rows.map((r) => ({
         ...r,
         path: `/policy/${r.token}`,
@@ -233,6 +240,8 @@ export function registerPolicyShareLinkRoutes(app: any, deps: {
       version: versionLabel(v),
       effective_date: v.effective_date,
       approved_date: approvedDateFor(db, v),
+      // The page then says a revision is in progress and this is the approved version.
+      revision_in_progress: v.revision_in_progress,
     });
   });
 

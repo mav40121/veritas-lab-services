@@ -252,6 +252,10 @@ jobs:
         # Michael 2026-11-04 (Q155 = 1): a staff login named on a route step or in its group reads and signs with typed name and password, using
         # no editing seat. Nobody else can open it, a changed document is refused, and the editor's approve and reject paths are unchanged.
         run: npm run test:veritadc-staff-approvals
+      - name: Run VeritaDC approved version integration test
+        # BUG-151: while a newer revision is a draft or in review, a limited Staff login, the staff portal and a share link read the version
+        # recorded as approved; editors read the revision; every approval path records it; the one-time backfill guesses nothing.
+        run: npm run test:veritadc-approved-version
       - name: Run structure-only database copy integration test
         # GET /api/admin/schema-db (Lifepoint questionnaire: customer data is not used for testing): secret-gated, every
         # table, index, view and trigger rebuilt with the same columns, no rows, nothing from the source in the file, audited.

@@ -17,9 +17,10 @@
 // route added later is covered too. Who is limited is staffOwnScope (Q182, Q186): a Staff seat with edit on VeritaDC, the owner, an
 // admin, an org admin and anyone holding another live seat are not. A limited login:
 //   - sees only what's assigned to them in the document list, My sign-offs and the bell, and can only sign those;
-//   - can look up and read any approved document's current version, read-only. 42 CFR 493.1251(a) says the procedure manual must be
-//     available to laboratory personnel, and a tech covering another bench needs the procedure there. It is a search, not a list, and
-//     it never asks for a signature;
+//   - can look up and read any approved document's approved version, read-only: the current version, or while a newer revision
+//     is a draft or in review the version recorded as approved (BUG-151, server/policyApprovedVersion.ts). 42 CFR 493.1251(a)
+//     says the procedure manual must be available to laboratory personnel, and a tech covering another bench needs the procedure
+//     there. It is a search, not a list, and it never asks for a signature;
 //   - never reads who else has signed or owes: the tracker, signature list, signature report, audit trail and compliance page refuse.
 
 import { orderManualTree } from "@shared/manualTree";
@@ -28,6 +29,7 @@ import { staffOwnScope } from "./competencySelfEntry";
 import { employeeLoginAddress } from "./labGroups";
 import { labCarriesMinorRevisions } from "./policyMinorRevision";
 import { writeAuditLog } from "./veritapolicyApproval";
+import { approvedReadVersionId, approvedReadVersionSql, revisionInProgress, revisionInProgressSql } from "./policyApprovedVersion";
 
 export type ReadSignScopeType = "document" | "manual" | "lab";
 export type ReadSignTargetType = "group" | "person" | "everyone";
@@ -482,17 +484,23 @@ export function lookupDocuments(sqlite: any, labId: number, q: string): any[] {
   const term = String(q ?? "").trim();
   if (term.length < 2) return [];
   const like = `%${term.replace(/[\\%_]/g, "\\$&")}%`;
-  return sqlite.prepare(
-    `SELECT d.id AS document_id, d.title, d.description, d.doc_number, d.doc_type, d.status, d.manual_id, d.effective_date, d.next_review_date, d.current_version_id,
+  // current_version_id here is the version this reader reads: while a revision is a draft or in review, the approved one
+  // (BUG-151). Such a row reads as approved, with revision_in_progress = 1 so the screen can say so.
+  const rows = sqlite.prepare(
+    `SELECT d.id AS document_id, d.title, d.description, d.doc_number, d.doc_type,
+            CASE WHEN ${revisionInProgressSql("d")} = 1 THEN 'approved' ELSE d.status END AS status,
+            d.manual_id, d.effective_date, d.next_review_date, ${approvedReadVersionSql("d")} AS current_version_id,
+            ${revisionInProgressSql("d")} AS revision_in_progress,
             v.version_number, v.version_major, v.version_minor, m.name AS manual_name
        FROM policy_documents d
-       LEFT JOIN policy_versions v ON v.id = d.current_version_id
+       LEFT JOIN policy_versions v ON v.id = ${approvedReadVersionSql("d")} AND v.document_id = d.id
        LEFT JOIN policy_manuals m ON m.id = d.manual_id
-      WHERE d.lab_id = ? AND d.archived_at IS NULL AND d.status IN ('approved','expired') AND d.current_version_id IS NOT NULL
+      WHERE d.lab_id = ? AND d.archived_at IS NULL AND ${approvedReadVersionSql("d")} IS NOT NULL
         AND (d.title LIKE ? ESCAPE '\\' OR COALESCE(d.doc_number, '') LIKE ? ESCAPE '\\' OR COALESCE(d.description, '') LIKE ? ESCAPE '\\')
       ORDER BY d.title COLLATE NOCASE
       LIMIT 50`
   ).all(labId, like, like, like) as any[];
+  return rows.map((r) => ({ ...r, revision_in_progress: r.revision_in_progress === 1 }));
 }
 
 /** A read by a Staff login shows on the document's trail, as a read in the main app does. */
@@ -526,13 +534,17 @@ export function veritaDcStaffGuard(sqlite: any) {
     if (req.method !== "GET" && req.method !== "HEAD") return next(); // each write has its own check, and answers 403 for a Staff login
     const id = /^\d+$/.test(m[1]) ? Number(m[1]) : NaN;
     const doc = Number.isFinite(id)
-      ? (sqlite.prepare("SELECT id, status, archived_at, current_version_id FROM policy_documents WHERE id = ? AND lab_id = ?").get(id, labId) as any)
+      ? (sqlite.prepare("SELECT id, status, archived_at, current_version_id, approved_version_id FROM policy_documents WHERE id = ? AND lab_id = ?").get(id, labId) as any)
       : null;
-    if (!doc || doc.archived_at || !["approved", "expired"].includes(doc.status)) return res.status(404).json({ error: "Not found" });
+    // The approved version: the current one while approved or review-overdue, the recorded one while a revision is a draft
+    // or in review (BUG-151, server/policyApprovedVersion.ts). The document routes read req.dcStaffRead to serve it.
+    const versionId = approvedReadVersionId(doc);
+    if (!doc || versionId == null) return res.status(404).json({ error: "Not found" });
+    req.dcStaffRead = { versionId, revisionInProgress: revisionInProgress(doc) };
     const sub = m[2] || "";
     if (DOCUMENT_READS_ALLOWED.has(sub)) return next();
     const ver = sub.match(/^\/versions\/(\d+)\/render$/);
-    if (ver && Number(ver[1]) === doc.current_version_id) return next(); // the current version only
+    if (ver && Number(ver[1]) === versionId) return next(); // the approved version only
     return res.status(403).json(STAFF_OWN_REFUSAL);
   };
 }
