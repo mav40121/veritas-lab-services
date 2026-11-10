@@ -36635,6 +36635,38 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     res.json({ ok: true, deleted, transfer: tlog, totalRows, manifest: man, orphansAfter, plannedOwnership });
   });
 
+  // POST /api/admin/labs/attach-to-org (Michael 2026-11-10: "Create a lab for jesse wilson and put it into my lab
+  // group ... Make him the owner"). Links ONE lab that belongs to no organization to an organization, and changes
+  // nothing else: not the owner, memberships, seats or plan. transfer-owner could only attach while changing the
+  // owner, and provision-system only links labs the billing owner owns by CLIA, so a lab owned by someone other than
+  // the org's billing owner, or one without a CLIA, had no way in. Header x-admin-secret. Body: { labId,
+  // organizationId, confirm? }: a dry run unless confirm is true. Already in that org: answered as is, nothing
+  // written. In another org: 409, detach first.
+  app.post("/api/admin/labs/attach-to-org", (req, res) => {
+    if (!ADMIN_SECRET || req.headers["x-admin-secret"] !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    const { labId, organizationId, confirm } = req.body || {};
+    const lid = Number(labId), oid = Number(organizationId);
+    if (!Number.isInteger(lid) || lid <= 0 || !Number.isInteger(oid) || oid <= 0) {
+      return res.status(400).json({ error: "labId and organizationId (positive integers) required" });
+    }
+    const sqlite = (db as any).$client;
+    const lab = sqlite.prepare("SELECT id, lab_name, owner_user_id, organization_id FROM labs WHERE id = ?").get(lid) as any;
+    if (!lab) return res.status(404).json({ error: "lab not found", labId: lid });
+    const org = sqlite.prepare("SELECT id, name, billing_owner_user_id FROM organizations WHERE id = ?").get(oid) as any;
+    if (!org) return res.status(404).json({ error: "organization not found", organizationId: oid });
+    if (lab.organization_id === oid) return res.json({ ok: true, alreadyAttached: true, lab, organization: org });
+    if (lab.organization_id != null) {
+      return res.status(409).json({ error: "lab already belongs to a different organization; detach it first", currentOrgId: lab.organization_id });
+    }
+    const plan = { labId: lid, labName: lab.lab_name, ownerUserId: lab.owner_user_id, organizationId: oid, organizationName: org.name,
+      ownerIsBillingOwner: lab.owner_user_id === org.billing_owner_user_id };
+    if (confirm !== true) return res.json({ dryRun: true, plan });
+    sqlite.prepare("UPDATE labs SET organization_id = ?, updated_at = ? WHERE id = ? AND organization_id IS NULL").run(oid, new Date().toISOString(), lid);
+    const after = sqlite.prepare("SELECT id, lab_name, owner_user_id, organization_id FROM labs WHERE id = ?").get(lid);
+    console.log(`[ADMIN] labs/attach-to-org lab=${lid} org=${oid} owner=${lab.owner_user_id} at=${new Date().toISOString()}`);
+    res.json({ ok: true, plan, after });
+  });
+
   // POST /api/admin/labs/transfer-owner — ADMIN: transfer ONE lab's ownership to a
   // new owner WITHOUT deleting any content, and optionally attach the lab to an
   // organization. This is the no-wipe sibling of reset-and-reassign: use it to
