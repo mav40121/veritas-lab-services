@@ -20,8 +20,17 @@ export interface Criterion {
   cliaAbsoluteFloor: number | null; cliaAbsoluteUnit: string | null; cliaPresetLabel: string | null;
 }
 export const LAB_DEFINED_LABEL = "Lab-defined";
-// The study types whose Run Study stores its own fixed criterion and takes only the label from the picker.
+// The study types whose Run Study stores its own fixed criterion (PT/INR judges each module by its own TEa, typed on its form).
 export const FIXED_CRITERION_TYPES = new Set(["qc_range", "multi_analyte_coag", "ref_interval", "carryover", "pt_coag", "sensitivity"]);
+// BUG-160 (2026-11-10): those types took the label from the shared picker, which none of them reads (sensitivity's was
+// hidden and still saved ALT/SGPT, its first preset), so a QC lot verification could be saved "ALT/SGPT ...". The form
+// hides the picker on them and saves this instead. Never blank: BUG-139's floor backfill reads a blank label as a row
+// saved before labels. It doesn't print (printedPresetLabel gives null for these types) and classifyCriterion reads them
+// as fixedType, so it never counts as a mismatch.
+export const FIXED_CRITERION_LABEL = "Set by study type";
+export function savedPresetLabel(studyType: string, pickerLabel: string | null): string | null {
+  return FIXED_CRITERION_TYPES.has(studyType) ? FIXED_CRITERION_LABEL : pickerLabel;
+}
 // The parts of a saved criterion a label's preset may fail to give back.
 export type CriterionMismatchReason = "value" | "units" | "floor" | "floorUnit";
 
@@ -69,7 +78,8 @@ export function savedCriterionOf(row: any): SavedCriterion {
 // How a saved criterion stands against the label it carries:
 //   matches       the label's preset (or Custom, for "Lab-defined") gives back the saved value, percent or units, and floor
 //   mismatch      the label names a preset (or "Lab-defined") that can't give it back; `reasons` says which parts differ
-//   fixedType     a type that stores its own fixed criterion, whose label names a preset: only the label matters
+//   fixedType     a type that stores its own fixed criterion, saved with FIXED_CRITERION_LABEL (BUG-160) or with a label
+//                 naming a preset (before BUG-160): only the label matters
 //   noLabel       no preset label (saved before labels, 2026-06-04)
 //   unknownLabel  a label no preset carries (a renamed preset, or a form's own label such as manual differential's)
 // The value's unit (teaUnit) isn't compared: Run Study writes it from the preset, or for accuracy/bias, linearity and
@@ -90,6 +100,7 @@ export function classifyCriterion(row: any, presets: CriterionPreset[]): {
     presetIndex = presets.findIndex((p, i) => i !== customIdx && p.value !== 0 && p.label === saved.label);
   }
   if (!saved.label) return { kind: "noLabel", reasons: [], presetIndex, custom, saved };
+  if (saved.label === FIXED_CRITERION_LABEL && FIXED_CRITERION_TYPES.has(studyType)) return { kind: "fixedType", reasons: [], presetIndex, custom, saved };
   if (presetIndex < 0) return { kind: "unknownLabel", reasons: [], presetIndex, custom, saved };
   if (FIXED_CRITERION_TYPES.has(studyType)) return { kind: "fixedType", reasons: [], presetIndex, custom, saved };
   const c = criterionOf(presets, { presetIndex, customClia: custom?.clia ?? 0, customAbsFloor: custom?.absFloor ?? null, customAbsUnit: custom?.absUnit ?? "", saved: null });

@@ -30,6 +30,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { calculateStudy, calculateCalVerCorrelation, calculatePrecision, calculateLotToLot, calculatePTCoag, calculateQCRange, calculateMultiAnalyteCoag, calculateRefInterval, calculateQualitative, calculateSemiQuant, calculateSensitivity, type DataPoint, type PrecisionDataPoint, type LotToLotDataPoint, type RefIntervalDataPoint, type SensitivityInput, calculateINR, formatTeaCriterion } from "@/lib/calculations";
 import { buildPtCoagPayload, readPtPairRows, type PtCoagForm } from "@/lib/ptCoagPayload";
+import { FIXED_CRITERION_TYPES, savedPresetLabel } from "@shared/studyCriterion";
 import { splitPastedCells, fillCellsFrom, splitPastedRows, fillPairsFrom, parsePairCell, pairRowId, type PairRow } from "@/lib/pasteCells";
 import {
   GRADE_PRESETS, readStudyForms, studyDraftFields, buildPrecisionPayload, buildLotToLotPayload, buildQcRangePayload,
@@ -1371,7 +1372,8 @@ export default function VeritaCheckPage() {
   const teaUnit = activeCriterion.teaUnit;
   const cliaAbsoluteFloor: number | null = activeCriterion.cliaAbsoluteFloor;
   const cliaAbsoluteUnit: string | null = activeCriterion.cliaAbsoluteUnit;
-  const cliaPresetLabel: string | null = activeCriterion.cliaPresetLabel;
+  // BUG-160: a type that sets its own criterion never saves the picker's label (shared/studyCriterion.ts).
+  const cliaPresetLabel: string | null = savedPresetLabel(studyType, activeCriterion.cliaPresetLabel);
 
   const handleGridKeyDown = (e: React.KeyboardEvent, row: number, col: number) => {
     if (e.key !== "Tab") return;
@@ -2900,7 +2902,8 @@ return (
                 </Card>
               )}
 
-              {studyType !== "sensitivity" && studyType !== "manual_diff" && studyType !== "heparin_range" && (
+              {/* BUG-160: hidden on a type that sets its own criterion (PT/INR's modules carry their own TEa). */}
+              {!FIXED_CRITERION_TYPES.has(studyType) && studyType !== "manual_diff" && studyType !== "heparin_range" && (
               <Card>
                 <CardHeader className="pb-3"><CardTitle className="text-base">{studyType === "precision" ? "Adopted Precision Acceptance Criterion (CV%)" : "Adopted Acceptance Criterion (TEa)"}</CardTitle></CardHeader>
                 <CardContent className="space-y-3">
