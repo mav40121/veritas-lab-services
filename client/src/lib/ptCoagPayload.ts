@@ -50,6 +50,7 @@ export interface PtCoagForm {
   module3Rows: PtPairRow[];
   module3TEa: number;
   oldLotNum: string;
+  oldLotExp: string;                       // BUG-158: typed on the form and never saved before
 }
 
 // A comparison module counts only with this many complete pairs (studyResults.ts and the form agree).
@@ -91,8 +92,8 @@ export function buildPtCoagPayload(f: PtCoagForm, opts: { draft?: boolean } = {}
   const module3 = f.skipModule3
     ? null
     : opts.draft
-    ? { data: f.module3Rows, tea: f.module3TEa, oldLot: f.oldLotNum, newLot: i1.reagentLot }
-    : m3Used ? { data: m3Pairs, tea: f.module3TEa, oldLot: f.oldLotNum, newLot: i1.reagentLot } : null;
+    ? { data: f.module3Rows, tea: f.module3TEa, oldLot: f.oldLotNum, oldLotExp: f.oldLotExp, newLot: i1.reagentLot }
+    : m3Used ? { data: m3Pairs, tea: f.module3TEa, oldLot: f.oldLotNum, oldLotExp: f.oldLotExp, newLot: i1.reagentLot } : null;
 
   const dataPoints = {
     module1Instruments,

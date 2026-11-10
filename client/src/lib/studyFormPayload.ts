@@ -131,12 +131,15 @@ export const lotRows = (n: number, cohort: "Normal" | "Abnormal"): LotToLotDataP
 // Each pair is saved labeled with the cohort it was entered for. BUG-157: an Abnormal Only study's pairs are typed
 // into the one Specimen Data grid (f.data), whose rows carry "Normal", and were saved that way.
 const asCohort = (rows: LotToLotDataPoint[], cohort: "Normal" | "Abnormal") => rows.map((r) => (r.cohort === cohort ? r : { ...r, cohort }));
-export function buildLotToLotPayload(f: LotToLotForm, opts: { draft?: boolean } = {}) {
+// A draft and a finished study save the same shape; `draft` is kept so every form's builder is called alike.
+export function buildLotToLotPayload(f: LotToLotForm, _opts: { draft?: boolean } = {}) {
   const allData = f.sampleType === "both" ? [...asCohort(f.data, "Normal"), ...asCohort(f.dataAbnormal, "Abnormal")]
     : asCohort(f.data, f.sampleType === "abnormal" ? "Abnormal" : "Normal");
+  // BUG-158: Run Study saves the lot expiration dates as Save Draft does; it kept them only in a draft, so a finished
+  // study lost them. The results page and PDF print them (shared/studyLotRows.ts).
   const dataPoints = {
     data: allData, sampleType: f.sampleType, currentLot: f.currentLotNum, newLot: f.newLotNum, analyte: f.analyte, units: f.units,
-    ...(opts.draft ? { currentLotExp: f.currentLotExp, newLotExp: f.newLotExp } : {}),
+    currentLotExp: f.currentLotExp, newLotExp: f.newLotExp,
   };
   return { allData, dataPoints };
 }

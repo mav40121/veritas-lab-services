@@ -651,6 +651,7 @@ export default function VeritaCheckPage() {
         if (dp.module3 && typeof dp.module3 === "object") {
           setPtSkipModule3(false);
           if (typeof dp.module3.tea === "number") setPtModule3TEa(dp.module3.tea);
+          if (typeof dp.module3.oldLotExp === "string") setPtOldLotExp(dp.module3.oldLotExp);
           if (typeof dp.module3.oldLot === "string") setPtOldLotNum(dp.module3.oldLot);
           if (Array.isArray(dp.module3.data) && dp.module3.data.length > 0) setPtModule3Data(pairRows(dp.module3.data));
         } else if (dp.module3 === null) {
@@ -1014,7 +1015,7 @@ export default function VeritaCheckPage() {
     instrument1: { name: ptInstrumentName, reagentLot: ptReagentLot, reagentExp: ptReagentExp, isi: ptISI, ptRILow, ptRIHigh, inrRILow: ptINRRILow, inrRIHigh: ptINRRIHigh, ptValues: ptNumbers(ptModule1Data) },
     addlInstruments: ptAddlInstruments.map(b => ({ ...b, ptValues: ptNumbers(b.ptValues) })),
     instrument2Name: ptInstrument2Name, module2Rows: ptModule2Data, module2TEa: ptModule2TEa,
-    skipModule3: ptSkipModule3, module3Rows: ptModule3Data, module3TEa: ptModule3TEa, oldLotNum: ptOldLotNum,
+    skipModule3: ptSkipModule3, module3Rows: ptModule3Data, module3TEa: ptModule3TEa, oldLotNum: ptOldLotNum, oldLotExp: ptOldLotExp,
   });
 
   // QC Lot Verification state. Default to empty so a fresh study reads as
