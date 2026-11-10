@@ -28,6 +28,11 @@ import {
 } from "./licenseStamp";
 import { cfrSectionForTestName } from "./backfillAbsoluteFloor";
 import { criterionStanding, teaLabelFor } from "@shared/regulatedAnalytes";
+import { printedPresetLabel } from "@shared/studyCriterion";
+import { CLIA_PRESETS } from "@shared/cliaPresets";
+// The preset name printed beside a study's criterion (Q275 = 1): none for a type that sets its own criterion, none when the
+// label names a preset whose criterion isn't the stored one; otherwise the saved label. shared/studyCriterion.ts.
+const presetSuffix = (study: Study): string => { const l = printedPresetLabel(study, CLIA_PRESETS); return l ? ` (${l})` : ""; };
 import { CLIA_TEA_TABLE_ECFR_DATE } from "../client/src/lib/cliaTeaData";
 import { evaluateManualDiff } from "./rumke";
 import { evaluateHeparinRange, normalizeHeparinInput, heparinRangeNarrative, heparinRangeChartSVG } from "@shared/heparinRange";
@@ -946,11 +951,10 @@ const SUPPORTING_STUDY_TYPE_LABEL: Record<string, string> = {
   multi_analyte_coag: "Multi-Analyte Lot Comparison (Coag)",
 };
 
-// Study types whose form sets its own criterion and never reads the shared criterion picker: PT/INR (a TEa per
-// comparison module), QC Lot Verification, multi-analyte coag, reference range, carryover and sensitivity. The
-// cliaPresetLabel saved with them is whatever the picker held, ALT/SGPT (the first preset) unless someone changed it,
-// so it names a criterion they never used and is not printed (BUG-147).
-const OWN_CRITERION_STUDY_TYPES = new Set(["pt_coag", "qc_range", "multi_analyte_coag", "ref_interval", "carryover", "sensitivity"]);
+// Study types whose form sets its own criterion and never reads the shared criterion picker (PT/INR, QC Lot Verification,
+// multi-analyte coag, reference range, carryover and sensitivity; shared/studyCriterion.ts FIXED_CRITERION_TYPES): the
+// cliaPresetLabel saved with them is whatever the picker held, ALT/SGPT unless someone changed it, so it is never printed
+// (BUG-147). printedPresetLabel decides that, and leaves out a label whose preset isn't the stored criterion (Q275 = 1).
 
 // The criterion a PT/INR study used: each comparison module that ran, with its own TEa. Module 1 verifies the
 // reference intervals and uses none, so a study with no comparison module used none.
@@ -990,7 +994,7 @@ function supportingPageHTML(study: Study, instrumentNames: string[], agreement?:
   // crosswire (e.g. picking pCO2 8% / 5 mm Hg thinking it was Carbon Dioxide
   // 20%) is visible at report-review time. Customer report 2026-06-04.
   // NULL on legacy studies = render the value alone (the old way).
-  const presetLabel: string | null = OWN_CRITERION_STUDY_TYPES.has(study.studyType) ? null : ((study as any).cliaPresetLabel ?? null);
+  const presetLabel: string | null = printedPresetLabel(study, CLIA_PRESETS);
   const teaStrWithPreset = presetLabel ? `${teaStr} (${presetLabel})` : teaStr;
   const specs: any[][] = [
     ["Study Type", SUPPORTING_STUDY_TYPE_LABEL[study.studyType] || "VeritaCheck Verification Study"],
@@ -2989,7 +2993,7 @@ function buildAccuracyBiasHTML(study: Study, results: any): string {
       <div class="stat-item"><div class="stat-label">Levels</div><div class="stat-value">${levels.length}</div></div>
       <div class="stat-item"><div class="stat-label">Max % Recovery</div><div class="stat-value">${sf(maxRecovery, 2)}%</div></div>
       <div class="stat-item"><div class="stat-label">Min % Recovery</div><div class="stat-value">${sf(minRecovery, 2)}%</div></div>
-      <div class="stat-item"><div class="stat-label">${criterionLabel(study.testName, study)}</div><div class="stat-value">${teaPctTxt}${(study as any).cliaPresetLabel ? ` (${(study as any).cliaPresetLabel})` : ""}</div></div>
+      <div class="stat-item"><div class="stat-label">${criterionLabel(study.testName, study)}</div><div class="stat-value">${teaPctTxt}${presetSuffix(study)}</div></div>
       <div class="stat-item"><div class="stat-label">Result</div><div class="stat-value ${passClass}">${verdictText}</div></div>
     </div>`;
 
@@ -3441,7 +3445,7 @@ export function buildLinearityHTML(study: Study, results: any): string {
       <div class="stat-item"><div class="stat-label">Intercept</div><div class="stat-value">${sf(intercept, 3)}</div></div>
       <div class="stat-item"><div class="stat-label">r²</div><div class="stat-value">${sf(r2, 4)}</div></div>
       <div class="stat-item"><div class="stat-label">|Slope - 1|</div><div class="stat-value">${sf(slopeBiasPct, 2)}%</div></div>
-      <div class="stat-item"><div class="stat-label">${criterionLabel(study.testName, study)}</div><div class="stat-value">±${teaPctTxt}${(study as any).cliaPresetLabel ? ` (${(study as any).cliaPresetLabel})` : ""}</div></div>
+      <div class="stat-item"><div class="stat-label">${criterionLabel(study.testName, study)}</div><div class="stat-value">±${teaPctTxt}${presetSuffix(study)}</div></div>
       <div class="stat-item"><div class="stat-label">Result</div><div class="stat-value ${passClass}">${verdictText}</div></div>
     </div>`;
 
@@ -3575,7 +3579,7 @@ function buildReportableRangeHTML(study: Study, results: any): string {
       <div class="stat-item"><div class="stat-label">Analyte</div><div class="stat-value">${analyte}${units ? " (" + units + ")" : ""}</div></div>
       <div class="stat-item"><div class="stat-label">Claimed Reportable Range</div><div class="stat-value">${claimedRangeTxt}</div></div>
       <div class="stat-item"><div class="stat-label">Levels Tested</div><div class="stat-value">${levels.length}</div></div>
-      <div class="stat-item"><div class="stat-label">${criterionLabel(study.testName, study)}</div><div class="stat-value">${teaPctTxt}${(study as any).cliaPresetLabel ? ` (${(study as any).cliaPresetLabel})` : ""}</div></div>
+      <div class="stat-item"><div class="stat-label">${criterionLabel(study.testName, study)}</div><div class="stat-value">${teaPctTxt}${presetSuffix(study)}</div></div>
       <div class="stat-item"><div class="stat-label">Result</div><div class="stat-value ${passClass}">${verdictText}</div></div>
     </div>`;
 

@@ -66,6 +66,10 @@ import { evaluateHeparinRange, normalizeHeparinInput, heparinRangeNarrative, hep
 import { evaluateManualDiff } from "@shared/rumke";
 import { labLocaleDate } from "@/lib/labDate";
 import { teaLabelFor } from "@shared/regulatedAnalytes";
+import { printedPresetLabel } from "@shared/studyCriterion";
+import { CLIA_PRESETS } from "@shared/cliaPresets";
+// The preset name shown beside a study's criterion, by the PDF's rule (Q275 = 1; shared/studyCriterion.ts printedPresetLabel).
+const presetSuffix = (study: Study): string => { const l = printedPresetLabel(study, CLIA_PRESETS); return l ? ` (${l})` : ""; };
 
 import {
   ScatterChart,
@@ -508,7 +512,9 @@ function UserSpecs({ study, instrumentNames }: { study: Study; instrumentNames: 
   // crosswire (e.g. picking pCO2 8% / 5 mm Hg thinking it was Carbon Dioxide
   // 20%) is visible at report-review time. NULL on legacy studies = render
   // the value alone (the old way). Customer report 2026-06-04.
-  const presetLabel = (study as any).cliaPresetLabel ?? null;
+  // printedPresetLabel (the PDF's rule too): no stray picker label on a type that sets its own criterion (BUG-159), and
+  // none when the label names a preset whose criterion isn't the stored one (Q275 = 1).
+  const presetLabel = printedPresetLabel(study, CLIA_PRESETS);
   const teaDisplayWithPreset = presetLabel ? `${teaDisplay} (${presetLabel})` : teaDisplay;
   return (
     <Card>
@@ -1589,7 +1595,7 @@ function AccuracyBiasReport({ study, results }: { study: Study; results: any }) 
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 text-xs">
             <div><div className="text-muted-foreground">Analyte</div><div className="font-mono">{results.analyte || study.testName}</div></div>
             <div><div className="text-muted-foreground">Units</div><div className="font-mono">{units || "-"}</div></div>
-            <div><div className="text-muted-foreground">{teaLabelFor(study.testName, study as any)}</div><div className="font-mono">{formatTeaDisplay(study)}{(study as any).cliaPresetLabel ? ` (${(study as any).cliaPresetLabel})` : ""}</div></div>
+            <div><div className="text-muted-foreground">{teaLabelFor(study.testName, study as any)}</div><div className="font-mono">{formatTeaDisplay(study)}{presetSuffix(study)}</div></div>
             <div><div className="text-muted-foreground">Levels</div><div className="font-mono">{levels.length}</div></div>
             <div><div className="text-muted-foreground">Min % Recovery</div><div className="font-mono">{minRec !== null ? fmtPct(minRec) : "-"}</div></div>
             <div><div className="text-muted-foreground">Max % Recovery</div><div className="font-mono">{maxRec !== null ? fmtPct(maxRec) : "-"}</div></div>
@@ -1857,7 +1863,7 @@ function LinearityReport({ study, results }: { study: Study; results: any }) {
             <div><div className="text-muted-foreground">Intercept</div><div className="font-mono">{fmt(intercept, 3)}</div></div>
             <div><div className="text-muted-foreground">r²</div><div className="font-mono">{fmt(r2, 4)}</div></div>
             <div><div className="text-muted-foreground">|Slope - 1|</div><div className="font-mono">{fmtPct(slopeBiasPct)}</div></div>
-            <div><div className="text-muted-foreground">{teaLabelFor(study.testName, study as any)}</div><div className="font-mono">{formatTeaDisplay(study)}{(study as any).cliaPresetLabel ? ` (${(study as any).cliaPresetLabel})` : ""}</div></div>
+            <div><div className="text-muted-foreground">{teaLabelFor(study.testName, study as any)}</div><div className="font-mono">{formatTeaDisplay(study)}{presetSuffix(study)}</div></div>
           </div>
           {results.summary && (
             <div className="mt-4 text-xs text-muted-foreground leading-relaxed">{results.summary}</div>
@@ -1960,7 +1966,7 @@ function ReportableRangeReport({ study, results }: { study: Study; results: any 
             <div><div className="text-muted-foreground">Analyte</div><div className="font-mono">{results.analyte || study.testName}</div></div>
             <div><div className="text-muted-foreground">Units</div><div className="font-mono">{units || "-"}</div></div>
             <div><div className="text-muted-foreground">Claimed Range</div><div className="font-mono">{claimedTxt}</div></div>
-            <div><div className="text-muted-foreground">{teaLabelFor(study.testName, study as any)}</div><div className="font-mono">{formatTeaDisplay(study)}{(study as any).cliaPresetLabel ? ` (${(study as any).cliaPresetLabel})` : ""}</div></div>
+            <div><div className="text-muted-foreground">{teaLabelFor(study.testName, study as any)}</div><div className="font-mono">{formatTeaDisplay(study)}{presetSuffix(study)}</div></div>
             <div><div className="text-muted-foreground">Levels</div><div className="font-mono">{levels.length}</div></div>
           </div>
           {results.summary && (
