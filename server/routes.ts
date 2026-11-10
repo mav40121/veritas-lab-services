@@ -37150,6 +37150,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // map and saved test rows (analyte, specialty, complexity, active). Used to find
   // the maps that carry a library entry that was later corrected (BUG-005: the
   // VITROS 4600 entry carried every test as HIGH; FDA lists them MODERATE).
+  // Nickname and serial number come back too (2026-11-10), so two identical
+  // analyzers on one map can be told apart without a lab-scoped read, which would
+  // write a record_views row on the customer's lab.
   app.get("/api/admin/veritamap/instruments-by-name", (req, res) => {
     const secret = (req.query.secret as string) || (req.headers["x-admin-secret"] as string);
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
@@ -37157,7 +37160,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (like.length < 3) return res.status(400).json({ error: "like (3+ characters) required" });
     const sqlite = (db as any).$client;
     const insts = sqlite.prepare(
-      `SELECT i.id AS instrument_id, i.instrument_name, i.role, i.map_id, m.name AS map_name, m.lab_id, l.lab_name
+      `SELECT i.id AS instrument_id, i.instrument_name, i.nickname, i.serial_number, i.role, i.map_id, m.name AS map_name, m.lab_id, l.lab_name
          FROM veritamap_instruments i
          JOIN veritamap_maps m ON m.id = i.map_id
          LEFT JOIN labs l ON l.id = m.lab_id
