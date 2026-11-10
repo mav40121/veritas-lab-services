@@ -296,7 +296,9 @@ import { insertStudySchema, insertContactSchema, registerSchema, loginSchema, ty
 // Each study type has its own pass/fail rule derived from the raw dataPoints.
 import { isCensored, censorValueForMath, type CensoringPolicy } from "@shared/censoring";
 import { lotCohortsFor, pairInCohort } from "@shared/lotToLotCohort";
-import { heldForVerdictRuleDecision } from "./verdictRuleHold";
+import { calculateRefInterval } from "../client/src/lib/calculations";
+import { deepResolveCensored } from "../client/src/lib/studyResults";
+import { heldForVerdictRuleDecision, refIntervalHoldReasons } from "./verdictRuleHold";
 import { computePTCoagStatus, ptCoagStatusByResultsPageRule } from "./ptCoagVerdict";
 // Shown wherever a self-serve path used to create a lab (2026-10-14, Michael Q195 = 1).
 export const LAB_SETUP_BY_STAFF_MESSAGE = "Your lab is set up by the Veritas Lab Services team after a short call. Reach us at www.veritaslabservices.com/contact or info@veritaslabservices.com.";
@@ -637,13 +639,15 @@ export function computeStudyStatus(studyType: string, dataPointsJson: string, in
     }
 
     if (studyType === "ref_interval") {
-      // CLSI EP28-A3c: pass if <=10% (<=2 of 20) fall outside reference range
+      // CLSI EP28-A3c: pass if <=10% (<=2 of 20) fall outside reference range, on at least 20 results.
+      // BUG-155 (2026-11-10): the results page's own calculator, after the study's censoring policy resolves each "<x" or
+      // ">x" result (deepResolveCensored, as computeStudyResults does), so the stored verdict is the one the page and
+      // the PDF show. Before, a blank cell counted as a specimen (outside the range whenever the low limit was above 0),
+      // a censored result counted as in range under every policy, and there was no 20-result minimum. Saved rows the
+      // two readings could judge differently are held at boot (server/verdictRuleHold.ts).
       const { specimens, refLow, refHigh } = rawData;
-      if (!specimens || !Array.isArray(specimens) || specimens.length === 0) return "fail";
-      const n = specimens.length;
-      const outsideCount = specimens.filter((s: any) => s.value < refLow || s.value > refHigh).length;
-      const outsidePct = (outsideCount / n) * 100;
-      return outsidePct <= 10 ? "pass" : "fail";
+      if (!specimens || !Array.isArray(specimens)) return "fail";
+      return calculateRefInterval(deepResolveCensored(specimens, censoringPolicy), refLow, refHigh, "", "").overallPass ? "pass" : "fail";
     }
 
     if (studyType === "carryover") {
@@ -837,8 +841,9 @@ export function recomputeAllStudyStatuses(): { fixed: number; skipped: number } 
     // through the controlled exclusion endpoint, which captures that decision.
     if (dataPointsHaveExclusions(study.dataPoints)) continue;
     if (isUnitsRuleStudy(study as any)) continue;
-    // BUG-157 (2026-11-10): a one-cohort lot-to-lot row the corrected cohort rule reads differently stays as saved until
-    // Michael has GET /api/admin/veritacheck/lot-abnormal-refrange-counts and decides (server/verdictRuleHold.ts).
+    // BUG-157 and BUG-155 (2026-11-10): a one-cohort lot-to-lot row the corrected cohort rule reads differently, and a
+    // reference range row the results page's rule could judge differently from the old stored reading, stay as saved
+    // until Michael has GET /api/admin/veritacheck/lot-abnormal-refrange-counts and decides (server/verdictRuleHold.ts).
     if (heldForVerdictRuleDecision(study as any)) continue;
     // BUG-150 (2026-11-09): a saved draft has no verdict yet. Without this, every deploy turned every draft into a PASS or FAIL
     // and the dashboard stopped listing it as a draft. It gets its verdict when it is finished.
@@ -35623,11 +35628,13 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     res.json({ ...totals, byLab });
   });
 
-  // ── ADMIN: saved verdicts the corrected lot-to-lot cohort rule would change, counts only (BUG-157, 2026-11-10) ──
+  // ── ADMIN: saved verdicts the corrected lot-to-lot and reference range rules would change, counts only (BUG-157, BUG-155, 2026-11-10) ──
   // The boot recompute holds the rows server/verdictRuleHold.ts names: a one-cohort lot-to-lot study holding pairs
   // labeled other than its cohort (the Abnormal Only form saved its pairs labeled Normal, so the old rule counted none
-  // and stored FAIL). This says how many there are and how many saved verdicts the current rule would change, so
-  // Michael decides. Read-only: nothing is written. Counts and lab ids only (no study ids, test names, analysts or values).
+  // and stored FAIL), and a reference range study the old stored reading and the results page's rule could judge
+  // differently (blank cells, censored results, fewer than 20 results). This says how many there are and how many saved
+  // verdicts the current rules would change, so Michael decides. Read-only: nothing is written. Counts and lab ids only
+  // (no study ids, test names, analysts or values).
   app.get("/api/admin/veritacheck/lot-abnormal-refrange-counts", (req, res) => {
     if (!ADMIN_SECRET || req.headers["x-admin-secret"] !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
     const sqlite = (db as any).$client;
@@ -35640,18 +35647,29 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const blank = () => ({ studies: 0, drafts: 0, savedPass: 0, savedFail: 0, newRulePass: 0, newRuleFail: 0, wouldChange: 0, passToFail: 0, failToPass: 0, finalizedWouldChange: 0, notEvaluable: 0 });
     // alsoUnitsRule: rows the units-criterion hold (isUnitsRuleStudy) keeps as saved too.
     const lotToLot = { ...blank(), alsoUnitsRule: 0, bySampleType: { abnormal: 0, normal: 0, missing: 0 } as Record<string, number> };
-    const byLab: Record<string, { isDemo: boolean | null; lotToLot: number; wouldChange: number }> = {};
+    // A held reference range row may be counted under more than one reason; fewerThan20Results is under its own policy.
+    const refInterval = { ...blank(), withBlank: 0, withCensored: 0, fewerThan20Results: 0, otherReason: 0 };
+    const byLab: Record<string, { isDemo: boolean | null; lotToLot: number; refInterval: number; wouldChange: number }> = {};
     for (const r of rows) {
       const hold = heldForVerdictRuleDecision(r);
-      if (hold !== "lot_to_lot_one_cohort") continue;
+      if (!hold) continue;
       const lab = String(r.lab_id ?? "none");
-      byLab[lab] = byLab[lab] || { isDemo: r.lab_id == null || r.is_demo == null ? null : r.is_demo === 1, lotToLot: 0, wouldChange: 0 };
-      const t = lotToLot;
+      byLab[lab] = byLab[lab] || { isDemo: r.lab_id == null || r.is_demo == null ? null : r.is_demo === 1, lotToLot: 0, refInterval: 0, wouldChange: 0 };
+      const t = hold === "lot_to_lot_one_cohort" ? lotToLot : refInterval;
       t.studies++;
-      byLab[lab].lotToLot++;
-      const sampleType = safeJsonParse(r.data_points, {})?.sampleType;
-      lotToLot.bySampleType[sampleType === "abnormal" || sampleType === "normal" ? sampleType : "missing"]++;
-      if (r.tea_is_percentage === 0) lotToLot.alsoUnitsRule++;
+      if (hold === "lot_to_lot_one_cohort") {
+        byLab[lab].lotToLot++;
+        const sampleType = safeJsonParse(r.data_points, {})?.sampleType;
+        lotToLot.bySampleType[sampleType === "abnormal" || sampleType === "normal" ? sampleType : "missing"]++;
+        if (r.tea_is_percentage === 0) lotToLot.alsoUnitsRule++;
+      } else {
+        byLab[lab].refInterval++;
+        const why = refIntervalHoldReasons(safeJsonParse(r.data_points, null), r.censoring_policy ?? "exclude");
+        if (why.blank) refInterval.withBlank++;
+        if (why.censored) refInterval.withCensored++;
+        if (why.fewerThan20Results) refInterval.fewerThan20Results++;
+        if (why.other) refInterval.otherReason++;
+      }
       if (r.status === "draft") { t.drafts++; continue; }
       if (r.status === "pass") t.savedPass++; else if (r.status === "fail") t.savedFail++;
       const next = computeStudyStatus(r.study_type, r.data_points, r.instruments, r.clia_allowable_error, r.tea_is_percentage !== 0, r.clia_absolute_floor ?? null, r.censoring_policy ?? "exclude");
@@ -35664,7 +35682,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         if (r.lifecycle_state === "finalized") t.finalizedWouldChange++;
       }
     }
-    res.json({ lotToLot, byLab });
+    res.json({ lotToLot, refInterval, byLab });
   });
 
   // ── ADMIN: Read-only VeritaCheck/VeritaMap diagnostic probe ─────────────

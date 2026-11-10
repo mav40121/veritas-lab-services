@@ -1,19 +1,25 @@
 // scripts/verify-veritacheck-lot-refrange.mjs
 //
-// Math receipt for BUG-157 (2026-11-10): reagent lot verification (lot-to-lot, CLSI EP26) "Abnormal Only" counted no
-// pairs. The form types an Abnormal Only study's pairs into the Specimen Data grid, whose rows carry cohort "Normal",
-// and the screen, the stored verdict and the PDF kept only rows labeled "Abnormal". Hand-calculated, made-up values
-// through the real code (shared/lotToLotCohort.ts, client/src/lib/calculations.ts, client/src/lib/studyFormPayload.ts,
-// server/verdictRuleHold.ts):
+// Math receipt for BUG-157 and BUG-155 (2026-11-10). Hand-calculated, made-up values through the real code
+// (shared/lotToLotCohort.ts, client/src/lib/calculations.ts, client/src/lib/studyFormPayload.ts,
+// client/src/lib/studyResults.ts, server/verdictRuleHold.ts).
+// BUG-157: reagent lot verification (lot-to-lot, CLSI EP26) "Abnormal Only" counted no pairs. The form types an
+// Abnormal Only study's pairs into the Specimen Data grid, whose rows carry cohort "Normal", and the screen, the stored
+// verdict and the PDF kept only rows labeled "Abnormal".
 //   1. an Abnormal Only study counts its pairs; the cohort rule's two branches (mean within TEa, >= 90% of pairs within)
 //   2. Normal Only and Both are as before
 //   3. the form labels each pair with its cohort; Edit puts a one-cohort study's pairs back in its grid
 //   4. which saved rows the boot recompute holds (only those the old and new rules read differently)
+// BUG-155: reference range verification's stored verdict counted blank cells, read censored results as in range and had
+// no 20-result minimum. It now uses the results page's calculator (calculateRefInterval after deepResolveCensored).
+//   5. blank, censored (each policy), the 20-result minimum, the 10% limit at its edges, limits inclusive
+//   6. the old and new pass tests agree on every row of 20 to 1,000 plain numbers, so only other rows are held
 // Run: npx tsx scripts/verify-veritacheck-lot-refrange.mjs
 import { lotCohortsFor, pairInCohort, lotCohortRuleChanges } from "../shared/lotToLotCohort.ts";
-import { calculateLotToLot } from "../client/src/lib/calculations.ts";
+import { calculateLotToLot, calculateRefInterval } from "../client/src/lib/calculations.ts";
 import { buildLotToLotPayload, readStudyForms } from "../client/src/lib/studyFormPayload.ts";
-import { heldForVerdictRuleDecision } from "../server/verdictRuleHold.ts";
+import { deepResolveCensored } from "../client/src/lib/studyResults.ts";
+import { heldForVerdictRuleDecision, refIntervalRuleChanges, refIntervalHoldReasons } from "../server/verdictRuleHold.ts";
 
 let pass = 0, fail = 0;
 const check = (name, got, want) => {
@@ -91,6 +97,64 @@ check("not held: Normal Only labeled Normal, Both, a half-typed mislabeled pair,
   heldForVerdictRuleDecision({ studyType: "precision", dataPoints: "[]" }),
 ], [null, null, null, null]);
 check("lotCohortRuleChanges on unreadable data: false (the recompute's own error guard handles it)", [lotCohortRuleChanges(null), lotCohortRuleChanges([]), lotCohortRuleChanges({ sampleType: "abnormal" })], [false, false, false]);
+
+// ── 5. Reference range (BUG-155) ────────────────────────────────────────────
+// Made-up sodium, 135 to 145 mmol/L. The stored verdict is now this, the results page's calculation:
+const page = (values, policy = "exclude", lo = 135, hi = 145) => {
+  const r = calculateRefInterval(deepResolveCensored(values.map((value, i) => ({ specimenId: id(i), value })), policy), lo, hi, "Made-up Sodium", "mmol/L");
+  return [r.n, r.outsideCount, r.overallPass];
+};
+// The reading it replaced (computeStudyStatus before 2026-11-10), for the cases where they differ.
+const old = (values, lo = 135, hi = 145) => {
+  const out = values.filter((v) => v < lo || v > hi).length;
+  return (out / values.length) * 100 <= 10;
+};
+const C = (v, dir = "below") => ({ censored: true, censor_direction: dir, censor_value: v });
+const ins = (n) => Array.from({ length: n }, (_, i) => 136 + (i % 9));
+// Hand: blank cells aren't results. 18 numbers, all in range -> N 18 < 20 -> FAIL. Old: 20 rows, null < 135 -> 2 outside, 10% -> PASS.
+check("2 blank + 18 in range: N 18, 0 outside, FAIL (fewer than 20 results); the old reading gave PASS", [...page([...ins(18), null, null]), old([...ins(18), null, null])], [18, 0, false, true]);
+// Hand: 3 blank + 20 in range -> N 20, 0 outside -> PASS. Old: 23 rows, 3 outside (blanks), 13% -> FAIL.
+check("3 blank + 20 in range: N 20, 0 outside, PASS; the old reading gave FAIL", [...page([...ins(20), null, null, null]), old([...ins(20), null, null, null])], [20, 0, true, false]);
+// Hand: refLow 0 (a blank compared as 0 was in range): 2 blank + 18 in range -> still N 18, FAIL.
+check("2 blank + 18 in range with a low limit of 0: N 18, FAIL", page([...ins(18).map((v) => v - 130), null, null], "exclude", 0, 15), [18, 0, false]);
+// Hand: censored "<120" under exclude is dropped -> N 19 -> FAIL. Under substitute it is 120 -> outside: 1 of 20 -> PASS.
+// Under substitute half it is 60 -> outside: 1 of 20 -> PASS.
+check("19 in range + <120: exclude N 19 FAIL; substitute 120 -> N 20, 1 outside, PASS; half 60 -> N 20, 1 outside, PASS",
+  [page([...ins(19), C(120)], "exclude"), page([...ins(19), C(120)], "substitute_lld"), page([...ins(19), C(120)], "substitute_lld_half")], [[19, 0, false], [20, 1, true], [20, 1, true]]);
+// Hand: 17 in range, 147, two "<100" substituted at 100 -> 3 of 20 outside > 2 -> FAIL. Old: censored read as in range -> 1 of 20 -> PASS.
+check("17 in range + 147 + two <100, substitute: N 20, 3 outside, FAIL; the old reading gave PASS",
+  [...page([...ins(17), 147, C(100), C(100)], "substitute_lld"), old([...ins(17), 147, C(100), C(100)])], [20, 3, false, true]);
+// Hand: a censored ">140" substituted at 140 is in range (the limit's own value), so 20 of 20 in range -> PASS.
+check("19 in range + >140, substitute: 140 is in range, N 20, 0 outside, PASS", page([...ins(19), C(140, "above")], "substitute_lld"), [20, 0, true]);
+// The 10% limit and the limits themselves: 2 of 20 outside PASS, 3 FAIL; 3 of 30 PASS, 3 of 29 FAIL; 135 and 145 are in range.
+check("2 of 20 outside: PASS; 3 of 20: FAIL", [page([...ins(18), 134.9, 145.1])[2], page([...ins(17), 134.9, 145.1, 150])[2]], [true, false]);
+check("3 of 30 outside: PASS; 3 of 29: FAIL", [page([...ins(27), 120, 150, 160])[2], page([...ins(26), 120, 150, 160])[2]], [true, false]);
+check("values at 135 and 145 are in range (limits inclusive)", page([...ins(18), 135, 145]), [20, 0, true]);
+
+// ── 6. The hold is exact ────────────────────────────────────────────────────
+// On n plain numbers with k outside, old: (k / n) * 100 <= 10; new: n >= 20 and k <= floor(n * 0.1). For every n from
+// 20 to 1,000 and every k they agree, so a row of 20 or more plain numbers (no blank, censored or excluded value, both
+// limits numbers) gets the same verdict from both and is left to the boot recompute.
+let disagree = 0;
+for (let n = 20; n <= 1000; n++) for (let k = 0; k <= n; k++) if (((k / n) * 100 <= 10) !== (k <= Math.floor(n * 0.1))) disagree++;
+check("old and new pass tests agree for every count of 20 to 1,000 plain numbers", disagree, 0);
+const ri = (values, extra = {}) => ({ specimens: values.map((value, i) => ({ specimenId: id(i), value })), refLow: 135, refHigh: 145, ...extra });
+check("held: a blank, a censored value, fewer than 20 rows, an excluded flag, a limit not a number, a text value", [
+  refIntervalRuleChanges(ri([...ins(20), null])), refIntervalRuleChanges(ri([...ins(20), C(120)])), refIntervalRuleChanges(ri(ins(19))),
+  refIntervalRuleChanges({ ...ri(ins(20)), specimens: ri(ins(20)).specimens.map((s, i) => (i ? s : { ...s, excluded: true })) }),
+  refIntervalRuleChanges(ri(ins(20), { refHigh: null })), refIntervalRuleChanges(ri([...ins(19), "140"])),
+], [true, true, true, true, true, true]);
+check("not held: 20 or more plain numbers, any count outside; unreadable data (the error guard handles it)", [
+  refIntervalRuleChanges(ri(ins(20))), refIntervalRuleChanges(ri([...ins(17), 120, 150, 160])), refIntervalRuleChanges(null), refIntervalRuleChanges({ specimens: "x" }),
+], [false, false, false, false]);
+check("heldForVerdictRuleDecision names the reference range hold", [heldForVerdictRuleDecision({ study_type: "ref_interval", data_points: JSON.stringify(ri([...ins(18), null, null])) }), heldForVerdictRuleDecision({ study_type: "ref_interval", data_points: JSON.stringify(ri(ins(20))) })], ["ref_interval", null]);
+check("hold reasons: blank; censored and under 20 results (exclude); censored only (substitute)", [
+  refIntervalHoldReasons(ri([...ins(20), null]), "exclude"), refIntervalHoldReasons(ri([...ins(19), C(120)]), "exclude"), refIntervalHoldReasons(ri([...ins(19), C(120)]), "substitute_lld"),
+], [
+  { blank: true, censored: false, fewerThan20Results: false, other: false },
+  { blank: false, censored: true, fewerThan20Results: true, other: false },
+  { blank: false, censored: true, fewerThan20Results: false, other: false },
+]);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

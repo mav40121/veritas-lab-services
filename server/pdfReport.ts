@@ -2841,7 +2841,7 @@ function differencePlotSVG(
 }
 
 // ─── LOT-TO-LOT HTML report ──────────────────────────────────────────────────
-function buildRefIntervalHTML(study: Study, results: any): string {
+export function buildRefIntervalHTML(study: Study, results: any): string {
   const analyte = results.analyte || study.testName;
   const units = results.units || "";
   const refLow = results.refLow;
