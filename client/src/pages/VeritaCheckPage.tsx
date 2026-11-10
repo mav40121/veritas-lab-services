@@ -29,8 +29,8 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { calculateStudy, calculateCalVerCorrelation, calculatePrecision, calculateLotToLot, calculatePTCoag, calculateQCRange, calculateMultiAnalyteCoag, calculateRefInterval, calculateQualitative, calculateSemiQuant, calculateSensitivity, type DataPoint, type PrecisionDataPoint, type LotToLotDataPoint, type RefIntervalDataPoint, type SensitivityInput, calculateINR, formatTeaCriterion } from "@/lib/calculations";
-import { buildPtCoagPayload, type PtCoagForm } from "@/lib/ptCoagPayload";
-import { splitPastedCells, fillCellsFrom } from "@/lib/pasteCells";
+import { buildPtCoagPayload, readPtPairRows, type PtCoagForm } from "@/lib/ptCoagPayload";
+import { splitPastedCells, fillCellsFrom, splitPastedRows, fillPairsFrom, parsePairCell, pairRowId, type PairRow } from "@/lib/pasteCells";
 import {
   GRADE_PRESETS, readStudyForms, studyDraftFields, buildPrecisionPayload, buildLotToLotPayload, buildQcRangePayload,
   buildMultiAnalyteCoagPayload, buildRefIntervalPayload, buildSensitivityInput, buildCarryoverPayload, buildLevelsPayload,
@@ -641,11 +641,8 @@ export default function VeritaCheckPage() {
             ptValues: fill20(b.ptValues),
           })));
         }
-        const pairRows = (data: any[]): { id: string; x: number | null; y: number | null }[] => {
-          const rows = Array.from({ length: 20 }, (_, i) => ({ id: `S${String(i + 1).padStart(5, "0")}`, x: null as number | null, y: null as number | null }));
-          if (Array.isArray(data)) data.slice(0, 20).forEach((d: any, i: number) => { rows[i] = { id: typeof d.id === "string" ? d.id : rows[i].id, x: typeof d.x === "number" ? d.x : null, y: typeof d.y === "number" ? d.y : null }; });
-          return rows;
-        };
+        // BUG-162: every saved pair comes back (it read the first 20), at least 20 rows.
+        const pairRows = readPtPairRows;
         if (dp.module2 && typeof dp.module2 === "object") {
           if (typeof dp.module2.inst2 === "string") setPtInstrument2Name(dp.module2.inst2);
           if (typeof dp.module2.tea === "number") setPtModule2TEa(dp.module2.tea);
@@ -1000,6 +997,18 @@ export default function VeritaCheckPage() {
   const [ptModule3Data, setPtModule3Data] = useState<{ id: string; x: number | null; y: number | null }[]>(
     Array.from({ length: 20 }, (_, i) => ({ id: `S${String(i + 1).padStart(5, "0")}`, x: null, y: null }))
   );
+  // BUG-162: Modules 2 and 3 were fixed at 20 pairs. A paste of a column, or of both columns from the X cell, fills from
+  // that row down and adds rows as needed (pasteCells.ts fillPairsFrom); a single value pastes as the browser does.
+  const pastePairs = (rows: PairRow[], set: (r: PairRow[]) => void, idx: number, col: "x" | "y") => (e: React.ClipboardEvent<HTMLInputElement>) => {
+    const pasted = splitPastedRows(e.clipboardData.getData("text"));
+    if (pasted.length === 0) return;
+    e.preventDefault();
+    set(fillPairsFrom(rows, idx, col, pasted, parsePairCell));
+    // DecimalInput holds its own draft while focused, so the cell pasted into would still read empty; leaving it resyncs it.
+    e.currentTarget.blur();
+  };
+  const addPairRows = (rows: PairRow[], set: (r: PairRow[]) => void) =>
+    set([...rows, ...Array.from({ length: 10 }, (_, i) => ({ id: pairRowId(rows.length + i), x: null, y: null }))]);
   // The PT/INR form as buildPtCoagPayload reads it (Run Study and Save Draft).
   const ptCoagForm = (): PtCoagForm => ({
     instrument1: { name: ptInstrumentName, reagentLot: ptReagentLot, reagentExp: ptReagentExp, isi: ptISI, ptRILow, ptRIHigh, inrRILow: ptINRRILow, inrRIHigh: ptINRRIHigh, ptValues: ptNumbers(ptModule1Data) },
@@ -3231,15 +3240,20 @@ return (
                             <th className="text-left py-2 pr-4 text-xs text-muted-foreground font-medium">{ptInstrument2Name} PT</th>
                           </tr></thead>
                           <tbody>
+                            {/* BUG-162: pairs grow past 20 by paste or Add 10 rows, as Module 1's normals do (BUG-149). */}
                             {ptModule2Data.map((dp, idx) => (
                               <tr key={idx} className="border-b border-border/50">
                                 <td className="py-1.5 pr-4"><span className="text-xs text-muted-foreground font-mono">{dp.id}</span></td>
-                                <td className="py-1.5 pr-4"><DecimalInput step="any" placeholder="-" value={dp.x ?? NaN} fallback={NaN} onChangeNumber={n => { const d = [...ptModule2Data]; d[idx] = { ...d[idx], x: Number.isNaN(n) ? null : n }; setPtModule2Data(d); }} className="h-8 text-sm w-28" /></td>
-                                <td className="py-1.5 pr-4"><DecimalInput step="any" placeholder="-" value={dp.y ?? NaN} fallback={NaN} onChangeNumber={n => { const d = [...ptModule2Data]; d[idx] = { ...d[idx], y: Number.isNaN(n) ? null : n }; setPtModule2Data(d); }} className="h-8 text-sm w-28" /></td>
+                                <td className="py-1.5 pr-4"><DecimalInput step="any" placeholder="-" value={dp.x ?? NaN} fallback={NaN} onChangeNumber={n => { const d = [...ptModule2Data]; d[idx] = { ...d[idx], x: Number.isNaN(n) ? null : n }; setPtModule2Data(d); }} onPaste={pastePairs(ptModule2Data, setPtModule2Data, idx, "x")} aria-label={`Module 2 ${dp.id} instrument 1 PT`} className="h-8 text-sm w-28" /></td>
+                                <td className="py-1.5 pr-4"><DecimalInput step="any" placeholder="-" value={dp.y ?? NaN} fallback={NaN} onChangeNumber={n => { const d = [...ptModule2Data]; d[idx] = { ...d[idx], y: Number.isNaN(n) ? null : n }; setPtModule2Data(d); }} onPaste={pastePairs(ptModule2Data, setPtModule2Data, idx, "y")} aria-label={`Module 2 ${dp.id} instrument 2 PT`} className="h-8 text-sm w-28" /></td>
                               </tr>
                             ))}
                           </tbody>
                         </table>
+                      </div>
+                      <div className="flex items-center gap-3 flex-wrap mt-2">
+                        <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={() => addPairRows(ptModule2Data, setPtModule2Data)} data-testid="pt-module2-add-rows">Add 10 rows</Button>
+                        <span className="text-xs text-muted-foreground">Paste a column, or both columns, from Excel into any cell; rows are added as needed.</span>
                       </div>
                     </CardContent>
                   </Card>
@@ -3272,12 +3286,16 @@ return (
                               {ptModule3Data.map((dp, idx) => (
                                 <tr key={idx} className="border-b border-border/50">
                                   <td className="py-1.5 pr-4"><span className="text-xs text-muted-foreground font-mono">{dp.id}</span></td>
-                                  <td className="py-1.5 pr-4"><DecimalInput step="any" placeholder="-" value={dp.x ?? NaN} fallback={NaN} onChangeNumber={n => { const d = [...ptModule3Data]; d[idx] = { ...d[idx], x: Number.isNaN(n) ? null : n }; setPtModule3Data(d); }} className="h-8 text-sm w-28" /></td>
-                                  <td className="py-1.5 pr-4"><DecimalInput step="any" placeholder="-" value={dp.y ?? NaN} fallback={NaN} onChangeNumber={n => { const d = [...ptModule3Data]; d[idx] = { ...d[idx], y: Number.isNaN(n) ? null : n }; setPtModule3Data(d); }} className="h-8 text-sm w-28" /></td>
+                                  <td className="py-1.5 pr-4"><DecimalInput step="any" placeholder="-" value={dp.x ?? NaN} fallback={NaN} onChangeNumber={n => { const d = [...ptModule3Data]; d[idx] = { ...d[idx], x: Number.isNaN(n) ? null : n }; setPtModule3Data(d); }} onPaste={pastePairs(ptModule3Data, setPtModule3Data, idx, "x")} aria-label={`Module 3 ${dp.id} old lot PT`} className="h-8 text-sm w-28" /></td>
+                                  <td className="py-1.5 pr-4"><DecimalInput step="any" placeholder="-" value={dp.y ?? NaN} fallback={NaN} onChangeNumber={n => { const d = [...ptModule3Data]; d[idx] = { ...d[idx], y: Number.isNaN(n) ? null : n }; setPtModule3Data(d); }} onPaste={pastePairs(ptModule3Data, setPtModule3Data, idx, "y")} aria-label={`Module 3 ${dp.id} new lot PT`} className="h-8 text-sm w-28" /></td>
                                 </tr>
                               ))}
                             </tbody>
                           </table>
+                        </div>
+                        <div className="flex items-center gap-3 flex-wrap">
+                          <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={() => addPairRows(ptModule3Data, setPtModule3Data)} data-testid="pt-module3-add-rows">Add 10 rows</Button>
+                          <span className="text-xs text-muted-foreground">Paste a column, or both columns, from Excel into any cell; rows are added as needed.</span>
                         </div>
                       </CardContent>
                     )}
