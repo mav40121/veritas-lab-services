@@ -33,7 +33,7 @@ import { labLocalDate, labToday, addLabDays, labClockMiddleware, setRequestLabTz
 import { labTimeZoneInfo, isValidLabTimeZone, TIME_ZONE_CHOICES } from "@shared/labTimeZone";
 import { parseRunDetails, serializeRunDetails } from "@shared/studyRunDetails";
 import { CLIA_PRESETS } from "@shared/cliaPresets";
-import { classifyCriterion } from "@shared/studyCriterion";
+import { classifyCriterion, criterionOf } from "@shared/studyCriterion";
 import { sanitizeTypeDetails, parseTypeDetails, FINDING_SOURCE_TYPES } from "@shared/findingTypes";
 import { PT_ROOT_CAUSE_CATEGORIES } from "@shared/ptFailure";
 import { studyRowToClient, resolveInstrumentDisplay } from "./studyPdf";
@@ -35755,6 +35755,59 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       if (r.lifecycle_state === "finalized") { totals.mismatchedFinalized++; byLab[lab].mismatchedFinalized++; }
     }
     res.json({ ...totals, resaved: null, byReason, byType, byLab, byPreset });
+  });
+
+  // ── ADMIN: the studies criterion-mismatch-counts counts, one row each (Michael 2026-11-10, Q274 = 1) ──
+  // So Michael and each lab's director can judge the signed ones: for every study classifyCriterion marks "mismatch", the
+  // study id, lab, test name, study type, date, saved status, whether it's signed and when, the criterion its label names
+  // and the stored one, and the verdict computeStudyStatus gives under each (the stored verdict rule, as the boot
+  // recompute runs it). `floorAsBackfillGives`: the stored floor is the one BUG-139's earlier pass gives this test name
+  // (resolveFloor), a sign the floor came from that pass rather than a save. Read-only: nothing is written. No analyst,
+  // signer or any other person's name; test names, lab names and ids are what a director needs to find the study.
+  app.get("/api/admin/veritacheck/criterion-mismatch-list", (req, res) => {
+    if (!ADMIN_SECRET || req.headers["x-admin-secret"] !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    const sqlite = (db as any).$client;
+    const rows = sqlite.prepare(
+      `SELECT s.id, s.lab_id, l.lab_name, l.is_demo, s.test_name, s.study_type, s.date, s.created_at, s.status, s.lifecycle_state, s.finalized_at,
+              s.clia_allowable_error, s.tea_is_percentage, s.tea_unit, s.clia_absolute_floor, s.clia_absolute_unit, s.clia_preset_label,
+              s.data_points, s.instruments, s.censoring_policy
+         FROM studies s LEFT JOIN labs l ON l.id = s.lab_id
+        ORDER BY s.lab_id, s.id`
+    ).all() as any[];
+    const verdict = (r: any, value: number, isPct: boolean, floor: number | null) => {
+      const v = computeStudyStatus(r.study_type, r.data_points, r.instruments, value, isPct, floor, r.censoring_policy ?? "exclude");
+      return lastStudyStatusWasError() ? "notEvaluable" : v;
+    };
+    const studies: any[] = [];
+    for (const r of rows) {
+      const k = classifyCriterion(r, CLIA_PRESETS);
+      if (k.kind !== "mismatch") continue;
+      const label = criterionOf(CLIA_PRESETS, { presetIndex: k.presetIndex, customClia: k.custom?.clia ?? 0, customAbsFloor: k.custom?.absFloor ?? null, customAbsUnit: k.custom?.absUnit ?? "", saved: null });
+      const s = k.saved;
+      const storedFloor = s.absoluteFloor != null && s.absoluteFloor > 0 ? s.absoluteFloor : null;
+      const backfill = resolveFloor(String(r.test_name ?? ""));
+      const verdictStored = r.status === "draft" ? null : verdict(r, s.value, s.isPercentage, storedFloor);
+      const verdictLabel = r.status === "draft" ? null : verdict(r, label.cliaValue, label.teaIsPercentage, label.cliaAbsoluteFloor ?? null);
+      studies.push({
+        studyId: r.id, labId: r.lab_id ?? null, labName: r.lab_name ?? null, isDemo: r.lab_id == null || r.is_demo == null ? null : r.is_demo === 1,
+        testName: r.test_name ?? null, studyType: r.study_type, date: r.date ?? null, createdAt: r.created_at ?? null,
+        savedStatus: r.status, signed: r.lifecycle_state === "finalized", finalizedAt: r.finalized_at ?? null,
+        label: s.label, reasons: k.reasons,
+        labelCriterion: { value: label.cliaValue, isPercentage: label.teaIsPercentage, unit: label.teaUnit, floor: label.cliaAbsoluteFloor ?? null, floorUnit: label.cliaAbsoluteUnit ?? null },
+        storedCriterion: { value: s.value, isPercentage: s.isPercentage, unit: s.unit ?? null, floor: storedFloor, floorUnit: storedFloor != null ? s.absoluteUnit ?? null : null },
+        floorAsBackfillGives: storedFloor != null && !!backfill && Math.abs(storedFloor - backfill.value) < 1e-9
+          && String(s.absoluteUnit ?? "").trim().toLowerCase() === backfill.unit.trim().toLowerCase(),
+        verdictStoredCriterion: verdictStored, verdictLabelCriterion: verdictLabel,
+        verdictsDiffer: verdictStored != null && verdictLabel != null && verdictStored !== verdictLabel,
+      });
+    }
+    res.json({
+      total: studies.length,
+      signed: studies.filter((x) => x.signed).length,
+      verdictsDiffer: studies.filter((x) => x.verdictsDiffer).length,
+      signedVerdictsDiffer: studies.filter((x) => x.verdictsDiffer && x.signed).length,
+      studies,
+    });
   });
 
   // ── ADMIN: Read-only VeritaCheck/VeritaMap diagnostic probe ─────────────
