@@ -14,6 +14,20 @@
 
 export type PtPairRow = { id: string; x: number | null; y: number | null };
 
+// Edit reads a saved Module 2 or 3 back into its rows: every saved pair, and at least 20 rows (BUG-162: it read only the
+// first 20, so a comparison saved with more reopened short, and a re-run dropped the rest).
+export function readPtPairRows(data: unknown): PtPairRow[] {
+  const saved = Array.isArray(data) ? data : [];
+  return Array.from({ length: Math.max(20, saved.length) }, (_, i) => {
+    const d: any = saved[i];
+    return {
+      id: d && typeof d.id === "string" ? d.id : `S${String(i + 1).padStart(5, "0")}`,
+      x: d && typeof d.x === "number" ? d.x : null,
+      y: d && typeof d.y === "number" ? d.y : null,
+    };
+  });
+}
+
 export interface PtInstrumentForm {
   name: string;
   reagentLot: string;
