@@ -64,12 +64,17 @@ export function labSeatSummary(sqlite: any, labId: number): LabSeatSummary | nul
     const rows = sqlite.prepare(
       "SELECT lower(seat_email) AS e, COALESCE(seat_type,'active') AS t FROM user_seats WHERE owner_user_id = ? AND status != 'deactivated'"
     ).all(lab.owner_user_id) as { e: string; t: string }[];
-    let active = 0, md = 0;
+    // BUG-093 (2026-10-25): the medical director seat is one free seat per lab (the members route's
+    // medicalDirectorIncluded is 1 when this lab names one). This counted every seat row of every lab's director
+    // across the owner's labs, so a director invited to both of a system's labs read "2 of 1" in each. It now counts
+    // this lab's director once. Any lab's director still sits outside the active count, as before.
+    const thisLabMd = String(lab.medical_director_email || "").trim().toLowerCase();
+    let active = 0, mdSeen = false;
     for (const r of rows) {
-      if (r.e && mdEmails.has(r.e)) { md++; continue; }
+      if (r.e && mdEmails.has(r.e)) { if (r.e === thisLabMd) mdSeen = true; continue; }
       if (r.t === "active") active++;
     }
-    return { activeIncluded, activeUsed: active + 1, medicalDirectorUsed: md, pooled: true, ...staff };
+    return { activeIncluded, activeUsed: active + 1, medicalDirectorUsed: mdSeen ? 1 : 0, pooled: true, ...staff };
   }
 
   // Standalone lab.
