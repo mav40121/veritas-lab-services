@@ -12,6 +12,8 @@
 //   5. it writes nothing (row counts before and after)
 //   6. Q279 = 1 (2026-11-11): per lab and in totals, how many uncounted admins are Veritas logins (the operator's
 //      address or an @veritaslabservices.com address), and the count with them left out; counts only
+//   7. Q282 = 1 (2026-11-11): those admins now count against seats in labSeatSummary, except Veritas logins, so the
+//      Members page and the invite gate read the same number; a system's admin counts once across its labs
 // Run: rm -f .tmp-seatgap.db && DB_PATH=.tmp-seatgap.db JWT_SECRET=test-jwt-secret ADMIN_SECRET=test-admin-secret STRIPE_SECRET_KEY=sk_test_dummy STRIPE_WEBHOOK_SECRET=whsec_dummy npx tsx tests/integration/seat-count-gaps.test.ts
 import http from "node:http";
 import express from "express";
@@ -86,14 +88,17 @@ async function main() {
     const row = (id: number) => (j.labs || []).find((x: any) => x.labId === id);
     const sr = row(s);
     check("2. the standalone lab lists exactly one uncounted admin (the former owner)", r.status === 200 && sr?.uncountedAdmins === 1, JSON.stringify(sr));
-    check("2. ... used 5 of 5 now; 6 if counted, over the cap", sr?.activeIncluded === 5 && sr?.activeUsed === 5 && sr?.usedIfCounted === 6 && !sr?.overNow && sr?.overIfCounted, JSON.stringify(sr));
-    check("2. ... the next writer invite is refused now and would be refused counted (5 + 1 > 5)", sr?.nextInviteRefusedNow === true && sr?.nextInviteRefusedIfCounted === true, JSON.stringify(sr));
+    check("2. ... seat rows give 5 of 5; since Q282 the former owner counts, so 6 of 5 now (over), and 6 counted with everyone",
+      sr?.activeIncluded === 5 && sr?.activeUsedFromSeatRows === 5 && sr?.activeUsed === 6 && sr?.usedIfCounted === 6 && sr?.overNow === true && sr?.overIfCounted === true, JSON.stringify(sr));
+    check("2. ... the next writer invite is refused now and would be refused counted (6 + 1 > 5)", sr?.nextInviteRefusedNow === true && sr?.nextInviteRefusedIfCounted === true, JSON.stringify(sr));
     check("3. left out: the seated admin, the support account, the staff-role member, the owner and the medical director (the count is 1, not 5)", sr?.uncountedAdmins === 1);
     const r1 = row(p1), r2 = row(p2);
     check("4. the system's labs each list their one admin, counted once in the pool (usedIfCounted = used + 1, not + 2)",
-      r1?.uncountedAdmins === 1 && r2?.uncountedAdmins === 1 && r1?.pooled && r1?.usedIfCounted === r1?.activeUsed + 1 && r2?.usedIfCounted === r2?.activeUsed + 1, JSON.stringify([r1, r2]));
-    check("4. totals: 4 labs with uncounted admins, 4 people (the former owner, the one system admin, the two Veritas logins)", j.totals?.labsWithUncountedAdmins === 4 && j.totals?.uncountedAdmins === 4, JSON.stringify(j.totals));
-    check("4. totals: two labs newly over their cap if counted (the standalone and the client lab)", j.totals?.labsNewlyOverIfCounted === 2, JSON.stringify(j.totals));
+      r1?.uncountedAdmins === 1 && r2?.uncountedAdmins === 1 && r1?.pooled
+        && r1?.usedIfCounted === r1?.activeUsedFromSeatRows + 1 && r2?.usedIfCounted === r2?.activeUsedFromSeatRows + 1
+        && r1?.activeUsed === r1?.activeUsedFromSeatRows + 1 && r2?.activeUsed === r2?.activeUsedFromSeatRows + 1, JSON.stringify([r1, r2]));
+    check("4. totals: 4 labs with admins without a seat row, 4 people (the former owner, the one system admin, the two Veritas logins)", j.totals?.labsWithUncountedAdmins === 4 && j.totals?.uncountedAdmins === 4, JSON.stringify(j.totals));
+    check("4. totals: one lab newly over if Veritas logins counted too (the client lab; the standalone is over already)", j.totals?.labsNewlyOverIfCounted === 1, JSON.stringify(j.totals));
     // ── 6. Q279 = 1: how many of the uncounted admins are Veritas logins ──
     const vr = row(v);
     check("6. the client lab lists 2 uncounted admins, both Veritas logins", vr?.uncountedAdmins === 2 && vr?.veritasLogins === 2, JSON.stringify(vr));
@@ -101,14 +106,34 @@ async function main() {
       vr?.activeUsed === 4 && vr?.usedIfCounted === 6 && vr?.overIfCounted === true && vr?.usedIfCountedExceptVeritas === 4 && vr?.overIfCountedExceptVeritas === false, JSON.stringify(vr));
     check("6. the other labs' uncounted admins aren't Veritas logins (0 each; except-Veritas equals if-counted)",
       sr?.veritasLogins === 0 && sr?.usedIfCountedExceptVeritas === sr?.usedIfCounted && r1?.veritasLogins === 0 && r1?.usedIfCountedExceptVeritas === r1?.usedIfCounted, JSON.stringify([sr, r1]));
-    check("6. totals: 4 distinct people, 2 of them Veritas logins, in 1 lab; 1 lab newly over if Veritas logins are left out",
-      j.totals?.uncountedPeopleDistinct === 4 && j.totals?.uncountedVeritasLogins === 2 && j.totals?.labsWithVeritasLogins === 1 && j.totals?.labsNewlyOverIfCountedExceptVeritas === 1, JSON.stringify(j.totals));
+    check("6. totals: 4 distinct people, 2 of them Veritas logins, in 1 lab; none newly over with Veritas logins left out (that is today's count since Q282)",
+      j.totals?.uncountedPeopleDistinct === 4 && j.totals?.uncountedVeritasLogins === 2 && j.totals?.labsWithVeritasLogins === 1 && j.totals?.labsNewlyOverIfCountedExceptVeritas === 0, JSON.stringify(j.totals));
     check("6. the rule: the operator's address and any @veritaslabservices.com address, in any case; nothing else",
       isVeritasLogin(OWNER_EMAIL.toUpperCase()) && isVeritasLogin(" a.b@VeritasLabServices.COM ") && !isVeritasLogin("someone@notveritaslabservices.com")
         && !isVeritasLogin("someone@veritaslabservices.com.example") && !isVeritasLogin("someone@gmail.com") && !isVeritasLogin("") && !isVeritasLogin(null));
     check("4. no names or emails in the answer", !/@|Made-up|veritaslabservices/i.test(JSON.stringify(j)));
     const after = ["user_seats", "lab_members", "labs", "users"].map((t) => (sqlite.prepare(`SELECT COUNT(*) AS n FROM ${t}`).get() as any).n).join(",");
     check("5. it writes nothing", before === after, `${before} -> ${after}`);
+
+    // ── 7. Q282 = 1 (2026-11-11): admins without a seat row count against seats, except Veritas logins ──
+    const { labSeatSummary } = await import("../../server/labSeats");
+    const jwt = (await import("jsonwebtoken")).default;
+    const tok = (uid: number) => jwt.sign({ svc: true, userId: uid }, process.env.JWT_SECRET!, { expiresIn: "10m" });
+    const ss = labSeatSummary(sqlite, s)!, vs = labSeatSummary(sqlite, v)!, p1s = labSeatSummary(sqlite, p1)!, p2s = labSeatSummary(sqlite, p2)!;
+    check("7. standalone: the former owner takes a seat (6 used, 1 of them an admin without a seat row)", ss.activeUsed === 6 && ss.adminsWithoutSeatCounted === 1, JSON.stringify(ss));
+    check("7. left out still: the seated admin (counted once), Veritas support, the staff-role member and the medical director", ss.activeUsed === 6);
+    check("7. client lab: its two Veritas logins take no seat (4 used, 0 added)", vs.activeUsed === 4 && vs.adminsWithoutSeatCounted === 0, JSON.stringify(vs));
+    check("7. system: the admin in both labs takes one pooled seat, counted once (1 added in each lab's pooled count)",
+      p1s.adminsWithoutSeatCounted === 1 && p2s.adminsWithoutSeatCounted === 1 && p1s.activeUsed === p2s.activeUsed, JSON.stringify([p1s, p2s]));
+    const mem = await fetch(`${base}/api/labs/${s}/members`, { headers: { Authorization: `Bearer ${tok(o1)}`, "X-Active-Lab-Id": String(s) } });
+    const mj: any = await mem.json().catch(() => ({}));
+    check("7. the Members page reads the same count (6 of 5)", mem.status === 200 && mj?.seatCounts?.active === 6 && mj?.seatLimits?.activeIncluded === 5, JSON.stringify({ s: mem.status, c: mj?.seatCounts, l: mj?.seatLimits?.activeIncluded }));
+    const inv = await fetch(`${base}/api/labs/${s}/members`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${tok(o1)}`, "X-Active-Lab-Id": String(s) }, body: JSON.stringify({ email: "new-writer-096@example.test", role: "staff", seatType: "active" }) });
+    const ij: any = await inv.json().catch(() => ({}));
+    check("7. the invite gate refuses a new writer at 6 of 5 (402 seat_limit_reached, current 6)", inv.status === 402 && ij?.error === "seat_limit_reached" && ij?.current === 6 && ij?.limit === 5, JSON.stringify({ s: inv.status, ij }));
+    const inv2 = await fetch(`${base}/api/labs/${v}/members`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${tok(o3)}`, "X-Active-Lab-Id": String(v) }, body: JSON.stringify({ email: "client-writer-096@example.test", role: "staff", seatType: "active" }) });
+    const ij2: any = await inv2.json().catch(() => ({}));
+    check("7. the client lab's gate still lets a writer in at 4 of 5 (its Veritas logins don't count)", inv2.status !== 402 && inv2.status < 300, JSON.stringify({ s: inv2.status, ij2 }));
   } finally {
     server.close();
   }
