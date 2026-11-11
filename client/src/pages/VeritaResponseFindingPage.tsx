@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { rootCauseLabel } from "@shared/ptFailure";
+import { isHardDeadline, isFindingOpen } from "@shared/findingCounts";
 import { findingTemplate, parseTypeDetails, ptScorePercent } from "@shared/findingTypes";
 import { FindingTypeDetails } from "@/components/FindingTypeDetails";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -976,8 +977,9 @@ export default function VeritaResponseFindingPage() {
   // (FDA reportable-event window, not a lab CAPA deadline) get a soft "target"
   // treatment: amber, not red "overdue".
   // ISO 15189 counts as hard: its due date is the one the accreditation body set (#108).
-  const hardDeadline = ["CMS", "CAP", "TJC", "ISO"].includes(finding.accreditor);
-  const isActive = status !== "closed" && status !== "accepted";
+  const hardDeadline = isHardDeadline(finding.accreditor);
+  // BUG-167: a closed or accepted finding shows its date only, by the rule the list tiles count by.
+  const isActive = isFindingOpen(finding);
   const isOverdue = hardDeadline && d !== null && d < 0 && isActive;
   const isPastTarget = !hardDeadline && d !== null && d < 0 && isActive;
   const isDueSoon = d !== null && d >= 0 && d <= 7 && isActive;
@@ -1093,7 +1095,7 @@ export default function VeritaResponseFindingPage() {
           <div className="text-sm">
             <span className="font-semibold">
               {hardDeadline ? "Due" : "Target"} {finding.due_date}
-              {d !== null && (
+              {d !== null && isActive && (
                 <>
                   {" "}({d < 0
                     ? hardDeadline ? `${Math.abs(d)}d overdue` : `${Math.abs(d)}d past target`

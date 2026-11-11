@@ -324,7 +324,7 @@ export default function VeritaResponseAppPage() {
   }).length;
   const dueSoonCount = findings.filter((f) => {
     if (!f.due_date) return false;
-    if (f.status === "closed" || f.status === "accepted") return false;
+    if (!isFindingOpen(f)) return false;
     const d = daysUntil(f.due_date);
     return d !== null && d >= 0 && d <= 7;
   }).length;
@@ -451,9 +451,11 @@ export default function VeritaResponseAppPage() {
                   const d = daysUntil(f.due_date);
                   // #11: soft-clock accreditors (COLA/AABB) read "target", not "overdue".
                   const hard = isHardDeadline(f.accreditor);
+                  // BUG-167: a closed or accepted finding shows its date only, by the rule the tiles count by.
+                  const open = isFindingOpen(f);
                   const dueLabel = !f.due_date
                     ? "No deadline"
-                    : d === null
+                    : d === null || !open
                       ? f.due_date
                       : d < 0
                         ? hard
@@ -464,7 +466,7 @@ export default function VeritaResponseAppPage() {
                             ? `Due today (${f.due_date})`
                             : `Target today (${f.due_date})`
                           : `In ${d}d (${f.due_date})`;
-                  const dueCls = !f.due_date
+                  const dueCls = !f.due_date || !open
                     ? "text-muted-foreground"
                     : d !== null && d < 0
                       ? hard
