@@ -42,6 +42,28 @@ check("8. edit_all reads as edit on every seat module", modulesWithStoredEdit(JS
 check("9. view_all and broken JSON read as no edit", modulesWithStoredEdit(JSON.stringify({ mode: "view_all" })).length === 0 && modulesWithStoredEdit("{not json").length === 0);
 check("10. the answer carries no names, emails or seat ids", !/@|seat_?id|email|name/i.test(JSON.stringify(r).replace(/"rule":"[^"]*"/, "")), JSON.stringify(r).slice(0, 200));
 
-console.log(`${passes} PASS, ${fails} FAIL`);
-console.log(fails ? "FAILED" : "ALL PASS");
-process.exit(fails ? 1 : 0);
+// seat-facts (server/seatFacts.ts): one made-up person holding a Staff seat (view_all) and a writer seat (edit_all) in the
+// same lab, a membership there, and one audited permission change.
+import("../../server/seatFacts").then(({ seatFactsForUser }) => {
+  const f = new Database(":memory:");
+  f.exec(`CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT);
+    CREATE TABLE user_seats (id INTEGER PRIMARY KEY, owner_user_id INTEGER, seat_email TEXT, seat_user_id INTEGER, lab_id INTEGER, seat_type TEXT, status TEXT, invited_at TEXT, accepted_at TEXT, permissions TEXT);
+    CREATE TABLE lab_members (lab_id INTEGER, user_id INTEGER, role TEXT, status TEXT, is_primary_lab INTEGER);
+    CREATE TABLE audit_log (id INTEGER PRIMARY KEY, user_id INTEGER, entity_type TEXT, entity_id TEXT, created_at TEXT, before_json TEXT, after_json TEXT);`);
+  f.prepare("INSERT INTO users VALUES (7, 'Made.Up@Example.test')").run();
+  f.prepare("INSERT INTO user_seats VALUES (1, 2, 'made.up@example.test', 7, 20, 'staff_portal', 'active', 't0', 't1', ?)").run(JSON.stringify({ mode: "view_all" }));
+  f.prepare("INSERT INTO user_seats VALUES (2, 2, 'made.up@example.test', 7, 20, 'active', 'active', 't2', 't3', ?)").run(JSON.stringify({ mode: "edit_all" }));
+  f.prepare("INSERT INTO user_seats VALUES (3, 2, 'made.up@example.test', NULL, 21, 'active', 'pending', 't4', NULL, ?)").run(JSON.stringify({ mode: "edit_all" }));
+  f.prepare("INSERT INTO lab_members VALUES (20, 7, 'staff', 'active', 1)").run();
+  f.prepare("INSERT INTO audit_log VALUES (1, 2, 'seat.permissions', '2', '2026-11-11 17:39:00', ?, ?)").run(JSON.stringify({ mode: "view_all" }), JSON.stringify({ mode: "edit_all" }));
+  const r: any = seatFactsForUser(f, 7);
+  check("11. seat-facts lists all three seats, the email-only pending one included", r.seats.length === 3 && r.seats[2].linkedBy === "email-only", JSON.stringify(r.seats));
+  check("12. it reads each seat's type and mode", r.seats[0].seatType === "staff_portal" && r.seats[0].mode === "view_all" && r.seats[1].mode === "edit_all", JSON.stringify(r.seats));
+  check("13. the edit check sees two active seats in lab 20 and reports which it picks", r.editCheck[0].activeSeatsInLab.length === 2 && [1, 2].includes(r.editCheck[0].pickedSeatId), JSON.stringify(r.editCheck));
+  check("14. the audited change shows before view_all, after edit_all, with its time", r.permissionChanges.length === 1 && r.permissionChanges[0].before.mode === "view_all" && r.permissionChanges[0].after.mode === "edit_all", JSON.stringify(r.permissionChanges));
+  check("15. no email in the answer", !/example\.test/i.test(JSON.stringify(r)));
+  check("16. unknown user gives null", seatFactsForUser(f, 999) === null);
+  console.log(`${passes} PASS, ${fails} FAIL`);
+  console.log(fails ? "FAILED" : "ALL PASS");
+  process.exit(fails ? 1 : 0);
+});
