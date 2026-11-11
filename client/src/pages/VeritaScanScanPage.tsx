@@ -4,6 +4,7 @@ import { Link, useParams } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/components/AuthContext";
 import { API_BASE } from "@/lib/queryClient";
+import { useFreshRecord } from "@/lib/freshRecord";
 import { authHeaders } from "@/lib/auth";
 import { downloadPdfToken } from "@/lib/utils";
 import { saveAs } from "file-saver";
@@ -1135,7 +1136,7 @@ export default function VeritaScanScanPage() {
   };
 
   // ── Fetch scan items ────────────────────────────────────────────────────
-  const { isLoading: itemsLoading } = useQuery<ItemState[]>({
+  const itemsQuery = useQuery<ItemState[]>({
     queryKey: [scanItemsUrl],
     enabled: !isNaN(scanId),
     staleTime: 0,
@@ -1143,9 +1144,14 @@ export default function VeritaScanScanPage() {
     select: (data: any) => data,
     // @ts-ignore — using onSuccess via select + useEffect below
   });
+  const { isLoading: itemsLoading } = itemsQuery;
 
-  // Watch the raw query data and merge into local state
-  const rawItemData = qc.getQueryData<ItemState[]>([scanItemsUrl]);
+  // Merge the items into local state only from a read made after the scan opened (Sampson 2026-11-11, the
+  // stale-reopen class). Autosave sends every item in local state, and it left the cached read behind, so a click
+  // made on a reopened scan before its own read came back (or after that read failed) wrote the cached statuses
+  // back over every item saved since. Edits wait for that read (itemsReady).
+  const rawItemData = useFreshRecord(itemsQuery);
+  const itemsReady = rawItemData !== undefined;
   useEffect(() => {
     if (!rawItemData) return;
     setItems((prev) => {
@@ -1217,7 +1223,7 @@ export default function VeritaScanScanPage() {
   // ── Item change handler ─────────────────────────────────────────────────
   const handleItemChange = useCallback(
     (id: number, patch: Partial<ItemState>) => {
-      if (readOnly) return;
+      if (readOnly || !itemsReady) return;
       setItems((prev) => {
         const next = {
           ...prev,
@@ -1228,11 +1234,12 @@ export default function VeritaScanScanPage() {
         return next;
       });
     },
-    [scheduleAutoSave, readOnly]
+    [scheduleAutoSave, readOnly, itemsReady]
   );
 
   // Manual save
   const handleManualSave = () => {
+    if (!itemsReady) return;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveMutation.mutate(Object.values(items));
   };
@@ -1348,7 +1355,8 @@ export default function VeritaScanScanPage() {
   const isLoading = metaLoading || itemsLoading;
 
   // ── Loading state ───────────────────────────────────────────────────────
-  if (isLoading && !scanMeta) {
+  // Also while this open's own read of the items is on its way, so the cached statuses never show as current.
+  if ((isLoading && !scanMeta) || (!itemsReady && itemsQuery.isFetching)) {
     return (
       <div className="flex items-center justify-center h-64">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
