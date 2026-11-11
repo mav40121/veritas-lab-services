@@ -16,6 +16,7 @@ import fs from "fs";
 import path from "path";
 import crypto from "crypto";
 import { labGroupSignerIds } from "./labGroups";
+import { seatTypeInLabSql } from "./seatContext";
 
 export const POLICY_STORAGE_ROOT =
   process.env.POLICY_STORAGE_ROOT || "/data/policies";
@@ -470,19 +471,16 @@ export function canUserApproveStep(
       : { ok: false, reason: "This step is assigned to a specific user other than you." };
   }
   // For everything else, check the user's relationship to this lab.
+  // The member's one seat in this lab, as requireModuleEdit reads it (server/seatContext.ts seatTypeInLabSql): tied to the lab
+  // before a seat with no lab under the lab's owner (Q287 = 1), a writer seat before a Staff seat. No seat reads as active.
   const member = sqlite
     .prepare(
-      `SELECT lm.role, COALESCE(us.seat_type, 'active') AS seat_type
+      `SELECT lm.role, COALESCE(${seatTypeInLabSql("lm.user_id", "lm.lab_id")}, 'active') AS seat_type
          FROM lab_members lm
-         LEFT JOIN user_seats us
-           ON us.seat_user_id = lm.user_id
-          AND us.owner_user_id = (SELECT owner_user_id FROM labs WHERE id = ?)
-          AND us.status = 'active'
-          AND us.lab_id = lm.lab_id
         WHERE lm.user_id = ? AND lm.lab_id = ? AND lm.status = 'active'
         LIMIT 1`
     )
-    .get(labId, userId, labId) as { role?: string; seat_type?: string } | undefined;
+    .get(userId, labId) as { role?: string; seat_type?: string } | undefined;
   if (!member) return { ok: false, reason: "Not a member of this lab" };
   if (role === "any_active_seat") {
     if (member.seat_type === "active" || member.role === "owner" || member.role === "admin") {
@@ -897,18 +895,14 @@ export function eligibleReviewerIdsForStep(
   }
   // Pull all active members on the lab with their seat_type, exclude
   // owner unless allow_self_approval=1, then filter by role.
+  // Each member's one seat in this lab, as canUserApproveStep reads it (seatTypeInLabSql; one row per member, Q287 = 1).
   const members = sqlite
     .prepare(
-      `SELECT lm.user_id, lm.role, COALESCE(us.seat_type, 'active') AS seat_type
+      `SELECT lm.user_id, lm.role, COALESCE(${seatTypeInLabSql("lm.user_id", "lm.lab_id")}, 'active') AS seat_type
          FROM lab_members lm
-         LEFT JOIN user_seats us
-           ON us.seat_user_id = lm.user_id
-          AND us.owner_user_id = (SELECT owner_user_id FROM labs WHERE id = ?)
-          AND us.status = 'active'
-          AND us.lab_id = lm.lab_id
         WHERE lm.lab_id = ? AND lm.status = 'active'`
     )
-    .all(labId, labId) as { user_id: number; role: string; seat_type: string }[];
+    .all(labId) as { user_id: number; role: string; seat_type: string }[];
   // Mirror the strict Medical Director routing used by canUserApproveStep so
   // the submit-time "zero eligible approvers" warning is accurate: when a
   // designated director is active, only the director plus owner/admin

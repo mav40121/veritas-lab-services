@@ -1,6 +1,6 @@
 import { useAuth } from "./AuthContext";
 import { AlertTriangle, Lock, ArrowRight } from "lucide-react";
-import { resolveSeatPermission } from "@shared/schema";
+import { effectiveSeatPermission, isReadOnlySeatType } from "@shared/seatEditRule";
 import { useActiveSubscription } from "@/hooks/useActiveSubscription";
 import { useMemberships } from "@/hooks/useMemberships";
 import { pickCurrentMembership } from "@/lib/currentLab";
@@ -46,13 +46,24 @@ export function useIsReadOnly(module?: string): boolean {
     return false;
   }
 
+  // Michael 2026-11-11: a Staff seat (read and sign) never edits, whatever its
+  // stored permissions say. The active lab's seat type comes from /api/labs/me,
+  // picked as requireModuleEdit picks it (a writer seat before a Staff seat),
+  // so a Staff login in this lab is read only here exactly as the server
+  // refuses it. See shared/seatEditRule.ts.
+  const labSeatType = activeMembership?.seatType ?? null;
+  if (module && isReadOnlySeatType(labSeatType)) return true;
+
   // Seat user module check. Resolver handles both shapes:
   //   * legacy flat map (auto-upgrades all-edit seats to edit_all)
   //   * new mode shape (edit_all / view_all / custom)
   // See shared/schema.ts. If no module key passed, fall through to false --
   // pages without per-module gating still respect base access level above.
+  // The account-level seat's own type decides only when the active lab gives
+  // no seat type (the server's legacy branch reads that same seat); a writer
+  // seat in this lab keeps reading its permissions as before.
   if (module && user?.isSeatUser && user?.seatPermissions) {
-    const perm = resolveSeatPermission(user.seatPermissions, module);
+    const perm = effectiveSeatPermission(labSeatType ?? user.seatType ?? null, user.seatPermissions, module);
     return perm !== 'edit';
   }
   return false;

@@ -351,9 +351,10 @@ async function main() {
     const editor = await addStaffLogin(A, "Edna", "Editor", '{"mode":"custom","overrides":{"veritapolicy":"edit"}}');
     check("7. a Staff seat given edit on VeritaDC sees every document", (await docIds(editor)).includes(draft.id));
     check("7. and the tracker", (await call("GET", `${P}/documents/${docSafety}/signature-status`, undefined, editor.token)).status === 200);
+    // Michael 2026-11-11: a Staff seat never edits, whatever its stored permissions say (shared/seatEditRule.ts), so the edit
+    // stored on this seat no longer assigns. Its reads above are left as they were (tests/integration/staff-seat-no-edit.test.ts).
     const editorAssign = await assign({ scope: "document", id: docMicro, group_ids: [chem] }, editor.token);
-    check("7. and can assign", editorAssign.status === 201, `HTTP ${editorAssign.status} ${editorAssign.body.error || ""}`);
-    await call("DELETE", `${P}/read-sign/${editorAssign.body.rows.find((r: any) => r.direct && r.group_id === chem).id}`, undefined, A.token);
+    check("7. but can't assign: a Staff seat never edits", editorAssign.status === 403, `HTTP ${editorAssign.status} ${editorAssign.body.error || ""}`);
     check("7. the owner reads the tracker", (await call("GET", `${P}/documents/${docSafety}/signature-status`, undefined, A.token)).status === 200);
     const viewer = await call("POST", "/api/auth/register", { email: `readsign-viewer-${stamp}@example.com`, password: PW, name: "View Only", hipaa_acknowledged: true });
     const viewerId = Number(viewer.body.user?.id ?? viewer.body.id);

@@ -64,7 +64,8 @@ import { renderMonthlyReviewPDF, type MonthlyReviewPayload, type MonthlyReviewRe
 import { buildMonthlyReviewPayload } from "./qcMonthlyReviewPayload";
 import { applyLicenseToExcelJS } from "./licenseStamp";
 import { resolveLegacyLabId as sharedResolveLegacyLabId, ownerMatchCounts, ownerRowInReach, isOlderSeatDate } from "./labAccessGuard";
-import { legacySeatForUser, seatForRequest } from "./seatContext";
+import { adminSeatLabId, editSeatInLab, labForNewAccountSeat, legacySeatForUser, seatForRequest, seatInLabOrderSql, seatInLabSql, seatTypeInLabSql, stampLablessSeatLab } from "./seatContext";
+import { effectiveSeatPermission, staffSeatEditRefusal } from "@shared/seatEditRule";
 import { staffSeatEditCounts } from "./staffSeatEditCounts";
 import { seatFactsForUser } from "./seatFacts";
 import { checkAuthToken, verifySessionJwt, issueSession, endSessions, touchSession, issuePurposeToken, verifyPurposeToken, describeDevice, clientIp } from "./sessionAuth";
@@ -286,7 +287,7 @@ function safeJsonParse(value: any, fallback: any = []): any {
     return [value];
   }
 }
-import { insertStudySchema, insertContactSchema, registerSchema, loginSchema, type Study, resolveSeatPermission, type SeatPermissions } from "@shared/schema";
+import { insertStudySchema, insertContactSchema, registerSchema, loginSchema, type Study, type SeatPermissions } from "@shared/schema";
 
 // ── Server-side pass/fail recomputation ─────────────────────────────────────
 // Mirrors the client calculation logic so the stored status is always correct.
@@ -1225,6 +1226,9 @@ function activeLabIdFromContext(req: any): number | null {
 // Uses the shared resolver so client useIsReadOnly() and this middleware
 // agree on the answer. Drift between the two = UI says edit while API
 // returns 403, which is exactly the symptom David hit. See shared/schema.ts.
+// 2026-11-11 (Michael): a Staff seat (seat_type 'staff_portal') never passes,
+// whatever its stored permissions say; both branches read the seat through
+// effectiveSeatPermission (shared/seatEditRule.ts), as useIsReadOnly does.
 function requireModuleEdit(module: string) {
   return (req: any, res: any, next: any) => {
     // 2026-06-01 lab-scoped seat check (mirrors PR #479's account-settings
@@ -1268,10 +1272,8 @@ function requireModuleEdit(module: string) {
         ).get(activeLabId, req.userId);
       if (adminMember) return next();
 
-      // Otherwise check if the caller has an active seat IN THIS lab.
-      const seatRow = (db as any).$client.prepare(
-        "SELECT permissions FROM user_seats WHERE seat_user_id = ? AND status = 'active' AND lab_id = ? LIMIT 1"
-      ).get(req.userId, activeLabId) as any;
+      // Otherwise check if the caller has an active seat IN THIS lab: a writer seat before a Staff seat (editSeatInLab).
+      const seatRow = editSeatInLab((db as any).$client, req.userId, activeLabId) as any;
       if (!seatRow) {
         // No seat in this lab. Owners and lab/org admins already passed above, so a
         // caller reaching here with an ACTIVE MEMBERSHIP is a non-owner/non-admin
@@ -1297,7 +1299,8 @@ function requireModuleEdit(module: string) {
       }
       let labSeatPermissions: SeatPermissions = {} as SeatPermissions;
       try { labSeatPermissions = JSON.parse(seatRow.permissions || '{}') as SeatPermissions; } catch {}
-      const perm = resolveSeatPermission(labSeatPermissions, module);
+      // A Staff seat never edits, whatever its stored permissions say (Michael 2026-11-11; shared/seatEditRule.ts).
+      const perm = effectiveSeatPermission(seatRow.seat_type, labSeatPermissions, module);
       if (perm !== 'edit') {
         return res.status(403).json({
           error: `You have view-only access to ${module}. Ask the account owner to grant edit access.`
@@ -1312,7 +1315,8 @@ function requireModuleEdit(module: string) {
     // routes; with the resolution above, that case now uses the Referer
     // and falls into the lab-scoped branch instead.
     if (req.isSeatUser && req.seatPermissions) {
-      const perm = resolveSeatPermission(req.seatPermissions as SeatPermissions, module);
+      // req.seatType is the same seat row's type (authMiddleware): a Staff seat is refused here too.
+      const perm = effectiveSeatPermission(req.seatType, req.seatPermissions as SeatPermissions, module);
       if (perm !== 'edit') {
         return res.status(403).json({
           error: `You have view-only access to ${module}. Ask the account owner to grant edit access.`
@@ -1341,13 +1345,11 @@ function hasModuleEditAccess(labId: number, userId: number, module: string): boo
         WHERE l.id = ? AND om.user_id = ? AND om.status = 'active' AND om.org_role IN ('org_owner','org_admin') LIMIT 1`
     ).get(labId, userId);
   if (adminMember) return true;
-  const seatRow = sqlite.prepare(
-    "SELECT permissions FROM user_seats WHERE seat_user_id = ? AND status = 'active' AND lab_id = ? LIMIT 1"
-  ).get(userId, labId) as any;
+  const seatRow = editSeatInLab(sqlite, userId, labId) as any;
   if (!seatRow) return false;
   let perms: SeatPermissions = {} as SeatPermissions;
   try { perms = JSON.parse(seatRow.permissions || '{}') as SeatPermissions; } catch {}
-  return resolveSeatPermission(perms, module) === 'edit';
+  return effectiveSeatPermission(seatRow.seat_type, perms, module) === 'edit';
 }
 
 // ── PDF TOKEN STORE ──────────────────────────────────────────────────────────
@@ -3786,8 +3788,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       return res.status(400).json({ error: "seatId and permissions (object) required" });
     }
     const sqlite = (db as any).$client;
-    const seat = sqlite.prepare("SELECT id, owner_user_id, seat_email, permissions FROM user_seats WHERE id = ?").get(Number(seatId)) as any;
+    const seat = sqlite.prepare("SELECT id, owner_user_id, seat_email, permissions, seat_type FROM user_seats WHERE id = ?").get(Number(seatId)) as any;
     if (!seat) return res.status(404).json({ error: "Seat not found" });
+    // A Staff seat never edits (Michael 2026-11-11): edit on one is refused and nothing is stored.
+    const staffRefusal = staffSeatEditRefusal(seat.seat_type, permissions);
+    if (staffRefusal) return res.status(400).json(staffRefusal);
     const before = seat.permissions;
     const after = JSON.stringify(permissions);
     sqlite.prepare("UPDATE user_seats SET permissions = ? WHERE id = ?").run(after, Number(seatId));
@@ -6196,24 +6201,27 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
   // Admin: attach an existing user as an active seat under an owner account
   app.post("/api/admin/attach-seat", (req, res) => {
-    const { secret, ownerUserId, seatEmail, seatUserId } = req.body;
+    const { secret, ownerUserId, seatEmail, seatUserId, labId } = req.body;
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
     if (!ownerUserId || !seatEmail || !seatUserId) return res.status(400).json({ error: "ownerUserId, seatEmail, seatUserId required" });
     const sqlite = db.$client;
-    // seat-scope-ok: legacy admin tool, lab-less by design (creates one seat with
-    // no lab_id, no labId param). NOT the multi-lab customer path
+    // Q287 = 1 (2026-11-11): an optional labId, which must be a lab ownerUserId owns, is stamped on the seat so it isn't
+    // made without a lab. Left out, the seat has no lab, as before.
+    const stampLab = adminSeatLabId(sqlite, labId, ownerUserId);
+    if (stampLab === false) return res.status(400).json({ error: "labId must be a lab ownerUserId owns", code: "LAB_NOT_OWNED" });
+    // seat-scope-ok: legacy admin tool (one seat, a lab only when labId is given). NOT the multi-lab customer path
     // (/api/labs/:labId/members is). Admin-gated; a cross-lab DELETE here is a
     // known limitation flagged for a follow-up labId pass or retirement.
     // Remove any existing seat records for this email under this owner, then insert as an active seat with full
     // permissions; one transaction so a failed insert never leaves the person with no seat (BUG-094 sweep).
     const now = new Date().toISOString();
     sqlite.transaction(() => {
-      // seat-scope-ok: the legacy lab-less admin tool described above
+      // seat-scope-ok: the legacy admin tool described above
       sqlite.prepare("DELETE FROM user_seats WHERE owner_user_id = ? AND seat_email = ?").run(Number(ownerUserId), seatEmail);
       sqlite.prepare(`
-        INSERT INTO user_seats (owner_user_id, seat_email, seat_user_id, invited_at, accepted_at, status, permissions)
-        VALUES (?, ?, ?, ?, ?, 'active', '{}')
-      `).run(Number(ownerUserId), seatEmail, Number(seatUserId), now, now);
+        INSERT INTO user_seats (owner_user_id, seat_email, seat_user_id, invited_at, accepted_at, status, permissions, lab_id)
+        VALUES (?, ?, ?, ?, ?, 'active', '{}', ?)
+      `).run(Number(ownerUserId), seatEmail, Number(seatUserId), now, now, stampLab);
     })();
     // Give the seat user the owner's actual plan (not hardcoded community)
     const ownerUser = sqlite.prepare("SELECT plan FROM users WHERE id = ?").get(Number(ownerUserId)) as any;
@@ -6299,10 +6307,13 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // Used to manually onboard teammates whose corporate email gateway
   // quarantines automated invitations from Resend.
   app.post("/api/admin/create-pending-seat", (req, res) => {
-    const { secret, ownerUserId, seatEmail } = req.body || {};
+    const { secret, ownerUserId, seatEmail, labId } = req.body || {};
     if (secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
     if (!ownerUserId || !seatEmail) return res.status(400).json({ error: "ownerUserId and seatEmail required" });
     const sqlite = (db as any).$client;
+    // Q287 = 1 (2026-11-11): an optional labId (a lab ownerUserId owns) is stamped on the seat; left out, it has no lab as before.
+    const stampLab = adminSeatLabId(sqlite, labId, ownerUserId);
+    if (stampLab === false) return res.status(400).json({ error: "labId must be a lab ownerUserId owns", code: "LAB_NOT_OWNED" });
     const owner = sqlite.prepare("SELECT id, seat_count FROM users WHERE id = ?").get(Number(ownerUserId)) as any;
     if (!owner) return res.status(404).json({ error: "Owner not found" });
     const seatCap = Number(owner.seat_count || 1);
@@ -6318,10 +6329,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const token = crypto.randomUUID();
     const now = new Date().toISOString();
     sqlite.prepare(`
-      INSERT INTO user_seats (owner_user_id, seat_email, invited_at, status, permissions, invite_token)
-      VALUES (?, ?, ?, 'pending', '{}', ?)
-    `).run(Number(ownerUserId), String(seatEmail), now, token);
-    const seat = sqlite.prepare("SELECT id, owner_user_id, seat_email, status, invited_at, invite_token FROM user_seats WHERE owner_user_id = ? AND lower(seat_email) = lower(?)").get(Number(ownerUserId), String(seatEmail)) as any;
+      INSERT INTO user_seats (owner_user_id, seat_email, invited_at, status, permissions, invite_token, lab_id)
+      VALUES (?, ?, ?, 'pending', '{}', ?, ?)
+    `).run(Number(ownerUserId), String(seatEmail), now, token, stampLab);
+    const seat = sqlite.prepare("SELECT id, owner_user_id, seat_email, status, invited_at, invite_token, lab_id FROM user_seats WHERE owner_user_id = ? AND lower(seat_email) = lower(?)").get(Number(ownerUserId), String(seatEmail)) as any;
     const url = `${process.env.FRONTEND_URL || ''}/join?token=${token}`;
     res.json({ ok: true, seat, url });
   });
@@ -7260,6 +7271,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       } catch (err: any) {
         console.error("[auth/register seat-accept] lab_members grant failed (non-fatal):", err.message);
       }
+      // Q287 = 1: a seat with no lab takes the lab when the person is now an active member of exactly one of the owner's labs.
+      try { stampLablessSeatLab((db as any).$client, Number(seatInvite.id)); } catch (err: any) {
+        console.error("[auth/register seat-accept] lab stamp failed (non-fatal):", err.message);
+      }
     } else if (activeSeat) {
       // User is already an active seat (e.g. manually attached via admin endpoint)
       isSeatUser = true;
@@ -7299,14 +7314,16 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // a just-accepted Staff login is read-only for setup from its first screen
     // (without them the client treated the seat as editable until the next login).
     let registerSeatPermissions: Record<string, any> | null = null;
+    let registerSeatType: string | null = null;
     if (isSeatUser) {
-      const sp = legacySeatForUser((db as any).$client, user.id, "permissions") as any;
+      const sp = legacySeatForUser((db as any).$client, user.id, "permissions, seat_type") as any;
+      registerSeatType = sp ? (sp.seat_type || "active") : null;
       try { registerSeatPermissions = JSON.parse(sp?.permissions || "{}"); } catch { registerSeatPermissions = {}; }
     }
     if (needsVerification) {
       const emailSent = await sendVerificationEmail(resend, FRONTEND_URL, user.email, startEmailVerification((db as any).$client, user.id));
       res.json({ verification_required: true, email: user.email, email_sent: emailSent });
-    } else res.json({ ...(regMfa.required ? setupResponse(user, regMfa) : { token, session_token: sessionToken }), user: { id: user.id, email: user.email, name: user.name, plan: responsePlan, studyCredits: user.studyCredits, hasCompletedOnboarding: isSeatUser ? true : false, isSeatUser, seatPermissions: registerSeatPermissions, subscriptionExpiresAt: responseSubExpiry, subscriptionStatus: responseSubStatus, accessLevel: responseAccessLevel, cliaNumber: null, cliaLabName: null, cliaTier: null, seatCount: isSeatUser ? 0 : selectedSeatCount } });
+    } else res.json({ ...(regMfa.required ? setupResponse(user, regMfa) : { token, session_token: sessionToken }), user: { id: user.id, email: user.email, name: user.name, plan: responsePlan, studyCredits: user.studyCredits, hasCompletedOnboarding: isSeatUser ? true : false, isSeatUser, seatType: registerSeatType, seatPermissions: registerSeatPermissions, subscriptionExpiresAt: responseSubExpiry, subscriptionStatus: responseSubStatus, accessLevel: responseAccessLevel, cliaNumber: null, cliaLabName: null, cliaTier: null, seatCount: isSeatUser ? 0 : selectedSeatCount } });
 
     // Send welcome email via Resend. A sign-up still confirming its address gets that email instead.
     if (resend && !needsVerification) {
@@ -7558,13 +7575,15 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
     // Resolve seat info. #82: an owner's account-level plan and permissions are
     // their own, never a seat they hold on someone else's lab.
-    const seatInfo = legacySeatForUser((db as any).$client, user.id, "owner_user_id, permissions") as any;
+    const seatInfo = legacySeatForUser((db as any).$client, user.id, "owner_user_id, permissions, seat_type") as any;
     const isSeatUser = !!seatInfo;
     let seatPermissions: Record<string, string> | null = null;
     if (seatInfo) {
       try { seatPermissions = JSON.parse(seatInfo.permissions || '{}'); } catch { seatPermissions = {}; }
     }
     const ownerUserId = seatInfo?.owner_user_id ?? null;
+    // The same seat's type, so the client reads a Staff seat as read only (shared/seatEditRule.ts), as the server does.
+    const seatType: string | null = seatInfo ? (seatInfo.seat_type || "active") : null;
 
     // For seat users, use the owner's plan and subscription fields
     let effectivePlan = user.plan;
@@ -7606,6 +7625,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           seatCount: effectiveSeatCount,
           onboardingSeen: !!(userRow?.onboarding_seen),
           isSeatUser,
+          seatType,
           seatPermissions,
           ownerUserId,
         },
@@ -7628,6 +7648,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         seatCount: effectiveSeatCount,
         onboardingSeen: !!(userRow?.onboarding_seen),
         isSeatUser,
+        seatType,
         seatPermissions,
         ownerUserId,
       },
@@ -7674,13 +7695,15 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
     // Resolve seat info. #82: an owner's account-level plan and permissions are
     // their own, never a seat they hold on someone else's lab.
-    const seatInfo = legacySeatForUser((db as any).$client, user.id, "owner_user_id, permissions") as any;
+    const seatInfo = legacySeatForUser((db as any).$client, user.id, "owner_user_id, permissions, seat_type") as any;
     const isSeatUser = !!seatInfo;
     let seatPermissions: Record<string, string> | null = null;
     if (seatInfo) {
       try { seatPermissions = JSON.parse(seatInfo.permissions || '{}'); } catch { seatPermissions = {}; }
     }
     const ownerUserId = seatInfo?.owner_user_id ?? null;
+    // The same seat's type, so the client reads a Staff seat as read only (shared/seatEditRule.ts), as the server does.
+    const seatType: string | null = seatInfo ? (seatInfo.seat_type || "active") : null;
 
     // For seat users, resolve the owner's plan and subscription so they see the correct access level
     let effectivePlan = user.plan;
@@ -7711,6 +7734,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       seatCount: effectiveSeatCount,
       onboardingSeen: !!(userRow?.onboarding_seen),
       isSeatUser,
+      seatType,
       seatPermissions,
       ownerUserId,
     });
@@ -7760,9 +7784,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         l.nys_permit_type,
         l.organization_id,
         (SELECT o.name FROM organizations o WHERE o.id = l.organization_id) AS organization_name,
-        (SELECT us.seat_type FROM user_seats us
-          WHERE us.seat_user_id = ? AND us.lab_id = l.id AND us.status = 'active'
-          ORDER BY us.id ASC LIMIT 1) AS seat_type,
+        ${seatTypeInLabSql("?", "l.id")} AS seat_type,
         (SELECT sl.lab_address_state FROM staff_labs sl
           WHERE sl.user_id = l.owner_user_id ORDER BY sl.id DESC LIMIT 1) AS owner_state,
         (SELECT lc.expiration_date
@@ -7816,6 +7838,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       // #84 (2026-10-08): the seat this user holds IN THIS LAB ('active',
       // 'view_only', 'staff_portal', 'medical_director'...), null when none.
       // role 'staff' alone cannot tell a writer seat from a Staff login.
+      // The same seat requireModuleEdit judges (editSeatInLab, server/seatContext.ts):
+      // tied to the lab before one with no lab (Q287 = 1), a writer seat before a
+      // Staff seat (2026-11-11), so useIsReadOnly reads the same one.
       seatType: m.seat_type ?? null,
       // Michael Q182 = 1: this person sees only their own competency data in this lab, and which roster row is theirs. Decided
       // here, per lab, by the same rule the routes apply, so the screens never guess.
@@ -11870,10 +11895,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
     const now = new Date().toISOString();
     const inviteToken = crypto.randomUUID();
-    // Staff Portal seats get view_all permissions by default — they
-    // don't author. The seat_type='staff_portal' gate is what actually
-    // restricts them; permissions just keeps legacy permission-mode
-    // callsites from blowing up on null.
+    // Staff Portal seats are read and sign: they don't author. They are stored
+    // as view_all, and since 2026-11-11 the seat type alone keeps them from
+    // editing: requireModuleEdit reads a staff_portal seat as view whatever its
+    // permissions say, and every route that writes seat permissions refuses
+    // edit on one (shared/seatEditRule.ts). The view_all value only keeps
+    // permission-mode readers from meeting a null.
     const permJson = JSON.stringify({ mode: "view_all" });
     try {
       sqlite.exec("BEGIN");
@@ -12125,10 +12152,18 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (!member) return res.status(404).json({ error: "Member not found in this lab" });
     const lab = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(req.scope.labId) as any;
     if (!lab) return res.status(404).json({ error: "Lab not found" });
+    // The seat the edit check reads (editSeatInLab's rule and order): tied to this lab before one with no lab (Q287 = 1; a
+    // seat with no lab counts here when the member holds it), a writer seat before a Staff seat, so the seat that edits changes.
     const seat = sqlite.prepare(
-      "SELECT id, permissions FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND lab_id = ? AND status != 'deactivated'"
-    ).get(lab.owner_user_id, String(member.email).toLowerCase(), req.scope.labId) as any;
+      `SELECT us.id, us.permissions, us.seat_type FROM user_seats us
+        WHERE us.owner_user_id = @owner AND us.status != 'deactivated'
+          AND ((us.seat_email = @email AND us.lab_id = @lab) OR (us.seat_user_id = @user AND ${seatInLabSql("us", "@lab")}))
+        ORDER BY ${seatInLabOrderSql("us")}`
+    ).get({ owner: lab.owner_user_id, email: String(member.email).toLowerCase(), lab: req.scope.labId, user: member.user_id }) as any;
     if (!seat) return res.status(404).json({ error: "Seat row not found for this member" });
+    // A Staff seat never edits (Michael 2026-11-11): edit on one is refused and nothing is stored.
+    const staffRefusal = staffSeatEditRefusal(seat.seat_type, permissions);
+    if (staffRefusal) return res.status(400).json(staffRefusal);
     const before = seat.permissions;
     const after = JSON.stringify(permissions);
     sqlite.prepare("UPDATE user_seats SET permissions = ? WHERE id = ?").run(after, seat.id);
@@ -12718,9 +12753,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         "SELECT 1 FROM labs WHERE id = ? AND owner_user_id = ? LIMIT 1"
       ).get(getActiveLabId, sessionUserId);
       if (!ownsLab) {
-        const seatRow = (db as any).$client.prepare(
-          "SELECT owner_user_id FROM user_seats WHERE seat_user_id = ? AND status = 'active' AND lab_id = ? LIMIT 1"
-        ).get(sessionUserId, getActiveLabId) as any;
+        // The person's seat in this lab, a seat with no lab included when its owner owns the lab and the person is a member
+        // (Q287 = 1, editSeatInLab). The lab-tied lookup alone refused a lab-less writer seat "Access denied".
+        const seatRow = editSeatInLab((db as any).$client, sessionUserId, getActiveLabId, "owner_user_id") as any;
         if (seatRow) effectiveUserId = seatRow.owner_user_id;
       }
     } else {
@@ -12837,13 +12872,14 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         "SELECT 1 FROM labs WHERE id = ? AND owner_user_id = ? LIMIT 1"
       ).get(postActiveLabId, payload.userId);
       if (!ownsLab) {
-        seatRow = (db as any).$client.prepare(
-          "SELECT owner_user_id, permissions FROM user_seats WHERE seat_user_id = ? AND status = 'active' AND lab_id = ? LIMIT 1"
-        ).get(payload.userId, postActiveLabId) as any;
+        // The person's seat in this lab (editSeatInLab: a seat with no lab counts when its owner owns the lab and the person is
+        // a member, Q287 = 1), read as requireModuleEdit reads it (effectiveSeatPermission: a Staff seat never edits). This
+        // read only the flat `veritacheck` key, so a seat stored {mode:"edit_all"} was refused here and nowhere else.
+        seatRow = editSeatInLab((db as any).$client, payload.userId, postActiveLabId, "owner_user_id, permissions, seat_type") as any;
         if (seatRow) {
-          let perms: Record<string, string> = {};
+          let perms: SeatPermissions = {} as SeatPermissions;
           try { perms = JSON.parse(seatRow.permissions || '{}'); } catch {}
-          if ((perms.veritacheck || 'view') !== 'edit') {
+          if (effectiveSeatPermission(seatRow.seat_type, perms, "veritacheck") !== 'edit') {
             return res.status(403).json({ error: "You have view-only access to veritacheck. Ask the account owner to grant edit access." });
           }
         }
@@ -12851,11 +12887,11 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     } else {
       // Legacy fallback: no active-lab context. Non-owners keep the global
       // behavior; owners act as themselves (#82).
-      seatRow = legacySeatForUser((db as any).$client, payload.userId, "owner_user_id, permissions") as any;
+      seatRow = legacySeatForUser((db as any).$client, payload.userId, "owner_user_id, permissions, seat_type") as any;
       if (seatRow) {
-        let perms: Record<string, string> = {};
+        let perms: SeatPermissions = {} as SeatPermissions;
         try { perms = JSON.parse(seatRow.permissions || '{}'); } catch {}
-        if ((perms.veritacheck || 'view') !== 'edit') {
+        if (effectiveSeatPermission(seatRow.seat_type, perms, "veritacheck") !== 'edit') {
           return res.status(403).json({ error: "You have view-only access to veritacheck. Ask the account owner to grant edit access." });
         }
       }
@@ -20287,10 +20323,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const { token: newToken, sessionToken: resetSessionToken } = issueSession((db as any).$client, user.id, req);
     // #84 (2026-10-08): include the seat flags login returns, so a Staff login
     // that resets its password is not shown edit controls until the next login.
-    const resetSeat = legacySeatForUser((db as any).$client, user.id, "permissions, owner_user_id") as any;
+    const resetSeat = legacySeatForUser((db as any).$client, user.id, "permissions, owner_user_id, seat_type") as any;
     let resetSeatPermissions: Record<string, any> | null = null;
     if (resetSeat) { try { resetSeatPermissions = JSON.parse(resetSeat.permissions || "{}"); } catch { resetSeatPermissions = {}; } }
-    res.json({ ok: true, token: newToken, session_token: resetSessionToken, user: { id: user.id, email: user.email, name: user.name, plan: user.plan, studyCredits: user.studyCredits, isSeatUser: !!resetSeat, seatPermissions: resetSeatPermissions, ownerUserId: resetSeat?.owner_user_id ?? null } });
+    res.json({ ok: true, token: newToken, session_token: resetSessionToken, user: { id: user.id, email: user.email, name: user.name, plan: user.plan, studyCredits: user.studyCredits, isSeatUser: !!resetSeat, seatType: resetSeat ? (resetSeat.seat_type || "active") : null, seatPermissions: resetSeatPermissions, ownerUserId: resetSeat?.owner_user_id ?? null } });
   });
 
   app.post("/api/stripe/checkout", authMiddleware, async (req: any, res) => {
@@ -29668,7 +29704,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
   // Staff self-entry on the person page (Michael's 2026-09-27 rule, opened here 2026-11-05 after RFGH staff could not
   // enter their own specimen numbers). Decided here from the session, never from anything the page sends: a Staff login
-  // on their OWN record, in a lab that can still take writes, who doesn't already hold edit access through their seat.
+  // on their OWN record, in a lab that can still take writes, who isn't the lab's owner or an admin.
   // Owners, admins and editors keep the evaluator's route below, unchanged.
   // Who may sign a method lists other people by name and role, for the evaluator's sign-off form. A Staff login never has that form.
   const withoutSigners = (ts: any) => ({ ...ts, signers: [] });
@@ -29677,9 +29713,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const seat = staffSelfSeat(sqlite, req.userId, req.scope.labId);
     if (!seat || seat.staff_employee_id !== empId) return false;
     if (req.scope.role === "owner" || req.scope.role === "admin") return false;
-    let perms: SeatPermissions = {} as SeatPermissions;
-    try { perms = JSON.parse(seat.permissions || "{}") as SeatPermissions; } catch { /* a malformed value reads as no edit access */ }
-    if (resolveSeatPermission(perms, "veritacomp") === "edit") return false;
+    // This used to send a Staff seat stored with edit on VeritaComp to the evaluator's route. A Staff seat never edits
+    // (Michael 2026-11-11, shared/seatEditRule.ts), so requireModuleEdit refuses it there: it enters its own data here.
     const level = getAccessLevel(storage.getUserById(req.userId), req.scope.lab);
     return level !== "read_only" && level !== "locked";
   };
@@ -32184,17 +32219,28 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // Reactivate a previously deactivated seat if one exists
     // seat-scope-ok: legacy account-level invite (primary-lab; see above).
     const deactivated = (db as any).$client.prepare(
-      "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND status = 'deactivated'"
+      "SELECT id, seat_type FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND status = 'deactivated'"
     ).get(req.userId, email.toLowerCase()) as any;
+    // Reactivating keeps the row's seat type, so a deactivated Staff seat comes back as a Staff seat: edit on it is
+    // refused, as on the permissions route below (Michael 2026-11-11), and nothing is stored.
+    const staffRefusal = deactivated ? staffSeatEditRefusal(deactivated.seat_type, permJson) : null;
+    if (staffRefusal) return res.status(400).json(staffRefusal);
+    // Q287 = 1 (2026-11-11): stop making seats with no lab. The seat takes the lab the owner is viewing when they own it, or
+    // their one lab when they own exactly one; otherwise it stays without a lab as before (labForNewAccountSeat). A
+    // reactivated row keeps a lab it already has.
+    const stampLabId = labForNewAccountSeat((db as any).$client, req.userId, req.headers["x-active-lab-id"]);
+    let seatRowId: number;
     if (deactivated) {
       (db as any).$client.prepare(
-        "UPDATE user_seats SET seat_user_id = ?, status = ?, invited_at = ?, accepted_at = ?, permissions = ?, invite_token = ? WHERE id = ?"
-      ).run(seatUserId, newStatus, now, seatUserId ? now : null, permJson, inviteToken, deactivated.id);
+        "UPDATE user_seats SET seat_user_id = ?, status = ?, invited_at = ?, accepted_at = ?, permissions = ?, invite_token = ?, lab_id = COALESCE(lab_id, ?) WHERE id = ?"
+      ).run(seatUserId, newStatus, now, seatUserId ? now : null, permJson, inviteToken, stampLabId, deactivated.id);
+      seatRowId = Number(deactivated.id);
     } else {
-      (db as any).$client.prepare(
-        "INSERT INTO user_seats (owner_user_id, seat_email, seat_user_id, invited_at, status, permissions, invite_token) VALUES (?, ?, ?, ?, ?, ?, ?)"
-      ).run(req.userId, email.toLowerCase(), seatUserId, now, newStatus, permJson, inviteToken);
+      seatRowId = Number((db as any).$client.prepare(
+        "INSERT INTO user_seats (owner_user_id, seat_email, seat_user_id, invited_at, status, permissions, invite_token, lab_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+      ).run(req.userId, email.toLowerCase(), seatUserId, now, newStatus, permJson, inviteToken, stampLabId).lastInsertRowid);
     }
+    const seatLabId: number | null = ((db as any).$client.prepare("SELECT lab_id FROM user_seats WHERE id = ?").get(seatRowId) as any)?.lab_id ?? null;
 
     // If the seat user already exists and is active, inherit the owner's lab_id
     if (seatUserId && newStatus === "active") {
@@ -32206,8 +32252,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       // invite to an already-registered user must also grant lab membership
       // on the inviter's primary lab, otherwise the lab switcher and per-
       // lab data gates won't see them (the original Bug 2 from 2026-05-24).
-      // Target lab = the inviter's primary lab_members row (is_primary_lab=1).
-      const inviterPrimary = (db as any).$client.prepare(
+      // Target lab = the seat's own lab when it has one (Q287 = 1, so the membership and the seat name the same lab), else
+      // the inviter's primary lab_members row (is_primary_lab=1) as before.
+      const inviterPrimary = seatLabId ? { lab_id: seatLabId } : (db as any).$client.prepare(
         "SELECT lab_id FROM lab_members WHERE user_id = ? AND is_primary_lab = 1 AND status = 'active' LIMIT 1"
       ).get(req.userId) as any;
       if (inviterPrimary?.lab_id) {
@@ -32226,6 +32273,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           auditLabMembership("create", newMembership, req.userId, (req.headers["x-forwarded-for"] as string) || null, "account/seats:legacy-invite");
         }
       }
+      // An existing account takes the seat at once, which is its acceptance: a seat still without a lab takes the lab when
+      // the person is now a member of exactly one of the owner's labs (Q287 = 1, as the invite link's acceptance does).
+      stampLablessSeatLab((db as any).$client, seatRowId);
     }
 
     // Send invite email via Resend
@@ -32355,6 +32405,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     ).get(seatId, req.userId) as any;
 
     if (!seat) return res.status(404).json({ error: "Seat not found" });
+    // A Staff seat (read and sign) never edits (Michael 2026-11-11, shared/seatEditRule.ts): edit on one is refused and
+    // nothing is stored. A view-only change on it still saves. Writer seats are unchanged.
+    const staffRefusal = staffSeatEditRefusal(seat.seat_type, permissions || {});
+    if (staffRefusal) return res.status(400).json(staffRefusal);
 
     const permJson = JSON.stringify(permissions || {});
     (db as any).$client.prepare(
@@ -34257,9 +34311,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           isSeat = false;
           resolvedOwnerUserId = req.userId;
         } else {
-          const seatRow = (db as any).$client.prepare(
-            "SELECT owner_user_id FROM user_seats WHERE seat_user_id = ? AND status = 'active' AND lab_id = ? LIMIT 1"
-          ).get(req.userId, lab.id) as any;
+          // The person's seat in this lab, a seat with no lab included (Q287 = 1, editSeatInLab).
+          const seatRow = editSeatInLab((db as any).$client, req.userId, lab.id, "owner_user_id") as any;
           if (seatRow) {
             isSeat = true;
             resolvedOwnerUserId = seatRow.owner_user_id;
@@ -34387,9 +34440,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       if (activeLabId) {
         const activeLab = (db as any).$client.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(activeLabId) as any;
         if (activeLab && activeLab.owner_user_id !== req.userId) {
-          const seatRow = (db as any).$client.prepare(
-            "SELECT owner_user_id FROM user_seats WHERE seat_user_id = ? AND status = 'active' AND lab_id = ? LIMIT 1"
-          ).get(req.userId, activeLabId) as any;
+          // The person's seat in this lab, a seat with no lab included (Q287 = 1, editSeatInLab).
+          const seatRow = editSeatInLab((db as any).$client, req.userId, activeLabId, "owner_user_id") as any;
           if (seatRow) {
             isSeatInActiveLab = true;
             activeLabOwnerId = seatRow.owner_user_id;
