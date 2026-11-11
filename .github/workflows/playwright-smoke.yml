@@ -55,7 +55,11 @@ jobs:
         run: npm ci
 
       - name: Install Playwright browser (chromium)
-        run: npx playwright install --with-deps chromium
+        # 2026-11-11: GitHub's runners could not resolve the Ubuntu package servers for hours, so the apt half of
+        # --with-deps failed every job before a test ran and froze deploys. The runner image already carries the
+        # libraries Chromium needs; if apt is unreachable, install the browser alone. Tests still fail if a library
+        # is really missing, so the gate is not weakened.
+        run: timeout 300 npx playwright install --with-deps chromium || { echo "::warning::apt unreachable; installing Chromium without system packages"; npx playwright install chromium; }
 
       # BLOCKING GATE: every spec must compile and collect. This is the real
       # regression catcher — it caught a spec that called test.use({...devices})
