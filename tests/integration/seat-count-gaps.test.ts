@@ -10,6 +10,8 @@
 //      owner, and a medical director (who sits on the free seat)
 //   4. on a system account, one admin with no seat in two of its labs is one more pooled seat, and one person in totals
 //   5. it writes nothing (row counts before and after)
+//   6. Q279 = 1 (2026-11-11): per lab and in totals, how many uncounted admins are Veritas logins (the operator's
+//      address or an @veritaslabservices.com address), and the count with them left out; counts only
 // Run: rm -f .tmp-seatgap.db && DB_PATH=.tmp-seatgap.db JWT_SECRET=test-jwt-secret ADMIN_SECRET=test-admin-secret STRIPE_SECRET_KEY=sk_test_dummy STRIPE_WEBHOOK_SECRET=whsec_dummy npx tsx tests/integration/seat-count-gaps.test.ts
 import http from "node:http";
 import express from "express";
@@ -54,6 +56,19 @@ async function main() {
   const p1 = insert("labs", { lab_name: "Made-up System Lab 1", owner_user_id: o2, plan: "hospital", organization_id: org });
   const p2 = insert("labs", { lab_name: "Made-up System Lab 2", owner_user_id: o2, plan: "hospital", organization_id: org });
   const both = user("bothlabs"); member(p1, both, "admin"); member(p2, both, "admin");
+  // ── Q279 = 1 (2026-11-11): a standalone Community lab whose two uncounted admins are Veritas logins: an
+  // @veritaslabservices.com address and the operator's own address (OWNER_EMAIL). Owner + 3 seated writers = 4 used. ──
+  const { OWNER_EMAIL } = await import("../../server/constants");
+  const { isVeritasLogin } = await import("../../server/labSeats");
+  const o3 = user("owner3");
+  const v = insert("labs", { lab_name: "Made-up Client Lab", owner_user_id: o3, plan: "community", organization_id: null });
+  member(v, o3, "owner");
+  for (let i = 1; i <= 3; i++) { const w = user(`v${i}`); member(v, w, "staff"); seat(o3, v, `v${i}-096@example.test`, w); }
+  const vlsLogin = insert("users", { email: "Made-Up.QA@VeritasLabServices.com", name: "Made-up QA login", plan: "community", seat_count: 0 });
+  member(v, vlsLogin, "admin");
+  const opRow = sqlite.prepare("SELECT id FROM users WHERE lower(email) = lower(?)").get(OWNER_EMAIL) as { id: number } | undefined;
+  const operator = opRow?.id ?? insert("users", { email: OWNER_EMAIL, name: "Made-up operator", plan: "community", seat_count: 0 });
+  member(v, operator, "admin");
 
   const app = express();
   app.use(express.json());
@@ -77,9 +92,21 @@ async function main() {
     const r1 = row(p1), r2 = row(p2);
     check("4. the system's labs each list their one admin, counted once in the pool (usedIfCounted = used + 1, not + 2)",
       r1?.uncountedAdmins === 1 && r2?.uncountedAdmins === 1 && r1?.pooled && r1?.usedIfCounted === r1?.activeUsed + 1 && r2?.usedIfCounted === r2?.activeUsed + 1, JSON.stringify([r1, r2]));
-    check("4. totals: 3 labs with uncounted admins, 2 people (the former owner, the one system admin)", j.totals?.labsWithUncountedAdmins === 3 && j.totals?.uncountedAdmins === 2, JSON.stringify(j.totals));
-    check("4. totals: one lab newly over its cap if counted (the standalone)", j.totals?.labsNewlyOverIfCounted === 1, JSON.stringify(j.totals));
-    check("4. no names or emails in the answer", !/@|Made-up/.test(JSON.stringify(j)));
+    check("4. totals: 4 labs with uncounted admins, 4 people (the former owner, the one system admin, the two Veritas logins)", j.totals?.labsWithUncountedAdmins === 4 && j.totals?.uncountedAdmins === 4, JSON.stringify(j.totals));
+    check("4. totals: two labs newly over their cap if counted (the standalone and the client lab)", j.totals?.labsNewlyOverIfCounted === 2, JSON.stringify(j.totals));
+    // ── 6. Q279 = 1: how many of the uncounted admins are Veritas logins ──
+    const vr = row(v);
+    check("6. the client lab lists 2 uncounted admins, both Veritas logins", vr?.uncountedAdmins === 2 && vr?.veritasLogins === 2, JSON.stringify(vr));
+    check("6. ... 4 of 5 used now; 6 if all counted (over); 4 if Veritas logins are left out (not over)",
+      vr?.activeUsed === 4 && vr?.usedIfCounted === 6 && vr?.overIfCounted === true && vr?.usedIfCountedExceptVeritas === 4 && vr?.overIfCountedExceptVeritas === false, JSON.stringify(vr));
+    check("6. the other labs' uncounted admins aren't Veritas logins (0 each; except-Veritas equals if-counted)",
+      sr?.veritasLogins === 0 && sr?.usedIfCountedExceptVeritas === sr?.usedIfCounted && r1?.veritasLogins === 0 && r1?.usedIfCountedExceptVeritas === r1?.usedIfCounted, JSON.stringify([sr, r1]));
+    check("6. totals: 4 distinct people, 2 of them Veritas logins, in 1 lab; 1 lab newly over if Veritas logins are left out",
+      j.totals?.uncountedPeopleDistinct === 4 && j.totals?.uncountedVeritasLogins === 2 && j.totals?.labsWithVeritasLogins === 1 && j.totals?.labsNewlyOverIfCountedExceptVeritas === 1, JSON.stringify(j.totals));
+    check("6. the rule: the operator's address and any @veritaslabservices.com address, in any case; nothing else",
+      isVeritasLogin(OWNER_EMAIL.toUpperCase()) && isVeritasLogin(" a.b@VeritasLabServices.COM ") && !isVeritasLogin("someone@notveritaslabservices.com")
+        && !isVeritasLogin("someone@veritaslabservices.com.example") && !isVeritasLogin("someone@gmail.com") && !isVeritasLogin("") && !isVeritasLogin(null));
+    check("4. no names or emails in the answer", !/@|Made-up|veritaslabservices/i.test(JSON.stringify(j)));
     const after = ["user_seats", "lab_members", "labs", "users"].map((t) => (sqlite.prepare(`SELECT COUNT(*) AS n FROM ${t}`).get() as any).n).join(",");
     check("5. it writes nothing", before === after, `${before} -> ${after}`);
   } finally {
