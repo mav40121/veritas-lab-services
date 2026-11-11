@@ -8,7 +8,11 @@
 //                                  owner or an admin also the draft editor, Publish, Withdraw and who has read it
 // Anyone the issue's audience doesn't reach gets the same "not available" as an id that doesn't exist (the server's 404).
 // A reader sees only their own read status; the roster, which names lab members, is the owner's and admins' only, as the
-// route enforces. No Download PDF and no bell here (PR 5).
+// route enforces. No bell here (the spec's own).
+// PR 5: a published issue's header carries Download PDF (GET issues/:id/pdf, fetched with the sign-in header and saved, as the
+// tissue record button does), for anyone who can open the issue; and the owner or an admin gets the Notice email card:
+// the count before sending (GET issues/:id/notice), Send notice with a confirm naming that count (POST, sent as
+// expectedCount), and the sent date and count after. Publishing sends nothing; the notice goes once per issue.
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useLocation, useParams } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -26,7 +30,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Lock, Loader2, Newspaper, Check, ChevronLeft } from "lucide-react";
+import { Lock, Loader2, Newspaper, Check, ChevronLeft, Download, Mail } from "lucide-react";
 import { DigestIssueSheet, DIGEST_SUB, sentToLabel, type DigestIssueDetail } from "@/components/digest/DigestIssueSheet";
 import {
   DIGEST_CARD_KEYS, DIGEST_CARDS, DIGEST_AUDIENCE_LABELS, draftablePeriods, periodTitle, formatDay, formatMomentDay,
@@ -511,6 +515,141 @@ function RosterCard({ acks, tz }: { acks: Acks; tz?: string | null }) {
   );
 }
 
+// ── One issue: Download PDF (PR 5; anyone who can open a published issue) ─────────────────────────────────────────
+// The route needs the sign-in header, so the page fetches the file and saves it itself, as the tissue record button does; a
+// plain link would go out without the header.
+function DownloadPdfButton({ labId, issue }: { labId: number; issue: DigestIssueDetail }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const download = async () => {
+    setBusy(true); setErr(null);
+    try {
+      const r = await fetch(`${API_BASE}/api/labs/${labId}/digest/issues/${issue.id}/pdf`, { headers: authHeaders() });
+      if (!r.ok) {
+        let msg = `The PDF couldn't be downloaded (${r.status}).`;
+        try { msg = (await r.json())?.error || msg; } catch { /* not JSON */ }
+        throw new Error(msg);
+      }
+      const name = /filename="([^"]+)"/.exec(r.headers.get("Content-Disposition") || "")?.[1] || `Compliance_Digest_${issue.period_start.slice(0, 7)}.pdf`;
+      const url = URL.createObjectURL(await r.blob());
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 30000);
+    } catch (e: any) { setErr(e?.message || "The PDF couldn't be downloaded."); } finally { setBusy(false); }
+  };
+  return (
+    <div className="flex flex-col items-start sm:items-end gap-1">
+      <Button variant="outline" onClick={download} disabled={busy} data-testid="digest-download-pdf"
+        className="h-auto px-3.5 py-2 text-[14px] font-semibold rounded-md border-[1.5px] border-[#01696F] bg-white text-[#01696F] hover:bg-[#E6F2F2] hover:text-[#015A5F] dark:border-[#5FC4C9] dark:bg-transparent dark:text-[#5FC4C9] dark:hover:bg-[#0F2D30] dark:hover:text-[#8ED8DB]">
+        {busy ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}{busy ? "Building the PDF..." : "Download PDF"}
+      </Button>
+      {err && <p className="text-xs text-destructive" data-testid="digest-download-error">{err}</p>}
+    </div>
+  );
+}
+
+// ── One issue: the notice email (PR 5; owner or admin, published issues) ─────────────────────────────────────────
+interface NoticePlan { issue_id: number; status: string; ack_requested: boolean; recipients: number; no_address: number; sent_at: string | null; sent_count: number | null; can_send: boolean }
+const people = (n: number) => `${n} ${n === 1 ? "person" : "people"}`;
+
+function NoticeCard({ labId, issue, tz, onChanged }: { labId: number; issue: DigestIssueDetail; tz?: string | null; onChanged: () => void }) {
+  const { toast } = useToast();
+  const path = `/api/labs/${labId}/digest/issues/${issue.id}/notice`;
+  const planQ = useDigestQuery<NoticePlan>(["digest", labId, "notice", issue.id], path);
+  const plan = planQ.data?.ok ? planQ.data.body : null;
+  const [open, setOpen] = useState(false);
+  const [count, setCount] = useState<number | null>(null); // the count the confirm shows, and the send names
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [refused, setRefused] = useState(false); // the server said it already went out: nothing more to send from this confirm
+  const sentAt = issue.notice_sent_at ?? plan?.sent_at ?? null;
+  const sentCount = issue.notice_sent_count ?? plan?.sent_count ?? null;
+
+  const openConfirm = async () => {
+    setError(null);
+    const r = await api<NoticePlan>("GET", path); // the count as it is now, not as the card loaded it
+    if (!r.ok) { toast({ title: "Couldn't check who it goes to", description: r.body.error || `HTTP ${r.status}`, variant: "destructive" }); return; }
+    if (r.body.sent_at) { onChanged(); return; }
+    setCount(r.body.recipients);
+    setRefused(false);
+    setOpen(true);
+  };
+  const send = async () => {
+    setBusy(true); setError(null);
+    const r = await api<{ sending: number; sent_at: string; recipients?: number }>("POST", path, { expectedCount: count });
+    setBusy(false);
+    if (!r.ok) {
+      if (r.body.code === "COUNT_CHANGED" && typeof r.body.recipients === "number") {
+        setCount(r.body.recipients);
+        setError(`The list changed since you opened this. It now goes to ${people(r.body.recipients)}. Check the count and send again.`);
+        return;
+      }
+      setError(r.body.error || `Couldn't send the notice (${r.status}).`);
+      if (r.body.code === "NOTICE_SENT" || r.body.code === "NOT_PUBLISHED") { setRefused(true); onChanged(); }
+      return;
+    }
+    setOpen(false);
+    toast({ title: "Notice sent", description: `The email is going to ${people(r.body.sending)} now.` });
+    onChanged();
+  };
+
+  return (
+    <Card className="border-border mt-4" data-testid="digest-notice">
+      <CardContent className="py-4 flex flex-wrap items-center gap-3">
+        <Mail className="h-5 w-5 text-[#01696F] dark:text-[#5FC4C9] shrink-0" aria-hidden="true" />
+        <div className="min-w-0 flex-1">
+          <h2 className="text-base font-semibold">Notice email</h2>
+          {sentAt ? (
+            <p className="text-sm" data-testid="digest-notice-sent">
+              Notice sent {formatMomentDay(sentAt, tz)} to {people(Number(sentCount ?? 0))}. It goes once per issue, so it can't be sent again.
+            </p>
+          ) : (
+            <>
+              <p className="text-xs text-muted-foreground">Publishing doesn't send email. The notice tells the people this issue reaches that it's ready and links to it; it carries no numbers. It goes once per issue.</p>
+              <p className="text-sm mt-1" data-testid="digest-notice-count">
+                {plan == null ? "Checking who it goes to..." : plan.recipients
+                  ? `It would go to ${people(plan.recipients)} who can sign in.`
+                  : "Nobody this issue reaches can sign in yet, so there's no one to send it to."}
+                {plan && plan.no_address > 0 ? ` ${people(plan.no_address)} it reaches ${plan.no_address === 1 ? "has" : "have"} no email address on file.` : ""}
+              </p>
+            </>
+          )}
+        </div>
+        {!sentAt && (
+          <Button size="sm" onClick={openConfirm} disabled={!plan?.can_send} data-testid="digest-notice-send"
+            className="ml-auto bg-[#01696F] hover:bg-[#015A5F] text-white dark:bg-[#1F8F95] dark:hover:bg-[#1A7A80]">
+            <Mail className="h-4 w-4 mr-1.5" />Send notice
+          </Button>
+        )}
+      </CardContent>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-md" data-testid="notice-dialog">
+          <DialogHeader>
+            <DialogTitle>Send the notice for the {periodTitle(issue.period_start, issue.period_end)} issue?</DialogTitle>
+            <DialogDescription asChild>
+              <div className="space-y-2 text-sm" data-testid="notice-dialog-text">
+                <p>One email goes to {count === 1 ? "the" : "each of the"} <b data-testid="notice-dialog-count">{people(count ?? 0)}</b> this issue reaches who can sign in.</p>
+                <p>It says the issue is ready{issue.ack_requested ? " and asks them to acknowledge it" : ""}, and links to it. It carries no numbers. You can send it once.</p>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          {error && <p className="text-sm text-destructive" data-testid="notice-error">{error}</p>}
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" size="sm" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button size="sm" onClick={send} disabled={busy || !count || refused} data-testid="notice-confirm">
+              {busy && <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />}Send to {people(count ?? 0)}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </Card>
+  );
+}
+
 function IssueView({ labId, issueId, labName, cliaNumber }: { labId: number; issueId: string; labName: string | null; cliaNumber: string | null }) {
   const qc = useQueryClient();
   const issueQ = useDigestQuery<DigestIssueDetail>(["digest", labId, "issue", issueId], `/api/labs/${labId}/digest/issues/${issueId}`);
@@ -560,7 +699,9 @@ function IssueView({ labId, issueId, labName, cliaNumber }: { labId: number; iss
         </CardContent></Card>
       )}
       <DigestIssueSheet issue={issue} labId={labId} labName={labName} cliaNumber={cliaNumber} readerCount={readerCount}
+        headerAction={issue.status === "published" ? <DownloadPdfButton labId={labId} issue={issue} /> : null}
         statusCard={issue.status === "published" && showMyStatus ? <ReaderStatusCard labId={labId} issue={issue} onChanged={refresh} /> : null} />
+      {manager && issue.status === "published" && <NoticeCard labId={labId} issue={issue} tz={tz} onChanged={refresh} />}
       {manager && issue.status !== "draft" && acksQ.data?.ok && <RosterCard acks={acksQ.data.body} tz={tz} />}
       {manager && issue.status === "published" && (
         <div className="mt-4 flex justify-end">

@@ -33,6 +33,22 @@
 // Every text in a write goes through the patient-information refusal (shared/phiPatterns.ts detectPhi): 400 PHI_REFUSED
 // with the field, refused rather than warned, as the tissue and stain logs do. Create, edit, publish and withdraw each write
 // an audit_log row (logAudit; module "account", the lab-wide one, since the digest is no module of its own).
+//
+// PR 5 (the last): the issue PDF and the notice email.
+//   GET issues/:id/pdf: a published issue's PDF (server/digestPdf.ts, the approved PDF mock of 2026-11-11), with the issue
+//     GET's reach exactly (visibleIssue): whoever can open the issue gets its PDF, anyone else the same 404. A draft or
+//     withdrawn issue has no PDF: 409 NOT_PUBLISHED for the owner and admins (the read and ack routes' answer), and the
+//     issue GET's 404 for anyone else, who can't see it. It prints what GET issues/:id gives that reader (detail()), so the
+//     numbers and change words are the screen's.
+//   The notice (decided 2026-11-11): publishing sends nothing. The owner or an admin sends one notice per published issue,
+//     once (digest_issues.notice_sent_at, notice_sent_count, notice_sent_by_user_id; 409 NOTICE_SENT after that):
+//     GET issues/:id/notice gives the count first, POST issues/:id/notice {expectedCount} sends one email per person the
+//     audience reaches (audiencePeople, the roster's list) who has a login with an address, and is refused 409
+//     COUNT_CHANGED when that count isn't the one the screen showed, 409 NOT_PUBLISHED for a draft or withdrawn issue. The
+//     email says the issue is ready, whether acknowledgment is asked, and links to it; it carries no counts and no name but
+//     the recipient's own greeting. It goes through the read-and-sign notice's mailer (policyReadSign.ts readSignMailer, the
+//     one the tests swap out) from info@veritaslabservices.com, in the background at that mailer's pace. Sent and finished
+//     each write an audit row. Veritas support can't send it (server/vlsSupport.ts).
 
 import type { Express } from "express";
 import { db } from "./db";
@@ -40,8 +56,11 @@ import { logAudit, type AuditAction } from "./audit";
 import { digestCountsForLab, type DigestCounts } from "./digestCounts";
 import { addLabDays, labLocalDate, labTimeZoneById, labToday } from "./dateLocal";
 import { staffOwnScope } from "./competencySelfEntry";
-import { labGroupSignerIds } from "./labGroups";
+import { EMAIL_RE, labGroupSignerIds } from "./labGroups";
+import { readSignMailer } from "./policyReadSign";
+import { digestPdfFilename, generateDigestPDF } from "./digestPdf";
 import { detectPhi } from "@shared/phiPatterns";
+import { periodTitle } from "@shared/digestCards";
 
 const sqliteOf = () => (db as any).$client;
 const BASE = "/api/labs/:labId/digest";
@@ -246,6 +265,55 @@ function audiencePeople(sqlite: any, labId: number, issue: any): Set<number> {
   return out;
 }
 
+// ── The notice email (PR 5) ───────────────────────────────────────────────────────────────────────────────────────────
+export const DIGEST_NOTICE_FROM = "VeritaAssure® <info@veritaslabservices.com>";
+export interface DigestNoticeRecipient { user_id: number; email: string; name: string | null }
+
+/**
+ * Who the notice goes to: everyone the issue's audience reaches today (audiencePeople, the roster's list) who has a login
+ * with an address, one email per address, in user id order. noAddress counts the people it reaches without one.
+ */
+export function digestNoticeRecipients(sqlite: any, labId: number, issue: any): { recipients: DigestNoticeRecipient[]; noAddress: number } {
+  const ids = Array.from(audiencePeople(sqlite, labId, issue)).sort((a, b) => a - b);
+  if (!ids.length) return { recipients: [], noAddress: 0 };
+  const users = new Map((sqlite.prepare(`SELECT id, name, email FROM users WHERE id IN (${ids.map(() => "?").join(", ")})`).all(...ids) as any[]).map((u) => [Number(u.id), u]));
+  const seen = new Set<string>();
+  const recipients: DigestNoticeRecipient[] = [];
+  let noAddress = 0;
+  for (const id of ids) {
+    const u = users.get(id);
+    const email = String(u?.email ?? "").trim();
+    if (!u || !EMAIL_RE.test(email)) { noAddress += 1; continue; }
+    if (seen.has(email.toLowerCase())) continue;
+    seen.add(email.toLowerCase());
+    recipients.push({ user_id: id, email, name: String(u.name ?? "").trim() || null });
+  }
+  return { recipients, noAddress };
+}
+
+const escHtml = (s: unknown) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+const oneLine = (s: unknown) => String(s ?? "").replace(/[\r\n\t]+/g, " ").trim();
+
+/**
+ * One recipient's notice: the issue is ready, whether acknowledgment is asked, and a link to it. No counts, and no name but
+ * the recipient's own in the greeting. Paragraphs as <div>...</div><div><br></div>, the read-and-sign notice's spacing.
+ */
+export function digestNoticeEmail(p: { labName: string; periodStart: string; periodEnd: string; ackRequested: boolean; link: string; recipientName: string | null }) {
+  const period = periodTitle(p.periodStart, p.periodEnd);
+  const lab = oneLine(p.labName) || "Your lab";
+  const para = (html: string) => `<div>${html}</div><div><br></div>`;
+  return {
+    subject: `${lab}: ${period} compliance digest is ready`,
+    html: para(p.recipientName ? `Hello ${escHtml(oneLine(p.recipientName))},` : "Hello,")
+      + para(`The ${escHtml(period)} compliance digest for ${escHtml(lab)} is ready to read in VeritaAssure&reg;.`)
+      + para(p.ackRequested
+        ? "Your lab asks each reader to acknowledge this issue. Open it and select &quot;I've read this&quot;."
+        : "No acknowledgment is needed for this issue.")
+      + para(`<a href="${escHtml(p.link)}" style="display:inline-block;background:#01696F;color:#ffffff;text-decoration:none;font-weight:bold;padding:10px 18px;border-radius:6px;">Open the digest</a>`)
+      + `<div>The numbers are in the issue itself, so you'll need to sign in to see them. Your lab sends this notice once for each issue.</div>`,
+  };
+}
+
 // ── Issues ────────────────────────────────────────────────────────────────────────────────────────────────────────────
 /** The counts an issue stores: the range and as-of day, and only the sections it includes. */
 export function pickDigestSections(c: DigestCounts, sections: readonly DigestSectionKey[]): Record<string, unknown> {
@@ -268,7 +336,13 @@ function issueView(row: any, manager: boolean) {
     created_at: row.created_at, published_at: row.published_at ?? null,
     withdrawn_at: row.withdrawn_at ?? null, withdrawn_reason: row.withdrawn_reason ?? null,
   };
-  if (manager) Object.assign(v, { created_by_user_id: row.created_by_user_id ?? null, published_by_user_id: row.published_by_user_id ?? null });
+  if (manager) {
+    Object.assign(v, {
+      created_by_user_id: row.created_by_user_id ?? null, published_by_user_id: row.published_by_user_id ?? null,
+      // PR 5: when the notice email went out and to how many people (the owner and admins only).
+      notice_sent_at: row.notice_sent_at ?? null, notice_sent_count: row.notice_sent_count ?? null,
+    });
+  }
   return v;
 }
 
@@ -626,5 +700,102 @@ export function registerDigestIssueRoutes(app: Express, authMiddleware: any, req
       },
       roster,
     });
+  });
+
+  // ── PR 5: the PDF ─────────────────────────────────────────────────────────────────────────────────────────────────
+  // The issue GET's reach exactly, and only a published issue. It prints detail(): the same counts, previous and group names
+  // the screen gets for this reader.
+  const notPublished = (res: any, what: string) => res.status(409).json({ error: `Only a published issue ${what}.`, code: "NOT_PUBLISHED" });
+  app.get(`${BASE}/issues/:id/pdf`, ...read, async (req: any, res: any) => {
+    const row = visibleIssue(req);
+    if (!row) return notFound(res);
+    if (row.status !== "published") return notPublished(res, "has a PDF");
+    const lab = sqliteOf().prepare("SELECT lab_name, clia_number FROM labs WHERE id = ?").get(req.scope.labId) as any;
+    try {
+      const { pdf } = await generateDigestPDF(detail(req, row) as any, {
+        labName: String(lab?.lab_name ?? "").trim() || null, cliaNumber: String(lab?.clia_number ?? "").trim() || null,
+      });
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="${digestPdfFilename(row)}"`);
+      res.setHeader("Content-Length", pdf.length);
+      res.setHeader("Cache-Control", "no-store");
+      res.send(pdf);
+    } catch (err: any) {
+      console.error("[digest] issue PDF failed:", err?.message || err);
+      res.status(500).json({ error: "The PDF could not be built." });
+    }
+  });
+
+  // ── PR 5: the notice email ────────────────────────────────────────────────────────────────────────────────────────
+  const noticeState = (row: any) => ({ sent_at: row.notice_sent_at ?? null, sent_count: row.notice_sent_count ?? null });
+  // What the notice would do, as a count, before anyone sends it (the owner and admins).
+  app.get(`${BASE}/issues/:id/notice`, ...read, (req: any, res: any) => {
+    const row = visibleIssue(req);
+    if (!row) return notFound(res);
+    if (!isManager(req)) return ownerOrAdmin(res);
+    const plan = digestNoticeRecipients(sqliteOf(), req.scope.labId, row);
+    res.json({
+      issue_id: row.id, status: row.status, ack_requested: Number(row.ack_requested) === 1,
+      recipients: plan.recipients.length, no_address: plan.noAddress, ...noticeState(row),
+      can_send: row.status === "published" && !row.notice_sent_at && plan.recipients.length > 0,
+    });
+  });
+
+  // Send it. Body: { expectedCount }, the count the screen showed. Once per issue.
+  app.post(`${BASE}/issues/:id/notice`, ...write, (req: any, res: any) => {
+    const row = visibleIssue(req);
+    if (!row) return notFound(res);
+    if (!isManager(req)) return ownerOrAdmin(res);
+    if (row.status !== "published") return notPublished(res, "can have a notice sent");
+    if (row.notice_sent_at) {
+      return res.status(409).json({ error: "This issue's notice already went out. It is sent once per issue.", code: "NOTICE_SENT", ...noticeState(row) });
+    }
+    const sqlite = sqliteOf();
+    const labId = req.scope.labId;
+    const plan = digestNoticeRecipients(sqlite, labId, row);
+    if (Number(req.body?.expectedCount) !== plan.recipients.length) {
+      return res.status(409).json({ error: "The list changed. Check the new count before sending.", code: "COUNT_CHANGED", recipients: plan.recipients.length });
+    }
+    if (!plan.recipients.length) return res.status(400).json({ error: "Nobody this issue reaches has a login with an email address.", code: "NO_RECIPIENTS" });
+    const at = new Date().toISOString();
+    // Claimed in one statement, so two sends at once can't both go out.
+    const claimed = sqlite.prepare(
+      "UPDATE digest_issues SET notice_sent_at = ?, notice_sent_count = ?, notice_sent_by_user_id = ? WHERE id = ? AND status = 'published' AND notice_sent_at IS NULL"
+    ).run(at, plan.recipients.length, req.userId, row.id).changes;
+    if (!claimed) {
+      const now = fetchIssue(sqlite, labId, row.id);
+      if (now?.status !== "published") return notPublished(res, "can have a notice sent");
+      return res.status(409).json({ error: "This issue's notice already went out. It is sent once per issue.", code: "NOTICE_SENT", ...noticeState(now) });
+    }
+    const label = periodLabel(row);
+    audit(req, "update", row.id, `${label}: notice sent to ${plan.recipients.length}`, { notice_sent_at: null }, { notice_sent_at: at, notice_sent_count: plan.recipients.length });
+    res.status(202).json({ issue_id: row.id, sending: plan.recipients.length, sent_at: at, sent_count: plan.recipients.length });
+
+    // In the background, at the mailer's pace: a long list outlasts the request (the read-and-sign notice does the same).
+    const lab = sqlite.prepare("SELECT lab_name FROM labs WHERE id = ?").get(labId) as any;
+    const base = (process.env.FRONTEND_URL || "https://www.veritaslabservices.com").replace(/\/+$/, "");
+    const link = `${base}/labs/${labId}/digest/${row.id}`;
+    const by = { userId: req.userId, ownerUserId: req.scope?.lab?.owner_user_id ?? req.userId, ip: req.ip };
+    (async () => {
+      let sent = 0, failed = 0;
+      for (let i = 0; i < plan.recipients.length; i++) {
+        const r = plan.recipients[i];
+        if (i > 0 && readSignMailer.pauseMs) await new Promise((done) => setTimeout(done, readSignMailer.pauseMs));
+        try {
+          await readSignMailer.send({
+            from: DIGEST_NOTICE_FROM, to: r.email,
+            ...digestNoticeEmail({ labName: lab?.lab_name || "", periodStart: row.period_start, periodEnd: row.period_end, ackRequested: Number(row.ack_requested) === 1, link, recipientName: r.name }),
+          });
+          sent += 1;
+        } catch (err: any) {
+          failed += 1;
+          console.error("[digest notice] send failed:", err?.message || err);
+        }
+      }
+      logAudit({
+        userId: by.userId, ownerUserId: by.ownerUserId, module: "account", action: "update", entityType: "digest_issue", entityId: row.id,
+        entityLabel: `${label}: notice finished, ${sent} sent, ${failed} not sent`, after: { sent, failed }, ipAddress: by.ip,
+      });
+    })().catch((err) => console.error("[digest notice]", err?.message || err));
   });
 }

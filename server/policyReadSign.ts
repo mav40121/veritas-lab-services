@@ -440,9 +440,10 @@ export function noticePlan(sqlite: any, labId: number, scope: ReadSignScope) {
 }
 
 // Swapped out by the integration test, which reads what would go out. Resend's default limit is about two calls a second.
+// The compliance digest's notice (server/digestIssues.ts) sends through it too, naming its own `from` on the same address.
 export const readSignMailer = {
   pauseMs: 600,
-  send: async (message: { to: string; subject: string; html: string }): Promise<void> => {
+  send: async (message: { to: string; subject: string; html: string; from?: string }): Promise<void> => {
     if (!process.env.RESEND_API_KEY) throw new Error("RESEND_API_KEY is not set");
     const { Resend } = await import("resend");
     const out: any = await new Resend(process.env.RESEND_API_KEY).emails.send({ from: "VeritaDC <info@veritaslabservices.com>", ...message });
