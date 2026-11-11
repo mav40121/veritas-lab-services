@@ -113,6 +113,7 @@ const EquipmentAppPage = lazy(() => import("@/pages/EquipmentAppPage"));
 const InstrumentTrailPage = lazy(() => import("@/pages/InstrumentTrailPage"));
 const StainLogPage = lazy(() => import("@/pages/StainLogPage"));
 const ReadinessDashboardPage = lazy(() => import("@/pages/ReadinessDashboardPage"));
+const DigestPage = lazy(() => import("@/pages/DigestPage"));
 const SystemRepositoryPage = lazy(() => import("@/pages/SystemRepositoryPage"));
 const VeritaQCDailyReviewPage = lazy(() => import("@/pages/VeritaQCDailyReviewPage"));
 const VeritaPolicyAppPage = lazy(() => import("@/pages/VeritaPolicyAppPage"));
@@ -612,6 +613,9 @@ function AppContent() {
           <Route path="/labs/:labId/equipment-app" component={EquipmentAppPage} />
           <Route path="/labs/:labId/instruments/:instrumentId/trail" component={InstrumentTrailPage} />
           <Route path="/labs/:labId/readiness" component={ReadinessDashboardPage} />
+          {/* Compliance digest (Q281 = 1, PR 4): reached from Inspection Readiness; not a module. */}
+          <Route path="/labs/:labId/digest/:issueId" component={DigestPage} />
+          <Route path="/labs/:labId/digest" component={DigestPage} />
           <Route path="/labs/:labId/repository" component={SystemRepositoryPage} />
           <Route path="/labs/:labId/veritaqc-app/review" component={VeritaQCDailyReviewPage} />
           <Route path="/labs/:labId/veritapolicy-app" component={VeritaPolicyAppPage} />

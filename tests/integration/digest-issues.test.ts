@@ -18,7 +18,10 @@
 //   9. withdraw keeps the row, needs a reason, and the period can be drafted again;
 //  10. the review box: a draft takes the lab's setting when created, and a published issue keeps its own;
 //  11. quarterly periods, and a quarter's maintenance review covering its three months;
-//  12. another lab's issue is 404 through this lab's path; 13. the plan allowlist; 14. audit rows; no em dash in any reply.
+//  12. another lab's issue is 404 through this lab's path; 13. the plan allowlist; 14. audit rows; no em dash in any reply;
+//  15. (PR 4, the screens) GET issues/:id's `previous`: the lab's prior published issue of the same frequency, never a
+//      withdrawn one or a draft, its stored counts picked to this issue's sections and never recomputed, null for a reader
+//      the prior issue's audience doesn't reach; a group issue's `audience_groups`; the owner's settings `groups`.
 // Run: rm -f <db> && DB_PATH=<db> JWT_SECRET=test-jwt-secret ADMIN_SECRET=test-admin-secret STRIPE_SECRET_KEY=sk_test_dummy STRIPE_WEBHOOK_SECRET=whsec_dummy npx tsx tests/integration/digest-issues.test.ts
 import http from "node:http";
 import express from "express";
@@ -425,6 +428,67 @@ async function main() {
     const free = await call("GET", `/api/labs/${LAB_FREE}/digest/settings`, undefined, OTHER.token);
     const freeDraft = await call("POST", `/api/labs/${LAB_FREE}/digest/issues`, {}, OTHER.token);
     check("13. a lab on a plan outside the allowlist: 403 PLAN_REQUIRED", free.s === 403 && free.j.code === "PLAN_REQUIRED" && freeDraft.s === 403 && freeDraft.j.code === "PLAN_REQUIRED", `${free.s} ${freeDraft.s}`);
+
+    // ── 15. PR 4's read-only fields: the prior issue for the change lines, group names, the settings' groups ─────────
+    // State here: D1 published (last month, leadership, studies/qc/findings); P2 withdrawn (two months back, staff) and its
+    // redraft withdrawn; P3 published (three months back, group G1, every default section); quarterly drafts only.
+    const getAs = async (id: number, u: { token: string }) => (await call("GET", `${L}/issues/${id}`, undefined, u.token)).j;
+    const p3Stored = JSON.parse(issueRow(P3.id).counts_json);
+    const d1Owner = await getAs(D1, OWNER);
+    check("15. the leadership issue's previous is the group issue three months back: the withdrawn issue two months back never counts",
+      d1Owner.previous?.id === P3.id && d1Owner.previous?.period_start === prev3.start && d1Owner.previous?.period_end === prev3.end && d1Owner.previous?.counts_as_of === issueRow(P3.id).counts_as_of,
+      JSON.stringify(d1Owner.previous ? { ...d1Owner.previous, counts: Object.keys(d1Owner.previous.counts) } : null));
+    check("15. previous carries only this issue's sections (studies, qc, findings), each exactly as the prior issue stored it",
+      same(Object.keys(d1Owner.previous?.counts || {}), ["studies", "qc", "findings"]) && ["studies", "qc", "findings"].every((k) => same(d1Owner.previous.counts[k], p3Stored[k])),
+      JSON.stringify(Object.keys(d1Owner.previous?.counts || {})));
+    finding(LAB); // one more open finding today, so the live count for the prior issue's month moves
+    const liveP3 = digestCountsForLab(sqlite, LAB, prev3.start, prev3.end).findings!;
+    check("15. previous is never recomputed: the prior issue's frozen findings, while the live count for its month has moved",
+      d1Owner.previous?.counts?.findings?.open === p3Stored.findings.open && liveP3.open !== p3Stored.findings.open, JSON.stringify({ frozen: p3Stored.findings, live: liveP3 }));
+    check("15. the oldest published monthly issue has no previous", (await getAs(P3.id, OWNER)).previous === null);
+    check("15. the medical director reads the leadership issue, but its previous (a group issue they aren't in) is null",
+      (await getAs(D1, MD)).previous === null && (await getAs(D1, MD)).status === "published");
+    check("15. the group issue's detail names its group; the leadership issue names none",
+      same((await getAs(P3.id, STAFF_IN)).audience_groups, [{ id: G1, name: "Made-up Chemistry Group", retired: false }]) && same(d1Owner.audience_groups, []));
+    // A staff issue two months back, with a section the group issue didn't hold (the scan): its previous is the group issue.
+    const p4c = await call("POST", `${L}/issues`, { periodStart: prev2.start }, OWNER.token);
+    const P4 = Number(p4c.j.id);
+    await call("PUT", `${L}/issues/${P4}`, { audience: "staff", sections: ["findings", "studies", "scan"] }, OWNER.token);
+    const p4draft = await getAs(P4, OWNER);
+    check("15. a draft gets previous too (the owner's preview): the group issue, picked to the draft's sections; the scan it never held is absent",
+      p4c.s === 201 && p4draft.status === "draft" && p4draft.previous?.id === P3.id && same(Object.keys(p4draft.previous.counts), ["studies", "findings"]), JSON.stringify(p4draft.previous && Object.keys(p4draft.previous.counts)));
+    await call("POST", `${L}/issues/${P4}/publish`, {}, OWNER.token);
+    const p4In = await getAs(P4, STAFF_IN), p4Out = await getAs(P4, STAFF_OUT), p4Ed = await getAs(P4, EDITOR);
+    check("15. a Staff login in the group reads the staff issue with its previous (the group issue it can read)",
+      p4In.status === "published" && p4In.previous?.id === P3.id && same(p4In.previous.counts.findings, p3Stored.findings), JSON.stringify(p4In.previous && { id: p4In.previous.id }));
+    check("15. a Staff login outside the group and an editor read the staff issue, and its previous is null for them (the group issue doesn't reach them)",
+      p4Out.status === "published" && p4Out.previous === null && p4Ed.status === "published" && p4Ed.previous === null);
+    check("15. a reader's previous names no person", ![NAMES.owner, NAMES.admin, NAMES.staffOut, NAMES.md, OWNER.email].some((n) => JSON.stringify(p4In).includes(n)));
+    const d1Now = await getAs(D1, OWNER), d1Md = await getAs(D1, MD);
+    check("15. the leadership issue's previous moves to the newer staff issue, which the medical director can read too",
+      d1Now.previous?.id === P4 && d1Md.previous?.id === P4 && same(Object.keys(d1Now.previous.counts), ["studies", "findings"]), JSON.stringify({ owner: d1Now.previous?.id, md: d1Md.previous?.id, P4 }));
+    // Quarterly: only a published quarter counts, and a month never stands in for a quarter (or the reverse).
+    const qd = await call("GET", `${L}/issues`, undefined, OWNER.token);
+    const qDraftOf = (start: string) => (qd.j.issues || []).find((i: any) => i.period_start === start && i.status === "draft");
+    const qLastYear = qDraftOf(`${y}-04-01`), qLatest = qDraftOf(lastQ.start);
+    check("15. setup: the quarterly drafts are there (last year's second quarter, the last finished quarter)", !!qLastYear && !!qLatest, JSON.stringify({ y, lastQ }));
+    check("15. a quarterly draft with only drafts before it has no previous (a draft never counts)", (await getAs(qLatest.id, OWNER)).previous === null);
+    const qPub = await call("POST", `${L}/issues/${qLastYear.id}/publish`, {}, OWNER.token);
+    const qNowPrev = (await getAs(qLatest.id, OWNER)).previous;
+    check("15. once last year's second quarter is published, it is the last finished quarter's previous",
+      qPub.s === 200 && qNowPrev?.id === qLastYear.id && qNowPrev?.period_start === `${y}-04-01` && qNowPrev?.period_end === `${y}-06-30`, JSON.stringify(qNowPrev && { id: qNowPrev.id, s: qNowPrev.period_start }));
+    check("15. a monthly issue's previous is never a quarterly issue", (await getAs(D1, OWNER)).previous?.id === P4 && (await getAs(P3.id, OWNER)).previous === null);
+    const { digestPeriodFrequency } = await import("../../server/digestIssues");
+    check("15. digestPeriodFrequency: a month, a quarter, and a range that is neither",
+      digestPeriodFrequency({ period_start: "2026-10-01", period_end: "2026-10-31" }) === "monthly" && digestPeriodFrequency({ period_start: "2026-10-01", period_end: "2026-12-31" }) === "quarterly"
+        && digestPeriodFrequency({ period_start: "2026-11-01", period_end: "2027-01-31" }) === null && digestPeriodFrequency({ period_start: "2026-02-01", period_end: "2026-02-28" }) === "monthly");
+    // The settings' groups: the owner and admins get the lab's active groups by name; a Staff login gets none.
+    const gOwner = await call("GET", `${L}/settings`, undefined, OWNER.token), gStaff = await call("GET", `${L}/settings`, undefined, STAFF_IN.token);
+    check("15. the owner's settings list the lab's active groups by name (not the retired one, no members)",
+      same(gOwner.j.groups, [{ id: G1, name: "Made-up Chemistry Group" }]) && !gOwner.text.includes("Made-up Ingleby"), JSON.stringify(gOwner.j.groups));
+    check("15. a Staff login's settings carry no groups list", gStaff.s === 200 && !("groups" in gStaff.j));
+    const prevB = (await call("GET", `${LB}/issues/${BID}`, undefined, OTHER.token)).j;
+    check("15. another customer's issue never takes this lab's earlier published issues as its previous", prevB.status === "published" && prevB.previous === null, JSON.stringify({ s: prevB.status, p: prevB.previous }));
 
     // ── 14. Audit rows, counts only, no em dash ──────────────────────────────────────────────────────────────────────
     const a = auditRows("digest_issue", D1).map((r) => r.entity_label);
