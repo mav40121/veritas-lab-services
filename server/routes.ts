@@ -65,6 +65,7 @@ import { buildMonthlyReviewPayload } from "./qcMonthlyReviewPayload";
 import { applyLicenseToExcelJS } from "./licenseStamp";
 import { resolveLegacyLabId as sharedResolveLegacyLabId, ownerMatchCounts, ownerRowInReach, isOlderSeatDate } from "./labAccessGuard";
 import { legacySeatForUser, seatForRequest } from "./seatContext";
+import { staffSeatEditCounts } from "./staffSeatEditCounts";
 import { checkAuthToken, verifySessionJwt, issueSession, endSessions, touchSession, issuePurposeToken, verifyPurposeToken, describeDevice, clientIp } from "./sessionAuth";
 import { passwordProblem } from "@shared/passwordRule";
 import { registerTwoFactorRoutes, twoFactorLoginGate, setupResponse } from "./twoFactorRoutes";
@@ -1594,6 +1595,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const sqlite = (db as any).$client;
     const active = activeTermsVersion(sqlite);
     res.json({ activeVersion: active, currentVersion: TERMS_VERSION, ...acceptanceCounts(sqlite, active || TERMS_VERSION) });
+  });
+
+  // Michael 2026-11-11: a Staff seat never edits. Measured before that rule ships: the active or pending Staff seats whose
+  // stored permissions give edit, by lab id, and which modules (server/staffSeatEditCounts.ts). Read-only; counts and lab
+  // ids, no names or emails. Header only.
+  app.get("/api/admin/staff-seat-edit-counts", (req: any, res) => {
+    const secret = req.headers["x-admin-secret"] as string | undefined;
+    if (!secret || secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    res.json(staffSeatEditCounts((db as any).$client));
   });
 
   // BUG-096: lab admins writing without a seat row, per lab, and what the seat count and the invite gate would read if
