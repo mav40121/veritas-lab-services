@@ -6282,6 +6282,11 @@ try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_inv_transfers_owner ON invento
     // an instrument. Lab-enterable exact assay-IFU URL; when blank the UI derives
     // a manufacturer eIFU-portal link from the instrument name (shared/ifu.ts).
     ensureVit("ifu_url", "ALTER TABLE veritamap_instrument_tests ADD COLUMN ifu_url TEXT");
+    // 2026-11-11 (Michael, Q281 = 1, the compliance digest's "New tests added"): when this test became active on this
+    // instrument. Set by every path that adds or switches on a test (server/veritamapActiveSince.ts); cleared when it is
+    // switched off; carried over when a save rewrites a row that was already active. Rows that exist when this ships
+    // stay NULL, so they never read as new: nobody knows when they were added.
+    ensureVit("active_since", "ALTER TABLE veritamap_instrument_tests ADD COLUMN active_since TEXT");
   }
 }
 

@@ -82,6 +82,7 @@ import { DEMO_FIXTURE_NAME, planDemoFixtureRename, demoFixtureRenameReport, appl
 import { resealAll } from "./secretRotation";
 import { labWideCorrelation, correlationPeerInstruments, describeCorrelationInstrument, rowComplexity, mapComplianceGaps } from "./labWideCorrelation";
 import { attachSopLinks, sopLinksByDocument, effectiveSop } from "./veritamapSopLink";
+import { activeSinceOnInsert, activeSinceOnReplace, SET_ACTIVE_WITH_SINCE_SQL, snapshotActiveSince, isActive as isActiveFlag, nowIso as activeSinceNow } from "./veritamapActiveSince";
 import { seedProfileFor, seedTeaFor, seedCalVerPoints, seedMethodCompQuant, seedMethodCompCategorical, seedStudyDate } from "./seedStudyProfiles";
 import type { LicenseContext } from "@shared/licenseText";
 import { validateClia } from "@shared/validateClia";
@@ -15665,19 +15666,21 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const sourceTests = (db as any).$client.prepare("SELECT * FROM veritamap_instrument_tests WHERE instrument_id = ? AND map_id = ?").all(sourceInstId, mapId) as any[];
       const existingAnalytes = new Set(((db as any).$client.prepare("SELECT analyte FROM veritamap_instrument_tests WHERE instrument_id = ? AND map_id = ?").all(targetInstId, mapId) as any[]).map((r: any) => r.analyte.toLowerCase().trim()));
       let copied = 0; let updated = 0;
-      const insertStmt = (db as any).$client.prepare("INSERT OR IGNORE INTO veritamap_instrument_tests (instrument_id, map_id, analyte, specialty, complexity, active) VALUES (?, ?, ?, ?, ?, ?)");
+      const insertStmt = (db as any).$client.prepare("INSERT OR IGNORE INTO veritamap_instrument_tests (instrument_id, map_id, analyte, specialty, complexity, active, active_since) VALUES (?, ?, ?, ?, ?, ?, ?)");
       // When the target already carries this analyte (e.g. a backup instrument
       // pre-seeded with the full menu, all inactive), copying must bring the
       // SOURCE's active selection forward -- sync the active flag rather than
       // skipping the row and leaving the backup at 0 active.
-      const updateStmt = (db as any).$client.prepare("UPDATE veritamap_instrument_tests SET active = ? WHERE instrument_id = ? AND map_id = ? AND lower(trim(analyte)) = ?");
+      const updateStmt = (db as any).$client.prepare(`UPDATE veritamap_instrument_tests SET ${SET_ACTIVE_WITH_SINCE_SQL} WHERE instrument_id = ? AND map_id = ? AND lower(trim(analyte)) = ?`);
+      const now = activeSinceNow();
       for (const t of sourceTests) {
         const key = (t.analyte || '').toLowerCase().trim();
+        const act = isActiveFlag(t.active) ? 1 : 0;
         if (existingAnalytes.has(key)) {
-          updateStmt.run(t.active ?? 1, targetInstId, mapId, key);
+          updateStmt.run(act, act, now, targetInstId, mapId, key);
           updated++;
         } else {
-          insertStmt.run(targetInstId, mapId, t.analyte, t.specialty, t.complexity, t.active ?? 1);
+          insertStmt.run(targetInstId, mapId, t.analyte, t.specialty, t.complexity, act, activeSinceOnInsert(act, now));
           copied++;
         }
       }
@@ -16679,19 +16682,21 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         let updated = 0;
 
         const insertStmt = (db as any).$client.prepare(
-          "INSERT OR IGNORE INTO veritamap_instrument_tests (instrument_id, map_id, analyte, specialty, complexity, active) VALUES (?, ?, ?, ?, ?, ?)"
+          "INSERT OR IGNORE INTO veritamap_instrument_tests (instrument_id, map_id, analyte, specialty, complexity, active, active_since) VALUES (?, ?, ?, ?, ?, ?, ?)"
         );
         const updateStmt = (db as any).$client.prepare(
-          "UPDATE veritamap_instrument_tests SET active = ? WHERE instrument_id = ? AND map_id = ? AND lower(trim(analyte)) = ?"
+          `UPDATE veritamap_instrument_tests SET ${SET_ACTIVE_WITH_SINCE_SQL} WHERE instrument_id = ? AND map_id = ? AND lower(trim(analyte)) = ?`
         );
+        const now = activeSinceNow();
 
         for (const t of sourceTests) {
           const key = (t.analyte || '').toLowerCase().trim();
+          const act = isActiveFlag(t.active) ? 1 : 0;
           if (existingAnalytes.has(key)) {
-            updateStmt.run(t.active ?? 1, targetInstId, mapId, key);
+            updateStmt.run(act, act, now, targetInstId, mapId, key);
             updated++;
           } else {
-            insertStmt.run(targetInstId, mapId, t.analyte, t.specialty, t.complexity, t.active ?? 1);
+            insertStmt.run(targetInstId, mapId, t.analyte, t.specialty, t.complexity, act, activeSinceOnInsert(act, now));
             copied++;
           }
         }
@@ -16891,17 +16896,24 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // restore and map rebuild now commit together or not at all (rebuildMapTests' own transaction nests as a savepoint).
   function replaceInstrumentTests(instId: string | number, mapId: string | number, tests: any[]) {
     const client = (db as any).$client;
-    const ins = client.prepare("INSERT OR IGNORE INTO veritamap_instrument_tests (instrument_id, map_id, analyte, specialty, complexity, active) VALUES (?, ?, ?, ?, ?, ?)");
+    const ins = client.prepare("INSERT OR IGNORE INTO veritamap_instrument_tests (instrument_id, map_id, analyte, specialty, complexity, active, active_since) VALUES (?, ?, ?, ?, ?, ?, ?)");
     // Michael 2026-11-02: a manual differential cell line is the analyzer's percent test, so it takes the name the map
     // already uses on another instrument ("Eosinophils" saves as "EO%") and the map keeps one row with both methods.
     const others = (client.prepare("SELECT DISTINCT analyte FROM veritamap_instrument_tests WHERE map_id = ? AND instrument_id != ?").all(mapId, instId) as any[]).map((r) => r.analyte);
     const nameOf = (a: string) => sameTestNameOnMap(a, others);
     client.transaction(() => {
       const exSnapshot = captureInstrumentExemptions(instId, mapId).map((e) => ({ ...e, k: nameOf(e.k).toLowerCase().trim() }));
+      // 2026-11-11 (Q281 = 1): the delete below would lose when each test became active; a row that was already active
+      // keeps its date (NULL for rows from before active_since existed), anything newly active gets now.
+      const priorRaw = snapshotActiveSince(client, instId, mapId);
+      const prior = new Map(Array.from(priorRaw, ([k, v]) => [nameOf(k).toLowerCase().trim(), v] as const));
+      const now = activeSinceNow();
       client.prepare("DELETE FROM veritamap_instrument_tests WHERE instrument_id = ? AND map_id = ?").run(instId, mapId);
       for (const t of tests) {
         const active = typeof t.active === 'boolean' ? (t.active ? 1 : 0) : (t.active ?? 1);
-        ins.run(instId, mapId, nameOf(String(t.analyte || '')), String(t.specialty || ''), String(t.complexity || ''), active);
+        const name = nameOf(String(t.analyte || ''));
+        const before = prior.get(name.toLowerCase().trim()) ?? priorRaw.get(String(t.analyte || '').toLowerCase().trim());
+        ins.run(instId, mapId, name, String(t.specialty || ''), String(t.complexity || ''), active, activeSinceOnReplace(active, before, now));
       }
       restoreInstrumentExemptions(instId, mapId, exSnapshot);
       rebuildMapTests(mapId);
@@ -37000,7 +37012,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
     const findExisting = sqlite.prepare("SELECT id, specialty, complexity FROM veritamap_instrument_tests WHERE instrument_id = ? AND lower(analyte) = lower(?)");
     const findCopy = sqlite.prepare("SELECT specialty, complexity FROM veritamap_instrument_tests WHERE instrument_id = ? AND lower(analyte) = lower(?) AND active = 1");
-    const ins = sqlite.prepare("INSERT OR IGNORE INTO veritamap_instrument_tests (instrument_id, map_id, analyte, specialty, complexity, active) VALUES (?, ?, ?, ?, ?, ?)");
+    const ins = sqlite.prepare("INSERT OR IGNORE INTO veritamap_instrument_tests (instrument_id, map_id, analyte, specialty, complexity, active, active_since) VALUES (?, ?, ?, ?, ?, ?, ?)");
+    const addedAt = activeSinceNow(); // 2026-11-11 (Q281 = 1): an added analyte is active from now
 
     const results: any[] = [];
     let inserted = 0;
@@ -37014,7 +37027,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         sp = src.specialty; cx = src.complexity;
       }
       if (!sp || !cx) { results.push({ instrumentId: inst.id, instrument: inst.instrument_name, action: "error-missing-specialty-or-complexity" }); continue; }
-      if (!dryRun) { ins.run(inst.id, mapId, analyte, sp, cx, 1); inserted++; }
+      if (!dryRun) { ins.run(inst.id, mapId, analyte, sp, cx, 1, addedAt); inserted++; }
       results.push({ instrumentId: inst.id, instrument: inst.instrument_name, action: dryRun ? "would-insert" : "inserted", specialty: sp, complexity: cx });
     }
     if (!dryRun && inserted > 0) rebuildMapTests(mapId);
@@ -38298,8 +38311,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       }
 
       const stmt = sqlite.prepare(
-        "INSERT OR IGNORE INTO veritamap_instrument_tests (instrument_id, map_id, analyte, specialty, complexity, active) VALUES (?, ?, ?, ?, ?, ?)"
+        "INSERT OR IGNORE INTO veritamap_instrument_tests (instrument_id, map_id, analyte, specialty, complexity, active, active_since) VALUES (?, ?, ?, ?, ?, ?, ?)"
       );
+      const seededAt = activeSinceNow(); // 2026-11-11 (Q281 = 1): active rows are active from now; inactive rows NULL
       let inserted = 0;
       const skipped: string[] = [];
       // One row per test (Michael 2026-11-02): a manual differential line takes the map's percent name.
@@ -38313,7 +38327,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           // COMPLEXITY_RANK lookup and the allowlist agree on one spelling.
           const complexity = String(t.complexity).trim().toUpperCase();
           const active = (typeof t.active === "number" && (t.active === 0 || t.active === 1)) ? t.active : dActive;
-          const r = stmt.run(instrumentId, mapId, analyte, specialty, complexity, active);
+          const r = stmt.run(instrumentId, mapId, analyte, specialty, complexity, active, activeSinceOnInsert(active, seededAt));
           if (r.changes === 1) inserted++;
           else skipped.push(analyte);
         }
@@ -38459,7 +38473,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         }
       } else {
         const createInst = sqlite.prepare("INSERT INTO veritamap_instruments (map_id, instrument_name, role, category, serial_number, nickname, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)");
-        const insertTest = sqlite.prepare("INSERT OR IGNORE INTO veritamap_instrument_tests (instrument_id, map_id, analyte, specialty, complexity, active) VALUES (?, ?, ?, ?, ?, ?)");
+        const insertTest = sqlite.prepare("INSERT OR IGNORE INTO veritamap_instrument_tests (instrument_id, map_id, analyte, specialty, complexity, active, active_since) VALUES (?, ?, ?, ?, ?, ?, ?)");
         const now = new Date().toISOString();
         const tx = sqlite.transaction(() => {
           for (const inst of instruments) {
@@ -38485,7 +38499,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
               const specialty = String(t.specialty || "").trim();
               const complexity = String(t.complexity).trim().toUpperCase();
               const active = (typeof t.active === "number" && (t.active === 0 || t.active === 1)) ? t.active : dActive;
-              const r = insertTest.run(instrumentId, Number(mapId), analyte, specialty, complexity, active);
+              const r = insertTest.run(instrumentId, Number(mapId), analyte, specialty, complexity, active, activeSinceOnInsert(active, now)); // Q281 = 1
               if (r.changes === 1) inserted++; else skipped++;
             }
             results.push({ instrument: iname, instrumentId, created, inserted, skipped });
