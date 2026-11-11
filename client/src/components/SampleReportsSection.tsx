@@ -13,7 +13,7 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { FileDown, Loader2 } from "lucide-react";
-import { API_BASE } from "@/lib/queryClient";
+import { API_BASE, responseErrorText } from "@/lib/queryClient";
 import { DEMO_SAMPLES } from "@/lib/demoSampleReports";
 import { downloadPdfToken } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -39,7 +39,7 @@ export function SampleReportsSection({ heading, subheading }: SampleReportsSecti
         body: JSON.stringify({ study, results }),
       });
       if (!res.ok) {
-        throw new Error(await res.text() || `HTTP ${res.status}`);
+        throw new Error(await responseErrorText(res));
       }
       const { token } = await res.json();
       downloadPdfToken(token, sample.filename);

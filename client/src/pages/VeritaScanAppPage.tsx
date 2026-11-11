@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/components/AuthContext";
 import { ModuleHowToCard } from "@/components/ModuleHowToCard";
 import { useIsReadOnly, useCanRecord } from "@/components/SubscriptionBanner";
-import { API_BASE } from "@/lib/queryClient";
+import { API_BASE, responseErrorText } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { useLabRoute } from "@/hooks/useLabRoute";
@@ -182,8 +182,7 @@ export default function VeritaScanAppPage() {
         body: JSON.stringify({ name }),
       });
       if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || "Failed to create scan");
+        throw new Error(await responseErrorText(res, "Failed to create scan"));
       }
       return res.json() as Promise<ScanSummary>;
     },

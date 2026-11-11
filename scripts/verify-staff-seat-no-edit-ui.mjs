@@ -119,7 +119,7 @@ for (const mode of ["light", "dark"]) {
   check(`${tag}V1a. the Staff login's VeritaMap page shows New Map disabled`, await newMap.isVisible().catch(() => false) && await newMap.isDisabled().catch(() => false), vm.url());
   if (mode === "light") {
     const post = await vm.evaluate(async ([b, t, l]) => { const r = await fetch(`${b}/api/labs/${l}/veritamap/maps`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${t}` }, body: JSON.stringify({ name: "Made-up map the Staff login tries" }) }); return { s: r.status, j: await r.json() }; }, [BASE, STAFF.token, LAB]);
-    check("V1b. ... and the create route refuses it (403 view-only), so no map is made", post.s === 403 && /view-only access to veritamap/.test(post.j.error || "") && !sql("SELECT id FROM veritamap_maps WHERE name = 'Made-up map the Staff login tries'"), JSON.stringify(post));
+    check("V1b. ... and the create route refuses it (403 view-only), so no map is made", post.s === 403 && /view-only access to VeritaMap®\./.test(post.j.error || "") && !sql("SELECT id FROM veritamap_maps WHERE name = 'Made-up map the Staff login tries'"), JSON.stringify(post));
   }
   await vm.screenshot({ path: `${OUT}/veritamap-staff-${mode}.png` });
   await vm.context().close();

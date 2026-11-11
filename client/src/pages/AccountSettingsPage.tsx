@@ -20,6 +20,7 @@ import { Save, Tag, Loader2, CheckCircle2, AlertTriangle } from "lucide-react";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { validateClia, CLIA_FORMAT_HINT } from "@shared/validateClia";
 import { STAFF_SEAT_READ_ONLY_MESSAGE, STAFF_SEAT_TYPE_LABEL } from "@shared/seatEditRule";
+import { SEAT_MODULE_LABELS } from "@shared/schema";
 import { isStockHost } from "@/lib/host";
 
 const API_BASE = ""; // same-origin: works on the lab site and the separate VeritaStock deployment
@@ -134,22 +135,25 @@ export default function AccountSettingsPage() {
   // Module permission constants. Keys MUST match SEAT_MODULE_KEYS in
   // shared/schema.ts (the resolver and server middleware key off that list).
   // Display order here drives the per-module list when Custom mode is picked.
+  // The labels are SEAT_MODULE_LABELS, which the server's view-only refusal names the module by too (BUG-168).
+  // scripts/verify-module-gate-consistency.mjs reads the `key: '...'` entries below.
+  const L = SEAT_MODULE_LABELS;
   const MODULE_LIST = [
-    { key: 'veritacheck',  label: 'VeritaCheck®' },
-    { key: 'veritamap',    label: 'VeritaMap®' },
-    { key: 'veritascan',   label: 'VeritaScan®' },
-    { key: 'veritacomp',   label: 'VeritaComp™' },
-    { key: 'veritastaff',  label: 'VeritaStaff™' },
-    { key: 'veritabench',  label: 'VeritaQA™ Suite' }, // VeritaPace, VeritaShift, VeritaQA
-    { key: 'veritastock',  label: 'VeritaStock™' },
-    { key: 'veritaops',    label: 'VeritaOps™' },
-    { key: 'veritamaintain', label: 'VeritaMaintain™' },
-    { key: 'veritaqc', label: 'VeritaQC™' },
-    { key: 'veritapt',     label: 'VeritaPT™' },
-    { key: 'veritapolicy', label: 'VeritaDC™' },
-    { key: 'veritalab',    label: 'VeritaLab™' },
-    { key: 'veritatrack',  label: 'VeritaTrack™' },
-    { key: 'veritaresponse', label: 'VeritaResponse™' },
+    { key: 'veritacheck',  label: L.veritacheck },
+    { key: 'veritamap',    label: L.veritamap },
+    { key: 'veritascan',   label: L.veritascan },
+    { key: 'veritacomp',   label: L.veritacomp },
+    { key: 'veritastaff',  label: L.veritastaff },
+    { key: 'veritabench',  label: L.veritabench }, // VeritaPace, VeritaShift, VeritaQA
+    { key: 'veritastock',  label: L.veritastock },
+    { key: 'veritaops',    label: L.veritaops },
+    { key: 'veritamaintain', label: L.veritamaintain },
+    { key: 'veritaqc', label: L.veritaqc },
+    { key: 'veritapt',     label: L.veritapt },
+    { key: 'veritapolicy', label: L.veritapolicy },
+    { key: 'veritalab',    label: L.veritalab },
+    { key: 'veritatrack',  label: L.veritatrack },
+    { key: 'veritaresponse', label: L.veritaresponse },
   ];
 
   const DEFAULT_PERMISSIONS: Record<string, string> = {

@@ -88,7 +88,7 @@ import {
 } from "recharts";
 import { FileDown, FileSpreadsheet, ArrowLeft, CheckCircle2, XCircle, Loader2, BookOpen, Archive, ArchiveRestore, GitBranch, Pencil, AlertTriangle } from "lucide-react";
 import React, { useState, useCallback, useEffect } from "react";
-import { API_BASE } from "@/lib/queryClient";
+import { API_BASE, responseErrorText } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { useLabRoute } from "@/hooks/useLabRoute";
@@ -101,7 +101,7 @@ async function downloadPDF(study: Study, results: StudyResults) {
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify({ study, results }),
   });
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) throw new Error(await responseErrorText(res));
 
   const typeMap: Record<string, string> = { cal_ver: "CalVer", cal_ver_correlation: "CalVerCorrelation", precision: "Precision", method_comparison: "MethodComp", lot_to_lot: "LotToLot", pt_coag: "PTCoag", qc_range: "QCRange", multi_analyte_coag: "MultiAnalyteCoag", ref_interval: "RefInterval", sensitivity: "Sensitivity", carryover: "Carryover", accuracy_bias: "AccuracyBias", linearity: "Linearity", reportable_range: "ReportableRange", manual_diff: "ManualDiff", heparin_range: "HeparinRange" };
   const filename = `VeritaCheck_${typeMap[study.studyType] || "Study"}_${study.testName.replace(/\s+/g, "_")}_${study.date}.pdf`;

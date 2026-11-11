@@ -14,7 +14,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { API_BASE } from "@/lib/queryClient";
+import { API_BASE, responseErrorText } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 
 type ElementStatus = "pass" | "fail" | "na" | "none" | "needs_review";
@@ -74,7 +74,7 @@ export function PriorYearComparisonDialog({ open, onOpenChange, assessmentId, la
     queryKey: [url ?? "no-prior-year"],
     queryFn: async () => {
       const r = await fetch(`${API_BASE}${url}`, { headers: authHeaders() });
-      if (!r.ok) throw new Error(await r.text());
+      if (!r.ok) throw new Error(await responseErrorText(r));
       return r.json();
     },
     enabled: !!url,

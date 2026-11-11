@@ -287,7 +287,7 @@ function safeJsonParse(value: any, fallback: any = []): any {
     return [value];
   }
 }
-import { insertStudySchema, insertContactSchema, registerSchema, loginSchema, type Study, type SeatPermissions } from "@shared/schema";
+import { insertStudySchema, insertContactSchema, registerSchema, loginSchema, type Study, type SeatPermissions, seatModuleLabel } from "@shared/schema";
 
 // ── Server-side pass/fail recomputation ─────────────────────────────────────
 // Mirrors the client calculation logic so the stored status is always correct.
@@ -1291,8 +1291,9 @@ function requireModuleEdit(module: string) {
           "SELECT 1 FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active' LIMIT 1"
         ).get(activeLabId, req.userId);
         if (isActiveMember) {
+          // BUG-168: the module by its display name ("VeritaMap®"), not its key.
           return res.status(403).json({
-            error: `You have view-only access to ${module}. Ask the account owner to grant edit access.`
+            error: `You have view-only access to ${seatModuleLabel(module)}. Ask the account owner to grant edit access.`
           });
         }
         return next();
@@ -1303,7 +1304,7 @@ function requireModuleEdit(module: string) {
       const perm = effectiveSeatPermission(seatRow.seat_type, labSeatPermissions, module);
       if (perm !== 'edit') {
         return res.status(403).json({
-          error: `You have view-only access to ${module}. Ask the account owner to grant edit access.`
+          error: `You have view-only access to ${seatModuleLabel(module)}. Ask the account owner to grant edit access.`
         });
       }
       return next();
@@ -1319,7 +1320,7 @@ function requireModuleEdit(module: string) {
       const perm = effectiveSeatPermission(req.seatType, req.seatPermissions as SeatPermissions, module);
       if (perm !== 'edit') {
         return res.status(403).json({
-          error: `You have view-only access to ${module}. Ask the account owner to grant edit access.`
+          error: `You have view-only access to ${seatModuleLabel(module)}. Ask the account owner to grant edit access.`
         });
       }
     }
@@ -12880,7 +12881,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           let perms: SeatPermissions = {} as SeatPermissions;
           try { perms = JSON.parse(seatRow.permissions || '{}'); } catch {}
           if (effectiveSeatPermission(seatRow.seat_type, perms, "veritacheck") !== 'edit') {
-            return res.status(403).json({ error: "You have view-only access to veritacheck. Ask the account owner to grant edit access." });
+            return res.status(403).json({ error: "You have view-only access to VeritaCheck®. Ask the account owner to grant edit access." });
           }
         }
       }
@@ -12892,7 +12893,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         let perms: SeatPermissions = {} as SeatPermissions;
         try { perms = JSON.parse(seatRow.permissions || '{}'); } catch {}
         if (effectiveSeatPermission(seatRow.seat_type, perms, "veritacheck") !== 'edit') {
-          return res.status(403).json({ error: "You have view-only access to veritacheck. Ask the account owner to grant edit access." });
+          return res.status(403).json({ error: "You have view-only access to VeritaCheck®. Ask the account owner to grant edit access." });
         }
       }
     }
@@ -41753,7 +41754,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           ? null
           : !check.ok
           ? (check as any).reason
-          : "You have view-only access to VeritaDC. Ask the owner or an admin for edit access to approve.",
+          : "You have view-only access to VeritaDC™. Ask the owner or an admin for edit access to approve.",
       });
     }
   );

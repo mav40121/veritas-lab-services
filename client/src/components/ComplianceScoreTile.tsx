@@ -22,7 +22,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ChevronDown, ChevronUp, Gauge } from "lucide-react";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
-import { API_BASE } from "@/lib/queryClient";
+import { API_BASE, responseErrorText } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 
 type ScoreResponse = {
@@ -79,7 +79,7 @@ export function ComplianceScoreTile({ className = "" }: { className?: string }) 
     queryFn: async () => {
       if (!url) throw new Error("no lab");
       const r = await fetch(`${API_BASE}${url}`, { headers: authHeaders() });
-      if (!r.ok) throw new Error(await r.text());
+      if (!r.ok) throw new Error(await responseErrorText(r));
       return r.json();
     },
     enabled: !!url,

@@ -24,7 +24,7 @@ import { useLabRoute } from "@/hooks/useLabRoute";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Download, Upload, FileSpreadsheet, CheckCircle2, AlertTriangle, XCircle } from "lucide-react";
-import { API_BASE } from "@/lib/queryClient";
+import { API_BASE, responseErrorText } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -261,7 +261,7 @@ function ProgramRecordsImport({ labId, onDone }: { labId: number; onDone: () => 
   async function downloadTemplate() {
     try {
       const r = await fetch(`${API_BASE}/api/labs/${labId}/competency/assessments/bulk-template`, { headers: authHeaders() });
-      if (!r.ok) throw new Error(await r.text());
+      if (!r.ok) throw new Error(await responseErrorText(r));
       const blob = await r.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");

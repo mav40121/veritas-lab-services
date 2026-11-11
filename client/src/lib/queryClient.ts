@@ -26,14 +26,31 @@ async function throwIfResNotOk(res: Response) {
   }
 }
 
+// The server's own sentence in an error body: its JSON `error` field, or failing that `message`; "" when it sent none.
+function serverSentence(body: string): string {
+  try {
+    const parsed = JSON.parse(body);
+    if (typeof parsed?.error === "string" && parsed.error) return parsed.error;
+    if (typeof parsed?.message === "string" && parsed.message) return parsed.message;
+  } catch {}
+  return "";
+}
+
 // apiRequest throws "409: {json}". This is the server's own sentence, when it sent one.
 export function apiErrorMessage(err: unknown, fallback: string): string {
-  try {
-    const parsed = JSON.parse(err instanceof Error ? err.message.replace(/^\d{3}: /, "") : "");
-    return typeof parsed?.error === "string" && parsed.error ? parsed.error : fallback;
-  } catch {
-    return fallback;
-  }
+  return serverSentence(err instanceof Error ? err.message.replace(/^\d{3}: /, "") : "") || fallback;
+}
+
+// BUG-168: for a plain fetch() that fails, throw new Error(await responseErrorText(res, ...)) rather than the raw body, so
+// a toast reads the server's sentence and never {"error":"..."}. A body that isn't JSON (plain text) is shown as sent; an
+// empty body, or JSON with no sentence in it, gives the fallback.
+export async function responseErrorText(res: Response, fallback?: string): Promise<string> {
+  const text = await res.text().catch(() => "");
+  const sentence = serverSentence(text);
+  if (sentence) return sentence;
+  const fb = fallback || `The request failed (HTTP ${res.status}).`;
+  if (!text.trim()) return fb;
+  try { JSON.parse(text); return fb; } catch { return text; }
 }
 
 export async function apiRequest(

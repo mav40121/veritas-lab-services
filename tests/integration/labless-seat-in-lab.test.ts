@@ -92,7 +92,8 @@ async function main() {
     const studyA = studyRow(OWNER.id, labA, "Made-up Glucose A");
     const studyB = studyRow(OWNER.id, labB, "Made-up Glucose B");
     const hA = { "X-Active-Lab-Id": String(labA) }, hB = { "X-Active-Lab-Id": String(labB) };
-    const refusedView = (r: { s: number; j: any }, mod: string) => r.s === 403 && String(r.j?.error || "").includes(`view-only access to ${mod}`);
+    // BUG-168: the refusal names the module by its display name (VeritaMap®), not its key.
+    const refusedView = (r: { s: number; j: any }, mod: string) => r.s === 403 && r.j?.error === `You have view-only access to ${mod}. Ask the account owner to grant edit access.`;
 
     // ── 1. Brittany's seat works in the owner's lab she belongs to ──
     const map = await call("POST", `${A}/veritamap/maps`, { name: "Made-up map, lab-less writer" }, BRITT.token);
@@ -134,11 +135,11 @@ async function main() {
     const tiedFacts = await call("GET", `/api/admin/users/${TIED.id}/seat-facts`, undefined, null, { "x-admin-secret": ADMIN });
     const tiedA = (tiedFacts.j?.editCheck || []).find((e: any) => e.labId === labA);
     check("3a. a seat tied to the lab (view_all) beats a lab-less one (edit_all): refused, and the tied seat is the one picked",
-      refusedView(tiedMap, "veritamap") && tiedA?.pickedSeatId === seatTied, `${tiedMap.s} ${JSON.stringify(tiedA)}`);
+      refusedView(tiedMap, "VeritaMap®") && tiedA?.pickedSeatId === seatTied, `${tiedMap.s} ${JSON.stringify(tiedA)}`);
     const viewMap = await call("POST", `${A}/veritamap/maps`, { name: "Made-up map, lab-less view" }, LVIEW.token);
-    check("3b. a lab-less view_all seat stays view only", refusedView(viewMap, "veritamap"), `${viewMap.s} ${JSON.stringify(viewMap.j)}`);
+    check("3b. a lab-less view_all seat stays view only", refusedView(viewMap, "VeritaMap®"), `${viewMap.s} ${JSON.stringify(viewMap.j)}`);
     const staffMap = await call("POST", `${A}/veritamap/maps`, { name: "Made-up map, lab-less staff" }, LSTAFF.token);
-    check("3c. a lab-less Staff seat stored edit_all stays view only (a Staff seat never edits)", refusedView(staffMap, "veritamap"), `${staffMap.s} ${JSON.stringify(staffMap.j)}`);
+    check("3c. a lab-less Staff seat stored edit_all stays view only (a Staff seat never edits)", refusedView(staffMap, "VeritaMap®"), `${staffMap.s} ${JSON.stringify(staffMap.j)}`);
     check("3d. ... and GET /api/labs/me reads it as a Staff seat in lab A", (await labsMe(LSTAFF.token, labA))?.seatType === "staff_portal", JSON.stringify(await labsMe(LSTAFF.token, labA)));
 
     // ── 4. POST /api/account/seats stamps the lab ──

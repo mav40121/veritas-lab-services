@@ -10,7 +10,7 @@ import {
   ArrowRight, Shield, Users, Award, CalendarDays,
   ChevronDown, ChevronUp, Activity, Info, FileText, Download, TestTubes
 } from "lucide-react";
-import { API_BASE } from "@/lib/queryClient";
+import { API_BASE, responseErrorText } from "@/lib/queryClient";
 import { downloadPdfToken } from "@/lib/utils";
 import { useLabRoute } from "@/hooks/useLabRoute";
 import { saveAs } from "file-saver";
@@ -80,7 +80,7 @@ export default function DemoLabPage() {
     setGenerating209(true);
     try {
       const res = await fetch(`${API_BASE}/api/demo/staff/cms209`);
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) throw new Error(await responseErrorText(res));
       const { token } = await res.json();
       downloadPdfToken(token, `CMS_209_22D0999999_${labTodayIso()}.pdf`);
     } catch (err: any) {
