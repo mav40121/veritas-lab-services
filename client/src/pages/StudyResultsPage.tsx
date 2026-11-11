@@ -15,6 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiRequest } from "@/lib/queryClient";
+import { refreshSavedStudy } from "@/lib/freshRecord";
 import { authHeaders } from "@/lib/auth";
 import { downloadPdfToken } from "@/lib/utils";
 import { useAuth } from "@/components/AuthContext";
@@ -2335,6 +2336,9 @@ function StudyResultsPage() {
   const studyUrl = labId ? `/api/labs/${labId}/studies/${id}` : `/api/studies/${id}`;
   const { data: study, isLoading, error } = useQuery<Study>({
     queryKey: [studyUrl],
+    // Read from the server on every open (Sampson 2026-11-11): a copy cached by Edit or an earlier visit could be
+    // older than the study, and Exclude acts on a point by its position.
+    refetchOnMount: "always",
     queryFn: async () => {
       const res = await apiRequest("GET", studyUrl);
       if (res.status === 403) {
@@ -2440,7 +2444,7 @@ function StudyResultsPage() {
           </div>
         </div>
         <StudySignPanel study={study} isReadOnly={isReadOnly} onEdit={() => navigate(labRoute(`/study/${study.id}/edit`))}
-          onFinalized={() => queryClient.invalidateQueries({ queryKey: [studyUrl] })} />
+          onFinalized={() => refreshSavedStudy(queryClient, id)} />
         <div className="space-y-4">
           <div className={`rounded-md border p-3 text-sm font-semibold ${md.overallPass ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30" : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30"}`} data-testid="md-result-verdict">
             {md.overallPass ? "Every cell class is within the Rümke 95% confidence limits" : `Outside the Rümke 95% confidence limits: ${exceeded.join(", ")}`}
@@ -2545,7 +2549,7 @@ function StudyResultsPage() {
         </div>
 
         <StudySignPanel study={study} isReadOnly={isReadOnly} onEdit={() => navigate(labRoute(`/study/${study.id}/edit`))}
-          onFinalized={() => queryClient.invalidateQueries({ queryKey: [studyUrl] })} />
+          onFinalized={() => refreshSavedStudy(queryClient, id)} />
 
         <div className="space-y-4">
           <div className={`rounded-md border p-3 text-sm font-semibold ${res.meets ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30" : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30"}`} data-testid="hr-result-verdict">
@@ -3147,7 +3151,7 @@ function StudyResultsPage() {
             } catch { return []; }
           })(),
         }}
-        onUpdated={() => queryClient.invalidateQueries({ queryKey: [studyUrl] })}
+        onUpdated={() => refreshSavedStudy(queryClient, id)}
       />
 
       {/* 2026-06-09 (Michael L feedback): Set AMR affordance for
@@ -3193,7 +3197,7 @@ function StudyResultsPage() {
           amrUnits: (study as any).amrUnits,
           resultUnits: (study as any).resultUnits,
         }}
-        onUpdated={() => queryClient.invalidateQueries({ queryKey: [studyUrl] })}
+        onUpdated={() => refreshSavedStudy(queryClient, id)}
       />
 
       {/* 2026-06-09 (overnight session 5/11): Sign + Lock + Amend.
@@ -3269,14 +3273,14 @@ function StudyResultsPage() {
         open={finalizeOpen}
         onOpenChange={setFinalizeOpen}
         studyId={study.id}
-        onFinalized={() => queryClient.invalidateQueries({ queryKey: [studyUrl] })}
+        onFinalized={() => refreshSavedStudy(queryClient, id)}
       />
       <StudyArchiveDialog
         open={archiveOpen}
         onOpenChange={setArchiveOpen}
         studyId={study.id}
         mode={(study as any).archived_at ? "unarchive" : "archive"}
-        onDone={() => queryClient.invalidateQueries({ queryKey: [studyUrl] })}
+        onDone={() => refreshSavedStudy(queryClient, id)}
       />
 
       {/* 2026-06-09 (overnight session 8/11, Q1 Censoring Level 2):
@@ -3309,7 +3313,7 @@ function StudyResultsPage() {
         onOpenChange={setCensoringOpen}
         studyId={study.id}
         currentPolicy={(study as any).censoringPolicy}
-        onUpdated={() => queryClient.invalidateQueries({ queryKey: [studyUrl] })}
+        onUpdated={() => refreshSavedStudy(queryClient, id)}
       />
 
       {isCalVer(results) && <CalVerReport study={study} results={results} />}

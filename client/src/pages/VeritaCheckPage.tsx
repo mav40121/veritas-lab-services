@@ -27,6 +27,7 @@ import { VeritaQcBulkImportModal, type VeritaQcBulkImportPayload } from "@/compo
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useFreshRecord, dropSavedStudy } from "@/lib/freshRecord";
 import { useToast } from "@/hooks/use-toast";
 import { calculateStudy, calculateCalVerCorrelation, calculatePrecision, calculateLotToLot, calculatePTCoag, calculateQCRange, calculateMultiAnalyteCoag, calculateRefInterval, calculateQualitative, calculateSemiQuant, calculateSensitivity, type DataPoint, type PrecisionDataPoint, type LotToLotDataPoint, type RefIntervalDataPoint, type SensitivityInput, calculateINR, formatTeaCriterion } from "@/lib/calculations";
 import { buildPtCoagPayload, readPtPairRows, type PtCoagForm } from "@/lib/ptCoagPayload";
@@ -209,10 +210,17 @@ export default function VeritaCheckPage() {
   const editStudyUrl = isEditing && editingLabId
     ? `/api/labs/${editingLabId}/studies/${editId}`
     : null;
-  const { data: editStudy } = useQuery<any>({
+  // Edit reads the study from the server each time it opens and fills the form only from that read (Sampson
+  // 2026-11-11). queryClient.ts keeps a read forever (staleTime Infinity) and holds it 5 minutes after the page
+  // closes, so Continue on a draft just saved filled the form from the copy read before the save, and saving
+  // that form erased what had been saved since. useFreshRecord (lib/freshRecord.ts) gives nothing until a
+  // read made after this page opened has come back, and every save drops the study's cached copy (dropSavedStudy).
+  const editStudyQuery = useQuery<any>({
     queryKey: editStudyUrl ? [editStudyUrl] : ["__skip_edit_fetch__"],
     enabled: !!editStudyUrl,
+    refetchOnMount: "always",
   });
+  const editStudy = useFreshRecord(editStudyQuery);
   const { toast } = useToast();
   const { isLoggedIn, user } = useAuth();
   const [paymentStatus, setPaymentStatus] = useState<"success" | "cancelled" | null>(null);
@@ -1598,10 +1606,9 @@ export default function VeritaCheckPage() {
     },
     onSuccess: async (res) => {
       const data = await res.json();
-      queryClient.invalidateQueries({ queryKey: ["/api/studies"] });
-      if (activeLabId) {
-        queryClient.invalidateQueries({ queryKey: [`/api/labs/${activeLabId}/studies`] });
-      }
+      // The study's own cached copy goes with the lists (it was only the lists), so Continue, Edit or the
+      // results page read what was just saved (Sampson 2026-11-11).
+      dropSavedStudy(queryClient, data?.id ?? editId);
       // Drafts skip navigation to results; return to the dashboard so the
       // user sees the draft listed and can resume later.
       if (data.status === "draft") {

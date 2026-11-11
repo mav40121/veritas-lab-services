@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { Link, useLocation, useRoute } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { API_BASE } from "@/lib/queryClient";
+import { useFreshRecord } from "@/lib/freshRecord";
 import { authHeaders } from "@/lib/auth";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
@@ -1161,11 +1162,14 @@ export default function VeritaMapBuildPage() {
   });
 
   // Fetch existing instruments
-  const { data: instruments = [], isLoading: loadingInstruments } = useQuery<
+  const instrumentsQuery = useQuery<
     InstrumentEntry[]
   >({
     queryKey: [`${mapApiBase}/instruments`],
     enabled: !!mapId,
+    // Read on every open: useFreshRecord below waits for a read made after the page opened, and with the
+    // global staleTime Infinity a cached menu that no save had marked stale would never be read again.
+    refetchOnMount: "always",
     queryFn: async () => {
       const res = await fetch(
         `${API_BASE}${mapApiBase}/instruments`,
@@ -1175,6 +1179,11 @@ export default function VeritaMapBuildPage() {
       return res.json();
     },
   });
+  const { data: instruments = [], isLoading: loadingInstruments } = instrumentsQuery;
+  // The test toggles fill only from a read made after this page opened (Sampson 2026-11-11, the stale-reopen
+  // class). The key re-reads on every open, but the cached copy came first: reopened within 5 minutes of an
+  // autosave, the toggles filled from the menu as it was before, and the next autosave wrote that back.
+  const freshInstruments = useFreshRecord(instrumentsQuery);
 
   // Compute which role groups are present (in order), used for step navigation
   const presentRoleGroups = useMemo(() =>
@@ -1210,10 +1219,10 @@ export default function VeritaMapBuildPage() {
 
   // Initialize test toggles when instruments load or change
   useEffect(() => {
-    if (!instruments.length) return;
+    if (!freshInstruments?.length) return;
     setTestsByInstrument((prev) => {
       const next = { ...prev };
-      for (const instr of instruments) {
+      for (const instr of freshInstruments) {
         if (!next[instr.id]) {
           // If the API returned saved tests for this instrument, use them
           if (instr.tests && instr.tests.length > 0) {
@@ -1261,7 +1270,7 @@ export default function VeritaMapBuildPage() {
       }
       return next;
     });
-  }, [instruments]);
+  }, [freshInstruments]);
 
   // Determine effective instrument name based on cascade state
   const isOtherDepartment = selectedDepartment === OTHER_DEPARTMENT_VALUE;
@@ -1530,6 +1539,10 @@ export default function VeritaMapBuildPage() {
           );
           if (!res.ok) throw new Error(`autosave failed for ${instr.instrument_name}`);
         }
+        // The cached menu is now older than the server's. Mark it stale without reading it again here: a read
+        // while the page is open would refill nothing (the toggles fill once) but would start another autosave.
+        qc.invalidateQueries({ queryKey: [`${mapApiBase}/instruments`], refetchType: "none" });
+        qc.invalidateQueries({ queryKey: [`${mapApiBase}`], refetchType: "none" });
         setAutosaveStatus("saved");
         if (savedFadeTimerRef.current) clearTimeout(savedFadeTimerRef.current);
         savedFadeTimerRef.current = setTimeout(() => setAutosaveStatus("idle"), 1500);

@@ -15,6 +15,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { VeritaPolicyTabs } from "@/components/VeritaPolicyTabs";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useFreshRecord } from "@/lib/freshRecord";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -300,7 +301,12 @@ function PlanBuilder({ planId, bank, labId, jsonMut, onBack }: any) {
   const isReadOnly = useIsReadOnly("veritapolicy");
   const { toast } = useToast();
   const planUrl = `/api/labs/${labId}/iqcp/plans/${planId}`;
-  const { data: plan, isLoading } = useQuery<any>({ queryKey: [planUrl], enabled: !!labId });
+  // The worksheets fill only from a read made after the plan opened (Sampson 2026-11-11, the stale-reopen class):
+  // the tab-switch autosave left the cached plan behind, so Back to list and reopening within 5 minutes filled the
+  // worksheets from the rows before that save, and Save all or Mark complete wrote them back over it.
+  const planQuery = useQuery<any>({ queryKey: [planUrl], enabled: !!labId, refetchOnMount: "always" });
+  const plan = useFreshRecord(planQuery);
+  const { isLoading } = planQuery;
   const [step, setStep] = useState<string>("risk");
   const [risk, setRisk] = useState<RiskRow[]>([]);
   const [qcp, setQcp] = useState<QcpRow[]>([]);
@@ -341,6 +347,9 @@ function PlanBuilder({ planId, bank, labId, jsonMut, onBack }: any) {
       try {
         await jsonMut("PUT", `${planUrl}/${cur}-items`, { items: itemsFor(cur) });
         setDirty((d) => ({ ...d, [cur]: false }));
+        // The cached plan is older than the server now. Marked stale, not read again here, so the other worksheets
+        // aren't refilled while the plan is open.
+        if (next !== "review") queryClient.invalidateQueries({ queryKey: [planUrl], refetchType: "none" });
       } catch { /* keep the dirty flag so the user can retry from the tab */ }
     }
     if (next === "review") queryClient.invalidateQueries({ queryKey: [planUrl] });
