@@ -19,6 +19,7 @@ import { useMemberships } from "@/hooks/useMemberships";
 import { Save, Tag, Loader2, CheckCircle2, AlertTriangle } from "lucide-react";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { validateClia, CLIA_FORMAT_HINT } from "@shared/validateClia";
+import { STAFF_SEAT_READ_ONLY_MESSAGE, STAFF_SEAT_TYPE_LABEL } from "@shared/seatEditRule";
 import { isStockHost } from "@/lib/host";
 
 const API_BASE = ""; // same-origin: works on the lab site and the separate VeritaStock deployment
@@ -280,6 +281,12 @@ export default function AccountSettingsPage() {
         }),
       });
       if (res.ok) {
+        setEditingSeatId(null);
+        await fetchSeats();
+      } else {
+        // e.g. 400 STAFF_SEAT_READ_ONLY from a tab opened before the seat list showed its type: nothing was saved.
+        const body = await res.json().catch(() => ({}));
+        toast({ title: "Permissions not saved", description: body?.error || "Please try again.", variant: "destructive" });
         setEditingSeatId(null);
         await fetchSeats();
       }
@@ -900,16 +907,20 @@ export default function AccountSettingsPage() {
               <div className="space-y-2">
                 {activeSeats.map((seat: any) => {
                   const seatPerms = (() => { try { return typeof seat.permissions === 'string' ? JSON.parse(seat.permissions || '{}') : (seat.permissions || {}); } catch { return {}; } })();
-                  const isEditing = editingSeatId === seat.id;
+                  // Michael 2026-11-11: a Staff seat is read and sign only. It shows its type and no edit
+                  // controls; the server refuses edit on it whatever is sent (shared/seatEditRule.ts).
+                  const isStaffSeat = seat.seat_type === 'staff_portal';
+                  const isEditing = !isStaffSeat && editingSeatId === seat.id;
                   return (
-                    <div key={seat.id} className="py-2 border-b border-border last:border-0">
+                    <div key={seat.id} className="py-2 border-b border-border last:border-0" data-testid={`account-seat-${seat.id}`} data-seat-type={seat.seat_type || 'active'}>
                       <div className="flex items-center justify-between">
                         <div>
                           <p className="text-sm font-medium text-foreground">{seat.seat_email}</p>
                           <p className="text-xs text-muted-foreground capitalize">{seat.status === "active" ? "Active" : "Invite pending"}</p>
                         </div>
                         <div className="flex gap-2">
-                          <button
+                          {!isStaffSeat && <button
+                            data-testid={`account-seat-edit-${seat.id}`}
                             onClick={() => {
                               if (isEditing) { setEditingSeatId(null); }
                               else {
@@ -927,7 +938,7 @@ export default function AccountSettingsPage() {
                             className="text-xs text-blue-600 hover:text-blue-800 underline"
                           >
                             {isEditing ? "Cancel" : "Edit Permissions"}
-                          </button>
+                          </button>}
                           {seat.status === 'pending' && (
                             <button
                               type="button"
@@ -993,7 +1004,13 @@ export default function AccountSettingsPage() {
                           </ConfirmDialog>
                         </div>
                       </div>
-                      {!isEditing && (() => {
+                      {isStaffSeat && (
+                        <div className="mt-1 flex flex-col gap-0.5" data-testid={`account-seat-staff-${seat.id}`}>
+                          <span className="self-start text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">{STAFF_SEAT_TYPE_LABEL}</span>
+                          <span className="text-xs text-muted-foreground">{STAFF_SEAT_READ_ONLY_MESSAGE}</span>
+                        </div>
+                      )}
+                      {!isStaffSeat && !isEditing && (() => {
                         const summaryMode = inferModeFromPerms(seatPerms);
                         if (summaryMode === 'edit_all') {
                           return (

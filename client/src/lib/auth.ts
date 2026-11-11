@@ -42,8 +42,10 @@ export interface AuthUser {
   // Two shapes accepted for backward compatibility (see shared/schema.ts):
   //   * legacy flat map  { veritacheck: 'edit', ... }
   //   * new mode shape   { mode: 'edit_all'|'view_all'|'custom', overrides?: {...} }
-  // Always read through resolveSeatPermission(), never index this directly.
+  // Always read through effectiveSeatPermission() (shared/seatEditRule.ts), never index this directly.
   seatPermissions?: SeatPermissions;
+  // The same seat's type ('active', 'view_only', 'staff_portal'). A Staff seat is read only whatever seatPermissions say.
+  seatType?: string | null;
   ownerUserId?: number | null;
 }
 
