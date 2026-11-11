@@ -206,7 +206,8 @@ check("S1g. the mock's colors: better #437A22, worse #A12C7B, no change #7A7974"
 check(`S1h. "Change shown against ${PRIOR_LABEL}." and the counts-only line`, (await text(reader, "digest-glance-note")) === `Counts only: no patient information and no staff names. Change shown against ${PRIOR_LABEL}.`, await text(reader, "digest-glance-note"));
 check("S1i. each card links to its module screen (findings to VeritaResponse™)", (await reader.getByTestId("digest-card-findings-link").getAttribute("href")) === `/labs/${LAB}/veritaresponse` && (await text(reader, "digest-card-findings-link")).startsWith("View in VeritaResponse™"));
 check("S1j. the acknowledgment card: requested, not yet read, only you and the lab admins see it", (await text(reader, "digest-status-card")).includes("Acknowledgment requested for this issue") && (await text(reader, "digest-my-status")) === "Your status: not yet read. Only you and the lab admins see your status." && await visible(reader, "digest-ack"));
-check("S1k. no Download PDF button and no SAMPLE banner on the reader view", !/Download PDF/i.test(await pageText(reader)) && !/SAMPLE ISSUE/i.test(await pageText(reader)));
+// PR 5 added Download PDF to a published issue's header (scripts/verify-digest-pdf-notice-ui.mjs is its receipt); still no SAMPLE banner.
+check("S1k. the reader view's header carries Download PDF (PR 5), and there is no SAMPLE banner", await visible(reader, "digest-download-pdf") && !/SAMPLE ISSUE/i.test(await pageText(reader)));
 await reader.screenshot({ path: `${OUT}/digest-reader-light.png`, fullPage: true });
 const readerMainText = await pageText(reader);
 

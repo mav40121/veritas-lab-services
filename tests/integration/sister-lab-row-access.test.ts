@@ -184,7 +184,7 @@ async function main() {
       const own = await call("GET", `/api/labs/${labA}/digest/issues/${digestA}`, undefined, token);
       check(`${who}: lab A's published staff digest issue opens`, own.s === 200 && own.j.note === "Made-up lab A digest", `${own.s}`);
       for (const [label, header] of [["no header", undefined], ["header naming lab B", labB]] as const) {
-        for (const suffix of ["", "/acks"]) {
+        for (const suffix of ["", "/acks", "/pdf", "/notice"]) { // PR 5 added the PDF and the notice count
           const viaA = await call("GET", `/api/labs/${labA}/digest/issues/${digestB}${suffix}`, undefined, token, header);
           const viaB = await call("GET", `/api/labs/${labB}/digest/issues/${digestB}${suffix}`, undefined, token, header);
           check(`${who}: sister lab B's digest issue${suffix}, ${label}: 404 through lab A's path, refused through lab B's`,

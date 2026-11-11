@@ -107,6 +107,8 @@ const ALWAYS: Record<string, string> = {
   "PUT /api/labs/:labId/findings/:id/effectiveness-checks/:checkId": "verify a corrective action",
   // Compliance digest: an acknowledgment is a reader's own word that they read the issue.
   "POST /api/labs/:labId/digest/issues/:id/ack": "acknowledge a compliance digest issue",
+  // The notice email goes out in the lab's name to its own people; the lab's owner or an admin sends it (PR 5).
+  "POST /api/labs/:labId/digest/issues/:id/notice": "send a compliance digest notice",
 };
 
 const present = (v: any) => v !== undefined && v !== null && v !== "" && v !== false && v !== 0;

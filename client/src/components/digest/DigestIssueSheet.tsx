@@ -1,11 +1,12 @@
 // client/src/components/digest/DigestIssueSheet.tsx
 //
 // The compliance digest's reader view of one issue (Michael 2026-11-11, Q281 = 1; PR 4 of 5; the approved screen mock of
-// 2026-11-10, without its SAMPLE banner, Download PDF button or bell, which are PR 5's or the spec's own). The header
-// block, the note from the medical director or designee, "This month at a glance" (one card per section the issue
-// includes) and a slot for the reader's status card. Every number comes from the issue's counts: frozen at publish, live
-// on a draft. The change lines compare with GET issues/:id `previous` (shared/digestCards.ts changeLine); none is drawn
-// when there is no prior issue or it didn't hold the section. No person's name is on this sheet.
+// 2026-11-10, without its SAMPLE banner or bell, which are the spec's own). The header block (with a slot at its top right,
+// where the mock draws Download PDF; PR 5 fills it on a published issue), the note from the medical director or designee,
+// "This month at a glance" (one card per section the issue includes) and a slot for the reader's status card. Every number
+// comes from the issue's counts: frozen at publish, live on a draft. The change lines compare with GET issues/:id
+// `previous` (shared/digestCards.ts changeLine); none is drawn when there is no prior issue or it didn't hold the section.
+// No person's name is on this sheet.
 import type { ReactNode } from "react";
 import { Link } from "wouter";
 import {
@@ -36,6 +37,9 @@ export interface DigestIssueDetail {
   previous: { id: number; period_start: string; period_end: string; counts_as_of: string | null; counts: Record<string, any> } | null;
   mine: { read_at: string | null; acknowledged_at: string | null };
   can_edit: boolean;
+  // PR 5, the owner and admins only: when the notice email went out and to how many people.
+  notice_sent_at?: string | null;
+  notice_sent_count?: number | null;
 }
 
 // The mock's colors (#437A22 better, #A12C7B worse, #7A7974 same and info), with lighter shades on a dark page.
@@ -108,13 +112,14 @@ export function sentToLabel(issue: Pick<DigestIssueDetail, "audience" | "audienc
   return DIGEST_AUDIENCE_LABELS[issue.audience] || issue.audience;
 }
 
-export function DigestIssueSheet({ issue, labId, labName, cliaNumber, readerCount, statusCard }: {
+export function DigestIssueSheet({ issue, labId, labName, cliaNumber, readerCount, statusCard, headerAction }: {
   issue: DigestIssueDetail;
   labId: number;
   labName: string | null;
   cliaNumber: string | null;
   readerCount?: number | null; // the owner and admins only: how many people the audience reaches
   statusCard?: ReactNode;
+  headerAction?: ReactNode; // the header's top right (PR 5: Download PDF on a published issue)
 }) {
   const tz = issue.counts?.timeZone ?? null;
   const keys = issueCardKeys(issue.sections);
@@ -124,10 +129,16 @@ export function DigestIssueSheet({ issue, labId, labName, cliaNumber, readerCoun
   return (
     <div className="text-[14px] leading-[1.35]" data-testid="digest-sheet">
       <div className="rounded-lg border border-border bg-card px-[18px] py-3" data-testid="digest-header">
-        <div className={`font-bold text-xs tracking-[.8px] uppercase ${TEAL}`} data-testid="digest-eyebrow">Compliance Digest | {digestVersionLabel(issue.audience)}</div>
-        <h1 className={`mt-0.5 mb-1 text-[25px] font-bold ${DEEP}`} style={SANS} data-testid="digest-title">{periodTitle(issue.period_start, issue.period_end)}</h1>
-        <div className="text-sm font-semibold" data-testid="digest-lab">
-          {labName || `Lab ${labId}`} {" | "} <span className="whitespace-nowrap">{cliaNumber ? `CLIA ${cliaNumber}` : "CLIA: Not on file. Enter it in account settings."}</span>
+        <div className="flex flex-wrap items-start gap-x-4 gap-y-2">
+          <div className="min-w-0 flex-1 basis-full sm:basis-0">
+            <div className={`font-bold text-xs tracking-[.8px] uppercase ${TEAL}`} data-testid="digest-eyebrow">Compliance Digest | {digestVersionLabel(issue.audience)}</div>
+            <h1 className={`mt-0.5 mb-1 text-[25px] font-bold ${DEEP}`} style={SANS} data-testid="digest-title">{periodTitle(issue.period_start, issue.period_end)}</h1>
+            <div className="text-sm font-semibold" data-testid="digest-lab">
+              {labName || `Lab ${labId}`} {" | "} <span className="whitespace-nowrap">{cliaNumber ? `CLIA ${cliaNumber}` : "CLIA: Not on file. Enter it in account settings."}</span>
+            </div>
+          </div>
+          {/* The mock's top right: Download PDF on a published issue (PR 5). Below the title block on a phone. */}
+          {headerAction && <div className="shrink-0 sm:pt-1" data-testid="digest-header-action">{headerAction}</div>}
         </div>
         {/* One item per line on a phone; on a wider screen one line with the mock's separators, each kept with the item after it. */}
         <div className={`mt-1.5 text-[12.5px] ${DIGEST_SUB} flex flex-col sm:flex-row sm:flex-wrap gap-y-0.5`} data-testid="digest-meta">

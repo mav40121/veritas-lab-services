@@ -9608,7 +9608,9 @@ try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_veritaceu_profiles_lab ON veri
 // who has read and acknowledged each one. counts_json holds counts only, never a person's name, email or id.
 // "One non-withdrawn issue per lab and period" is enforced in code, not by an index. review_box (Michael Q284 = 1,
 // 2026-11-11): the PDF's optional "Reviewed by the medical director or designee" box, off by default, copied onto each
-// issue when it is drafted so a published issue keeps what it had (PR 5 prints it).
+// issue when it is drafted so a published issue keeps what it had (PR 5 prints it). notice_sent_at, notice_sent_count and
+// notice_sent_by_user_id (PR 5, 2026-11-11): the issue's one notice email, when it went out, to how many people and who sent it;
+// set once by POST .../issues/:id/notice, so a second notice is refused (409 NOTICE_SENT).
 sqlite.exec(`
   CREATE TABLE IF NOT EXISTS digest_settings (
     lab_id INTEGER PRIMARY KEY,
@@ -9641,7 +9643,10 @@ sqlite.exec(`
     published_at TEXT,
     published_by_user_id INTEGER,
     withdrawn_at TEXT,
-    withdrawn_reason TEXT
+    withdrawn_reason TEXT,
+    notice_sent_at TEXT,
+    notice_sent_count INTEGER,
+    notice_sent_by_user_id INTEGER
   );
   CREATE INDEX IF NOT EXISTS idx_digest_issues_lab_period ON digest_issues(lab_id, period_start, period_end);
   CREATE TABLE IF NOT EXISTS digest_issue_acks (
@@ -9688,6 +9693,9 @@ sqlite.exec(`
     ["published_by_user_id", "INTEGER"],
     ["withdrawn_at", "TEXT"],
     ["withdrawn_reason", "TEXT"],
+    ["notice_sent_at", "TEXT"],
+    ["notice_sent_count", "INTEGER"],
+    ["notice_sent_by_user_id", "INTEGER"],
   ]);
   addMissing("digest_issue_acks", colsOf(sqlite.prepare("PRAGMA table_info(digest_issue_acks)").all() as { name: string }[]), [
     ["read_at", "TEXT"],

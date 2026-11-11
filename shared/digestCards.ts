@@ -162,8 +162,12 @@ export function headlineNumber(key: DigestCardKey, s: Section): number | null {
 
 export interface DigestCardBody { available: boolean; big: number | null; unit: string; detail: string }
 
-/** The big number, its words and the detail line for one section of an issue. */
-export function cardBody(key: DigestCardKey, s: Section, period: { start: string; end: string; asOf?: string | null }): DigestCardBody {
+/**
+ * The big number, its words and the detail line for one section of an issue. The PDF (PR 5, server/digestPdf.ts) passes
+ * `newTestsListedBelow`: it prints the new tests as their own list, so that row's detail gives the count on file instead of
+ * naming them again. Every number is the same either way.
+ */
+export function cardBody(key: DigestCardKey, s: Section, period: { start: string; end: string; asOf?: string | null }, opts: { newTestsListedBelow?: boolean } = {}): DigestCardBody {
   const big = headlineNumber(key, s);
   if (big == null || !s) {
     const detail = key === "scan"
@@ -196,8 +200,12 @@ export function cardBody(key: DigestCardKey, s: Section, period: { start: string
         byInstrument.set(k, [...(byInstrument.get(k) || []), String(i.analyte)]);
       }
       const listed = Array.from(byInstrument.entries()).slice(0, 8).map(([inst, tests]) => `${joinNames(tests)} on ${inst}`);
-      if (listed.length) parts.push(listed.join("; ") + (byInstrument.size > 8 ? `; and ${byInstrument.size - 8} more analyzers` : ""));
-      if (items.length) {
+      if (opts.newTestsListedBelow && items.length) {
+        parts.push(`VeritaCheck® study on file for ${items.filter((i) => i.studyOnFile).length} of ${items.length} (listed below)`);
+      } else if (listed.length) {
+        parts.push(listed.join("; ") + (byInstrument.size > 8 ? `; and ${byInstrument.size - 8} more analyzers` : ""));
+      }
+      if (items.length && !opts.newTestsListedBelow) {
         const onFile = items.filter((i) => i.studyOnFile).length;
         const missing = items.filter((i) => !i.studyOnFile).map((i) => i.analyte);
         parts.push(`VeritaCheck® study on file: ${onFile} of ${items.length}` + (missing.length ? `. None yet: ${joinNames(Array.from(new Set(missing)).slice(0, 10))}${missing.length > 10 ? " and more" : ""}` : ""));
@@ -279,6 +287,40 @@ export function changeLine(
   if (now < then) return { kind: "better", label: "Better:", text: `Down from ${then} in ${when}` };
   if (now > then) return { kind: "worse", label: "Worse:", text: `Up from ${then} in ${when}` };
   return { kind: "same", label: "No change:", text: `Same as ${when} (${then})` };
+}
+
+/** The PDF's Change column (PR 5, the approved PDF mock of 2026-11-11): the change line's verdict in a word; information only is blank. */
+export const DIGEST_CHANGE_WORDS: Record<DigestChangeKind, string> = { better: "Better", worse: "Worse", same: "No change", info: "" };
+
+// The PDF table's column headings: "October" against "Sept." as the mock has them; "Q3 2026" against "Q2 2026" for a quarter.
+const MONTHS_COLUMN = ["Jan.", "Feb.", "March", "April", "May", "June", "July", "Aug.", "Sept.", "Oct.", "Nov.", "Dec."];
+const quarterName = (start: string) => `Q${Math.floor((ymd(start).m - 1) / 3) + 1} ${ymd(start).y}`;
+/** This period's column heading: the month's name, or the quarter. */
+export function periodColumnLabel(start: string, end: string): string {
+  const f = periodFrequency(start, end);
+  if (f === "monthly") return MONTHS[ymd(start).m - 1];
+  if (f === "quarterly") return quarterName(start);
+  return "This period";
+}
+/** The prior period's column heading: "Sept.", or "Q2 2026"; with no prior issue, "Last month" or "Last quarter". */
+export function priorColumnLabel(prior: { period_start: string; period_end: string } | null | undefined, current: { period_start: string; period_end: string }): string {
+  if (!prior) return periodFrequency(current.period_start, current.period_end) === "quarterly" ? "Last quarter" : "Last month";
+  if (periodFrequency(prior.period_start, prior.period_end) === "quarterly") return quarterName(prior.period_start);
+  return MONTHS_COLUMN[ymd(prior.period_start).m - 1];
+}
+/**
+ * The meta line's last sentence, naming which period the comparison column is: "Last month = September 2026." when the prior
+ * issue is the month just before (the mock's wording), "Last quarter = Q2 2026." for a quarter, "Last issue = August 2026."
+ * when the issue just before wasn't published, and a plain statement when there is no prior issue.
+ */
+export function priorPeriodSentence(prior: { period_start: string; period_end: string } | null | undefined, current: { period_start: string; period_end: string }): string {
+  if (!prior) return "No earlier published issue to compare with.";
+  const quarterly = periodFrequency(prior.period_start, prior.period_end) === "quarterly";
+  const p = ymd(prior.period_start), c = ymd(current.period_start);
+  const monthsApart = (c.y - p.y) * 12 + (c.m - p.m);
+  const adjacent = monthsApart === (quarterly ? 3 : 1);
+  const name = quarterly ? quarterName(prior.period_start) : `${MONTHS[p.m - 1]} ${p.y}`;
+  return `${adjacent ? (quarterly ? "Last quarter" : "Last month") : "Last issue"} = ${name}.`;
 }
 
 /** The sections an issue includes, in the digest's order. */
