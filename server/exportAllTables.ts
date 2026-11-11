@@ -273,6 +273,11 @@ export const EXPORT_TABLES: Record<string, ExportTable> = {
   terms_acceptances: exclude(VLS_BUSINESS),
   terms_activations: exclude(VLS_BUSINESS),
   record_views: lab("Access log"),
+  // Compliance digest (server/digestIssues.ts): the lab's settings, its issues with their frozen counts, and who read and
+  // acknowledged each one.
+  digest_settings: lab("Compliance digest"),
+  digest_issues: lab("Compliance digest"),
+  digest_issue_acks: child("Compliance digest", "issue_id", "digest_issues"),
   sso_configs: exclude(ORG),
   system_security_settings: exclude(ORG),
   organizations: exclude(ORG),
