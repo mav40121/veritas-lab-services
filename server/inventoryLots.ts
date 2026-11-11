@@ -14,6 +14,49 @@
 
 type Sqlite = any;
 
+// Items PAST their expiration date with quantity on hand, in the given locations (GET .../veritastock/expired-on-shelf,
+// which passes every location of the enterprise group). An item's expiration_date is its earliest lot's (reconcileLots),
+// so this is one row per product per location. expiration_date is stored as 'YYYY-MM-DD', so a lexical comparison
+// against the lab's day is a correct "in the past" test. Moved out of routes.ts (2026-11-11).
+export function expiredOnShelfItems(sqlite: Sqlite, labIds: number[], today: string): any[] {
+  if (labIds.length === 0) return [];
+  const ph = labIds.map(() => "?").join(",");
+  return sqlite.prepare(`
+    SELECT ii.id AS id, ii.item_name AS item_name, ii.catalog_number AS catalog_number,
+           ii.lot_number AS lot_number, ii.expiration_date AS expiration_date,
+           ii.quantity_on_hand AS quantity_on_hand, ii.usage_unit AS usage_unit,
+           COALESCE(ii.unit_cost, 0) AS unit_cost, ii.lab_id AS lab_id, l.lab_name AS location_name
+      FROM inventory_items ii
+      LEFT JOIN labs l ON l.id = ii.lab_id
+     WHERE ii.lab_id IN (${ph})
+       AND COALESCE(ii.status, 'active') = 'active'
+       AND ii.expiration_date IS NOT NULL AND ii.expiration_date != ''
+       AND ii.expiration_date < ?
+       AND COALESCE(ii.quantity_on_hand, 0) > 0
+     ORDER BY ii.expiration_date ASC, ii.item_name ASC
+  `).all(...labIds, today) as any[];
+}
+
+// Expired LOTS still on the shelf in one lab (the compliance digest, 2026-11-11): each inventory_lots row past its
+// expiration with quantity left, on an active item of this lab. An item with no lot rows (before nested lots, or never
+// reconciled) counts as one lot from its own expiration and quantity, as it reads on the expired-on-shelf list.
+export function expiredLotsOnShelf(sqlite: Sqlite, labId: number, today: string): number {
+  const lots = (sqlite.prepare(
+    `SELECT COUNT(*) AS n FROM inventory_lots l JOIN inventory_items ii ON ii.id = l.item_id
+      WHERE ii.lab_id = ? AND COALESCE(ii.status, 'active') = 'active'
+        AND l.expiration_date IS NOT NULL AND l.expiration_date != '' AND l.expiration_date < ?
+        AND COALESCE(l.quantity, 0) > 0`
+  ).get(labId, today) as any).n as number;
+  const noLots = (sqlite.prepare(
+    `SELECT COUNT(*) AS n FROM inventory_items ii
+      WHERE ii.lab_id = ? AND COALESCE(ii.status, 'active') = 'active'
+        AND ii.expiration_date IS NOT NULL AND ii.expiration_date != '' AND ii.expiration_date < ?
+        AND COALESCE(ii.quantity_on_hand, 0) > 0
+        AND NOT EXISTS (SELECT 1 FROM inventory_lots l WHERE l.item_id = ii.id)`
+  ).get(labId, today) as any).n as number;
+  return lots + noLots;
+}
+
 // Lots for an item, oldest-expiry first (FEFO order). NULL/blank expiry sorts last.
 export function lotsForItem(sqlite: Sqlite, itemId: number): any[] {
   return sqlite.prepare(

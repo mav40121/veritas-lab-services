@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { PT_ROOT_CAUSE_CATEGORIES } from "@shared/ptFailure";
+import { isHardDeadline, isFindingOpen } from "@shared/findingCounts";
 import {
   Select,
   SelectContent,
@@ -61,8 +62,7 @@ const ACCREDITORS: { value: Accreditor; label: string; anchorLabel: string; offs
 // styling, not red "overdue", and they are excluded from the "past their
 // deadline" overdue count/banner.
 // ISO 15189 is hard too: its due date is the one the accreditation body set, entered by the lab (#108).
-const HARD_DEADLINE_ACCREDITORS = new Set<Accreditor>(["CMS", "CAP", "TJC", "ISO"]);
-const isHardDeadline = (acc: string) => HARD_DEADLINE_ACCREDITORS.has(acc as Accreditor);
+// The rule (isHardDeadline, isFindingOpen) is shared/findingCounts.ts, which the compliance digest counts by too.
 
 const STATUS_BADGES: Record<FindingStatus, { label: string; cls: string }> = {
   open:                 { label: "Open",        cls: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" },
@@ -314,10 +314,10 @@ export default function VeritaResponseAppPage() {
   const anchorLabel = ACCREDITORS.find((a) => a.value === newAccreditor)?.anchorLabel ?? "Anchor date";
   const deadlineNote = ACCREDITORS.find((a) => a.value === newAccreditor)?.deadlineNote ?? "";
 
-  const openCount = findings.filter((f) => f.status !== "closed" && f.status !== "accepted").length;
+  const openCount = findings.filter(isFindingOpen).length;
   const overdueCount = findings.filter((f) => {
     if (!f.due_date) return false;
-    if (f.status === "closed" || f.status === "accepted") return false;
+    if (!isFindingOpen(f)) return false;
     if (!isHardDeadline(f.accreditor)) return false; // #11: soft clocks are not "overdue"
     const d = daysUntil(f.due_date);
     return d !== null && d < 0;

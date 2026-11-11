@@ -187,10 +187,20 @@ type Combo = { id: number; analyte: string; specialty: string; instrument_id: nu
 // the same analyzer twice (e.g. two Ortho VITROS 5600 named Bonnie and Clyde);
 // those still need a method comparison between them, so the label carries the
 // nickname (or serial) to make the pair legible instead of collapsing to one name.
-function instLabel(i?: Instrument): string {
+export function instLabel(i?: Instrument): string {
   if (!i) return "(unknown)";
   const extra = (i.nickname || "").trim() || (i.serial_number || "").trim();
   return extra ? `${i.instrument_name} (${extra})` : i.instrument_name;
+}
+
+// The studies that belong to one map test on one instrument, matched the way Coverage credits a study to a row: the
+// analyte by name or the director's alignment (matchesAnalyte), the instrument by nickname or model tokens
+// (studyMatchesInstrument). Any study type; the caller filters drafts or types. The compliance digest's "New tests
+// added" uses it for "study on file" (server/digestCounts.ts).
+export function studiesForMapTest<S extends { test_name: string; instrument: string; coverage_analyte?: string | null }>(
+  studies: S[], analyte: string, inst: { instrument_name: string; nickname: string | null },
+): S[] {
+  return studies.filter((s) => matchesAnalyte(s as any, analyte) && studyMatchesInstrument(s.instrument, inst.instrument_name, inst.nickname));
 }
 
 export function computeCoverageFrom(instruments: Instrument[], combos: Combo[], studies: Study[], outside: OutsideRecord[] = []): CoverageResult {

@@ -37,8 +37,11 @@ ok("#6 in-app checklist cites 42 CFR 493 and the CMS-2567 form instructions",
 
 console.log("\n=== #11 soft-clock (COLA/AABB) ===");
 // AppPage
-ok("#11 AppPage defines the hard-deadline set (CMS/CAP/TJC only)",
-  /HARD_DEADLINE_ACCREDITORS = new Set<Accreditor>\(\["CMS", "CAP", "TJC"\]\)/.test(app));
+// 2026-11-11: the set moved to shared/findingCounts.ts (the compliance digest counts by it too); ISO 15189 is hard (#108).
+const shared = fs.readFileSync(path.join(ROOT, "shared/findingCounts.ts"), "utf8");
+ok("#11 AppPage reads the hard-deadline set (CMS/CAP/TJC, and ISO 15189) from shared/findingCounts.ts",
+  /HARD_DEADLINE_ACCREDITORS: ReadonlySet<string> = new Set\(\["CMS", "CAP", "TJC", "ISO"\]\)/.test(shared)
+    && /import \{ isHardDeadline, isFindingOpen \} from "@shared\/findingCounts";/.test(app));
 ok("#11 AppPage excludes soft accreditors from the overdue count",
   /if \(!isHardDeadline\(f\.accreditor\)\) return false;/.test(app));
 ok("#11 AppPage list shows 'past target' for soft clocks, not 'overdue'",
