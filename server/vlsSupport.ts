@@ -105,6 +105,8 @@ const ALWAYS: Record<string, string> = {
   "POST /api/labs/:labId/equipment/:id/events": "log maintenance as performed",
   "POST /api/labs/:labId/findings/:id/signoff": "sign off a finding",
   "PUT /api/labs/:labId/findings/:id/effectiveness-checks/:checkId": "verify a corrective action",
+  // Compliance digest: an acknowledgment is a reader's own word that they read the issue.
+  "POST /api/labs/:labId/digest/issues/:id/ack": "acknowledge a compliance digest issue",
 };
 
 const present = (v: any) => v !== undefined && v !== null && v !== "" && v !== false && v !== 0;

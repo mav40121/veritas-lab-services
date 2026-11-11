@@ -112,7 +112,9 @@ async function main() {
     const pendingSeat = seed("user_seats", { owner_user_id: OWNER.id, seat_email: `iso-pending-${stamp}@example.com`, invited_at: now, status: "pending", permissions: "{}", invite_token: `ZZ-LABA-token-${stamp}`, lab_id: labA, seat_type: "active" });
     const item = seed("inventory_items", { account_id: OWNER.id, lab_id: labA, item_name: "ZZ-LABA reagent" });
     seed("inventory_count_events", { lab_id: labA, account_id: OWNER.id, item_id: item, counted_qty: 5, previous_qty: 4, delta: 1, counted_by: "ZZ-LABA counter", source: "director", occurred_at: now, created_at: now });
-    check("0. fixture: lab A and its rows", !!labA && [study, mapId, scan, tracker, finding, program, assessment, quiz, olderQuiz, systemQuiz, assignment, cert, ptEvent, task, verification, staffing, costStudy, metric].every((x) => x > 0));
+    // A compliance digest issue (server/digestIssues.ts): its note carries the marker, and the owner sees a draft.
+    const digestIssue = seed("digest_issues", { lab_id: labA, period_start: "2026-09-01", period_end: "2026-09-30", status: "draft", note: "ZZ-LABA digest note", sections: '["findings"]', audience: "staff" });
+    check("0. fixture: lab A and its rows", !!labA && [study, mapId, scan, tracker, finding, program, assessment, quiz, olderQuiz, systemQuiz, assignment, cert, ptEvent, task, verification, staffing, costStudy, metric, digestIssue].every((x) => x > 0));
 
     // ── Logins with no place in lab A ─────────────────────────────────────────
     const OUT = await register("Outsider"), OUTSEAT = await register("Outseat"), OUTSTAFF = await register("Outstaff"), FREE = await register("Free");
@@ -305,7 +307,7 @@ async function main() {
       if (name === "employeeId") return String(path.includes("/programs/") ? compEmp : staffRow);
       const byName: Record<string, number> = { mapId, scanId: scan, programId: program, assessmentId: assessment, quizId: quiz, instrumentId: instrument, studyId: study, findingId: finding, trackerId: tracker, verificationId: verification, taskId: task, enrollmentId: enrollment, eventId: ptEvent, certificateId: cert, itemId: item, docId: certDoc };
       if (name in byName) return String(byName[name]);
-      const byPrev: Record<string, number> = { maps: mapId, scans: scan, programs: program, assessments: assessment, quizzes: quiz, instruments: instrument, studies: study, findings: finding, trackers: tracker, verifications: verification, tasks: task, enrollments: enrollment, events: ptEvent, certificates: cert, inventory: item, items: item, employees: path.includes("/competency/") ? compEmp : staffRow };
+      const byPrev: Record<string, number> = { maps: mapId, scans: scan, programs: program, assessments: assessment, quizzes: quiz, instruments: instrument, studies: study, findings: finding, trackers: tracker, verifications: verification, tasks: task, enrollments: enrollment, events: ptEvent, certificates: cert, inventory: item, items: item, issues: digestIssue, employees: path.includes("/competency/") ? compEmp : staffRow };
       return String(byPrev[prev] ?? 1);
     });
     const scopedLeaks: string[] = [];

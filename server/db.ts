@@ -9602,3 +9602,95 @@ try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_veritaceu_profiles_lab ON veri
     } catch (e: any) { console.error("[migration] hipaa_ack_source:", e?.message); }
   }
 }
+
+// Compliance digest issue builder (Michael 2026-11-10, Q281 = 1; PR 3 of 5; server/digestIssues.ts). One settings row
+// per lab, the issues (a draft shows live counts; publish freezes counts_json so each issue stays a dated record), and
+// who has read and acknowledged each one. counts_json holds counts only, never a person's name, email or id.
+// "One non-withdrawn issue per lab and period" is enforced in code, not by an index. review_box (Michael Q284 = 1,
+// 2026-11-11): the PDF's optional "Reviewed by the medical director or designee" box, off by default, copied onto each
+// issue when it is drafted so a published issue keeps what it had (PR 5 prints it).
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS digest_settings (
+    lab_id INTEGER PRIMARY KEY,
+    enabled INTEGER NOT NULL DEFAULT 0,
+    frequency TEXT NOT NULL DEFAULT 'monthly',
+    sections TEXT,
+    audience TEXT NOT NULL DEFAULT 'leadership',
+    audience_group_ids TEXT NOT NULL DEFAULT '[]',
+    ack_default INTEGER NOT NULL DEFAULT 0,
+    review_box INTEGER NOT NULL DEFAULT 0,
+    updated_at TEXT,
+    updated_by_user_id INTEGER
+  );
+  CREATE TABLE IF NOT EXISTS digest_issues (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    period_start TEXT NOT NULL,
+    period_end TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'draft',
+    note TEXT,
+    sections TEXT NOT NULL DEFAULT '[]',
+    audience TEXT NOT NULL DEFAULT 'leadership',
+    audience_group_ids TEXT NOT NULL DEFAULT '[]',
+    ack_requested INTEGER NOT NULL DEFAULT 0,
+    review_box INTEGER NOT NULL DEFAULT 0,
+    counts_json TEXT,
+    counts_as_of TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    created_by_user_id INTEGER,
+    published_at TEXT,
+    published_by_user_id INTEGER,
+    withdrawn_at TEXT,
+    withdrawn_reason TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_digest_issues_lab_period ON digest_issues(lab_id, period_start, period_end);
+  CREATE TABLE IF NOT EXISTS digest_issue_acks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    issue_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    read_at TEXT,
+    acknowledged_at TEXT,
+    UNIQUE(issue_id, user_id)
+  );
+`);
+// PRAGMA migration block per the New DB Table Rule (CLAUDE.md §8).
+{
+  const addMissing = (table: string, cols: string[], required: Array<[string, string]>) => {
+    if (cols.length === 0) return; // fresh DB: CREATE TABLE above handled it
+    for (const [c, t] of required) {
+      if (!cols.includes(c)) { try { sqlite.exec(`ALTER TABLE ${table} ADD COLUMN ${c} ${t}`); } catch {} }
+    }
+  };
+  const colsOf = (rows: { name: string }[]) => rows.map((c) => c.name);
+  addMissing("digest_settings", colsOf(sqlite.prepare("PRAGMA table_info(digest_settings)").all() as { name: string }[]), [
+    ["enabled", "INTEGER NOT NULL DEFAULT 0"],
+    ["frequency", "TEXT NOT NULL DEFAULT 'monthly'"],
+    ["sections", "TEXT"],
+    ["audience", "TEXT NOT NULL DEFAULT 'leadership'"],
+    ["audience_group_ids", "TEXT NOT NULL DEFAULT '[]'"],
+    ["ack_default", "INTEGER NOT NULL DEFAULT 0"],
+    ["review_box", "INTEGER NOT NULL DEFAULT 0"],
+    ["updated_at", "TEXT"],
+    ["updated_by_user_id", "INTEGER"],
+  ]);
+  addMissing("digest_issues", colsOf(sqlite.prepare("PRAGMA table_info(digest_issues)").all() as { name: string }[]), [
+    ["status", "TEXT NOT NULL DEFAULT 'draft'"],
+    ["note", "TEXT"],
+    ["sections", "TEXT NOT NULL DEFAULT '[]'"],
+    ["audience", "TEXT NOT NULL DEFAULT 'leadership'"],
+    ["audience_group_ids", "TEXT NOT NULL DEFAULT '[]'"],
+    ["ack_requested", "INTEGER NOT NULL DEFAULT 0"],
+    ["review_box", "INTEGER NOT NULL DEFAULT 0"],
+    ["counts_json", "TEXT"],
+    ["counts_as_of", "TEXT"],
+    ["created_by_user_id", "INTEGER"],
+    ["published_at", "TEXT"],
+    ["published_by_user_id", "INTEGER"],
+    ["withdrawn_at", "TEXT"],
+    ["withdrawn_reason", "TEXT"],
+  ]);
+  addMissing("digest_issue_acks", colsOf(sqlite.prepare("PRAGMA table_info(digest_issue_acks)").all() as { name: string }[]), [
+    ["read_at", "TEXT"],
+    ["acknowledged_at", "TEXT"],
+  ]);
+}

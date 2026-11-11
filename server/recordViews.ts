@@ -44,6 +44,7 @@ const MODULES: Array<[RegExp, string]> = [
   [/^(ops|veritaops|cprt)/, "VeritaOps"],
   [/^(members|team|seat|account-status|two-factor|vls-support|access-report)/, "Members and access"],
   [/^(export|export-all)/, "Exports"],
+  [/^digest/, "Compliance digest"],
 ];
 
 /** Module label and record id for a lab-relative path like "veritamap/maps/12/instruments". */
