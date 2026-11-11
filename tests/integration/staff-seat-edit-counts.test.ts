@@ -49,7 +49,10 @@ import("../../server/seatFacts").then(({ seatFactsForUser }) => {
   f.exec(`CREATE TABLE users (id INTEGER PRIMARY KEY, email TEXT);
     CREATE TABLE user_seats (id INTEGER PRIMARY KEY, owner_user_id INTEGER, seat_email TEXT, seat_user_id INTEGER, lab_id INTEGER, seat_type TEXT, status TEXT, invited_at TEXT, accepted_at TEXT, permissions TEXT);
     CREATE TABLE lab_members (lab_id INTEGER, user_id INTEGER, role TEXT, status TEXT, is_primary_lab INTEGER);
+    CREATE TABLE labs (id INTEGER PRIMARY KEY, owner_user_id INTEGER);
     CREATE TABLE audit_log (id INTEGER PRIMARY KEY, user_id INTEGER, entity_type TEXT, entity_id TEXT, created_at TEXT, before_json TEXT, after_json TEXT);`);
+  // The edit check reads a seat with no lab through the lab's owner (Q287 = 1, server/seatContext.ts editSeatInLab), so the labs table is here too.
+  f.prepare("INSERT INTO labs VALUES (20, 2)").run();
   f.prepare("INSERT INTO users VALUES (7, 'Made.Up@Example.test')").run();
   f.prepare("INSERT INTO user_seats VALUES (1, 2, 'made.up@example.test', 7, 20, 'staff_portal', 'active', 't0', 't1', ?)").run(JSON.stringify({ mode: "view_all" }));
   f.prepare("INSERT INTO user_seats VALUES (2, 2, 'made.up@example.test', 7, 20, 'active', 'active', 't2', 't3', ?)").run(JSON.stringify({ mode: "edit_all" }));
@@ -59,7 +62,7 @@ import("../../server/seatFacts").then(({ seatFactsForUser }) => {
   const r: any = seatFactsForUser(f, 7);
   check("11. seat-facts lists all three seats, the email-only pending one included", r.seats.length === 3 && r.seats[2].linkedBy === "email-only", JSON.stringify(r.seats));
   check("12. it reads each seat's type and mode", r.seats[0].seatType === "staff_portal" && r.seats[0].mode === "view_all" && r.seats[1].mode === "edit_all", JSON.stringify(r.seats));
-  check("13. the edit check sees two active seats in lab 20 and reports which it picks", r.editCheck[0].activeSeatsInLab.length === 2 && [1, 2].includes(r.editCheck[0].pickedSeatId), JSON.stringify(r.editCheck));
+  check("13. the edit check sees two active seats in lab 20 and picks the writer seat (editSeatInLab: a writer seat before a Staff seat)", r.editCheck[0].activeSeatsInLab.length === 2 && r.editCheck[0].pickedSeatId === 2, JSON.stringify(r.editCheck));
   check("14. the audited change shows before view_all, after edit_all, with its time", r.permissionChanges.length === 1 && r.permissionChanges[0].before.mode === "view_all" && r.permissionChanges[0].after.mode === "edit_all", JSON.stringify(r.permissionChanges));
   check("15. no email in the answer", !/example\.test/i.test(JSON.stringify(r)));
   check("16. unknown user gives null", seatFactsForUser(f, 999) === null);

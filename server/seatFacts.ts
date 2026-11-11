@@ -8,6 +8,7 @@
 // permission modes only: no email, name or invite token. It writes nothing.
 
 import { modulesWithStoredEdit } from "@shared/seatEditRule";
+import { editSeatInLab, seatInLabOrderSql, seatInLabSql } from "./seatContext";
 
 const permSummary = (raw: unknown) => {
   let p: any = raw;
@@ -30,15 +31,14 @@ export function seatFactsForUser(sqlite: any, userId: number) {
   const memberships = sqlite.prepare(
     "SELECT lab_id AS labId, role, status, is_primary_lab AS isPrimaryLab FROM lab_members WHERE user_id = ? ORDER BY lab_id"
   ).all(userId) as any[];
-  // The lookup requireModuleEdit runs for a non-owner, non-admin caller in a lab (server/routes.ts, "Otherwise check if the
-  // caller has an active seat IN THIS lab"), run here as-is so the answer shows which row it lands on.
+  // The lookup requireModuleEdit runs for a non-owner, non-admin caller in a lab (server/seatContext.ts editSeatInLab, the
+  // same function), so the answer shows which row it lands on. Since Q287 = 1 that includes a seat with no lab whose owner owns
+  // the lab, while the person is an active member there; activeSeatsInLab lists every row that rule counts in the lab, in order.
   const editCheck = memberships.map((m) => {
-    const row = sqlite.prepare(
-      "SELECT id, permissions FROM user_seats WHERE seat_user_id = ? AND status = 'active' AND lab_id = ? LIMIT 1"
-    ).get(userId, m.labId) as any;
+    const row = editSeatInLab(sqlite, userId, m.labId, "id, permissions") as any;
     const candidates = (sqlite.prepare(
-      "SELECT id FROM user_seats WHERE seat_user_id = ? AND status = 'active' AND lab_id = ?"
-    ).all(userId, m.labId) as any[]).map((r) => r.id);
+      `SELECT us.id FROM user_seats us WHERE us.seat_user_id = @user AND us.status = 'active' AND ${seatInLabSql("us", "@lab")} ORDER BY ${seatInLabOrderSql("us")}`
+    ).all({ user: userId, lab: m.labId }) as any[]).map((r) => r.id);
     return { labId: m.labId, role: m.role, pickedSeatId: row?.id ?? null, pickedPermissions: row ? permSummary(row.permissions) : null, activeSeatsInLab: candidates };
   });
   const seatIds = seats.map((s) => String(s.seatId));

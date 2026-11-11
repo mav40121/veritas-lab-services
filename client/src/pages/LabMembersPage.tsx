@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Loader2, UserPlus, ShieldCheck, ShieldOff, Trash2, Crown, ArrowRightLeft, Clock, Link as LinkIcon, RotateCw, X, KeyRound, Copy, Check, MapPin, Stethoscope, Pencil, Download } from "lucide-react";
 import { labLocaleDate } from "@/lib/labDate";
 import { RosterStaffCard } from "@/components/RosterStaffCard";
+import { STAFF_SEAT_TYPE_LABEL } from "@shared/seatEditRule";
 
 interface LabMember {
   membership_id: number;
@@ -27,7 +28,7 @@ interface LabMember {
   last_active_at: string | null;
   name: string | null;
   email: string;
-  seat_type: "active" | "view_only";
+  seat_type: "active" | "view_only" | "staff_portal";
 }
 
 interface PendingInvite {
@@ -36,7 +37,7 @@ interface PendingInvite {
   invited_at: string;
   status: string;
   invite_token: string | null;
-  seat_type: "active" | "view_only";
+  seat_type: "active" | "view_only" | "staff_portal";
   invitee_name?: string | null;
   invite_role?: "admin" | "staff";
 }
@@ -87,7 +88,16 @@ function roleBadge(role: string) {
 // reviewers (view-only). Reviewers are medical director or designee,
 // technical consultant, technical supervisor, general supervisor — they
 // read and approve but do not enter data.
-function seatTypeBadge(seatType: "active" | "view_only") {
+// A Staff login (staff_portal) reads and signs only and never edits (Michael 2026-11-11, shared/seatEditRule.ts); it was
+// shown as "Active", the writer chip. Promote to admin is the way to let that person edit.
+function seatTypeBadge(seatType: "active" | "view_only" | "staff_portal") {
+  if (seatType === "staff_portal") {
+    return (
+      <span data-testid="seat-type-staff" className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium border bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-600">
+        {STAFF_SEAT_TYPE_LABEL}
+      </span>
+    );
+  }
   if (seatType === "view_only") {
     return (
       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium border bg-violet-100 text-violet-900 border-violet-300">
