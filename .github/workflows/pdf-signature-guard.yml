@@ -51,7 +51,9 @@ jobs:
       # playwright (a devDependency) provides the OS libs via install-deps; the
       # browser itself comes from puppeteer's own cache.
       - name: Install headless Chrome system libraries
-        run: npx playwright install-deps chromium
+        # 2026-11-11: if the Ubuntu package servers are unreachable, carry on with the runner image's own libraries;
+        # the PDF checks below still fail if Chrome cannot start.
+        run: timeout 300 npx playwright install-deps chromium || echo "::warning::apt unreachable; using the runner image libraries"
 
       - name: Ensure Puppeteer Chrome is present
         run: npx puppeteer browsers install chrome
