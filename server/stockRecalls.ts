@@ -216,6 +216,17 @@ function logEvent(sqlite: any, recallId: number, labId: number, userId: number |
     .run(recallId, labId, userId, action, detail == null ? null : (typeof detail === "string" ? detail : JSON.stringify(detail)), new Date().toISOString());
 }
 
+/** An open case whose due date (YYYY-MM-DD) is before the lab's day. The case list and the compliance digest share it. */
+export function recallIsOverdue(row: { status?: string | null; due_date?: string | null }, today: string): boolean {
+  return row.status === "open" && isYmd(row.due_date) && (row.due_date as string) < today;
+}
+
+/** One lab's recall cases: open, and open past due (server/digestCounts.ts). */
+export function recallCounts(sqlite: any, labId: number, today: string): { open: number; overdue: number } {
+  const rows = sqlite.prepare("SELECT status, due_date FROM stock_recalls WHERE lab_id = ?").all(labId) as any[];
+  return { open: rows.filter((r) => r.status === "open").length, overdue: rows.filter((r) => recallIsOverdue(r, today)).length };
+}
+
 function decorate(sqlite: any, row: any, today: string) {
   const items = recallChecklist(row, vendorDocCount(sqlite, row.id));
   const assigned = userLabel(sqlite, row.assigned_user_id);
@@ -230,7 +241,7 @@ function decorate(sqlite: any, row: any, today: string) {
     checklist_total: items.length,
     ready_for_signoff: readyForSignoff(items),
     ready_to_close: readyToClose(items),
-    overdue: row.status === "open" && isYmd(row.due_date) && row.due_date < today,
+    overdue: recallIsOverdue(row, today),
     days_overdue: row.status === "open" && isYmd(row.due_date) ? Math.max(0, daysBetweenYmd(row.due_date, today)) : 0,
   };
 }

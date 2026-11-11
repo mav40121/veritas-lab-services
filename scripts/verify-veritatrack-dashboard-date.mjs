@@ -32,14 +32,18 @@ ok("#6 daysUntilDateOnly helper defined (UTC-midnight date-only diff)",
 ok("#6 taskStatus uses the date-only helper (no live-timestamp diff)",
   /function taskStatus[\s\S]*?const daysUntil = daysUntilDateOnly\(nextDueDate\);/.test(srv) &&
   !/function taskStatus[\s\S]*?Math\.floor\(\(due\.getTime\(\) - now\.getTime\(\)\)/.test(srv));
+// 2026-11-11: the two dashboard loops are one function, trackDashboardForLab, which both dashboard routes call (and the
+// compliance digest reads), so the helper appears once there and each route calls it.
 ok("#6 both server dashboards use daysUntilDateOnly for the overdue boundary",
-  (srv.match(/const daysUntil = daysUntilDateOnly\(nextDueDate, todayStr\);/g) || []).length >= 2); // the lab's day (#111, 2026-10-26)
+  /export function trackDashboardForLab\([\s\S]*?const daysUntil = daysUntilDateOnly\(nextDueDate, todayStr\);/.test(srv)
+    && (srv.match(/res\.json\(trackDashboardForLab\(sqlite, [^)]*\)\)\);/g) || []).length >= 2); // the lab's day (#111, 2026-10-26)
 ok("#6 client daysLabel uses a date-only diff (Due today on the due date)",
   /function daysLabel[\s\S]*?Date\.parse\(next_due \+ "T00:00:00Z"\)[\s\S]*?Date\.parse\(todayStr \+ "T00:00:00Z"\)/.test(cli));
 
 // #5 lab-scoped dashboard shape
 ok("#5 lab-scoped dashboard returns the camelCase shape (dueThisMonth + *Items)",
-  /res\.json\(\{ overdue, dueThisMonth, dueSoon, current, notStarted, total: tasks\.length, overdueItems, dueThisMonthItems, dueSoonItems \}\);/.test(srv));
+  /return \{ overdue, dueThisMonth, dueSoon, current, notStarted, total: tasks\.length, overdueItems, dueThisMonthItems, dueSoonItems \};/.test(srv)
+    && /"\/api\/labs\/:labId\/veritatrack\/dashboard"[\s\S]*?res\.json\(trackDashboardForLab\(sqlite, req\.scope\.labId, labDayFor\(req\.scope\.labId\)\)\);/.test(srv));
 ok("#5 the old snake_case, dueThisMonth-less lab-scoped response is gone",
   !/res\.json\(\{ overdue, due_soon: dueSoon, current, not_started: notStarted, total: tasks\.length, tasks: items \}\);/.test(srv));
 

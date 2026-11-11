@@ -251,16 +251,20 @@ import { buildCompetencyRegisterRows, generateCompetencyRegisterExcel } from "./
 import { methodClock, loadInstrumentGroups, labGroupRefs, loadLabMethodClocks, loadImportedHistory, programNamedInstrumentIds, type InstrumentGroup } from "./competencyMethodClock";
 import { labGroupsForRow } from "@shared/competencyQuizGroups";
 import {
-  deriveCompetencyStatus, competencyView, labMethodClocks,
+  deriveCompetencyStatus, competencyView, labMethodClocks, competencyDashboardStats,
   readCompetencyReminderConfig, writeCompetencyReminderConfig, planCompetencyReminders, runCompetencyReminders,
 } from "./competencyReminders";
 import { readNontechnicalFrequency, nontechnicalDueForLab } from "./competencyNontechnicalDue";
+import { computeLabReadiness } from "./labReadiness";
+import { ptSummaryForLab } from "./ptSummary";
+import { policyComplianceHeadline, policyOverdueDocuments } from "./policyComplianceCounts";
+import { scanStatusCounts } from "./veritascanCounts";
 import { deleteMapCascade, mapDeleteBlockers } from "./veritamapDelete";
 import { computeGettingStarted, setGettingStartedCheck, isManualKey } from "./gettingStarted";
 import { HOUSE_FORMATS } from "./veritapolicyHouseFormats";
 import { logConsumption } from "./consumptionLedger";
 import { logCount } from "./countLedger";
-import { reconcileLots } from "./inventoryLots";
+import { reconcileLots, expiredOnShelfItems } from "./inventoryLots";
 import { CLSI_COMPLIANCE_MATRIX_B64, SOFTWARE_VALIDATION_TEMPLATE_B64, SPECIMEN_TUBE_LABELING_GUIDE_B64 } from "./downloadAssets";
 import { cliaAnalytes, ptCategoryLinks } from "./cliaAnalytes";
 import { createAnalyteMatcher, nzKey, specialtyCategory } from "./ptAnalyteMatcher";
@@ -9542,24 +9546,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         const { locations } = resolveEnterpriseGroup(sqlite, req.scope.labId, req.scope.userId);
         const groupIds = locations.map((l) => l.id);
         if (groupIds.length === 0) return res.json({ items: [], products: [], total: 0, totalValue: 0 });
-        // expiration_date is stored as a 'YYYY-MM-DD' string, so a lexical
-        // comparison against today's date is a correct "in the past" test.
-        const today = labToday();
-        const ph = groupIds.map(() => "?").join(",");
-        const rows = sqlite.prepare(`
-          SELECT ii.id AS id, ii.item_name AS item_name, ii.catalog_number AS catalog_number,
-                 ii.lot_number AS lot_number, ii.expiration_date AS expiration_date,
-                 ii.quantity_on_hand AS quantity_on_hand, ii.usage_unit AS usage_unit,
-                 COALESCE(ii.unit_cost, 0) AS unit_cost, ii.lab_id AS lab_id, l.lab_name AS location_name
-            FROM inventory_items ii
-            LEFT JOIN labs l ON l.id = ii.lab_id
-           WHERE ii.lab_id IN (${ph})
-             AND COALESCE(ii.status, 'active') = 'active'
-             AND ii.expiration_date IS NOT NULL AND ii.expiration_date != ''
-             AND ii.expiration_date < ?
-             AND COALESCE(ii.quantity_on_hand, 0) > 0
-           ORDER BY ii.expiration_date ASC, ii.item_name ASC
-        `).all(...groupIds, today) as any[];
+        // The rows: server/inventoryLots.ts expiredOnShelfItems (the compliance digest reads it for one lab).
+        const rows = expiredOnShelfItems(sqlite, groupIds, labToday());
         let totalValue = 0;
         for (const r of rows) { r.value = (r.quantity_on_hand || 0) * (r.unit_cost || 0); totalValue += r.value; }
         // Group by product so the alert lists each product + the locations
@@ -18198,14 +18186,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const items = (db as any).$client.prepare(
         "SELECT status FROM veritascan_items WHERE scan_id = ?"
       ).all(s.id);
-      const total = items.length || 173;
-      const notAssessed = items.filter((i: any) => i.status === 'Not Assessed').length;
-      const assessed = items.length - notAssessed;
-      const compliant = items.filter((i: any) => i.status === 'Compliant').length;
-      const needsAttention = items.filter((i: any) => i.status === 'Needs Attention').length;
-      const immediateAction = items.filter((i: any) => i.status === 'Immediate Action').length;
-      const na = items.filter((i: any) => i.status === 'N/A').length;
-      const issues = needsAttention + immediateAction;
+      const { total, notAssessed, assessed, compliant, needsAttention, immediateAction, na, issues } = scanStatusCounts(items); // server/veritascanCounts.ts
       return {
         ...s,
         // camelCase mirrors of created_at/updated_at for the frontend
@@ -18292,14 +18273,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const items = (db as any).$client.prepare(
         "SELECT status FROM veritascan_items WHERE scan_id = ?"
       ).all(s.id);
-      const total = items.length || 173;
-      const notAssessed = items.filter((i: any) => i.status === 'Not Assessed').length;
-      const assessed = items.length - notAssessed;
-      const compliant = items.filter((i: any) => i.status === 'Compliant').length;
-      const needsAttention = items.filter((i: any) => i.status === 'Needs Attention').length;
-      const immediateAction = items.filter((i: any) => i.status === 'Immediate Action').length;
-      const na = items.filter((i: any) => i.status === 'N/A').length;
-      const issues = needsAttention + immediateAction;
+      // server/veritascanCounts.ts, shared with the compliance digest.
+      const { total, notAssessed, assessed, compliant, needsAttention, immediateAction, na, issues } = scanStatusCounts(items);
       return {
         ...s, createdAt: s.created_at, updatedAt: s.updated_at,
         isTeaching: !!s.is_teaching,
@@ -30472,105 +30447,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     }
   });
 
-  // GET /api/labs/:labId/competency/dashboard-stats
-  //
-  // PR E2 of the customer-blockers wave (2026-06-05). Single endpoint that
-  // returns the four counts the dashboard tile renders + a small sample of
-  // the overdue employees for the at-a-glance preview. The "next due"
-  // computation is JS-side because expressing the milestone walk in raw
-  // SQL would be more brittle than it is worth at this scale (a lab with
-  // 500 active testing employees still completes in a single sub-100ms
-  // pass through the array).
-  //
-  // Classification:
-  //   - overdue:    nextDue < today, OR employee needs Initial and hired >90d ago
-  //   - dueSoon30:  today <= nextDue <= today + 30d
-  //   - dueSoon90:  today + 30d < nextDue <= today + 90d
-  //   - compliant:  nextDue > today + 90d, all milestones completed in current
-  //                 annual cycle, or no schedule obligations on file
+  // GET /api/labs/:labId/competency/dashboard-stats: the four counts the dashboard tile renders and a small sample of the
+  // overdue employees (PR E2, 2026-06-05). The counting is competencyDashboardStats in server/competencyReminders.ts, which
+  // the compliance digest reads too.
   app.get("/api/labs/:labId/competency/dashboard-stats", authMiddleware, labScopeMiddleware, (req: any, res) => {
     if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
-    const labId = req.scope.labId;
-    const staffOwn = staffOwnIn(req);
-    const rows = ((db as any).$client.prepare(
-      `SELECT e.id, e.first_name, e.last_name, e.middle_initial, e.title, e.hire_date, e.created_at,
-              s.initial_completed_at,
-              s.six_month_due_at, s.six_month_completed_at,
-              s.first_annual_due_at, s.first_annual_completed_at,
-              s.annual_due_at, s.last_annual_completed_at, s.recorded_as
-       FROM staff_employees e
-       LEFT JOIN staff_competency_schedules s ON s.employee_id = e.id
-       WHERE e.tier2_lab_id = ? AND e.status = 'active' AND e.performs_testing = 1`
-    ).all(labId) as any[]).filter((e) => !staffOwn || e.id === staffOwn.employeeId) as Array<{
-      id: number; first_name: string; last_name: string; middle_initial: string | null; title: string | null; hire_date: string | null; created_at: string | null;
-      initial_completed_at: string | null;
-      six_month_due_at: string | null; six_month_completed_at: string | null;
-      first_annual_due_at: string | null; first_annual_completed_at: string | null;
-      annual_due_at: string | null; last_annual_completed_at: string | null;
-    }>;
-
-    const today = new Date(labToday() + "T00:00:00Z"); // lab calendar day at 00:00 (parking lot #97)
-    const dayMs = 24 * 60 * 60 * 1000;
-    const plus30 = new Date(today.getTime() + 30 * dayMs);
-    const plus90 = new Date(today.getTime() + 90 * dayMs);
-    const parse = (s: string | null): Date | null => {
-      if (!s) return null;
-      const d = new Date(s);
-      return Number.isNaN(d.getTime()) ? null : d;
-    };
-
-    type Bucket = "overdue" | "dueSoon30" | "dueSoon90" | "compliant";
-    const counts: Record<Bucket, number> = { overdue: 0, dueSoon30: 0, dueSoon90: 0, compliant: 0 };
-    const overdueSample: Array<{ id: number; name: string; nextDue: string | null; reason: string }> = [];
-    // Full list of overdue employee ids so the VeritaStaff list filter can
-    // drive its rendering from the same single source of truth the tile
-    // shows. Without this, the client-side getCompetencyStatus helper (which
-    // does not check Initial) and the server-side classification drift, and
-    // the user sees "3 overdue" on the tile but "Showing 0" on the filtered
-    // list. Hotfix to PR E2 (2026-06-05).
-    const overdueIds: number[] = [];
-    const methodClocks = labMethodClocks((db as any).$client, labId); // BUG-069: per-method due status
-
-    for (const e of rows) {
-      let bucket: Bucket = "compliant";
-      let nextDue: Date | null = null;
-      let reason = "";
-
-      // The shared milestone walk (server/competencyReminders.ts), so this tile, the
-      // owed list, the reminders, the compliance score and the roster badge agree.
-      const st = deriveCompetencyStatus(e, today, methodClocks.get(e.id));
-      bucket = st.bucket; reason = st.reason; nextDue = parse(st.nextDue);
-
-      counts[bucket] += 1;
-
-      if (bucket === "overdue") {
-        overdueIds.push(e.id);
-      }
-
-      if (bucket === "overdue" && overdueSample.length < 5) {
-        const name = [e.last_name, e.first_name].filter(Boolean).join(", ") + (e.middle_initial ? ` ${e.middle_initial}.` : "");
-        overdueSample.push({
-          id: e.id,
-          name: name || `Employee #${e.id}`,
-          nextDue: nextDue ? nextDue.toISOString().split("T")[0] : null,
-          reason,
-        });
-      }
-    }
-
-    const total = rows.length;
-    const percentCompliant = total > 0 ? Math.round((counts.compliant / total) * 100) : 100;
-
-    res.json({
-      overdue: counts.overdue,
-      dueSoon30: counts.dueSoon30,
-      dueSoon90: counts.dueSoon90,
-      compliant: counts.compliant,
-      total,
-      percentCompliant,
-      overdueSample,
-      overdueIds,
-    });
+    res.json(competencyDashboardStats((db as any).$client, req.scope.labId, staffOwnIn(req)));
   });
 
   // GET /api/labs/:labId/competency/reassessment-stats
@@ -30716,72 +30598,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const plan = lab?.plan ?? user?.plan;
     return ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "clinic", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(plan);
   }
-  function computeLabReadiness(client: any, labId: number) {
-    const today = labToday();
-    const daysTo = (d: string) => Math.round((Date.parse(d + "T00:00:00Z") - Date.parse(today + "T00:00:00Z")) / 86400000);
-    const modules: any[] = [];
-    const push = (key: string, label: string, overdue: number, dueSoon: number, total: number, unit: string) => {
-      const status = overdue > 0 ? "overdue" : dueSoon > 0 ? "attention" : "ok";
-      const headline = overdue > 0 ? `${overdue} overdue${dueSoon > 0 ? `, ${dueSoon} due soon` : ""}`
-        : dueSoon > 0 ? `${dueSoon} due soon`
-        : total > 0 ? `${total} ${unit}, all current`
-        : `No ${unit} tracked`;
-      modules.push({ key, label, status, overdue, due_soon: dueSoon, total, headline });
-    };
-    // Equipment maintenance (next_due_date; due-soon within 30d)
-    try {
-      const rows = client.prepare("SELECT next_due_date FROM lab_equipment WHERE lab_id = ? AND status <> 'retired'").all(labId) as any[];
-      let od = 0, ds = 0; for (const r of rows) { if (!r.next_due_date) continue; const d = daysTo(r.next_due_date); if (d < 0) od++; else if (d <= 30) ds++; }
-      push("equipment", "Equipment maintenance", od, ds, rows.length, "instruments");
-    } catch {}
-    // PT submission deadlines (pending events; due-soon within 14d)
-    try {
-      const rows = client.prepare("SELECT submission_due_date FROM pt_events WHERE lab_id = ? AND pass_fail = 'pending' AND submission_due_date IS NOT NULL AND TRIM(submission_due_date) <> ''").all(labId) as any[];
-      let od = 0, ds = 0; for (const r of rows) { const d = daysTo(r.submission_due_date); if (d < 0) od++; else if (d <= 14) ds++; }
-      push("pt_deadlines", "PT submission deadlines", od, ds, rows.length, "pending submissions");
-    } catch {}
-    // QC corrective actions (rejection violations with no CA filed)
-    try {
-      const miss = client.prepare("SELECT COUNT(*) AS n FROM qc_rule_violations v WHERE v.severity = 'rejection' AND v.superseded_at IS NULL AND v.qc_result_id IN (SELECT id FROM qc_results WHERE lab_id = ?) AND NOT EXISTS (SELECT 1 FROM qc_corrective_actions ca WHERE ca.qc_result_id = v.qc_result_id)").get(labId).n as number;
-      const lots = client.prepare("SELECT COUNT(*) AS n FROM qc_control_lots WHERE lab_id = ? AND status = 'active'").get(labId).n as number;
-      push("qc", "QC corrective actions", miss, 0, lots, "active lots");
-    } catch {}
-    // Certificate expirations (this lab's certificates, by lab_id, as VeritaLab lists them;
-    // due-soon 60d). BUG-033: keyed by the owner's user_id this counted every lab the owner
-    // owns and missed this lab's certificates filed under another user.
-    try {
-      const rows = client.prepare("SELECT expiration_date FROM lab_certificates WHERE lab_id = ? AND is_active = 1 AND expiration_date IS NOT NULL AND TRIM(expiration_date) <> ''").all(labId) as any[];
-      let od = 0, ds = 0; for (const r of rows) { const d = daysTo(String(r.expiration_date).slice(0, 10)); if (d < 0) od++; else if (d <= 60) ds++; }
-      push("certificates", "Certificate expirations", od, ds, rows.length, "certificates");
-    } catch {}
-    // Competency (testing staff whose next assessment is overdue; due-soon 30d).
-    // Mirrors the next-due classification used by /compliance/score.
-    try {
-      const emps = client.prepare(
-        "SELECT e.id, s.initial_completed_at, s.six_month_due_at, s.six_month_completed_at, s.first_annual_due_at, s.first_annual_completed_at, s.annual_due_at, s.last_annual_completed_at, s.recorded_as, e.hire_date, e.created_at FROM staff_employees e LEFT JOIN staff_competency_schedules s ON s.employee_id = e.id WHERE e.tier2_lab_id = ? AND e.status = 'active' AND e.performs_testing = 1"
-      ).all(labId) as any[];
-      const methodClocks = labMethodClocks(client, labId); // BUG-069: per-method due status
-      let od = 0, ds = 0;
-      const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
-      for (const e of emps) {
-        // Shared walk (server/competencyReminders.ts).
-        const st = deriveCompetencyStatus(e, todayStart, methodClocks.get(e.id));
-        if (st.bucket === "overdue") od++; else if (st.bucket === "dueSoon30") ds++;
-      }
-      push("competency", "Competency assessments", od, ds, emps.length, "testing staff");
-    } catch {}
-
-    const modules_ok = modules.filter(m => m.status === "ok").length;
-    const overdue_items = modules.reduce((a, m) => a + m.overdue, 0);
-    const attention_items = modules.reduce((a, m) => a + m.overdue + m.due_soon, 0);
-    return {
-      modules,
-      overall: {
-        modules_total: modules.length, modules_ok, attention_items, overdue_items,
-        status: overdue_items > 0 ? "overdue" : attention_items > 0 ? "attention" : "ok",
-      },
-    };
-  }
+  // computeLabReadiness (the per-module counts) lives in server/labReadiness.ts, shared with the compliance digest.
   app.get("/api/labs/:labId/readiness", authMiddleware, labScopeMiddleware, (req: any, res) => {
     if (!hasReadinessAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "A VeritaAssure subscription is required" });
     const client = (db as any).$client;
@@ -34045,29 +33862,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (!hasPTAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaPT™ subscription required" });
     const labId = resolveLegacyLabId(req);
     if (!labId) return res.json({ totalEnrollments: 0, eventsThisYear: 0, passRate: 0, openCorrectiveActions: 0 });
-    const totalEnrollments = ((db as any).$client.prepare(
-      "SELECT COUNT(*) as cnt FROM pt_enrollments WHERE lab_id = ? AND status = 'active'"
-    ).get(labId) as any).cnt;
-
-    const currentYear = new Date().getFullYear().toString();
-    const eventsThisYear = ((db as any).$client.prepare(
-      "SELECT COUNT(*) as cnt FROM pt_events WHERE lab_id = ? AND strftime('%Y', event_date) = ?"
-    ).get(labId, currentYear) as any).cnt;
-
-    const passCount = ((db as any).$client.prepare(
-      "SELECT COUNT(*) as cnt FROM pt_events WHERE lab_id = ? AND pass_fail = 'pass'"
-    ).get(labId) as any).cnt;
-    const failCount = ((db as any).$client.prepare(
-      "SELECT COUNT(*) as cnt FROM pt_events WHERE lab_id = ? AND pass_fail = 'fail'"
-    ).get(labId) as any).cnt;
-    const gradedTotal = passCount + failCount;
-    const passRate = gradedTotal > 0 ? Math.round((passCount / gradedTotal) * 1000) / 10 : 0;
-
-    const openCorrectiveActions = ((db as any).$client.prepare(
-      "SELECT COUNT(*) as cnt FROM pt_corrective_actions WHERE lab_id = ? AND status = 'open'"
-    ).get(labId) as any).cnt;
-
-    res.json({ totalEnrollments, eventsThisYear, passRate, openCorrectiveActions });
+    res.json(ptSummaryForLab((db as any).$client, labId)); // server/ptSummary.ts, shared with the compliance digest
   });
 
   // PDF placeholder
@@ -43231,20 +43026,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         )
         .get(labId, { today: labToday() }) as any;
 
-      // Overdue list: every approved doc past next_review_date.
-      const overdueList = sqlite
-        .prepare(
-          `SELECT d.id, d.title, d.next_review_date, d.manual_id,
-                  m.name AS manual_name
-             FROM policy_documents d
-             LEFT JOIN policy_manuals m ON m.id = d.manual_id
-            WHERE d.lab_id = ? AND d.archived_at IS NULL
-              AND d.status = 'approved'
-              AND d.next_review_date IS NOT NULL
-              AND date(d.next_review_date) < date(@today)
-            ORDER BY d.next_review_date ASC`
-        )
-        .all(labId, { today: labToday() });
+      // Overdue list: every approved doc past next_review_date (server/policyComplianceCounts.ts).
+      const overdueList = policyOverdueDocuments(sqlite, labId, labToday());
 
       // Due-soon list: approved doc with next_review_date in next 30 days.
       const dueSoonList = sqlite
@@ -43310,19 +43093,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         };
       });
 
-      // Headline numbers.
-      const headline = sqlite
-        .prepare(
-          `SELECT
-              SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) AS approved_total,
-              SUM(CASE WHEN status = 'in_review' THEN 1 ELSE 0 END) AS in_review_total,
-              SUM(CASE WHEN status = 'draft' THEN 1 ELSE 0 END) AS draft_total,
-              SUM(CASE WHEN status = 'expired' THEN 1 ELSE 0 END) AS expired_total,
-              COUNT(id) AS doc_total
-             FROM policy_documents
-            WHERE lab_id = ? AND archived_at IS NULL`
-        )
-        .get(labId) as any;
+      // Headline numbers (server/policyComplianceCounts.ts).
+      const headline = policyComplianceHeadline(sqlite, labId);
 
       // LHF-1: per-staff kiosk signature rollup (bench staff who read-and-signed
       // policies at the Staff Portal), so the director dashboard reflects them,
@@ -43427,16 +43199,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       `).all(labId, { today: labToday() }) as any[];
       const perManual = withManualTree(sqlite, labId, perManualRows, true);
 
-      const overdueList = withManualTree(sqlite, labId, sqlite.prepare(`
-        SELECT d.id, d.title, d.next_review_date, d.manual_id, m.name AS manual_name
-          FROM policy_documents d
-          LEFT JOIN policy_manuals m ON m.id = d.manual_id
-         WHERE d.lab_id = ? AND d.archived_at IS NULL
-           AND d.status = 'approved'
-           AND d.next_review_date IS NOT NULL
-           AND date(d.next_review_date) < date(@today)
-         ORDER BY d.next_review_date ASC
-      `).all(labId, { today: labToday() }) as any[]);
+      const overdueList = withManualTree(sqlite, labId, policyOverdueDocuments(sqlite, labId, labToday()));
 
       const dueSoonList = withManualTree(sqlite, labId, sqlite.prepare(`
         SELECT d.id, d.title, d.next_review_date, d.manual_id, m.name AS manual_name
@@ -43468,16 +43231,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
          ORDER BY pending DESC, u.name ASC
       `).all(labId, labId) as any[];
 
-      const headline = sqlite.prepare(`
-        SELECT
-           SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) AS approved_total,
-           SUM(CASE WHEN status = 'in_review' THEN 1 ELSE 0 END) AS in_review_total,
-           SUM(CASE WHEN status = 'draft' THEN 1 ELSE 0 END) AS draft_total,
-           SUM(CASE WHEN status = 'expired' THEN 1 ELSE 0 END) AS expired_total,
-           COUNT(id) AS doc_total
-          FROM policy_documents
-         WHERE lab_id = ? AND archived_at IS NULL
-      `).get(labId) as any;
+      const headline = policyComplianceHeadline(sqlite, labId);
 
       const ExcelJS = (await import("exceljs")).default;
       const wb = new ExcelJS.Workbook();

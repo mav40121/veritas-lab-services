@@ -86,6 +86,33 @@ export function daysUntilDateOnly(dateStr: string, todayStr: string = labToday()
 // calendar export, the nightly reminders in veritatrackReminders.ts, the map-link backfill in routes.ts) adds this.
 export const LIVE_SIGNOFF = "voided_at IS NULL";
 
+// The VeritaTrack dashboard cards for one lab, on the lab's calendar day (todayStr). Both dashboard routes (the legacy
+// /api/veritatrack/dashboard and /api/labs/:labId/veritatrack/dashboard) and the compliance digest
+// (server/digestCounts.ts) read this; it was two copies of one loop inside the routes until 2026-11-11. A task with no
+// live sign-off is Not Started, never overdue (BUG-143); "due this month" runs to the end of the lab's current month.
+export function trackDashboardForLab(sqlite: any, labId: number | null, todayStr: string) {
+  const tasks = sqlite.prepare(
+    "SELECT * FROM veritatrack_tasks WHERE lab_id = ? AND active = 1"
+  ).all(labId) as any[];
+  const monthEnd = addLabDays(todayStr.slice(0, 8) + "01", -1, 1); // last day of the lab's month
+  const thirtyDays = addLabDays(todayStr, 30);
+  let overdue = 0, dueThisMonth = 0, dueSoon = 0, current = 0, notStarted = 0;
+  const overdueItems: any[] = [], dueThisMonthItems: any[] = [], dueSoonItems: any[] = [];
+  for (const t of tasks) {
+    const last = sqlite.prepare(
+      `SELECT completed_date FROM veritatrack_signoffs WHERE task_id = ? AND ${LIVE_SIGNOFF} ORDER BY completed_date DESC LIMIT 1`
+    ).get(t.id) as any;
+    if (!last) { notStarted++; continue; }
+    const nextDueDate = nextDue(last.completed_date, t.frequency_months, t.frequency_days);
+    const daysUntil = daysUntilDateOnly(nextDueDate, todayStr);
+    if (daysUntil < 0) { overdue++; overdueItems.push({ ...t, next_due: nextDueDate, days_overdue: -daysUntil }); }
+    else if (nextDueDate <= monthEnd) { dueThisMonth++; dueThisMonthItems.push({ ...t, next_due: nextDueDate, days_until: daysUntil }); }
+    else if (nextDueDate <= thirtyDays) { dueSoon++; dueSoonItems.push({ ...t, next_due: nextDueDate, days_until: daysUntil }); }
+    else { current++; }
+  }
+  return { overdue, dueThisMonth, dueSoon, current, notStarted, total: tasks.length, overdueItems, dueThisMonthItems, dueSoonItems };
+}
+
 function taskStatus(nextDueDate: string, soonDays = 30): "overdue" | "due_soon" | "current" | "not_started" {
   const daysUntil = daysUntilDateOnly(nextDueDate);
   if (daysUntil < 0) return "overdue";
@@ -905,27 +932,7 @@ export function registerVeritaTrackRoutes(
     // user_id, so a multi-lab owner's summary counts match the visible list
     // instead of aggregating tasks across every lab they own.
     const labId = resolveLegacyLabId(sqlite, req);
-    const tasks = sqlite.prepare(
-      "SELECT * FROM veritatrack_tasks WHERE lab_id = ? AND active = 1"
-    ).all(labId) as any[];
-    const todayStr = labDayFor(labId);
-    const monthEnd = addLabDays(todayStr.slice(0, 8) + "01", -1, 1); // last day of the lab's month
-    const thirtyDays = addLabDays(todayStr, 30);
-    let overdue = 0, dueThisMonth = 0, dueSoon = 0, current = 0, notStarted = 0;
-    const overdueItems: any[] = [], dueThisMonthItems: any[] = [], dueSoonItems: any[] = [];
-    for (const t of tasks) {
-      const last = sqlite.prepare(
-        `SELECT completed_date FROM veritatrack_signoffs WHERE task_id = ? AND ${LIVE_SIGNOFF} ORDER BY completed_date DESC LIMIT 1`
-      ).get(t.id) as any;
-      if (!last) { notStarted++; continue; }
-      const nextDueDate = nextDue(last.completed_date, t.frequency_months, t.frequency_days);
-      const daysUntil = daysUntilDateOnly(nextDueDate, todayStr);
-      if (daysUntil < 0) { overdue++; overdueItems.push({ ...t, next_due: nextDueDate, days_overdue: -daysUntil }); }
-      else if (nextDueDate <= monthEnd) { dueThisMonth++; dueThisMonthItems.push({ ...t, next_due: nextDueDate, days_until: daysUntil }); }
-      else if (nextDueDate <= thirtyDays) { dueSoon++; dueSoonItems.push({ ...t, next_due: nextDueDate, days_until: daysUntil }); }
-      else { current++; }
-    }
-    res.json({ overdue, dueThisMonth, dueSoon, current, notStarted, total: tasks.length, overdueItems, dueThisMonthItems, dueSoonItems });
+    res.json(trackDashboardForLab(sqlite, labId, labDayFor(labId)));
   });
 
   // POST seed default tasks (idempotent)
@@ -1354,32 +1361,9 @@ export function registerVeritaTrackRoutes(
 
     app.get("/api/labs/:labId/veritatrack/dashboard", authMiddleware, labScopeMiddleware, (req: any, res) => {
       if (!hasTrackAccess(req.user, trackLab(req))) return res.status(403).json({ error: "VeritaTrack™ subscription required" });
-      const tasks = sqlite.prepare(
-        "SELECT * FROM veritatrack_tasks WHERE lab_id = ? AND active = 1"
-      ).all(req.scope.labId) as any[];
-      // #5 shape fix (2026-07-11): return the SAME camelCase shape as the legacy
-      // dashboard (dueThisMonth/dueSoon + *Items) so the client's Due This Month
-      // and Due Soon cards are not blank on the multi-lab path (they previously
-      // read dashboard.dueThisMonth / dashboard.dueSoon against a snake_case,
-      // dueThisMonth-less response).
-      const todayStr = labDayFor(req.scope.labId);
-      const monthEnd = addLabDays(todayStr.slice(0, 8) + "01", -1, 1); // last day of the lab's month
-      const thirtyDays = addLabDays(todayStr, 30);
-      let overdue = 0, dueThisMonth = 0, dueSoon = 0, current = 0, notStarted = 0;
-      const overdueItems: any[] = [], dueThisMonthItems: any[] = [], dueSoonItems: any[] = [];
-      for (const t of tasks) {
-        const last = sqlite.prepare(
-          `SELECT completed_date FROM veritatrack_signoffs WHERE task_id = ? AND ${LIVE_SIGNOFF} ORDER BY completed_date DESC LIMIT 1`
-        ).get(t.id) as any;
-        if (!last) { notStarted++; continue; }
-        const nextDueDate = nextDue(last.completed_date, t.frequency_months, t.frequency_days);
-        const daysUntil = daysUntilDateOnly(nextDueDate, todayStr);
-        if (daysUntil < 0) { overdue++; overdueItems.push({ ...t, next_due: nextDueDate, days_overdue: -daysUntil }); }
-        else if (nextDueDate <= monthEnd) { dueThisMonth++; dueThisMonthItems.push({ ...t, next_due: nextDueDate, days_until: daysUntil }); }
-        else if (nextDueDate <= thirtyDays) { dueSoon++; dueSoonItems.push({ ...t, next_due: nextDueDate, days_until: daysUntil }); }
-        else { current++; }
-      }
-      res.json({ overdue, dueThisMonth, dueSoon, current, notStarted, total: tasks.length, overdueItems, dueThisMonthItems, dueSoonItems });
+      // #5 shape fix (2026-07-11): the SAME camelCase shape as the legacy dashboard (dueThisMonth/dueSoon + *Items), so
+      // the client's Due This Month and Due Soon cards are not blank on the multi-lab path. One loop: trackDashboardForLab.
+      res.json(trackDashboardForLab(sqlite, req.scope.labId, labDayFor(req.scope.labId)));
     });
 
     // ── Sign-off log (Michael 2026-11-09): every sign-off the lab has recorded (server/veritatrackSignoffLog.ts). ──

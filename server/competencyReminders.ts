@@ -189,6 +189,96 @@ export function competencyView(emp: any, schedule: any, methods?: PersonMethodCl
   };
 }
 
+// GET /api/labs/:labId/competency/dashboard-stats (PR E2 of the customer-blockers wave, 2026-06-05): the four counts the
+// dashboard tile renders and a small sample of the overdue employees. Moved out of routes.ts (2026-11-11) so the
+// compliance digest (server/digestCounts.ts) reads the same numbers the tile shows; the route's answer is unchanged.
+// "Today" is the request's lab clock (labToday()), so a caller with no request runs it inside withLabClock.
+//
+// Classification:
+//   - overdue:    nextDue < today, OR employee needs Initial and hired >90d ago
+//   - dueSoon30:  today <= nextDue <= today + 30d
+//   - dueSoon90:  today + 30d < nextDue <= today + 90d
+//   - compliant:  nextDue > today + 90d, all milestones completed in current
+//                 annual cycle, or no schedule obligations on file
+// staffOwn: a Staff login's own-data scope (staffOwnIn); the counts are then that person's row only.
+export function competencyDashboardStats(sqlite: any, labId: number, staffOwn?: { employeeId: number | null } | null) {
+  const rows = (sqlite.prepare(
+    `SELECT e.id, e.first_name, e.last_name, e.middle_initial, e.title, e.hire_date, e.created_at,
+            s.initial_completed_at,
+            s.six_month_due_at, s.six_month_completed_at,
+            s.first_annual_due_at, s.first_annual_completed_at,
+            s.annual_due_at, s.last_annual_completed_at, s.recorded_as
+     FROM staff_employees e
+     LEFT JOIN staff_competency_schedules s ON s.employee_id = e.id
+     WHERE e.tier2_lab_id = ? AND e.status = 'active' AND e.performs_testing = 1`
+  ).all(labId) as any[]).filter((e) => !staffOwn || e.id === staffOwn.employeeId) as Array<{
+    id: number; first_name: string; last_name: string; middle_initial: string | null; title: string | null; hire_date: string | null; created_at: string | null;
+    initial_completed_at: string | null;
+    six_month_due_at: string | null; six_month_completed_at: string | null;
+    first_annual_due_at: string | null; first_annual_completed_at: string | null;
+    annual_due_at: string | null; last_annual_completed_at: string | null;
+  }>;
+
+  const today = new Date(labToday() + "T00:00:00Z"); // lab calendar day at 00:00 (parking lot #97)
+  const parse = (s: string | null): Date | null => {
+    if (!s) return null;
+    const d = new Date(s);
+    return Number.isNaN(d.getTime()) ? null : d;
+  };
+
+  const counts: Record<CompetencyBucket, number> = { overdue: 0, dueSoon30: 0, dueSoon90: 0, compliant: 0 };
+  const overdueSample: Array<{ id: number; name: string; nextDue: string | null; reason: string }> = [];
+  // Full list of overdue employee ids so the VeritaStaff list filter can
+  // drive its rendering from the same single source of truth the tile
+  // shows. Without this, the client-side getCompetencyStatus helper (which
+  // does not check Initial) and the server-side classification drift, and
+  // the user sees "3 overdue" on the tile but "Showing 0" on the filtered
+  // list. Hotfix to PR E2 (2026-06-05).
+  const overdueIds: number[] = [];
+  const methodClocks = labMethodClocks(sqlite, labId); // BUG-069: per-method due status
+
+  for (const e of rows) {
+    let bucket: CompetencyBucket = "compliant";
+    let nextDue: Date | null = null;
+    let reason = "";
+
+    // The shared milestone walk (deriveCompetencyStatus), so this tile, the
+    // owed list, the reminders, the compliance score and the roster badge agree.
+    const st = deriveCompetencyStatus(e, today, methodClocks.get(e.id));
+    bucket = st.bucket; reason = st.reason; nextDue = parse(st.nextDue);
+
+    counts[bucket] += 1;
+
+    if (bucket === "overdue") {
+      overdueIds.push(e.id);
+    }
+
+    if (bucket === "overdue" && overdueSample.length < 5) {
+      const name = [e.last_name, e.first_name].filter(Boolean).join(", ") + (e.middle_initial ? ` ${e.middle_initial}.` : "");
+      overdueSample.push({
+        id: e.id,
+        name: name || `Employee #${e.id}`,
+        nextDue: nextDue ? nextDue.toISOString().split("T")[0] : null,
+        reason,
+      });
+    }
+  }
+
+  const total = rows.length;
+  const percentCompliant = total > 0 ? Math.round((counts.compliant / total) * 100) : 100;
+
+  return {
+    overdue: counts.overdue,
+    dueSoon30: counts.dueSoon30,
+    dueSoon90: counts.dueSoon90,
+    compliant: counts.compliant,
+    total,
+    percentCompliant,
+    overdueSample,
+    overdueIds,
+  };
+}
+
 export interface CompetencyDueItem {
   employeeId: number;
   name: string;
