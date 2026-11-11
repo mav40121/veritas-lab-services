@@ -22,6 +22,7 @@
 import { PLAN_SEATS } from "./db";
 import { PLAN_LIMITS, STAFF_PORTAL_BANDS } from "./stripe";
 import { orgSeatCapForOwner } from "./organizationSeats";
+import { OWNER_EMAIL } from "./constants";
 
 export type LabSeatSummary = {
   activeIncluded: number;
@@ -107,12 +108,26 @@ export function labSeatSummary(sqlite: any, labId: number): LabSeatSummary | nul
 // counts, per lab, the active owner or admin members who are writing without a seat row (not the lab's owner, not a
 // Veritas support account, not a medical director, who sits on the free seat) and what the count and the gate would
 // read with them. It changes nothing. GET /api/admin/seat-count-gaps sends it; lab ids and counts only, no names.
+//
+// Michael 2026-11-11 (Q279 = 1): before deciding, count how many of the uncounted admins are Veritas logins (our own
+// accounts holding an admin role on a lab: the operator's address, OWNER_EMAIL, or any @veritaslabservices.com
+// address), since counting them would charge a client a seat for our access. A Veritas support account (vls_support)
+// was already left out above and still is. Counts only: veritasLogins per lab, usedIfCountedExceptVeritas (the count
+// with only the other uncounted admins), and in totals the distinct people and distinct Veritas logins.
 export type SeatCountGapRow = {
   labId: number; isDemo: boolean; pooled: boolean;
   activeIncluded: number; activeUsed: number; uncountedAdmins: number; usedIfCounted: number;
   overNow: boolean; overIfCounted: boolean;
   nextInviteRefusedNow: boolean; nextInviteRefusedIfCounted: boolean;
+  veritasLogins: number; usedIfCountedExceptVeritas: number; overIfCountedExceptVeritas: boolean;
 };
+
+const VERITAS_DOMAIN = "@veritaslabservices.com";
+export function isVeritasLogin(email: string | null | undefined): boolean {
+  const e = String(email || "").trim().toLowerCase();
+  if (!e) return false;
+  return e === String(OWNER_EMAIL || "").trim().toLowerCase() || e.endsWith(VERITAS_DOMAIN);
+}
 
 export function seatCountGaps(sqlite: any): { totals: Record<string, number>; labs: SeatCountGapRow[] } {
   const labs = sqlite.prepare("SELECT id, owner_user_id, organization_id, medical_director_email, COALESCE(is_demo, 0) AS is_demo FROM labs ORDER BY id").all() as any[];
@@ -130,8 +145,8 @@ export function seatCountGaps(sqlite: any): { totals: Record<string, number>; la
   const seatsByLab = sqlite.prepare("SELECT seat_user_id AS u, lower(seat_email) AS e FROM user_seats WHERE lab_id = ? AND status != 'deactivated' AND COALESCE(seat_type, 'active') = 'active'");
   const seatsByOwner = sqlite.prepare("SELECT seat_user_id AS u, lower(seat_email) AS e FROM user_seats WHERE owner_user_id = ? AND status != 'deactivated' AND COALESCE(seat_type, 'active') = 'active'");
 
-  // The people writing without a seat row in one lab: user ids, never shown.
-  const uncountedIn = (l: any): number[] => {
+  // The people writing without a seat row in one lab: user ids and whether each is a Veritas login, never shown.
+  const uncountedIn = (l: any): { u: number; veritas: boolean }[] => {
     const pooled = l.organization_id != null;
     const seats = (pooled ? seatsByOwner.all(l.owner_user_id) : seatsByLab.all(l.id)) as { u: number | null; e: string | null }[];
     const seatUsers = new Set(seats.map((s) => s.u).filter((u) => u != null));
@@ -140,34 +155,45 @@ export function seatCountGaps(sqlite: any): { totals: Record<string, number>; la
       : new Set([String(l.medical_director_email || "").trim().toLowerCase()].filter(Boolean));
     return (membersOf.all(l.id) as { u: number; e: string }[])
       .filter((m) => m.u !== l.owner_user_id && !seatUsers.has(m.u) && !(m.e && seatEmails.has(m.e)) && !(m.e && mdEmails.has(m.e)))
-      .map((m) => m.u);
+      .map((m) => ({ u: m.u, veritas: isVeritasLogin(m.e) }));
   };
 
   // An org-linked lab's count is pooled across the owner's labs, so its uncounted people are pooled the same way:
   // one person admin in two labs of a system is one more seat, not two.
-  const pooledUncounted = new Map<number, Set<number>>();
+  const pooledUncounted = new Map<number, Map<number, boolean>>();
   for (const l of labs) {
     if (l.organization_id == null) continue;
-    if (!pooledUncounted.has(l.owner_user_id)) pooledUncounted.set(l.owner_user_id, new Set());
-    for (const u of uncountedIn(l)) pooledUncounted.get(l.owner_user_id)!.add(u);
+    if (!pooledUncounted.has(l.owner_user_id)) pooledUncounted.set(l.owner_user_id, new Map());
+    for (const p of uncountedIn(l)) pooledUncounted.get(l.owner_user_id)!.set(p.u, p.veritas);
   }
 
   const rows: SeatCountGapRow[] = [];
   const people = new Set<string>();
+  const distinctPeople = new Set<number>();
+  const distinctVeritas = new Set<number>();
   for (const l of labs) {
     const summary = labSeatSummary(sqlite, l.id);
     if (!summary) continue;
     const pooled = l.organization_id != null;
     const own = uncountedIn(l);
-    const add = pooled ? (pooledUncounted.get(l.owner_user_id)?.size ?? 0) : own.length;
-    for (const u of own) people.add(pooled ? `o${l.owner_user_id}:${u}` : `l${l.id}:${u}`);
+    const pool = pooled ? pooledUncounted.get(l.owner_user_id) : undefined;
+    const add = pooled ? (pool?.size ?? 0) : own.length;
+    const addExceptVeritas = pooled ? [...(pool?.values() ?? [])].filter((v) => !v).length : own.filter((p) => !p.veritas).length;
+    for (const p of own) {
+      people.add(pooled ? `o${l.owner_user_id}:${p.u}` : `l${l.id}:${p.u}`);
+      distinctPeople.add(p.u);
+      if (p.veritas) distinctVeritas.add(p.u);
+    }
     if (own.length === 0) continue;
     const usedIfCounted = summary.activeUsed + add;
+    const usedIfCountedExceptVeritas = summary.activeUsed + addExceptVeritas;
     rows.push({
       labId: l.id, isDemo: Number(l.is_demo) === 1, pooled,
       activeIncluded: summary.activeIncluded, activeUsed: summary.activeUsed, uncountedAdmins: own.length, usedIfCounted,
       overNow: summary.activeUsed > summary.activeIncluded, overIfCounted: usedIfCounted > summary.activeIncluded,
       nextInviteRefusedNow: summary.activeUsed + 1 > summary.activeIncluded, nextInviteRefusedIfCounted: usedIfCounted + 1 > summary.activeIncluded,
+      veritasLogins: own.filter((p) => p.veritas).length, usedIfCountedExceptVeritas,
+      overIfCountedExceptVeritas: usedIfCountedExceptVeritas > summary.activeIncluded,
     });
   }
   const totals = {
@@ -178,6 +204,11 @@ export function seatCountGaps(sqlite: any): { totals: Record<string, number>; la
     labsNewlyOverIfCounted: rows.filter((r) => r.overIfCounted && !r.overNow).length,
     labsWhoseNextInviteWouldBeRefused: rows.filter((r) => r.nextInviteRefusedIfCounted && !r.nextInviteRefusedNow).length,
     demoLabsAmongThem: rows.filter((r) => r.isDemo).length,
+    // Q279 = 1: one person counts once here even when uncounted in several labs or systems.
+    uncountedPeopleDistinct: distinctPeople.size,
+    uncountedVeritasLogins: distinctVeritas.size,
+    labsWithVeritasLogins: rows.filter((r) => r.veritasLogins > 0).length,
+    labsNewlyOverIfCountedExceptVeritas: rows.filter((r) => r.overIfCountedExceptVeritas && !r.overNow).length,
   };
   return { totals, labs: rows };
 }
