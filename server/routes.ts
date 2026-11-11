@@ -44302,6 +44302,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   const { registerTissueRoutes } = await import('./tissue');
   registerTissueRoutes(app, authMiddleware, requireWriteAccess, requireModuleEdit, ADMIN_SECRET);
 
+  // Compliance digest issue builder (/api/labs/:labId/digest/*; Q281 = 1, PR 3 of 5): settings, issues, read and acknowledgment.
+  const { registerDigestIssueRoutes } = await import('./digestIssues');
+  registerDigestIssueRoutes(app, authMiddleware, requireWriteAccess);
+
   // VeritaMaintain temperature logs (/api/labs/:labId/temp-logs/*; St. Charles REQ-068)
   const { registerTemperatureLogRoutes } = await import('./temperatureLogs');
   registerTemperatureLogRoutes(app, authMiddleware, requireWriteAccess, requireModuleEdit);

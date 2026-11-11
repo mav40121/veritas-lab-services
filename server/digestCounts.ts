@@ -34,7 +34,8 @@ import { isFindingOpen, isFindingPastDue } from "@shared/findingCounts";
 import { scanStatusCounts, AUTOMATIC_MARK_SOURCES } from "./veritascanCounts";
 
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
-const validDay = (d: string) => DAY_RE.test(d) && new Date(`${d}T00:00:00Z`).toISOString().slice(0, 10) === d;
+// An invalid Date's toISOString throws a RangeError, so test the time first and the bad day gets this module's own message.
+const validDay = (d: string) => { if (!DAY_RE.test(d)) return false; const t = new Date(`${d}T00:00:00Z`); return !Number.isNaN(t.getTime()) && t.toISOString().slice(0, 10) === d; };
 
 export interface DigestCounts {
   labId: number;
@@ -80,7 +81,8 @@ type StatusTally = { compliant: number; needsAttention: number; immediateAction:
 
 /**
  * The digest's counts for one lab and one month of its calendar. monthStartIso and monthEndIso are YYYY-MM-DD, the
- * first and last day of the month (inclusive), on the lab's own clock.
+ * first and last day of the month (inclusive), on the lab's own clock. A quarterly issue (server/digestIssues.ts)
+ * passes its quarter's first and last day, and every month count covers the whole quarter.
  */
 export function digestCountsForLab(sqlite: any, labId: number, monthStartIso: string, monthEndIso: string): DigestCounts {
   const start = String(monthStartIso || "");
@@ -94,7 +96,9 @@ export function digestCountsForLab(sqlite: any, labId: number, monthStartIso: st
 
 function build(sqlite: any, labId: number, start: string, end: string, tz: string): DigestCounts {
   const today = labToday();
-  const month = start.slice(0, 7);
+  // Every calendar month the range touches, "YYYY-MM": one for a month, three for a quarter's issue (PR 3).
+  const months: string[] = [];
+  for (let m = start.slice(0, 7); m <= end.slice(0, 7); m = addLabDays(`${m}-01`, 0, 1).slice(0, 7)) months.push(m);
   // A stored value's day on the lab's calendar. A date stays as written; an instant is read on the lab's clock. SQLite's
   // datetime('now') writes "YYYY-MM-DD HH:MM:SS" in UTC with no zone, which JavaScript would read as server-local.
   const labDayOf = (value: unknown): string | null => {
@@ -219,10 +223,10 @@ function build(sqlite: any, labId: number, start: string, end: string, tz: strin
   });
 
   // 7. VeritaMaintain: overdue and due within 30 days as readiness counts them, and the month's review problems
-  // (GET .../maintain-reviews?month=, server/maintainRecordReview.ts).
+  // (GET .../maintain-reviews?month=, server/maintainRecordReview.ts); a quarter adds up its three months' reviews.
   const maintenance = section("maintenance", () => {
     const eq = equipmentDueCounts(sqlite, labId, today);
-    const items = monthReviewItems(sqlite, labId, month);
+    const items = months.flatMap((m) => monthReviewItems(sqlite, labId, m));
     return {
       overdue: eq.overdue, dueIn30: eq.dueIn30,
       reviewProblems: items.reduce((n: number, i: any) => n + (i.problems?.length || 0), 0),

@@ -174,6 +174,29 @@ async function main() {
       check(`Staff login in lab A, lab B's program, ${label}: refused`, refused(prog.s), `${prog.s}`);
     }
 
+    // ── The compliance digest (server/digestIssues.ts): an issue opens only through its own lab's path ──────────
+    const digestIn = (lab: number, note: string) => seed("digest_issues", {
+      lab_id: lab, period_start: "2026-09-01", period_end: "2026-09-30", status: "published", note, sections: '["findings"]', audience: "staff",
+      counts_json: '{"monthStart":"2026-09-01","monthEnd":"2026-09-30","findings":{"open":0,"pastDue":0}}', counts_as_of: now,
+    });
+    const digestA = digestIn(labA, "Made-up lab A digest"), digestB = digestIn(labB, "Made-up lab B digest");
+    for (const [who, token] of [["editor in lab A", EDITOR.token], ["Staff login in lab A", STAFF.token]] as const) {
+      const own = await call("GET", `/api/labs/${labA}/digest/issues/${digestA}`, undefined, token);
+      check(`${who}: lab A's published staff digest issue opens`, own.s === 200 && own.j.note === "Made-up lab A digest", `${own.s}`);
+      for (const [label, header] of [["no header", undefined], ["header naming lab B", labB]] as const) {
+        for (const suffix of ["", "/acks"]) {
+          const viaA = await call("GET", `/api/labs/${labA}/digest/issues/${digestB}${suffix}`, undefined, token, header);
+          const viaB = await call("GET", `/api/labs/${labB}/digest/issues/${digestB}${suffix}`, undefined, token, header);
+          check(`${who}: sister lab B's digest issue${suffix}, ${label}: 404 through lab A's path, refused through lab B's`,
+            viaA.s === 404 && refused(viaB.s) && !viaA.text.includes("lab B digest") && !viaB.text.includes("lab B digest"), `${viaA.s}/${viaB.s}`);
+        }
+      }
+      const listA = await call("GET", `/api/labs/${labA}/digest/issues`, undefined, token, labB);
+      check(`${who}: lab A's digest list, header naming lab B, holds only lab A's issue`, listA.s === 200 && listA.j.issues.map((i: any) => i.id).join() === String(digestA), listA.text.slice(0, 120));
+    }
+    const ownerDigestB = await call("GET", `/api/labs/${labB}/digest/issues/${digestB}`, undefined, OWNER.token);
+    check("owner: sister lab B's digest issue opens through lab B's path", ownerDigestB.s === 200 && ownerDigestB.j.note === "Made-up lab B digest", `${ownerDigestB.s}`);
+
     // ── A record with no lab: the owner match counts ──────────────────────────
     await expectReads("editor in lab A", EDITOR.token, noLab, "a record with no lab", "open");
     await expectWrites("editor in lab A", EDITOR.token, noLab, "a record with no lab", "open");
