@@ -110,19 +110,20 @@ async function main() {
     const newMap = (token: string, name: string) => call("POST", `${L}/veritamap/maps`, { name }, token);
     const newScan = (token: string, name: string) => call("POST", `${L}/veritascan/scans`, { name }, token);
     const newPt = (token: string) => call("POST", `${L}/pt/enrollments`, { vendor: "CAP", program_name: "Made-up Chemistry Survey", pt_category: "Chemistry", year_enrolled: 2026 }, token);
-    const refusedView = (r: { s: number; j: any }, mod: string) => r.s === 403 && String(r.j?.error || "").includes(`view-only access to ${mod}`);
+    // BUG-168: the refusal names the module by its display name (VeritaMap®), not its key.
+    const refusedView = (r: { s: number; j: any }, mod: string) => r.s === 403 && r.j?.error === `You have view-only access to ${mod}. Ask the account owner to grant edit access.`;
     for (const [who, u] of [["edit_all", STAFF_EA], ["custom veritamap edit", STAFF_CU]] as const) {
       const m = await newMap(u.token, `Made-up map ${who}`);
-      check(`1a. a Staff seat stored ${who} is refused a new VeritaMap map (403)`, refusedView(m, "veritamap"), `${m.s} ${JSON.stringify(m.j)}`);
+      check(`1a. a Staff seat stored ${who} is refused a new VeritaMap map (403)`, refusedView(m, "VeritaMap®"), `${m.s} ${JSON.stringify(m.j)}`);
       const sc = await newScan(u.token, `Made-up scan ${who}`);
-      check(`1b. ... and a new VeritaScan scan (403)`, refusedView(sc, "veritascan"), `${sc.s} ${JSON.stringify(sc.j)}`);
+      check(`1b. ... and a new VeritaScan scan (403)`, refusedView(sc, "VeritaScan®"), `${sc.s} ${JSON.stringify(sc.j)}`);
       const pt = await newPt(u.token);
-      check(`1c. ... and a new VeritaPT enrollment (403)`, refusedView(pt, "veritapt"), `${pt.s} ${JSON.stringify(pt.j)}`);
+      check(`1c. ... and a new VeritaPT enrollment (403)`, refusedView(pt, "VeritaPT™"), `${pt.s} ${JSON.stringify(pt.j)}`);
     }
     const staffMaps = Number((sqlite.prepare("SELECT COUNT(*) AS n FROM veritamap_maps WHERE name LIKE 'Made-up map %'").get() as any).n);
     check("1d. nothing was created by the refused Staff seats", staffMaps === 0, String(staffMaps));
     const va = await newMap(STAFF_VA.token, "Made-up map view_all");
-    check("1e. a Staff seat stored view_all is refused, as before", refusedView(va, "veritamap"), String(va.s));
+    check("1e. a Staff seat stored view_all is refused, as before", refusedView(va, "VeritaMap®"), String(va.s));
     for (const [who, u] of [["edit_all", WRITER_EA], ["custom", WRITER_CU]] as const) {
       const m = await newMap(u.token, `Made-up writer map ${who}`), sc = await newScan(u.token, `Made-up writer scan ${who}`), pt = await newPt(u.token);
       check(`1f. a writer seat stored ${who} still creates a map, a scan and a PT enrollment`, m.s === 200 && !!m.j.id && sc.s === 200 && !!sc.j.id && pt.s === 201, `${m.s}/${sc.s}/${pt.s}`);
@@ -141,11 +142,11 @@ async function main() {
     const hdr = { "X-Active-Lab-Id": String(labId) };
     const legacyStaff = await call("POST", "/api/veritamap/maps", { name: "Made-up legacy map staff" }, STAFF_EA.token, hdr);
     const legacyWriter = await call("POST", "/api/veritamap/maps", { name: "Made-up legacy map writer" }, WRITER_EA.token, hdr);
-    check("2a. POST /api/veritamap/maps with the lab in X-Active-Lab-Id: a Staff seat stored edit_all is refused", refusedView(legacyStaff, "veritamap"), `${legacyStaff.s} ${JSON.stringify(legacyStaff.j)}`);
+    check("2a. POST /api/veritamap/maps with the lab in X-Active-Lab-Id: a Staff seat stored edit_all is refused", refusedView(legacyStaff, "VeritaMap®"), `${legacyStaff.s} ${JSON.stringify(legacyStaff.j)}`);
     check("2b. ... a writer seat still creates the map", legacyWriter.s === 200 && !!legacyWriter.j.id, String(legacyWriter.s));
     const noCtxStaff = await call("POST", "/api/veritamap/maps", { name: "Made-up no-lab map staff" }, LEGACY.token);
     const noCtxWriter = await call("POST", "/api/veritamap/maps", { name: "Made-up no-lab map writer" }, LEGACY_W.token);
-    check("2c. with no lab context at all (an older lab-less Staff seat stored edit_all, the legacy branch) it is refused", refusedView(noCtxStaff, "veritamap"), `${noCtxStaff.s} ${JSON.stringify(noCtxStaff.j)}`);
+    check("2c. with no lab context at all (an older lab-less Staff seat stored edit_all, the legacy branch) it is refused", refusedView(noCtxStaff, "VeritaMap®"), `${noCtxStaff.s} ${JSON.stringify(noCtxStaff.j)}`);
     check("2d. ... and a lab-less writer seat stored edit_all still creates the map there", noCtxWriter.s === 200 && !!noCtxWriter.j.id, `${noCtxWriter.s} ${JSON.stringify(noCtxWriter.j)}`);
 
     // ── 3. The screens read the same answer ──
@@ -223,7 +224,7 @@ async function main() {
     check("6f. POST /api/account/seats won't bring a deactivated Staff seat back with edit (400), and the row stays deactivated",
       reinvite.s === 400 && reinvite.j.code === "STAFF_SEAT_READ_ONLY" && deactRow.status === "deactivated", `${reinvite.s} ${JSON.stringify(reinvite.j)} ${deactRow.status}`);
     // The seat ids the routes saw stay with the right people.
-    check("6g. the Staff seat stored edit_all is still refused after all that (stored values never decide it)", refusedView(await newMap(STAFF_EA.token, "Made-up map after"), "veritamap"));
+    check("6g. the Staff seat stored edit_all is still refused after all that (stored values never decide it)", refusedView(await newMap(STAFF_EA.token, "Made-up map after"), "VeritaMap®"));
     check("6h. ids used: the custom Staff seat and the writer seats exist", seatStaffCU > 0 && seatWriterEA > 0 && seatWriterCU > 0);
   } finally {
     server.close();

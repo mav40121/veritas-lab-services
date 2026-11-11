@@ -9,7 +9,7 @@ import { ModuleHowToCard } from "@/components/ModuleHowToCard";
 import { CompetencyRegisterButton } from "@/components/CompetencyRegisterButton";
 import { CompetencyTimingPanel } from "@/components/CompetencyTimingPanel";
 import { useIsReadOnly, useCanRecord } from "@/components/SubscriptionBanner";
-import { API_BASE } from "@/lib/queryClient";
+import { API_BASE, responseErrorText } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
@@ -2294,7 +2294,7 @@ function ProgramDetailView({ programId }: { programId: number }) {
                   `${API_BASE}/api/labs/${activeLabId}/competency/programs/${programId}/blank-template-pdf`,
                   { headers: authHeaders() }
                 );
-                if (!r.ok) throw new Error(await r.text());
+                if (!r.ok) throw new Error(await responseErrorText(r));
                 const { token } = await r.json();
                 const typeLabel = program.record_kind === "evaluation" ? "Evaluation" : program.type === "technical" ? "Technical" : program.type === "waived" ? "Waived" : "NonTechnical";
                 const safeName = (program.name || "Program").replace(/[^a-zA-Z0-9_\- ]/g, "").trim();

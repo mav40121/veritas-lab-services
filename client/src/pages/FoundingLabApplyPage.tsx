@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, CheckCircle2 } from "lucide-react";
-import { API_BASE } from "@/lib/queryClient";
+import { API_BASE, responseErrorText } from "@/lib/queryClient";
 
 export default function FoundingLabApplyPage() {
   const [labName, setLabName] = useState("");
@@ -31,7 +31,7 @@ export default function FoundingLabApplyPage() {
           labType, tierOfInterest, approximateSeatCount, whyFounder, marketingLogoApproval,
         }),
       });
-      if (!res.ok) throw new Error((await res.text()) || "Submission failed");
+      if (!res.ok) throw new Error(await responseErrorText(res, "Submission failed"));
       return res.json();
     },
     onSuccess: () => setSubmitted(true),

@@ -6,7 +6,7 @@ import { useAuth } from "@/components/AuthContext";
 import { ModuleHowToCard } from "@/components/ModuleHowToCard";
 import { CompetencyRegisterButton } from "@/components/CompetencyRegisterButton";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
-import { API_BASE } from "@/lib/queryClient";
+import { API_BASE, responseErrorText } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { useLabRoute } from "@/hooks/useLabRoute";
@@ -682,7 +682,7 @@ export default function VeritaStaffAppPage() {
         method: "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) throw new Error(await responseErrorText(res));
       const { token } = await res.json();
       downloadPdfToken(token, `CMS_209_${lab?.clia_number || "report"}_${labTodayIso()}.pdf`);
       toast({ title: "CMS 209 generated", description: "Your personnel report has been downloaded." });
@@ -720,7 +720,7 @@ export default function VeritaStaffAppPage() {
         method: "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
       });
-      if (!cms209Res.ok) throw new Error(`CMS-209: ${await cms209Res.text()}`);
+      if (!cms209Res.ok) throw new Error(`CMS-209: ${await responseErrorText(cms209Res)}`);
       const cms209Json = await cms209Res.json();
       downloadPdfToken(cms209Json.token, `Day1_Packet_${cliaTag}_${today}_1of2_CMS_209.pdf`);
 
@@ -741,7 +741,7 @@ export default function VeritaStaffAppPage() {
           });
           return;
         }
-        throw new Error(`Survey bundle: ${await bundleRes.text()}`);
+        throw new Error(`Survey bundle: ${await responseErrorText(bundleRes)}`);
       }
       const bundleJson = await bundleRes.json();
       // Survey-bundle returns its own filename and uses the same token
@@ -856,7 +856,7 @@ function LabSetupDialog({ open, onOpenChange, lab, isStaffAccreditorAllowed }: {
         headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify(form),
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) throw new Error(await responseErrorText(res));
       // CMS-209 Part B: persist the director-set lab specialty list.
       const specUrl = activeLabId
         ? `${API_BASE}/api/labs/${activeLabId}/staff/lab-specialties`
@@ -1182,7 +1182,7 @@ function EmployeeDialog({ open, onOpenChange, employee, lab, fromMember = null }
         headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({ ...form, ...pendingCredFields(), roles, ...(!isEdit && fromMember && activeLabId ? { loginUserId: fromMember.userId } : {}) }),
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) throw new Error(await responseErrorText(res));
       const saved = await res.json().catch(() => ({}));
       await queryClient.invalidateQueries({ predicate: (q) => typeof q.queryKey[0] === 'string' && (q.queryKey[0] as string).endsWith('/staff/employees') });
       if (activeLabId) await queryClient.invalidateQueries({ queryKey: [rosterPromptKey(activeLabId)] });
@@ -1854,7 +1854,7 @@ function EmployeeDetailView({ employee, lab, onBack, onEdit, onCompetency }: {
         headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({ terminatedAt, terminationReason }),
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) throw new Error(await responseErrorText(res));
       await queryClient.invalidateQueries({ predicate: (q) => typeof q.queryKey[0] === 'string' && (q.queryKey[0] as string).endsWith('/staff/employees') });
       toast({ title: "Employee terminated", description: `Records preserved per CMS records-retention rules. Status set to terminated as of ${terminatedAt}.` });
       setTerminateOpen(false);
@@ -2732,7 +2732,7 @@ function BulkImportDialog({ open, onOpenChange, lab }: { open: boolean; onOpenCh
     setDownloadingTemplate(true);
     try {
       const res = await fetch(`${API_BASE}${activeLabId ? `/api/labs/${activeLabId}` : "/api"}/staff/employees/template`, { headers: authHeaders() });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) throw new Error(await responseErrorText(res));
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -3015,7 +3015,7 @@ function PositionDescriptionsCard({ className = "" }: { className?: string }) {
         headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({ title: draft.title, description: draft.description }),
       });
-      if (!r.ok) throw new Error(await r.text());
+      if (!r.ok) throw new Error(await responseErrorText(r));
       await queryClient.invalidateQueries({ queryKey: [url] });
       toast({ title: "Position description saved", description: `${PD_ROLE_LABELS[role]} updated.` });
     } catch (err: any) {

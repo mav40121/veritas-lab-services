@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { API_BASE } from "@/lib/queryClient";
+import { API_BASE, responseErrorText } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -52,11 +52,11 @@ export function LettersOfDelegation({ activeLabId }: { activeLabId: number | nul
 
   const catalogQ = useQuery<Catalog>({
     queryKey: ["dd-catalog", activeLabId], enabled: !!base,
-    queryFn: async () => { const r = await fetch(`${base}/catalog`, { headers: authHeaders() }); if (!r.ok) throw new Error(await r.text()); return r.json(); },
+    queryFn: async () => { const r = await fetch(`${base}/catalog`, { headers: authHeaders() }); if (!r.ok) throw new Error(await responseErrorText(r)); return r.json(); },
   });
   const listQ = useQuery<Letter[]>({
     queryKey: ["dd-list", activeLabId], enabled: !!base,
-    queryFn: async () => { const r = await fetch(base!, { headers: authHeaders() }); if (!r.ok) throw new Error(await r.text()); return r.json(); },
+    queryFn: async () => { const r = await fetch(base!, { headers: authHeaders() }); if (!r.ok) throw new Error(await responseErrorText(r)); return r.json(); },
   });
 
   const isMd = !!catalogQ.data?.isMedicalDirector;
@@ -91,7 +91,7 @@ export function LettersOfDelegation({ activeLabId }: { activeLabId: number | nul
     mutationFn: async () => {
       const body = { delegate_name: fName.trim(), position: fPos, complexity_scope: fComp, responsibilities: fResp };
       const r = await fetch(editing ? `${base}/${editing.id}` : base!, { method: editing ? "PUT" : "POST", headers: { ...authHeaders(), "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      if (!r.ok) throw new Error(await r.text());
+      if (!r.ok) throw new Error(await responseErrorText(r));
       return r.json();
     },
     onSuccess: () => { setDialogOpen(false); invalidate(); toast({ title: editing ? "Draft updated" : "Draft created" }); },
@@ -99,19 +99,19 @@ export function LettersOfDelegation({ activeLabId }: { activeLabId: number | nul
   });
 
   const signMut = useMutation({
-    mutationFn: async () => { const r = await fetch(`${base}/${signTarget!.id}/sign`, { method: "POST", headers: { ...authHeaders(), "Content-Type": "application/json" }, body: JSON.stringify({ signed_name: signName.trim() }) }); if (!r.ok) throw new Error(await r.text()); return r.json(); },
+    mutationFn: async () => { const r = await fetch(`${base}/${signTarget!.id}/sign`, { method: "POST", headers: { ...authHeaders(), "Content-Type": "application/json" }, body: JSON.stringify({ signed_name: signName.trim() }) }); if (!r.ok) throw new Error(await responseErrorText(r)); return r.json(); },
     onSuccess: () => { setSignTarget(null); setSignName(""); invalidate(); toast({ title: "Letter signed and active" }); },
     onError: (e: any) => toast({ title: "Sign failed", description: String(e?.message || e), variant: "destructive" }),
   });
 
   const discardMut = useMutation({
-    mutationFn: async (id: number) => { const r = await fetch(`${base}/${id}`, { method: "DELETE", headers: authHeaders() }); if (!r.ok) throw new Error(await r.text()); return r.json(); },
+    mutationFn: async (id: number) => { const r = await fetch(`${base}/${id}`, { method: "DELETE", headers: authHeaders() }); if (!r.ok) throw new Error(await responseErrorText(r)); return r.json(); },
     onSuccess: () => { invalidate(); toast({ title: "Draft discarded" }); },
     onError: (e: any) => toast({ title: "Discard failed", description: String(e?.message || e), variant: "destructive" }),
   });
 
   const revokeMut = useMutation({
-    mutationFn: async (id: number) => { const r = await fetch(`${base}/${id}/revoke`, { method: "POST", headers: { ...authHeaders(), "Content-Type": "application/json" } }); if (!r.ok) throw new Error(await r.text()); return r.json(); },
+    mutationFn: async (id: number) => { const r = await fetch(`${base}/${id}/revoke`, { method: "POST", headers: { ...authHeaders(), "Content-Type": "application/json" } }); if (!r.ok) throw new Error(await responseErrorText(r)); return r.json(); },
     onSuccess: () => { invalidate(); toast({ title: "Letter revoked" }); },
     onError: (e: any) => toast({ title: "Revoke failed", description: String(e?.message || e), variant: "destructive" }),
   });

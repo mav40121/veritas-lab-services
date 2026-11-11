@@ -3,7 +3,7 @@ import { labTodayIso } from "@/lib/labDate";
 import { Link, useParams } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/components/AuthContext";
-import { API_BASE } from "@/lib/queryClient";
+import { API_BASE, responseErrorText } from "@/lib/queryClient";
 import { useFreshRecord } from "@/lib/freshRecord";
 import { authHeaders } from "@/lib/auth";
 import { downloadPdfToken } from "@/lib/utils";
@@ -1089,8 +1089,7 @@ export default function VeritaScanScanPage() {
         body: JSON.stringify(payload),
       });
       if (!res.ok) {
-        const t = await res.text();
-        throw new Error(t || "Failed to update teaching settings");
+        throw new Error(await responseErrorText(res, "Failed to update teaching settings"));
       }
       return res.json();
     },
@@ -1190,8 +1189,7 @@ export default function VeritaScanScanPage() {
         }
       );
       if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || "Save failed");
+        throw new Error(await responseErrorText(res, "Save failed"));
       }
       return res.json();
     },

@@ -172,9 +172,9 @@ export interface DataPoint {
 // view/edit gating. Used by:
 //   * client useIsReadOnly resolver (SubscriptionBanner.tsx)
 //   * server requireModuleEdit middleware (routes.ts)
-//   * AccountSettingsPage MODULE_LIST (display labels live there)
+//   * AccountSettingsPage MODULE_LIST (its labels come from SEAT_MODULE_LABELS below)
 // New per-module gated modules MUST be added here AND given a label in
-// AccountSettingsPage.tsx, or seat permissions silently miss them and
+// SEAT_MODULE_LABELS, or seat permissions silently miss them and
 // existing seats with universally-edit access break on the new page.
 export const SEAT_MODULE_KEYS = [
   'veritacheck',
@@ -198,6 +198,30 @@ export const SEAT_MODULE_KEYS = [
 ] as const;
 
 export type SeatModuleKey = typeof SEAT_MODULE_KEYS[number];
+
+// The name a person reads for each module key: the Team Members permission list (AccountSettingsPage MODULE_LIST) and
+// requireModuleEdit's view-only refusal, which named the module by its key ("view-only access to veritamap", BUG-168).
+// VeritaCheck, VeritaMap and VeritaScan are registered (®); every other module carries ™ (CLAUDE.md section 3).
+export const SEAT_MODULE_LABELS: Record<SeatModuleKey, string> = {
+  veritacheck: 'VeritaCheck®',
+  veritamap: 'VeritaMap®',
+  veritascan: 'VeritaScan®',
+  veritacomp: 'VeritaComp™',
+  veritastaff: 'VeritaStaff™',
+  veritapt: 'VeritaPT™',
+  veritapolicy: 'VeritaDC™',
+  veritalab: 'VeritaLab™',
+  veritatrack: 'VeritaTrack™',
+  veritabench: 'VeritaQA™ Suite', // VeritaPace, VeritaShift, VeritaQA
+  veritastock: 'VeritaStock™',
+  veritaresponse: 'VeritaResponse™',
+  veritaops: 'VeritaOps™',
+  veritamaintain: 'VeritaMaintain™',
+  veritaqc: 'VeritaQC™',
+};
+
+/** A module key's display name, or the key itself when it is not a seat module. */
+export const seatModuleLabel = (key: string): string => (SEAT_MODULE_LABELS as Record<string, string>)[key] ?? key;
 
 // Stored shape on disk (user_seats.permissions JSON column). Two shapes are
 // accepted on read for backward compatibility:
