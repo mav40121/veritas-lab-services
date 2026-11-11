@@ -25,6 +25,11 @@
 // asks for it. The roster of who has and hasn't is the owner's and admins' only, and it names lab members; anyone else gets
 // their own status. counts_json never carries a name, email or person id (PR 2 guarantees it).
 //
+// The reading screens (PR 4, client/src/pages/DigestPage.tsx) added three read-only fields: GET issues/:id
+// carries `previous` (the lab's prior published issue of the same frequency, with the counts it stored, for the change lines)
+// and `audience_groups` (the names of a group issue's groups), and GET settings gives the owner and admins the lab's active
+// `groups` to pick from. Nothing new is stored.
+//
 // Every text in a write goes through the patient-information refusal (shared/phiPatterns.ts detectPhi): 400 PHI_REFUSED
 // with the field, refused rather than warned, as the tissue and stain logs do. Create, edit, publish and withdraw each write
 // an audit_log row (logAudit; module "account", the lab-wide one, since the digest is no module of its own).
@@ -73,6 +78,15 @@ export function digestPeriodFrom(start: unknown, frequency: DigestFrequency): Di
   if (frequency === "quarterly" && (s.slice(8) !== "01" || !quarterStart)) return { error: "A quarter starts on the first of January, April, July or October." };
   if (s.slice(8) !== "01") return { error: "A month's issue starts on the first of the month." };
   return { start: s, end: addLabDays(s, -1, monthsPer(frequency)) };
+}
+
+/** Whether an issue's stored period is a month or a calendar quarter (null for a range that is neither). */
+export function digestPeriodFrequency(row: { period_start: string; period_end: string }): DigestFrequency | null {
+  for (const f of DIGEST_FREQUENCIES) {
+    const p = digestPeriodFrom(row.period_start, f);
+    if (!("error" in p) && p.end === row.period_end) return f;
+  }
+  return null;
 }
 
 /** The last month, or calendar quarter, finished by `today` (a day on the lab's own calendar). */
@@ -263,6 +277,36 @@ const ownStatus = (sqlite: any, issueId: number, userId: number) => {
   return { read_at: r?.read_at ?? null, acknowledged_at: r?.acknowledged_at ?? null };
 };
 
+/** The lab's groups by id with their names, in the order given (a retired group keeps its name, marked retired). Names, never members. */
+function groupNames(sqlite: any, labId: number, ids: number[]): Array<{ id: number; name: string; retired: boolean }> {
+  if (!ids.length) return [];
+  const rows = new Map((sqlite.prepare(`SELECT id, name, retired FROM lab_groups WHERE lab_id = ? AND id IN (${ids.map(() => "?").join(", ")})`).all(labId, ...ids) as any[])
+    .map((g) => [Number(g.id), { id: Number(g.id), name: String(g.name), retired: Number(g.retired) === 1 }]));
+  return ids.map((id) => rows.get(id)).filter((g): g is { id: number; name: string; retired: boolean } => !!g);
+}
+
+/**
+ * The change lines' comparison (PR 4, the reading screen): the lab's previous published issue of the same frequency
+ * (a withdrawn one never counts; the one whose period starts latest before this issue's), with its id, period and the
+ * counts it stored at publish, picked to this issue's sections. Never recomputed: a section the prior issue didn't
+ * include is simply absent. Inside the reach rules: someone who isn't the owner or an admin gets it only when that
+ * issue's audience reaches them too; otherwise null, as when there is no prior issue.
+ */
+function previousIssue(sqlite: any, row: any, manager: boolean, reach: () => Reach) {
+  const frequency = digestPeriodFrequency(row);
+  if (!frequency) return null;
+  const prior = (sqlite.prepare(
+    "SELECT * FROM digest_issues WHERE lab_id = ? AND status = 'published' AND period_start < ? AND id <> ? ORDER BY period_start DESC, id DESC"
+  ).all(row.lab_id, row.period_start, row.id) as any[]).find((r) => digestPeriodFrequency(r) === frequency);
+  if (!prior || (!manager && !reaches(prior, reach()))) return null;
+  let stored: any = null;
+  try { stored = prior.counts_json ? JSON.parse(prior.counts_json) : null; } catch { stored = null; }
+  if (!stored || typeof stored !== "object") return null;
+  const counts: Record<string, unknown> = {};
+  for (const k of storedSections(row.sections, [])) if (has(stored, k)) counts[k] = stored[k];
+  return { id: prior.id, period_start: prior.period_start, period_end: prior.period_end, counts_as_of: prior.counts_as_of ?? null, counts };
+}
+
 const periodLabel = (row: { period_start: string; period_end: string }) => `Compliance digest ${row.period_start} to ${row.period_end}`;
 // The digest's columns an audit row records (not the counts: they are on the issue).
 const auditFields = (row: any) => ({
@@ -307,7 +351,12 @@ export function registerDigestIssueRoutes(app: Express, authMiddleware: any, req
     const sqlite = sqliteOf();
     const s = readDigestSettings(sqlite, req.scope.labId);
     const today = labToday(labTimeZoneById(sqlite, req.scope.labId));
-    return { ...s, can_edit: isManager(req), section_keys: [...DIGEST_SECTION_KEYS], default_period: lastFinishedDigestPeriod(today, s.frequency) };
+    const manager = isManager(req);
+    // The owner and admins pick a group audience from the lab's active groups (names only; PR 4's settings card).
+    const groups = manager
+      ? (sqlite.prepare("SELECT id, name FROM lab_groups WHERE lab_id = ? AND retired = 0 ORDER BY name COLLATE NOCASE, id").all(req.scope.labId) as any[]).map((g) => ({ id: Number(g.id), name: String(g.name) }))
+      : undefined;
+    return { ...s, can_edit: manager, section_keys: [...DIGEST_SECTION_KEYS], default_period: lastFinishedDigestPeriod(today, s.frequency), ...(groups ? { groups } : {}) };
   };
   app.get(`${BASE}/settings`, ...read, (req: any, res: any) => res.json(settingsView(req)));
 
@@ -367,10 +416,15 @@ export function registerDigestIssueRoutes(app: Express, authMiddleware: any, req
     const counts = live
       ? pickDigestSections(digestCountsForLab(sqlite, row.lab_id, row.period_start, row.period_end), storedSections(row.sections, []))
       : (() => { try { return row.counts_json ? JSON.parse(row.counts_json) : null; } catch { return null; } })();
+    let reach: Reach | null = null;
+    const readerReachOnce = (): Reach => { if (!reach) reach = readerReach(sqlite, row.lab_id, Number(req.userId)); return reach; };
     return {
       ...issueView(row, manager),
       ...(live ? { counts_as_of: new Date().toISOString() } : {}),
       counts, counts_live: live,
+      // PR 4: the names of the groups a group issue is sent to (the header's "Sent to"), and the prior issue the change lines compare against.
+      audience_groups: row.audience === "groups" ? groupNames(sqlite, row.lab_id, storedIds(row.audience_group_ids)) : [],
+      previous: previousIssue(sqlite, row, manager, readerReachOnce),
       mine: ownStatus(sqlite, row.id, Number(req.userId)),
       can_edit: manager,
     };

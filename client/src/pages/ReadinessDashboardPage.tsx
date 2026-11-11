@@ -7,7 +7,7 @@ import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Gauge, Lock, CheckCircle2, AlertTriangle, XCircle } from "lucide-react";
+import { Gauge, Lock, CheckCircle2, AlertTriangle, XCircle, Newspaper } from "lucide-react";
 import { summarizeRollup, badModules } from "@/lib/readinessRollup";
 
 interface ModuleReadiness {
@@ -95,7 +95,11 @@ export default function ReadinessDashboardPage() {
       <div className="mb-6 flex items-center gap-2">
         <Gauge className="h-6 w-6 text-primary" />
         <h1 className="text-2xl font-bold">Inspection Readiness</h1>
-        <Button size="sm" variant="outline" className="ml-auto" onClick={load} disabled={loading}>Refresh</Button>
+        {/* Compliance digest (Q281 = 1, PR 4): the same plan allowlist as this page; any member may be in an issue's audience. */}
+        <Button asChild size="sm" variant="outline" className="ml-auto" data-testid="readiness-digest-link">
+          <Link href={`/labs/${activeLabId}/digest`}><Newspaper className="h-4 w-4 mr-1.5" />Compliance Digest</Link>
+        </Button>
+        <Button size="sm" variant="outline" onClick={load} disabled={loading}>Refresh</Button>
       </div>
 
       {loading ? (
