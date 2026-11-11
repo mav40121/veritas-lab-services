@@ -617,6 +617,18 @@ _(item #88 closed 2026-10-08; see C91 below)_
 
 ---
 
+### 121. VeritaComp: evidence files on each competency element (VHC Health ask)
+
+**Effort:** M (1-2 weeks) to store uploaded files with a patient-information refusal; none if the links that exist today cover it
+**Importance:** Medium. One prospect asked on a demo; it helps survey readiness, but storing files brings PHI risk.
+
+**What:** On Michael's VHC Health demo (Tue 2026-11-10, about 29:47 in the recording), their quality specialist asked to attach evidence to each competency element, such as QC log sheets, maintenance logs and blind-sample records, the way another lab she works with does. Michael said on the call he was happy to build it, and flagged the PHI risk: direct observation and result-reporting evidence is often a patient record. What exists on main (14d727b9): each element of a competency record already takes linked documents (competency_element_documents, types QC record, PT report, blind sample record, observation notes, quiz scan and other), through POST /api/labs/:labId/competency/assessments/:id/elements/:el/documents, stored as an http(s) link to the lab's own storage, not an uploaded file. VeritaStaff person documents are links too (staff_employee_documents.url), so no module stores uploaded evidence today. The gap is uploading the file itself, which is exactly where the PHI risk sits; a link keeps the file, and anything patient-related in it, in the lab's own system. Choices for Michael: show the per-element links as they are (no build); add uploads with the patient-information refusal plus a "no patient identifiers" confirmation at upload; or allow uploads only for record types that rarely carry patient data (QC, maintenance, blind-sample records).
+
+**Source:** VLS Leads, 2026-11-11, from the 11/10 VHC Health demo recording; code read on origin/main 14d727b9.
+**Status:** Open. Michael is considering it; nothing promised to VHC. No build until Michael decides.
+
+---
+
 ## CLOSED (audit trail)
 
 ### C117. Precision guide: 12 lines said VeritaCheck with no ® (was #119)
