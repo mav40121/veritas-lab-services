@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, type CSSProperties } from "react";
 import { labTodayIso } from "@/lib/labDate";
 import { Link } from "wouter";
 import { useAuth } from "@/components/AuthContext";
@@ -19,8 +19,10 @@ import {
 } from "@/components/ui/dialog";
 import {
   Lock, Users, Activity, BarChart3, Save, Plus, Edit2, Trash2, FileText,
-  ChevronDown, ChevronRight, BookOpen, Library, AlertTriangle,
+  ChevronDown, ChevronRight, BookOpen, Library, AlertTriangle, Printer,
 } from "lucide-react";
+import { useMemberships } from "@/hooks/useMemberships";
+import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { useToast } from "@/hooks/use-toast";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -354,7 +356,32 @@ interface PIReviewStatus {
   never_reviewed: boolean; last_review_date: string | null;
   next_review_due: string | null; overdue: boolean;
 }
-interface PlanMetricOpt { id: number; name: string; department_id: number; }
+// A metric as GET /api/pi/metrics returns it: the Plan tab links priorities to it and prints it in the plan's indicator list.
+type PlanMetricOpt = PIMetric;
+
+// The printed plan's goal for one indicator, from its stored thresholds and direction (≤ when lower is better).
+function planGoalText(m: PIMetric): string {
+  const op = m.direction === "higher_is_better" ? "≥" : "≤";
+  const parts: string[] = [];
+  if (m.benchmark_green != null) parts.push(`${op} ${m.benchmark_green}`);
+  if (m.benchmark_yellow != null) parts.push(`yellow ${op} ${m.benchmark_yellow}`);
+  if (m.is_tat && m.tat_threshold_minutes != null) parts.push(`within ${m.tat_threshold_minutes} min`);
+  return parts.join("; ");
+}
+
+const PRINT = {
+  page: { fontSize: "10.5pt", lineHeight: 1.35, color: "#000" } as CSSProperties,
+  h1: { fontSize: "16pt", fontWeight: 700, margin: "0 0 2pt" } as CSSProperties,
+  sub: { fontSize: "9.5pt", margin: "0 0 10pt" } as CSSProperties,
+  h2: { fontSize: "12pt", fontWeight: 700, margin: "12pt 0 4pt", borderBottom: "1px solid #999", paddingBottom: "2pt" } as CSSProperties,
+  h3: { fontSize: "10.5pt", fontWeight: 700, margin: "8pt 0 3pt" } as CSSProperties,
+  label: { fontWeight: 700 } as CSSProperties,
+  text: { whiteSpace: "pre-wrap" as const, margin: "0 0 6pt" } as CSSProperties,
+  table: { width: "100%", borderCollapse: "collapse" as const, fontSize: "9pt", margin: "0 0 6pt" } as CSSProperties,
+  th: { border: "1px solid #999", padding: "3pt 4pt", textAlign: "left" as const, background: "#eee" } as CSSProperties,
+  td: { border: "1px solid #999", padding: "3pt 4pt", verticalAlign: "top" as const } as CSSProperties,
+  foot: { fontSize: "8.5pt", marginTop: "14pt", borderTop: "1px solid #999", paddingTop: "4pt" } as CSSProperties,
+};
 
 function PlanTextarea({ label, value, onChange, disabled, placeholder }: {
   label: string; value: string; onChange: (v: string) => void; disabled?: boolean; placeholder?: string;
@@ -429,7 +456,7 @@ function PIPlanTab({ readOnly, departments }: { readOnly: boolean; departments: 
         const res = await fetch(`${API_BASE}/api/pi/metrics?department_id=${dept.id}`, { headers: authHeaders() });
         if (!res.ok) return [] as PlanMetricOpt[];
         const ms = await res.json();
-        return (ms as any[]).map((m) => ({ id: m.id, name: m.name, department_id: dept.id }));
+        return (ms as PIMetric[]).map((m) => ({ ...m, department_id: dept.id }));
       }));
       setAllMetrics(lists.flat());
     } catch { /* metric linkage is optional */ }
@@ -526,6 +553,34 @@ function PIPlanTab({ readOnly, departments }: { readOnly: boolean; departments: 
   const deptName = (id: number | null) => departments.find((d) => d.id === id)?.name || "";
   const metricName = (id: number | null) => allMetrics.find((m) => m.id === id)?.name || "";
 
+  // The printout is the SAVED plan (Chineme, SCAHC, 2026-11-12: "cannot export the plan"; the tab had no export). It
+  // carries the active lab's name and CLIA, the plan's sections, every active indicator by department with its goal and
+  // how it's measured, the improvement priorities and the leadership reviews. Typed changes not yet saved aren't in it,
+  // and the button says so.
+  const activeLabId = useActiveLabId();
+  const { data: memberships } = useMemberships();
+  const lab = (memberships || []).find((m) => m.labId === activeLabId) || null;
+  const planUnsaved = !!plan && (
+    planForm.title !== (plan.title || "") ||
+    planForm.effective_year !== (plan.effective_year != null ? String(plan.effective_year) : String(new Date().getFullYear())) ||
+    planForm.program_scope !== (plan.program_scope || "") ||
+    planForm.measurement_methods !== (plan.measurement_methods || "") ||
+    planForm.analysis_methods !== (plan.analysis_methods || "") ||
+    planForm.remediation_methods !== (plan.remediation_methods || "") ||
+    planForm.monitor_sustain_methods !== (plan.monitor_sustain_methods || "")
+  );
+  const printDepartments = departments
+    .map((d) => ({ dept: d, metrics: allMetrics.filter((m) => m.department_id === d.id && m.active !== 0) }))
+    .filter((g) => g.metrics.length > 0);
+  const printedIndicatorCount = printDepartments.reduce((n, g) => n + g.metrics.length, 0);
+  const planSections: [string, string | null][] = plan ? [
+    ["Program scope", plan.program_scope],
+    ["Measurement methods", plan.measurement_methods],
+    ["Analysis methods", plan.analysis_methods],
+    ["Remediation methods", plan.remediation_methods],
+    ["Monitor and sustain methods", plan.monitor_sustain_methods],
+  ] : [];
+
   if (loading) return <div className="text-center py-12 text-muted-foreground">Loading...</div>;
 
   return (
@@ -544,7 +599,17 @@ function PIPlanTab({ readOnly, departments }: { readOnly: boolean; departments: 
       )}
 
       <Card>
-        <CardHeader><CardTitle className="text-base">Performance Improvement Program Plan</CardTitle></CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0 flex-wrap">
+          <CardTitle className="text-base">Performance Improvement Program Plan</CardTitle>
+          {plan && (
+            <div className="flex items-center gap-2 flex-wrap">
+              {planUnsaved && <span className="text-xs text-muted-foreground" data-testid="pi-plan-print-unsaved">Save the plan to include your changes in the printout.</span>}
+              <Button size="sm" variant="outline" onClick={() => window.print()} data-testid="pi-plan-print">
+                <Printer size={14} className="mr-1.5" />Print / Save as PDF
+              </Button>
+            </div>
+          )}
+        </CardHeader>
         <CardContent className="space-y-4">
           {!plan && <p className="text-sm text-muted-foreground">No PI plan yet. Fill this in and save to create your program plan.</p>}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -634,9 +699,9 @@ function PIPlanTab({ readOnly, departments }: { readOnly: boolean; departments: 
                     <tr key={r.id} className="border-b last:border-b-0">
                       <td className="py-2 pr-3 whitespace-nowrap">{r.review_date}</td>
                       <td className="py-2 pr-3">{r.reviewed_by}</td>
-                      <td className="py-2 pr-3">{r.reviewer_title || "—"}</td>
-                      <td className="py-2 pr-3">{r.changes_summary || "—"}</td>
-                      <td className="py-2 pr-3 whitespace-nowrap">{r.next_review_due || "—"}</td>
+                      <td className="py-2 pr-3">{r.reviewer_title || ""}</td>
+                      <td className="py-2 pr-3">{r.changes_summary || ""}</td>
+                      <td className="py-2 pr-3 whitespace-nowrap">{r.next_review_due || ""}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -645,6 +710,88 @@ function PIPlanTab({ readOnly, departments }: { readOnly: boolean; departments: 
           )}
         </CardContent>
       </Card>
+
+      {/* The printed plan. Only this part prints (index.css #compliance-print-area); the browser's print dialog saves it as a PDF. */}
+      {plan && (
+        <div id="compliance-print-area" data-print-solo="" className="hidden print:block" style={PRINT.page} data-testid="pi-plan-print-area">
+          <h1 style={PRINT.h1}>{plan.title || "Performance Improvement Program Plan"}</h1>
+          <p style={PRINT.sub}>
+            {lab?.labName || ""}{lab?.labName ? " | " : ""}CLIA: {lab?.cliaNumber || "Not on file. Enter it in account settings."}
+            {plan.effective_year != null ? ` | Effective ${plan.effective_year}` : ""} | Printed {today}
+          </p>
+
+          {planSections.map(([label, text]) => (
+            <div key={label}>
+              <h2 style={PRINT.h2}>{label}</h2>
+              <p style={PRINT.text}>{text || "Not entered."}</p>
+            </div>
+          ))}
+
+          <h2 style={PRINT.h2}>Quality indicators ({printedIndicatorCount})</h2>
+          {printDepartments.length === 0 ? (
+            <p style={PRINT.text}>No indicators entered.</p>
+          ) : printDepartments.map(({ dept, metrics }) => (
+            <div key={dept.id} data-testid={`pi-plan-print-dept-${dept.id}`} style={{ breakInside: "avoid", pageBreakInside: "avoid" }}>
+              <h3 style={PRINT.h3}>{dept.name} ({metrics.length})</h3>
+              <table style={PRINT.table}>
+                <thead>
+                  <tr>
+                    <th style={{ ...PRINT.th, width: "30%" }}>Indicator</th>
+                    <th style={{ ...PRINT.th, width: "8%" }}>Unit</th>
+                    <th style={{ ...PRINT.th, width: "16%" }}>Goal</th>
+                    <th style={PRINT.th}>How it's measured</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {metrics.map((m) => (
+                    <tr key={m.id}>
+                      <td style={PRINT.td}>{m.name}</td>
+                      <td style={PRINT.td}>{m.unit}</td>
+                      <td style={PRINT.td}>{planGoalText(m)}</td>
+                      <td style={{ ...PRINT.td, whiteSpace: "pre-wrap" }}>{m.measurement_methodology || ""}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))}
+
+          <h2 style={PRINT.h2}>Improvement priorities</h2>
+          {priorities.length === 0 ? <p style={PRINT.text}>None entered.</p> : priorities.map((p) => (
+            <div key={p.id} style={{ margin: "0 0 6pt" }}>
+              <div style={PRINT.label}>{p.process_name}</div>
+              {p.goal && <div><span style={PRINT.label}>Goal:</span> {p.goal}</div>}
+              {p.stakeholder_requirements && <div><span style={PRINT.label}>Stakeholder requirements:</span> {p.stakeholder_requirements}</div>}
+              {p.improvement_activities && <div><span style={PRINT.label}>Activities:</span> {p.improvement_activities}</div>}
+              {(p.linked_department_id || p.linked_metric_id) ? (
+                <div>{p.linked_department_id ? `Department: ${deptName(p.linked_department_id)}` : ""}{p.linked_department_id && p.linked_metric_id ? "; " : ""}{p.linked_metric_id ? `Indicator: ${metricName(p.linked_metric_id)}` : ""}</div>
+              ) : null}
+            </div>
+          ))}
+
+          <h2 style={PRINT.h2}>Annual leadership review</h2>
+          {reviews.length === 0 ? <p style={PRINT.text}>No leadership review on record.</p> : (
+            <table style={PRINT.table}>
+              <thead>
+                <tr><th style={PRINT.th}>Date</th><th style={PRINT.th}>Reviewed by</th><th style={PRINT.th}>Title</th><th style={PRINT.th}>Changes</th><th style={PRINT.th}>Next due</th></tr>
+              </thead>
+              <tbody>
+                {reviews.map((r) => (
+                  <tr key={r.id}>
+                    <td style={PRINT.td}>{r.review_date}</td>
+                    <td style={PRINT.td}>{r.reviewed_by}</td>
+                    <td style={PRINT.td}>{r.reviewer_title || ""}</td>
+                    <td style={PRINT.td}>{r.changes_summary || ""}</td>
+                    <td style={PRINT.td}>{r.next_review_due || ""}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+
+          <div style={PRINT.foot}>VeritaAssure&#174; | VeritaQA&#8482; | Confidential, For Internal Lab Use Only</div>
+        </div>
+      )}
 
       <Dialog open={prioOpen} onOpenChange={setPrioOpen}>
         <DialogContent className="max-w-lg">
