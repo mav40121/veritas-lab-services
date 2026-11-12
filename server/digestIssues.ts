@@ -421,8 +421,13 @@ export function createDigestDraft(sqlite: any, labId: number, periodStart: unkno
     return { ok: false, status: 400, body: { error: `That ${s.frequency === "quarterly" ? "quarter" : "month"} hasn't finished yet on the lab's calendar (it ends ${period.end}).`, code: "PERIOD_NOT_FINISHED", field: "periodStart" } };
   }
   const byJob = !!actor.byJob;
+  // The daily job never drafts a period that has any issue, a withdrawn one included: withdrawing is how an owner skips a
+  // month, so the job must not bring it back. A person can still draft a withdrawn period again by hand.
+  const takenSql = byJob
+    ? "SELECT id, status FROM digest_issues WHERE lab_id = ? AND period_start = ? AND period_end = ? LIMIT 1"
+    : "SELECT id, status FROM digest_issues WHERE lab_id = ? AND period_start = ? AND period_end = ? AND status <> 'withdrawn' LIMIT 1";
   const created = sqlite.transaction(() => {
-    const taken = sqlite.prepare("SELECT id, status FROM digest_issues WHERE lab_id = ? AND period_start = ? AND period_end = ? AND status <> 'withdrawn' LIMIT 1").get(labId, period.start, period.end) as any;
+    const taken = sqlite.prepare(takenSql).get(labId, period.start, period.end) as any;
     if (taken) return { taken };
     const id = Number(sqlite.prepare(
       `INSERT INTO digest_issues (lab_id, period_start, period_end, status, note, sections, audience, audience_group_ids, ack_requested, review_box, created_at, created_by_user_id, created_by_job)

@@ -35,7 +35,7 @@ import { Resend } from "resend";
 import { DEFAULT_TEMPLATES, renderReminderEmail } from "./policyReminderTemplate";
 import { reminderDays, reminderTypeForDays } from "../shared/policyCarriedOver";
 import { db } from "./db";
-import { labToday, labTimeZoneById } from "./dateLocal";
+import { labToday, labTimeZoneById, labLocalDate } from "./dateLocal";
 import { writeAuditLog } from "./veritapolicyApproval";
 
 const FRONTEND_URL = process.env.FRONTEND_URL || "https://www.veritaslabservices.com";
@@ -57,7 +57,7 @@ export async function runPolicyReviewReminders(): Promise<{
               d.next_review_date,
               u.email AS owner_email, u.name AS owner_name,
               l.lab_name AS lab_name,
-              c.reminders_start_on, date(c.loaded_at) AS carried_loaded_on
+              c.reminders_start_on, c.loaded_at AS carried_loaded_at
          FROM policy_documents d
          JOIN users u ON u.id = d.owner_user_id
          LEFT JOIN labs l ON l.id = d.lab_id
@@ -90,7 +90,13 @@ export async function runPolicyReviewReminders(): Promise<{
       continue;
     }
 
-    const reminderType = reminderTypeForDays(reminderDays(todayFor(r.lab_id ?? null), dueDay, r.carried_loaded_on));
+    // The day a carried document arrived, on the lab's calendar like "today" above. date(loaded_at) in SQL was the UTC
+    // day, a day ahead of a US lab every evening, so a document loaded past due then read as not yet due.
+    const loadedStamp = r.carried_loaded_at ? String(r.carried_loaded_at) : "";
+    const loadedOn = loadedStamp
+      ? labLocalDate(/(Z|[+-]\d\d:?\d\d)$/i.test(loadedStamp) ? loadedStamp : loadedStamp.replace(" ", "T") + "Z", false, labTimeZoneById(sqlite, r.lab_id ?? null))
+      : null;
+    const reminderType = reminderTypeForDays(reminderDays(todayFor(r.lab_id ?? null), dueDay, loadedOn));
     if (!reminderType) continue;
 
     // Idempotency check.

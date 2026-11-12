@@ -9,7 +9,7 @@
 //      while UTC is already on October 1;
 //   3. quarterly: a draft only once the quarter has ended on the lab's clock;
 //   4. a second run, and a later day's, makes nothing new (PERIOD_HAS_ISSUE is "already done"), and a manual draft counts too;
-//   5. a withdrawn issue frees the period, as it does for the manual route, and the next run drafts it again;
+//   5. the job never re-drafts a withdrawn period (withdrawing is how an owner skips a month), while the manual route still can;
 //   6. a lab on a plan outside the allowlist gets nothing;
 //   7. the draft takes the lab's settings at that moment, is a draft only (never published, no counts frozen, no notice);
 //   8. no email: the mailer stub records nothing and no request leaves the test;
@@ -194,17 +194,17 @@ async function main() {
     const again = await call("POST", `/api/labs/${OFF}/digest/issues`, { periodStart: "2026-09-01" }, OWNER.token);
     check("5. (the manual route, for comparison: after a withdraw the same month can be drafted again)", byHand.s === 201 && wdOff.s === 200 && again.s === 201, `${byHand.s} ${wdOff.s} ${again.s}`);
     const r7 = job(T3, NY);
-    check("5. the job does the same: after the owner withdraws the September draft, the next run drafts September again",
-      wd.s === 200 && r7.drafted === 1 && same(periods(NY), ["2026-08-01..2026-08-31", "2026-09-01..2026-09-30"]) && issues(NY).filter((r) => r.period_start === "2026-09-01").length === 2,
+    check("5. the job does NOT bring a withdrawn month back: after the owner withdraws the September draft, the next run leaves September alone",
+      wd.s === 200 && r7.drafted === 0 && r7.alreadyDone === 1 && same(periods(NY), ["2026-08-01..2026-08-31"]) && issues(NY).filter((r) => r.period_start === "2026-09-01").length === 1,
       JSON.stringify({ wd: wd.s, r7, p: periods(NY) }));
     const r8 = job(T3, NY);
-    check("5. and only once: the run after that is already done", r8.drafted === 0 && r8.alreadyDone === 1, JSON.stringify(r8));
+    check("5. and on later runs too: still nothing for September", r8.drafted === 0 && r8.alreadyDone === 1, JSON.stringify(r8));
     check("1. the setting-off lab still has only the owner's own drafts (the job never drafted there)", issues(OFF).every((r) => r.created_by_job === 0) && issues(OFF).length === 2);
 
     // ── 9. Audit: the manual draft's row, marked as the system ────────────────────────────────────────────────────────────
     const jobIds = (sqlite.prepare("SELECT id FROM digest_issues WHERE created_by_job = 1 ORDER BY id").all() as any[]).map((r) => Number(r.id));
     const jobAudits = jobIds.map((id) => createAudits(id));
-    check(`9. every job draft (${jobIds.length}) has exactly one create audit row`, jobIds.length === 6 && jobAudits.every((a) => a.length === 1), JSON.stringify(jobAudits.map((a) => a.length)));
+    check(`9. every job draft (${jobIds.length}) has exactly one create audit row`, jobIds.length === 5 && jobAudits.every((a) => a.length === 1), JSON.stringify(jobAudits.map((a) => a.length)));
     const a0 = jobAudits[0]?.[0];
     check("9. the job's audit row is marked as the system: user id 0, the lab's owner as owner_user_id, no IP address, not Veritas support",
       jobAudits.every((a) => a[0]?.user_id === 0 && a[0]?.owner_user_id === OWNER.id && a[0]?.ip_address == null && a[0]?.acting_as == null), JSON.stringify(a0));
