@@ -101,6 +101,7 @@ import { applySelfOps, planSelfElements, planSelfRecordRows, planSelfWaivedMetho
 import { cleanWaivedSpecimens, waivedSpecimenColumns, waivedSpecimensFromRow, waivedEvidenceText, WAIVED_BLIND_METHOD } from "@shared/competencyWaivedSpecimens";
 import { oneRowKey, sameTestNameOnMap, preferredSameTestName } from "@shared/presetAnalytes";
 import { quizImageProblem } from "@shared/quizImages";
+import { quizRetakeDecision } from "@shared/quizRetake";
 import { certificateExtras } from "./veritalabRegistry";
 
 // Express already URL-decodes route params before the handler runs, so
@@ -10959,7 +10960,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       // Pull assigned quizzes + their results (if any). Quiz title +
       // due_date + status + score (when completed) for the tech's list.
       const rows = sqlite.prepare(
-        `SELECT qa.id AS assignment_id, qa.quiz_id, qa.due_date, qa.status,
+        `SELECT qa.id AS assignment_id, qa.quiz_id, qa.due_date, qa.status, qa.attempt_no,
                 qa.assigned_at, qa.completed_at, qa.completed_result_id,
                 q.title, q.method_group_name, q.question_format,
                 cqr.score, cqr.passed
@@ -10967,7 +10968,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
          JOIN competency_quizzes q ON q.id = qa.quiz_id
          LEFT JOIN competency_quiz_results cqr ON cqr.id = qa.completed_result_id
          WHERE qa.staff_employee_id = ? AND qa.lab_id = ?
-         ORDER BY qa.status ASC, qa.due_date ASC, qa.assigned_at DESC`
+         ORDER BY qa.status ASC, qa.due_date ASC, qa.assigned_at DESC, qa.attempt_no DESC`
       ).all(staffEmployee.id, labId) as any[];
 
       res.json({
@@ -10978,6 +10979,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           title: r.title || r.method_group_name || `Quiz ${r.quiz_id}`,
           due_date: r.due_date,
           status: r.status,
+          attempt_no: r.attempt_no ?? 1,
           assigned_at: r.assigned_at,
           completed_at: r.completed_at,
           score: r.score,
@@ -26106,12 +26108,22 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   });
 
   // ─── 2026-06-09 PR2: per-tech quiz assignments + Staff Portal surface ───
+  // The lab a quiz's assignments live in: the quiz's own lab, or for an older quiz with none, its owner's default lab.
+  const quizAssignmentLabId = (sqlite: any, quiz: { lab_id: number | null; user_id: number }): number | null => {
+    if (quiz.lab_id) return quiz.lab_id;
+    const owner = sqlite.prepare("SELECT default_lab_id FROM users WHERE id = ?").get(quiz.user_id) as any;
+    return owner?.default_lab_id || null;
+  };
+  // The same roster test Assign uses: on this lab's roster (tier2_lab_id) and active.
+  const onActiveQuizRoster = (sqlite: any, labId: number, staffEmployeeId: number): boolean =>
+    !!sqlite.prepare("SELECT 1 FROM staff_employees WHERE id = ? AND tier2_lab_id = ? AND status = 'active'").get(staffEmployeeId, labId);
+
   // POST /api/veritacomp/quizzes/:id/assignments
   //   Body: { staff_employee_ids: number[], due_date?: string }
   //   Director assigns the quiz to N staff employees in one call.
-  //   Idempotent on (quiz_id, staff_employee_id) via UNIQUE index — if the
-  //   tech is already assigned, the row is left untouched and reported as
-  //   `skipped`. Returns { created: [ids], skipped: [staff_employee_ids] }.
+  //   Anyone already assigned this quiz, at any attempt, is left untouched
+  //   and reported as `skipped`; another attempt is "Assign a retake"
+  //   (POST .../retake). Returns { created: [ids], skipped: [staff_employee_ids] }.
   app.post("/api/veritacomp/quizzes/:id/assignments", authMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
     const quiz = (db as any).$client.prepare("SELECT id, user_id, lab_id FROM competency_quizzes WHERE id = ?").get(req.params.id) as any;
@@ -26131,14 +26143,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     }
     const sqlite = (db as any).$client;
 
-    // Resolve the quiz's lab. Required for the new assignment rows.
-    let assignmentLabId: number | null = quiz.lab_id;
-    if (!assignmentLabId) {
-      // Legacy quiz with no lab_id set. Fall back to the owner's default
-      // lab so we don't strand the assign flow.
-      const owner = sqlite.prepare("SELECT default_lab_id FROM users WHERE id = ?").get(quiz.user_id) as any;
-      assignmentLabId = owner?.default_lab_id || null;
-    }
+    // Resolve the quiz's lab. Required for the new assignment rows. A legacy quiz with no lab_id
+    // falls back to the owner's default lab so we don't strand the assign flow.
+    const assignmentLabId = quizAssignmentLabId(sqlite, quiz);
     if (!assignmentLabId) return res.status(409).json({ error: "Quiz has no lab association; cannot assign" });
 
     // Validate each staff_employee_id belongs to this lab + is active.
@@ -26164,15 +26171,17 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const skipped: number[] = [];
     const insert = sqlite.prepare(
       `INSERT INTO competency_quiz_assignments (
-         quiz_id, staff_employee_id, lab_id, assigned_by_user_id, assigned_at, due_date, status
-       ) VALUES (?, ?, ?, ?, ?, ?, 'assigned')`
+         quiz_id, staff_employee_id, lab_id, assigned_by_user_id, assigned_at, due_date, status, attempt_no
+       ) VALUES (?, ?, ?, ?, ?, ?, 'assigned', 1)`
     );
+    const alreadyAssigned = sqlite.prepare("SELECT 1 FROM competency_quiz_assignments WHERE quiz_id = ? AND staff_employee_id = ? LIMIT 1");
     for (const sid of staff_employee_ids) {
+      if (alreadyAssigned.get(quiz.id, sid)) { skipped.push(sid); continue; }
       try {
         const r = insert.run(quiz.id, sid, assignmentLabId, req.user.userId, now, dueDate);
         created.push(Number(r.lastInsertRowid));
       } catch (err: any) {
-        // UNIQUE(quiz_id, staff_employee_id) violation = already assigned
+        // UNIQUE(quiz_id, staff_employee_id, attempt_no) violation = already assigned
         if (String(err.message || "").includes("UNIQUE")) {
           skipped.push(sid);
         } else {
@@ -26197,7 +26206,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     }
     const staffOwn = staffOwnIn(req, quiz.lab_id);
     const rows = ((db as any).$client.prepare(
-      `SELECT qa.id, qa.staff_employee_id, qa.due_date, qa.status, qa.assigned_at,
+      `SELECT qa.id, qa.staff_employee_id, qa.due_date, qa.status, qa.attempt_no, qa.assigned_at,
               qa.completed_at, qa.completed_result_id,
               se.first_name, se.last_name, se.title,
               cqr.score, cqr.passed
@@ -26205,7 +26214,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
        JOIN staff_employees se ON se.id = qa.staff_employee_id
        LEFT JOIN competency_quiz_results cqr ON cqr.id = qa.completed_result_id
        WHERE qa.quiz_id = ?
-       ORDER BY se.last_name, se.first_name`
+       ORDER BY se.last_name, se.first_name, qa.attempt_no`
     ).all(req.params.id) as any[]).filter((r) => !staffOwn || (staffOwn.employeeId != null && Number(r.staff_employee_id) === staffOwn.employeeId));
     res.json({
       assignments: rows.map((r) => ({
@@ -26215,6 +26224,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         employee_title: r.title,
         due_date: r.due_date,
         status: r.status,
+        attempt_no: r.attempt_no ?? 1,
         assigned_at: r.assigned_at,
         completed_at: r.completed_at,
         completed_result_id: r.completed_result_id,
@@ -26222,6 +26232,155 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         passed: r.passed,
       })),
     });
+  });
+
+  // GET /api/veritacomp/quizzes/:id/results
+  //   Redington 2026-11-11 (Cathy couldn't find a staff member's failed result): every person assigned the quiz, with every
+  //   attempt (number, date, score, Pass or Fail) and, per attempt, the answers they gave, marked right or wrong, beside the
+  //   quiz's questions and answer key. For whoever runs the quiz: the lab's owner or admin, or anyone with edit on VeritaComp in
+  //   the quiz's lab. A Staff login (staffOwnScope) gets only their own attempts, with no answers and no answer key (Q182, Q185);
+  //   anyone else, such as a view-only seat, is refused. can_retake comes from shared/quizRetake.ts, as the retake route decides.
+  app.get("/api/veritacomp/quizzes/:id/results", authMiddleware, (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const sqlite = (db as any).$client;
+    const quiz = sqlite.prepare("SELECT id, user_id, lab_id, title, method_group_name, questions, question_format FROM competency_quizzes WHERE id = ?").get(req.params.id) as any;
+    if (!quiz) return res.status(404).json({ error: "Quiz not found" });
+    const quizInfo = { id: quiz.id, title: quiz.title || quiz.method_group_name || `Quiz ${quiz.id}` };
+    // A built-in quiz can't be assigned, so it has no attempts to list.
+    if (quiz.user_id === 0) return res.json({ quiz: quizInfo, own_only: false, question_format: quiz.question_format || "plain", questions: [], people: [] });
+    if (!userCanAccessLabRow('competency_quizzes', quiz.id, req)) return res.status(404).json({ error: "Quiz not found" });
+    const labId = quizAssignmentLabId(sqlite, quiz);
+    const staffOwn = staffOwnIn(req, labId);
+    if (!staffOwn && !(labId && hasModuleEditAccess(labId, req.userId, "veritacomp"))) {
+      return res.status(403).json({ error: "Quiz results are for the lab's owner or admin and anyone with edit access to VeritaComp™.", code: "QUIZ_RESULTS_EDIT_ONLY" });
+    }
+    const rows = sqlite.prepare(
+      `SELECT qa.id, qa.staff_employee_id, qa.attempt_no, qa.status, qa.assigned_at, qa.due_date, qa.completed_at,
+              se.first_name, se.last_name, se.title, se.status AS roster_status, se.tier2_lab_id,
+              cqr.id AS result_id, cqr.score, cqr.passed, cqr.date_taken, cqr.answers
+       FROM competency_quiz_assignments qa
+       JOIN staff_employees se ON se.id = qa.staff_employee_id
+       LEFT JOIN competency_quiz_results cqr ON cqr.id = qa.completed_result_id
+       WHERE qa.quiz_id = ? ${staffOwn ? "AND qa.staff_employee_id = ?" : ""}
+       ORDER BY se.last_name, se.first_name, qa.staff_employee_id, qa.attempt_no, qa.id`
+    ).all(...(staffOwn ? [quiz.id, staffOwn.employeeId ?? -1] : [quiz.id])) as any[];
+    const parseAnswers = (raw: any): Array<{ question_id: string; selected_answer: string | null; correct: boolean }> => {
+      try {
+        const list = JSON.parse(raw || "[]");
+        return Array.isArray(list) ? list.map((a: any) => ({ question_id: String(a?.question_id ?? ""), selected_answer: a?.selected_answer ?? null, correct: !!a?.correct })) : [];
+      } catch { return []; }
+    };
+    const people: any[] = [];
+    for (const r of rows) {
+      let p = people[people.length - 1];
+      if (!p || p.staff_employee_id !== r.staff_employee_id) {
+        p = {
+          staff_employee_id: r.staff_employee_id,
+          employee_name: `${r.first_name || ""} ${r.last_name || ""}`.trim(),
+          employee_title: r.title ?? null,
+          on_roster: r.roster_status === "active" && Number(r.tier2_lab_id) === Number(labId),
+          attempts: [] as any[],
+        };
+        people.push(p);
+      }
+      p.attempts.push({
+        assignment_id: r.id,
+        attempt_no: r.attempt_no ?? 1,
+        status: r.status,
+        assigned_at: r.assigned_at,
+        due_date: r.due_date,
+        completed_at: r.completed_at,
+        result_id: r.result_id ?? null,
+        date_taken: r.date_taken ?? null,
+        score: r.result_id != null ? r.score : null,
+        passed: r.result_id != null ? Number(r.passed) === 1 : null,
+        ...(staffOwn ? {} : { answers: r.result_id != null ? parseAnswers(r.answers) : [] }),
+      });
+    }
+    for (const p of people) {
+      const latest = p.attempts[p.attempts.length - 1];
+      const decision = quizRetakeDecision({ attemptNo: latest.attempt_no, status: latest.status, passed: latest.passed == null ? null : latest.passed ? 1 : 0 }, p.on_roster);
+      p.latest_attempt_no = latest.attempt_no;
+      p.can_retake = !staffOwn && decision.ok;
+      p.next_attempt_no = p.can_retake ? decision.nextAttemptNo : null;
+      p.retake_refusal = staffOwn ? null : decision.code;
+    }
+    let questions: any[] | undefined;
+    if (!staffOwn) {
+      try {
+        const parsed = JSON.parse(quiz.questions || "[]");
+        questions = (Array.isArray(parsed) ? parsed : []).map((q: any) => ({
+          id: q.id, question: q.question, options: Array.isArray(q.options) ? q.options : [], correct_answer: q.correct_answer,
+          explanation: q.explanation ?? null, image: q.image ?? null, method_group_name: q.method_group_name ?? null,
+        }));
+      } catch { questions = []; }
+    }
+    res.json({ quiz: quizInfo, own_only: !!staffOwn, question_format: quiz.question_format || "plain", ...(questions ? { questions } : {}), people });
+  });
+
+  // POST /api/veritacomp/quizzes/:id/retake
+  //   Body: { staff_employee_id: number, due_date?: string }
+  //   "Assign a retake" (Redington 2026-11-11): a new assignment with the next attempt number, for a person whose LATEST attempt
+  //   on this quiz was taken and failed. They take it on their staff login exactly as attempt 1. The failed attempt and its
+  //   result are not touched. Refused (shared/quizRetake.ts) when the latest attempt passed, is still open, has no score, or
+  //   doesn't exist, and when the person isn't on the lab's active roster (the same check as Assign). No cap on retakes; that's
+  //   the lab's policy. Audited as entity_type 'quiz_retake'.
+  app.post("/api/veritacomp/quizzes/:id/retake", authMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const sqlite = (db as any).$client;
+    const quiz = sqlite.prepare("SELECT id, user_id, lab_id, title, method_group_name FROM competency_quizzes WHERE id = ?").get(req.params.id) as any;
+    if (!quiz) return res.status(404).json({ error: "Quiz not found" });
+    if (quiz.user_id === 0) return res.status(403).json({ error: "Cannot assign a system-default quiz" });
+    if (!userCanAccessLabRow('competency_quizzes', quiz.id, req)) return res.status(404).json({ error: "Quiz not found" });
+    const labId = quizAssignmentLabId(sqlite, quiz);
+    if (!labId) return res.status(409).json({ error: "Quiz has no lab association; cannot assign" });
+    // requireModuleEdit goes by the active lab; this goes by the quiz's own lab, so edit in one lab never assigns in another.
+    if (!hasModuleEditAccess(labId, req.userId, "veritacomp")) {
+      return res.status(403).json({ error: "You have view-only access to VeritaComp™. Ask the account owner to grant edit access." });
+    }
+    const { staff_employee_id, due_date } = req.body || {};
+    const sid = Number(staff_employee_id);
+    if (!Number.isInteger(sid) || sid <= 0) return res.status(400).json({ error: "staff_employee_id required" });
+    if (due_date != null && due_date !== "" && (typeof due_date !== "string" || !/^\d{4}-\d{2}-\d{2}/.test(due_date))) {
+      return res.status(400).json({ error: "due_date must be an ISO date string" });
+    }
+    const dueDate = due_date ? String(due_date).slice(0, 10) : null;
+    const now = new Date().toISOString();
+    const outcome = sqlite.transaction(() => {
+      const latest = sqlite.prepare(
+        `SELECT qa.id, qa.attempt_no, qa.status, qa.assigned_at, qa.completed_at, cqr.id AS result_id, cqr.score, cqr.passed, cqr.date_taken
+         FROM competency_quiz_assignments qa
+         LEFT JOIN competency_quiz_results cqr ON cqr.id = qa.completed_result_id
+         WHERE qa.quiz_id = ? AND qa.staff_employee_id = ?
+         ORDER BY qa.attempt_no DESC, qa.id DESC LIMIT 1`
+      ).get(quiz.id, sid) as any;
+      const decision = quizRetakeDecision(
+        latest ? { attemptNo: latest.attempt_no ?? 1, status: latest.status, passed: latest.result_id != null ? Number(latest.passed) : null } : null,
+        onActiveQuizRoster(sqlite, labId, sid),
+      );
+      if (!decision.ok) return { decision, latest };
+      const r = sqlite.prepare(
+        `INSERT INTO competency_quiz_assignments (quiz_id, staff_employee_id, lab_id, assigned_by_user_id, assigned_at, due_date, status, attempt_no)
+         VALUES (?, ?, ?, ?, ?, ?, 'assigned', ?)`
+      ).run(quiz.id, sid, labId, req.user.userId, now, dueDate, decision.nextAttemptNo);
+      return { decision, latest, id: Number(r.lastInsertRowid) };
+    })();
+    const { decision, latest } = outcome;
+    if (!decision.ok) {
+      const status = decision.code === "NOT_ON_ROSTER" ? 400 : 409;
+      return res.status(status).json({ error: decision.message, code: decision.code, ...(decision.code === "NOT_ON_ROSTER" ? { invalid: [sid] } : {}), ...(latest ? { latest_attempt_no: latest.attempt_no ?? 1 } : {}) });
+    }
+    const person = sqlite.prepare("SELECT first_name, last_name FROM staff_employees WHERE id = ?").get(sid) as any;
+    const personName = `${person?.first_name || ""} ${person?.last_name || ""}`.trim() || `Staff ${sid}`;
+    const quizTitle = quiz.title || quiz.method_group_name || `Quiz ${quiz.id}`;
+    const created = { id: outcome.id, quiz_id: quiz.id, staff_employee_id: sid, lab_id: labId, attempt_no: decision.nextAttemptNo, status: "assigned", assigned_at: now, due_date: dueDate };
+    logAudit({
+      userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritacomp", action: "create", entityType: "quiz_retake",
+      entityId: String(outcome.id), entityLabel: `${personName} / ${quizTitle}: attempt ${decision.nextAttemptNo}`,
+      before: { latest_attempt: { assignment_id: latest.id, attempt_no: latest.attempt_no ?? 1, status: latest.status, result_id: latest.result_id, score: latest.score, passed: Number(latest.passed) === 1, date_taken: latest.date_taken } },
+      after: { assignment: created }, ipAddress: req.ip,
+    });
+    res.json({ ...created, employee_name: personName });
   });
 
   // DELETE /api/veritacomp/quiz-assignments/:id
