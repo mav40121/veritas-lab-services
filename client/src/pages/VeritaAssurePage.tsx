@@ -8,7 +8,7 @@ import {
   FlaskConical, Map, ClipboardCheck, Award, Users, FileText,
   ChevronRight, CheckCircle2, Download, Shield, Play, CalendarDays,
   TestTubes, ClipboardList, Activity,
-  BarChart3, TrendingUp, Clock, Boxes, Calculator, Gauge, Wrench,
+  BarChart3, TrendingUp, Clock, Boxes, Calculator, Gauge, Wrench, Newspaper,
 } from "lucide-react";
 
 const COMPLIANCE_MODULES = [
@@ -252,6 +252,24 @@ function BadgePill({ label, color }: { label: string; color: string }) {
   );
 }
 
+// Features that come with every suite plan and aren't modules (Michael 2026-11-12, Q297 = 1: the digest stays a feature,
+// with a tile here so it can be found). Signed in, the tile opens the digest in the active lab (the bare /digest route
+// resolves it); signed out, it goes to pricing, since the digest has no public page.
+const INCLUDED_FEATURES = [
+  {
+    href: "/digest",
+    publicHref: "/pricing",
+    label: "Compliance Digest",
+    desc: "Monthly or Quarterly Compliance Summary",
+    detail:
+      "One summary of the lab's compliance status each month or quarter, built from the numbers each module already shows: competency, proficiency testing, certificates, policies, QC, equipment, inventory, open findings and new tests added. Each lab picks the frequency, sections and audience, and whether staff acknowledge it. A draft is ready when the period ends, a lab leader publishes it, and the PDF can carry a medical director or designee review box.",
+    badge: "Included",
+    badgeColor: "emerald",
+    icon: Newspaper,
+    color: "text-teal-600 bg-teal-500/10 border-teal-500/20",
+  },
+];
+
 function ModuleGrid({ modules }: { modules: typeof COMPLIANCE_MODULES }) {
   // A module with no public page has a publicHref: logged-out visitors go to its
   // demo instead of landing on the app's sign-in gate.
@@ -357,6 +375,18 @@ return (
             running well: benchmarking, staffing, quality metrics, cost per reportable test, and inventory.
           </p>
           <ModuleGrid modules={OPERATIONS_MODULES} />
+        </section>
+
+        {/* Included with every suite plan: features, not modules (Q297 = 1) */}
+        <section data-testid="included-features">
+          <div className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-2">
+            Included in every plan
+          </div>
+          <p className="text-sm text-muted-foreground mb-6 max-w-2xl">
+            Part of every Clinic, Community, Hospital and System plan, at no added cost. These work across the
+            modules above rather than being modules of their own.
+          </p>
+          <ModuleGrid modules={INCLUDED_FEATURES as typeof COMPLIANCE_MODULES} />
         </section>
 
         {/* Free Downloads */}
