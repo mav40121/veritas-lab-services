@@ -138,6 +138,10 @@ jobs:
         # SCAHC 2026-11-12 (Q304 = 1): a client's indicator plan loads into its VeritaQA by owner account; a wrong account writes nothing;
         # a dry run writes nothing; a rerun adds nothing; nothing the account already has is changed.
         run: npm run test:veritaqa-admin-load
+      - name: Run VeritaQA All departments integration test
+        # Michael 2026-11-12: department_id=all on metrics, entries and dashboard is exactly each department's list put together,
+        # in the department list's order; inactive metrics stay off the dashboard; another account's rows never appear.
+        run: npm run test:veritaqa-all-departments
       - name: Competency clearance rule
         # Only a technical or waived record can clear a person for patient testing; what an import builds from what's left, on known dates.
         run: npx tsx scripts/verify-competency-clearance-types.mts
