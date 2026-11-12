@@ -5,14 +5,14 @@ import { useAuth } from "@/components/AuthContext";
 import { useIsStaffLogin } from "@/hooks/useStaffLogin";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Sun, Moon, Menu, X, ChevronDown, FlaskConical, TestTube, User, LogOut, LayoutDashboard, Play, ListChecks, ShieldCheck, Gauge } from "lucide-react";
+import { Sun, Moon, Menu, X, ChevronDown, FlaskConical, TestTube, User, LogOut, LayoutDashboard, Play, ListChecks, ShieldCheck, Gauge, Newspaper } from "lucide-react";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 import { LabSwitcher, LabSwitcherMobile } from "@/components/LabSwitcher";
 import { PendingStaffPortalBell } from "@/components/PendingStaffPortalBell";
 import { useLabRoute } from "@/hooks/useLabRoute";
 import { useMemberships } from "@/hooks/useMemberships";
-import { useActiveLabId } from "@/hooks/useActiveLabId";
+import { useActiveLabId, stripLabPrefix } from "@/hooks/useActiveLabId";
 import { isStockHost, isSingleSiteDemo } from "@/lib/host";
 import { setActiveLabId } from "@/lib/auth";
 import { pickCurrentMembership } from "@/lib/currentLab";
@@ -39,6 +39,9 @@ type NavLink = { href: string; label: string; header?: boolean };
 // Inspection Readiness is the dashboard across the modules (certificates, competency, maintenance, PT, QC corrective
 // actions; multi-lab roll-up), not a module, so it sits at the top of the menu beside All Modules Overview.
 const readinessLink: NavLink = { href: "/readiness", label: "Inspection Readiness" };
+// The compliance digest (Q281 = 1) is a feature beside readiness, not a module: right under it, for a signed-in user only,
+// linked into the active lab (/labs/:labId/digest; the bare /digest route resolves the lab, as /readiness does).
+const digestLink: NavLink = { href: "/digest", label: "Compliance Digest" };
 const complianceModules: NavLink[] = [
   { href: "/veritacheck", label: "VeritaCheck\u00AE" },
   { href: "/veritamap", label: "VeritaMap\u00AE" },
@@ -77,12 +80,13 @@ const desktopRows = Math.ceil(desktopModules.length / 2);
 // redirects from, so the entry highlights everywhere it used to under the old
 // two-entry (VeritaAssure + Operations) split.
 const veritaassureActiveRoutes: string[] = [
-  "/veritaassure", "/operations", readinessLink.href,
+  "/veritaassure", "/operations", readinessLink.href, digestLink.href,
   ...allModules.map(m => m.href),
   "/veritatrack-app", "/veritascan-app", "/veritamap-app", "/veritacomp-app",
   "/veritapt/app", "/veritastaff-app", "/veritalab-app", "/veritapolicy-app",
   "/veritacheck/cumsum",
 ];
+// The digest row goes in only for a signed-in user, under readiness (mobileVeritaassureLinksFor).
 const mobileVeritaassureLinks: NavLink[] = [
   { href: "/veritaassure", label: "All Modules Overview" },
   readinessLink,
@@ -91,6 +95,16 @@ const mobileVeritaassureLinks: NavLink[] = [
   { href: "", label: "Operations", header: true },
   ...alphabetical(operationsModules),
 ];
+const mobileVeritaassureLinksFor = (digestHref: string | null): NavLink[] => {
+  if (!digestHref) return mobileVeritaassureLinks;
+  const at = mobileVeritaassureLinks.indexOf(readinessLink) + 1;
+  return [...mobileVeritaassureLinks.slice(0, at), { ...digestLink, href: digestHref }, ...mobileVeritaassureLinks.slice(at)];
+};
+// Whether a route is one of these, with or without its /labs/:labId prefix (the in-app pages, the digest's included).
+const onRoute = (location: string, routes: string[]) => {
+  const bare = stripLabPrefix(location);
+  return routes.some((p) => bare === p || bare.startsWith(p + "/"));
+};
 const mobileResourcesLinks: { href: string; label: string }[] = [
   { href: "/learn", label: "Video Library" },
   { href: "/getting-started", label: "Getting Started" },
@@ -245,7 +259,7 @@ export function NavBar() {
             <DropdownMenuTrigger asChild>
               <button className={cn(
                 "flex items-center gap-1 px-2 py-1.5 rounded-md text-sm font-medium transition-colors",
-                veritaassureActiveRoutes.some(p => location === p || location.startsWith(p + "/"))
+                onRoute(location, veritaassureActiveRoutes)
                   ? "text-foreground bg-secondary"
                   : "text-muted-foreground hover:text-foreground hover:bg-secondary"
               )}>
@@ -269,6 +283,14 @@ export function NavBar() {
                   {readinessLink.label}
                 </Link>
               </DropdownMenuItem>
+              {isLoggedIn && (
+                <DropdownMenuItem asChild>
+                  <Link href={labRoute(digestLink.href)} className="flex items-center gap-2 py-2 font-medium" data-testid="nav-digest">
+                    <Newspaper size={15} className="text-primary shrink-0" />
+                    {digestLink.label}
+                  </Link>
+                </DropdownMenuItem>
+              )}
               <DropdownMenuSeparator />
               <div className="grid grid-cols-2 grid-flow-col gap-0.5 p-1" style={{ gridTemplateRows: `repeat(${desktopRows}, auto)` }} data-testid="nav-modules-grid">
                 {desktopModules.map(m => (
@@ -475,7 +497,7 @@ export function NavBar() {
               icon={<ShieldCheck size={14} className="text-primary" />}
               expanded={mobileExpanded.has("va")}
               onToggle={() => toggleMobileGroup("va")}
-              links={mobileVeritaassureLinks}
+              links={mobileVeritaassureLinksFor(isLoggedIn ? labRoute(digestLink.href) : null)}
               onLinkClick={closeMobile}
             />
             <MobileGroup

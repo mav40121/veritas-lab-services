@@ -510,6 +510,8 @@ function AppContent() {
           <Route path="/equipment-app/stain-log">{wrapLegacy(StainLogPage)}</Route>
           <Route path="/equipment-app">{wrapLegacy(EquipmentAppPage)}</Route>
           <Route path="/readiness">{wrapLegacy(ReadinessDashboardPage)}</Route>
+          {/* The nav's Compliance Digest entry off a lab page: resolves the active lab, as /readiness does. */}
+          <Route path="/digest">{wrapLegacy(DigestPage)}</Route>
           <Route path="/veritapolicy-app">{wrapLegacy(VeritaPolicyAppPage)}</Route>
           <Route path="/veritadc">{wrapLegacy(VeritaPolicyPage, "/veritapolicy-app")}</Route>
           <Route path="/veritacheck/cumsum">{wrapLegacy(CumsumPage)}</Route>
