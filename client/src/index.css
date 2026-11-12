@@ -194,4 +194,10 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   .no-print { display: none !important; }
   #compliance-print-area .rounded-lg,
   #compliance-print-area table { break-inside: avoid; page-break-inside: avoid; }
+  /* A print area marked data-print-solo (VeritaQA's PI plan, 2026-11-12) prints alone: everything that neither holds it
+     nor sits in it leaves the layout, so the hidden page adds no blank pages after it, and the area flows from the top
+     so a long plan breaks across pages. Areas without the mark print as before. */
+  body:has([data-print-solo]) *:not(:has([data-print-solo])):not([data-print-solo]):not([data-print-solo] *) { display: none !important; }
+  body:has([data-print-solo]) *:has([data-print-solo]) { min-height: 0 !important; height: auto !important; margin: 0 !important; padding: 0 !important; border: 0 !important; box-shadow: none !important; }
+  #compliance-print-area[data-print-solo] { position: static; }
 }
