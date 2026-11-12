@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, type CSSProperties } from "react";
+import { useState, useEffect, useMemo, Fragment, type CSSProperties } from "react";
 import { labTodayIso } from "@/lib/labDate";
 import { Link } from "wouter";
 import { useAuth } from "@/components/AuthContext";
@@ -102,6 +102,23 @@ const SUITE_PLANS = ["annual", "professional", "lab", "complete", "veritamap", "
 const MONTH_NAMES = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const FULL_MONTHS = ["", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const BENCHMARK_COLORS: Record<string, string> = { green: "#437A22", yellow: "#964219", red: "#A12C7B" };
+
+// The department picker's "All departments" choice (Michael 2026-11-12, "we need an option to see all instead of only
+// by department"). The server reads department_id=all as every department on the account, in the department list's order.
+const ALL_DEPARTMENTS = "all";
+
+// Splits items already in department order into one run per department, so All departments can head each run with
+// its department's name. With deptOf returning one value for every item, it is a single run.
+function byDepartment<T>(items: T[], deptOf: (item: T) => number): { deptId: number; items: T[] }[] {
+  const runs: { deptId: number; items: T[] }[] = [];
+  for (const item of items) {
+    const id = deptOf(item);
+    const last = runs[runs.length - 1];
+    if (last && last.deptId === id) last.items.push(item);
+    else runs.push({ deptId: id, items: [item] });
+  }
+  return runs;
+}
 
 function StatusDot({ status }: { status: string | null }) {
   if (!status) return <span className="inline-block w-2.5 h-2.5 rounded-full bg-gray-300" title="No benchmark configured" />;
@@ -967,7 +984,7 @@ export default function VeritaQAPage() {
         const depts = await res.json();
         setDepartments(depts);
         if (depts.length > 0 && !selectedDeptId) {
-          setSelectedDeptId(String(depts[0].id));
+          setSelectedDeptId(ALL_DEPARTMENTS);
         }
       } else { setLoadError(true); }
     } catch { setLoadError(true); } finally { setLoading(false); }
@@ -1113,7 +1130,8 @@ export default function VeritaQAPage() {
 
   async function handleSaveMetric() {
     const payload = {
-      department_id: parseInt(selectedDeptId),
+      // An edit keeps the metric's own department (All departments has no single one); a new metric goes to the one picked.
+      department_id: editMetric ? editMetric.department_id : parseInt(selectedDeptId),
       name: metricForm.name,
       unit: metricForm.unit,
       direction: metricForm.direction,
@@ -1363,6 +1381,9 @@ export default function VeritaQAPage() {
 
   // -- Normal Dashboard/Data View ---------------------------------------------
 
+  const showAll = selectedDeptId === ALL_DEPARTMENTS;
+  const deptName = (id: number) => departments.find(d => d.id === id)?.name ?? "";
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
       {/* Header */}
@@ -1373,10 +1394,11 @@ export default function VeritaQAPage() {
         </div>
         <div className="flex gap-2 items-center flex-wrap">
           <Select value={selectedDeptId} onValueChange={setSelectedDeptId}>
-            <SelectTrigger className="w-[180px]">
+            <SelectTrigger className="w-[240px]" data-testid="qa-department-select">
               <SelectValue placeholder="Select department" />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value={ALL_DEPARTMENTS}>All departments</SelectItem>
               {departments.map(d => (
                 <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>
               ))}
@@ -1467,12 +1489,20 @@ export default function VeritaQAPage() {
           ) : dashboardData.length === 0 ? (
             <div className="text-center py-12">
               <Activity size={40} className="mx-auto text-muted-foreground mb-4" />
-              <p className="text-muted-foreground mb-2">No metrics found for this department.</p>
+              <p className="text-muted-foreground mb-2">{showAll ? "No metrics found yet." : "No metrics found for this department."}</p>
               <p className="text-xs text-muted-foreground">Switch to the Data Entry tab to add metrics and enter values.</p>
             </div>
           ) : (
+            <div className="space-y-6">
+            {byDepartment(dashboardData, dm => (showAll ? dm.metric.department_id : 0)).map(run => (
+            <section key={run.deptId} data-testid={showAll ? `qa-dept-group-${run.deptId}` : undefined}>
+              {showAll && (
+                <h2 className="font-sans text-sm font-semibold mb-3 text-[#01696F] dark:text-teal-300">
+                  {deptName(run.deptId)} <span className="font-normal text-muted-foreground">({run.items.length})</span>
+                </h2>
+              )}
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {dashboardData.map(dm => {
+              {run.items.map(dm => {
                 const sparkData = Array.from({ length: 12 }, (_, i) => ({
                   month: i + 1,
                   value: dm.monthlyValues[i + 1]?.value ?? null,
@@ -1535,11 +1565,14 @@ export default function VeritaQAPage() {
                 );
               })}
             </div>
+            </section>
+            ))}
+            </div>
           )}
 
           {/* Benchmark Legend */}
           {dashboardData.length > 0 && (
-            <div className="flex items-center gap-4 text-xs text-muted-foreground pt-2">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground pt-2">
               <span className="font-medium">Benchmark:</span>
               <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: "#437A22" }} /> Green = within target</span>
               <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: "#964219" }} /> Yellow = approaching threshold</span>
@@ -1566,7 +1599,10 @@ export default function VeritaQAPage() {
               </SelectContent>
             </Select>
             <span className="text-sm text-muted-foreground">{year}</span>
-            <div className="ml-auto flex gap-2">
+            <div className="ml-auto flex gap-2 items-center">
+              {showAll && !readOnly && (
+                <span className="text-xs text-muted-foreground" data-testid="qa-add-metric-hint">Pick a department to add a metric to it.</span>
+              )}
               <Button
                 variant="outline"
                 size="sm"
@@ -1575,7 +1611,7 @@ export default function VeritaQAPage() {
               >
                 <BookOpen size={14} className="mr-1.5" />Browse Metric Library
               </Button>
-              <Button variant="outline" size="sm" onClick={openAddMetric} disabled={readOnly || !selectedDeptId}>
+              <Button variant="outline" size="sm" onClick={openAddMetric} disabled={readOnly || !selectedDeptId || showAll} data-testid="qa-add-metric">
                 <Plus size={14} className="mr-1.5" />Add Metric
               </Button>
             </div>
@@ -1587,7 +1623,7 @@ export default function VeritaQAPage() {
           ) : metrics.length === 0 ? (
             <div className="text-center py-12">
               <Activity size={40} className="mx-auto text-muted-foreground mb-4" />
-              <p className="text-muted-foreground mb-4">No metrics configured for this department.</p>
+              <p className="text-muted-foreground mb-4">{showAll ? "No metrics configured yet." : "No metrics configured for this department."}</p>
               <div className="flex gap-2 justify-center">
                 <Button
                   variant="outline"
@@ -1596,7 +1632,7 @@ export default function VeritaQAPage() {
                 >
                   <BookOpen size={14} className="mr-1.5" />Browse Metric Library
                 </Button>
-                <Button onClick={openAddMetric} disabled={readOnly || !selectedDeptId} style={{ backgroundColor: "#01696F" }}>
+                <Button onClick={openAddMetric} disabled={readOnly || !selectedDeptId || showAll} style={{ backgroundColor: "#01696F" }}>
                   <Plus size={14} className="mr-1.5" />Add Metric
                 </Button>
               </div>
@@ -1620,8 +1656,15 @@ export default function VeritaQAPage() {
                       const vals = entryValues[m.id] || { value: "", volume: "", notes: "" };
                       const parsedVal = vals.value !== "" ? parseFloat(vals.value) : null;
                       const status = getBenchmarkStatusForValue(parsedVal, m);
+                      const startsDepartment = showAll && (i === 0 || metrics[i - 1].department_id !== m.department_id);
                       return (
-                        <tr key={m.id} className={`border-b hover:bg-muted/30 ${i % 2 === 0 ? "" : "bg-muted/10"}`}>
+                        <Fragment key={m.id}>
+                        {startsDepartment && (
+                          <tr className="border-b bg-muted/40" data-testid={`qa-dept-row-${m.department_id}`}>
+                            <td colSpan={6} className="px-3 py-1.5 text-xs font-semibold text-[#01696F] dark:text-teal-300">{deptName(m.department_id)}</td>
+                          </tr>
+                        )}
+                        <tr className={`border-b hover:bg-muted/30 ${i % 2 === 0 ? "" : "bg-muted/10"}`}>
                           <td className="px-3 py-2">
                             <div className="font-medium">{m.name}</div>
                             <div className="text-xs text-muted-foreground">{m.unit}</div>
@@ -1687,6 +1730,7 @@ export default function VeritaQAPage() {
                             </div>
                           </td>
                         </tr>
+                        </Fragment>
                       );
                     })}
                   </tbody>

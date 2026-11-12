@@ -2472,17 +2472,31 @@ export function registerVeritaBenchRoutes(
     res.json({ success: true });
   });
 
-  // GET /api/pi/metrics - list metrics for a department
+  // The metrics a VeritaQA read covers: one department, or department_id=all (Michael 2026-11-12, "we need an option to
+  // see all instead of only by department"): every department on the account, in the department list's order, so "all"
+  // is exactly each department's own list put together. A metric whose department isn't one of the account's isn't in
+  // any department's list, so it isn't in "all" either.
+  function piMetricsFor(accountId: number, departmentId: string, activeOnly: boolean): any[] {
+    const active = activeOnly ? " AND m.active = 1" : "";
+    if (departmentId === "all") {
+      return sqlite.prepare(
+        `SELECT m.* FROM pi_metrics m JOIN pi_departments d ON d.id = m.department_id AND d.account_id = m.account_id
+         WHERE m.account_id = ?${active} ORDER BY d.sort_order ASC, d.id ASC, m.sort_order ASC, m.id ASC`
+      ).all(accountId) as any[];
+    }
+    return sqlite.prepare(
+      `SELECT m.* FROM pi_metrics m WHERE m.department_id = ? AND m.account_id = ?${active} ORDER BY m.sort_order ASC, m.id ASC`
+    ).all(departmentId, accountId) as any[];
+  }
+
+  // GET /api/pi/metrics - list metrics for a department, or department_id=all
   app.get("/api/pi/metrics", authMiddleware, (req: any, res) => {
     if (blockNonOperatorSeat(req, res)) return;
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const departmentId = req.query.department_id;
     if (!departmentId) return res.status(400).json({ error: "department_id is required" });
-    const rows = sqlite.prepare(
-      "SELECT * FROM pi_metrics WHERE department_id = ? AND account_id = ? ORDER BY sort_order ASC, id ASC"
-    ).all(departmentId, accountId);
-    res.json(rows);
+    res.json(piMetricsFor(accountId, String(departmentId), false));
   });
 
   // POST /api/pi/metrics - create metric
@@ -2549,14 +2563,14 @@ export function registerVeritaBenchRoutes(
     res.json({ success: true });
   });
 
-  // GET /api/pi/entries - get all entries for a year/department
+  // GET /api/pi/entries - get all entries for a year/department (or department_id=all)
   app.get("/api/pi/entries", authMiddleware, (req: any, res) => {
     if (blockNonOperatorSeat(req, res)) return;
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
     const accountId = req.ownerUserId ?? req.userId;
     const { year, department_id } = req.query;
     if (!year || !department_id) return res.status(400).json({ error: "year and department_id are required" });
-    const metricIds = sqlite.prepare("SELECT id FROM pi_metrics WHERE department_id = ? AND account_id = ?").all(department_id, accountId) as any[];
+    const metricIds = piMetricsFor(accountId, String(department_id), false);
     if (metricIds.length === 0) return res.json([]);
     const ids = metricIds.map((m: any) => m.id);
     const placeholders = ids.map(() => "?").join(",");
@@ -2831,7 +2845,7 @@ export function registerVeritaBenchRoutes(
     }
   });
 
-  // GET /api/pi/dashboard - computed dashboard data
+  // GET /api/pi/dashboard - computed dashboard data, for a department or department_id=all
   app.get("/api/pi/dashboard", authMiddleware, (req: any, res) => {
     if (blockNonOperatorSeat(req, res)) return;
     if (!hasOpsAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaBench™ requires a suite subscription" });
@@ -2840,9 +2854,7 @@ export function registerVeritaBenchRoutes(
     if (!year || !department_id) return res.status(400).json({ error: "year and department_id are required" });
     const yr = parseInt(year as string);
 
-    const metrics = sqlite.prepare(
-      "SELECT * FROM pi_metrics WHERE department_id = ? AND account_id = ? AND active = 1 ORDER BY sort_order ASC, id ASC"
-    ).all(department_id, accountId) as any[];
+    const metrics = piMetricsFor(accountId, String(department_id), true);
 
     if (metrics.length === 0) return res.json({ metrics: [] });
 
