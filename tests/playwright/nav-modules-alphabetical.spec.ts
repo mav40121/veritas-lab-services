@@ -22,7 +22,8 @@ test("the VeritaAssure menu reads A to Z down the columns, with Inspection Readi
   const grid = page.getByTestId("nav-modules-grid");
   await expect(grid).toBeVisible({ timeout: 15000 });
   const items = grid.locator("a");
-  const labels = (await items.allInnerTexts()).map((t) => t.replace(/™/g, "").trim());
+  // The marks: ™, and ® on the registered ones (VeritaCheck, VeritaMap, VeritaScan since 2026-10-27).
+  const labels = (await items.allInnerTexts()).map((t) => t.replace(/[™®]/g, "").trim());
   expect(labels).toEqual(EXPECTED);
   // Down the left column first: the first ten share one x position, top to bottom; the rest sit in the right column.
   const boxes = await Promise.all((await items.all()).map((a) => a.boundingBox()));

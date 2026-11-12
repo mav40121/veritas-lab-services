@@ -7,7 +7,7 @@
 // Settings (digest_settings, one row per lab): which sections, the audience, monthly or quarterly, whether a new issue asks
 // readers to acknowledge it, and whether its PDF carries the medical director or designee review box (Q284 = 1). Any member
 // reads them; only the lab's owner or an admin changes them (403 OWNER_OR_ADMIN_ONLY, the VeritaComp non-technical frequency
-// pattern). `enabled` is stored for the later daily job that may draft an issue at month end; drafting by hand doesn't need it.
+// pattern). `enabled` turns on the daily draft job (below) for the lab; drafting by hand doesn't need it.
 //
 // An issue (digest_issues) covers one finished month, or calendar quarter, on the lab's own clock. The owner or an admin
 // drafts it (it takes the lab's settings at that moment), edits the note, sections, audience and flags, then publishes or
@@ -49,12 +49,20 @@
 //     the recipient's own greeting. It goes through the read-and-sign notice's mailer (policyReadSign.ts readSignMailer, the
 //     one the tests swap out) from info@veritaslabservices.com, in the background at that mailer's pace. Sent and finished
 //     each write an audit row. Veritas support can't send it (server/vlsSupport.ts).
+//
+// The daily draft job (runDigestAutoDrafts, scheduled in server/index.ts): for each lab whose settings have `enabled` on and
+// whose plan is on DIGEST_PLANS, on that lab's own calendar day, it drafts the last finished month (or calendar quarter)
+// through createDigestDraft, the function POST issues uses, so the draft takes the lab's settings at that moment exactly as
+// a manual draft does. A period another non-withdrawn issue holds is 409 PERIOD_HAS_ISSUE there, which the job counts as
+// already done, so a second run (or a later day's) never makes a second draft. The issue is marked created_by_job = 1 (the
+// list's "Drafted automatically on <date>"), and its audit row is the manual one's with user id 0, the codebase's system
+// actor in audit_log. It only drafts: it never publishes and never sends the notice or any other email.
 
 import type { Express } from "express";
 import { db } from "./db";
 import { logAudit, type AuditAction } from "./audit";
 import { digestCountsForLab, type DigestCounts } from "./digestCounts";
-import { addLabDays, labLocalDate, labTimeZoneById, labToday } from "./dateLocal";
+import { addLabDays, labLocalDate, labTimeZoneById, labToday, withLabClock } from "./dateLocal";
 import { staffOwnScope } from "./competencySelfEntry";
 import { EMAIL_RE, labGroupSignerIds } from "./labGroups";
 import { readSignMailer } from "./policyReadSign";
@@ -339,6 +347,8 @@ function issueView(row: any, manager: boolean) {
   if (manager) {
     Object.assign(v, {
       created_by_user_id: row.created_by_user_id ?? null, published_by_user_id: row.published_by_user_id ?? null,
+      // The daily draft job made it (the list's "Drafted automatically on <date>").
+      created_by_job: Number(row.created_by_job) === 1,
       // PR 5: when the notice email went out and to how many people (the owner and admins only).
       notice_sent_at: row.notice_sent_at ?? null, notice_sent_count: row.notice_sent_count ?? null,
     });
@@ -387,6 +397,96 @@ const auditFields = (row: any) => ({
   status: row.status, note: row.note ?? null, sections: storedSections(row.sections, []), audience: row.audience,
   audience_group_ids: storedIds(row.audience_group_ids), ack_requested: Number(row.ack_requested) === 1, review_box: Number(row.review_box) === 1,
 });
+
+/** audit_log's system actor: the user id the codebase writes for an action no signed-in person took. */
+export const DIGEST_SYSTEM_USER_ID = 0;
+/** Who drafts: a person through POST issues, or the daily job (DIGEST_SYSTEM_USER_ID, byJob). */
+export interface DigestDraftActor { userId: number; ownerUserId: number; ipAddress?: string; byJob?: boolean }
+export type DigestDraftOutcome =
+  | { ok: true; row: any }
+  | { ok: false; status: 400 | 409; body: { error: string; code: string; field?: string; issueId?: number } };
+
+/**
+ * Draft one period's issue for a lab: the given period's first day, or the last finished month (or quarter) on the lab's clock
+ * when none is given. It takes the lab's settings now. Refused 400 BAD_PERIOD or PERIOD_NOT_FINISHED, and 409 PERIOD_HAS_ISSUE
+ * while another non-withdrawn issue holds the period. Writes the issue's create audit row. POST issues and the daily job both
+ * draft through here; `at` is the moment the lab's day is read from (now, unless a test says otherwise).
+ */
+export function createDigestDraft(sqlite: any, labId: number, periodStart: unknown, actor: DigestDraftActor, at: Date = new Date()): DigestDraftOutcome {
+  const s = readDigestSettings(sqlite, labId);
+  const today = labLocalDate(at.toISOString(), false, labTimeZoneById(sqlite, labId));
+  const period = periodStart == null || periodStart === "" ? lastFinishedDigestPeriod(today, s.frequency) : digestPeriodFrom(periodStart, s.frequency);
+  if ("error" in period) return { ok: false, status: 400, body: { error: period.error, code: "BAD_PERIOD", field: "periodStart" } };
+  if (period.end >= today) {
+    return { ok: false, status: 400, body: { error: `That ${s.frequency === "quarterly" ? "quarter" : "month"} hasn't finished yet on the lab's calendar (it ends ${period.end}).`, code: "PERIOD_NOT_FINISHED", field: "periodStart" } };
+  }
+  const byJob = !!actor.byJob;
+  // The daily job never drafts a period that has any issue, a withdrawn one included: withdrawing is how an owner skips a
+  // month, so the job must not bring it back. A person can still draft a withdrawn period again by hand.
+  const takenSql = byJob
+    ? "SELECT id, status FROM digest_issues WHERE lab_id = ? AND period_start = ? AND period_end = ? LIMIT 1"
+    : "SELECT id, status FROM digest_issues WHERE lab_id = ? AND period_start = ? AND period_end = ? AND status <> 'withdrawn' LIMIT 1";
+  const created = sqlite.transaction(() => {
+    const taken = sqlite.prepare(takenSql).get(labId, period.start, period.end) as any;
+    if (taken) return { taken };
+    const id = Number(sqlite.prepare(
+      `INSERT INTO digest_issues (lab_id, period_start, period_end, status, note, sections, audience, audience_group_ids, ack_requested, review_box, created_at, created_by_user_id, created_by_job)
+       VALUES (?, ?, ?, 'draft', NULL, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(labId, period.start, period.end, JSON.stringify(s.sections), s.audience, JSON.stringify(s.audience_group_ids), s.ack_default ? 1 : 0, s.review_box ? 1 : 0,
+      at.toISOString(), actor.userId, byJob ? 1 : 0).lastInsertRowid);
+    return { id };
+  })();
+  if (created.taken) {
+    return { ok: false, status: 409, body: { error: `This period already has an issue (${created.taken.status}). Withdraw it to start a new one.`, code: "PERIOD_HAS_ISSUE", issueId: created.taken.id } };
+  }
+  const row = fetchIssue(sqlite, labId, created.id);
+  logAudit({
+    userId: actor.userId, ownerUserId: actor.ownerUserId, module: "account", action: "create", entityType: "digest_issue", entityId: row.id,
+    entityLabel: `${periodLabel(row)}: draft created${byJob ? " automatically" : ""}`, after: { ...auditFields(row), created_by_job: byJob }, ipAddress: actor.ipAddress,
+  });
+  return { ok: true, row };
+}
+
+export interface DigestAutoDraftSummary {
+  labs: number; drafted: number; alreadyDone: number; notOnPlan: number; errors: number;
+  issues: Array<{ lab_id: number; issue_id: number; period_start: string; period_end: string }>;
+}
+
+/**
+ * The daily draft job. Every lab with the digest's daily draft turned on (digest_settings.enabled = 1) whose plan is on
+ * DIGEST_PLANS gets a draft of its last finished period on its own calendar day, as the system (DIGEST_SYSTEM_USER_ID). A
+ * period that already has a non-withdrawn issue is already done. It drafts only: no publish, no notice, no email.
+ * `labId` limits it to one lab; `at` stands in for now (tests).
+ */
+export function runDigestAutoDrafts(sqlite: any = sqliteOf(), opts: { at?: Date; labId?: number } = {}): DigestAutoDraftSummary {
+  const at = opts.at ?? new Date();
+  const one = Number.isInteger(opts.labId) && Number(opts.labId) > 0;
+  const labs = sqlite.prepare(
+    `SELECT l.id, l.plan, l.owner_user_id FROM digest_settings s JOIN labs l ON l.id = s.lab_id
+      WHERE s.enabled = 1${one ? " AND l.id = ?" : ""} ORDER BY l.id`
+  ).all(...(one ? [Number(opts.labId)] : [])) as Array<{ id: number; plan: string | null; owner_user_id: number | null }>;
+  const out: DigestAutoDraftSummary = { labs: labs.length, drafted: 0, alreadyDone: 0, notOnPlan: 0, errors: 0, issues: [] };
+  for (const lab of labs) {
+    if (!hasDigestAccess(lab)) { out.notOnPlan += 1; continue; }
+    try {
+      const actor: DigestDraftActor = { userId: DIGEST_SYSTEM_USER_ID, ownerUserId: Number(lab.owner_user_id ?? DIGEST_SYSTEM_USER_ID), byJob: true };
+      const r = withLabClock(labTimeZoneById(sqlite, lab.id), () => createDigestDraft(sqlite, Number(lab.id), null, actor, at));
+      if (r.ok) {
+        out.drafted += 1;
+        out.issues.push({ lab_id: Number(lab.id), issue_id: Number(r.row.id), period_start: r.row.period_start, period_end: r.row.period_end });
+      } else if (r.body.code === "PERIOD_HAS_ISSUE") {
+        out.alreadyDone += 1;
+      } else {
+        out.errors += 1;
+        console.warn(`[digest-autodraft] lab ${lab.id}: ${r.body.code}`);
+      }
+    } catch (err: any) {
+      out.errors += 1;
+      console.warn(`[digest-autodraft] lab ${lab.id} failed:`, err?.message || err);
+    }
+  }
+  return out;
+}
 
 export function registerDigestIssueRoutes(app: Express, authMiddleware: any, requireWriteAccess: any) {
   const labScopeMiddleware = (app as any).locals?.labScopeMiddleware;
@@ -441,7 +541,7 @@ export function registerDigestIssueRoutes(app: Express, authMiddleware: any, req
     const b = req.body || {};
     const before = readDigestSettings(sqlite, labId);
     const next = { ...before };
-    for (const [key, label] of [["enabled", "Turned on"], ["ack_default", "Ask readers to acknowledge"], ["review_box", "Medical director or designee review box"]] as const) {
+    for (const [key, label] of [["enabled", "Draft each issue automatically"], ["ack_default", "Ask readers to acknowledge"], ["review_box", "Medical director or designee review box"]] as const) {
       if (!has(b, key)) continue;
       const c = cleanFlag(b[key], label);
       if (failed(c)) return res.status(400).json({ error: c.error, code: c.code, field: key });
@@ -505,32 +605,25 @@ export function registerDigestIssueRoutes(app: Express, authMiddleware: any, req
   };
 
   // Draft one period's issue. Default: the last finished month (or quarter) on the lab's clock. It takes the lab's settings now.
+  // createDigestDraft is the daily job's path too.
   app.post(`${BASE}/issues`, ...write, (req: any, res: any) => {
     if (!isManager(req)) return ownerOrAdmin(res);
-    const sqlite = sqliteOf();
-    const labId = req.scope.labId;
-    const s = readDigestSettings(sqlite, labId);
-    const today = labToday(labTimeZoneById(sqlite, labId));
-    const given = req.body?.periodStart;
-    const period = given == null || given === "" ? lastFinishedDigestPeriod(today, s.frequency) : digestPeriodFrom(given, s.frequency);
-    if ("error" in period) return res.status(400).json({ error: period.error, code: "BAD_PERIOD", field: "periodStart" });
-    if (period.end >= today) return res.status(400).json({ error: `That ${s.frequency === "quarterly" ? "quarter" : "month"} hasn't finished yet on the lab's calendar (it ends ${period.end}).`, code: "PERIOD_NOT_FINISHED", field: "periodStart" });
-    const created = sqlite.transaction(() => {
-      const taken = sqlite.prepare("SELECT id, status FROM digest_issues WHERE lab_id = ? AND period_start = ? AND period_end = ? AND status <> 'withdrawn' LIMIT 1").get(labId, period.start, period.end) as any;
-      if (taken) return { taken };
-      const id = Number(sqlite.prepare(
-        `INSERT INTO digest_issues (lab_id, period_start, period_end, status, note, sections, audience, audience_group_ids, ack_requested, review_box, created_at, created_by_user_id)
-         VALUES (?, ?, ?, 'draft', NULL, ?, ?, ?, ?, ?, ?, ?)`
-      ).run(labId, period.start, period.end, JSON.stringify(s.sections), s.audience, JSON.stringify(s.audience_group_ids), s.ack_default ? 1 : 0, s.review_box ? 1 : 0,
-        new Date().toISOString(), req.userId).lastInsertRowid);
-      return { id };
-    })();
-    if (created.taken) {
-      return res.status(409).json({ error: `This period already has an issue (${created.taken.status}). Withdraw it to start a new one.`, code: "PERIOD_HAS_ISSUE", issueId: created.taken.id });
-    }
-    const row = fetchIssue(sqlite, labId, created.id);
-    audit(req, "create", row.id, `${periodLabel(row)}: draft created`, undefined, auditFields(row));
-    res.status(201).json(detail(req, row));
+    const r = createDigestDraft(sqliteOf(), req.scope.labId, req.body?.periodStart, {
+      userId: req.userId, ownerUserId: req.scope?.lab?.owner_user_id ?? req.userId, ipAddress: req.ip,
+    });
+    if (!r.ok) return res.status(r.status).json(r.body);
+    res.status(201).json(detail(req, r.row));
+  });
+
+  // Veritas admin: run the daily draft job now (the same run the schedule makes), for every lab or one ({ labId }).
+  // It only drafts, as the schedule does; nothing is published or sent.
+  app.post("/api/admin/digest-autodraft/run", (req: any, res: any) => {
+    const ADMIN_SECRET = process.env.ADMIN_SECRET;
+    const secret = req.body?.secret ?? req.headers["x-admin-secret"];
+    if (!ADMIN_SECRET || secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const labId = req.body?.labId == null || req.body.labId === "" ? undefined : Number(req.body.labId);
+    if (labId !== undefined && !(Number.isInteger(labId) && labId > 0)) return res.status(400).json({ error: "labId: send a lab id.", code: "BAD_VALUE", field: "labId" });
+    res.json(runDigestAutoDrafts(sqliteOf(), { labId }));
   });
 
   // The owner and admins: every issue. Anyone else: the published ones their audience reaches, with their own read status.

@@ -13,6 +13,8 @@
 // tissue record button does), for anyone who can open the issue; and the owner or an admin gets the Notice email card:
 // the count before sending (GET issues/:id/notice), Send notice with a confirm naming that count (POST, sent as
 // expectedCount), and the sent date and count after. Publishing sends nothing; the notice goes once per issue.
+// The daily draft job (server/digestIssues.ts runDigestAutoDrafts): the settings card's "Draft each issue automatically" toggle
+// is digest_settings.enabled, and the owner's list marks an issue the job drafted "Drafted automatically on <date>".
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useLocation, useParams } from "wouter";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -42,6 +44,7 @@ const DIGEST_PLANS = ["annual", "professional", "lab", "complete", "veritamap", 
 const NOTE_MAX = 4000;
 
 interface DigestSettings {
+  enabled: boolean;
   frequency: DigestFrequencyLike;
   sections: string[];
   audience: "leadership" | "staff" | "groups";
@@ -52,7 +55,8 @@ interface DigestSettings {
   default_period: { start: string; end: string };
   groups?: Array<{ id: number; name: string }>;
 }
-type IssueSummary = Omit<DigestIssueDetail, "note" | "counts" | "counts_live" | "previous" | "audience_groups" | "can_edit">;
+// created_by_job: the owner's and admins' list only (the daily draft job made the issue).
+type IssueSummary = Omit<DigestIssueDetail, "note" | "counts" | "counts_live" | "previous" | "audience_groups" | "can_edit"> & { created_by_job?: boolean };
 interface Acks {
   issue_id: number;
   ack_requested: boolean;
@@ -164,6 +168,7 @@ function ToggleRow({ checked, onChange, label, hint, testId }: { checked: boolea
 
 function SettingsCard({ labId, settings, onSaved }: { labId: number; settings: DigestSettings; onSaved: () => void }) {
   const { toast } = useToast();
+  const [autoDraft, setAutoDraft] = useState(settings.enabled);
   const [frequency, setFrequency] = useState(settings.frequency);
   const [sections, setSections] = useState<string[]>(settings.sections);
   const [audience, setAudience] = useState(settings.audience);
@@ -173,15 +178,15 @@ function SettingsCard({ labId, settings, onSaved }: { labId: number; settings: D
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
-    setFrequency(settings.frequency); setSections(settings.sections); setAudience(settings.audience);
+    setAutoDraft(settings.enabled); setFrequency(settings.frequency); setSections(settings.sections); setAudience(settings.audience);
     setGroupIds(settings.audience_group_ids); setAck(settings.ack_default); setReviewBox(settings.review_box);
   }, [settings]);
-  const dirty = frequency !== settings.frequency || !sameSet(sections, settings.sections) || audience !== settings.audience
+  const dirty = autoDraft !== settings.enabled || frequency !== settings.frequency || !sameSet(sections, settings.sections) || audience !== settings.audience
     || !sameSet(groupIds, settings.audience_group_ids) || ack !== settings.ack_default || reviewBox !== settings.review_box;
 
   const save = async () => {
     setSaving(true); setError(null);
-    const r = await api("PUT", `/api/labs/${labId}/digest/settings`, { frequency, sections, audience, audience_group_ids: audience === "groups" ? groupIds : [], ack_default: ack, review_box: reviewBox });
+    const r = await api("PUT", `/api/labs/${labId}/digest/settings`, { enabled: autoDraft, frequency, sections, audience, audience_group_ids: audience === "groups" ? groupIds : [], ack_default: ack, review_box: reviewBox });
     setSaving(false);
     if (!r.ok) { setError(r.body.error || `Couldn't save (${r.status}).`); return; }
     toast({ title: "Digest settings saved", description: "A new draft takes these settings. Issues already drafted keep their own." });
@@ -216,6 +221,8 @@ function SettingsCard({ labId, settings, onSaved }: { labId: number; settings: D
             onChange={(a, g) => { setAudience(a); setGroupIds(g); }} />
         </div>
         <div className="space-y-3">
+          <ToggleRow checked={autoDraft} onChange={setAutoDraft} testId="settings-auto-draft" label="Draft each issue automatically when the period ends"
+            hint="You still review and publish it. Off by default." />
           <ToggleRow checked={ack} onChange={setAck} testId="settings-ack-default" label="Ask readers to acknowledge each new issue"
             hint="Off by default. Each draft can still turn it on or off before it's published." />
           <ToggleRow checked={reviewBox} onChange={setReviewBox} testId="settings-review-box" label="Print the medical director or designee review box on the PDF"
@@ -289,17 +296,25 @@ function IssueList({ labId, issues, manager, tz }: { labId: number; issues: Issu
   return (
     <Card className="border-border" data-testid="digest-issues">
       <CardContent className="py-2 divide-y divide-border">
-        {issues.map((i) => (
-          <Link key={i.id} href={`/labs/${labId}/digest/${i.id}`} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5 hover:bg-muted/40 -mx-2 px-2 rounded" data-testid={`issue-row-${i.id}`}>
-            <span className="font-medium">{periodTitle(i.period_start, i.period_end)}</span>
-            {manager && <StatusBadge status={i.status} />}
-            <span className="text-xs text-muted-foreground">{sentToLabel(i as any)}</span>
-            <span className="ml-auto text-xs text-muted-foreground">
-              {i.status === "published" ? `Published ${formatMomentDay(i.published_at, tz)}` : i.status === "withdrawn" ? `Withdrawn ${formatMomentDay(i.withdrawn_at, tz)}` : `Drafted ${formatMomentDay(i.created_at, tz)}`}
-              {i.status === "published" && !manager && <> {"·"} <span data-testid={`issue-row-${i.id}-mine`}>You: {ownStatusText(i.mine, i.ack_requested, tz)}</span></>}
-            </span>
-          </Link>
-        ))}
+        {issues.map((i) => {
+          // The daily draft job made it: say so, so the owner knows where it came from (the owner's and admins' list only).
+          const auto = manager && i.created_by_job
+            ? <span data-testid={`issue-row-${i.id}-auto`}>Drafted automatically on {formatMomentDay(i.created_at, tz)}</span>
+            : null;
+          return (
+            <Link key={i.id} href={`/labs/${labId}/digest/${i.id}`} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5 hover:bg-muted/40 -mx-2 px-2 rounded" data-testid={`issue-row-${i.id}`}>
+              <span className="font-medium">{periodTitle(i.period_start, i.period_end)}</span>
+              {manager && <StatusBadge status={i.status} />}
+              <span className="text-xs text-muted-foreground">{sentToLabel(i as any)}</span>
+              {/* Lighter on a dark page (DIGEST_SUB's dark shade): the theme's muted gray reads 4.44:1 on the card at this size. */}
+              <span className="ml-auto text-xs text-muted-foreground dark:text-[#B4BAC2]">
+                {i.status === "published" ? `Published ${formatMomentDay(i.published_at, tz)}` : i.status === "withdrawn" ? `Withdrawn ${formatMomentDay(i.withdrawn_at, tz)}` : auto ? null : `Drafted ${formatMomentDay(i.created_at, tz)}`}
+                {auto && (i.status === "draft" ? auto : <> {"·"} {auto}</>)}
+                {i.status === "published" && !manager && <> {"·"} <span data-testid={`issue-row-${i.id}-mine`}>You: {ownStatusText(i.mine, i.ack_requested, tz)}</span></>}
+              </span>
+            </Link>
+          );
+        })}
       </CardContent>
     </Card>
   );

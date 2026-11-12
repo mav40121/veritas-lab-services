@@ -9620,7 +9620,8 @@ try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_veritaceu_profiles_lab ON veri
 // 2026-11-11): the PDF's optional "Reviewed by the medical director or designee" box, off by default, copied onto each
 // issue when it is drafted so a published issue keeps what it had (PR 5 prints it). notice_sent_at, notice_sent_count and
 // notice_sent_by_user_id (PR 5, 2026-11-11): the issue's one notice email, when it went out, to how many people and who sent it;
-// set once by POST .../issues/:id/notice, so a second notice is refused (409 NOTICE_SENT).
+// set once by POST .../issues/:id/notice, so a second notice is refused (409 NOTICE_SENT). created_by_job (2026-11-11): 1 when
+// the daily draft job drafted the issue (runDigestAutoDrafts; the list's "Drafted automatically on <date>"), 0 by hand.
 sqlite.exec(`
   CREATE TABLE IF NOT EXISTS digest_settings (
     lab_id INTEGER PRIMARY KEY,
@@ -9656,7 +9657,8 @@ sqlite.exec(`
     withdrawn_reason TEXT,
     notice_sent_at TEXT,
     notice_sent_count INTEGER,
-    notice_sent_by_user_id INTEGER
+    notice_sent_by_user_id INTEGER,
+    created_by_job INTEGER NOT NULL DEFAULT 0
   );
   CREATE INDEX IF NOT EXISTS idx_digest_issues_lab_period ON digest_issues(lab_id, period_start, period_end);
   CREATE TABLE IF NOT EXISTS digest_issue_acks (
@@ -9706,6 +9708,7 @@ sqlite.exec(`
     ["notice_sent_at", "TEXT"],
     ["notice_sent_count", "INTEGER"],
     ["notice_sent_by_user_id", "INTEGER"],
+    ["created_by_job", "INTEGER NOT NULL DEFAULT 0"],
   ]);
   addMissing("digest_issue_acks", colsOf(sqlite.prepare("PRAGMA table_info(digest_issue_acks)").all() as { name: string }[]), [
     ["read_at", "TEXT"],
