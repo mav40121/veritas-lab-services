@@ -1,5 +1,5 @@
 import { NaReasonPresets } from "@/components/competency/NaReasonPresets";
-import { labTodayIso, labLocaleDate } from "@/lib/labDate";
+import { labTodayIso, labLocaleDate, labDayOfStamp } from "@/lib/labDate";
 import { useState, useEffect, useLayoutEffect, useMemo, useRef, type ReactNode, type ComponentProps } from "react";
 import DOMPurify from "dompurify";
 import { Link, useLocation, useParams } from "wouter";
@@ -5223,6 +5223,8 @@ function QuizzesTab({ program, autoOpenNew }: { program: Program; autoOpenNew?: 
   // 2026-06-09 PR2: Assign-to-employees dialog. Opens the bulk-assign
   // multi-select that creates competency_quiz_assignments rows.
   const [assignQuizId, setAssignQuizId] = useState<number | null>(null);
+  // 2026-11-11 (Redington): each person's attempts and answers, and Assign a retake.
+  const [resultsQuizId, setResultsQuizId] = useState<number | null>(null);
 
   const { data: quizzes, isLoading } = useQuery<QuizListItem[]>({
     queryKey: ["/api/veritacomp/programs", program.id, "quizzes"],
@@ -5314,6 +5316,7 @@ function QuizzesTab({ program, autoOpenNew }: { program: Program; autoOpenNew?: 
                     isReadOnly={isReadOnly}
                     onPreview={() => setPreviewQuizId(q.id)}
                     onAssign={() => setAssignQuizId(q.id)}
+                    onResults={() => setResultsQuizId(q.id)}
                     onDelete={() => setConfirmDelete(q)}
                   />
                 ))}
@@ -5371,8 +5374,13 @@ function QuizzesTab({ program, autoOpenNew }: { program: Program; autoOpenNew?: 
           onClose={() => setAssignQuizId(null)}
           onAssigned={() => {
             qc.invalidateQueries({ queryKey: ["/api/veritacomp/quizzes", assignQuizId, "assignments"] });
+            qc.invalidateQueries({ queryKey: ["/api/veritacomp/quizzes", assignQuizId, "results"] });
           }}
         />
+      )}
+
+      {resultsQuizId !== null && (
+        <QuizResultsDialog quizId={resultsQuizId} onClose={() => setResultsQuizId(null)} />
       )}
 
       {confirmDelete && (
@@ -5413,6 +5421,7 @@ interface QuizAssignmentSummary {
   employee_title: string | null;
   due_date: string | null;
   status: "assigned" | "completed";
+  attempt_no?: number;
   assigned_at: string;
   completed_at: string | null;
   completed_result_id: number | null;
@@ -5420,8 +5429,18 @@ interface QuizAssignmentSummary {
   passed: number | null;
 }
 
+// One row per person: their latest attempt (a retake adds a row per attempt, 2026-11-11).
+function latestAttemptPerPerson(assignments: QuizAssignmentSummary[]): QuizAssignmentSummary[] {
+  const byPerson = new Map<number, QuizAssignmentSummary>();
+  for (const a of assignments) {
+    const prev = byPerson.get(a.staff_employee_id);
+    if (!prev || (a.attempt_no ?? 1) > (prev.attempt_no ?? 1)) byPerson.set(a.staff_employee_id, a);
+  }
+  return Array.from(byPerson.values());
+}
+
 function QuizCardWithAssignStatus({
-  quiz, methodGroupLabel, followsLine, isReadOnly, onPreview, onAssign, onDelete,
+  quiz, methodGroupLabel, followsLine, isReadOnly, onPreview, onAssign, onResults, onDelete,
 }: {
   quiz: QuizListItem;
   methodGroupLabel: string;
@@ -5429,6 +5448,7 @@ function QuizCardWithAssignStatus({
   isReadOnly: boolean;
   onPreview: () => void;
   onAssign: () => void;
+  onResults: () => void;
   onDelete: () => void;
 }) {
   const { data: assignmentData } = useQuery<{ assignments: QuizAssignmentSummary[] }>({
@@ -5439,12 +5459,14 @@ function QuizCardWithAssignStatus({
       return r.json();
     },
   });
-  const assignments = assignmentData?.assignments ?? [];
-  const total = assignments.length;
-  const completed = assignments.filter(a => a.status === "completed").length;
+  // Counted by person, from each person's latest attempt.
+  const latest = latestAttemptPerPerson(assignmentData?.assignments ?? []);
+  const total = latest.length;
+  const completed = latest.filter(a => a.status === "completed").length;
+  const notPassed = latest.filter(a => a.status === "completed" && a.passed != null && !a.passed).length;
   const pending = total - completed;
   const today = labTodayIso();
-  const overdue = assignments.filter(a => a.status === "assigned" && a.due_date && a.due_date < today).length;
+  const overdue = latest.filter(a => a.status === "assigned" && a.due_date && a.due_date < today).length;
 
   return (
     <Card
@@ -5467,6 +5489,15 @@ function QuizCardWithAssignStatus({
                 variant="outline"
                 size="sm"
                 className="text-xs h-7"
+                onClick={(e) => { e.stopPropagation(); onResults(); }}
+                data-testid={`quiz-results-btn-${quiz.id}`}
+              >
+                <BarChart3 className="h-3.5 w-3.5 mr-1" /> Results
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs h-7"
                 onClick={(e) => { e.stopPropagation(); onAssign(); }}
                 data-testid={`quiz-assign-btn-${quiz.id}`}
               >
@@ -5484,9 +5515,12 @@ function QuizCardWithAssignStatus({
           )}
         </div>
         {total > 0 && (
-          <div className="text-[11px] flex items-center gap-3 pt-1 border-t border-border">
+          <div className="text-[11px] flex flex-wrap items-center gap-x-3 gap-y-0.5 pt-1 border-t border-border" data-testid={`quiz-status-${quiz.id}`}>
             <span className="text-muted-foreground">Status:</span>
-            <span className="font-medium text-emerald-700 dark:text-emerald-400">{completed} completed</span>
+            <span className="font-medium text-emerald-700 dark:text-emerald-400">
+              {completed} completed
+              {notPassed > 0 && <span className="text-red-700 dark:text-red-400"> ({notPassed} not passed)</span>}
+            </span>
             <span className="font-medium text-amber-700 dark:text-amber-400">{pending} pending</span>
             {overdue > 0 && (
               <span className="font-semibold text-red-700 dark:text-red-400">{overdue} overdue</span>
@@ -5496,6 +5530,305 @@ function QuizCardWithAssignStatus({
         )}
       </CardContent>
     </Card>
+  );
+}
+
+// ── 2026-11-11: QuizResultsDialog (Redington) ───────────────────────────
+// Opened from Results on a quiz card. Every person assigned the quiz, every attempt (number, date, score, Pass or Fail), the
+// answers given on an attempt marked right or wrong, and Assign a retake for a person whose latest attempt failed. The server
+// (GET /api/veritacomp/quizzes/:id/results) decides who may read it and whether a retake is allowed (shared/quizRetake.ts).
+interface QuizResultAnswer { question_id: string; selected_answer: string | null; correct: boolean }
+interface QuizResultAttempt {
+  assignment_id: number;
+  attempt_no: number;
+  status: "assigned" | "completed";
+  assigned_at: string;
+  due_date: string | null;
+  completed_at: string | null;
+  result_id: number | null;
+  date_taken: string | null;
+  score: number | null;
+  passed: boolean | null;
+  answers?: QuizResultAnswer[];
+}
+interface QuizResultPerson {
+  staff_employee_id: number;
+  employee_name: string;
+  employee_title: string | null;
+  on_roster: boolean;
+  attempts: QuizResultAttempt[];
+  latest_attempt_no: number;
+  can_retake: boolean;
+  next_attempt_no: number | null;
+  retake_refusal: string | null;
+}
+interface QuizResultsPayload {
+  quiz: { id: number; title: string };
+  own_only: boolean;
+  question_format: string;
+  questions?: QuizQuestion[];
+  people: QuizResultPerson[];
+}
+
+const optionLetter = (i: number) => String.fromCharCode(65 + i);
+// Which option an answer key names: by position letter (A, B, ...) as the quiz preview reads it, or else by the option's own
+// first character, as the staff login's quiz screen sends it.
+function optionIndexFor(options: string[], key: string | null | undefined): number {
+  if (key == null || key === "") return -1;
+  const byLetter = options.findIndex((_, i) => optionLetter(i) === key);
+  return byLetter >= 0 ? byLetter : options.findIndex((o) => String(o).trim().charAt(0) === key);
+}
+
+function AttemptOutcome({ attempt }: { attempt: QuizResultAttempt }) {
+  if (attempt.status !== "completed") return <Badge variant="outline" className="text-[10px] border-amber-400 text-amber-700 dark:text-amber-400">Not taken yet</Badge>;
+  if (attempt.passed == null) return <Badge variant="outline" className="text-[10px]">No score</Badge>;
+  return attempt.passed
+    ? <Badge className="text-[10px] bg-emerald-600 hover:bg-emerald-600 text-white">Pass</Badge>
+    : <Badge className="text-[10px] bg-red-600 hover:bg-red-600 text-white">Fail</Badge>;
+}
+
+function QuizResultsDialog({ quizId, onClose }: { quizId: number; onClose: () => void }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [viewing, setViewing] = useState<{ personId: number; assignmentId: number } | null>(null);
+  const [retakeFor, setRetakeFor] = useState<number | null>(null);
+  const [retakeDue, setRetakeDue] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const { data, isLoading, error } = useQuery<QuizResultsPayload>({
+    queryKey: ["/api/veritacomp/quizzes", quizId, "results"],
+    queryFn: async () => {
+      const r = await fetch(`${API_BASE}/api/veritacomp/quizzes/${quizId}/results`, { headers: authHeaders() });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(body.error || "Could not load the results");
+      return body;
+    },
+  });
+
+  async function assignRetake(person: QuizResultPerson) {
+    setSaving(true);
+    try {
+      const r = await fetch(`${API_BASE}/api/veritacomp/quizzes/${quizId}/retake`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ staff_employee_id: person.staff_employee_id, due_date: retakeDue || null }),
+      });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(body.error || "The retake wasn't assigned");
+      toast({
+        title: `Attempt ${body.attempt_no} assigned to ${person.employee_name}`,
+        description: "They'll see it under My sign-offs, Take a Quiz, on their staff login. The earlier attempt stays on record.",
+      });
+      setRetakeFor(null);
+      setRetakeDue("");
+      qc.invalidateQueries({ queryKey: ["/api/veritacomp/quizzes", quizId, "results"] });
+      qc.invalidateQueries({ queryKey: ["/api/veritacomp/quizzes", quizId, "assignments"] });
+    } catch (e: any) {
+      toast({ title: "Retake not assigned", description: e.message, variant: "destructive" });
+      qc.invalidateQueries({ queryKey: ["/api/veritacomp/quizzes", quizId, "results"] });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const person = viewing ? data?.people.find((p) => p.staff_employee_id === viewing.personId) : undefined;
+  const attempt = viewing ? person?.attempts.find((a) => a.assignment_id === viewing.assignmentId) : undefined;
+
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" data-testid="quiz-results-dialog">
+        <DialogHeader>
+          <DialogTitle>Results: {data?.quiz.title || `Quiz #${quizId}`}</DialogTitle>
+        </DialogHeader>
+
+        {isLoading ? (
+          <div className="h-32 rounded-lg bg-muted/40 animate-pulse" />
+        ) : error ? (
+          <div className="text-sm text-destructive" data-testid="quiz-results-error">{(error as Error).message}</div>
+        ) : !data ? null : person && attempt ? (
+          <QuizAttemptAnswers
+            person={person}
+            attempt={attempt}
+            questions={data.questions || []}
+            questionFormat={data.question_format}
+            onBack={() => setViewing(null)}
+          />
+        ) : (
+          <div className="space-y-3">
+            <p className="text-xs text-muted-foreground">
+              Everyone assigned this quiz and every attempt they've taken on their staff login. A pass needs 100%. Open an attempt to see the
+              answers given. When someone's latest attempt failed, Assign a retake gives them the next attempt; the failed attempt stays on record.
+            </p>
+            {data.people.length === 0 ? (
+              <div className="text-xs text-muted-foreground border border-border rounded-md p-4 text-center" data-testid="quiz-results-empty">
+                Nobody has been assigned this quiz yet. Use Assign on the quiz card.
+              </div>
+            ) : data.people.map((p) => {
+              const latest = p.attempts[p.attempts.length - 1];
+              return (
+                <div key={p.staff_employee_id} className="border border-border rounded-md p-3 space-y-2" data-testid="quiz-results-person" data-staff-id={p.staff_employee_id}>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium" data-testid="quiz-results-name">{p.employee_name}</div>
+                      {p.employee_title && <div className="text-[11px] text-muted-foreground">{p.employee_title}</div>}
+                    </div>
+                    <div className="text-[11px] text-muted-foreground">
+                      {p.attempts.length} attempt{p.attempts.length === 1 ? "" : "s"}
+                    </div>
+                  </div>
+                  <div className="divide-y divide-border border border-border rounded">
+                    {p.attempts.map((a) => (
+                      <div key={a.assignment_id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-2 py-1.5 text-xs" data-testid="quiz-results-attempt" data-attempt-no={a.attempt_no}>
+                        <span className="font-medium w-20 shrink-0">Attempt {a.attempt_no}</span>
+                        <span className="text-muted-foreground min-w-[9rem]">
+                          {a.status === "completed"
+                            ? `Taken ${a.date_taken || labDayOfStamp(a.completed_at)}`
+                            : `Assigned ${labDayOfStamp(a.assigned_at)}${a.due_date ? `, due ${a.due_date}` : ""}`}
+                        </span>
+                        <span className="w-12 font-semibold" data-testid="quiz-results-score">{a.score != null ? `${a.score}%` : ""}</span>
+                        <AttemptOutcome attempt={a} />
+                        {a.status === "completed" && a.result_id != null && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="h-6 text-xs ml-auto"
+                            onClick={() => setViewing({ personId: p.staff_employee_id, assignmentId: a.assignment_id })}
+                            data-testid={`quiz-results-view-${a.assignment_id}`}
+                          >
+                            View answers
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  {p.can_retake && retakeFor !== p.staff_employee_id && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-xs h-7"
+                      onClick={() => { setRetakeFor(p.staff_employee_id); setRetakeDue(""); }}
+                      data-testid={`quiz-retake-btn-${p.staff_employee_id}`}
+                    >
+                      Assign a retake
+                    </Button>
+                  )}
+                  {p.can_retake && retakeFor === p.staff_employee_id && (
+                    <div className="flex flex-wrap items-end gap-2 border border-border rounded-md p-2 bg-muted/30" data-testid={`quiz-retake-form-${p.staff_employee_id}`}>
+                      <div className="space-y-1">
+                        <Label htmlFor={`quiz-retake-due-${p.staff_employee_id}`} className="text-xs">Due date (optional)</Label>
+                        <Input
+                          id={`quiz-retake-due-${p.staff_employee_id}`}
+                          type="date"
+                          value={retakeDue}
+                          onChange={(e) => setRetakeDue(e.target.value)}
+                          className="w-44 h-8 text-xs"
+                          data-testid={`quiz-retake-due-${p.staff_employee_id}`}
+                        />
+                      </div>
+                      <Button size="sm" className="h-8 text-xs" disabled={saving} onClick={() => assignRetake(p)} data-testid={`quiz-retake-confirm-${p.staff_employee_id}`}>
+                        {saving ? "Assigning..." : `Assign attempt ${p.next_attempt_no}`}
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-8 text-xs" disabled={saving} onClick={() => setRetakeFor(null)}>Cancel</Button>
+                    </div>
+                  )}
+                  {!p.can_retake && p.retake_refusal === "NOT_ON_ROSTER" && latest?.status === "completed" && latest.passed === false && (
+                    <div className="text-[11px] text-muted-foreground" data-testid="quiz-retake-not-on-roster">
+                      Not on this lab's active roster, so a retake can't be assigned.
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// One attempt's answers: each question marked right or wrong as it was scored, the answer given and the correct answer.
+function QuizAttemptAnswers({
+  person, attempt, questions, questionFormat, onBack,
+}: {
+  person: QuizResultPerson;
+  attempt: QuizResultAttempt;
+  questions: QuizQuestion[];
+  questionFormat: string;
+  onBack: () => void;
+}) {
+  const answers = attempt.answers || [];
+  const byQuestion = new Map(answers.map((a) => [a.question_id, a]));
+  const onQuiz = new Set(questions.map((q) => q.id));
+  const offQuiz = answers.filter((a) => !onQuiz.has(a.question_id));
+  const rightCount = questions.filter((q) => byQuestion.get(q.id)?.correct).length;
+  return (
+    <div className="space-y-3" data-testid="quiz-attempt-answers">
+      <Button size="sm" variant="outline" className="text-xs h-7" onClick={onBack} data-testid="quiz-results-back">
+        <ChevronLeft className="h-3.5 w-3.5 mr-1" /> Back to results
+      </Button>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border border-border rounded-md p-2 bg-muted/30 text-sm">
+        <span className="font-medium">{person.employee_name}</span>
+        <span>Attempt {attempt.attempt_no}</span>
+        <span className="text-muted-foreground">Taken {attempt.date_taken || labDayOfStamp(attempt.completed_at)}</span>
+        <span className="font-semibold">{attempt.score != null ? `${attempt.score}%` : ""}</span>
+        <AttemptOutcome attempt={attempt} />
+        <span className="text-xs text-muted-foreground">{rightCount} of {questions.length} right</span>
+      </div>
+      <p className="text-[11px] text-muted-foreground">Right or wrong is as the attempt was scored when it was submitted.</p>
+      <ol className="space-y-3">
+        {questions.map((q, qi) => {
+          const given = byQuestion.get(q.id);
+          const selectedIdx = optionIndexFor(q.options, given?.selected_answer);
+          const correctIdx = optionIndexFor(q.options, q.correct_answer);
+          const right = !!given?.correct;
+          return (
+            <li key={q.id} className={`border rounded-md p-3 text-sm ${right ? "border-emerald-300 dark:border-emerald-800" : "border-red-300 dark:border-red-800"}`} data-testid="quiz-answer-row" data-correct={right ? "true" : "false"}>
+              <div className="flex items-start justify-between gap-2">
+                <div className="font-medium">
+                  Q{qi + 1}.{" "}
+                  {q.method_group_name && <span className="font-normal text-muted-foreground">({q.method_group_name}) </span>}
+                  {renderQuizPrompt(q.question, questionFormat)}
+                </div>
+                {right
+                  ? <Badge className="shrink-0 text-[10px] bg-emerald-600 hover:bg-emerald-600 text-white" data-testid="quiz-answer-mark">Right</Badge>
+                  : <Badge className="shrink-0 text-[10px] bg-red-600 hover:bg-red-600 text-white" data-testid="quiz-answer-mark">{given ? "Wrong" : "No answer"}</Badge>}
+              </div>
+              <QuizQuestionImage src={q.image} className="block my-2 max-h-48 max-w-full rounded border border-border bg-white object-contain" />
+              <ul className="mt-1 space-y-0.5 list-none">
+                {q.options.map((opt, oIdx) => {
+                  const letter = optionLetter(oIdx);
+                  const display = opt.startsWith(`${letter}.`) ? opt : `${letter}. ${opt}`;
+                  const isSel = oIdx === selectedIdx;
+                  const isCorrect = oIdx === correctIdx;
+                  return (
+                    <li
+                      key={oIdx}
+                      className={`text-xs px-1.5 py-0.5 rounded ${isSel && isCorrect ? "bg-emerald-100 dark:bg-emerald-900/40" : isSel ? "bg-red-100 dark:bg-red-900/40" : isCorrect ? "bg-emerald-50 dark:bg-emerald-950/30" : ""}`}
+                    >
+                      <span className="inline-block w-4">{isSel ? "●" : "○"}</span>
+                      {display}
+                      {isSel && <span className="ml-2 font-semibold">Their answer</span>}
+                      {isCorrect && <span className="ml-2 font-semibold text-emerald-700 dark:text-emerald-400">Correct answer</span>}
+                    </li>
+                  );
+                })}
+              </ul>
+              {q.explanation && (
+                <div className="mt-1 text-[11px] text-muted-foreground italic">
+                  <span className="font-semibold not-italic">Explanation:</span> {q.explanation}
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+      {offQuiz.length > 0 && (
+        <div className="text-xs text-muted-foreground border border-border rounded-md p-2" data-testid="quiz-answers-off-quiz">
+          {offQuiz.length} answer{offQuiz.length === 1 ? " is" : "s are"} for a question no longer on this quiz:{" "}
+          {offQuiz.map((a) => `${a.selected_answer ?? "no answer"} (${a.correct ? "right" : "wrong"})`).join(", ")}.
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -5605,7 +5938,8 @@ function AssignQuizDialog({
         <div className="space-y-4">
           <p className="text-xs text-muted-foreground">
             Each picked employee will see this quiz under My sign-offs, "Take a Quiz", when they sign in with their staff login. Employees already
-            assigned to this quiz are shown but cannot be re-assigned.
+            assigned to this quiz are shown but cannot be assigned again here. To give someone another attempt after a failed one, open Results
+            on the quiz card and use Assign a retake.
           </p>
 
           <div className="flex items-center justify-between gap-2">

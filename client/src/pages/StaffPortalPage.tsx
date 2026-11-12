@@ -1629,11 +1629,14 @@ interface PortalQuiz {
   title: string;
   due_date: string | null;
   status: "assigned" | "completed";
+  attempt_no?: number;
   assigned_at: string;
   completed_at: string | null;
   score: number | null;
   passed: number | null;
 }
+// A retake is a new assignment with the next attempt number (2026-11-11); attempt 1 reads as it always did.
+const attemptLabel = (q: PortalQuiz) => ((q.attempt_no ?? 1) > 1 ? `Attempt ${q.attempt_no}` : "");
 interface PortalQuizTakePayload {
   assignment_id: number;
   quiz_id: number;
@@ -1964,6 +1967,7 @@ function StaffPortalQuizzesView({
                         <div>
                           <div className="text-sm font-medium">{q.title}</div>
                           <div className="text-[11px] text-muted-foreground">
+                            {attemptLabel(q) ? <span className="mr-2 font-semibold" data-testid="sp-quiz-attempt">{attemptLabel(q)}</span> : null}
                             {q.due_date ? `Due ${q.due_date}` : "No due date"}
                             {overdue ? <span className="ml-2 text-red-600 font-semibold">Overdue</span> : null}
                           </div>
@@ -1987,6 +1991,7 @@ function StaffPortalQuizzesView({
                       <div>
                         <div className="text-sm font-medium">{q.title}</div>
                         <div className="text-[11px] text-muted-foreground">
+                          {attemptLabel(q) ? <span className="mr-2 font-semibold">{attemptLabel(q)}</span> : null}
                           {q.completed_at ? `Completed ${q.completed_at.split("T")[0]}` : ""}
                           {q.score != null ? <span className="ml-2">Score: <span className="font-semibold">{q.score}%</span></span> : null}
                         </div>

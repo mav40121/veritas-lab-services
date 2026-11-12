@@ -1980,10 +1980,11 @@ for (const [col, colType] of compQuizResultsNewCols) {
 // 2026-06-09 PR2: per-tech quiz assignments. Created by the director
 // from the Assign dialog on a quiz card; consumed by Staff Portal to
 // show the tech "Your assigned quizzes" on their tile. One assignment
-// per (quiz, staff_employee); status flips from 'assigned' to
-// 'completed' when the attempt POSTs. Retakes after completion create
-// a new attempt row but don't reset the assignment (the assignment is
-// "done"). Director can DELETE only while status='assigned'.
+// per (quiz, staff_employee, attempt_no); status flips from 'assigned' to
+// 'completed' when the attempt POSTs, and a completed assignment is never
+// reopened. A retake after a failed attempt is a NEW assignment with the
+// next attempt_no (POST /api/veritacomp/quizzes/:id/retake, 2026-11-11).
+// Director can DELETE only while status='assigned'.
 sqlite.exec(`
   CREATE TABLE IF NOT EXISTS competency_quiz_assignments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -2003,21 +2004,30 @@ sqlite.exec(`
 try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_quiz_assign_quiz ON competency_quiz_assignments(quiz_id)"); } catch {}
 try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_quiz_assign_staff_emp ON competency_quiz_assignments(staff_employee_id)"); } catch {}
 try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_quiz_assign_lab ON competency_quiz_assignments(lab_id)"); } catch {}
-try { sqlite.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_quiz_assign_unique ON competency_quiz_assignments(quiz_id, staff_employee_id)"); } catch {}
 
 // 2026-06-09 PR2: defensive ALTER block for competency_quiz_assignments.
 // Per CLAUDE.md §8 NEW DB TABLE RULE every CREATE TABLE must ship with a
 // PRAGMA table_info migration block in the same commit so future column
-// additions don't strand on tables that already exist live. Empty for
-// now; the pattern is set up for when v2 adds columns (e.g. reminder
-// cadence, retake_policy_override).
+// additions don't strand on tables that already exist live.
+// 2026-11-11 (Redington, quiz retakes): attempt_no. Each assignment is one attempt; "Assign a retake" after a failed attempt adds
+// a new row with the next number, and the failed attempt and its result stay as they are. Rows already on file are attempt 1.
 const compQuizAssignCols = sqlite.prepare("PRAGMA table_info(competency_quiz_assignments)").all() as { name: string }[];
 const compQuizAssignColNames = compQuizAssignCols.map((c) => c.name);
-const compQuizAssignNewCols: [string, string][] = [];
+const compQuizAssignNewCols: [string, string][] = [
+  ["attempt_no", "INTEGER NOT NULL DEFAULT 1"],
+];
 for (const [col, colType] of compQuizAssignNewCols) {
   if (!compQuizAssignColNames.includes(col)) {
     try { sqlite.exec(`ALTER TABLE competency_quiz_assignments ADD COLUMN ${col} ${colType}`); } catch {}
   }
+}
+// One row per person per quiz per attempt. The old index, one row per person per quiz, made a retake impossible; it is dropped
+// and the attempt-numbered one made in its place, both on every boot so it runs once on the live database and is a no-op after.
+try { sqlite.exec("DROP INDEX IF EXISTS idx_quiz_assign_unique"); } catch {}
+try {
+  sqlite.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_quiz_assign_attempt_unique ON competency_quiz_assignments(quiz_id, staff_employee_id, attempt_no)");
+} catch (err: any) {
+  console.error("[db] idx_quiz_assign_attempt_unique not created:", err?.message);
 }
 
 // Seed default VITROS 5600 quiz if not present

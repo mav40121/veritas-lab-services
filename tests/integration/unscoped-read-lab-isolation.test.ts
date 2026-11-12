@@ -165,6 +165,7 @@ async function main() {
       { route: "/api/veritacomp/programs/:id/quizzes", url: `/api/veritacomp/programs/${program}/quizzes` },
       { route: "/api/veritacomp/quizzes/:id", url: `/api/veritacomp/quizzes/${q}` },
       { route: "/api/veritacomp/quizzes/:id/assignments", url: `/api/veritacomp/quizzes/${q}/assignments` },
+      { route: "/api/veritacomp/quizzes/:id/results", url: `/api/veritacomp/quizzes/${q}/results` },
       { route: "/api/veritacomp/assessments/:id/quiz-results", url: `/api/veritacomp/assessments/${a}/quiz-results` },
       { route: "/api/veritacomp/assessments/:id/pdf", url: `/api/veritacomp/assessments/${a}/pdf` },
       { route: "/api/competency/map-instruments/:mapId", url: `/api/competency/map-instruments/${mapId}` },
