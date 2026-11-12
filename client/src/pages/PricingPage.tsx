@@ -509,6 +509,7 @@ return (
                   { feature: "VeritaLab\u2122 certificate management", values: [false, false, true, true, true] },
                   { feature: "VeritaQA™", values: [false, false, true, true, true] },
                   { feature: "VeritaStock\u2122 inventory management", values: [false, false, true, true, true] },
+                  { feature: "Compliance Digest, monthly or quarterly", values: [false, false, true, true, true] },
                   { feature: "Seats included", values: ["1", "1", "2", "5", "15"] },
                   { feature: "Onboarding session", values: [false, false, "1 hour", "1 hour", "2 hours"] },
                   { feature: "Priority support", values: [false, false, false, true, true] },
