@@ -365,6 +365,32 @@ app.use((req, res, next) => {
     console.error("[scan-coverage] Scheduler setup error:", err.message);
   }
 
+  // Compliance digest daily draft (Michael 2026-11-11, Q281 = 1; server/digestIssues.ts runDigestAutoDrafts): each lab that
+  // turned it on gets a draft of its last finished month or quarter, on the lab's own calendar day. Daily at 12:00 UTC, when
+  // every US lab from American Samoa (UTC-11) to Guam (UTC+10) is on the same calendar day as UTC, so a mainland lab finds the
+  // draft the morning of the 1st (at midnight UTC it would still be the last day of the month there, and the draft would wait
+  // until the evening of the 1st). Idempotent (one non-withdrawn issue per period); drafts only, never publishes or sends.
+  try {
+    const { runDigestAutoDrafts } = await import("./digestIssues");
+    const runDigestDrafts = () => {
+      try {
+        const r = runDigestAutoDrafts();
+        console.log(`[digest-autodraft] labs=${r.labs} drafted=${r.drafted} alreadyDone=${r.alreadyDone} notOnPlan=${r.notOnPlan} errors=${r.errors}`);
+      } catch (err: any) {
+        console.error("[digest-autodraft] Run failed:", err?.message || err);
+      }
+    };
+    const now = new Date();
+    const next = new Date(now);
+    next.setUTCHours(12, 0, 0, 0);
+    if (next.getTime() <= now.getTime()) next.setUTCDate(next.getUTCDate() + 1);
+    const ms = next.getTime() - now.getTime();
+    setTimeout(() => { runDigestDrafts(); setInterval(runDigestDrafts, 24 * 60 * 60 * 1000); }, ms);
+    console.log(`[digest-autodraft] Daily draft scheduled in ${Math.round(ms / 60000)} minutes`);
+  } catch (err: any) {
+    console.error("[digest-autodraft] Scheduler setup error:", err.message);
+  }
+
   // Schedule daily VeritaTrack due-date reminder dispatch at midnight UTC.
   // Mirrors the finding/policy reminder schedulers. Per-lab opt-in
   // (veritatrack_reminder_config.enabled); idempotent via
