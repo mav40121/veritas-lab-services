@@ -134,6 +134,10 @@ jobs:
         # Redington 2026-11-11: an editor sees every attempt's score and answers, a Staff login only their own; Assign a retake after a fail
         # makes attempt 2, refused after a pass or while an attempt is open; the failed attempt stays as it was; nothing crosses labs.
         run: npm run test:quiz-results-retake
+      - name: Run VeritaQA admin load integration test
+        # SCAHC 2026-11-12 (Q304 = 1): a client's indicator plan loads into its VeritaQA by owner account; a wrong account writes nothing;
+        # a dry run writes nothing; a rerun adds nothing; nothing the account already has is changed.
+        run: npm run test:veritaqa-admin-load
       - name: Competency clearance rule
         # Only a technical or waived record can clear a person for patient testing; what an import builds from what's left, on known dates.
         run: npx tsx scripts/verify-competency-clearance-types.mts

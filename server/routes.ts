@@ -42711,6 +42711,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   registerBulkLoadRoutes(app, { adminSecret: ADMIN_SECRET, authMiddleware, labScopeMiddleware, resolveSurveyorToken });
   const { registerHistoryLoadRoutes } = await import("./veritadcHistoryLoad");
   registerHistoryLoadRoutes(app, { adminSecret: ADMIN_SECRET });
+  // Load a client's quality-indicator plan into its VeritaQA, by owner account (server/veritaqaAdminLoad.ts).
+  const { registerVeritaQaAdminLoadRoutes } = await import("./veritaqaAdminLoad");
+  registerVeritaQaAdminLoadRoutes(app, { adminSecret: ADMIN_SECRET });
   // A share link for one document's current approved version, opened without a login (server/policyShareLinks.ts).
   const { registerPolicyShareLinkRoutes } = await import("./policyShareLinks");
   registerPolicyShareLinkRoutes(app, {
