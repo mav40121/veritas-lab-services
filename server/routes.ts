@@ -14,6 +14,7 @@ import { isDelegationPosition, isDelegationComplexity, sanitizeResponsibilities,
 import { mayAttestAsDirectorOrDesignee, complexityForAnalyte, labHighestComplexity, isLabOwnerUser } from "./delegationGate";
 import { vlsContext, isVlsSupportUser, labAllowsVlsSupport, vlsSupportBlocked, recordVlsActivity } from "./vlsSupport";
 import { foldInviteDuplicates, membersNotOnRoster, reattachOrphanStaffInvites, rosterLinkProblem, rosterRowForInvite, rosterStaffStatus } from "./rosterMembers";
+import { buildStaffListWorkbook, staffListRows } from "./staffListExport";
 import { staffInventoryBlocked, inventoryNotAllowedBody } from "./inventoryPermission";
 import { deriveAttestationStatus } from "./policyAttestationStatus";
 import { DEFAULT_TEMPLATES, REMINDER_TYPES, REMINDER_MERGE_FIELDS, type ReminderType } from "./policyReminderTemplate";
@@ -27415,6 +27416,29 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   app.get("/api/staff/employees/template", authMiddleware, staffImportTemplateHandler);
   // Registered before /api/labs/:labId/staff/employees/:id so "template" is not read as an employee id.
   app.get("/api/labs/:labId/staff/employees/template", authMiddleware, labScopeMiddleware, staffImportTemplateHandler);
+
+  // Staff list download (Heywood 2026-11-13: a printable employee list other than the CMS 209). The Staff tab's
+  // active roster as one customer-facing workbook (server/staffListExport.ts). It lists the whole lab, so a Staff
+  // login limited to their own record is refused, as the CMS 209 is. Registered before .../employees/:id.
+  app.get("/api/labs/:labId/staff/employees/export.xlsx", authMiddleware, labScopeMiddleware, notForStaffLoginRoster, async (req: any, res) => {
+    if (!hasStaffAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaStaff™ subscription required" });
+    const sqlite = (db as any).$client;
+    try {
+      foldInviteDuplicates(sqlite, req.scope.labId); // as the Staff tab's list does before anyone sees it
+      const staffLab = sqlite.prepare("SELECT lab_name, clia_number FROM staff_labs WHERE tier2_lab_id = ?").get(req.scope.labId) as any;
+      const labName = String(staffLab?.lab_name || req.scope.lab?.lab_name || "").trim() || "Laboratory";
+      const clia = String(staffLab?.clia_number || req.scope.lab?.clia_number || "").trim() || "Not on file";
+      const today = labToday();
+      const rows = staffListRows(sqlite, req.scope.labId, (n) => CMS_SPECIALTIES[n]);
+      const buf = await buildStaffListWorkbook({ labName, clia, today, rows }, (wb) => applyLicenseToExcelJS(wb, licenseCtxFromReq(req, "VeritaStaff™")));
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", `attachment; filename="VeritaStaff_Staff_List_${today}.xlsx"`);
+      res.send(buf);
+    } catch (err: any) {
+      console.error("[staff/export] error:", err);
+      res.status(500).json({ error: "Could not build the staff list" });
+    }
+  });
 
   // Get single employee
   app.get("/api/staff/employees/:id", authMiddleware, staffOwnRecordOnly("id", rosterOwnIn), (req: any, res) => {
