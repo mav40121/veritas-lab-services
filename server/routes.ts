@@ -42741,6 +42741,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // Delete one customer's data at the end of a contract (server/customerPurge.ts); a dry run unless told otherwise.
   const { registerCustomerPurgeRoutes } = await import("./customerPurge");
   registerCustomerPurgeRoutes(app, { sqlite: () => (db as any).$client, adminSecret: ADMIN_SECRET });
+  // What other modules point at one VeritaMap analyzer, before an analyzer is removed (server/instrumentReferences.ts). Read-only.
+  const { registerInstrumentReferenceRoutes } = await import("./instrumentReferences");
+  registerInstrumentReferenceRoutes(app, { sqlite: () => (db as any).$client, adminSecret: ADMIN_SECRET });
   // A share link for one document's current approved version, opened without a login (server/policyShareLinks.ts).
   const { registerPolicyShareLinkRoutes } = await import("./policyShareLinks");
   registerPolicyShareLinkRoutes(app, {
