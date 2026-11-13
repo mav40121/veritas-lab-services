@@ -101,7 +101,7 @@ export default function TrustPage() {
             <li>the same records as JSON, for moving them into another system</li>
           </ul>
           <p>Owners can also turn on a weekly copy. A new one is built every Monday and kept for 7 days, and the owner is emailed when it is ready. The email has no download link: the owner signs in to download, so a forwarded email opens nothing.</p>
-          <p>After cancellation, records are kept for two years and then deleted, with notice by email first. Earlier deletion can be requested at any time and is confirmed within 30 days (see section 7 of our <a href="/privacy" className="text-primary hover:underline">Privacy Policy</a>).</p>
+          <p>After cancellation, records are kept for two years and then deleted, with notice by email first. Earlier deletion can be requested at any time; the data is deleted and the deletion confirmed in writing within 30 days (see section 7 of our <a href="/privacy" className="text-primary hover:underline">Privacy Policy</a>). Copies already in the backups described in section 8 expire on that schedule, the last within two years.</p>
         </section>
 
         <section>

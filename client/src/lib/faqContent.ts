@@ -607,15 +607,15 @@ export const FAQ_CATEGORIES: FaqCategory[] = [
       },
       {
         q: "Can I export my data before canceling?",
-        a: "Yes. Every module that generates structured data has an Excel or PDF export function. We recommend exporting your records before canceling if you want local copies.",
+        a: "Yes. The lab owner can download all of the lab's records at any time, including after a subscription ends: one zip file with a workbook per module, every stored document (every policy version included), the reports the modules produce, and the same records as JSON for moving them into another system. Each module also has its own Excel or PDF export.",
       },
       {
         q: "What happens after the 2-year retention period?",
-        a: "After 2 years of inactivity, your account and associated data are permanently deleted from our servers. We will notify you by email before this occurs.",
+        a: "After 2 years of inactivity, we permanently delete your account and associated data from our servers, and we notify you by email before we do. You can ask us to delete it sooner at any time, and we confirm the deletion in writing within 30 days. Copies already in our backups expire on our backup schedule, the last within 2 years.",
       },
       {
         q: "Can I request deletion of my data before the retention period ends?",
-        a: "Yes. Contact info@veritaslabservices.com to request early deletion. We will confirm deletion within 30 days.",
+        a: "Yes. Contact info@veritaslabservices.com to request early deletion. We delete your lab's records, its people's accounts and its stored files, and confirm the deletion in writing within 30 days. Copies already in our backups expire on our backup schedule, the last within 2 years.",
       },
     ],
   },
