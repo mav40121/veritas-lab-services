@@ -147,6 +147,11 @@ jobs:
         # every header and footer); each Competency cell is the Staff tab's badge; a Staff login limited to their own record
         # gets 403 STAFF_OWN_ONLY, and another lab's owner can't reach it.
         run: npm run test:staff-list-export
+      - name: Run customer purge integration test
+        # Michael 2026-11-13, Q313 = 1: deleting one customer takes exactly the planned rows of every table and nothing of
+        # another customer's; every table has a purge rule; people who belong elsewhere, Veritas logins and demo labs stay;
+        # applying needs CUSTOMER_PURGE_ENABLED=1, the confirm phrase and the dry run's count; a failed apply rolls back whole.
+        run: npm run test:customer-purge
       - name: Excel header and footer stay within 255 characters
         # 2026-11-13: Excel opens a workbook with a longer header or footer only in repair mode; the license stamp now
         # shortens its own line to fit, keeps the sheet's lab identity and a demo lab's sample-data mark.
