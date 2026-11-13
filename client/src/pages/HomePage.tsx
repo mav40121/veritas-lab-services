@@ -155,7 +155,7 @@ return (
             <div>
               <h2 className="font-serif text-xl font-bold mb-2 text-foreground">We never store PHI. By design.</h2>
               <p className="text-sm text-muted-foreground leading-relaxed mb-3">
-                VeritaAssure® never asks for, transmits, or stores protected health information. No patient names, no specimen-to-patient links, no patient results. Every module works with statistical and compliance data only, never patient data, so there is nothing for a breach, or an inspector, to expose.
+                VeritaAssure® never asks for, transmits, or stores protected health information. No patient names, no specimen-to-patient links, no patient results. Every module works with statistical and compliance data only, never patient data.
               </p>
               <div className="flex flex-wrap gap-x-5 gap-y-1.5 text-xs font-medium text-foreground">
                 <span className="inline-flex items-center gap-1.5"><CheckCircle2 size={13} className="text-primary shrink-0" /> No patient identifiers</span>

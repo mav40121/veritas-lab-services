@@ -2,7 +2,7 @@ export default function PrivacyPage() {
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-16">
       <h1 className="font-serif text-3xl font-bold mb-2">Privacy Policy</h1>
-      <p className="text-sm text-muted-foreground mb-8">Effective Date: March 27, 2026 · Veritas Lab Services, LLC</p>
+      <p className="text-sm text-muted-foreground mb-8">Effective Date: March 27, 2026 · Updated November 13, 2026 · Veritas Lab Services, LLC</p>
 
       <div className="prose prose-sm dark:prose-invert max-w-none space-y-6 text-sm leading-relaxed">
 
@@ -53,7 +53,7 @@ export default function PrivacyPage() {
 
         <section>
           <h2 className="font-semibold text-base mb-2">7. Data Retention</h2>
-          <p>We retain your account and study data for as long as your account is active. After cancellation, your data is retained for 2 years to align with common laboratory record retention requirements. During this period you can reactivate your account and regain full access to your historical records. After the 2-year period your account and associated data are permanently deleted, and we will notify you by email before this occurs. You may request earlier deletion at any time by emailing us; we will confirm deletion within 30 days, except where retention is required by law.</p>
+          <p>We retain your account and study data for as long as your account is active. After cancellation, your data is retained for 2 years to align with common laboratory record retention requirements. During this period you can reactivate your account and regain full access to your historical records. After the 2-year period your account and associated data are permanently deleted, and we will notify you by email before this occurs. You may request earlier deletion at any time by emailing us; we will delete your data and confirm the deletion in writing within 30 days, except where retention is required by law. Copies already in our backups are not altered; they expire on our backup schedule, the last within 2 years of the deletion.</p>
         </section>
 
         <section>

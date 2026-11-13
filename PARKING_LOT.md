@@ -522,7 +522,7 @@ _(item #88 closed 2026-10-08; see C91 below)_
 **What:** the "Data Retention and Cancellation" answers in client/src/lib/faqContent.ts (lines 605-614 on main, 2026-10-14) say: data is kept 2 years after a subscription ends and can be reactivated; "every module that generates structured data has an Excel or PDF export function"; and after 2 years the account is deleted with an email notice first. In the product, cancelling drops the lab to the free plan, which blocks most exports; Equipment (VeritaMaintain) has no export and VeritaPT has no export button although its page promises a PDF (VeritaPTPage.tsx line 22); no 2-year deletion job or notice email exists. Fix the copy to say what the product does (or build the missing pieces, Michael's call), then check the FAQ page and its prerendered/static copy.
 
 **Source:** found 2026-10-09 during the Mike Hiltunen and Natalie Lamb replies; promised as "its own item" that day and never raised. Parked 2026-10-14 from the weekly review.
-**Status:** Open. Needs Michael's call: correct the copy, or build retention/export/notice to match it. **2026-11-06:** the Privacy Policy repeats the deletion promise. client/src/pages/PrivacyPage.tsx line 56 (section 7, Data Retention) says data is kept 2 years after cancellation, then permanently deleted with an email notice first, so whichever way Michael decides has to reach that page as well as the FAQ.
+**Status:** Copy corrected 2026-11-13 (Michael Q325 = 1, before Lifepoint's review), with the full download (live since 10/16) and the one-customer delete (PR 1914, live 6db8257d) behind it: the FAQ export answer names the full download; the 2-year and early-deletion answers, Privacy section 7 and Trust section 10 add deletion confirmed in writing within 30 days and backup copies expiring within 2 years. The 2-year deletion and its email notice stay manual (the purge route plus an email). Fix/site-data-claims PR. Michael closes. **2026-11-06:** the Privacy Policy repeats the deletion promise. client/src/pages/PrivacyPage.tsx line 56 (section 7, Data Retention) says data is kept 2 years after cancellation, then permanently deleted with an email notice first, so whichever way Michael decides has to reach that page as well as the FAQ.
 
 ---
 
@@ -613,7 +613,7 @@ _(item #88 closed 2026-10-08; see C91 below)_
 **What:** client/src/pages/HomePage.tsx line 158, under "We never store PHI. By design.", ends "so there is nothing for a breach, or an inspector, to expose." The product holds no PHI by design, but it does hold staff records: rosters, credential documents, competency records, CE transcripts and read-and-sign history, and a tissue record names a surgeon. The PHI point doesn't support "nothing to expose", so the last clause says more than the rest of the paragraph can back up. It's a decision for Michael, best taken with the data retention promises in #96. Changing it is one line.
 
 **Source:** read on main at 9c701920, 2026-11-06. Parked on Michael's Q216 = 1.
-**Status:** Open. Michael's decision; take it with #96.
+**Status:** Copy fixed 2026-11-13 (Michael Q325 = 1, before Lifepoint's review): the clause is gone; the card ends "never patient data." Fix/site-data-claims PR. Michael closes.
 
 ---
 
