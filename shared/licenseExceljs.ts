@@ -176,32 +176,51 @@ function joinHeaderFooter(p: { L: string; C: string; R: string }): string {
  *   - Sheet has no footer         -> set the license footer including page
  *     numbers (prior behavior).
  */
+// Excel opens a workbook whose header or footer is longer than 255 characters (codes included) only in repair mode,
+// and the repair drops it (2026-11-13: the staff list download's footer plus the appended license line came to 282
+// characters with an ordinary lab name and email). Every header and footer this file writes stays within it.
+export const HEADER_FOOTER_MAX = 255;
+
+// In a header or footer, & starts a code; a literal & is written &&.
+const hfText = (s: unknown) => String(s ?? "").replace(/&/g, "&&");
+
 function setHeaderFooter(ws: ExcelJS.Worksheet, ctx: LicenseContext): void {
   ws.headerFooter = ws.headerFooter || ({} as any);
-  const headerRight = `Licensed: ${ctx.licensee}`;
+  const licensee = hfText(ctx.licensee), email = hfText(ctx.email), issued = hfText(ctx.issueDate);
   // USON bake-off: a demo lab prefixes the sample-data mark onto the left footer
   // so it rides every printed page whether or not the sheet already set a footer.
   const demoFooterPrefix = ctx.isDemo ? `${SAMPLE_DATA_FOOTER}\n` : "";
-  const footerLeft =
-    demoFooterPrefix +
-    `© 2026 Veritas Lab Services, LLC | ` +
-    `Licensed to: ${ctx.licensee} (${ctx.email}) | ` +
-    `Issued ${ctx.issueDate} | Do not redistribute`;
+  // The license line, longest first: the first that keeps the footer within 255 characters is used. The full
+  // statement (licensee and email) is always on the row-1 band and the About sheet.
+  const footerLines = [
+    `© 2026 Veritas Lab Services, LLC | Licensed to: ${licensee} (${email}) | Issued ${issued} | Do not redistribute`,
+    `© 2026 Veritas Lab Services, LLC | Licensed to: ${licensee} | Issued ${issued} | Do not redistribute`,
+    `© 2026 Veritas Lab Services, LLC | Licensed to: ${licensee}`,
+    `© 2026 Veritas Lab Services, LLC`,
+  ].map((line) => demoFooterPrefix + line);
+  // A demo lab's sample-data mark is the one line that must ride every page, so it is the last thing to go.
+  if (ctx.isDemo) footerLines.push(SAMPLE_DATA_FOOTER);
+  const fits = (s: string) => s.length <= HEADER_FOOTER_MAX;
 
   const existingHeader = String(ws.headerFooter.oddHeader || "");
   if (!existingHeader.trim()) {
-    ws.headerFooter.oddHeader = ctx.isDemo ? `&C${SAMPLE_DATA_FOOTER}&R${headerRight}` : `&R${headerRight}`;
+    const header = ctx.isDemo ? `&C${SAMPLE_DATA_FOOTER}&RLicensed: ${licensee}` : `&RLicensed: ${licensee}`;
+    ws.headerFooter.oddHeader = fits(header) ? header : (ctx.isDemo ? `&C${SAMPLE_DATA_FOOTER}` : "&RLicensed");
   }
 
   const existingFooter = String(ws.headerFooter.oddFooter || "");
   if (!existingFooter.trim()) {
-    ws.headerFooter.oddFooter = `&L${footerLeft}&RPage &P of &N`;
+    const footer = footerLines.map((line) => `&L${line}&RPage &P of &N`).find(fits);
+    if (footer) ws.headerFooter.oddFooter = footer;
   } else {
     const parts = splitHeaderFooter(existingFooter);
     // Newline inside a section is a real line break in Excel. Any font/size code
-    // already opening the section keeps applying to the appended line.
-    parts.L = parts.L ? `${parts.L}\n${footerLeft}` : footerLeft;
-    ws.headerFooter.oddFooter = joinHeaderFooter(parts);
+    // already opening the section keeps applying to the appended line. When even the
+    // shortest line won't fit, the sheet's own footer (its lab identity) stays as it is.
+    const footer = footerLines
+      .map((line) => joinHeaderFooter({ ...parts, L: parts.L ? `${parts.L}\n${line}` : line }))
+      .find(fits);
+    if (footer) ws.headerFooter.oddFooter = footer;
   }
 
   ws.headerFooter.evenHeader = ws.headerFooter.oddHeader;

@@ -41,6 +41,7 @@ import { RosterMembersPrompt, rosterPromptKey, type RosterMember } from "@/compo
 import { getStaffTitleLabel, getCredentialPickerGroups, buildCredentialFields, parseCredentialFields } from "@shared/staffTitles";
 import { CLIA_ROLE_QUALIFICATIONS, tsQualificationsFor, QUALIFICATION_FOOTNOTE } from "@shared/cliaRoleQualifications";
 import { FREE_CEU_CATALOG, FREE_CEU_VERIFIED } from "@shared/freeCeuCatalog";
+import { competencyBadgeLabel, complexityLabel } from "@shared/staffListLabels";
 
 // ── Types ──────────────────────────────────────────────────────────────
 interface Lab {
@@ -171,22 +172,19 @@ function getCompetencyStatus(emp: Employee): { label: string; color: string; tit
   // surface (the old "Not set" branch painted gray-on-teal; San Carlos, 2026-06-05).
   // The status itself is the server's (emp.competencyStatus), so the badge, the dashboard
   // tile and the reminders cannot disagree.
+  // The label is shared/staffListLabels.ts competencyBadgeLabel, which the staff list download prints too (2026-11-13).
   const st = emp.competencyStatus;
   const title = st ? `${st.label}. ${st.reason}${st.nextDue ? `, due ${st.nextDue}` : ""}` : "";
-  if (!st) return { label: "Not set", color: "text-muted-foreground bg-muted/40 border-muted-foreground/30", title };
-  if (st.bucket === "overdue") return { label: "Overdue", color: "text-red-600 bg-red-500/10 border-red-500/20", title };
-  if (!emp.competencySchedule) return { label: "Not set", color: "text-muted-foreground bg-muted/40 border-muted-foreground/30", title };
-  if (!st.cleared) return { label: "Not cleared", color: "text-amber-600 bg-amber-500/10 border-amber-500/20", title };
-  if (st.bucket === "dueSoon30") return { label: "Due Soon", color: "text-amber-600 bg-amber-500/10 border-amber-500/20", title };
-  return { label: "Current", color: "text-emerald-600 bg-emerald-500/10 border-emerald-500/20", title };
+  const label = competencyBadgeLabel(st, !!emp.competencySchedule);
+  const color = label === "Overdue" ? "text-red-600 bg-red-500/10 border-red-500/20"
+    : label === "Not cleared" || label === "Due Soon" ? "text-amber-600 bg-amber-500/10 border-amber-500/20"
+    : label === "Current" ? "text-emerald-600 bg-emerald-500/10 border-emerald-500/20"
+    : "text-muted-foreground bg-muted/40 border-muted-foreground/30";
+  return { label, color, title };
 }
 
 const isWaivedTester = (c?: string | null) => ["W", "WAIVED"].includes(String(c ?? "").trim().toUpperCase());
 // BUG-031: waived testers read "Moderate" (anything not "H" fell through to Moderate).
-const complexityLabel = (c?: string | null): string => {
-  const v = String(c ?? "").trim().toUpperCase();
-  return v === "H" || v === "HIGH" ? "High" : v === "M" || v === "MODERATE" ? "Moderate" : v === "W" || v === "WAIVED" ? "Waived" : (c || "Not set");
-};
 const isWebLink = (v: string) => /^https?:\/\/\S+$/i.test(v.trim());
 
 // Top-level switcher between the staff roster and the embedded VeritaCEU
@@ -224,6 +222,7 @@ export default function VeritaStaffAppPage() {
   const [showCompetency, setShowCompetency] = useState<Employee | null>(null);
   const [generating209, setGenerating209] = useState(false);
   const [generatingPacket, setGeneratingPacket] = useState(false);
+  const [downloadingList, setDownloadingList] = useState(false);
   const [showBulkImport, setShowBulkImport] = useState(false);
   const [showMarkExisting, setShowMarkExisting] = useState(false);
   // VeritaCEU rides in VeritaStaff as a tab (not a separate module).
@@ -453,6 +452,20 @@ export default function VeritaStaffAppPage() {
               <Button variant="outline" size="sm" onClick={() => setStaffTab("instruments")} title="Assign staff from the instrument side: tick test systems or manual tests, then pick who runs them" data-testid="button-assign-by-instrument">
                 <FlaskConical size={14} className="mr-1.5" /> Assign by Instrument
               </Button>
+              {/* Staff list download (Heywood 2026-11-13): the active roster as a printable Excel list. Not shown to a
+                  Staff login limited to their own record; the server refuses it the same way it refuses the CMS 209. */}
+              {activeLabId && !cms209Readiness?.ownOnly && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDownloadStaffList}
+                  disabled={downloadingList || employees.length === 0}
+                  title="Excel list of the active staff on this roster: name, title, CLIA roles, complexity, competency status and hire date. Prints landscape, one page wide."
+                  data-testid="button-download-staff-list"
+                >
+                  <FileSpreadsheet size={14} className="mr-1.5" /> {downloadingList ? "Preparing..." : "Download staff list"}
+                </Button>
+              )}
               <Button size="sm" className="bg-primary hover:bg-primary/90" onClick={handleGenerate209} disabled={generating209 || readOnly}>
                 <FileDown size={14} className="mr-1.5" /> {generating209 ? "Generating..." : "Generate CMS 209"}
               </Button>
@@ -671,6 +684,29 @@ export default function VeritaStaffAppPage() {
       <MarkExistingStaffDialog open={showMarkExisting} onOpenChange={setShowMarkExisting} labId={activeLabId} employees={employees as any} />
     </div>
   );
+
+  async function handleDownloadStaffList() {
+    if (!activeLabId) return;
+    setDownloadingList(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/labs/${activeLabId}/staff/employees/export.xlsx`, { headers: authHeaders() });
+      if (!res.ok) throw new Error(await responseErrorText(res));
+      const blob = await res.blob();
+      const named = /filename="([^"]+)"/.exec(res.headers.get("Content-Disposition") || "")?.[1];
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = named || `VeritaStaff_Staff_List_${labTodayIso()}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err: any) {
+      toast({ title: "Could not download the staff list", description: err.message, variant: "destructive" });
+    } finally {
+      setDownloadingList(false);
+    }
+  }
 
   async function handleGenerate209() {
     setGenerating209(true);
