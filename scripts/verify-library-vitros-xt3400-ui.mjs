@@ -7,6 +7,7 @@
 // (QuidelOrtho, 47 tests, from the FDA CLIA records); once added, its electrolytes
 // sit under General Chemistry and there is no Electrolytes group. Light + dark shots.
 import { createRequire } from "node:module";
+import fs from "node:fs";
 const require = createRequire(import.meta.url);
 const { chromium } = require("@playwright/test");
 const Database = require("better-sqlite3");
@@ -50,12 +51,15 @@ for (const mode of ["light", "dark"]) {
     await result.click();
     await page.getByRole("button", { name: /^Add Instrument$/ }).click();
     await page.waitForTimeout(2000);
-    // The rebuilt VITROS 4600 (BUG-005 part 2): 101 tests, every FDA record for the 4600.
+    // The rebuilt VITROS 4600 (BUG-005 part 2): 101 tests, every FDA record for the 4600, less the second name the
+    // duplicate review took off (Q330, 2026-11-14: "Albumin, urinary" beside "Microalbumin").
+    const dup = JSON.parse(fs.readFileSync(new URL("./fda-menus/dup_names_plan_2026-11-14.json", import.meta.url), "utf8"));
+    const n4600 = 101 - (dup.instruments["Ortho VITROS 4600"]?.groups.flatMap((g) => g.remove).length ?? 0);
     await search.fill("VITROS 4600");
     await page.waitForTimeout(500);
     const r4600 = page.locator("button", { hasText: "Ortho VITROS 4600" }).first();
     const t4600 = (await r4600.isVisible().catch(() => false)) ? (await r4600.innerText()).replace(/\s+/g, " ") : "(no result)";
-    check("searching VITROS 4600 offers the rebuilt entry with 101 tests", /101 tests/.test(t4600), t4600);
+    check(`searching VITROS 4600 offers the rebuilt entry with ${n4600} tests`, new RegExp(`\\b${n4600} tests`).test(t4600), t4600);
     await r4600.click();
     await page.getByRole("button", { name: /^Add Instrument$/ }).click();
     await page.waitForTimeout(2000);
