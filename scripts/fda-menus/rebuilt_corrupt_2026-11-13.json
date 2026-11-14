@@ -1,0 +1,379 @@
+{
+ "source": "FDA clia_detail.zip",
+ "report_built": "2026-11-13",
+ "instruments": {
+  "Beckman Coulter UniCel DxI 600": {
+   "removed_corrupt": [
+    {
+     "name": "Access 2, Access 2i, Access 2 Immunoassay Analyzer, Access AccuTnI+3, Access AFP, Access Anti-HCV, Access Anti-HBc, Acce...",
+     "length": 1839,
+     "complexity": "HIGH",
+     "specialty": "Cardiac"
+    },
+    {
+     "name": "HCG5",
+     "length": 4,
+     "complexity": "HIGH",
+     "specialty": "Endocrinology"
+    },
+    {
+     "name": "HCG5d",
+     "length": 5,
+     "complexity": "HIGH",
+     "specialty": "Endocrinology"
+    },
+    {
+     "name": "PTH",
+     "length": 3,
+     "complexity": "HIGH",
+     "specialty": "Immunology"
+    },
+    {
+     "name": "PTHIO",
+     "length": 5,
+     "complexity": "HIGH",
+     "specialty": "Immunology"
+    },
+    {
+     "name": "TSH3",
+     "length": 4,
+     "complexity": "HIGH",
+     "specialty": "Endocrinology"
+    },
+    {
+     "name": "TSH3d",
+     "length": 5,
+     "complexity": "HIGH",
+     "specialty": "Endocrinology"
+    },
+    {
+     "name": "d-CG5",
+     "length": 5,
+     "complexity": "HIGH",
+     "specialty": "Immunology"
+    }
+   ],
+   "adds": [
+    {
+     "analyte": "25-hydroxyvitamin D (25-OH-D)",
+     "complexity": "MODERATE",
+     "specialty": "Endocrinology",
+     "evidence": "MODERATE CR150006 Beckman Coulter UniCel DxI 600 Access Immunoassay System"
+    },
+    {
+     "analyte": "Alkaline phosphatase bone specific (BAP)",
+     "complexity": "MODERATE",
+     "specialty": "General Chemistry",
+     "evidence": "MODERATE K994278 Beckman Coulter UniCel DxI 600 Access Immunoassay System"
+    },
+    {
+     "analyte": "Alpha-fetoprotein, amniotic fluid",
+     "complexity": "MODERATE",
+     "specialty": "General Chemistry",
+     "evidence": "MODERATE P980041 Access AFP Reagents"
+    },
+    {
+     "analyte": "Alpha-fetoprotein, maternal serum",
+     "complexity": "MODERATE",
+     "specialty": "General Chemistry",
+     "evidence": "MODERATE P980041 Access AFP Reagents"
+    },
+    {
+     "analyte": "Anti-Mullerian Hormone (AMH)",
+     "complexity": "MODERATE",
+     "specialty": "Endocrinology",
+     "evidence": "MODERATE CR180027 Beckman Coulter UniCel DxI 600 Access Immunoassay System"
+    },
+    {
+     "analyte": "Anti-thyroglobulin antibodies",
+     "complexity": "MODERATE",
+     "specialty": "General Immunology",
+     "evidence": "MODERATE K112933 Beckman Coulter UniCel DxI 600 Access Immunoassay System; MODERATE K062516 ACCESS Thyroglobulin Antibody II Reagents; MODERATE CR210463 ACCESS Thyroglobulin Antibody II"
+    },
+    {
+     "analyte": "Anti-thyroid peroxidase (TPO) antibodies",
+     "complexity": "MODERATE",
+     "specialty": "General Immunology",
+     "evidence": "MODERATE K061382 ACCESS TPO Antibody Reagents"
+    },
+    {
+     "analyte": "B-type natriuretic peptide (BNP)",
+     "complexity": "MODERATE",
+     "specialty": "General Chemistry",
+     "evidence": "MODERATE K033383 Biosite Triage BNP; MODERATE K033383 Alere Triage BNP; MODERATE CR210309 Beckman Coulter, Inc., Access BNP; ... +1 more"
+    },
+    {
+     "analyte": "C-peptide",
+     "complexity": "MODERATE",
+     "specialty": "General Chemistry",
+     "evidence": "MODERATE CR190712 Beckman Coulter UniCel DxI 600 Access Immunoassay System"
+    },
+    {
+     "analyte": "CA 19-9",
+     "complexity": "MODERATE",
+     "specialty": "General Chemistry",
+     "evidence": "MODERATE K033038 Access GI Monitor Assay"
+    },
+    {
+     "analyte": "Cancer antigen 125 (CA 125)",
+     "complexity": "MODERATE",
+     "specialty": "General Chemistry",
+     "evidence": "MODERATE K031297 Access OV Monitor Assay"
+    },
+    {
+     "analyte": "Cancer antigen 15-3 (CA 15-3)",
+     "complexity": "MODERATE",
+     "specialty": "General Chemistry",
+     "evidence": "MODERATE K072612 Access BR Monitor Assay; MODERATE K033036 Access BR Monitor Assay"
+    },
+    {
+     "analyte": "Carcinoembryonic antigen (CEA)",
+     "complexity": "MODERATE",
+     "specialty": "General Chemistry",
+     "evidence": "MODERATE K031270 ACCESS CEA Reagents"
+    },
+    {
+     "analyte": "Cortisol",
+     "complexity": "MODERATE",
+     "specialty": "Endocrinology",
+     "evidence": "MODERATE K023764 Beckman Coulter UniCel DxI 600 Access Immunoassay System"
+    },
+    {
+     "analyte": "Creatine kinase MB fraction (CKMB)",
+     "complexity": "MODERATE",
+     "specialty": "General Chemistry",
+     "evidence": "MODERATE K030012 Beckman Coulter UniCel DxI 600 Access Immunoassay System"
+    },
+    {
+     "analyte": "Dehydroepiandrosterone sulfate (DHEA-SO4)",
+     "complexity": "MODERATE",
+     "specialty": "Endocrinology",
+     "evidence": "MODERATE X070032 Beckman Coulter UniCel DxI 600 Access Immunoassay System"
+    },
+    {
+     "analyte": "Digoxin",
+     "complexity": "MODERATE",
+     "specialty": "Toxicology",
+     "evidence": "MODERATE K925802 Beckman Coulter UniCel DxI 600 Access Immunoassay System"
+    },
+    {
+     "analyte": "Erythropoietin",
+     "complexity": "MODERATE",
+     "specialty": "Endocrinology",
+     "evidence": "MODERATE K052223 Beckman Coulter UniCel DxI 600 Access Immunoassay System"
+    },
+    {
+     "analyte": "Estradiol",
+     "complexity": "MODERATE",
+     "specialty": "Endocrinology",
+     "evidence": "MODERATE K023764 Beckman Coulter UniCel DxI 600 Access Immunoassay System"
+    },
+    {
+     "analyte": "Estriol, unconjugated",
+     "complexity": "MODERATE",
+     "specialty": "Endocrinology",
+     "evidence": "MODERATE X070031 Beckman Coulter UniCel DxI 600 Access Immunoassay System"
+    },
+    {
+     "analyte": "Ferritin",
+     "complexity": "MODERATE",
+     "specialty": "General Chemistry",
+     "evidence": "MODERATE K052082 Access Ferritin Immunoassay"
+    },
+    {
+     "analyte": "Folate (folic acid)",
+     "complexity": "MODERATE",
+     "specialty": "General Chemistry",
+     "evidence": "MODERATE K060774 Beckman Coulter UniCel DxI 600 Access Immunoassay System"
+    },
+    {
+     "analyte": "Folate, red blood cell (RBC folate)",
+     "complexity": "HIGH",
+     "specialty": "General Chemistry",
+     "evidence": "HIGH K060774 Beckman Coulter UniCel DxI 600 Access Immunoassay System"
+    },
+    {
+     "analyte": "Follicle stimulating hormone (FSH)",
+     "complexity": "MODERATE",
+     "specialty": "Endocrinology",
+     "evidence": "MODERATE X070026 Beckman Coulter UniCel DxI 600 Access Immunoassay System; MODERATE X070022 Beckman Coulter UniCel DxI 600 Access Immunoassay System"
+    },
+    {
+     "analyte": "Human growth hormone (GH)",
+     "complexity": "MODERATE",
+     "specialty": "Endocrinology",
+     "evidence": "MODERATE X070019 Beckman Coulter UniCel DxI 600 Access Immunoassay System"
+    },
+    {
+     "analyte": "Immunoglobulins IgE",
+     "complexity": "MODERATE",
+     "specialty": "General Immunology",
+     "evidence": "MODERATE K930984 Beckman Coulter UniCel DxI 600 Access Immunoassay System"
+    },
+    {
+     "analyte": "Inhibin-A",
+     "complexity": "MODERATE",
+     "specialty": "General Chemistry",
+     "evidence": "MODERATE X070020 Beckman Coulter UniCel DxI 600 Access Immunoassay System"
+    },
+    {
+     "analyte": "Insulin",
+     "complexity": "MODERATE",
+     "specialty": "Endocrinology",
+     "evidence": "MODERATE X070029 Beckman Coulter UniCel DxI 600 Access Immunoassay System"
+    },
+    {
+     "analyte": "Intrinsic factor blocking antibody (IFBAB)",
+     "complexity": "MODERATE",
+     "specialty": "General Immunology",
+     "evidence": "MODERATE K033603 Beckman Coulter UniCel DxI 600 Access Immunoassay System"
+    },
+    {
+     "analyte": "Luteinizing hormone (LH)",
+     "complexity": "MODERATE",
+     "specialty": "Endocrinology",
+     "evidence": "MODERATE X070027 Beckman Coulter UniCel DxI 600 Access Immunoassay System; MODERATE X070023 Beckman Coulter UniCel DxI 600 Access Immunoassay System"
+    },
+    {
+     "analyte": "Myoglobin",
+     "complexity": "MODERATE",
+     "specialty": "General Chemistry",
+     "evidence": "MODERATE K021229 Beckman Coulter UniCel DxI 600 Access Immunoassay System"
+    },
+    {
+     "analyte": "Parathyroid hormone - intact",
+     "complexity": "MODERATE",
+     "specialty": "Endocrinology",
+     "evidence": "MODERATE K061190 Beckman Coulter UniCel DxI 600 Access Immunoassay System"
+    },
+    {
+     "analyte": "Progesterone",
+     "complexity": "MODERATE",
+     "specialty": "Endocrinology",
+     "evidence": "MODERATE X070033 Beckman Coulter UniCel DxI 600 Access Immunoassay System"
+    },
+    {
+     "analyte": "Prolactin",
+     "complexity": "MODERATE",
+     "specialty": "Endocrinology",
+     "evidence": "MODERATE X070030 Beckman Coulter UniCel DxI 600 Access Immunoassay System"
+    },
+    {
+     "analyte": "Prostate health evaluation index",
+     "complexity": "MODERATE",
+     "specialty": "General Immunology",
+     "evidence": "MODERATE P090026 Access Hybritech p2PSA Assay"
+    },
+    {
+     "analyte": "Prostatic specific antigen (PSA)",
+     "complexity": "MODERATE",
+     "specialty": "General Chemistry",
+     "evidence": "MODERATE P850048 Access Hybritech PSA Immunoassay System"
+    },
+    {
+     "analyte": "Prostatic specific antigen (PSA), free",
+     "complexity": "MODERATE",
+     "specialty": "General Chemistry",
+     "evidence": "MODERATE P970038 Access Hybritech Free PSA Immunoassay System"
+    },
+    {
+     "analyte": "Rubella antibodies",
+     "complexity": "MODERATE",
+     "specialty": "General Immunology",
+     "evidence": "MODERATE K031606 IgG"
+    },
+    {
+     "analyte": "Sex hormone binding globulin",
+     "complexity": "MODERATE",
+     "specialty": "Endocrinology",
+     "evidence": "MODERATE K083867 Beckman Coulter UniCel DxI 600 Access Immunoassay System"
+    },
+    {
+     "analyte": "T uptake (TU)",
+     "complexity": "MODERATE",
+     "specialty": "Endocrinology",
+     "evidence": "MODERATE X070024 Beckman Coulter UniCel DxI 600 Access Immunoassay System"
+    },
+    {
+     "analyte": "Testosterone",
+     "complexity": "MODERATE",
+     "specialty": "Endocrinology",
+     "evidence": "MODERATE K001935 Beckman Coulter UniCel DxI 600 Access Immunoassay System"
+    },
+    {
+     "analyte": "Thyroglobulin",
+     "complexity": "MODERATE",
+     "specialty": "General Chemistry",
+     "evidence": "MODERATE K031269 ACCESS Thyroglobulin Reagents; MODERATE CR240141 Access Thyroglobulin"
+    },
+    {
+     "analyte": "Thyroid stimulating hormone - high sens. (TSH-HS)",
+     "complexity": "MODERATE",
+     "specialty": "Endocrinology",
+     "evidence": "MODERATE K023764 Beckman Coulter UniCel DxI 600 Access Immunoassay System"
+    },
+    {
+     "analyte": "Thyroxine (T4)",
+     "complexity": "MODERATE",
+     "specialty": "Endocrinology",
+     "evidence": "MODERATE K023369 Beckman Coulter UniCel DxI 600 Access Immunoassay System"
+    },
+    {
+     "analyte": "Thyroxine, free (FT4)",
+     "complexity": "MODERATE",
+     "specialty": "Endocrinology",
+     "evidence": "MODERATE K023764 Beckman Coulter UniCel DxI 600 Access Immunoassay System"
+    },
+    {
+     "analyte": "Toxoplasma gondii antibodies",
+     "complexity": "MODERATE",
+     "specialty": "General Immunology",
+     "evidence": "MODERATE K031506 IgM II"
+    },
+    {
+     "analyte": "Transferrin receptor (TFR)",
+     "complexity": "MODERATE",
+     "specialty": "General Chemistry",
+     "evidence": "MODERATE K080634 Beckman Coulter UniCel DxI 600 Access Immunoassay System"
+    },
+    {
+     "analyte": "Triiodothyronine (T3)",
+     "complexity": "MODERATE",
+     "specialty": "Endocrinology",
+     "evidence": "MODERATE X070021 Beckman Coulter UniCel DxI 600 Access Immunoassay System"
+    },
+    {
+     "analyte": "Triiodothyronine, free (FT3)",
+     "complexity": "MODERATE",
+     "specialty": "Endocrinology",
+     "evidence": "MODERATE X070025 Beckman Coulter UniCel DxI 600 Access Immunoassay System"
+    },
+    {
+     "analyte": "Troponin-I (cardiac)",
+     "complexity": "MODERATE",
+     "specialty": "General Chemistry",
+     "evidence": "MODERATE K023764 Beckman Coulter UniCel DxI 600 Access Immunoassay System"
+    },
+    {
+     "analyte": "Vitamin B12",
+     "complexity": "MODERATE",
+     "specialty": "General Chemistry",
+     "evidence": "MODERATE K955436 Beckman Coulter UniCel DxI 600 Access Immunoassay System"
+    },
+    {
+     "analyte": "hCG, beta, serum, quantitative",
+     "complexity": "MODERATE",
+     "specialty": "Endocrinology",
+     "evidence": "MODERATE K980173 Beckman Coulter UniCel DxI 600 Access Immunoassay System"
+    },
+    {
+     "analyte": "hCG, total, serum, quantitative",
+     "complexity": "MODERATE",
+     "specialty": "Endocrinology",
+     "evidence": "MODERATE K130020 Beckman Coulter UniCel DxI 600 Access Immunoassay System"
+    }
+   ],
+   "held_adds_fda_disagrees": []
+  }
+ }
+}
