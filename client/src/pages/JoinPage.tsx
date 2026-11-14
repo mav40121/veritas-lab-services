@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useAuth } from "@/components/AuthContext";
 import { apiErrorMessage, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { FlaskConical, AlertTriangle } from "lucide-react";
+import { FlaskConical, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { trackEvent } from "@/lib/analytics";
 import { useLabRoute } from "@/hooks/useLabRoute";
 import { passwordProblem, PASSWORD_RULE_TEXT } from "@shared/passwordRule";
@@ -108,12 +108,39 @@ export default function JoinPage() {
     );
   }
 
+  // BUG-117 (2026-11-13): a person who already joined opens the link again. Tell them to
+  // sign in; "get a new invitation" is only for a link that expired or never worked.
+  // The invited address is not shown: the lookup returns nothing but the reason here.
+  if (invite && !invite.valid && invite.reason === "already_accepted") {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center px-4">
+        <Card className="w-full max-w-md" data-testid="join-already-accepted">
+          <CardContent className="pt-8 pb-8 text-center space-y-4">
+            <CheckCircle2 className="h-12 w-12 text-green-600 mx-auto" />
+            <h2 className="text-xl font-semibold">You've already joined</h2>
+            <p className="text-sm text-muted-foreground">
+              This invitation was used to create your account. Sign in with the email address the invitation was sent to.
+            </p>
+            <Button
+              className="bg-primary hover:bg-primary/90 text-primary-foreground"
+              onClick={() => navigate("/login")}
+              data-testid="join-sign-in"
+            >
+              Sign in
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              <a href="/reset-password" className="text-primary hover:underline">Forgot your password?</a>
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   if (!invite || !invite.valid) {
     const message =
       invite?.reason === "expired"
         ? "This invitation has expired."
-        : invite?.reason === "already_accepted"
-        ? "This invitation has already been accepted."
         : "This invitation link is not valid.";
     return (
       <div className="min-h-[60vh] flex items-center justify-center px-4">
