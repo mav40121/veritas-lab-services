@@ -53,6 +53,14 @@ export function labDayOfStamp(stamp: string | null | undefined): string {
   return Number.isNaN(at.getTime()) ? "" : todayInZone(activeLabTimeZone, at);
 }
 
+// The active lab's today plus n days (n may be negative), YYYY-MM-DD (BUG-171). Arithmetic on the lab's day, never on
+// the UTC clock: new Date() minus 30 days, then toISOString, starts "the last 30 days" a day late after about 7 PM
+// Eastern, and today plus a lead time lands a day late.
+export function labDaysFromToday(n: number): string {
+  const [y, m, d] = labTodayIso().split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + Math.trunc(Number(n) || 0))).toISOString().slice(0, 10);
+}
+
 // A stored value shown as a day, YYYY-MM-DD (BUG-171, 2026-11-13). Screens used to cut a stored moment to its first 10
 // characters, which is its UTC day, so anything entered after about 7 PM Eastern read as the next day. A bare date is
 // returned as is. A stored UTC midnight ("...T00:00:00Z", or "... 00:00:00") is a picked date that a route saved as a

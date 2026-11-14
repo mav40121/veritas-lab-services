@@ -21,7 +21,7 @@ import {
   AlertTriangle, CheckCircle2, Lock, ClipboardList, ChevronRight, FileDown, RefreshCw,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { labDayOfStamp, labDayOf } from "@/lib/labDate";
+import { labDayOfStamp, labDayOf, labDaysFromToday } from "@/lib/labDate";
 
 interface ViolationRow {
   id: number;
@@ -61,9 +61,7 @@ type StatusFilter = "any" | "with_violation" | "missing_ca";
 type DateFilter = "month" | "7d" | "30d" | "all";
 
 function dateNDaysAgoIso(n: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - n);
-  return d.toISOString().slice(0, 10);
+  return labDaysFromToday(-n);
 }
 
 // Bound the results list to a single calendar month, for the "Selected month"

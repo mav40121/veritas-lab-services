@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { labTodayIso, labDayOf } from "@/lib/labDate";
+import { labTodayIso, labDayOf, labDaysFromToday } from "@/lib/labDate";
 import { Link } from "wouter";
 import { useAuth } from "@/components/AuthContext";
 import { ModuleHowToCard } from "@/components/ModuleHowToCard";
@@ -761,7 +761,7 @@ function ItemFormDialog({ open, onClose, onSave, editItem, inventory, consumptio
                     next.on_order_placed_date = today;
                     if (!form.on_order_expected_date) {
                       const lt = Number(form.lead_time_days) || 0;
-                      next.on_order_expected_date = new Date(Date.now() + lt * 86400000).toISOString().slice(0, 10);
+                      next.on_order_expected_date = labDaysFromToday(lt);
                     }
                   }
                   setForm(next);

@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { authHeaders } from "@/lib/auth";
+import { labDaysFromToday } from "@/lib/labDate";
 
 // VeritaQC -> VeritaCheck "QC Lot Verification" (qc_range) Bulk Import modal.
 //
@@ -104,9 +105,7 @@ const DATE_RANGES = [
 ];
 
 function isoDaysAgo(days: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - days);
-  return d.toISOString().split("T")[0];
+  return labDaysFromToday(-days);
 }
 
 function cellKey(level: string, instrument: string): string {

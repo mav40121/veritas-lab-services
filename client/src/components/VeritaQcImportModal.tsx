@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { authHeaders } from "@/lib/auth";
+import { labDaysFromToday } from "@/lib/labDate";
 
 // VeritaQC → VeritaCheck Verification Import modal (Phase A: Precision).
 //
@@ -96,9 +97,7 @@ const DATE_RANGES = [
 ];
 
 function isoDaysAgo(days: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - days);
-  return d.toISOString().split("T")[0];
+  return labDaysFromToday(-days);
 }
 
 export function VeritaQcImportModal({ open, onOpenChange, labId, defaultAnalyte, studyMode = "precision", onImport }: Props) {

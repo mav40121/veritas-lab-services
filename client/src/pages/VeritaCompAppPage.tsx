@@ -1,5 +1,5 @@
 import { NaReasonPresets } from "@/components/competency/NaReasonPresets";
-import { labTodayIso, labLocaleDate, labDayOfStamp, labDayOf } from "@/lib/labDate";
+import { labTodayIso, labLocaleDate, labDayOfStamp, labDayOf, labDaysFromToday } from "@/lib/labDate";
 import { useState, useEffect, useLayoutEffect, useMemo, useRef, type ReactNode, type ComponentProps } from "react";
 import DOMPurify from "dompurify";
 import { Link, useLocation, useParams } from "wouter";
@@ -3848,9 +3848,7 @@ function NewAssessmentDialog({
   const [reviewPeriodEnd, setReviewPeriodEnd] = useState(editing?.review_period_end || labTodayIso());
   const [reviewPeriodStart, setReviewPeriodStart] = useState(() => {
     if (editing?.review_period_start) return editing.review_period_start;
-    const d = new Date();
-    d.setDate(d.getDate() - 365);
-    return d.toISOString().split("T")[0];
+    return labDaysFromToday(-365);
   });
   // Folder added 2026-06-05 PR A (customer-blockers wave item #1): free-text
   // grouping label so labs can organize a growing list of assessments by

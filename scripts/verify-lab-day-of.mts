@@ -10,7 +10,7 @@
 // Run: npx tsx scripts/verify-lab-day-of.mts
 import fs from "node:fs";
 import path from "node:path";
-import { labDayOf, setActiveLabTimeZone } from "../client/src/lib/labDate";
+import { labDayOf, labDaysFromToday, labTodayIso, setActiveLabTimeZone } from "../client/src/lib/labDate";
 
 let failures = 0;
 const check = (name: string, ok: boolean, detail = "") => { console.log(`${ok ? "PASS" : "FAIL"}  ${name}${ok || !detail ? "" : `  :: ${detail}`}`); if (!ok) failures++; };
@@ -29,6 +29,31 @@ check("3. a UTC lab reads the UTC day", labDayOf("2026-11-14T00:30:00Z") === "20
 setActiveLabTimeZone("America/New_York");
 check("4. blank gives blank", labDayOf("") === "" && labDayOf(null) === "" && labDayOf(undefined) === "");
 check("4. unreadable gives its first 10 characters, as before", labDayOf("not a date at all") === "not a date");
+
+// 6. "N days ago" and "today plus N" on the lab's day, with the clock held at 7:30 PM Eastern on 11/13 (00:30Z on 11/14).
+{
+  const RealDate = Date;
+  const FIXED = RealDate.parse("2026-11-14T00:30:00Z");
+  class FakeDate extends RealDate {
+    constructor(...a: any[]) { if (a.length === 0) super(FIXED); else super(...(a as [any])); }
+    static now() { return FIXED; }
+  }
+  (globalThis as any).Date = FakeDate;
+  try {
+    setActiveLabTimeZone("America/New_York");
+    const old = (n: number) => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+    check("6. today is the lab's 11/13 at 7:30 PM Eastern", labDaysFromToday(0) === "2026-11-13" && labTodayIso() === "2026-11-13", labDaysFromToday(0));
+    // 7 days back stays in standard time; the old way's answer depends on the computer's own zone, so only the new one is pinned.
+    check("6. 7 days ago is 11/6 (the UTC clock gives 11/7 on an Eastern computer)", labDaysFromToday(-7) === "2026-11-06", `${labDaysFromToday(-7)} vs ${old(-7)}`);
+    check("6. 30 days ago is 10/14, across the 11/1 clock change", labDaysFromToday(-30) === "2026-10-14", labDaysFromToday(-30));
+    check("6. today plus a 5-day lead time is 11/18 (the UTC clock gave 11/19)", labDaysFromToday(5) === "2026-11-18", `${labDaysFromToday(5)} vs ${old(5)}`);
+    console.log(`INFO  on this computer the old way gives ${old(-7)} for 7 days ago and ${old(5)} for today plus 5`);
+    check("6. a year back crosses the year and month correctly", labDaysFromToday(-365) === "2025-11-13");
+    check("6. a blank lead time is today", labDaysFromToday(NaN) === "2026-11-13");
+  } finally {
+    (globalThis as any).Date = RealDate;
+  }
+}
 
 // 5. The class sweep.
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1")), "..", "client", "src");
