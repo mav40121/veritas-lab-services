@@ -1,0 +1,691 @@
+{
+ "instrument": "Abbott ARCHITECT c4000",
+ "approved": "Michael Q329 = 1, 2026-11-13",
+ "source": "FDA clia_detail.zip; vls-ops c4000_review_workbook.py",
+ "remove": [
+  {
+   "test": "Active-B12 (Holotranscobalamin)",
+   "why": "FDA records it only on Abbott immunoassay analyzers (ARCHITECT i, Alinity i), never on a chemistry analyzer.",
+   "evidence": "Abbott Laboratories ARCHITECT i1000SR System: Holotranscobalamin (CR250593); Abbott Laboratories Alinity i System: Holotranscobalamin (CR250010)"
+  },
+  {
+   "test": "Anti-CCP",
+   "why": "FDA records it only on Abbott immunoassay analyzers (ARCHITECT i, Alinity i), never on a chemistry analyzer.",
+   "evidence": "Abbott Architect i 2000 System: Anti-citrullinated cyclic peptide (Anti-CCP) (K083868); Abbott Architect i 1000SR System: Anti-citrullinated cyclic peptide (Anti-CCP) (K083868)"
+  },
+  {
+   "test": "B-type Natriuretic Peptide",
+   "why": "FDA records it only on Abbott immunoassay analyzers (ARCHITECT i, Alinity i), never on a chemistry analyzer.",
+   "evidence": "Abbott ARCHITECT I System: B-type natriuretic peptide (BNP) (K060964); Abbott Architect i 1000SR System: B-type natriuretic peptide (BNP) (K060964)"
+  },
+  {
+   "test": "BNP",
+   "why": "FDA records it only on Abbott immunoassay analyzers (ARCHITECT i, Alinity i), never on a chemistry analyzer.",
+   "evidence": "Abbott ARCHITECT I System: B-type natriuretic peptide (BNP) (K060964); Abbott Architect i 1000SR System: B-type natriuretic peptide (BNP) (K060964)"
+  },
+  {
+   "test": "C-peptide",
+   "why": "FDA records it only on Abbott immunoassay analyzers (ARCHITECT i, Alinity i), never on a chemistry analyzer.",
+   "evidence": "Abbott ARCHITECT i1000SR System: C-peptide (X090084); Abbott Architect i 2000 System: C-peptide (X090084)"
+  },
+  {
+   "test": "CA 15-3",
+   "why": "FDA records it only on Abbott immunoassay analyzers (ARCHITECT i, Alinity i), never on a chemistry analyzer.",
+   "evidence": "Abbott ARCHITECT i2000 System: Cancer antigen 15-3 (CA 15-3) (K042732); Abbott ARCHITECT i2000SR System: Cancer antigen 15-3 (CA 15-3) (K042732)"
+  },
+  {
+   "test": "CEA",
+   "why": "FDA records it only on Abbott immunoassay analyzers (ARCHITECT i, Alinity i), never on a chemistry analyzer.",
+   "evidence": "Abbott ARCHITECT i2000SR System: Carcinoembryonic antigen (CEA) (K990774); Abbott ARCHITECT I System: Carcinoembryonic antigen (CEA) (K990774)"
+  },
+  {
+   "test": "CK-MB",
+   "why": "FDA records it only on Abbott immunoassay analyzers (ARCHITECT i, Alinity i), never on a chemistry analyzer.",
+   "evidence": "Abbott ARCHITECT i2000 System: Creatine kinase MB fraction (CKMB) (K041596); Abbott ARCHITECT i2000SR System: Creatine kinase MB fraction (CKMB) (K041596)"
+  },
+  {
+   "test": "Cortisol",
+   "why": "FDA records it only on Abbott immunoassay analyzers (ARCHITECT i, Alinity i), never on a chemistry analyzer.",
+   "evidence": "Abbott ARCHITECT I System: Cortisol (K062204); Abbott ARCHITECT i1000SR System: Cortisol (K062204)"
+  },
+  {
+   "test": "Estradiol",
+   "why": "FDA records it only on Abbott immunoassay analyzers (ARCHITECT i, Alinity i), never on a chemistry analyzer.",
+   "evidence": "Abbott Architect i 2000 System: Estradiol (X080094); Abbott Architect i 1000SR System: Estradiol (X070013)"
+  },
+  {
+   "test": "FSH",
+   "why": "FDA records it only on Abbott immunoassay analyzers (ARCHITECT i, Alinity i), never on a chemistry analyzer.",
+   "evidence": "Abbott Architect i 2000 System: Follicle stimulating hormone (FSH) (X080092); Abbott Architect i 1000SR System: Follicle stimulating hormone (FSH) (X070013)"
+  },
+  {
+   "test": "Folate",
+   "why": "FDA records it only on Abbott immunoassay analyzers (ARCHITECT i, Alinity i), never on a chemistry analyzer.",
+   "evidence": "Abbott ARCHITECT i2000SR System: Folate (folic acid) (K983212); Abbott Architect i 1000SR System: Folate (folic acid) (K092740)"
+  },
+  {
+   "test": "Galectin-3",
+   "why": "FDA records it only on Abbott immunoassay analyzers (ARCHITECT i, Alinity i), never on a chemistry analyzer.",
+   "evidence": "Abbott ARCHITECT i2000SR System: Galectin-3 (K140436)"
+  },
+  {
+   "test": "HE4",
+   "why": "FDA records it only on Abbott immunoassay analyzers (ARCHITECT i, Alinity i), never on a chemistry analyzer.",
+   "evidence": "Abbott ARCHITECT i2000 System: Cancer antigen, human epididymis protein 4 (HE4) (K093957); Abbott ARCHITECT i2000SR System: Cancer antigen, human epididymis protein 4 (HE4) (K093957)"
+  },
+  {
+   "test": "Homocysteine",
+   "why": "FDA records it only on Abbott immunoassay analyzers (ARCHITECT i, Alinity i), never on a chemistry analyzer.",
+   "evidence": "Abbott ARCHITECT I System: Homocysteine (K073640); Abbott ARCHITECT i1000SR System: Homocysteine (K073640)"
+  },
+  {
+   "test": "Insulin",
+   "why": "FDA records it only on Abbott immunoassay analyzers (ARCHITECT i, Alinity i), never on a chemistry analyzer.",
+   "evidence": "Abbott Architect i 2000 System: Insulin (X080088); Abbott Architect i 2000SR System: Insulin (X080088)"
+  },
+  {
+   "test": "LH",
+   "why": "FDA records it only on Abbott immunoassay analyzers (ARCHITECT i, Alinity i), never on a chemistry analyzer.",
+   "evidence": "Abbott Architect i 2000 System: Luteinizing hormone (LH) (X080093); Abbott Architect i 1000SR System: Luteinizing hormone (LH) (X070017)"
+  },
+  {
+   "test": "Myoglobin",
+   "why": "FDA records it only on Abbott immunoassay analyzers (ARCHITECT i, Alinity i), never on a chemistry analyzer.",
+   "evidence": "Abbott ARCHITECT I System: Myoglobin (K042924); Abbott ARCHITECT i1000SR System: Myoglobin (K042924)"
+  },
+  {
+   "test": "Progesterone",
+   "why": "FDA records it only on Abbott immunoassay analyzers (ARCHITECT i, Alinity i), never on a chemistry analyzer.",
+   "evidence": "Abbott Architect i 2000 System: Progesterone (X080091); Abbott Architect i 1000SR System: Progesterone (X070013)"
+  },
+  {
+   "test": "Prolactin",
+   "why": "FDA records it only on Abbott immunoassay analyzers (ARCHITECT i, Alinity i), never on a chemistry analyzer.",
+   "evidence": "Abbott Architect i 2000 System: Prolactin (X080095); Abbott Architect i 1000SR System: Prolactin (X070013)"
+  },
+  {
+   "test": "TSH",
+   "why": "FDA records it only on Abbott immunoassay analyzers (ARCHITECT i, Alinity i), never on a chemistry analyzer.",
+   "evidence": "Abbott ARCHITECT I System: Thyroid stimulating hormone (TSH) (K983442); Abbott Architect i 1000SR System: Thyroid stimulating hormone (TSH) (K983442)"
+  },
+  {
+   "test": "Testosterone",
+   "why": "FDA records it only on Abbott immunoassay analyzers (ARCHITECT i, Alinity i), never on a chemistry analyzer.",
+   "evidence": "Abbott ARCHITECT i2000 System: Testosterone (K983212); Abbott ARCHITECT i2000SR System: Testosterone (K983212)"
+  },
+  {
+   "test": "Total PSA",
+   "why": "FDA records it only on Abbott immunoassay analyzers (ARCHITECT i, Alinity i), never on a chemistry analyzer.",
+   "evidence": "Abbott ARCHITECT i2000SR System: Prostatic specific antigen (PSA), free (P980007); Abbott ARCHITECT i1000SR System: Prostatic specific antigen (PSA), free (P980007)"
+  },
+  {
+   "test": "Total T3",
+   "why": "FDA records it only on Abbott immunoassay analyzers (ARCHITECT i, Alinity i), never on a chemistry analyzer.",
+   "evidence": "Abbott Architect i 2000 System: Triiodothyronine (T3) (X080089); Abbott Architect i 1000SR System: Triiodothyronine (T3) (X070013)"
+  },
+  {
+   "test": "Total T4",
+   "why": "FDA records it only on Abbott immunoassay analyzers (ARCHITECT i, Alinity i), never on a chemistry analyzer.",
+   "evidence": "Abbott ARCHITECT I System: Thyroxine (T4) (K983440); Abbott Architect i 1000SR System: Thyroxine (T4) (K983440)"
+  },
+  {
+   "test": "Troponin-I",
+   "why": "FDA records it only on Abbott immunoassay analyzers (ARCHITECT i, Alinity i), never on a chemistry analyzer.",
+   "evidence": "Abbott ARCHITECT I System: Troponin-I (cardiac) (K041192); Abbott ARCHITECT i1000SR System: Troponin-I (cardiac) (K041192)"
+  },
+  {
+   "test": "Vitamin B12",
+   "why": "FDA records it only on Abbott immunoassay analyzers (ARCHITECT i, Alinity i), never on a chemistry analyzer.",
+   "evidence": "Abbott ARCHITECT I System: Vitamin B12 (K984108); Abbott Architect i 1000SR System: Vitamin B12 (K112443)"
+  },
+  {
+   "test": "Intact PTH",
+   "why": "FDA records it only on Abbott immunoassay analyzers.",
+   "evidence": "Parathyroid hormone - intact"
+  },
+  {
+   "test": "PTH",
+   "why": "FDA records it only on Abbott immunoassay analyzers.",
+   "evidence": "Parathyroid hormone - intact"
+  },
+  {
+   "test": "Total beta-hCG",
+   "why": "FDA records it only on Abbott immunoassay analyzers.",
+   "evidence": "hCG, beta, serum, quantitative"
+  },
+  {
+   "test": "AFP",
+   "why": "FDA's CLIA records list this test on no ARCHITECT or Alinity system.",
+   "evidence": ""
+  },
+  {
+   "test": "Anti-HBs",
+   "why": "FDA's CLIA records list this test on no ARCHITECT or Alinity system.",
+   "evidence": ""
+  },
+  {
+   "test": "Anti-TPO",
+   "why": "FDA's CLIA records list this test on no ARCHITECT or Alinity system.",
+   "evidence": ""
+  },
+  {
+   "test": "Anti-Tg",
+   "why": "FDA's CLIA records list this test on no ARCHITECT or Alinity system.",
+   "evidence": ""
+  },
+  {
+   "test": "Antistreptolysin O",
+   "why": "FDA's CLIA records list this test on no ARCHITECT or Alinity system.",
+   "evidence": ""
+  },
+  {
+   "test": "BRAHMS PCT",
+   "why": "Names Abbott's ARCHITECT i immunoassay kit. FDA's procalcitonin on the c4000 is DiaSys Procalcitonin FS (CR250595), added below as Procalcitonin (PCT).",
+   "evidence": ""
+  },
+  {
+   "test": "Beta-Carotene",
+   "why": "FDA's CLIA records list this test on no ARCHITECT or Alinity system.",
+   "evidence": ""
+  },
+  {
+   "test": "CMV IgG",
+   "why": "FDA's CLIA records list this test on no ARCHITECT or Alinity system.",
+   "evidence": ""
+  },
+  {
+   "test": "CMV IgG Avidity",
+   "why": "FDA's CLIA records list this test on no ARCHITECT or Alinity system.",
+   "evidence": ""
+  },
+  {
+   "test": "CMV IgM",
+   "why": "FDA's CLIA records list this test on no ARCHITECT or Alinity system.",
+   "evidence": ""
+  },
+  {
+   "test": "Calcidiol",
+   "why": "Same test as Vitamin D, which this entry also lists (calcidiol is 25-hydroxyvitamin D); the library would list it twice.",
+   "evidence": ""
+  },
+  {
+   "test": "Calcitonin",
+   "why": "FDA's CLIA records list this test on no ARCHITECT or Alinity system.",
+   "evidence": ""
+  },
+  {
+   "test": "Chagas",
+   "why": "FDA's CLIA records list this test on no ARCHITECT or Alinity system.",
+   "evidence": ""
+  },
+  {
+   "test": "DHEA-S",
+   "why": "FDA's CLIA records list this test on no ARCHITECT or Alinity system.",
+   "evidence": ""
+  },
+  {
+   "test": "Digitoxin",
+   "why": "FDA's CLIA records list this test on no ARCHITECT or Alinity system.",
+   "evidence": ""
+  },
+  {
+   "test": "EBV EBNA-1 IgG",
+   "why": "FDA's CLIA records list this test on no ARCHITECT or Alinity system.",
+   "evidence": ""
+  },
+  {
+   "test": "EBV VCA IgG",
+   "why": "FDA's CLIA records list this test on no ARCHITECT or Alinity system.",
+   "evidence": ""
+  },
+  {
+   "test": "EBV VCA IgM",
+   "why": "FDA's CLIA records list this test on no ARCHITECT or Alinity system.",
+   "evidence": ""
+  },
+  {
+   "test": "Free PSA",
+   "why": "FDA's CLIA records list this test on no ARCHITECT or Alinity system.",
+   "evidence": ""
+  },
+  {
+   "test": "Free T3",
+   "why": "FDA's CLIA records list this test on no ARCHITECT or Alinity system.",
+   "evidence": ""
+  },
+  {
+   "test": "Free T4",
+   "why": "FDA's CLIA records list this test on no ARCHITECT or Alinity system.",
+   "evidence": ""
+  },
+  {
+   "test": "HBeAg Quantitative",
+   "why": "FDA's CLIA records list this test on no ARCHITECT or Alinity system.",
+   "evidence": ""
+  },
+  {
+   "test": "HBsAg Confirmatory V.1",
+   "why": "FDA's CLIA records list this test on no ARCHITECT or Alinity system.",
+   "evidence": ""
+  },
+  {
+   "test": "HBsAg Next Qualitative",
+   "why": "FDA's CLIA records list this test on no ARCHITECT or Alinity system.",
+   "evidence": ""
+  },
+  {
+   "test": "HBsAg Qualitative II",
+   "why": "FDA's CLIA records list this test on no ARCHITECT or Alinity system.",
+   "evidence": ""
+  },
+  {
+   "test": "HBsAg Qualitative II Confirmatory",
+   "why": "FDA's CLIA records list this test on no ARCHITECT or Alinity system.",
+   "evidence": ""
+  },
+  {
+   "test": "HCV Ag",
+   "why": "FDA's CLIA records list this test on no ARCHITECT or Alinity system.",
+   "evidence": ""
+  },
+  {
+   "test": "HIV Ag/Ab Combo",
+   "why": "FDA's CLIA records list this test on no ARCHITECT or Alinity system.",
+   "evidence": ""
+  },
+  {
+   "test": "High Sensitive Troponin-I",
+   "why": "FDA's CLIA records list this test on no ARCHITECT or Alinity system.",
+   "evidence": ""
+  },
+  {
+   "test": "IGF-1",
+   "why": "FDA's CLIA records list this test on no ARCHITECT or Alinity system.",
+   "evidence": ""
+  },
+  {
+   "test": "MPO",
+   "why": "FDA's CLIA records list this test on no ARCHITECT or Alinity system.",
+   "evidence": ""
+  },
+  {
+   "test": "NSE",
+   "why": "FDA's CLIA records list this test on no ARCHITECT or Alinity system.",
+   "evidence": ""
+  },
+  {
+   "test": "NT-proBNP",
+   "why": "FDA's CLIA records list this test on no ARCHITECT or Alinity system.",
+   "evidence": ""
+  },
+  {
+   "test": "PIVKA-II",
+   "why": "FDA's CLIA records list this test on no ARCHITECT or Alinity system.",
+   "evidence": ""
+  },
+  {
+   "test": "Pepsinogen I",
+   "why": "FDA's CLIA records list this test on no ARCHITECT or Alinity system.",
+   "evidence": ""
+  },
+  {
+   "test": "Pepsinogen II",
+   "why": "FDA's CLIA records list this test on no ARCHITECT or Alinity system.",
+   "evidence": ""
+  },
+  {
+   "test": "ProGRP",
+   "why": "FDA's CLIA records list this test on no ARCHITECT or Alinity system.",
+   "evidence": ""
+  },
+  {
+   "test": "Reverse T3",
+   "why": "FDA's CLIA records list this test on no ARCHITECT or Alinity system.",
+   "evidence": ""
+  },
+  {
+   "test": "Rubella IgG",
+   "why": "FDA's CLIA records list this test on no ARCHITECT or Alinity system.",
+   "evidence": ""
+  },
+  {
+   "test": "Rubella IgM",
+   "why": "FDA's CLIA records list this test on no ARCHITECT or Alinity system.",
+   "evidence": ""
+  },
+  {
+   "test": "SCC",
+   "why": "FDA's CLIA records list this test on no ARCHITECT or Alinity system.",
+   "evidence": ""
+  },
+  {
+   "test": "SHBG",
+   "why": "FDA's CLIA records list this test on no ARCHITECT or Alinity system.",
+   "evidence": ""
+  },
+  {
+   "test": "Selenium",
+   "why": "FDA's CLIA records list this test on no ARCHITECT or Alinity system.",
+   "evidence": ""
+  },
+  {
+   "test": "Syphilis TP",
+   "why": "FDA's CLIA records list this test on no ARCHITECT or Alinity system.",
+   "evidence": ""
+  },
+  {
+   "test": "TSH receptor antibody",
+   "why": "FDA's CLIA records list this test on no ARCHITECT or Alinity system.",
+   "evidence": ""
+  },
+  {
+   "test": "Thyroglobulin",
+   "why": "FDA's CLIA records list this test on no ARCHITECT or Alinity system.",
+   "evidence": ""
+  },
+  {
+   "test": "Toxo IgG",
+   "why": "FDA's CLIA records list this test on no ARCHITECT or Alinity system.",
+   "evidence": ""
+  },
+  {
+   "test": "Toxo IgM",
+   "why": "FDA's CLIA records list this test on no ARCHITECT or Alinity system.",
+   "evidence": ""
+  },
+  {
+   "test": "Urine NGAL",
+   "why": "FDA's CLIA records list this test on no ARCHITECT or Alinity system.",
+   "evidence": ""
+  },
+  {
+   "test": "Vitamin A",
+   "why": "FDA's CLIA records list this test on no ARCHITECT or Alinity system.",
+   "evidence": ""
+  },
+  {
+   "test": "Vitamin B6",
+   "why": "FDA's CLIA records list this test on no ARCHITECT or Alinity system.",
+   "evidence": ""
+  },
+  {
+   "test": "Vitamin E",
+   "why": "FDA's CLIA records list this test on no ARCHITECT or Alinity system.",
+   "evidence": ""
+  },
+  {
+   "test": "Zinc",
+   "why": "FDA's CLIA records list this test on no ARCHITECT or Alinity system.",
+   "evidence": ""
+  },
+  {
+   "test": "rHTLV-I/II",
+   "why": "FDA's CLIA records list this test on no ARCHITECT or Alinity system.",
+   "evidence": ""
+  }
+ ],
+ "keep": [
+  {
+   "test": "Amikacin",
+   "why": "FDA records it on an ARCHITECT chemistry analyzer."
+  },
+  {
+   "test": "Carbamazepine",
+   "why": "FDA records it on an ARCHITECT chemistry analyzer."
+  },
+  {
+   "test": "Ceruloplasmin",
+   "why": "FDA records it on an ARCHITECT chemistry analyzer."
+  },
+  {
+   "test": "Copper",
+   "why": "FDA records it on an ARCHITECT chemistry analyzer."
+  },
+  {
+   "test": "Digoxin",
+   "why": "FDA records it on an ARCHITECT chemistry analyzer."
+  },
+  {
+   "test": "Microalbumin",
+   "why": "FDA records it on an ARCHITECT chemistry analyzer. Same test as FDA's Albumin, urinary, which is held."
+  },
+  {
+   "test": "Phenobarbital",
+   "why": "FDA records it on an ARCHITECT chemistry analyzer."
+  },
+  {
+   "test": "Phenytoin",
+   "why": "FDA records it on an ARCHITECT chemistry analyzer."
+  },
+  {
+   "test": "Theophylline",
+   "why": "FDA records it on an ARCHITECT chemistry analyzer."
+  },
+  {
+   "test": "Tobramycin",
+   "why": "FDA records it on an ARCHITECT chemistry analyzer."
+  },
+  {
+   "test": "Total Cholesterol",
+   "why": "FDA records it on an ARCHITECT chemistry analyzer."
+  },
+  {
+   "test": "Total Iron Binding Capacity",
+   "why": "FDA records it on an ARCHITECT chemistry analyzer."
+  },
+  {
+   "test": "Unsaturated Iron Binding Capacity (UIBC)",
+   "why": "FDA records it on an ARCHITECT chemistry analyzer. Same test as FDA's Iron binding capacity, unsat. (UIBC) no pretreatment, which is held."
+  },
+  {
+   "test": "Valproic Acid",
+   "why": "FDA records it on an ARCHITECT chemistry analyzer."
+  },
+  {
+   "test": "Vancomycin",
+   "why": "FDA records it on an ARCHITECT chemistry analyzer."
+  },
+  {
+   "test": "6-Acetylmorphine",
+   "why": "FDA records it on an ARCHITECT chemistry analyzer under its own name."
+  },
+  {
+   "test": "Amphetamine",
+   "why": "FDA records it on an ARCHITECT chemistry analyzer under its own name. Same test as FDA's Amphetamines, which is held."
+  },
+  {
+   "test": "Cocaine",
+   "why": "FDA records it on an ARCHITECT chemistry analyzer under its own name. Same test as FDA's Cocaine metabolites, which is held."
+  },
+  {
+   "test": "Direct Bilirubin",
+   "why": "FDA records it on an ARCHITECT chemistry analyzer under its own name. Same test as FDA's Bilirubin, direct, which is held."
+  },
+  {
+   "test": "Ecstasy",
+   "why": "FDA records it on an ARCHITECT chemistry analyzer under its own name. Same test as FDA's Methylenedioxymethamphetamine (MDMA), which is held."
+  },
+  {
+   "test": "HbA1c",
+   "why": "FDA records it on an ARCHITECT chemistry analyzer under its own name. Same test as FDA's Glycosylated Hemoglobin (Hgb A1c), which is held."
+  },
+  {
+   "test": "Methotrexate",
+   "why": "FDA records it on an ARCHITECT chemistry analyzer under its own name."
+  },
+  {
+   "test": "Salicylate",
+   "why": "FDA records it on an ARCHITECT chemistry analyzer under its own name. Same test as FDA's Salicylates, which is held."
+  },
+  {
+   "test": "Total Protein, Urine/CSF",
+   "why": "FDA records it on an ARCHITECT chemistry analyzer under its own name. Same test as FDA's Protein, total, urine, which is held."
+  },
+  {
+   "test": "Tramadol",
+   "why": "FDA records it on an ARCHITECT chemistry analyzer under its own name."
+  },
+  {
+   "test": "Triglycerides",
+   "why": "FDA records it on an ARCHITECT chemistry analyzer under its own name. Same test as FDA's Triglyceride, which is held."
+  },
+  {
+   "test": "Immunoglobulin A",
+   "why": "Same test as FDA's Immunoglobulins IgA on the c4000."
+  },
+  {
+   "test": "Immunoglobulin G",
+   "why": "Same test as FDA's Immunoglobulins IgG on the c4000."
+  },
+  {
+   "test": "Immunoglobulin M",
+   "why": "Same test as FDA's Immunoglobulins IgM on the c4000."
+  },
+  {
+   "test": "Vitamin D",
+   "why": "Same test as FDA's 25-hydroxyvitamin D (25-OH-D) on the c4000."
+  }
+ ],
+ "add": [
+  {
+   "analyte": "1,5-Anhydroglucitol",
+   "complexity": "MODERATE",
+   "specialty": "General Chemistry",
+   "evidence": "MODERATE CR160715 GlycoMark, Inc., GlycoMark"
+  },
+  {
+   "analyte": "Angiotensin converting enzyme (ACE)",
+   "complexity": "MODERATE",
+   "specialty": "General Chemistry",
+   "evidence": "MODERATE CR240601 BÜHLMANN Laboratories AG, BÜHLMANN ACE Kinetic; MODERATE CR240763 Sentinel CH. S.p.A., ACE Reagent"
+  },
+  {
+   "analyte": "Beta-2 microglobulin",
+   "complexity": "MODERATE",
+   "specialty": "General Immunology",
+   "evidence": "MODERATE K072078 Biokit Quantia Beta-2 Microglobulin"
+  },
+  {
+   "analyte": "Beta-hydroxybutyrate",
+   "complexity": "MODERATE",
+   "specialty": "General Chemistry",
+   "evidence": "MODERATE CR190757 DiaSys Diagnostic Systems GmbH, B-Hydroxybutyrate 21 FS"
+  },
+  {
+   "analyte": "Calprotectin",
+   "complexity": "HIGH",
+   "specialty": "General Immunology",
+   "evidence": "HIGH CR240231 BUHLMANN Laboratories AG, BUHLMANN fCAL turbo"
+  },
+  {
+   "analyte": "Clozapine",
+   "complexity": "MODERATE",
+   "specialty": "Toxicology",
+   "evidence": "MODERATE CR230292 Saladax Biomedical Inc., MyCare Psychiatry Clozapine Assay K"
+  },
+  {
+   "analyte": "Cystatin C",
+   "complexity": "MODERATE",
+   "specialty": "General Chemistry",
+   "evidence": "MODERATE CR220269 Kamiya Biomedical Company, K-ASSAY Cystatin C"
+  },
+  {
+   "analyte": "Elastase",
+   "complexity": "HIGH",
+   "specialty": "General Chemistry",
+   "evidence": "HIGH CR240111 BUHLMANN Laboratories AG, BUHLMANN fPELA turbo"
+  },
+  {
+   "analyte": "Fibrinogen",
+   "complexity": "MODERATE",
+   "specialty": "Hematology",
+   "evidence": "MODERATE CR170325 Kamiya Biomedical Company, Fibrinogen Immunoturbidometric Re"
+  },
+  {
+   "analyte": "Immunoglobulins IgE",
+   "complexity": "MODERATE",
+   "specialty": "General Immunology",
+   "evidence": "MODERATE K050493 Biokit Quantia IgE"
+  },
+  {
+   "analyte": "Kappa light chains",
+   "complexity": "MODERATE",
+   "specialty": "General Immunology",
+   "evidence": "MODERATE CR180158 Diazyme Human Kappa Free Light Chain Assay"
+  },
+  {
+   "analyte": "Methamphetamines",
+   "complexity": "MODERATE",
+   "specialty": "Toxicology",
+   "evidence": "MODERATE K093114 Thermo Scientific DRI Amphetamines Assay"
+  },
+  {
+   "analyte": "Procalcitonin (PCT)",
+   "complexity": "MODERATE",
+   "specialty": "Endocrinology",
+   "evidence": "MODERATE CR250595 DiaSys Diagnostic Systems GmbH, DiaSys Procalcitonin FS"
+  }
+ ],
+ "held_same_test": [
+  {
+   "fda": "25-hydroxyvitamin D (25-OH-D)",
+   "library": "Vitamin D"
+  },
+  {
+   "fda": "Albumin, urinary",
+   "library": "Microalbumin"
+  },
+  {
+   "fda": "Amphetamines",
+   "library": "Amphetamine"
+  },
+  {
+   "fda": "Bilirubin, direct",
+   "library": "Direct Bilirubin"
+  },
+  {
+   "fda": "Cerebrospinal fluid (CSF) protein",
+   "library": "Total Protein, Urine/CSF"
+  },
+  {
+   "fda": "Cocaine metabolites",
+   "library": "Cocaine"
+  },
+  {
+   "fda": "Glycosylated Hemoglobin (Hgb A1c)",
+   "library": "HbA1c"
+  },
+  {
+   "fda": "Immunoglobulins IgA",
+   "library": "Immunoglobulin A"
+  },
+  {
+   "fda": "Immunoglobulins IgG",
+   "library": "Immunoglobulin G"
+  },
+  {
+   "fda": "Immunoglobulins IgM",
+   "library": "Immunoglobulin M"
+  },
+  {
+   "fda": "Iron binding capacity, unsat. (UIBC) no pretreatment",
+   "library": "Unsaturated Iron Binding Capacity (UIBC)"
+  },
+  {
+   "fda": "Methylenedioxymethamphetamine (MDMA)",
+   "library": "Ecstasy"
+  },
+  {
+   "fda": "Protein, total, urine",
+   "library": "Total Protein, Urine/CSF"
+  },
+  {
+   "fda": "Salicylates",
+   "library": "Salicylate"
+  },
+  {
+   "fda": "Triglyceride",
+   "library": "Triglycerides"
+  }
+ ]
+}
