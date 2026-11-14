@@ -53,6 +53,18 @@ export function labDayOfStamp(stamp: string | null | undefined): string {
   return Number.isNaN(at.getTime()) ? "" : todayInZone(activeLabTimeZone, at);
 }
 
+// A stored value shown as a day, YYYY-MM-DD (BUG-171, 2026-11-13). Screens used to cut a stored moment to its first 10
+// characters, which is its UTC day, so anything entered after about 7 PM Eastern read as the next day. A bare date is
+// returned as is. A stored UTC midnight ("...T00:00:00Z", or "... 00:00:00") is a picked date that a route saved as a
+// moment, so it keeps its own date rather than moving back a day in a US zone. Any other moment is the active lab's day.
+// Unreadable input gives its first 10 characters, as before.
+export function labDayOf(value: string | null | undefined): string {
+  const s = String(value ?? "").trim();
+  if (!s) return "";
+  if (/^\d{4}-\d{2}-\d{2}([ T]00:00(:00(\.0+)?)?(Z|[+-]00:?00)?)?$/.test(s)) return s.slice(0, 10);
+  return labDayOfStamp(s) || s.slice(0, 10);
+}
+
 // The same moment as "YYYY-MM-DD HH:MM" on the active lab's clock (24-hour), for history and audit lines.
 export function labStampLabel(stamp: string | null | undefined): string {
   const day = labDayOfStamp(stamp);

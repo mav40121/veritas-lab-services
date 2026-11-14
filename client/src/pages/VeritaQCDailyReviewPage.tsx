@@ -21,7 +21,7 @@ import {
   AlertTriangle, CheckCircle2, Lock, ClipboardList, ChevronRight, FileDown, RefreshCw,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { labDayOfStamp } from "@/lib/labDate";
+import { labDayOfStamp, labDayOf } from "@/lib/labDate";
 
 interface ViolationRow {
   id: number;
@@ -675,7 +675,7 @@ export default function VeritaQCDailyReviewPage() {
                                     </span>
                                     {r.corrective_actions.map(c => c.resolved_at ? (
                                       <span key={`res-${c.id}`} className="inline-flex items-center gap-1 text-emerald-700" title={c.resolution_notes || ""} data-testid={`ca-closed-${c.id}`}>
-                                        <CheckCircle2 className="h-3 w-3" /> Closed {c.resolved_at.slice(0, 10)}{c.resolved_by_name ? ` by ${c.resolved_by_name}` : ""}
+                                        <CheckCircle2 className="h-3 w-3" /> Closed {labDayOf(c.resolved_at)}{c.resolved_by_name ? ` by ${c.resolved_by_name}` : ""}
                                       </span>
                                     ) : !isReadOnly ? (
                                       <Button

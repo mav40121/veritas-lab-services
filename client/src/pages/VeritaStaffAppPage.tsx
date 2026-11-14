@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { labTodayIso } from "@/lib/labDate";
+import { labTodayIso, labDayOf } from "@/lib/labDate";
 import { Link, useLocation, useParams } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/components/AuthContext";
@@ -2462,7 +2462,7 @@ function VeritaCeuCard({ employeeId }: { employeeId: number }) {
                   </a>
                   <div className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
                     <Calendar size={10} />
-                    {e.activityDate || e.createdAt.slice(0, 10)}
+                    {e.activityDate || labDayOf(e.createdAt)}
                     {!e.inCycle && <span className="ml-1 italic">outside current cycle</span>}
                   </div>
                 </div>
@@ -3135,7 +3135,7 @@ function PositionDescriptionsCard({ className = "" }: { className?: string }) {
                     </div>
                     <div className="flex items-center justify-between">
                       <div className="text-[10px] text-muted-foreground">
-                        {existing?.updated_at ? `Last updated ${existing.updated_at.split("T")[0]}` : "Never saved"}
+                        {existing?.updated_at ? `Last updated ${labDayOf(existing.updated_at)}` : "Never saved"}
                       </div>
                       <Button
                         size="sm"

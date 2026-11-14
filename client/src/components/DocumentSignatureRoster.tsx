@@ -4,6 +4,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getQueryFn } from "@/lib/queryClient";
+import { labDayOf } from "@/lib/labDate";
 
 type RosterPerson = {
   employee_id: number; name: string; title: string | null; has_login: boolean;
@@ -25,7 +26,7 @@ type RosterStatus = {
   approved: boolean;
 };
 
-const day = (s: string | null) => (s ? s.slice(0, 10) : "");
+const day = (s: string | null) => labDayOf(s);
 
 export function DocumentSignatureRoster({ labId, documentId }: { labId: number; documentId: number }) {
   const [openOnly, setOpenOnly] = useState(false);

@@ -20,6 +20,7 @@ import { authHeaders, getUser } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { useLabRoute } from "@/hooks/useLabRoute";
+import { labDayOf } from "@/lib/labDate";
 
 interface DueSoonRow {
   id: number;
@@ -49,7 +50,7 @@ interface DueSoonGroup {
 
 function formatShortDate(iso: string | null | undefined): string {
   if (!iso) return "-";
-  const dateOnly = iso.length >= 10 ? iso.slice(0, 10) : iso;
+  const dateOnly = labDayOf(iso) || iso;
   const [y, m, d] = dateOnly.split("-");
   if (!y || !m || !d) return iso;
   return `${m}/${d}/${y.slice(2)}`;

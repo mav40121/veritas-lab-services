@@ -17,7 +17,7 @@
 // items" section that Phase B fills in.
 
 import { useEffect, useMemo, useState } from "react";
-import { labTodayIso } from "@/lib/labDate";
+import { labTodayIso, labDayOf } from "@/lib/labDate";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -741,7 +741,7 @@ function EditDocumentDialog({ doc, labId, onClose, onSubmit, onArchive, pending 
               </SelectContent>
             </Select>
             {doc.owner_name && doc.owner_attested_at && (
-              <p className="text-xs text-muted-foreground">Last attested by <strong>{doc.owner_name}</strong> on {doc.owner_attested_at.slice(0, 10)}. Changing owner restamps the attestation.</p>
+              <p className="text-xs text-muted-foreground">Last attested by <strong>{doc.owner_name}</strong> on {labDayOf(doc.owner_attested_at)}. Changing owner restamps the attestation.</p>
             )}
           </div>
           <div className="space-y-1">

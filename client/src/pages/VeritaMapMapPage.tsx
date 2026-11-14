@@ -1,5 +1,5 @@
 import { normalizeSpecimen, SPECIMEN_SUGGESTIONS, SPECIMEN_MAX_LENGTH, specimenLabel } from "@shared/veritamapSpecimen";
-import { labTodayIso } from "@/lib/labDate";
+import { labTodayIso, labDayOf } from "@/lib/labDate";
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Link, useRoute, useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -871,7 +871,7 @@ interface TestRowProps {
 function formatShortDate(iso: string | null | undefined): string {
   if (!iso) return "-";
   // Accept full ISO or YYYY-MM-DD
-  const dateOnly = iso.length >= 10 ? iso.slice(0, 10) : iso;
+  const dateOnly = labDayOf(iso) || iso;
   const [y, m, d] = dateOnly.split("-");
   if (!y || !m || !d) return iso;
   return `${m}/${d}/${y.slice(2)}`;
@@ -2147,7 +2147,7 @@ function TestRow({ test, onChange, onChangeMany, onRowMount, analyteBands, amrVa
               <div className="flex flex-wrap items-center gap-2">
                 {localAv.mec_reviewed_at ? (
                   <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
-                    Critical values: MEC reviewed/approved {String(localAv.mec_reviewed_at).slice(0, 10)}{localAv.mec_reviewed_by ? `, recorded by ${localAv.mec_reviewed_by}` : ""}
+                    Critical values: MEC reviewed/approved {labDayOf(localAv.mec_reviewed_at)}{localAv.mec_reviewed_by ? `, recorded by ${localAv.mec_reviewed_by}` : ""}
                   </span>
                 ) : !readOnly ? (
                   <button type="button" className="text-[10px] underline text-blue-600 hover:text-blue-800" onClick={() => { setMecOpen(o => !o); setAttestFor(null); }}>
@@ -2157,7 +2157,7 @@ function TestRow({ test, onChange, onChangeMany, onRowMount, analyteBands, amrVa
                 {refLocked ? (
                   <>
                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
-                      Reference range attested per 42 CFR 493.1253 by {localAv.ref_attested_by}, {localAv.ref_attested_title} on {String(localAv.ref_attested_at).slice(0, 10)}
+                      Reference range attested per 42 CFR 493.1253 by {localAv.ref_attested_by}, {localAv.ref_attested_title} on {labDayOf(localAv.ref_attested_at)}
                     </span>
                     {canUnlock && (
                       <button type="button" className="text-[10px] underline text-amber-700 hover:text-amber-900" disabled={provBusy}
@@ -2257,8 +2257,8 @@ function TestRow({ test, onChange, onChangeMany, onRowMount, analyteBands, amrVa
                     {/* Wave A4: per-instrument AMR attestation per 42 CFR 493.1253 */}
                     {onProvenance && (amrLocked ? (
                       <span className="flex items-center gap-1">
-                        <span className="text-[10px] text-emerald-700 dark:text-emerald-400" title={`Attested by ${localAmr[inst.id]?.amr_attested_by}, ${localAmr[inst.id]?.amr_attested_title} on ${String(localAmr[inst.id]?.amr_attested_at).slice(0, 10)}`}>
-                          Attested {String(localAmr[inst.id]?.amr_attested_at).slice(0, 10)}
+                        <span className="text-[10px] text-emerald-700 dark:text-emerald-400" title={`Attested by ${localAmr[inst.id]?.amr_attested_by}, ${localAmr[inst.id]?.amr_attested_title} on ${labDayOf(localAmr[inst.id]?.amr_attested_at)}`}>
+                          Attested {labDayOf(localAmr[inst.id]?.amr_attested_at)}
                         </span>
                         {canUnlock && (
                           <button type="button" className="text-[10px] underline text-amber-700 hover:text-amber-900" disabled={provBusy}

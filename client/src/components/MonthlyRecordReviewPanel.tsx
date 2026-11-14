@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ClipboardCheck, FileSpreadsheet } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { labDayOf } from "@/lib/labDate";
 
 type ReviewItem = {
   key: string; type: "equipment" | "temp_unit" | "stain_manual"; id: number; name: string; detail: string | null; retired: boolean;
@@ -160,7 +161,7 @@ export function MonthlyRecordReviewPanel({ labId }: { labId: number }) {
                       <td className="py-2 text-xs">
                         {i.review ? (
                           <div className="text-green-800 dark:text-green-300">
-                            <div className="font-medium">Reviewed {i.review.signed_at.slice(0, 10)}</div>
+                            <div className="font-medium">Reviewed {labDayOf(i.review.signed_at)}</div>
                             <div>{i.review.typed_signature}, {i.review.capacity_label}</div>
                             {i.review.corrective_action && <div className="text-foreground mt-0.5 whitespace-pre-wrap">Corrective action: {i.review.corrective_action}</div>}
                           </div>

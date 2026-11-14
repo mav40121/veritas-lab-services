@@ -1,5 +1,5 @@
 import { NaReasonPresets } from "@/components/competency/NaReasonPresets";
-import { labTodayIso, labLocaleDate, labDayOfStamp } from "@/lib/labDate";
+import { labTodayIso, labLocaleDate, labDayOfStamp, labDayOf } from "@/lib/labDate";
 import { useState, useEffect, useLayoutEffect, useMemo, useRef, type ReactNode, type ComponentProps } from "react";
 import DOMPurify from "dompurify";
 import { Link, useLocation, useParams } from "wouter";
@@ -2943,7 +2943,7 @@ function AssessmentsTab({ program, onNewAssessment, onEdit }: { program: Program
                     <span className="text-xs text-muted-foreground">{assessmentTypeLabel(a.assessment_type)}</span>
                     {(a as any).locked === 1 && (a as any).completion_date && (
                       <Badge variant="outline" className="text-[10px] text-emerald-700 bg-emerald-500/10 border-emerald-500/30">
-                        Signed {String((a as any).completion_date).split("T")[0]}
+                        Signed {labDayOf((a as any).completion_date)}
                       </Badge>
                     )}
                   </div>
@@ -3073,7 +3073,7 @@ function AssessmentsTab({ program, onNewAssessment, onEdit }: { program: Program
                                 <Badge className={met
                                   ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px]"
                                   : "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 text-[10px]"}>
-                                  {met ? (date ? `Met ${String(date).split("T")[0]}` : "Met") : "Not yet"}
+                                  {met ? (date ? `Met ${labDayOf(String(date))}` : "Met") : "Not yet"}
                                 </Badge>
                               </td>
                             </tr>
@@ -5478,7 +5478,7 @@ function QuizCardWithAssignStatus({
           <div className="min-w-0 flex-1">
             <div className="text-sm font-medium truncate">{quiz.title || quiz.method_group_name || `Quiz #${quiz.id}`}</div>
             <div className="text-[11px] text-muted-foreground truncate">
-              {methodGroupLabel} &middot; created {quiz.created_at.split("T")[0]}
+              {methodGroupLabel} &middot; created {labDayOf(quiz.created_at)}
               {quiz.randomize_questions ? " · randomized" : ""}
             </div>
             {followsLine && <div className="text-[11px] text-muted-foreground" data-testid="quiz-follows-group">{followsLine}</div>}
