@@ -45,7 +45,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { useLabRoute } from "@/hooks/useLabRoute";
-import { labDayOfStamp, labStampLabel } from "@/lib/labDate";
+import { labDayOfStamp, labStampLabel, labDayOf } from "@/lib/labDate";
 
 type Accreditor = "CAP" | "TJC" | "COLA" | "CMS" | "AABB" | "ISO" | "Other";
 type FindingStatus = "open" | "drafting" | "submitted" | "accepted" | "rejected_resubmit" | "closed";
@@ -201,7 +201,7 @@ function LinkagePanel({ activeLabId, findingId }: { activeLabId: number; finding
                   <div key={s.corrective_action_id} className="rounded-md border p-2.5 text-sm">
                     <span className="font-medium">{s.analyte}{s.qc_level ? ` ${s.qc_level}` : ""}</span>
                     {s.lot_number ? <span className="text-muted-foreground"> (lot {s.lot_number})</span> : null}
-                    <div className="text-xs text-muted-foreground">Corrective action {s.status}, recorded {s.taken_at?.slice(0, 10)}: {s.action_taken}</div>
+                    <div className="text-xs text-muted-foreground">Corrective action {s.status}, recorded {labDayOf(s.taken_at)}: {s.action_taken}</div>
                   </div>
                 ))}
               </div>

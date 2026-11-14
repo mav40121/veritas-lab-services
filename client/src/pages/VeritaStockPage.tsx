@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { labTodayIso } from "@/lib/labDate";
+import { labTodayIso, labDayOf, labDaysFromToday } from "@/lib/labDate";
 import { Link } from "wouter";
 import { useAuth } from "@/components/AuthContext";
 import { ModuleHowToCard } from "@/components/ModuleHowToCard";
@@ -761,7 +761,7 @@ function ItemFormDialog({ open, onClose, onSave, editItem, inventory, consumptio
                     next.on_order_placed_date = today;
                     if (!form.on_order_expected_date) {
                       const lt = Number(form.lead_time_days) || 0;
-                      next.on_order_expected_date = new Date(Date.now() + lt * 86400000).toISOString().slice(0, 10);
+                      next.on_order_expected_date = labDaysFromToday(lt);
                     }
                   }
                   setForm(next);
@@ -3330,7 +3330,7 @@ export default function VeritaStockInventoryPage() {
                   {countHistoryRows.map((r: any, i: number) => (
                     <tr key={i} className="border-t border-border">
                       <td className="p-2">{r.item_name}</td>
-                      <td className="p-2 font-mono">{String(r.occurred_at).slice(0, 10)}</td>
+                      <td className="p-2 font-mono">{labDayOf(r.occurred_at)}</td>
                       <td className="p-2 text-right font-mono">{r.counted_qty}</td>
                       <td className="p-2 text-right font-mono">{r.previous_qty ?? ""}</td>
                       <td className="p-2 text-right font-mono">{r.delta == null ? "" : (r.delta > 0 ? `+${r.delta}` : r.delta)}</td>

@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { FolderOpen, Plus, ExternalLink, Trash2, Lock, Building2, FileText, Download } from "lucide-react";
+import { labDayOf } from "@/lib/labDate";
 
 // Plan gate: explicit allowlist (NOT a blocklist), per the canonical module pattern.
 const SUITE_PLANS = ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "clinic", "waived", "community", "hospital", "large_hospital", "enterprise"];
@@ -228,7 +229,7 @@ export default function SystemRepositoryPage() {
                             {d.description && <div className="text-xs text-muted-foreground mt-0.5">{d.description}</div>}
                             <div className="text-[11px] text-muted-foreground mt-1">
                               {d.doc_kind === "file" && d.file_size ? `${(d.file_size / 1024 / 1024).toFixed(d.file_size < 1048576 ? 2 : 1)} MB file · ` : ""}
-                              {d.added_by_name ? `Added by ${d.added_by_name}` : "Added"}{d.created_at ? ` on ${d.created_at.slice(0, 10)}` : ""}
+                              {d.added_by_name ? `Added by ${d.added_by_name}` : "Added"}{d.created_at ? ` on ${labDayOf(d.created_at)}` : ""}
                             </div>
                           </div>
                           <Button size="sm" variant="ghost" className="text-muted-foreground hover:text-destructive shrink-0" hidden={!canManageRepo} onClick={() => removeDoc(d.id)} title="Remove">

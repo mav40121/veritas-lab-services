@@ -25,6 +25,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   ArrowLeft, ArrowRightLeft, Building2, Truck, RefreshCw, AlertTriangle, Package, Search, X, Check,
 } from "lucide-react";
+import { labDayOf } from "@/lib/labDate";
 
 interface LocCell {
   item_id: number;
@@ -356,7 +357,7 @@ export default function VeritaStockEnterprisePage() {
                 <li key={b.batch_id} className="rounded-lg border bg-card p-3">
                   <div className="flex items-center justify-between gap-3 mb-1.5">
                     <div className="text-sm font-medium">{b.from_lab_name} to {b.to_lab_name}</div>
-                    <span className="text-xs text-muted-foreground whitespace-nowrap">{(b.created_at || "").slice(0, 10)}</span>
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">{labDayOf(b.created_at)}</span>
                   </div>
                   <ul className="text-sm text-muted-foreground mb-2 space-y-0.5">
                     {b.items.map((it) => (
@@ -585,7 +586,7 @@ export default function VeritaStockEnterprisePage() {
                       {t.accepted_by_name && t.status === "accepted" && ` · accepted by ${t.accepted_by_name}`}
                     </div>
                   </div>
-                  <span className="text-xs text-muted-foreground whitespace-nowrap">{(t.created_at || "").slice(0, 10)}</span>
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">{labDayOf(t.created_at)}</span>
                 </li>
               ))}
             </ul>

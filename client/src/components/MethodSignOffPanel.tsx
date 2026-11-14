@@ -20,6 +20,7 @@ import { MILESTONE_LABEL, MONTH_NAMES, initialsOf, milestonesForComplexity, type
 import { NEEDS_REVIEW } from "@shared/competencyStatus";
 import SignedEntries from "@/components/SignedEntries";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { labDayOf } from "@/lib/labDate";
 
 // BUG-051 (2026-10-14): the Overall Determination from the whole-record form, now on each method's sign-off.
 export type Determination = "pass" | "fail" | "remediation";
@@ -64,7 +65,7 @@ const RULE_TEXT: Record<string, string> = {
 };
 const fmt = (iso: string | null | undefined) => {
   if (!iso) return "";
-  const [y, m, d] = iso.slice(0, 10).split("-");
+  const [y, m, d] = labDayOf(iso).split("-");
   return y && m && d ? `${m}/${d}/${y}` : iso;
 };
 const localToday = () => new Date().toLocaleDateString("en-CA");

@@ -20,7 +20,7 @@
 // - No NavBar, no chrome, no links out. Kiosk surface.
 
 import { Fragment, useEffect, useRef, useState } from "react";
-import { labTodayIso } from "@/lib/labDate";
+import { labTodayIso, labDayOf } from "@/lib/labDate";
 import { useLocation } from "wouter";
 import DOMPurify from "dompurify";
 import { QuizQuestionImage } from "@/components/QuizQuestionImage";
@@ -1992,7 +1992,7 @@ function StaffPortalQuizzesView({
                         <div className="text-sm font-medium">{q.title}</div>
                         <div className="text-[11px] text-muted-foreground">
                           {attemptLabel(q) ? <span className="mr-2 font-semibold">{attemptLabel(q)}</span> : null}
-                          {q.completed_at ? `Completed ${q.completed_at.split("T")[0]}` : ""}
+                          {q.completed_at ? `Completed ${labDayOf(q.completed_at)}` : ""}
                           {q.score != null ? <span className="ml-2">Score: <span className="font-semibold">{q.score}%</span></span> : null}
                         </div>
                       </div>

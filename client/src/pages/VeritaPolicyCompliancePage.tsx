@@ -7,7 +7,7 @@
 // reminders + auto-expire.
 
 import { useState } from "react";
-import { labTodayIso, labLocaleDate } from "@/lib/labDate";
+import { labTodayIso, labLocaleDate, labDayOf } from "@/lib/labDate";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
@@ -733,7 +733,7 @@ export default function VeritaPolicyCompliancePage() {
                       <td className="py-2 pr-3 text-muted-foreground">{s.title || ""}</td>
                       <td className="py-2 pr-3 text-right">{s.signed_count}</td>
                       <td className="py-2 pr-3 text-right" data-testid="compliance-carried-count">{s.carried_count || 0}</td>
-                      <td className="py-2 pr-3 text-right text-muted-foreground">{s.last_signed_at ? String(s.last_signed_at).slice(0, 10) : ""}</td>
+                      <td className="py-2 pr-3 text-right text-muted-foreground">{s.last_signed_at ? labDayOf(s.last_signed_at) : ""}</td>
                     </tr>
                   ))}
                 </tbody>

@@ -3,6 +3,7 @@
 // The competency element names and the raw fields each element records, shared by the person page (entry), the
 // By-instrument page and the read-only view of a signed set (SignedEntries). Elements 1-6 are the CLIA elements
 // (42 CFR 493.1413(b)(8), 493.1451(b)(8)); 7 and 8 are the NYS CLEP additions.
+import { labDayOf } from "./labDate";
 
 export const ELEMENT_NAMES: Record<number, string> = {
   1: "Direct Observation of Routine Patient Test Performance",
@@ -34,6 +35,6 @@ export const ELEMENT_FIELDS: Record<number, Array<{ key: string; label: string; 
 /** A stored YYYY-MM-DD as MM/DD/YYYY; anything else unchanged. */
 export const fmtDate = (iso: string | null | undefined): string => {
   if (!iso) return "";
-  const [y, m, d] = String(iso).slice(0, 10).split("-");
+  const [y, m, d] = labDayOf(String(iso)).split("-");
   return y && m && d ? `${m}/${d}/${y}` : String(iso);
 };

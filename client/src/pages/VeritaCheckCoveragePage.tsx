@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { labTodayIso } from "@/lib/labDate";
+import { labTodayIso, labDayOf } from "@/lib/labDate";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { Link, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -628,7 +628,7 @@ export default function VeritaCheckCoveragePage() {
                     <td className="py-2 px-3 text-xs whitespace-nowrap">{o.performedOn}</td>
                     <td className="py-2 px-3 text-xs">{o.recordsLocation}</td>
                     <td className="py-2 px-3 text-xs">{o.reviewedBy}</td>
-                    <td className="py-2 px-3 text-xs text-muted-foreground">{o.createdBy}{o.createdAt ? `, ${o.createdAt.slice(0, 10)}` : ""}</td>
+                    <td className="py-2 px-3 text-xs text-muted-foreground">{o.createdBy}{o.createdAt ? `, ${labDayOf(o.createdAt)}` : ""}</td>
                     <td className="py-2 px-3">{!isReadOnly && <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => setVoidTarget(o)} data-testid={`cov-outside-void-${o.id}`}>Remove</Button>}</td>
                   </tr>
                 ))}</tbody>

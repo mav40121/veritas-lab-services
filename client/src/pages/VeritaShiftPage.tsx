@@ -29,6 +29,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { saveAs } from "file-saver";
+import { labDayOf } from "@/lib/labDate";
 
 interface StaffingStudy {
   id: number;
@@ -577,7 +578,7 @@ function AdequacyPanel({ study, readOnly, onAttested }: {
           <div className={`rounded-md border p-3 text-sm ${study.adequacy_determination === "adequate" ? "border-emerald-300 bg-emerald-50 dark:bg-emerald-950/20" : "border-amber-300 bg-amber-50 dark:bg-amber-950/20"}`}>
             <div className="font-medium">
               {study.adequacy_determination === "adequate" ? "Staffing determined adequate" : "Gap identified"}
-              {" "}by {study.adequacy_attested_by}{study.adequacy_attested_title ? `, ${study.adequacy_attested_title}` : ""} on {String(study.adequacy_attested_at).slice(0, 10)}
+              {" "}by {study.adequacy_attested_by}{study.adequacy_attested_title ? `, ${study.adequacy_attested_title}` : ""} on {labDayOf(study.adequacy_attested_at)}
             </div>
             {study.adequacy_note && <div className="text-xs mt-1">{study.adequacy_note}</div>}
           </div>

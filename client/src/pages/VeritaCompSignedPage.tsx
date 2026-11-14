@@ -18,6 +18,7 @@ import { ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { MILESTONE_LABEL, type MethodMilestone } from "@shared/competencySignoff";
 import { fmtDate } from "@/lib/competencyElements";
 import { useStaffOwnScope } from "@/hooks/useStaffLogin";
+import { labDayOf } from "@/lib/labDate";
 
 interface SignedRow {
   employeeId: number; employeeName: string; employeeTitle: string | null;
@@ -62,7 +63,7 @@ export default function VeritaCompSignedPage() {
     if (needle && !`${r.employeeName} ${r.methodName}`.toLowerCase().includes(needle)) return false;
     if (dept && (r.department || "Other") !== dept) return false;
     if (milestone && r.milestone !== milestone) return false;
-    const d = String(r.signedDate || "").slice(0, 10);
+    const d = labDayOf(r.signedDate);
     if (from && (!d || d < from)) return false;
     if (to && (!d || d > to)) return false;
     return true;

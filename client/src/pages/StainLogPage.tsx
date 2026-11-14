@@ -12,7 +12,7 @@ import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { useLabRoute } from "@/hooks/useLabRoute";
-import { labTodayIso } from "@/lib/labDate";
+import { labTodayIso, labDayOf } from "@/lib/labDate";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -54,7 +54,7 @@ const blankDraft = (): RowDraft => ({ codes: [], lot: "", expiration: "", action
 
 const fieldClass = "h-9 w-full rounded-md border border-border bg-background px-2 text-sm";
 const shortDate = (d: string) => `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}/${d.slice(0, 4)}`;
-const reviewLine = (r: Review) => r ? `Reviewed ${r.signed_at.slice(0, 10)} by ${r.typed_signature}, ${r.capacity_label}${r.corrective_action ? `. Corrective action: ${r.corrective_action}` : ""}` : "Not reviewed yet";
+const reviewLine = (r: Review) => r ? `Reviewed ${labDayOf(r.signed_at)} by ${r.typed_signature}, ${r.capacity_label}${r.corrective_action ? `. Corrective action: ${r.corrective_action}` : ""}` : "Not reviewed yet";
 
 // Printing never follows the screen's theme: black on white, by inline style, so dark mode can't print white on white.
 const P = {
@@ -467,7 +467,7 @@ export default function StainLogPage() {
                 <div className="mt-4 overflow-x-auto" data-testid="stain-voided">
                   <div className="text-sm font-medium mb-1">Voided entries</div>
                   <ul className="text-xs space-y-0.5">
-                    {grid.voided.map((e) => <li key={e.id}><span className="line-through">{e.log_date} {rowNameOf(e.row_id)} {codeMark(e.code)} ({e.initials})</span> · voided {e.voided_at?.slice(0, 10)}{e.voided_by_name ? ` by ${e.voided_by_name}` : ""}: {e.void_reason}</li>)}
+                    {grid.voided.map((e) => <li key={e.id}><span className="line-through">{e.log_date} {rowNameOf(e.row_id)} {codeMark(e.code)} ({e.initials})</span> · voided {labDayOf(e.voided_at)}{e.voided_by_name ? ` by ${e.voided_by_name}` : ""}: {e.void_reason}</li>)}
                   </ul>
                 </div>
               )}
@@ -517,7 +517,7 @@ export default function StainLogPage() {
                 <div className="mt-4" data-testid="manual-voided">
                   <div className="text-sm font-medium mb-1">Voided entries</div>
                   <ul className="text-xs space-y-0.5">
-                    {manual.voided.map((e) => <li key={e.id}><span className="line-through">{e.log_date} {e.specimen_type} ({e.initials})</span> · voided {e.voided_at?.slice(0, 10)}{e.voided_by_name ? ` by ${e.voided_by_name}` : ""}: {e.void_reason}</li>)}
+                    {manual.voided.map((e) => <li key={e.id}><span className="line-through">{e.log_date} {e.specimen_type} ({e.initials})</span> · voided {labDayOf(e.voided_at)}{e.voided_by_name ? ` by ${e.voided_by_name}` : ""}: {e.void_reason}</li>)}
                   </ul>
                 </div>
               )}
@@ -566,7 +566,7 @@ export default function StainLogPage() {
             {grid.voided.length > 0 && (
               <>
                 <h2 style={P.h2}>Voided entries</h2>
-                {grid.voided.map((e) => <p key={e.id} style={P.line}>{e.log_date} {rowNameOf(e.row_id)} {codeMark(e.code)} ({e.initials}), voided {e.voided_at?.slice(0, 10)}: {e.void_reason}</p>)}
+                {grid.voided.map((e) => <p key={e.id} style={P.line}>{e.log_date} {rowNameOf(e.row_id)} {codeMark(e.code)} ({e.initials}), voided {labDayOf(e.voided_at)}: {e.void_reason}</p>)}
               </>
             )}
             <p style={{ ...P.line, marginTop: "6px" }}><strong>Monthly review:</strong> {reviewLine(grid.review)}</p>
@@ -586,7 +586,7 @@ export default function StainLogPage() {
             {manual.voided.length > 0 && (
               <>
                 <h2 style={P.h2}>Voided entries</h2>
-                {manual.voided.map((e) => <p key={e.id} style={P.line}>{e.log_date} {e.specimen_type} ({e.initials}), voided {e.voided_at?.slice(0, 10)}: {e.void_reason}</p>)}
+                {manual.voided.map((e) => <p key={e.id} style={P.line}>{e.log_date} {e.specimen_type} ({e.initials}), voided {labDayOf(e.voided_at)}: {e.void_reason}</p>)}
               </>
             )}
             <p style={{ ...P.line, marginTop: "6px" }}><strong>Monthly review:</strong> {reviewLine(manual.review)}</p>
