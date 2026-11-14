@@ -59,6 +59,15 @@ FAMILY_EXTRA = {
     r"\bi stat 1\b": [r"\bi stat chem 8\b"],
     r"\bdimension vista\b": [r"\bdimension vista (integrated )?system\b"],
 }
+# Analyzers whose model name is an ordinary word another maker also uses. An FDA system
+# counts only if it also names this maker (2026-11-13 review: "Immucor NEO" matched
+# Abbott's FreeStyle Precision Neo meter and Carolina's Neo analyzers; both Ortho VISION
+# entries matched the Abbott Vision chemistry analyzer and Alfa's Vision drug cup).
+# Keys are regexes on the normalized library key; values on normalized FDA system names.
+MAKER_REQUIRED = {
+    r"\bimmucor neo\b": r"\b(immucor|galileo)\b",
+    r"\bortho vision\b": r"\bortho\b",
+}
 # A family name: the model tokens minus the trailing model number or suffix, then a
 # generic word ("Atellica CI Analyzer", "Dimension Vista System", "IMMULITE 2000 Analyzer").
 FAMILY_WORDS = r"(analy[sz]ers?|systems?|integrated|instruments?)"
@@ -185,11 +194,17 @@ def main():
                 systems = [s for s, n in sys_norm.items() if rx2.search(n)]
                 if systems:
                     match = "fallback"
+        maker = next((p_ for kr, p_ in MAKER_REQUIRED.items() if re.search(kr, norm(key))), None)
+        if maker and systems:
+            systems = [s for s in systems if re.search(maker, sys_norm[s])]
+            if not systems:
+                match = "none"
         recs = [r for s in systems for r in by_system[s]]
         qual_names = []
         if match.startswith("exact"):
             seen = {id(r) for r in recs}
-            qhits = [r for r in qual_recs if id(r) not in seen and (rx.search(r["_qn"]) or (rx_alt and rx_alt.search(r["_qn"])))]
+            qhits = [r for r in qual_recs if id(r) not in seen and (rx.search(r["_qn"]) or (rx_alt and rx_alt.search(r["_qn"])))
+                     and (not maker or re.search(maker, norm(r["TEST_SYSTEM_NAME"]) + " " + r["_qn"]))]
             if qhits:
                 recs += qhits
                 qual_names = sorted({f'{r["TEST_SYSTEM_NAME"].strip()} [qualifier: {r["_q"]}]' for r in qhits})
