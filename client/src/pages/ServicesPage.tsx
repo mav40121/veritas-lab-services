@@ -183,7 +183,7 @@ export default function ServicesPage() {
           </h1>
           <p className="text-muted-foreground text-lg max-w-2xl leading-relaxed mb-4">
             Led by Michael Veri, MS, MBA, MLS(ASCP), CPHQ. Former TJC Laboratory
-            Surveyor with over 200 surveys conducted nationally, former
+            Surveyor with over 200 facility inspections nationally, former
             clinical laboratory director of 12 years, and author of the
             forthcoming Lab Management 101.
           </p>
@@ -242,7 +242,7 @@ export default function ServicesPage() {
               <p className="text-muted-foreground leading-relaxed">
                 Michael Veri has been a lab tech since 2003, and still is. Twelve
                 of those years were as a clinical laboratory director and four as
-                a TJC Laboratory Surveyor, where he conducted over 200 surveys at
+                a TJC Laboratory Surveyor, where he conducted over 200 inspections at
                 hospitals, reference laboratories, and outpatient centers across
                 the country. He retired from the US Army Reserve after 23 years of
                 service. He holds an MS, an MBA, MLS(ASCP) certification, and the
@@ -262,7 +262,7 @@ export default function ServicesPage() {
                 <div className="flex items-center gap-2">
                   <Award size={16} className="text-primary shrink-0" />
                   <span className="text-sm">
-                    200+ TJC surveys conducted nationally
+                    200+ facility inspections nationally
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
