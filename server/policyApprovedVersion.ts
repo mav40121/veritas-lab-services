@@ -57,31 +57,46 @@ export function revisionInProgressSql(a = "d"): string {
   return `(CASE WHEN ${a}.archived_at IS NULL AND ${a}.status IN ('draft', 'in_review') AND ${a}.approved_version_id IS NOT NULL THEN 1 ELSE 0 END)`;
 }
 
-// An inspector's surveyor link (BUG-152, 2026-11-10; routes.ts "Phase 8" and the carried face page in veritadcBulkLoad.ts).
-// It always showed an approved document's current version, and still does. Before this fix a document dropped out of the
-// inspector's view from the moment a new version was uploaded until that revision was approved, though the earlier version
-// was still the approved procedure. Now, while a newer revision is a draft or in review, it shows the version recorded as
-// approved, as the share link and a limited Staff login do. Left as it was: a review-overdue ('expired') document isn't in
-// the surveyor view (the other readers show it), and an approved document's reads don't check archived_at. A draft or in-review
-// document with no recorded approved version still shows nothing.
+// An inspector's surveyor link (routes.ts "Phase 8" and the carried face page in veritadcBulkLoad.ts) shows the version a
+// reader limited to approved procedures reads (approvedReadVersionId above); which documents it lists is decided by status
+// (surveyorReads), so an approved document with no file still lists as it always did:
+//   - BUG-152 (2026-11-10): while a newer revision is a draft or in review, the version recorded as approved, flagged
+//     revision_in_progress. Before, the document dropped out of the inspector's view until the revision was approved.
+//   - BUG-164 (2026-11-13, Michael Q328 = 1): a review-overdue ('expired') document too, at its current version, flagged
+//     review_overdue so the link says "Review overdue" with the review date. Before, it dropped out of the inspector's view
+//     while staff logins and share links still showed it, so the inspector didn't see a procedure staff were using.
+//   - An archived document reads nothing on every surveyor read (before, only the list checked archived_at).
+// A draft or in-review document with no recorded approved version, and a retired one, still show nothing.
 
-/** True when the surveyor link shows this document. */
+/** True when the surveyor link shows this document: approved or review-overdue, or a revision in progress over a recorded
+ *  approved version, and not archived. Decided by status, as the list always was, so a document with no file still lists. */
 export function surveyorReads(doc: ApprovedReadDoc | null | undefined): boolean {
-  return !!doc && (doc.status === "approved" || revisionInProgress(doc));
+  return !!doc && !doc.archived_at && ((APPROVED_STATUSES as readonly string[]).includes(doc.status) || revisionInProgress(doc));
+}
+
+/** The same rule in SQL, for a policy_documents row aliased `a`: 1 when the surveyor link shows it, else 0. */
+export function surveyorReadsSql(a = "d"): string {
+  return `(CASE WHEN ${a}.archived_at IS NULL AND (${a}.status IN ('approved', 'expired') OR ${revisionInProgressSql(a)} = 1) THEN 1 ELSE 0 END)`;
 }
 
 /** The version the surveyor link shows for this document, or null. */
 export function surveyorReadVersionId(doc: ApprovedReadDoc | null | undefined): number | null {
-  if (!doc) return null;
-  if (doc.status === "approved") return doc.current_version_id ?? null;
-  return revisionInProgress(doc) ? doc.approved_version_id ?? null : null;
+  return approvedReadVersionId(doc);
 }
 
 /** The same rule in SQL, for a policy_documents row aliased `a`: the version id the surveyor link shows, or NULL. */
 export function surveyorReadVersionSql(a = "d"): string {
-  return `(CASE WHEN ${a}.status = 'approved' THEN ${a}.current_version_id
-               WHEN ${revisionInProgressSql(a)} = 1 THEN ${a}.approved_version_id
-               ELSE NULL END)`;
+  return approvedReadVersionSql(a);
+}
+
+/** True when the document's review date has passed (the nightly sweep's 'expired'), so readers mark it Review overdue. */
+export function reviewOverdue(doc: ApprovedReadDoc | null | undefined): boolean {
+  return !!doc && !doc.archived_at && doc.status === "expired";
+}
+
+/** SQL: 1 when the row aliased `a` is review-overdue, else 0. */
+export function reviewOverdueSql(a = "d"): string {
+  return `(CASE WHEN ${a}.archived_at IS NULL AND ${a}.status = 'expired' THEN 1 ELSE 0 END)`;
 }
 
 /**
