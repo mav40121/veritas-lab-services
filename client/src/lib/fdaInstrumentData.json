@@ -34225,42 +34225,222 @@
   "Beckman Coulter UniCel DxI 600": {
     "vendor": "Beckman Coulter",
     "category": "Immunoassay",
-    "testCount": 8,
+    "testCount": 53,
     "tests": {
-      "Access 2, Access 2i, Access 2 Immunoassay Analyzer, Access AccuTnI+3, Access AFP, Access Anti-HCV, Access Anti-HBc, Access Anti-HBs, Access Anti-HIV-1/2, Access BBV, Access Beta CrossLaps, Access B12, Access CA125, Access CA15-3, Access CA19-9, Access CEA, Access Chagas, Access Cortisol, Access Cytomegalovirus IgG, Access Cytomegalovirus IgM, Access DHEA-S, Access Direct Free Testosterone, Access Ferritin, Access FSH, Access Free T3, Access Free T4, Access Folate, Access Gastrin, Access hCG (Total βhCG), Access HIV Ag/Ab Combo, Access hsCRP, Access haptoglobin, Access IgE, Access Insulin, Access Intact PTH, Access LH, Access Lyme, Access Malaria, Access Myoglobin, Access N-terminal pro B-type Natriuretic Peptide, Access Osteocalcin, Access Phenytoin, Access Procalcitonin, Access Progesterone, Access Prolactin, Access PSA, Access PSA Free, Access Rubella IgG, Access Rubella IgM, Access SARS-CoV-2, Access SHBG, Access Testosterone, Access Toxoplasma IgG, Access Toxoplasma IgM, Access TSH (3rd IS), Access T-Uptake, Access Vitamin B12, Access Vitamin D (25-OH), Access Anti-Tg, Access Tg, Access AMH, Access Estradiol, Access E2, Access LH2, Access FSH2, Access Prolactin2, Access AFP2, Access CA 19-9 (2nd IS), Access CA 125 (2nd IS), Access Free PSA, Access Total βhCG (5th IS), Access Anti-HBc IgM, Access Anti-HAV IgM, Access Anti-HBs 2, Access Anti-HCV 2, Access HBsAg, Access HBsAg Confirmatory, Access HBsAg II, Access HCV Ab, Access HIV Combo 4th Gen, Access HIV Combo 5th Gen, Access Syphilis Total, Access Syphilis IgG/IgM, Access HBeAg, Access Anti-HBe, Access NT-proBNP, Access PAPP-A, Access P1NP, Access sFlt-1, Access PlGF, Access GFAP, Access pTau217, Access beta-Amyloid 42/40, Access NEPHRIN, Access IGFBP-3, Access LH3, Access Estrone, Access Progesterone 2, Access Testosterone 2, Access Free Testosterone 2": {
-        "complexity": "HIGH",
-        "specialty": "Cardiac"
-      },
-      "TSH3": {
-        "complexity": "HIGH",
+      "25-hydroxyvitamin D (25-OH-D)": {
+        "complexity": "MODERATE",
         "specialty": "Endocrinology"
       },
-      "TSH3d": {
-        "complexity": "HIGH",
+      "Alkaline phosphatase bone specific (BAP)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Alpha-fetoprotein, amniotic fluid": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Alpha-fetoprotein, maternal serum": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Anti-Mullerian Hormone (AMH)": {
+        "complexity": "MODERATE",
         "specialty": "Endocrinology"
       },
-      "PTH": {
-        "complexity": "HIGH",
-        "specialty": "Immunology"
+      "Anti-thyroglobulin antibodies": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
       },
-      "PTHIO": {
-        "complexity": "HIGH",
-        "specialty": "Immunology"
+      "Anti-thyroid peroxidase (TPO) antibodies": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
       },
-      "HCG5": {
-        "complexity": "HIGH",
+      "B-type natriuretic peptide (BNP)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "C-peptide": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "CA 19-9": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Cancer antigen 125 (CA 125)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Cancer antigen 15-3 (CA 15-3)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Carcinoembryonic antigen (CEA)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Cortisol": {
+        "complexity": "MODERATE",
         "specialty": "Endocrinology"
       },
-      "HCG5d": {
-        "complexity": "HIGH",
+      "Creatine kinase MB fraction (CKMB)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Dehydroepiandrosterone sulfate (DHEA-SO4)": {
+        "complexity": "MODERATE",
         "specialty": "Endocrinology"
       },
-      "d-CG5": {
+      "Digoxin": {
+        "complexity": "MODERATE",
+        "specialty": "Toxicology"
+      },
+      "Erythropoietin": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Estradiol": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Estriol, unconjugated": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Ferritin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Folate (folic acid)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Folate, red blood cell (RBC folate)": {
         "complexity": "HIGH",
-        "specialty": "Immunology"
+        "specialty": "General Chemistry"
+      },
+      "Follicle stimulating hormone (FSH)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Human growth hormone (GH)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Immunoglobulins IgE": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "Inhibin-A": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Insulin": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Intrinsic factor blocking antibody (IFBAB)": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "Luteinizing hormone (LH)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Myoglobin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Parathyroid hormone - intact": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Progesterone": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Prolactin": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Prostate health evaluation index": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "Prostatic specific antigen (PSA)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Prostatic specific antigen (PSA), free": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Rubella antibodies": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "Sex hormone binding globulin": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "T uptake (TU)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Testosterone": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Thyroglobulin": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Thyroid stimulating hormone - high sens. (TSH-HS)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Thyroxine (T4)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Thyroxine, free (FT4)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Toxoplasma gondii antibodies": {
+        "complexity": "MODERATE",
+        "specialty": "General Immunology"
+      },
+      "Transferrin receptor (TFR)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Triiodothyronine (T3)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Triiodothyronine, free (FT3)": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "Troponin-I (cardiac)": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "Vitamin B12": {
+        "complexity": "MODERATE",
+        "specialty": "General Chemistry"
+      },
+      "hCG, beta, serum, quantitative": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
+      },
+      "hCG, total, serum, quantitative": {
+        "complexity": "MODERATE",
+        "specialty": "Endocrinology"
       }
     },
-    "menuLastVerifiedAt": "2026-05-07"
+    "menuLastVerifiedAt": "2026-11-13"
   },
   "Beckman Coulter UniCel DxC 880i": {
     "vendor": "Beckman Coulter",
