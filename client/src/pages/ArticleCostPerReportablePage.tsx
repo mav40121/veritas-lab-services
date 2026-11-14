@@ -85,7 +85,7 @@ export default function ArticleCostPerReportablePage() {
           {/* Lede */}
           <div className="prose-styles space-y-4 text-[15px] leading-relaxed mb-10">
             <p>
-              In twenty-three years of clinical laboratory work and more than two hundred surveys with The Joint Commission, the single most common pattern I have seen at the intersection of the lab director's office and the CFO's office is this. When finance asks what a test costs, the laboratory gives a number that does not match the question being asked. The number is usually right. The question being answered is the wrong one. The decision that follows is made on a wrong premise.
+              In twenty-three years of clinical laboratory work and more than two hundred inspections with The Joint Commission, the single most common pattern I have seen at the intersection of the lab director's office and the CFO's office is this. When finance asks what a test costs, the laboratory gives a number that does not match the question being asked. The number is usually right. The question being answered is the wrong one. The decision that follows is made on a wrong premise.
             </p>
             <p>
               The clinical laboratory industry has had a defensible framework for cost-per-reportable-test (CPRT) since the late 1990s, in the form of NCCLS document GP11-A, later continued under CLSI. The framework separates the cost of a single reportable result into four layers, each of which answers a different financial question. The framework is conceptually unchanged in the years since. It is also rarely operationalized inside the laboratories that need it most.

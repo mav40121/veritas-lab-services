@@ -17,7 +17,7 @@ const services = [
 ];
 
 const stats = [
-  { value: "200+", label: "Facilities surveyed" },
+  { value: "200+", label: "Facility inspections" },
   { value: "18", label: "Software Modules" }, // eighteen: 12 compliance + 6 operations (CLAUDE.md copy rules)
   { value: "173", label: "Compliance items tracked" },
   { value: "23 yrs", label: "Industry experience" },
