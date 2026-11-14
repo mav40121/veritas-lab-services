@@ -249,7 +249,7 @@ import { labCarriesMinorRevisions, signatureStillCurrent, carriedStaffSignature 
 import { attestationStillCurrent, closeAttestationsCoveredByStaffSignatures, documentSignatureStatus, staffHasSignedCurrent, unsignedDocumentsForStaff } from "./policySignatureStatus";
 import { priorCountsByPerson, priorHow, priorSignatureStillCurrent, priorSignaturesOfDocument } from "./policyPriorSignature";
 import { assignedDocumentIds, loadReadSignContext, logStaffDocumentView, lookupDocuments, registerReadSignRoutes, rulesForDocument, targetLabels, veritaDcStaffGuard } from "./policyReadSign";
-import { approvedReadVersionId, approvedReadVersionSql, revisionInProgress, revisionInProgressSql, surveyorReadVersionId, surveyorReadVersionSql, surveyorReads } from "./policyApprovedVersion";
+import { approvedReadVersionId, approvedReadVersionSql, revisionInProgress, revisionInProgressSql, reviewOverdueSql, surveyorReadVersionId, surveyorReadVersionSql, surveyorReads, surveyorReadsSql } from "./policyApprovedVersion";
 import { assessmentTypeLabel, assessmentTypeProblem, isEvaluationProgram, normalizeRecordKind } from "@shared/competencyEvaluation";
 import { normalizeSpecimen, normalizeReportableField, specimenLabel } from "@shared/veritamapSpecimen";
 import { buildCompetencyRegisterRows, generateCompetencyRegisterExcel } from "./competencyRegisterExcel";
@@ -42573,8 +42573,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   }
 
   // GET /api/surveyor/:token/policies — list approved policies in this lab. A document whose newer revision is a draft or in
-  // review is listed at its approved version, with revision_in_progress (BUG-152; surveyorReadVersionSql in
-  // server/policyApprovedVersion.ts). The current_version_* fields are the version shown.
+  // review is listed at its approved version, with revision_in_progress (BUG-152); a review-overdue one is listed with
+  // review_overdue and its next_review_date, the date the review was due (BUG-164). surveyorReadVersionSql in
+  // server/policyApprovedVersion.ts decides both. The current_version_* fields are the version shown.
   app.get("/api/surveyor/:token/policies", (req: any, res) => {
     const r = resolveSurveyorToken(String(req.params.token || ""));
     if (!r.ok) return res.status(r.status).json({ error: r.error });
@@ -42587,14 +42588,15 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         `SELECT d.id, d.title, d.description, d.effective_date, d.next_review_date,
                 d.review_interval_months, v.version_number AS current_version_number, v.version_major AS current_version_major, v.version_minor AS current_version_minor, d.doc_number, d.doc_type,
                 v.file_format AS current_file_format, d.manual_id, m.name AS manual_name,
-                ${revisionInProgressSql("d")} AS revision_in_progress
+                ${revisionInProgressSql("d")} AS revision_in_progress,
+                ${reviewOverdueSql("d")} AS review_overdue
            FROM policy_documents d
            LEFT JOIN policy_versions v ON v.id = ${surveyorReadVersionSql("d")} AND v.document_id = d.id
            LEFT JOIN policy_manuals m ON m.id = d.manual_id
-          WHERE d.lab_id = ? AND d.archived_at IS NULL AND (d.status = 'approved' OR ${revisionInProgressSql("d")} = 1)
+          WHERE d.lab_id = ? AND ${surveyorReadsSql("d")} = 1
           ORDER BY m.display_order ASC, m.name ASC, d.title ASC`
       )
-      .all(r.labId) as any[]).map((d) => ({ ...d, revision_in_progress: d.revision_in_progress === 1 }));
+      .all(r.labId) as any[]).map((d) => ({ ...d, revision_in_progress: d.revision_in_progress === 1, review_overdue: d.review_overdue === 1 }));
     // Sub-manuals: the inspector sees the lab's manual tree, each document under its manual's full path.
     res.json({ lab, documents: withManualTree(sqlite, r.labId, withVersionLabel(docs), true) });
   });

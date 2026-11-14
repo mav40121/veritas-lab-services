@@ -13,7 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Loader2, FileText, ShieldCheck, XCircle, Eye } from "lucide-react";
 import { labLocaleDate } from "@/lib/labDate";
-import { REVISION_IN_PROGRESS_NOTE } from "@shared/policyApprovedVersion";
+import { REVISION_IN_PROGRESS_NOTE, reviewOverdueNote } from "@shared/policyApprovedVersion";
 import { CarriedOverPanel, type CarriedRecord } from "@/components/CarriedOverPanel";
 
 interface SurveyorDoc {
@@ -33,6 +33,8 @@ interface SurveyorDoc {
   manual_depth?: number;
   // True while a newer revision is a draft or in review; the link shows the approved version (BUG-152).
   revision_in_progress?: boolean;
+  // True when the review date has passed; the link shows the document marked Review overdue (BUG-164).
+  review_overdue?: boolean;
 }
 
 interface SurveyorListResponse {
@@ -236,6 +238,12 @@ export default function SurveyorViewPage() {
                           {REVISION_IN_PROGRESS_NOTE}
                         </div>
                       )}
+                      {/* BUG-164: a document whose review date has passed is shown, marked so. */}
+                      {d.review_overdue && (
+                        <div className="mt-1 inline-block rounded border border-red-300 bg-red-50 text-red-900 dark:border-red-800 dark:bg-red-950/30 dark:text-red-200 px-2 py-0.5 text-[11px]" data-testid={`surveyor-overdue-note-${d.id}`}>
+                          {reviewOverdueNote(d.next_review_date ? fmtDate(d.next_review_date) : null)}
+                        </div>
+                      )}
                     </div>
                     <Button size="sm" variant="outline" onClick={() => openView(d)}>
                       <Eye size={12} className="mr-1" /> View
@@ -265,6 +273,11 @@ export default function SurveyorViewPage() {
             {viewDoc.revision_in_progress && (
               <div className="rounded border border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-200 px-2 py-1 text-xs mb-2" data-testid="surveyor-view-revision-note">
                 {REVISION_IN_PROGRESS_NOTE} Version {viewDoc.current_version_label ?? viewDoc.current_version_number}.
+              </div>
+            )}
+            {viewDoc.review_overdue && (
+              <div className="rounded border border-red-300 bg-red-50 text-red-900 dark:border-red-800 dark:bg-red-950/30 dark:text-red-200 px-2 py-1 text-xs mb-2" data-testid="surveyor-view-overdue-note">
+                {reviewOverdueNote(viewDoc.next_review_date ? fmtDate(viewDoc.next_review_date) : null)}
               </div>
             )}
             {viewTampered && (

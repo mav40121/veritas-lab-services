@@ -10,10 +10,12 @@
 //      timeline still opens, with v1's approval.
 //   3. v2 in review, then rejected back to draft: the same, and the rejection on v2 isn't in the timeline.
 //   4. v2 approved: listed at 1.1 with no flag; the render is v2; the timeline has both approvals.
-//   5. Unchanged: a draft never approved, a revision over no recorded approved version, a retired document and a
-//      review-overdue ('expired') document aren't listed and their render and timeline are refused; another lab's document is
-//      "Wrong lab"; a revoked link is refused.
+//   5. Unchanged: a draft never approved, a revision over no recorded approved version and a retired document aren't
+//      listed and their render and timeline are refused; another lab's document is "Wrong lab"; a revoked link is refused.
 //   6. A document carried over from a prior system keeps its face page on the link while a revision is in progress.
+//   7. BUG-164 (Michael 2026-11-13, Q328 = 1): a review-overdue ('expired') document is listed, flagged review_overdue with
+//      the date its review was due, renders its current file and opens its timeline (it was left out before); an approved
+//      document isn't flagged; an archived approved document is refused on render and timeline too, not only the list.
 //
 // Boots the REAL routes against a throwaway SQLite DB (made-up rows only). Run: npm run test:veritadc-surveyor-revision
 
@@ -204,10 +206,26 @@ async function main() {
     await newVersion(retire, madeUpPdf(["MADEUP-RETIRE-V2"]));
     await call("POST", `${P}/documents/${retire}/archive`, {}, A.token);
     await gone("a retired document with a revision in progress", retire);
-    const overdue = await upload(P, A.token, "Made-up Overdue", madeUpPdf(["MADEUP-OVERDUE"]), "OV 152");
+    // 7. Review overdue (BUG-164, Michael Q328 = 1): listed, flagged, at its current version, with the date the review was due.
+    const OV = madeUpPdf(["Made-up Overdue", "MADEUP-OVERDUE"]);
+    const overdue = await upload(P, A.token, "Made-up Overdue", OV, "OV 152");
     await approve(overdue);
-    sqlite.prepare("UPDATE policy_documents SET status = 'expired' WHERE id = ?").run(overdue);
-    await gone("a review-overdue document (unchanged)", overdue);
+    sqlite.prepare("UPDATE policy_documents SET status = 'expired', next_review_date = '2026-10-01' WHERE id = ?").run(overdue);
+    const ovRow = ((await call("GET", `${S}/policies`)).body.documents || []).find((d: any) => d.id === overdue);
+    check("7. a review-overdue document is listed (it dropped out of the link before)", !!ovRow);
+    check("7. ... flagged review_overdue, with the date the review was due, and no revision flag",
+      ovRow?.review_overdue === true && ovRow?.next_review_date === "2026-10-01" && ovRow?.revision_in_progress === false,
+      JSON.stringify({ o: ovRow?.review_overdue, n: ovRow?.next_review_date, r: ovRow?.revision_in_progress }));
+    const ovRender = await raw(`${S}/policies/${overdue}/render`);
+    check("7. ... its render is its current file, byte for byte", ovRender.status === 200 && ovRender.buf.equals(OV), `HTTP ${ovRender.status}`);
+    const ovT = await call("GET", `${S}/policies/${overdue}/signoffs`);
+    check("7. ... its timeline opens, with its approval", ovT.status === 200 && (ovT.body.signoffs || []).some((s: any) => s.action === "approved"), `HTTP ${ovT.status}`);
+    check("7. an approved document isn't flagged review_overdue", (await listed())?.review_overdue === false);
+    // An archived document reads nothing on every surveyor read now; before, only the list checked archived_at.
+    const arch = await upload(P, A.token, "Made-up Archived", madeUpPdf(["MADEUP-ARCHIVED"]), "AR 152");
+    await approve(arch);
+    sqlite.prepare("UPDATE policy_documents SET archived_at = ? WHERE id = ?").run(now, arch);
+    await gone("an archived approved document (its render and timeline opened before)", arch);
     const other = await upload(`/api/labs/${B.labId}/veritapolicy`, B.token, "Made-up Other Lab", madeUpPdf(["MADEUP-OTHER"]), "OT 152");
     sqlite.prepare("UPDATE policy_documents SET status = 'approved', approved_version_id = current_version_id WHERE id = ?").run(other);
     const otherRender = await call("GET", `${S}/policies/${other}/render`);
