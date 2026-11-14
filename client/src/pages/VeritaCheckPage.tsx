@@ -28,6 +28,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useFreshRecord, dropSavedStudy } from "@/lib/freshRecord";
+import { minFilledFor, filledUnitFor, countOf } from "@/lib/studyMinimums";
 import { useToast } from "@/hooks/use-toast";
 import { calculateStudy, calculateCalVerCorrelation, calculatePrecision, calculateLotToLot, calculatePTCoag, calculateQCRange, calculateMultiAnalyteCoag, calculateRefInterval, calculateQualitative, calculateSemiQuant, calculateSensitivity, type DataPoint, type PrecisionDataPoint, type LotToLotDataPoint, type RefIntervalDataPoint, type SensitivityInput, calculateINR, formatTeaCriterion } from "@/lib/calculations";
 import { buildPtCoagPayload, readPtPairRows, type PtCoagForm } from "@/lib/ptCoagPayload";
@@ -2225,7 +2226,7 @@ export default function VeritaCheckPage() {
     }
 
     if (studyType === "precision") {
-      if (filledLevels < 1) { toast({ title: "Please enter at least 3 measurements for one level", variant: "destructive" }); return; }
+      if (filledLevels < minFilledFor("precision", precisionLevels)) { toast({ title: precisionLevels > 1 ? `Please enter at least 3 measurements for each of the ${precisionLevels} levels` : "Please enter at least 3 measurements for the level", variant: "destructive" }); return; }
       // Stored shape: KEEP censored ("<17") replicates so the server PDF renderer can resolve them per the study
       // policy; only blanks/NaN are dropped. A VeritaQC import's provenance rides on level 0 (design doc v2 decision
       // #5). The optional vendor claim, target and lots go in their own columns. (studyFormPayload.ts)
@@ -4696,18 +4697,9 @@ return (
               non-pending reason. */}
           {studyType !== "manual_diff" && studyType !== "heparin_range" && (<>
           {(() => {
-            const minLevels = studyType === "ref_interval" ? 20
-              : studyType === "sensitivity" ? 5
-              : studyType === "carryover" ? 12
-              : studyType === "qc_range" ? 2
-              : studyType === "accuracy_bias" ? 2
-              : studyType === "linearity" ? 3
-              : studyType === "reportable_range" ? 2
-              : 3;
-            const unit = studyType === "lot_to_lot" || studyType === "pt_coag" || studyType === "ref_interval" ? "specimen"
-              : studyType === "sensitivity" ? "blank replicate"
-              : studyType === "method_comparison" ? "sample"
-              : "level";
+            // The same minimum the Run Study button and the count below use (studyMinimums.ts, BUG-156).
+            const minLevels = minFilledFor(studyType, precisionLevels);
+            const unit = filledUnitFor(studyType);
             const studyTypeLabel = studyType === "cal_ver" ? "Calibration Verification"
               : studyType === "cal_ver_correlation" ? "Calibration Verification + Correlation"
               : studyType === "method_comparison" ? "Method Comparison"
@@ -4728,7 +4720,9 @@ return (
             if (studyType === "cal_ver_correlation" && instrumentNames.length < 2) reasons.push("Add a second analyzer on the Setup tab (the correlation compares each analyzer to the first one listed).");
             if (filledLevels < minLevels) {
               const need = minLevels - filledLevels;
-              reasons.push(`Fill ${need} more ${unit}${need !== 1 ? "s" : ""} on the Data Entry tab (${minLevels} ${unit}s required for ${studyTypeLabel}).`);
+              reasons.push(studyType === "precision"
+                ? `Enter at least 3 measurements in ${need === 1 ? "1 more level" : `${need} more levels`} on the Data Entry tab (each of the ${countOf(minLevels, "level")} chosen needs 3).`
+                : `Fill ${countOf(need, `more ${unit}`)} on the Data Entry tab (${countOf(minLevels, unit)} required for ${studyTypeLabel}).`);
             }
             if (reasons.length === 0) return null;
             return (
@@ -4743,7 +4737,7 @@ return (
 
           <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="text-sm text-muted-foreground">
-              {filledLevels >= (studyType === "precision" ? 1 : studyType === "ref_interval" ? 20 : studyType === "sensitivity" ? 5 : 3) ? <span className="text-green-600 dark:text-green-400">{"✓"} {filledLevels} {studyType === "lot_to_lot" || studyType === "pt_coag" || studyType === "ref_interval" ? "specimen" : studyType === "sensitivity" ? "blank replicate" : studyType === "method_comparison" ? "sample" : "level"}{filledLevels !== 1 ? "s" : ""} ready</span> : <span>{filledLevels} / {studyType === "precision" ? 1 : studyType === "ref_interval" ? 20 : studyType === "sensitivity" ? 5 : 3} minimum filled</span>}
+              {filledLevels >= minFilledFor(studyType, precisionLevels) ? <span className="text-green-600 dark:text-green-400" data-testid="text-filled-count">{"✓"} {countOf(filledLevels, filledUnitFor(studyType))} ready</span> : <span data-testid="text-filled-count">{filledLevels} / {minFilledFor(studyType, precisionLevels)} minimum filled</span>}
             </div>
             <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full sm:w-auto">
               {studyReadOnly && <span className="text-xs text-muted-foreground" data-testid="study-view-only-note">View only: running a study needs VeritaCheck edit access.</span>}
@@ -4757,7 +4751,7 @@ return (
               >
                 {saveMutation.isPending ? "Saving…" : isEditing ? "Save Changes (Draft)" : "Save Draft"}
               </Button>
-              <Button onClick={handleSubmit} disabled={studyReadOnly || saveMutation.isPending || filledLevels < (studyType === "ref_interval" ? 20 : studyType === "sensitivity" ? 5 : studyType === "carryover" ? 12 : studyType === "qc_range" ? 2 : studyType === "accuracy_bias" ? 2 : studyType === "linearity" ? 3 : studyType === "reportable_range" ? 2 : 3) || !testName.trim() || (studyType === "cal_ver_correlation" && instrumentNames.length < 2)} size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold" data-testid="button-submit-study">
+              <Button onClick={handleSubmit} disabled={studyReadOnly || saveMutation.isPending || filledLevels < minFilledFor(studyType, precisionLevels) || !testName.trim() || (studyType === "cal_ver_correlation" && instrumentNames.length < 2)} size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold" data-testid="button-submit-study">
                 {saveMutation.isPending ? "Calculating…" : isEditing ? "Save & Generate Report" : "Run Study & Generate Report"}
               </Button>
             </div>
