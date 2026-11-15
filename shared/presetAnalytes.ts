@@ -279,6 +279,7 @@ const _DRUGS: Array<[RegExp, string]> = [
   [/^(propoxyphene|ppx)$/, "propoxyphene"],
   [/^(fentanyl|fyl)$/, "fentanyl"],
   [/^(6 acetylmorphine|6 monoacetylmorphine|6 mam)$/, "6mam"],
+  [/^(lsd|lysergic acid diethylamide( lsd)?)$/, "lsd"],
 ];
 
 // Curated same-test names (FDA spelling variants and common short forms) found in
@@ -300,6 +301,17 @@ const _SAME_TEST: Array<[string, string[]]> = [
   ["troponin t", ["troponin t", "cardiac troponin t", "ctnt", "tnt"]],
   ["hs troponin i", ["hs troponin i", "high sensitivity troponin i", "high sensitive troponin i", "hs ctni", "hsctni", "hs tni", "hstni"]],
   ["hs troponin t", ["hs troponin t", "high sensitivity troponin t", "high sensitive troponin t", "hs ctnt", "hsctnt", "hs tnt", "hstnt"]],
+  // One test under two library spellings, often on the same analyzer (BUG-009 duplicate review, Michael Q330, 2026-11-14).
+  // A specimen word, "free", "ionized", HDL / LDL, NT-proBNP or another CA antigen keeps a name out of these.
+  ["calcium", ["calcium", "calcium total"]],
+  ["cholesterol", ["cholesterol", "cholesterol total"]],
+  ["cea", ["cea", "carcinoembryonic antigen"]],
+  ["bnp", ["bnp", "b type natriuretic peptide", "b natriuretic peptide", "brain natriuretic peptide"]],
+  ["fsh", ["fsh", "follicle stimulating hormone"]],
+  ["psa", ["psa", "psa total", "prostatic specific antigen", "prostate specific antigen"]],
+  ["ca 15 3", ["ca 15 3", "cancer antigen 15 3"]],
+  ["t uptake", ["t uptake", "thyroxine uptake"]],
+  ["apolipoprotein a1", ["apolipoprotein a1", "apolipoprotein a 1"]],
 ];
 
 function _wordKey(s: string): string {

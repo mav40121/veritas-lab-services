@@ -117,6 +117,32 @@ diff("TROPONIN-I HS", "High-Sensitivity Troponin T");
 diff("TROPONIN-I HS", "Troponin-I (cardiac)");
 diff("hs-cTnT", "Troponin T");
 
+console.log("\n=== library spellings of one test (BUG-009 duplicate review, Michael Q330, 2026-11-14) ===");
+same("Calcium", "Calcium, total"); same("Calcium", "Calcium, Total"); same("Calcium", "Total calcium");
+same("Cholesterol", "Total Cholesterol"); same("Cholesterol", "Total cholesterol"); same("Cholesterol", "Cholesterol, Total");
+same("CEA", "Carcinoembryonic antigen (CEA)");
+same("BNP", "B-type natriuretic peptide (BNP)"); same("BNP", "B-Type Natriuretic Peptide (BNP)");
+same("FSH", "Follicle stimulating hormone (FSH)");
+same("Total PSA", "Prostatic specific antigen (PSA)"); same("PSA", "Total PSA"); same("PSA", "Prostatic Specific Antigen (PSA)");
+same("CA 15-3", "Cancer antigen 15-3 (CA 15-3)");
+same("T uptake (TU)", "Thyroxine uptake (T4U) (TU)"); same("T Uptake (TU)", "Thyroxine uptake (T4U) (TU)");
+same("Apolipoprotein A1", "Apolipoprotein A-1");
+same("LSD", "Lysergic acid diethylamide (LSD)");
+// Near misses the new spellings must not reach.
+diff("Calcium", "Calcium, urine"); diff("Calcium", "Calcium (urine)"); diff("Calcium, total", "Calcium, ionized"); diff("Calcium", "cCa2+");
+diff("Cholesterol", "HDL Cholesterol"); diff("Cholesterol", "LDL Cholesterol"); diff("Total Cholesterol", "Cholesterol, HDL");
+diff("PSA", "Free PSA"); diff("Total PSA", "PSA, free"); diff("PSA", "Complexed PSA");
+same("BNP", "B-Natriuretic Peptide (BNP)"); same("BNP", "Brain natriuretic peptide");
+diff("BNP", "NT-proBNP"); diff("BNP", "Pro B-Natriuretic Peptide (proBNP)");diff("BNP", "N-terminal pro B-type natriuretic peptide (NT-proBNP)");
+diff("CA 15-3", "CA 27.29"); diff("CA 15-3", "CA 125"); diff("CEA", "CA 19-9");
+diff("FSH", "LH"); diff("T uptake (TU)", "Free T4"); diff("T uptake (TU)", "T3 uptake");
+diff("Apolipoprotein A1", "Apolipoprotein B"); diff("LSD", "PCP");
+
+console.log("\n=== correlationGroupsFor: one test under two spellings on two analyzers needs a comparison ===");
+const split = correlationGroupsFor({ "Calcium": [{ id: 1 }], "Calcium, total": [{ id: 2 }], "Calcium, ionized": [{ id: 3 }] });
+ok("Calcium and Calcium, total on two analyzers: 2 instruments", split["Calcium"].instrumentCount === 2 && split["Calcium, total"].instrumentCount === 2, JSON.stringify(split));
+ok("Ionized calcium stays on its own analyzer", split["Calcium, ionized"].instrumentCount === 1, JSON.stringify(split["Calcium, ionized"]));
+
 console.log("\n=== correlationGroupsFor on a real map shape (XN-2000 primary + backup, Manual Differential) ===");
 const map = {
   "Lymph%": [{ id: 116 }, { id: 117 }], "Neut%": [{ id: 116 }, { id: 117 }], "LYMPH#": [{ id: 116 }],
