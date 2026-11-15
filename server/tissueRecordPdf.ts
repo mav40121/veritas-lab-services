@@ -13,7 +13,7 @@ import { stampPdfAuthor } from "./pdfMeta";
 import { setPdfContent } from "./pdfContent";
 import { labLocalDate, labTimeZoneById, labToday } from "./dateLocal";
 import {
-  OTHER_DISPOSITION_LABELS, TISSUE_FIELD_LABELS, TISSUE_STATE_LABELS, liveSteps, type OtherDisposition, type TissueState,
+  OTHER_DISPOSITION_LABELS, SOLUTION_EXPIRED_NOTE_LABEL, TISSUE_FIELD_LABELS, TISSUE_STATE_LABELS, liveSteps, solutionExpiredAtImplant, type OtherDisposition, type TissueState,
 } from "../shared/tissueRules";
 
 export interface TissueRecordContext {
@@ -120,6 +120,7 @@ export function tissueHistoryRows(events: TissueEventRow[], ctx: TissueRecordCon
         step = "Implanted";
         detail = join([
           d.reconstituted_time && `Reconstituted ${d.reconstituted_time}${d.reconstitution_solution ? ` with ${d.reconstitution_solution}` : ""}${d.reconstitution_lot ? `, lot ${d.reconstitution_lot}` : ""}`,
+          d.reconstitution_expired_note && `solution past its expiration (${d.reconstitution_expiration}); what was done: ${d.reconstitution_expired_note}`,
           d.usage_card_returned === 1 && `tissue usage card returned ${d.usage_card_returned_on || ""}`.trim(),
         ]);
         break;
@@ -193,7 +194,10 @@ export function buildTissueRecordHTML(u: any, events: TissueEventRow[], ctx: Tis
       + `<div class="note">${esc(TISSUE_RECORD_CHART_LINE)}</div>`),
     sec("Implant", f("Date implanted", u.implanted_date) + f("Time implanted", u.implanted_time) + f("Implanted by", u.implanted_by, 2)
       + f("Reconstituted: time", u.reconstituted_time) + f("Reconstituted: by", u.reconstituted_by, 2) + f("Reconstituting solution", u.reconstitution_solution, 2)
-      + f("Solution lot", u.reconstitution_lot) + f("Solution expiration", u.reconstitution_expiration)),
+      + f("Solution lot", u.reconstitution_lot) + f("Solution expiration", u.reconstitution_expiration)
+      // Michael 2026-11-15, Q335 = 1: a solution past its expiration on the implant date prints with what was done. A unit
+      // recorded before the note existed says none is on file.
+      + (solutionExpiredAtImplant(u.reconstitution_expiration, u.implanted_date) ? f(SOLUTION_EXPIRED_NOTE_LABEL, u.reconstitution_expired_note || "Expired; no note on file", 3) : "")),
     sec("Tissue usage and information card", f("Completed and returned", u.state === "implanted" ? (u.usage_card_returned === 1 ? "Yes" : "No") : "") + f("Date returned", u.usage_card_returned_on)),
     sec("Returned unused to blood bank", lastReturn
       ? f("Returns", `${returns.length} (see step history)`) + f("Last returned", dt(lastReturn.e.event_date, (lastReturn.e as any).event_time))

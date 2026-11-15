@@ -25,8 +25,8 @@ import { storePdfToken } from "./pdfTokens";
 import { generateTissueLogExcel, generateTissueLogPDF } from "./tissueLogExport";
 import { generateTissueRecordPDF, loadTissueRecord } from "./tissueRecordPdf";
 import {
-  ISSUE_ROW_FIELDS, OTHER_DISPOSITIONS, TISSUE_STATE_LABELS, correctableFields, findTissuePhi, isBefore, isFinalState, isHhMm, isYmd,
-  issueRefusals, lastLiveReturn, liveSteps, returnUnusedRefusal, tissueFlags, tissueIdKey, tissuePhiMessage, yesNo, type TissueState,
+  ISSUE_ROW_FIELDS, OTHER_DISPOSITIONS, TISSUE_STATE_LABELS, correctableFields, expiredSolutionRefusal, findTissuePhi, isBefore, isFinalState, isHhMm, isYmd,
+  issueRefusals, lastLiveReturn, liveSteps, returnUnusedRefusal, solutionExpiredAtImplant, tissueFlags, tissueIdKey, tissuePhiMessage, yesNo, type TissueState,
 } from "../shared/tissueRules";
 
 const sqliteOf = () => (db as any).$client;
@@ -116,19 +116,24 @@ function blockBbFields(sqlite: any, labId: number, b: any, unit: any, today: str
 /** What the blood bank receipt's event keeps besides its checks: the action taken and where the unit went, as the record's history prints it. */
 const bbEventDetail = (set: Record<string, unknown>) => ({ transport_action: set.transport_action ?? null, storage_unit_id: set.storage_unit_id ?? null, storage_location: set.storage_location ?? null });
 
-function reconstitutionFields(b: any): { error?: string; set?: Record<string, unknown> } {
+// A solution past its expiration on the implant date still records (the implant happened), with a note of what was done
+// (Michael 2026-11-15, Q335 = 1, the stain log's rule for a lot past its expiration). A note sent with a solution in date isn't kept.
+function reconstitutionFields(b: any, implantedDate: unknown): { error?: string; code?: string; set?: Record<string, unknown> } {
   const f = {
     reconstituted_time: cleanStr(b.reconstituted_time, 5), reconstituted_by: cleanStr(b.reconstituted_by),
     reconstitution_solution: cleanStr(b.reconstitution_solution), reconstitution_lot: cleanStr(b.reconstitution_lot, 120),
     reconstitution_expiration: cleanStr(b.reconstitution_expiration, 10),
   };
-  if (Object.values(f).every((v) => v === null)) return { set: f };
+  if (Object.values(f).every((v) => v === null)) return { set: { ...f, reconstitution_expired_note: null } };
   if (!isHhMm(f.reconstituted_time)) return { error: "Reconstituted: enter the time." };
   if (!f.reconstituted_by) return { error: "Reconstituted: enter who did it." };
   if (!f.reconstitution_solution) return { error: "Reconstituted: enter the solution used." };
   if (!f.reconstitution_lot) return { error: "Reconstituted: enter the solution's lot." };
   if (!isYmd(f.reconstitution_expiration)) return { error: "Reconstituted: enter the solution's expiration date." };
-  return { set: f };
+  const note = cleanStr(b.reconstitution_expired_note, 1000);
+  const refusal = expiredSolutionRefusal(f.reconstitution_expiration, implantedDate, note);
+  if (refusal) return { error: refusal, code: "SOLUTION_EXPIRED_NOTE_REQUIRED" };
+  return { set: { ...f, reconstitution_expired_note: solutionExpiredAtImplant(f.reconstitution_expiration, implantedDate) ? note : null } };
 }
 
 function usageCardFields(b: any, implantedDate: string | null, today: string): { error?: string; set?: Record<string, unknown> } {
@@ -539,8 +544,8 @@ export function registerTissueRoutes(
     const by = cleanStr(b.implanted_by);
     if (!by) return res.status(400).json({ error: "Enter who implanted it." });
     if (isBefore(b.implanted_date, b.implanted_time, u.issued_date, u.issued_time)) return res.status(400).json({ error: "The implant can't be earlier than the issue." });
-    const recon = reconstitutionFields(b);
-    if (recon.error) return res.status(400).json({ error: recon.error });
+    const recon = reconstitutionFields(b, b.implanted_date);
+    if (recon.error) return res.status(400).json({ error: recon.error, ...(recon.code ? { code: recon.code } : {}) });
     let card: { error?: string; set?: Record<string, unknown> } = { set: {} };
     if (b.usage_card_returned !== undefined && b.usage_card_returned !== null && b.usage_card_returned !== "") {
       card = usageCardFields(b, b.implanted_date, today);
@@ -676,8 +681,14 @@ export function registerTissueRoutes(
           if (!sqlite.prepare("SELECT id FROM temp_log_units WHERE id = ? AND lab_id = ?").get(Number(raw), u.lab_id)) return res.status(400).json({ error: "That storage unit isn't in this lab." });
           set[field] = Number(raw);
         }
+      } else if (field === "catalog_id") {
+        // Another product on the lab's catalog (Michael 2026-11-15, Q335 = 1): the type, the supplier and its vendor row move together.
+        const cat = sqlite.prepare("SELECT c.id, c.tissue_type, c.vendor_id, c.active, v.name AS supplier_name FROM tissue_catalog c JOIN stock_vendors v ON v.id = c.vendor_id WHERE c.id = ? AND c.lab_id = ?").get(Number(raw), u.lab_id) as any;
+        if (!cat) return res.status(400).json({ error: "Choose the type of tissue and supplier from your catalog." });
+        if (!cat.active) return res.status(400).json({ error: "That tissue type is retired on your catalog." });
+        Object.assign(set, { catalog_id: cat.id, vendor_id: cat.vendor_id, tissue_type: cat.tissue_type, supplier_name: cat.supplier_name });
       } else {
-        const v = cleanStr(raw, field === "notes" ? 2000 : field === "transport_action" || field === "disposition_description" ? 1000 : 200);
+        const v = cleanStr(raw, field === "notes" ? 2000 : field === "transport_action" || field === "disposition_description" || field === "reconstitution_expired_note" ? 1000 : 200);
         if (!v && REQUIRED_TEXT.has(field)) return res.status(400).json({ error: "That field can't be blank." });
         set[field] = v;
       }
@@ -687,8 +698,16 @@ export function registerTissueRoutes(
       merged.source_id_key = tissueIdKey(merged.source_id);
       set.source_id_key = merged.source_id_key;
       if (!merged.source_id_key) return res.status(400).json({ error: "Enter the tissue ID from the supplier's label." });
-      const clash = sqlite.prepare("SELECT id FROM tissue_units WHERE lab_id = ? AND vendor_id = ? AND source_id_key = ? AND id <> ?").get(u.lab_id, u.vendor_id, merged.source_id_key, u.id);
-      if (clash) return res.status(409).json({ error: `Tissue ID ${merged.source_id} from ${u.supplier_name} is already on this log.`, code: "DUPLICATE_TISSUE_ID" });
+    }
+    // A tissue ID is unique per supplier, so a new ID, or the same ID under another supplier, is checked against the log.
+    if ("source_id" in set || "vendor_id" in set) {
+      const clash = sqlite.prepare("SELECT id FROM tissue_units WHERE lab_id = ? AND vendor_id = ? AND source_id_key = ? AND id <> ?").get(u.lab_id, merged.vendor_id, merged.source_id_key, u.id);
+      if (clash) return res.status(409).json({ error: `Tissue ID ${merged.source_id} from ${merged.supplier_name} is already on this log.`, code: "DUPLICATE_TISSUE_ID" });
+    }
+    // A correction that touches the implant date, the solution's expiration or its note keeps the expired-solution rule (Q335 = 1).
+    if ("implanted_date" in set || "reconstitution_expiration" in set || "reconstitution_expired_note" in set) {
+      const refusal = expiredSolutionRefusal(merged.reconstitution_expiration, merged.implanted_date, merged.reconstitution_expired_note);
+      if (refusal) return res.status(400).json({ error: refusal, code: "SOLUTION_EXPIRED_NOTE_REQUIRED" });
     }
     // What the record becomes has to hold, the same as if it had been entered that way.
     if (merged.issued_date && merged.issued_date > merged.expiration_date) return res.status(409).json({ error: `That would put the issue after the unit's expiration on ${merged.expiration_date}. An expired unit can't be issued.`, code: "ISSUE_REFUSED" });
@@ -704,7 +723,8 @@ export function registerTissueRoutes(
     for (let i = 1; i < steps.length; i++) {
       if (isBefore(steps[i][0], steps[i][1], steps[i - 1][0], steps[i - 1][1])) return res.status(400).json({ error: "That would put a step before the one it follows." });
     }
-    const recorded = Object.keys(set).filter((k) => k !== "source_id_key");
+    // The history names the type and supplier a catalog change moved; its ids are bookkeeping.
+    const recorded = Object.keys(set).filter((k) => k !== "source_id_key" && k !== "catalog_id" && k !== "vendor_id");
     const diff = recorded.filter((k) => String(set[k] ?? "") !== String(u[k] ?? "")).map((field) => ({ field, from: u[field] ?? null, to: set[field] ?? null }));
     if (diff.length === 0) return res.status(400).json({ error: "Nothing changed." });
     sqlite.transaction(() => {
@@ -719,7 +739,7 @@ export function registerTissueRoutes(
   const UNDO: Record<string, string[]> = {
     stored: ["received_bb_date", "received_bb_time", "received_bb_by", "transport_temp_ok", "transport_action", "package_ok", "storage_unit_id", "storage_location"],
     issued: [...ISSUE_ROW_FIELDS],
-    implanted: ["implanted_date", "implanted_time", "implanted_by", "reconstituted_time", "reconstituted_by", "reconstitution_solution", "reconstitution_lot", "reconstitution_expiration", "usage_card_returned", "usage_card_returned_on"],
+    implanted: ["implanted_date", "implanted_time", "implanted_by", "reconstituted_time", "reconstituted_by", "reconstitution_solution", "reconstitution_lot", "reconstitution_expiration", "reconstitution_expired_note", "usage_card_returned", "usage_card_returned_on"],
     disposition: ["disposition_date", "disposition_time", "disposition_description", "disposition_by"],
   };
 

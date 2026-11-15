@@ -3,8 +3,9 @@
 // eCFR's renderer API returned (https://www.ecfr.gov/api/renderer/v1/content/enhanced/2026-11-04/title-21?chapter=I&subchapter=L&part=1271&subpart=D&section=1271.290;
 // 2026-10-01 reads the same). Exits non-zero on any failure.
 import {
-  correctableFields, detectTissuePhi, findTissuePhi, isBefore, isFinalState, isHhMm, isOpenOnLog, isYmd, issueRefusals, lastLiveReturn, liveSteps, returnUnusedRefusal,
-  tissueFlags, tissueIdKey, yesNo, ISSUE_ROW_FIELDS, OTHER_DISPOSITION_LABELS, TISSUE_STATE_LABELS,
+  correctableFields, detectTissuePhi, expiredSolutionRefusal, findTissuePhi, isBefore, isFinalState, isHhMm, isOpenOnLog, isYmd, issueRefusals, lastLiveReturn, liveSteps,
+  returnUnusedRefusal, solutionExpiredAtImplant, tissueFlags, tissueIdKey, yesNo, ISSUE_ROW_FIELDS, OTHER_DISPOSITION_LABELS, SOLUTION_EXPIRED_NOTE_LABEL,
+  TISSUE_FIELD_LABELS, TISSUE_STATE_LABELS,
   TISSUE_CFR_CODE_CITATION, TISSUE_CFR_CODE_QUOTE, TISSUE_CFR_TRACKING_CITATION, TISSUE_CFR_TRACKING_QUOTE, TISSUE_NO_PHI_NOTICE,
 } from "../shared/tissueRules";
 
@@ -90,6 +91,22 @@ check("flags: past expiration with no disposition", open.open && open.expired_on
 check("flags: final and past expiration isn't flagged", !tissueFlags({ state: "expired", expiration_date: "2026-11-05" }, today).expired_on_shelf);
 check("flags: a no at receipt shows", tissueFlags({ state: "stored", transport_temp_ok: 0, package_ok: 1 }, today).receipt_problem && tissueFlags({ state: "stored", transport_temp_ok: 1, package_ok: 0 }, today).receipt_problem);
 check("flags: usage card pending only when implanted", tissueFlags({ state: "implanted" }, today).card_pending && !tissueFlags({ state: "implanted", usage_card_returned: 1 }, today).card_pending && !tissueFlags({ state: "issued" }, today).card_pending);
+
+// An expired reconstituting solution at implant (Michael 2026-11-15, Q335 = 1)
+check("solution: expiring the day before the implant is expired", solutionExpiredAtImplant("2026-11-05", "2026-11-06"));
+check("solution: expiring on the implant day is still good", !solutionExpiredAtImplant("2026-11-06", "2026-11-06"));
+check("solution: expiring after the implant is good", !solutionExpiredAtImplant("2026-12-01", "2026-11-06"));
+check("solution: no reconstitution or no implant date reads not expired", !solutionExpiredAtImplant(null, "2026-11-06") && !solutionExpiredAtImplant("2026-11-05", null) && !solutionExpiredAtImplant("11/05/2026", "2026-11-06"));
+check("solution: expired with no note is refused, naming both dates", /expired on 2026-11-05, before the implant on 2026-11-06.*still recorded/.test(expiredSolutionRefusal("2026-11-05", "2026-11-06", "") || ""));
+check("solution: a blank note is no note", expiredSolutionRefusal("2026-11-05", "2026-11-06", "   ") !== null && expiredSolutionRefusal("2026-11-05", "2026-11-06", null) !== null);
+check("solution: expired with a note passes", expiredSolutionRefusal("2026-11-05", "2026-11-06", "Surgeon informed; documented in the OR record") === null);
+check("solution: in date needs no note", expiredSolutionRefusal("2026-11-06", "2026-11-06", "") === null && expiredSolutionRefusal(null, "2026-11-06", null) === null);
+check("flags: solution expired at implant shows, in date doesn't", tissueFlags({ state: "implanted", implanted_date: "2026-11-06", reconstitution_expiration: "2026-11-05" }, today).solution_expired
+  && !tissueFlags({ state: "implanted", implanted_date: "2026-11-06", reconstitution_expiration: "2026-11-06" }, today).solution_expired && !tissueFlags({ state: "issued" }, today).solution_expired);
+check("correct: tissue type and supplier are corrected through the catalog product, on any unit", correctableFields({}).includes("catalog_id") && !correctableFields({}).includes("tissue_type") && !correctableFields({}).includes("supplier_name"));
+check("correct: the note is correctable once implanted, and not before", correctableFields({ implanted_date: "x" }).includes("reconstitution_expired_note") && !correctableFields({ issued_date: "x" }).includes("reconstitution_expired_note"));
+check("labels: catalog, type, supplier and the note read plainly", TISSUE_FIELD_LABELS.catalog_id === "Tissue type and supplier" && TISSUE_FIELD_LABELS.tissue_type === "Type of tissue"
+  && TISSUE_FIELD_LABELS.supplier_name === "Supplier" && TISSUE_FIELD_LABELS.reconstitution_expired_note === SOLUTION_EXPIRED_NOTE_LABEL);
 
 // Corrections
 const receiptOnly = correctableFields({});
