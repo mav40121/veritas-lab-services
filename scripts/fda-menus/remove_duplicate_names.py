@@ -25,12 +25,26 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 from rebuild_corrupt import LIB, splice_entries  # noqa: E402
+from remove_case_duplicate_entries import REMOVE as CASE_DUPLICATES_REMOVED  # noqa: E402
 
 PLAN = os.path.join(HERE, "dup_names_plan_2026-11-14.json")
 
 
 def load():
     return json.load(open(PLAN, encoding="utf-8")), json.load(open(LIB, encoding="utf-8"))
+
+
+def verify_plan(plan, lib):
+    """The plan as --verify reads it now: an entry remove_case_duplicate_entries.py later took out of the library (the
+    same entry under a name differing only in capitals) is checked through the entry that stayed, which the plan also
+    lists with the same groups."""
+    out = {}
+    for k, s in plan["instruments"].items():
+        if k not in lib and k in CASE_DUPLICATES_REMOVED:
+            print(f"NOTE  {k}: removed later as a repeat of {CASE_DUPLICATES_REMOVED[k]} (remove_case_duplicate_entries.py)")
+            continue
+        out[k] = s
+    return {**plan, "instruments": out}
 
 
 def apply():
@@ -67,6 +81,7 @@ def apply():
 
 def verify():
     plan, lib = load()
+    plan = verify_plan(plan, lib)
     ok = True
 
     def check(name, cond, detail=""):
