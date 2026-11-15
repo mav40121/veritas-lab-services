@@ -135,12 +135,15 @@ async function main() {
     check("7a. admin kill-sessions ends the sign-in", kill.status === 200 && kill.body?.sessionsKilled === 1 && (await me(reset.body.token)).status === 401, JSON.stringify(kill.body));
 
     // 8) Token kinds that carry no session id.
-    const legacyOld = jwt.sign({ userId, iat: Math.floor((LEGACY_TOKEN_CUTOFF_MS - 86_400_000) / 1000) }, SECRET, { expiresIn: "30d" });
+    // Each test token expires an hour from now, not 30 days from its iat: signed relative to the cutoff (10/17), a
+    // 30-day token expired on 2026-11-15 and these checks failed on the expiry, not on the rule they test.
+    const testExp = Math.floor(Date.now() / 1000) + 3600;
+    const legacyOld = jwt.sign({ userId, iat: Math.floor((LEGACY_TOKEN_CUTOFF_MS - 86_400_000) / 1000), exp: testExp }, SECRET);
     check("8a. a pre-Stage-1 token with no active session is refused", (await me(legacyOld)).status === 401);
     const live = issueSession(sqlite, userId, { headers: {} });
     check("8b. a pre-Stage-1 token works while the person has an active session", (await me(legacyOld)).status === 200);
     // Issued after the cutoff (any token the server issues from now on carries a sid).
-    const legacyNew = jwt.sign({ userId, iat: Math.floor(LEGACY_TOKEN_CUTOFF_MS / 1000) + 60 }, SECRET, { expiresIn: "30d" });
+    const legacyNew = jwt.sign({ userId, iat: Math.floor(LEGACY_TOKEN_CUTOFF_MS / 1000) + 60, exp: testExp }, SECRET);
     check("8c. a token issued after the cutoff without a session id is refused", (await me(legacyNew)).status === 401);
     await req("POST", "/api/auth/logout", {}, legacyOld);
     check("8d. sign-out on a pre-Stage-1 token ends it", (await me(legacyOld)).status === 401 && (await me(live.token)).status === 401);
