@@ -23,8 +23,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { ArrowLeft, Download, FileText, Plus, Search, ShieldCheck, Thermometer, Undo2 } from "lucide-react";
 import {
-  OTHER_DISPOSITION_LABELS, RETURN_UNUSED_PACKAGE_LABEL, RETURN_UNUSED_STORAGE_LABEL, TISSUE_CFR_CODE_CITATION, TISSUE_CFR_CODE_QUOTE, TISSUE_FIELD_LABELS,
-  TISSUE_NO_PHI_NOTICE, returnUnusedRefusal, type OtherDisposition,
+  OTHER_DISPOSITION_LABELS, RETURN_UNUSED_PACKAGE_LABEL, RETURN_UNUSED_STORAGE_LABEL, SOLUTION_EXPIRED_NOTE_LABEL, TISSUE_CFR_CODE_CITATION, TISSUE_CFR_CODE_QUOTE,
+  TISSUE_FIELD_LABELS, TISSUE_NO_PHI_NOTICE, returnUnusedRefusal, solutionExpiredAtImplant, type OtherDisposition,
 } from "@shared/tissueRules";
 
 const localToday = () => new Date().toLocaleDateString("en-CA");
@@ -93,6 +93,7 @@ const Flags = ({ unit }: { unit: any }) => (
     {unit.flags?.expired_on_shelf && <Badge variant="outline" className="border-red-600 text-red-700 dark:text-red-400">Past expiration</Badge>}
     {unit.flags?.receipt_problem && <Badge variant="outline" className="border-amber-600 text-amber-800 dark:text-amber-400">Receipt: answered no</Badge>}
     {unit.flags?.card_pending && <Badge variant="outline" className="border-amber-600 text-amber-800 dark:text-amber-400">Usage card not returned</Badge>}
+    {unit.flags?.solution_expired && <Badge variant="outline" className="border-red-600 text-red-700 dark:text-red-400" data-testid="flag-solution-expired">Solution expired at implant</Badge>}
   </>
 );
 
@@ -390,6 +391,7 @@ function UnitView({ base, labId, unitId, canEdit }: { base: string; labId: numbe
           <Row label="Implanted by" value={u.implanted_by} />
           {u.reconstituted_time && <Row label="Reconstituted" value={[u.reconstituted_time, u.reconstituted_by].filter(Boolean).join(", ")} />}
           {u.reconstitution_solution && <Row label="Solution" value={`${u.reconstitution_solution}, lot ${u.reconstitution_lot}, expires ${u.reconstitution_expiration}`} />}
+          {u.flags?.solution_expired && <Row label={SOLUTION_EXPIRED_NOTE_LABEL} value={u.reconstitution_expired_note || "Expired; no note on file"} />}
           <Row label="Tissue usage card completed and returned" value={u.usage_card_returned === 1 ? `Yes, ${u.usage_card_returned_on}` : "No"} />
         </Section>
       )}
@@ -507,9 +509,11 @@ function IssueStep({ base, u, done }: { base: string; u: any; done: () => void }
 }
 
 function ImplantStep({ base, u, done }: { base: string; u: any; done: () => void }) {
-  const [v, setV] = useState<Record<string, string>>({ implanted_date: localToday(), implanted_time: localNow(), implanted_by: "", reconstituted_time: "", reconstituted_by: "", reconstitution_solution: "", reconstitution_lot: "", reconstitution_expiration: "", usage_card_returned: "", usage_card_returned_on: "" });
+  const [v, setV] = useState<Record<string, string>>({ implanted_date: localToday(), implanted_time: localNow(), implanted_by: "", reconstituted_time: "", reconstituted_by: "", reconstitution_solution: "", reconstitution_lot: "", reconstitution_expiration: "", reconstitution_expired_note: "", usage_card_returned: "", usage_card_returned_on: "" });
   const set = (k: string, val: string) => setV((p) => ({ ...p, [k]: val }));
   const { err, saving, post } = usePost(`${base}/units/${u.id}/implant`, done);
+  // Michael 2026-11-15, Q335 = 1: an expired solution still records, with a note of what was done (the server holds the same rule).
+  const solutionExpired = solutionExpiredAtImplant(v.reconstitution_expiration, v.implanted_date);
   return (
     <Card><CardContent className="p-5 space-y-3" data-testid="step-implant">
       <h3 className="font-semibold">Next: implant</h3>
@@ -526,8 +530,14 @@ function ImplantStep({ base, u, done }: { base: string; u: any; done: () => void
         <Field label="Solution lot"><Input value={v.reconstitution_lot} onChange={(e) => set("reconstitution_lot", e.target.value)} data-testid="recon-lot" /></Field>
         <Field label="Solution expiration"><Input type="date" value={v.reconstitution_expiration} onChange={(e) => set("reconstitution_expiration", e.target.value)} data-testid="recon-exp" /></Field>
       </div>
+      {solutionExpired && (
+        <div className="space-y-2 rounded-md border border-red-600/60 p-3" data-testid="recon-expired">
+          <p className="text-sm text-red-700 dark:text-red-400">The solution expired on {v.reconstitution_expiration}, before the implant on {v.implanted_date}. The implant is still recorded. Say what was done about it.</p>
+          <Field label={SOLUTION_EXPIRED_NOTE_LABEL}><Textarea rows={2} value={v.reconstitution_expired_note} onChange={(e) => set("reconstitution_expired_note", e.target.value)} data-testid="recon-expired-note" /><NoPhiNotice /></Field>
+        </div>
+      )}
       <ErrorLine text={err} />
-      <Button onClick={() => post(v)} disabled={saving} data-testid="save-implant">{saving ? "Saving..." : "Record the implant"}</Button>
+      <Button onClick={() => post({ ...v, reconstitution_expired_note: solutionExpired ? v.reconstitution_expired_note : "" })} disabled={saving} data-testid="save-implant">{saving ? "Saving..." : "Record the implant"}</Button>
     </CardContent></Card>
   );
 }
@@ -620,18 +630,28 @@ function DisposeStep({ base, u, done }: { base: string; u: any; done: () => void
 const DATE_FIELD = /_date$|reconstitution_expiration/;
 const TIME_FIELD = /_time$/;
 const YES_NO_FIELD = /^(transport_temp_ok|package_ok)$/;
-const FREE_TEXT_FIELD = /^(notes|transport_action|disposition_description)$/;
+const FREE_TEXT_FIELD = /^(notes|transport_action|disposition_description|reconstitution_expired_note)$/;
+const LONG_TEXT_FIELD = /^(notes|transport_action|disposition_description|reconstitution_expired_note)$/;
 
 function CorrectionStep({ base, u, done }: { base: string; u: any; done: () => void }) {
   const [open, setOpen] = useState(false);
   const [field, setField] = useState("");
   const [value, setValue] = useState("");
+  const [note, setNote] = useState("");
   const [reason, setReason] = useState("");
   const [undoReason, setUndoReason] = useState("");
-  const correct = usePost(`${base}/units/${u.id}/correct`, () => { setField(""); setValue(""); setReason(""); done(); });
+  const correct = usePost(`${base}/units/${u.id}/correct`, () => { setField(""); setValue(""); setNote(""); setReason(""); done(); });
   const undo = usePost(`${base}/units/${u.id}/undo`, () => { setUndoReason(""); done(); });
+  // Tissue type and supplier are corrected by picking the catalog product (Michael 2026-11-15, Q335 = 1).
+  const { data: catalog } = useQuery<any>({ queryKey: [base, "catalog"], queryFn: () => api(`${base}/catalog`), enabled: open });
+  const products: any[] = (catalog?.items || []).filter((i: any) => i.active || i.id === u.catalog_id);
   const fields: string[] = (u.correctable_fields || []).filter((f: string) => f !== "storage_unit_id");
-  const pick = (f: string) => { setField(f); setValue(u[f] == null ? "" : YES_NO_FIELD.test(f) ? (u[f] === 1 ? "yes" : "no") : String(u[f])); };
+  const pick = (f: string) => { setField(f); setNote(""); setValue(u[f] == null ? "" : YES_NO_FIELD.test(f) ? (u[f] === 1 ? "yes" : "no") : String(u[f])); };
+  // A corrected implant date or solution expiration that leaves the solution expired needs the note too, unless one is on file.
+  const after = (f: string) => (field === f ? value : u[f]);
+  const needsNote = (field === "implanted_date" || field === "reconstitution_expiration") && !u.reconstitution_expired_note
+    && solutionExpiredAtImplant(after("reconstitution_expiration"), after("implanted_date"));
+  const changes = needsNote ? { [field]: value, reconstitution_expired_note: note } : { [field]: value };
   if (!open) return <div><Button variant="ghost" size="sm" onClick={() => setOpen(true)} data-testid="open-correct">Correct this record</Button></div>;
   return (
     <Card><CardContent className="p-5 space-y-4" data-testid="step-correct">
@@ -641,13 +661,24 @@ function CorrectionStep({ base, u, done }: { base: string; u: any; done: () => v
           <Field label="Which value"><select className={fieldClass} value={field} onChange={(e) => pick(e.target.value)} data-testid="correct-field"><option value="">Choose</option>{fields.map((f) => <option key={f} value={f}>{TISSUE_FIELD_LABELS[f] || f}</option>)}</select></Field>
           {field && <Field label="Correct value">
             {YES_NO_FIELD.test(field) ? <select className={fieldClass} value={value} onChange={(e) => setValue(e.target.value)} data-testid="correct-value"><option value="yes">Yes</option><option value="no">No</option></select>
+              : field === "catalog_id" ? <select className={fieldClass} value={value} onChange={(e) => setValue(e.target.value)} data-testid="correct-value">
+                  {products.map((p) => <option key={p.id} value={String(p.id)}>{p.tissue_type}, {p.supplier_name}{p.active ? "" : " (retired)"}</option>)}
+                </select>
+              : LONG_TEXT_FIELD.test(field) ? <Textarea rows={2} value={value} onChange={(e) => setValue(e.target.value)} data-testid="correct-value" />
               : <Input type={DATE_FIELD.test(field) ? "date" : TIME_FIELD.test(field) ? "time" : "text"} value={value} onChange={(e) => setValue(e.target.value)} data-testid="correct-value" />}
             {FREE_TEXT_FIELD.test(field) && <NoPhiNotice />}
           </Field>}
         </div>
+        {field === "catalog_id" && <p className="text-sm text-muted-foreground">The tissue type and supplier change together, to the product picked from your catalog.</p>}
+        {needsNote && (
+          <div className="space-y-2 rounded-md border border-red-600/60 p-3" data-testid="correct-expired">
+            <p className="text-sm text-red-700 dark:text-red-400">With this value the solution was past its expiration on the implant date. Say what was done about it.</p>
+            <Field label={SOLUTION_EXPIRED_NOTE_LABEL}><Textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} data-testid="correct-expired-note" /><NoPhiNotice /></Field>
+          </div>
+        )}
         <Field label="Reason for the correction"><Textarea rows={2} value={reason} onChange={(e) => setReason(e.target.value)} data-testid="correct-reason" /><NoPhiNotice /></Field>
         <ErrorLine text={correct.err} />
-        <Button variant="outline" size="sm" disabled={correct.saving || !field} onClick={() => correct.post({ reason, changes: { [field]: value } })} data-testid="save-correct">Save correction</Button>
+        <Button variant="outline" size="sm" disabled={correct.saving || !field} onClick={() => correct.post({ reason, changes })} data-testid="save-correct">Save correction</Button>
       </div>
       {u.state !== "received_mm" && (
         <div className="space-y-3 border-t pt-4">
@@ -666,6 +697,15 @@ const EVENT_LABELS: Record<string, string> = {
   received_mm: "Received in Materials Management", received_bb: "Received in blood bank", issued: "Issued", implanted: "Implanted",
   usage_card: "Tissue usage card", other_disposition: "Other disposition", returned_unused: "Returned unused to blood bank", corrected: "Corrected", undone: "Step undone",
 };
+
+// One change a correction made, as the record PDF prints it: the field, then from and to. A storage unit is named on the PDF; here it
+// just says it changed.
+function correctionLine(ch: { field: string; from: unknown; to: unknown }): string {
+  const label = TISSUE_FIELD_LABELS[ch.field] || ch.field;
+  if (ch.field === "storage_unit_id") return `${label} changed`;
+  const show = (v: unknown) => (v === null || v === undefined || v === "" ? "blank" : YES_NO_FIELD.test(ch.field) ? yn(Number(v)) || String(v) : String(v));
+  return `${label} from ${show(ch.from)} to ${show(ch.to)}`;
+}
 
 function History({ events }: { events: any[] }) {
   return (
@@ -687,6 +727,8 @@ function History({ events }: { events: any[] }) {
                   {d.note && ` Note: ${d.note}`}
                 </span>
               ) : (e.event_date || e.performed_by) && <span>: {[dt(e.event_date, e.event_time), e.performed_by].filter(Boolean).join(", ")}</span>}
+              {e.event_type === "corrected" && Array.isArray(d.changes) && d.changes.length > 0 && <span>: {d.changes.map(correctionLine).join("; ")}</span>}
+              {e.event_type === "implanted" && d.reconstitution_expired_note && <span>. Solution past its expiration ({d.reconstitution_expiration}); what was done: {d.reconstitution_expired_note}</span>}
               {reason && <span>. Reason: {reason}</span>}
               <span className="text-xs text-muted-foreground"> (entered by {e.recorded_by_name || "unknown"}, {new Date(e.created_at).toLocaleString()})</span>
             </li>

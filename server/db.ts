@@ -6633,6 +6633,7 @@ sqlite.exec(`
     reconstitution_solution TEXT,
     reconstitution_lot TEXT,
     reconstitution_expiration TEXT,
+    reconstitution_expired_note TEXT,
     usage_card_returned INTEGER,
     usage_card_returned_on TEXT,
     disposition_date TEXT,
@@ -6691,6 +6692,8 @@ try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_tissue_unit_events_unit ON tis
       ["readback_id_ok", "INTEGER"], ["readback_expiration_ok", "INTEGER"], ["readback_integrity_ok", "INTEGER"],
       ["implanted_date", "TEXT"], ["implanted_time", "TEXT"], ["implanted_by", "TEXT"],
       ["reconstituted_time", "TEXT"], ["reconstituted_by", "TEXT"], ["reconstitution_solution", "TEXT"], ["reconstitution_lot", "TEXT"], ["reconstitution_expiration", "TEXT"],
+      // Michael 2026-11-15, Q335 = 1: what was done when the reconstituting solution was past its expiration at implant.
+      ["reconstitution_expired_note", "TEXT"],
       ["usage_card_returned", "INTEGER"], ["usage_card_returned_on", "TEXT"],
       ["disposition_date", "TEXT"], ["disposition_time", "TEXT"], ["disposition_description", "TEXT"], ["disposition_by", "TEXT"],
       ["notes", "TEXT"], ["created_by", "INTEGER"], ["updated_at", "TEXT"],
