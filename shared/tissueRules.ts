@@ -208,16 +208,36 @@ export interface TissueFlags {
   receipt_problem: boolean;
   /** Implanted, and the supplier's usage card isn't recorded as returned. */
   card_pending: boolean;
+  /** The reconstituting solution was past its expiration on the implant date. */
+  solution_expired: boolean;
 }
 
-export function tissueFlags(unit: { state?: string | null; expiration_date?: string | null; transport_temp_ok?: number | null; package_ok?: number | null; usage_card_returned?: number | null }, today: string): TissueFlags {
+export function tissueFlags(unit: { state?: string | null; expiration_date?: string | null; transport_temp_ok?: number | null; package_ok?: number | null; usage_card_returned?: number | null; implanted_date?: string | null; reconstitution_expiration?: string | null }, today: string): TissueFlags {
   const open = isOpenOnLog(unit.state);
   return {
     open,
     expired_on_shelf: open && !!unit.expiration_date && today > unit.expiration_date,
     receipt_problem: unit.transport_temp_ok === 0 || unit.package_ok === 0,
     card_pending: unit.state === "implanted" && unit.usage_card_returned !== 1,
+    solution_expired: solutionExpiredAtImplant(unit.reconstitution_expiration, unit.implanted_date),
   };
+}
+
+// ── An expired reconstituting solution at implant (Michael 2026-11-15, Q335 = 1) ────────────────────
+// The implant happened, so it's recorded; a solution past its expiration needs a note of what was done, the way a stain log lot
+// past its expiration needs its corrective action (Q178). The note is kept on the unit, in its history and on the record PDF.
+export const SOLUTION_EXPIRED_NOTE_LABEL = "Solution expired at implant: what was done";
+
+/** True when the solution's expiration is before the implant date. A solution is good through its expiration date. */
+export function solutionExpiredAtImplant(expiration: unknown, implantedDate: unknown): boolean {
+  return isYmd(expiration) && isYmd(implantedDate) && implantedDate > expiration;
+}
+
+/** Why the reconstitution can't be saved as it stands, or null: an expired solution needs the note of what was done. */
+export function expiredSolutionRefusal(expiration: unknown, implantedDate: unknown, note: unknown): string | null {
+  if (!solutionExpiredAtImplant(expiration, implantedDate)) return null;
+  if (typeof note === "string" && note.trim()) return null;
+  return `The solution expired on ${expiration}, before the implant on ${implantedDate}. The implant is still recorded: say what was done about it.`;
 }
 
 // ── The source line, confirmed against eCFR's renderer API (Title 21, 2026-10-01 and 2026-11-04 read the same) ────────────
@@ -227,13 +247,17 @@ export const TISSUE_CFR_CODE_CITATION = "21 CFR 1271.290(c)";
 export const TISSUE_CFR_CODE_QUOTE = "distinct identification code";
 
 // ── Fields a correction may change, by the step that recorded them ───────────
-const RECEIPT_FIELDS = ["source_id", "quantity_or_size", "expiration_date", "received_mm_date", "received_mm_time", "received_mm_by", "notes"];
+// catalog_id picks another product on the lab's catalog: the unit's tissue type and supplier change together (Q335 = 1).
+const RECEIPT_FIELDS = ["catalog_id", "source_id", "quantity_or_size", "expiration_date", "received_mm_date", "received_mm_time", "received_mm_by", "notes"];
 const BB_FIELDS = ["received_bb_date", "received_bb_time", "received_bb_by", "transport_temp_ok", "transport_action", "package_ok", "storage_unit_id", "storage_location"];
 const ISSUE_FIELDS = ["issued_date", "issued_time", "requesting_physician", "issued_to", "issued_by_tech", "delivered_to"];
-const IMPLANT_FIELDS = ["implanted_date", "implanted_time", "implanted_by", "reconstituted_time", "reconstituted_by", "reconstitution_solution", "reconstitution_lot", "reconstitution_expiration"];
+const IMPLANT_FIELDS = ["implanted_date", "implanted_time", "implanted_by", "reconstituted_time", "reconstituted_by", "reconstitution_solution", "reconstitution_lot", "reconstitution_expiration", "reconstitution_expired_note"];
 const DISPOSITION_FIELDS = ["disposition_date", "disposition_time", "disposition_description", "disposition_by"];
 
 export const TISSUE_FIELD_LABELS: Record<string, string> = {
+  catalog_id: "Tissue type and supplier",
+  tissue_type: "Type of tissue",
+  supplier_name: "Supplier",
   source_id: "Tissue ID",
   quantity_or_size: "Quantity or size",
   expiration_date: "Expiration date",
@@ -263,6 +287,7 @@ export const TISSUE_FIELD_LABELS: Record<string, string> = {
   reconstitution_solution: "Reconstituting solution",
   reconstitution_lot: "Solution lot",
   reconstitution_expiration: "Solution expiration",
+  reconstitution_expired_note: SOLUTION_EXPIRED_NOTE_LABEL,
   disposition_date: "Other disposition: date",
   disposition_time: "Other disposition: time",
   disposition_description: "Description of disposition",
