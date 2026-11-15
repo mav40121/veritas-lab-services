@@ -161,6 +161,10 @@ jobs:
         # 2026-11-13: Excel opens a workbook with a longer header or footer only in repair mode; the license stamp now
         # shortens its own line to fit, keeps the sheet's lab identity and a demo lab's sample-data mark.
         run: npx tsx scripts/verify-license-footer-length.mts
+      - name: VeritaMap help text gives the library's real size
+        # 2026-11-14: the help card's "library of N analyzers and M manual procedures" is written into five pages; it
+        # must match client/src/lib/fdaInstrumentData.json, and "more than N" must stay true.
+        run: node scripts/verify-library-count-copy.mjs
       - name: Competency clearance rule
         # Only a technical or waived record can clear a person for patient testing; what an import builds from what's left, on known dates.
         run: npx tsx scripts/verify-competency-clearance-types.mts
