@@ -24027,11 +24027,11 @@
         "specialty": "Urinalysis"
       },
       "Total solids (specific gravity)": {
-        "complexity": "MODERATE",
+        "complexity": "WAIVED",
         "specialty": "Urinalysis"
       },
       "Urine qualitative dipstick ketone": {
-        "complexity": "MODERATE",
+        "complexity": "WAIVED",
         "specialty": "Urinalysis"
       },
       "Protein, total, urine": {
@@ -24039,15 +24039,15 @@
         "specialty": "General Chemistry"
       },
       "Urine qualitative dipstick blood": {
-        "complexity": "MODERATE",
+        "complexity": "WAIVED",
         "specialty": "Urinalysis"
       },
       "Urine qualitative dipstick glucose": {
-        "complexity": "MODERATE",
+        "complexity": "WAIVED",
         "specialty": "Urinalysis"
       },
       "Urine qualitative dipstick leukocytes": {
-        "complexity": "MODERATE",
+        "complexity": "WAIVED",
         "specialty": "Urinalysis"
       },
       "Nitrite, urine": {
@@ -24071,27 +24071,27 @@
         "specialty": "General Chemistry"
       },
       "Urine qualitative dipstick bilirubin": {
-        "complexity": "MODERATE",
+        "complexity": "WAIVED",
         "specialty": "Urinalysis"
       },
       "Urine qualitative dipstick nitrite": {
-        "complexity": "MODERATE",
+        "complexity": "WAIVED",
         "specialty": "Urinalysis"
       },
       "Urine qualitative dipstick Ph": {
-        "complexity": "MODERATE",
+        "complexity": "WAIVED",
         "specialty": "Urinalysis"
       },
       "Urine qualitative dipstick protein": {
-        "complexity": "MODERATE",
+        "complexity": "WAIVED",
         "specialty": "Urinalysis"
       },
       "Urine qualitative dipstick urobilinogen": {
-        "complexity": "MODERATE",
+        "complexity": "WAIVED",
         "specialty": "Urinalysis"
       },
       "Urine qualitative dipstick creatinine": {
-        "complexity": "MODERATE",
+        "complexity": "WAIVED",
         "specialty": "Urinalysis"
       }
     }
