@@ -588,16 +588,17 @@ _(item #88 closed 2026-10-08; see C91 below)_
 
 ### 115. Tissue tracking follow-ups left out of PR 1838
 
-**Effort:** M (1-2 weeks in all; each build item is XS to S)
+**Effort:** M (about a week left; each build item is XS to S)
 **Importance:** Medium. Units can be recorded without these; a surveyor would ask for the retention period and TJC numbers.
 
-**What:** VeritaStock tissue tracking merged 2026-11-06 (C109); these were left out of it or found while building it. None stops a lab from recording units. The correction gap and the expired-solution check matter most, because they bear on whether the record is right. Shipping the list finishes what the scope and Heywood's form describe.
+**What:** VeritaStock tissue tracking merged 2026-11-06 (C109); these were left out of it or found while building it. None stops a lab from recording units. Shipping the list finishes what the scope and Heywood's form describe.
+**Built 2026-11-15 (Michael Q335 = 1, PR 1929):** the two that bore on whether the record is right. A correction can now pick another catalog product, so a unit received under the wrong type or supplier is corrected rather than closed out; and a reconstituting solution past its expiration at implant records only with a note of what was done (the stain log's rule). Both are in CLAUDE.md's tissue section.
+
+**Still open:**
 - Barcode scan of the supplier's tissue ID. Phase 2 in the scope. The tissue page and server/tissue.ts have no scan code, and VeritaStock's barcode belongs to a product, not a unit.
 - Travel page. Heywood's form says to photocopy it, leave the copy in the blood bank and send the original to surgery. Decide whether the record prints a page that goes with the unit, and mock it first.
 - Staff tile. client/src/components/StaffMyWorkCard.tsx has no tissue tile; the way in is the Tissue button on VeritaStock.
 - Recall case pull. A recall case lists each matching unit with its state and a link to its record, but remove-stock takes lots only (server/stockRecalls.ts line 512). The lab records a disposition on the unit, and the case's "Stock removed" lines don't show it.
-- Reconstitution expiry check. reconstitutionFields (server/tissue.ts line 115) only checks that the solution's expiration is a date, so an expired solution saves at implant with no warning.
-- A correction can't change tissue type or supplier. correctableFields (shared/tissueRules.ts line 219) leaves both out and the first receipt can't be undone (server/tissue.ts line 630), so a unit received under the wrong type or supplier can only be closed out as another disposition.
 - Retention period and TJC transplant safety standard numbers. Neither is shown. The TJC numbers have to come from the current standard. Whether 21 CFR 1271.270(d) binds a consignee hospital is Michael's call.
 
 **Source:** 77aec80b commit message ("Not covered"), Lab\Verita Products\Product Specs\VeritaStock_tissue_submodule_scope_2026-11-03.md, and the 2026-11-06 build queue. Parked on Michael's Q216 = 1.
