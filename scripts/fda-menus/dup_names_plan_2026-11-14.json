@@ -1,0 +1,546 @@
+{
+ "approved": "Michael Q330 (2026-11-14)",
+ "review": "VeritaMap Library\\Same test listed twice 2026-11-14.xlsx",
+ "source": "vls-ops dup_review_workbook.py (lib_same_test_sweep.py, lib_dup_strict.py)",
+ "rule": "keep the name more library instruments use, then the name FDA's CLIA records use, then the shorter",
+ "instruments": {
+  "Abbott ARCHITECT c16000": {
+   "before_count": 107,
+   "groups": [
+    {
+     "keep": "Calcium, total",
+     "remove": [
+      "Calcium"
+     ]
+    },
+    {
+     "keep": "Cocaine metabolites",
+     "remove": [
+      "Cocaine"
+     ]
+    },
+    {
+     "keep": "EDDP (methadone metabolite)",
+     "remove": [
+      "Methadone metabolite (EDDP)"
+     ]
+    }
+   ]
+  },
+  "Abbott ARCHITECT c4000": {
+   "before_count": 102,
+   "groups": [
+    {
+     "keep": "Cholesterol",
+     "remove": [
+      "Total Cholesterol"
+     ]
+    }
+   ]
+  },
+  "Abbott ARCHITECT c8000": {
+   "before_count": 118,
+   "groups": [
+    {
+     "keep": "Microalbumin",
+     "remove": [
+      "Albumin, urinary"
+     ]
+    },
+    {
+     "keep": "Calcium, total",
+     "remove": [
+      "Calcium"
+     ]
+    },
+    {
+     "keep": "Cocaine metabolites",
+     "remove": [
+      "Cocaine"
+     ]
+    },
+    {
+     "keep": "EDDP (methadone metabolite)",
+     "remove": [
+      "Methadone metabolite (EDDP)"
+     ]
+    }
+   ]
+  },
+  "Abbott Alinity c": {
+   "before_count": 108,
+   "groups": [
+    {
+     "keep": "Microalbumin",
+     "remove": [
+      "Albumin, urinary"
+     ]
+    },
+    {
+     "keep": "Calcium, total",
+     "remove": [
+      "Calcium"
+     ]
+    },
+    {
+     "keep": "Cocaine metabolites",
+     "remove": [
+      "Cocaine"
+     ]
+    },
+    {
+     "keep": "EDDP (methadone metabolite)",
+     "remove": [
+      "Methadone metabolite (EDDP)"
+     ]
+    }
+   ]
+  },
+  "Abbott Architect c16000": {
+   "before_count": 107,
+   "groups": [
+    {
+     "keep": "Calcium, total",
+     "remove": [
+      "Calcium"
+     ]
+    },
+    {
+     "keep": "Cocaine metabolites",
+     "remove": [
+      "Cocaine"
+     ]
+    },
+    {
+     "keep": "EDDP (methadone metabolite)",
+     "remove": [
+      "Methadone metabolite (EDDP)"
+     ]
+    }
+   ]
+  },
+  "Abbott Architect c8000": {
+   "before_count": 118,
+   "groups": [
+    {
+     "keep": "Microalbumin",
+     "remove": [
+      "Albumin, urinary"
+     ]
+    },
+    {
+     "keep": "Calcium, total",
+     "remove": [
+      "Calcium"
+     ]
+    },
+    {
+     "keep": "Cocaine metabolites",
+     "remove": [
+      "Cocaine"
+     ]
+    },
+    {
+     "keep": "EDDP (methadone metabolite)",
+     "remove": [
+      "Methadone metabolite (EDDP)"
+     ]
+    }
+   ]
+  },
+  "Beckman Coulter UniCel DxC 660i": {
+   "before_count": 120,
+   "groups": [
+    {
+     "keep": "T uptake (TU)",
+     "remove": [
+      "Thyroxine uptake (T4U) (TU)"
+     ]
+    }
+   ]
+  },
+  "Beckman Coulter UniCel DxC 860i": {
+   "before_count": 119,
+   "groups": [
+    {
+     "keep": "T uptake (TU)",
+     "remove": [
+      "Thyroxine uptake (T4U) (TU)"
+     ]
+    }
+   ]
+  },
+  "Ortho VITROS 4600": {
+   "before_count": 101,
+   "groups": [
+    {
+     "keep": "Microalbumin",
+     "remove": [
+      "Albumin, urinary"
+     ]
+    }
+   ]
+  },
+  "Ortho VITROS 5600": {
+   "before_count": 152,
+   "groups": [
+    {
+     "keep": "Microalbumin",
+     "remove": [
+      "Albumin, urinary"
+     ]
+    }
+   ]
+  },
+  "Roche cobas c 703": {
+   "before_count": 98,
+   "groups": [
+    {
+     "keep": "Cholesterol",
+     "remove": [
+      "Total cholesterol"
+     ]
+    }
+   ]
+  },
+  "Siemens ADVIA 1800": {
+   "before_count": 111,
+   "groups": [
+    {
+     "keep": "Calcium, total",
+     "remove": [
+      "Calcium"
+     ]
+    },
+    {
+     "keep": "EDDP (methadone metabolite)",
+     "remove": [
+      "Methadone Metabolites",
+      "Methadone metabolite (EDDP)"
+     ]
+    }
+   ]
+  },
+  "Siemens ADVIA Chemistry XPT": {
+   "before_count": 107,
+   "groups": [
+    {
+     "keep": "Calcium, total",
+     "remove": [
+      "Calcium"
+     ]
+    },
+    {
+     "keep": "EDDP (methadone metabolite)",
+     "remove": [
+      "Methadone Metabolites"
+     ]
+    }
+   ]
+  },
+  "Siemens Atellica CH": {
+   "before_count": 126,
+   "groups": [
+    {
+     "keep": "Apolipoprotein A1",
+     "remove": [
+      "Apolipoprotein A-1"
+     ]
+    },
+    {
+     "keep": "Calcium, total",
+     "remove": [
+      "Calcium"
+     ]
+    },
+    {
+     "keep": "EDDP (methadone metabolite)",
+     "remove": [
+      "Methadone metabolite (EDDP)"
+     ]
+    },
+    {
+     "keep": "Lysergic acid diethylamide (LSD)",
+     "remove": [
+      "LSD"
+     ]
+    }
+   ]
+  },
+  "Siemens Atellica CH 930": {
+   "before_count": 138,
+   "groups": [
+    {
+     "keep": "Apolipoprotein A1",
+     "remove": [
+      "Apolipoprotein A-1"
+     ]
+    },
+    {
+     "keep": "Calcium, total",
+     "remove": [
+      "Calcium"
+     ]
+    },
+    {
+     "keep": "EDDP (methadone metabolite)",
+     "remove": [
+      "Methadone metabolite (EDDP)"
+     ]
+    },
+    {
+     "keep": "Lysergic acid diethylamide (LSD)",
+     "remove": [
+      "LSD"
+     ]
+    }
+   ]
+  },
+  "Siemens Dimension EXL": {
+   "before_count": 148,
+   "groups": [
+    {
+     "keep": "Calcium, total",
+     "remove": [
+      "Calcium"
+     ]
+    },
+    {
+     "keep": "Prostatic specific antigen (PSA)",
+     "remove": [
+      "Total PSA"
+     ]
+    },
+    {
+     "keep": "T uptake (TU)",
+     "remove": [
+      "Thyroxine uptake (T4U) (TU)"
+     ]
+    }
+   ]
+  },
+  "Siemens Dimension EXL 200": {
+   "before_count": 148,
+   "groups": [
+    {
+     "keep": "Calcium, total",
+     "remove": [
+      "Calcium"
+     ]
+    },
+    {
+     "keep": "Prostatic specific antigen (PSA)",
+     "remove": [
+      "Total PSA"
+     ]
+    },
+    {
+     "keep": "T uptake (TU)",
+     "remove": [
+      "Thyroxine uptake (T4U) (TU)"
+     ]
+    }
+   ]
+  },
+  "Siemens Dimension Vista 1500": {
+   "before_count": 178,
+   "groups": [
+    {
+     "keep": "B-type natriuretic peptide (BNP)",
+     "remove": [
+      "BNP"
+     ]
+    },
+    {
+     "keep": "Cancer antigen 15-3 (CA 15-3)",
+     "remove": [
+      "CA 15-3"
+     ]
+    },
+    {
+     "keep": "Carcinoembryonic antigen (CEA)",
+     "remove": [
+      "CEA"
+     ]
+    },
+    {
+     "keep": "Calcium, total",
+     "remove": [
+      "Calcium"
+     ]
+    },
+    {
+     "keep": "Follicle stimulating hormone (FSH)",
+     "remove": [
+      "FSH"
+     ]
+    },
+    {
+     "keep": "Prostatic specific antigen (PSA)",
+     "remove": [
+      "Total PSA"
+     ]
+    },
+    {
+     "keep": "Transferrin receptor (TFR)",
+     "remove": [
+      "Soluble Transferrin Receptor (sTfR)"
+     ]
+    },
+    {
+     "keep": "T uptake (TU)",
+     "remove": [
+      "Thyroxine uptake (T4U) (TU)"
+     ]
+    }
+   ]
+  },
+  "Siemens Dimension Vista 3000": {
+   "before_count": 178,
+   "groups": [
+    {
+     "keep": "B-type natriuretic peptide (BNP)",
+     "remove": [
+      "BNP"
+     ]
+    },
+    {
+     "keep": "Cancer antigen 15-3 (CA 15-3)",
+     "remove": [
+      "CA 15-3"
+     ]
+    },
+    {
+     "keep": "Carcinoembryonic antigen (CEA)",
+     "remove": [
+      "CEA"
+     ]
+    },
+    {
+     "keep": "Calcium, total",
+     "remove": [
+      "Calcium"
+     ]
+    },
+    {
+     "keep": "Follicle stimulating hormone (FSH)",
+     "remove": [
+      "FSH"
+     ]
+    },
+    {
+     "keep": "Prostatic specific antigen (PSA)",
+     "remove": [
+      "Total PSA"
+     ]
+    },
+    {
+     "keep": "Transferrin receptor (TFR)",
+     "remove": [
+      "Soluble Transferrin Receptor (sTfR)"
+     ]
+    },
+    {
+     "keep": "T uptake (TU)",
+     "remove": [
+      "Thyroxine uptake (T4U) (TU)"
+     ]
+    }
+   ]
+  },
+  "Siemens Dimension Vista 3000T": {
+   "before_count": 173,
+   "groups": [
+    {
+     "keep": "Cancer antigen 15-3 (CA 15-3)",
+     "remove": [
+      "CA 15-3"
+     ]
+    },
+    {
+     "keep": "Carcinoembryonic antigen (CEA)",
+     "remove": [
+      "CEA"
+     ]
+    },
+    {
+     "keep": "Calcium, total",
+     "remove": [
+      "Calcium"
+     ]
+    },
+    {
+     "keep": "Follicle stimulating hormone (FSH)",
+     "remove": [
+      "FSH"
+     ]
+    },
+    {
+     "keep": "Prostatic specific antigen (PSA)",
+     "remove": [
+      "Total PSA"
+     ]
+    },
+    {
+     "keep": "Transferrin receptor (TFR)",
+     "remove": [
+      "Soluble Transferrin Receptor (sTfR)"
+     ]
+    }
+   ]
+  },
+  "Siemens Dimension Vista 500": {
+   "before_count": 178,
+   "groups": [
+    {
+     "keep": "B-type natriuretic peptide (BNP)",
+     "remove": [
+      "BNP"
+     ]
+    },
+    {
+     "keep": "Cancer antigen 15-3 (CA 15-3)",
+     "remove": [
+      "CA 15-3"
+     ]
+    },
+    {
+     "keep": "Carcinoembryonic antigen (CEA)",
+     "remove": [
+      "CEA"
+     ]
+    },
+    {
+     "keep": "Calcium, total",
+     "remove": [
+      "Calcium"
+     ]
+    },
+    {
+     "keep": "Follicle stimulating hormone (FSH)",
+     "remove": [
+      "FSH"
+     ]
+    },
+    {
+     "keep": "Prostatic specific antigen (PSA)",
+     "remove": [
+      "Total PSA"
+     ]
+    },
+    {
+     "keep": "Transferrin receptor (TFR)",
+     "remove": [
+      "Soluble Transferrin Receptor (sTfR)"
+     ]
+    },
+    {
+     "keep": "T uptake (TU)",
+     "remove": [
+      "Thyroxine uptake (T4U) (TU)"
+     ]
+    }
+   ]
+  }
+ }
+}

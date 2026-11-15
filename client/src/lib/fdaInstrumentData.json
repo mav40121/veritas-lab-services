@@ -1610,7 +1610,7 @@
   "Beckman Coulter UniCel DxC 860i": {
     "vendor": "Beckman Coulter",
     "category": "Chemistry",
-    "testCount": 119,
+    "testCount": 118,
     "tests": {
       "Prealbumin": {
         "complexity": "MODERATE",
@@ -1731,10 +1731,6 @@
       "Ammonia, plasma/serum": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
-      },
-      "Thyroxine uptake (T4U) (TU)": {
-        "complexity": "MODERATE",
-        "specialty": "Endocrinology"
       },
       "Amphetamines": {
         "complexity": "MODERATE",
@@ -2093,7 +2089,7 @@
   "Beckman Coulter UniCel DxC 660i": {
     "vendor": "Beckman Coulter",
     "category": "Chemistry",
-    "testCount": 120,
+    "testCount": 119,
     "tests": {
       "Prealbumin": {
         "complexity": "MODERATE",
@@ -2218,10 +2214,6 @@
       "Ammonia, plasma/serum": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
-      },
-      "Thyroxine uptake (T4U) (TU)": {
-        "complexity": "MODERATE",
-        "specialty": "Endocrinology"
       },
       "Amphetamines": {
         "complexity": "MODERATE",
@@ -4339,7 +4331,7 @@
   "Abbott Architect c8000": {
     "vendor": "Abbott",
     "category": "Chemistry",
-    "testCount": 118,
+    "testCount": 114,
     "tests": {
       "Alpha-1-acid glycoprotein (orosomucoid)": {
         "complexity": "MODERATE",
@@ -4669,10 +4661,6 @@
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
-      "Albumin, urinary": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Alkaline phosphatase (ALP)": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
@@ -4745,10 +4733,6 @@
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
-      "Calcium": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Total Protein, Urine/CSF": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
@@ -4793,17 +4777,9 @@
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
-      "Cocaine": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
       "Ecstasy": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
-      },
-      "Methadone metabolite (EDDP)": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
       },
       "Tramadol": {
         "complexity": "MODERATE",
@@ -4819,7 +4795,7 @@
   "Abbott Architect c16000": {
     "vendor": "Abbott",
     "category": "Chemistry",
-    "testCount": 107,
+    "testCount": 104,
     "tests": {
       "Alpha-1-acid glycoprotein (orosomucoid)": {
         "complexity": "MODERATE",
@@ -5169,10 +5145,6 @@
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
-      "Calcium": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Total Protein, Urine/CSF": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
@@ -5229,17 +5201,9 @@
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
-      "Cocaine": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
       "Ecstasy": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
-      },
-      "Methadone metabolite (EDDP)": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
       },
       "Tramadol": {
         "complexity": "MODERATE",
@@ -5255,7 +5219,7 @@
   "Abbott Alinity c": {
     "vendor": "Abbott",
     "category": "Chemistry",
-    "testCount": 108,
+    "testCount": 104,
     "tests": {
       "Glucose": {
         "complexity": "MODERATE",
@@ -5505,10 +5469,6 @@
         "complexity": "MODERATE",
         "specialty": "General Immunology"
       },
-      "Albumin, urinary": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Complement C3": {
         "complexity": "MODERATE",
         "specialty": "General Immunology"
@@ -5641,10 +5601,6 @@
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
-      "Calcium": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Total Protein, Urine/CSF": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
@@ -5677,17 +5633,9 @@
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
-      "Cocaine": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
       "Ecstasy": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
-      },
-      "Methadone metabolite (EDDP)": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
       }
     },
     "menuLastVerifiedAt": "2026-10-09"
@@ -5695,7 +5643,7 @@
   "Siemens Dimension Vista 500": {
     "vendor": "Siemens Healthineers",
     "category": "Chemistry",
-    "testCount": 178,
+    "testCount": 170,
     "tests": {
       "Progesterone": {
         "complexity": "MODERATE",
@@ -5718,10 +5666,6 @@
         "specialty": "Endocrinology"
       },
       "Follicle stimulating hormone (FSH)": {
-        "complexity": "MODERATE",
-        "specialty": "Endocrinology"
-      },
-      "Thyroxine uptake (T4U) (TU)": {
         "complexity": "MODERATE",
         "specialty": "Endocrinology"
       },
@@ -6237,10 +6181,6 @@
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
-      "Calcium": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Pancreatic Amylase": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
@@ -6260,10 +6200,6 @@
       "Fructosamine": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
-      },
-      "BNP": {
-        "complexity": "MODERATE",
-        "specialty": "Cardiac"
       },
       "CKMB (Activity)": {
         "complexity": "MODERATE",
@@ -6325,10 +6261,6 @@
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
-      "Soluble Transferrin Receptor (sTfR)": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "T uptake (TU)": {
         "complexity": "MODERATE",
         "specialty": "Endocrinology"
@@ -6345,25 +6277,9 @@
         "complexity": "MODERATE",
         "specialty": "Immunology"
       },
-      "CA 15-3": {
-        "complexity": "MODERATE",
-        "specialty": "General Immunology"
-      },
-      "CEA": {
-        "complexity": "MODERATE",
-        "specialty": "General Immunology"
-      },
       "Free PSA": {
         "complexity": "MODERATE",
         "specialty": "Immunology"
-      },
-      "Total PSA": {
-        "complexity": "MODERATE",
-        "specialty": "Immunology"
-      },
-      "FSH": {
-        "complexity": "MODERATE",
-        "specialty": "Endocrinology"
       },
       "hCG (urine, qualitative)": {
         "complexity": "MODERATE",
@@ -6414,7 +6330,7 @@
   "Siemens Dimension EXL 200": {
     "vendor": "Siemens Healthineers",
     "category": "Chemistry",
-    "testCount": 148,
+    "testCount": 145,
     "tests": {
       "Protein, total, urine": {
         "complexity": "MODERATE",
@@ -6447,10 +6363,6 @@
       "Lactate dehydrogenase (LDH)": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
-      },
-      "Thyroxine uptake (T4U) (TU)": {
-        "complexity": "MODERATE",
-        "specialty": "Endocrinology"
       },
       "Triiodothyronine, free (FT3)": {
         "complexity": "MODERATE",
@@ -6848,10 +6760,6 @@
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
-      "Calcium": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Pancreatic Amylase": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
@@ -6976,10 +6884,6 @@
         "complexity": "MODERATE",
         "specialty": "Immunology"
       },
-      "Total PSA": {
-        "complexity": "MODERATE",
-        "specialty": "Immunology"
-      },
       "6-Acetylmorphine": {
         "complexity": "MODERATE",
         "specialty": "Toxicology"
@@ -7013,7 +6917,7 @@
   "Siemens Atellica CH": {
     "vendor": "Siemens Healthineers",
     "category": "Chemistry",
-    "testCount": 126,
+    "testCount": 122,
     "tests": {
       "Methotrexate": {
         "complexity": "MODERATE",
@@ -7439,14 +7343,6 @@
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
-      "Calcium": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Apolipoprotein A-1": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Antistreptolysin O": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
@@ -7507,14 +7403,6 @@
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
-      "LSD": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
-      "Methadone metabolite (EDDP)": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
       "Oxycodone": {
         "complexity": "MODERATE",
         "specialty": "Toxicology"
@@ -7525,7 +7413,7 @@
   "Siemens ADVIA Chemistry XPT": {
     "vendor": "Siemens Healthineers",
     "category": "Chemistry",
-    "testCount": 107,
+    "testCount": 105,
     "tests": {
       "Lithium": {
         "complexity": "MODERATE",
@@ -7871,10 +7759,6 @@
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
-      "Calcium": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Pancreatic Amylase": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
@@ -7947,10 +7831,6 @@
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
-      "Methadone Metabolites": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
       "Tricyclic antidepressants": {
         "complexity": "MODERATE",
         "specialty": "Toxicology"
@@ -7960,7 +7840,7 @@
   "Siemens ADVIA 1800": {
     "vendor": "Siemens Healthineers",
     "category": "Chemistry",
-    "testCount": 111,
+    "testCount": 108,
     "tests": {
       "Alpha-1-acid glycoprotein (orosomucoid)": {
         "complexity": "MODERATE",
@@ -8194,10 +8074,6 @@
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
-      "Methadone metabolite (EDDP)": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
       "Gentamicin": {
         "complexity": "MODERATE",
         "specialty": "Toxicology"
@@ -8322,10 +8198,6 @@
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
-      "Calcium": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Gamma-Glutamyltransferase (GGT)": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
@@ -8401,17 +8273,13 @@
       "Ethyl Glucuronide (EtG)": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
-      },
-      "Methadone Metabolites": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
       }
     }
   },
   "Ortho VITROS 5600": {
     "vendor": "QuidelOrtho",
     "category": "Chemistry",
-    "testCount": 152,
+    "testCount": 151,
     "tests": {
       "Anti-streptolysin O (ASO)": {
         "complexity": "MODERATE",
@@ -8852,10 +8720,6 @@
       "Rheumatoid factor (RF)": {
         "complexity": "MODERATE",
         "specialty": "General Immunology"
-      },
-      "Albumin, urinary": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
       },
       "Prostatic specific antigen (PSA)": {
         "complexity": "MODERATE",
@@ -10086,7 +9950,7 @@
   "Siemens Dimension Vista 3000T": {
     "vendor": "Siemens Healthineers",
     "category": "Immunoassay",
-    "testCount": 173,
+    "testCount": 167,
     "tests": {
       "Progesterone": {
         "complexity": "MODERATE",
@@ -10600,10 +10464,6 @@
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
-      "Calcium": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Pancreatic Amylase": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
@@ -10700,10 +10560,6 @@
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
-      "Soluble Transferrin Receptor (sTfR)": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Total T4": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
@@ -10716,25 +10572,9 @@
         "complexity": "MODERATE",
         "specialty": "Immunology"
       },
-      "CA 15-3": {
-        "complexity": "MODERATE",
-        "specialty": "General Immunology"
-      },
-      "CEA": {
-        "complexity": "MODERATE",
-        "specialty": "General Immunology"
-      },
       "Free PSA": {
         "complexity": "MODERATE",
         "specialty": "Immunology"
-      },
-      "Total PSA": {
-        "complexity": "MODERATE",
-        "specialty": "Immunology"
-      },
-      "FSH": {
-        "complexity": "MODERATE",
-        "specialty": "Endocrinology"
       },
       "hCG (urine, qualitative)": {
         "complexity": "MODERATE",
@@ -15124,7 +14964,7 @@
   "Siemens Atellica CH 930": {
     "vendor": "Siemens Healthineers",
     "category": "Chemistry",
-    "testCount": 138,
+    "testCount": 134,
     "tests": {
       "Methotrexate": {
         "complexity": "MODERATE",
@@ -15598,14 +15438,6 @@
         "complexity": "MODERATE",
         "specialty": "General Immunology"
       },
-      "Calcium": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Apolipoprotein A-1": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Antistreptolysin O": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
@@ -15665,14 +15497,6 @@
       "Ethyl Glucuronide (EtG)": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
-      },
-      "LSD": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
-      "Methadone metabolite (EDDP)": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
       },
       "Oxycodone": {
         "complexity": "MODERATE",
@@ -16239,7 +16063,7 @@
   "Siemens Dimension Vista 1500": {
     "vendor": "Siemens Healthineers",
     "category": "Chemistry",
-    "testCount": 178,
+    "testCount": 170,
     "tests": {
       "Progesterone": {
         "complexity": "MODERATE",
@@ -16262,10 +16086,6 @@
         "specialty": "Endocrinology"
       },
       "Follicle stimulating hormone (FSH)": {
-        "complexity": "MODERATE",
-        "specialty": "Endocrinology"
-      },
-      "Thyroxine uptake (T4U) (TU)": {
         "complexity": "MODERATE",
         "specialty": "Endocrinology"
       },
@@ -16781,10 +16601,6 @@
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
-      "Calcium": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Pancreatic Amylase": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
@@ -16804,10 +16620,6 @@
       "Fructosamine": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
-      },
-      "BNP": {
-        "complexity": "MODERATE",
-        "specialty": "Cardiac"
       },
       "CKMB (Activity)": {
         "complexity": "MODERATE",
@@ -16869,10 +16681,6 @@
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
-      "Soluble Transferrin Receptor (sTfR)": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "T uptake (TU)": {
         "complexity": "MODERATE",
         "specialty": "Endocrinology"
@@ -16889,25 +16697,9 @@
         "complexity": "MODERATE",
         "specialty": "Immunology"
       },
-      "CA 15-3": {
-        "complexity": "MODERATE",
-        "specialty": "General Immunology"
-      },
-      "CEA": {
-        "complexity": "MODERATE",
-        "specialty": "General Immunology"
-      },
       "Free PSA": {
         "complexity": "MODERATE",
         "specialty": "Immunology"
-      },
-      "Total PSA": {
-        "complexity": "MODERATE",
-        "specialty": "Immunology"
-      },
-      "FSH": {
-        "complexity": "MODERATE",
-        "specialty": "Endocrinology"
       },
       "hCG (urine, qualitative)": {
         "complexity": "MODERATE",
@@ -16958,7 +16750,7 @@
   "Siemens Dimension Vista 3000": {
     "vendor": "Siemens Healthineers",
     "category": "Chemistry",
-    "testCount": 178,
+    "testCount": 170,
     "tests": {
       "Progesterone": {
         "complexity": "MODERATE",
@@ -16981,10 +16773,6 @@
         "specialty": "Endocrinology"
       },
       "Follicle stimulating hormone (FSH)": {
-        "complexity": "MODERATE",
-        "specialty": "Endocrinology"
-      },
-      "Thyroxine uptake (T4U) (TU)": {
         "complexity": "MODERATE",
         "specialty": "Endocrinology"
       },
@@ -17500,10 +17288,6 @@
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
-      "Calcium": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Pancreatic Amylase": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
@@ -17523,10 +17307,6 @@
       "Fructosamine": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
-      },
-      "BNP": {
-        "complexity": "MODERATE",
-        "specialty": "Cardiac"
       },
       "CKMB (Activity)": {
         "complexity": "MODERATE",
@@ -17588,10 +17368,6 @@
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
-      "Soluble Transferrin Receptor (sTfR)": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "T uptake (TU)": {
         "complexity": "MODERATE",
         "specialty": "Endocrinology"
@@ -17608,25 +17384,9 @@
         "complexity": "MODERATE",
         "specialty": "Immunology"
       },
-      "CA 15-3": {
-        "complexity": "MODERATE",
-        "specialty": "General Immunology"
-      },
-      "CEA": {
-        "complexity": "MODERATE",
-        "specialty": "General Immunology"
-      },
       "Free PSA": {
         "complexity": "MODERATE",
         "specialty": "Immunology"
-      },
-      "Total PSA": {
-        "complexity": "MODERATE",
-        "specialty": "Immunology"
-      },
-      "FSH": {
-        "complexity": "MODERATE",
-        "specialty": "Endocrinology"
       },
       "hCG (urine, qualitative)": {
         "complexity": "MODERATE",
@@ -17677,7 +17437,7 @@
   "Siemens Dimension EXL": {
     "vendor": "Siemens Healthineers",
     "category": "Chemistry",
-    "testCount": 148,
+    "testCount": 145,
     "tests": {
       "Protein, total, urine": {
         "complexity": "MODERATE",
@@ -17710,10 +17470,6 @@
       "Lactate dehydrogenase (LDH)": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
-      },
-      "Thyroxine uptake (T4U) (TU)": {
-        "complexity": "MODERATE",
-        "specialty": "Endocrinology"
       },
       "Triiodothyronine, free (FT3)": {
         "complexity": "MODERATE",
@@ -18111,10 +17867,6 @@
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
-      "Calcium": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Pancreatic Amylase": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
@@ -18236,10 +17988,6 @@
         "specialty": "Endocrinology"
       },
       "Free PSA": {
-        "complexity": "MODERATE",
-        "specialty": "Immunology"
-      },
-      "Total PSA": {
         "complexity": "MODERATE",
         "specialty": "Immunology"
       },
@@ -19916,7 +19664,7 @@
   "Abbott ARCHITECT c16000": {
     "vendor": "Abbott",
     "category": "Chemistry",
-    "testCount": 107,
+    "testCount": 104,
     "tests": {
       "Alpha-1-acid glycoprotein (orosomucoid)": {
         "complexity": "MODERATE",
@@ -20266,10 +20014,6 @@
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
-      "Calcium": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Total Protein, Urine/CSF": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
@@ -20326,17 +20070,9 @@
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
-      "Cocaine": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
       "Ecstasy": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
-      },
-      "Methadone metabolite (EDDP)": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
       },
       "Tramadol": {
         "complexity": "MODERATE",
@@ -20352,7 +20088,7 @@
   "Abbott ARCHITECT c8000": {
     "vendor": "Abbott",
     "category": "Chemistry",
-    "testCount": 118,
+    "testCount": 114,
     "tests": {
       "Alpha-1-acid glycoprotein (orosomucoid)": {
         "complexity": "MODERATE",
@@ -20682,10 +20418,6 @@
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
-      "Albumin, urinary": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Alkaline phosphatase (ALP)": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
@@ -20758,10 +20490,6 @@
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
-      "Calcium": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
       "Total Protein, Urine/CSF": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
@@ -20806,17 +20534,9 @@
         "complexity": "MODERATE",
         "specialty": "Toxicology"
       },
-      "Cocaine": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
-      },
       "Ecstasy": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
-      },
-      "Methadone metabolite (EDDP)": {
-        "complexity": "MODERATE",
-        "specialty": "Toxicology"
       },
       "Tramadol": {
         "complexity": "MODERATE",
@@ -33187,7 +32907,7 @@
   "Roche cobas c 703": {
     "vendor": "Roche",
     "category": "Chemistry",
-    "testCount": 98,
+    "testCount": 97,
     "tests": {
       "Alanine aminotransferase (ALT)": {
         "complexity": "MODERATE",
@@ -33202,10 +32922,6 @@
         "specialty": "General Chemistry"
       },
       "Glucose": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Total cholesterol": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
@@ -37594,7 +37310,7 @@
   "Abbott ARCHITECT c4000": {
     "vendor": "Abbott",
     "category": "Chemistry",
-    "testCount": 102,
+    "testCount": 101,
     "tests": {
       "Ferritin": {
         "complexity": "MODERATE",
@@ -37705,10 +37421,6 @@
         "specialty": "General Chemistry"
       },
       "Triglycerides": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
-      },
-      "Total Cholesterol": {
         "complexity": "MODERATE",
         "specialty": "General Chemistry"
       },
@@ -38010,7 +37722,7 @@
   "Ortho VITROS 4600": {
     "vendor": "QuidelOrtho",
     "category": "Chemistry",
-    "testCount": 101,
+    "testCount": 100,
     "tests": {
       "Anti-streptolysin O (ASO)": {
         "complexity": "MODERATE",
@@ -38319,10 +38031,6 @@
       "C-reactive protein (CRP)": {
         "complexity": "MODERATE",
         "specialty": "General Immunology"
-      },
-      "Albumin, urinary": {
-        "complexity": "MODERATE",
-        "specialty": "General Chemistry"
       },
       "Methotrexate": {
         "complexity": "MODERATE",

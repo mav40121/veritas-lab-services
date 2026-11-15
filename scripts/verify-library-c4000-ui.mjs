@@ -65,7 +65,10 @@ try {
   const result = page.locator("button", { hasText: KEY }).first();
   const text = (await result.isVisible().catch(() => false)) ? (await result.innerText()).replace(/\s+/g, " ") : "(no result)";
   const n = lib[KEY].testCount;
-  check(`1. searching "c4000" offers ${KEY} with ${n} tests`, n === 102 && new RegExp(`\\b${n} tests`).test(text), text);
+  // 102 after the correction, less the second names the duplicate review took off (Q330: "Total Cholesterol").
+  const dup = JSON.parse(fs.readFileSync(new URL("./fda-menus/dup_names_plan_2026-11-14.json", import.meta.url), "utf8"));
+  const want = 102 - (dup.instruments[KEY]?.groups.flatMap((g) => g.remove).length ?? 0);
+  check(`1. searching "c4000" offers ${KEY} with ${n} tests`, n === want && new RegExp(`\\b${n} tests`).test(text), text);
   await result.click();
   await page.getByRole("button", { name: /^Add Instrument$/ }).click();
   await page.waitForTimeout(2000);
