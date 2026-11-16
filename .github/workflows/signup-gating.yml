@@ -157,6 +157,11 @@ jobs:
         # every table holding that analyzer's id, writes nothing and names no one; a new table with an instrument_id or
         # map_instrument_id column fails until it is on the list.
         run: npm run test:instrument-references
+      - name: Run seat count by system and unclaimed invitations integration test
+        # 2026-11-16 (Michael Q345 = 1): a system lab counts only its own system's seats against its own pool, a dismissed
+        # invite holds no seat and doesn't block a re-invite, and invitations nobody accepted in 30 days end with one email
+        # to the owner and the seat given back.
+        run: npm run test:seat-count-system-scope
       - name: Excel header and footer stay within 255 characters
         # 2026-11-13: Excel opens a workbook with a longer header or footer only in repair mode; the license stamp now
         # shortens its own line to fit, keeps the sheet's lab identity and a demo lab's sample-data mark.
