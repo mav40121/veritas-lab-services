@@ -52,7 +52,7 @@ import { auditVeritamapConsistency } from "./veritamapConsistency";
 import { auditSystemOwnership } from "./systemOwnershipAudit";
 import { computeBackfillCandidates } from "./organizationBackfill";
 import { orgSeatCapForOwner } from "./organizationSeats";
-import { labSeatSummary, seatCountGaps } from "./labSeats";
+import { labSeatSummary, seatCountGaps, SEAT_HOLDS_PLACE, SEAT_ROW_REUSABLE } from "./labSeats";
 import { promoteMedicalDirectorToAdmin, medicalDirectorPromotionPreview } from "./medicalDirectorRole";
 import { EMPLOYEE_HIRE_DATE_SQL, withStaffHireDates } from "./competencyHireDate";
 import { orgRoleForUserOnLab, labRoleFromOrgRole, transferBlockedOutOfOrg, isActiveOrgMember, resolveOwnerOrgId } from "./organizationRoles";
@@ -3851,7 +3851,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     // Seat uniqueness is PER LAB (see /api/labs/:labId/members). Scope by lab so
     // a person seated on one of the owner's labs can still be invited to another.
     const dupSeat = sqlite.prepare(
-      "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND lab_id = ? AND status != 'deactivated'"
+      "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND lab_id = ? AND " + SEAT_HOLDS_PLACE
     ).get(labOwnerId, normalizedEmail, Number(labId)) as any;
     if (dupSeat) return res.status(409).json({ error: "This email already has a seat on this lab" });
 
@@ -3862,7 +3862,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       sqlite.exec("BEGIN");
       const deactivated = sqlite.prepare(
-        "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND lab_id = ? AND status = 'deactivated'"
+        "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND lab_id = ? AND " + SEAT_ROW_REUSABLE
       ).get(labOwnerId, normalizedEmail, Number(labId)) as any;
       if (deactivated) {
         sqlite.prepare(
@@ -11270,7 +11270,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           (sqlite.prepare("SELECT lower(medical_director_email) AS e FROM labs WHERE owner_user_id = ? AND medical_director_email IS NOT NULL AND TRIM(medical_director_email) != ''").all(lab.owner_user_id) as { e: string }[]).map(r => r.e)
         );
         const seatRows = sqlite.prepare(
-          "SELECT lower(seat_email) AS e, COALESCE(seat_type,'active') AS t FROM user_seats WHERE owner_user_id = ? AND status != 'deactivated'"
+          "SELECT lower(seat_email) AS e, COALESCE(seat_type,'active') AS t FROM user_seats WHERE owner_user_id = ? AND " + SEAT_HOLDS_PLACE
         ).all(lab.owner_user_id) as { e: string; t: string }[];
         let activeSeatCount = 0, mdSeatCount = 0;
         for (const s of seatRows) {
@@ -11453,7 +11453,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       (sqlite.prepare("SELECT lower(medical_director_email) AS e FROM labs WHERE owner_user_id = ? AND medical_director_email IS NOT NULL AND TRIM(medical_director_email) != ''").all(labOwnerId) as { e: string }[]).map(r => r.e)
     );
     const gateSeatRows = sqlite.prepare(
-      "SELECT lower(seat_email) AS e, COALESCE(seat_type,'active') AS t FROM user_seats WHERE owner_user_id = ? AND status != 'deactivated'"
+      "SELECT lower(seat_email) AS e, COALESCE(seat_type,'active') AS t FROM user_seats WHERE owner_user_id = ? AND " + SEAT_HOLDS_PLACE
     ).all(labOwnerId) as { e: string; t: string }[];
     let gateActive = 0, gateViewOnly = 0;
     for (const s of gateSeatRows) {
@@ -11502,7 +11502,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // wrongly blocked multi-lab membership (the "This email already has a seat
     // under the lab owner" wall). See scripts/verify-seat-lab-scoping.mjs.
     const dupSeat = sqlite.prepare(
-      "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND lab_id = ? AND status != 'deactivated'"
+      "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND lab_id = ? AND " + SEAT_HOLDS_PLACE
     ).get(labOwnerId, normalizedEmail, req.scope.labId) as any;
     if (dupSeat) return res.status(409).json({ error: "This email already has a seat on this lab" });
 
@@ -11525,7 +11525,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       sqlite.exec("BEGIN");
       // Reactivate previously deactivated seat row if any.
       const deactivated = sqlite.prepare(
-        "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND lab_id = ? AND status = 'deactivated'"
+        "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND lab_id = ? AND " + SEAT_ROW_REUSABLE
       ).get(labOwnerId, normalizedEmail, req.scope.labId) as any;
       if (deactivated) {
         sqlite.prepare(
@@ -11884,7 +11884,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
     // Duplicate-invite guard.
     const dupSeat = sqlite.prepare(
-      "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND lab_id = ? AND status != 'deactivated'"
+      "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND lab_id = ? AND " + SEAT_HOLDS_PLACE
     ).get(labOwnerId, normalizedEmail, req.scope.labId) as any;
     if (dupSeat) return res.status(409).json({ error: "This email already has a seat on this lab. Use the seat list to manage it." });
 
@@ -11911,7 +11911,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     try {
       sqlite.exec("BEGIN");
       const deactivated = sqlite.prepare(
-        "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND lab_id = ? AND status = 'deactivated'"
+        "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND lab_id = ? AND " + SEAT_ROW_REUSABLE
       ).get(labOwnerId, normalizedEmail, req.scope.labId) as any;
       if (deactivated) {
         sqlite.prepare(
@@ -32344,7 +32344,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
          SUM(CASE WHEN COALESCE(seat_type,'active') = 'active'    THEN 1 ELSE 0 END) as active_count,
          SUM(CASE WHEN COALESCE(seat_type,'active') = 'view_only' THEN 1 ELSE 0 END) as view_only_count
        FROM user_seats
-       WHERE owner_user_id = ? AND status != 'deactivated'`
+       WHERE owner_user_id = ? AND ${SEAT_HOLDS_PLACE}`
     ).get(req.userId) as { active_count: number; view_only_count: number } | undefined;
     const currentActive = (seatBreakdown?.active_count ?? 0) + 1 /* owner counts as active */;
     const currentViewOnly = seatBreakdown?.view_only_count ?? 0;
@@ -32380,7 +32380,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // the multi-lab path; this one is left single-lab intentionally and flagged
     // for Michael (harden with a labId or retire).
     const existingActive = (db as any).$client.prepare(
-      "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND status != 'deactivated'"
+      "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND " + SEAT_HOLDS_PLACE
     ).get(req.userId, email.toLowerCase());
     if (existingActive) return res.status(409).json({ error: "This email already has a seat assigned" });
 
@@ -32405,7 +32405,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // Reactivate a previously deactivated seat if one exists
     // seat-scope-ok: legacy account-level invite (primary-lab; see above).
     const deactivated = (db as any).$client.prepare(
-      "SELECT id, seat_type FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND status = 'deactivated'"
+      "SELECT id, seat_type FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND " + SEAT_ROW_REUSABLE
     ).get(req.userId, email.toLowerCase()) as any;
     // Reactivating keeps the row's seat type, so a deactivated Staff seat comes back as a Staff seat: edit on it is
     // refused, as on the permissions route below (Michael 2026-11-11), and nothing is stored.
