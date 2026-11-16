@@ -2911,6 +2911,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true, dismissed_id: seatId });
   });
 
+  // POST /api/admin/seat-invites/unclaimed (Michael 2026-11-16): the daily job that ends invitations nobody accepted in
+  // 30 days, emails each owner once and gives the seats back (server/unclaimedSeatInvites.ts), on demand. Header
+  // x-admin-secret only. A dry run unless the body says {dryRun: false}; the answer is counts and ids, no addresses or
+  // names.
+  app.post("/api/admin/seat-invites/unclaimed", async (req, res) => {
+    const secret = req.headers["x-admin-secret"] as string | undefined;
+    if (!secret || secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    try {
+      const { runUnclaimedSeatInvites } = await import("./unclaimedSeatInvites");
+      res.json(await runUnclaimedSeatInvites({ dryRun: req.body?.dryRun !== false }));
+    } catch (err: any) {
+      console.error("[admin/seat-invites/unclaimed] failed:", err?.message || err);
+      res.status(500).json({ error: "unclaimed invitation run failed" });
+    }
+  });
+
   // Admin: bulk-import inventory_items rows for a lab. Used for migrating
   // existing inventory data (e.g. from a customer's spreadsheet) into
   // VeritaStock without requiring the caller to be a lab member. Items are

@@ -503,6 +503,26 @@ app.use((req, res, next) => {
     console.error("[recall-reminders] Scheduler setup error:", err.message);
   }
 
+  // Michael 2026-11-16: invitations nobody accepted in 30 days end, their seats go back, and each owner gets one email
+  // listing them (server/unclaimedSeatInvites.ts). Daily at 13:10 UTC, beside the certificate reminders. No-op when
+  // RESEND_API_KEY is unset (local and CI): nothing ends without the owner's email.
+  try {
+    const { runUnclaimedSeatInvites } = await import("./unclaimedSeatInvites");
+    const now = new Date();
+    const next = new Date(now);
+    next.setUTCHours(13, 10, 0, 0);
+    if (next.getTime() <= now.getTime()) next.setUTCDate(next.getUTCDate() + 1);
+    const run = () => {
+      if (!process.env.RESEND_API_KEY) return;
+      runUnclaimedSeatInvites()
+        .then((r) => console.log(`[unclaimed-seats] invitations ${r.invites}, owners ${r.owners}, emailed ${r.emailed}, ended ${r.ended}, errors ${r.errors}, pending with an account (left) ${r.pendingWithAccount}`))
+        .catch((err) => console.error("[unclaimed-seats] Run failed:", err?.message || err));
+    };
+    setTimeout(() => { run(); setInterval(run, 24 * 60 * 60 * 1000); }, next.getTime() - now.getTime());
+  } catch (err: any) {
+    console.error("[unclaimed-seats] Scheduler setup error:", err.message);
+  }
+
   // BUG-021 (2026-10-10): VeritaLab certificate renewal reminders, daily at 13:00 UTC (9 AM Eastern) so they
   // land in the morning. Newest due stage per certificate only (server/certificateReminders.ts). No-op when
   // RESEND_API_KEY is unset (local and CI).
