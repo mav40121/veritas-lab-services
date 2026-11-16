@@ -19,10 +19,49 @@
 //              medical director's seat free.
 //   staff    = this lab's Staff Portal seats against labs.staff_portal_band.
 
+//
+// Michael 2026-11-16 (Q345 = 1), "Michaels Lab maxed out at 25 with only 9 members": two rules.
+//   1. A seat row holds a place only while it is live: accepted ('active') or invited and not yet answered
+//      ('pending'), SEAT_HOLDS_PLACE. A dismissed invite stayed counted forever and, because the duplicate check
+//      read the same way, blocked inviting that address to the lab again. 'deactivated' (removed, or an invitation
+//      nobody accepted in 30 days: server/unclaimedSeatInvites.ts) and 'dismissed' hold none.
+//   2. An org-linked lab's cap is its OWN organization's pool, and its count is the owner's seats in that
+//      organization's labs (systemSeatScope). Before, the cap came from the owner's oldest org-linked lab and the
+//      count was every seat row on the owner's account, so an owner who also held standalone labs or a second system
+//      read all of them against this one (Michaels Lab: 25 of 25 with 6 seats of its own).
+
 import { PLAN_SEATS } from "./db";
 import { PLAN_LIMITS, STAFF_PORTAL_BANDS } from "./stripe";
-import { orgSeatCapForOwner } from "./organizationSeats";
+import { orgSeatCapForLab } from "./organizationSeats";
 import { OWNER_EMAIL } from "./constants";
+
+/** SQL condition: the seat row holds a place against a cap (accepted, or invited and not yet answered). */
+export const SEAT_HOLDS_PLACE = "status IN ('active', 'pending')";
+/** SQL condition for reusing a row on a new invite to the same address and lab: anything that holds no place. */
+export const SEAT_ROW_REUSABLE = "status NOT IN ('active', 'pending')";
+
+/**
+ * Which of an owner's seat rows belong to one organization's pool: rows on that organization's labs, plus an older
+ * row with no lab when every lab the owner owns is in that organization (otherwise no one can say which system it is
+ * for, and a standalone lab never counted it either). Use as `owner_user_id = ? AND ${sql}` with `params` after the
+ * owner id.
+ */
+export function systemSeatScope(ownerUserId: number, organizationId: number): { sql: string; params: number[] } {
+  return {
+    sql: `(lab_id IN (SELECT id FROM labs WHERE organization_id = ?)
+           OR (lab_id IS NULL AND NOT EXISTS (SELECT 1 FROM labs WHERE owner_user_id = ? AND (organization_id IS NULL OR organization_id != ?))))`,
+    params: [organizationId, ownerUserId, organizationId],
+  };
+}
+
+/** The lower-cased medical director addresses of an owner's labs in one organization. */
+function systemMdEmails(sqlite: any, ownerUserId: number, organizationId: number): Set<string> {
+  return new Set(
+    (sqlite.prepare(
+      "SELECT lower(medical_director_email) AS e FROM labs WHERE owner_user_id = ? AND organization_id = ? AND medical_director_email IS NOT NULL AND TRIM(medical_director_email) != ''"
+    ).all(ownerUserId, organizationId) as { e: string }[]).map((r) => r.e),
+  );
+}
 
 export type LabSeatSummary = {
   activeIncluded: number;
@@ -47,7 +86,7 @@ export function labSeatSummary(sqlite: any, labId: number): LabSeatSummary | nul
   const ownerEmail = String(owner?.email || "").toLowerCase();
   const band = ["small", "medium", "large"].includes(String(lab.staff_portal_band)) ? lab.staff_portal_band : null;
   const staffPortalUsed = (sqlite.prepare(
-    "SELECT COUNT(*) AS n FROM user_seats WHERE lab_id = ? AND seat_type = 'staff_portal' AND status != 'deactivated'"
+    `SELECT COUNT(*) AS n FROM user_seats WHERE lab_id = ? AND seat_type = 'staff_portal' AND ${SEAT_HOLDS_PLACE}`
   ).get(labId) as any).n as number;
   const staff = {
     staffPortalBand: band as LabSeatSummary["staffPortalBand"],
@@ -56,16 +95,15 @@ export function labSeatSummary(sqlite: any, labId: number): LabSeatSummary | nul
   };
 
   if (lab.organization_id != null) {
-    // Org-linked: unchanged pooled behavior (cap = organization pool; count across
-    // the owner's labs).
+    // Org-linked: cap = this lab's own organization's pool; count = the owner's seats in that organization
+    // (Q345 = 1, systemSeatScope).
     const ownerPlanSeats = planSeatsFor(owner?.plan);
-    const activeIncluded = orgSeatCapForOwner(sqlite, lab.owner_user_id, owner?.seat_count || 0, ownerPlanSeats);
-    const mdEmails = new Set(
-      (sqlite.prepare("SELECT lower(medical_director_email) AS e FROM labs WHERE owner_user_id = ? AND medical_director_email IS NOT NULL AND TRIM(medical_director_email) != ''").all(lab.owner_user_id) as { e: string }[]).map(r => r.e)
-    );
+    const activeIncluded = orgSeatCapForLab(sqlite, lab.organization_id, owner?.seat_count || 0, ownerPlanSeats);
+    const mdEmails = systemMdEmails(sqlite, lab.owner_user_id, lab.organization_id);
+    const scope = systemSeatScope(lab.owner_user_id, lab.organization_id);
     const rows = sqlite.prepare(
-      "SELECT lower(seat_email) AS e, COALESCE(seat_type,'active') AS t FROM user_seats WHERE owner_user_id = ? AND status != 'deactivated'"
-    ).all(lab.owner_user_id) as { e: string; t: string }[];
+      `SELECT lower(seat_email) AS e, COALESCE(seat_type,'active') AS t FROM user_seats WHERE owner_user_id = ? AND ${SEAT_HOLDS_PLACE} AND ${scope.sql}`
+    ).all(lab.owner_user_id, ...scope.params) as { e: string; t: string }[];
     // BUG-093 (2026-10-25): the medical director seat is one free seat per lab (the members route's
     // medicalDirectorIncluded is 1 when this lab names one). This counted every seat row of every lab's director
     // across the owner's labs, so a director invited to both of a system's labs read "2 of 1" in each. It now counts
@@ -78,7 +116,7 @@ export function labSeatSummary(sqlite: any, labId: number): LabSeatSummary | nul
     }
     // BUG-096, Q282 = 1: admins writing in any of the system's labs without a seat row take a pooled seat, one person
     // once; a Veritas login never does.
-    const extra = Array.from(pooledAdminsWithoutSeat(sqlite, lab.owner_user_id).values()).filter((veritas) => !veritas).length;
+    const extra = Array.from(pooledAdminsWithoutSeat(sqlite, lab.owner_user_id, lab.organization_id).values()).filter((veritas) => !veritas).length;
     return { activeIncluded, activeUsed: active + 1 + extra, adminsWithoutSeatCounted: extra, medicalDirectorUsed: mdSeen ? 1 : 0, pooled: true, ...staff };
   }
 
@@ -89,7 +127,7 @@ export function labSeatSummary(sqlite: any, labId: number): LabSeatSummary | nul
   const mdEmail = String(lab.medical_director_email || "").trim().toLowerCase();
   const rows = sqlite.prepare(
     `SELECT lower(seat_email) AS e, seat_user_id AS u, COALESCE(seat_type,'active') AS t
-       FROM user_seats WHERE lab_id = ? AND status != 'deactivated'`
+       FROM user_seats WHERE lab_id = ? AND ${SEAT_HOLDS_PLACE}`
   ).all(labId) as { e: string; u: number | null; t: string }[];
   let active = 0, md = 0;
   const seen = new Set<string>();
@@ -114,20 +152,21 @@ export function labSeatSummary(sqlite: any, labId: number): LabSeatSummary | nul
 // (the free seat), and now a Veritas login (isVeritasLogin), so our own access never takes a client's seat.
 export type AdminWithoutSeat = { u: number; veritas: boolean };
 
-/** The admins writing in one lab without a seat row. An org-linked lab is checked against the owner's pooled seats. */
+/** The admins writing in one lab without a seat row. An org-linked lab is checked against its organization's pool. */
 export function adminsWithoutSeatIn(
   sqlite: any,
   lab: { id: number; owner_user_id: number; organization_id: number | null; medical_director_email?: string | null },
 ): AdminWithoutSeat[] {
   const pooled = lab.organization_id != null;
-  const seats = (pooled
-    ? sqlite.prepare("SELECT seat_user_id AS u, lower(seat_email) AS e FROM user_seats WHERE owner_user_id = ? AND status != 'deactivated' AND COALESCE(seat_type, 'active') = 'active'").all(lab.owner_user_id)
-    : sqlite.prepare("SELECT seat_user_id AS u, lower(seat_email) AS e FROM user_seats WHERE lab_id = ? AND status != 'deactivated' AND COALESCE(seat_type, 'active') = 'active'").all(lab.id)
+  const scope = pooled ? systemSeatScope(lab.owner_user_id, lab.organization_id as number) : null;
+  const seats = (scope
+    ? sqlite.prepare(`SELECT seat_user_id AS u, lower(seat_email) AS e FROM user_seats WHERE owner_user_id = ? AND ${SEAT_HOLDS_PLACE} AND COALESCE(seat_type, 'active') = 'active' AND ${scope.sql}`).all(lab.owner_user_id, ...scope.params)
+    : sqlite.prepare(`SELECT seat_user_id AS u, lower(seat_email) AS e FROM user_seats WHERE lab_id = ? AND ${SEAT_HOLDS_PLACE} AND COALESCE(seat_type, 'active') = 'active'`).all(lab.id)
   ) as { u: number | null; e: string | null }[];
   const seatUsers = new Set(seats.map((s) => s.u).filter((u) => u != null));
   const seatEmails = new Set(seats.map((s) => s.e).filter(Boolean));
   const mdEmails = pooled
-    ? new Set((sqlite.prepare("SELECT lower(medical_director_email) AS e FROM labs WHERE owner_user_id = ? AND medical_director_email IS NOT NULL AND TRIM(medical_director_email) != ''").all(lab.owner_user_id) as { e: string }[]).map((r) => r.e))
+    ? systemMdEmails(sqlite, lab.owner_user_id, lab.organization_id as number)
     : new Set([String(lab.medical_director_email || "").trim().toLowerCase()].filter(Boolean));
   const members = sqlite.prepare(
     `SELECT m.user_id AS u, lower(u.email) AS e FROM lab_members m JOIN users u ON u.id = m.user_id
@@ -138,9 +177,9 @@ export function adminsWithoutSeatIn(
     .map((m) => ({ u: m.u, veritas: isVeritasLogin(m.e) }));
 }
 
-/** Across an owner's org-linked labs: each admin without a seat row once (user id -> is a Veritas login). */
-export function pooledAdminsWithoutSeat(sqlite: any, ownerUserId: number): Map<number, boolean> {
-  const labs = sqlite.prepare("SELECT id, owner_user_id, organization_id, medical_director_email FROM labs WHERE owner_user_id = ? AND organization_id IS NOT NULL").all(ownerUserId) as any[];
+/** Across an owner's labs in one organization: each admin without a seat row once (user id -> is a Veritas login). */
+export function pooledAdminsWithoutSeat(sqlite: any, ownerUserId: number, organizationId: number): Map<number, boolean> {
+  const labs = sqlite.prepare("SELECT id, owner_user_id, organization_id, medical_director_email FROM labs WHERE owner_user_id = ? AND organization_id = ?").all(ownerUserId, organizationId) as any[];
   const out = new Map<number, boolean>();
   for (const l of labs) for (const p of adminsWithoutSeatIn(sqlite, l)) out.set(p.u, p.veritas);
   return out;
@@ -183,12 +222,13 @@ export function seatCountGaps(sqlite: any): { totals: Record<string, number>; la
   // Q282 = 1: the same rule labSeatSummary counts with (adminsWithoutSeatIn), so the report and the gate can't drift.
   const uncountedIn = (l: any): AdminWithoutSeat[] => adminsWithoutSeatIn(sqlite, l);
 
-  // An org-linked lab's count is pooled across the owner's labs, so its admins are pooled the same way:
-  // one person admin in two labs of a system is one seat, not two.
-  const pooledUncounted = new Map<number, Map<number, boolean>>();
+  // An org-linked lab's count is pooled across the owner's labs in its organization (Q345 = 1), so its admins are
+  // pooled the same way: one person admin in two labs of a system is one seat, not two.
+  const poolKey = (l: any) => `${l.owner_user_id}:${l.organization_id}`;
+  const pooledUncounted = new Map<string, Map<number, boolean>>();
   for (const l of labs) {
-    if (l.organization_id == null || pooledUncounted.has(l.owner_user_id)) continue;
-    pooledUncounted.set(l.owner_user_id, pooledAdminsWithoutSeat(sqlite, l.owner_user_id));
+    if (l.organization_id == null || pooledUncounted.has(poolKey(l))) continue;
+    pooledUncounted.set(poolKey(l), pooledAdminsWithoutSeat(sqlite, l.owner_user_id, l.organization_id));
   }
 
   const rows: SeatCountGapRow[] = [];
@@ -200,11 +240,11 @@ export function seatCountGaps(sqlite: any): { totals: Record<string, number>; la
     if (!summary) continue;
     const pooled = l.organization_id != null;
     const own = uncountedIn(l);
-    const pool = pooled ? pooledUncounted.get(l.owner_user_id) : undefined;
+    const pool = pooled ? pooledUncounted.get(poolKey(l)) : undefined;
     const add = pooled ? (pool?.size ?? 0) : own.length;
     const addExceptVeritas = pooled ? [...(pool?.values() ?? [])].filter((v) => !v).length : own.filter((p) => !p.veritas).length;
     for (const p of own) {
-      people.add(pooled ? `o${l.owner_user_id}:${p.u}` : `l${l.id}:${p.u}`);
+      people.add(pooled ? `o${poolKey(l)}:${p.u}` : `l${l.id}:${p.u}`);
       distinctPeople.add(p.u);
       if (p.veritas) distinctVeritas.add(p.u);
     }

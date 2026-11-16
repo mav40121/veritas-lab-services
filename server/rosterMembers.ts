@@ -18,6 +18,8 @@
 // place on a lab's roster) and members the director marked "not lab personnel"
 // (staff_roster_prompt_hidden).
 
+import { SEAT_HOLDS_PLACE } from "./labSeats";
+
 export type RosterMember = {
   userId: number;
   name: string | null;
@@ -108,7 +110,7 @@ export function reattachOrphanStaffInvites(sqlite: any, labId: number): number {
   for (const o of orphans) {
     const hit = rosterRowForInvite(sqlite, labId, o.first_name, o.last_name);
     if (!hit || "ambiguous" in hit) continue;
-    const taken = sqlite.prepare("SELECT 1 FROM user_seats WHERE staff_employee_id = ? AND seat_type = 'staff_portal' AND status != 'deactivated' LIMIT 1").get(hit.employeeId);
+    const taken = sqlite.prepare("SELECT 1 FROM user_seats WHERE staff_employee_id = ? AND seat_type = 'staff_portal' AND " + SEAT_HOLDS_PLACE + " LIMIT 1").get(hit.employeeId);
     if (taken) continue;
     moved += Number(sqlite.prepare("UPDATE user_seats SET staff_employee_id = ? WHERE id = ? AND status = 'pending'").run(hit.employeeId, o.id).changes || 0);
   }
@@ -131,7 +133,7 @@ export function foldInviteDuplicates(sqlite: any, labId: number): { employeeId: 
   const seats = sqlite.prepare(
     `SELECT us.id AS seat_id, se.id AS row_id, se.first_name, se.last_name FROM user_seats us
        JOIN staff_employees se ON se.id = us.staff_employee_id
-      WHERE us.lab_id = ? AND us.seat_type = 'staff_portal' AND us.status != 'deactivated' AND se.status = 'active'
+      WHERE us.lab_id = ? AND us.seat_type = 'staff_portal' AND us.${SEAT_HOLDS_PLACE} AND se.status = 'active'
         AND COALESCE(se.performs_testing, 0) = 0 AND se.hire_date IS NULL AND se.login_user_id IS NULL`
   ).all(labId) as { seat_id: number; row_id: number; first_name: string; last_name: string }[];
   const folded: { employeeId: number; into: number }[] = [];
@@ -145,7 +147,7 @@ export function foldInviteDuplicates(sqlite: any, labId: number): { employeeId: 
       .filter((e) => norm(e.last_name) === last && (norm(e.first_name) === first || norm(e.first_name).split(/\s+/)[0] === firstToken));
     if (others.length !== 1 || others[0].login_user_id != null) continue;
     const target = others[0].id as number;
-    if (sqlite.prepare("SELECT 1 FROM user_seats WHERE staff_employee_id = ? AND seat_type = 'staff_portal' AND status != 'deactivated' LIMIT 1").get(target)) continue;
+    if (sqlite.prepare("SELECT 1 FROM user_seats WHERE staff_employee_id = ? AND seat_type = 'staff_portal' AND " + SEAT_HOLDS_PLACE + " LIMIT 1").get(target)) continue;
     const now = new Date().toISOString();
     sqlite.transaction(() => {
       sqlite.prepare("UPDATE user_seats SET staff_employee_id = ? WHERE id = ?").run(target, s.seat_id);
@@ -169,7 +171,7 @@ export function rosterStaffStatus(sqlite: any, labId: number): { people: RosterS
     "SELECT id, first_name, last_name, middle_initial, title, login_user_id FROM staff_employees WHERE tier2_lab_id = ? AND status = 'active' ORDER BY last_name, first_name"
   ).all(labId) as any[];
   const seats = sqlite.prepare(
-    "SELECT staff_employee_id, status, accepted_at, seat_email FROM user_seats WHERE lab_id = ? AND seat_type = 'staff_portal' AND status != 'deactivated' AND staff_employee_id IS NOT NULL"
+    "SELECT staff_employee_id, status, accepted_at, seat_email FROM user_seats WHERE lab_id = ? AND seat_type = 'staff_portal' AND " + SEAT_HOLDS_PLACE + " AND staff_employee_id IS NOT NULL"
   ).all(labId) as any[];
   const seatBy = new Map<number, any>(seats.map((s) => [s.staff_employee_id, s]));
   const people: RosterStaffRow[] = rows.map((e) => {

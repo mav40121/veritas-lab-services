@@ -29,6 +29,28 @@ export function resolveActiveSeatCap(args: {
   return ownerCap;
 }
 
+// Q345 = 1 (Michael 2026-11-16): a lab in an organization takes ITS OWN organization's pool. orgSeatCapForOwner
+// below picks the organization of the owner's oldest org-linked lab, which is a different organization once an owner
+// bills two (provision-system newOrganization): a lab of the second read the first's pool. The account-level seat
+// routes, which have no lab, keep orgSeatCapForOwner.
+export function orgSeatCapForLab(
+  sqlite: any,
+  organizationId: number | null,
+  ownerSeatCount: number | null,
+  ownerPlanSeats: number,
+): number {
+  let orgActiveSeatPool: number | null = null;
+  if (organizationId != null) {
+    try {
+      const row = sqlite.prepare("SELECT active_seat_pool AS pool FROM organizations WHERE id = ?").get(organizationId) as any;
+      orgActiveSeatPool = row?.pool ?? null;
+    } catch {
+      // organizations table absent (should not happen post-Phase-1): fall back to owner cap.
+    }
+  }
+  return resolveActiveSeatCap({ organizationId, orgActiveSeatPool, ownerSeatCount, ownerPlanSeats });
+}
+
 // SQLite convenience: resolve the active-seat cap for an account owner, consulting
 // their organization (found via any of their labs linked to an org) and its pool.
 // Used by the seat-gate sites so lab-scoped and account-scoped callers share one
