@@ -6436,7 +6436,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // bcrypt-hashes new password (cost 10, matching /api/auth/register), and signs
   // out every other device (two-factor sign-in Stage 1). The new password must
   // meet the password rule (shared/passwordRule.ts) and differ from the current one.
-  // A caller on a pre-Stage-1 token (no session id) gets a fresh session back,
+  // A caller whose token names no session (a script's service token; the pre-Stage-1
+  // tokens that also had none all expired by 2026-11-16) gets a fresh session back,
   // since ending "the others" would otherwise end their own sign-in too.
   app.post("/api/auth/change-password", authMiddleware, async (req: any, res) => {
     const { currentPassword, newPassword } = req.body || {};
@@ -32707,9 +32708,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
   // Logout (mark session inactive)
   // Sign-out ends THIS sign-in (two-factor Stage 1): the token names its session,
-  // so only that device is signed out, at once. A pre-Stage-1 token carries no
-  // session id; for it, an explicit body session_token (the person's own) is
-  // ended, else every sign-in for the person, as before.
+  // so only that device is signed out, at once. A token with no session id (a
+  // script's service token; pre-Stage-1 tokens all expired by 2026-11-16) ends an
+  // explicit body session_token (the person's own), else every sign-in for the person.
   app.post("/api/auth/logout", authMiddleware, (req: any, res) => {
     const sqlite = (db as any).$client;
     const { session_token } = req.body || {};

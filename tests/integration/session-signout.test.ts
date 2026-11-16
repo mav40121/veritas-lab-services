@@ -19,7 +19,7 @@ import jwt from "jsonwebtoken";
 import { createRequire } from "node:module";
 import { registerRoutes } from "../../server/routes";
 import { db } from "../../server/db";
-import { issueSession, LEGACY_TOKEN_CUTOFF_MS } from "../../server/sessionAuth";
+import { issueSession } from "../../server/sessionAuth";
 
 (globalThis as any).require ??= createRequire(import.meta.url);
 
@@ -135,18 +135,19 @@ async function main() {
     check("7a. admin kill-sessions ends the sign-in", kill.status === 200 && kill.body?.sessionsKilled === 1 && (await me(reset.body.token)).status === 401, JSON.stringify(kill.body));
 
     // 8) Token kinds that carry no session id.
-    // Each test token expires an hour from now, not 30 days from its iat: signed relative to the cutoff (10/17), a
-    // 30-day token expired on 2026-11-15 and these checks failed on the expiry, not on the rule they test.
+    // A bare { userId } token, as issued before Stage 1 (2026-10-17), was kept while the person had an active session until
+    // every real one had expired (2026-11-16); that path is gone (Michael Q336 = 1), so it is refused even with a session.
+    // Each test token expires an hour from now, so these checks test the rule, not an expiry.
     const testExp = Math.floor(Date.now() / 1000) + 3600;
-    const legacyOld = jwt.sign({ userId, iat: Math.floor((LEGACY_TOKEN_CUTOFF_MS - 86_400_000) / 1000), exp: testExp }, SECRET);
-    check("8a. a pre-Stage-1 token with no active session is refused", (await me(legacyOld)).status === 401);
+    const preStage1 = jwt.sign({ userId, iat: Math.floor(Date.UTC(2026, 9, 16) / 1000), exp: testExp }, SECRET);
+    check("8a. a bare token from before Stage 1 is refused with no active session", (await me(preStage1)).status === 401);
     const live = issueSession(sqlite, userId, { headers: {} });
-    check("8b. a pre-Stage-1 token works while the person has an active session", (await me(legacyOld)).status === 200);
-    // Issued after the cutoff (any token the server issues from now on carries a sid).
-    const legacyNew = jwt.sign({ userId, iat: Math.floor(LEGACY_TOKEN_CUTOFF_MS / 1000) + 60, exp: testExp }, SECRET);
-    check("8c. a token issued after the cutoff without a session id is refused", (await me(legacyNew)).status === 401);
-    await req("POST", "/api/auth/logout", {}, legacyOld);
-    check("8d. sign-out on a pre-Stage-1 token ends it", (await me(legacyOld)).status === 401 && (await me(live.token)).status === 401);
+    check("8b. and it is refused while the person has an active session", (await me(preStage1)).status === 401);
+    // Issued after the cutoff (any token the server issues carries a sid).
+    const bareNew = jwt.sign({ userId, iat: Math.floor(Date.UTC(2026, 9, 17) / 1000) + 60, exp: testExp }, SECRET);
+    check("8c. a token issued after the cutoff without a session id is refused", (await me(bareNew)).status === 401);
+    const out = await req("POST", "/api/auth/logout", {}, preStage1);
+    check("8d. sign-out with a bare token is refused and leaves the real session signed in", out.status === 401 && (await me(live.token)).status === 200);
     const svc = jwt.sign({ svc: true, userId }, SECRET, { expiresIn: "5m" });
     check("8e. a script service token (svc) works with no session", (await me(svc)).status === 200);
     const ci = jwt.sign({ userId, ci_sandbox: true }, SECRET, { expiresIn: "5m" });

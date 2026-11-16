@@ -16,25 +16,25 @@
 //   service  { userId, svc } or { userId, ci_sandbox }   minted with JWT_SECRET by our
 //            own scripts and the CI sandbox receipts; the server never issues these
 //            to a browser, so only a JWT_SECRET holder can make one
-//   legacy   { userId } issued before LEGACY_TOKEN_CUTOFF_MS: kept only while the
-//            person still has an active session row, so signing out or a password
-//            change ends them too. All expire by 2026-11-16; remove the branch then.
+// A bare { userId } token (issued before Stage 1, 2026-10-17) was kept while the person
+// still had an active session row; every one had expired by 2026-11-16 00:00 UTC, and
+// that path was removed then (Michael Q336 = 1). Any token with no session id that isn't
+// a demo or service token is refused.
 // A token with a `purpose` (the post-password "conflict" step) opens nothing but the
 // route built for it.
 //
 // Every place that reads a bearer token goes through checkAuthToken or
-// verifySessionJwt; scripts/verify-session-signout.mts fails if any other file in
-// server/ calls jwt.verify.
+// verifySessionJwt; tests/integration/session-signout.test.ts (check 10) fails if any
+// other file in server/ calls jwt.verify.
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import { effectivePolicy, stampSignIn } from "./securityPolicy";
 
 export const SESSION_TOKEN_TTL = "30d";
-export const LEGACY_TOKEN_CUTOFF_MS = Date.UTC(2026, 9, 17, 0, 0, 0);
 const PURPOSE_TOKEN_TTL = "10m";
 const TOUCH_INTERVAL_MS = 60_000;
 
-export type TokenKind = "session" | "legacy" | "service" | "demo";
+export type TokenKind = "session" | "service" | "demo";
 export type TokenCheck =
   | { ok: true; userId: number; sid: string | null; kind: TokenKind; isDemo: boolean }
   | { ok: false; code: "invalid" | "session_ended" | "not_a_session"; reason?: "idle"; idleMinutes?: number };
@@ -73,11 +73,6 @@ export function checkAuthToken(sqlite: any, raw: string): TokenCheck {
     return { ok: false, code: "session_ended" };
   }
   if (p.svc === true || p.ci_sandbox === true) return { ok: true, userId, sid: null, kind: "service", isDemo: false };
-  const iatMs = Number(p.iat) * 1000;
-  if (Number.isFinite(iatMs) && iatMs < LEGACY_TOKEN_CUTOFF_MS) {
-    const active = sqlite.prepare("SELECT 1 FROM user_sessions WHERE user_id = ? AND is_active = 1 LIMIT 1").get(userId);
-    if (active) return { ok: true, userId, sid: null, kind: "legacy", isDemo: false };
-  }
   return { ok: false, code: "session_ended" };
 }
 
