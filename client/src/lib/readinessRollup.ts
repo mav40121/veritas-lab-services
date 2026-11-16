@@ -86,3 +86,63 @@ export function summarizeRollup(rollup: RollupLab[]): RollupSummary {
 export function badModules(lab: RollupLab): RollupModule[] {
   return (lab.modules || []).filter((m) => m.status !== "ok").slice().sort((a, b) => sev(b.status) - sev(a.status));
 }
+
+// ── Roll-up groups (Michael 2026-11-16, Phase 1; server/rollupGroups.ts) ─────────────────────────────────────────────
+// A group is a named set of lab ids (a region, a consultant's labs). The server already cut each group's lab ids to the
+// labs the reader sees; these helpers only arrange the roll-up the reader was given.
+
+export interface RollupGroupRef {
+  id: number;
+  name: string;
+  kind: string;
+  lab_ids: number[];
+}
+
+export interface RollupSection {
+  group: RollupGroupRef | null; // null = the labs in none of the groups shown
+  labs: RollupLab[];            // worst-first, as the heatmap orders rows
+  summary: RollupSummary;
+}
+
+/** Groups holding at least one lab of this roll-up, in the order given (the server sorts by name). */
+export function groupsInRollup(rollup: RollupLab[], groups: RollupGroupRef[]): RollupGroupRef[] {
+  const ids = new Set(rollup.map((l) => l.lab_id));
+  return groups.filter((g) => g.lab_ids.some((id) => ids.has(id)));
+}
+
+/** The roll-up cut to one group ("none" = the labs in none of the groups). */
+export function filterRollupByGroup(rollup: RollupLab[], groups: RollupGroupRef[], filter: number | "none"): RollupLab[] {
+  if (filter === "none") {
+    const grouped = new Set(groupsInRollup(rollup, groups).flatMap((g) => g.lab_ids));
+    return rollup.filter((l) => !grouped.has(l.lab_id));
+  }
+  const g = groups.find((x) => x.id === filter);
+  if (!g) return rollup;
+  const ids = new Set(g.lab_ids);
+  return rollup.filter((l) => ids.has(l.lab_id));
+}
+
+/**
+ * The heatmap broken out by group: one section per group that holds a lab of this roll-up, each with its own subtotals,
+ * then "Not in a group" for the rest. A lab in two groups shows in both. No groups, no sections.
+ */
+export function groupSections(rollup: RollupLab[], groups: RollupGroupRef[]): RollupSection[] {
+  const byId = new Map(rollup.map((l) => [l.lab_id, l]));
+  const sections: RollupSection[] = [];
+  const grouped = new Set<number>();
+  for (const g of groupsInRollup(rollup, groups)) {
+    const labs = g.lab_ids.map((id) => byId.get(id)).filter((l): l is RollupLab => !!l);
+    labs.forEach((l) => grouped.add(l.lab_id));
+    const summary = summarizeRollup(labs);
+    sections.push({ group: g, labs: summary.rows, summary });
+  }
+  if (!sections.length) return sections;
+  const rest = rollup.filter((l) => !grouped.has(l.lab_id));
+  if (rest.length) {
+    const summary = summarizeRollup(rest);
+    sections.push({ group: null, labs: summary.rows, summary });
+  }
+  return sections;
+}
+
+export const ROLLUP_GROUP_KIND_LABEL: Record<string, string> = { region: "Region", consultant: "Consultant", other: "Group" };

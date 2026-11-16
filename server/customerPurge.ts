@@ -82,6 +82,9 @@ export const PURGE_EXCLUDED: Record<string, PurgeRule> = {
   organization_members: del(`organization_id ${IN("orgs")} OR user_id ${IN("people")}`),
   organization_billing_line_items: del(`organization_id ${IN("orgs")} OR lab_id ${IN("labs")}`),
   system_documents: del(`organization_id ${IN("orgs")}`),
+  // Roll-up groups: the customer's own groupings go, and any grouping's rows naming the customer's labs go with them.
+  rollup_groups: del(`organization_id ${IN("orgs")} OR owner_user_id ${IN("people")}`),
+  rollup_group_labs: del(`lab_id ${IN("labs")} OR group_id IN (SELECT id FROM rollup_groups WHERE organization_id ${IN("orgs")} OR owner_user_id ${IN("people")})`),
   contact_messages: retain(VLS_RECORD),
   discount_codes: retain(VLS_RECORD),
   founding_lab_applications: retain(VLS_RECORD),

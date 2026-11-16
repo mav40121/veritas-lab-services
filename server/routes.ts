@@ -56,6 +56,7 @@ import { labSeatSummary, seatCountGaps, SEAT_HOLDS_PLACE, SEAT_ROW_REUSABLE } fr
 import { promoteMedicalDirectorToAdmin, medicalDirectorPromotionPreview } from "./medicalDirectorRole";
 import { EMPLOYEE_HIRE_DATE_SQL, withStaffHireDates } from "./competencyHireDate";
 import { orgRoleForUserOnLab, labRoleFromOrgRole, transferBlockedOutOfOrg, isActiveOrgMember, resolveOwnerOrgId } from "./organizationRoles";
+import { RollupGroupError, rollupGroupsFor, createRollupGroup, updateRollupGroup, setRollupGroupLabs, deleteRollupGroup, adminListRollupGroups, adminCreateRollupGroup, adminDeleteRollupGroup } from "./rollupGroups";
 import { planProvisionLabs, accreditationFlagsFor, operatorOverviewGrant } from "./organizationProvision";
 import { validateSystemDocument } from "./systemRepository";
 import { computeDeletionScope, applyDeletion, transferOwnership, orphanScan, manifest, PRESERVE } from "./labReset";
@@ -30891,6 +30892,49 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     res.json(labs.map(l => ({ lab_id: l.id, lab_name: l.lab_name, clia_number: l.clia_number, organization_id: l.organization_id ?? null, organization_name: l.organization_name ?? null, ...computeLabReadiness(client, l.id) })));
   });
 
+  // Roll-up groups, Phase 1 (Michael 2026-11-16; server/rollupGroups.ts): named groups of labs the command center above is
+  // broken out by (a region, a consultant's labs). Presentation only: a group never opens a lab to anyone, and every read is
+  // cut to the labs /api/readiness/rollup gives the reader. Same plan allowlist as the roll-up (hasReadinessAccess).
+  const rollupGroupRoute = (fn: (sqlite: any, req: any) => any, status = 200) => (req: any, res: any) => {
+    if (!hasReadinessAccess(req.user)) return res.status(403).json({ error: "A VeritaAssure subscription is required", code: "PLAN_REQUIRED" });
+    try {
+      res.status(status).json(fn((db as any).$client, req));
+    } catch (err: any) {
+      if (err instanceof RollupGroupError) return res.status(err.status).json({ error: err.message, code: err.code, ...err.extra });
+      console.error("[rollup-groups] failed:", err?.message || err);
+      res.status(500).json({ error: "Roll-up groups failed" });
+    }
+  };
+  const rollupGroupId = (req: any) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) throw new RollupGroupError(404, "NOT_FOUND", "Group not found.");
+    return id;
+  };
+  app.get("/api/rollup-groups", authMiddleware, rollupGroupRoute((sqlite, req) => rollupGroupsFor(sqlite, req.userId)));
+  app.post("/api/rollup-groups", authMiddleware, rollupGroupRoute((sqlite, req) => createRollupGroup(sqlite, req.userId, req.body), 201));
+  app.patch("/api/rollup-groups/:id", authMiddleware, rollupGroupRoute((sqlite, req) => updateRollupGroup(sqlite, req.userId, rollupGroupId(req), req.body)));
+  app.put("/api/rollup-groups/:id/labs", authMiddleware, rollupGroupRoute((sqlite, req) => setRollupGroupLabs(sqlite, req.userId, rollupGroupId(req), req.body)));
+  app.delete("/api/rollup-groups/:id", authMiddleware, rollupGroupRoute((sqlite, req) => deleteRollupGroup(sqlite, req.userId, rollupGroupId(req))));
+  // Admin (header x-admin-secret only): list, create (a dry run unless dryRun is false) and delete any organization's or
+  // person's groups. The answer carries group names and lab ids, never a person's name or email.
+  const rollupGroupAdmin = (fn: (sqlite: any, req: any) => any) => (req: any, res: any) => {
+    const secret = req.headers["x-admin-secret"] as string | undefined;
+    if (!secret || secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    try {
+      res.json(fn((db as any).$client, req));
+    } catch (err: any) {
+      if (err instanceof RollupGroupError) return res.status(err.status).json({ error: err.message, code: err.code, ...err.extra });
+      console.error("[admin/rollup-groups] failed:", err?.message || err);
+      res.status(500).json({ error: "Roll-up groups failed" });
+    }
+  };
+  app.get("/api/admin/rollup-groups", rollupGroupAdmin((sqlite, req) => adminListRollupGroups(sqlite, {
+    organizationId: req.query.organizationId != null ? Number(req.query.organizationId) : null,
+    ownerUserId: req.query.ownerUserId != null ? Number(req.query.ownerUserId) : null,
+  })));
+  app.post("/api/admin/rollup-groups", rollupGroupAdmin((sqlite, req) => adminCreateRollupGroup(sqlite, req.body)));
+  app.delete("/api/admin/rollup-groups/:id", rollupGroupAdmin((sqlite, req) => adminDeleteRollupGroup(sqlite, rollupGroupId(req))));
+
   app.get("/api/labs/:labId/compliance/score", authMiddleware, labScopeMiddleware, (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab) && !hasStaffAccess(req.user, req.scope?.lab)) {
       return res.status(403).json({ error: "VeritaComp™ or VeritaStaff™ subscription required" });
@@ -36593,6 +36637,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       sqlite.prepare("DELETE FROM veritaceu_requirement_profiles WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM intacct_export_config WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM organization_billing_line_items WHERE lab_id = ?").run(id);
+      // Roll-up groups (server/rollupGroups.ts): the lab leaves every grouping; the groups themselves stay.
+      sqlite.prepare("DELETE FROM rollup_group_labs WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM lab_audit_log WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM lab_members WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM labs WHERE id = ?").run(id);

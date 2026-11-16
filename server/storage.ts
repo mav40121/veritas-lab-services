@@ -161,7 +161,10 @@ class DatabaseStorage implements IStorage {
       sqlite.prepare("DELETE FROM staffing_hourly_data WHERE study_id IN (SELECT id FROM staffing_studies WHERE account_id = ?)").run(id);
       sqlite.prepare("DELETE FROM pi_entries WHERE metric_id IN (SELECT id FROM pi_metrics WHERE department_id IN (SELECT id FROM pi_departments WHERE account_id = ?))").run(id);
       sqlite.prepare("DELETE FROM pi_metrics WHERE department_id IN (SELECT id FROM pi_departments WHERE account_id = ?)").run(id);
+      // Roll-up groups (server/rollupGroups.ts): this person's own network groups and their lab rows.
+      sqlite.prepare("DELETE FROM rollup_group_labs WHERE group_id IN (SELECT id FROM rollup_groups WHERE owner_user_id = ?)").run(id);
       // Direct children
+      del("rollup_groups", "owner_user_id");
       del("user_sessions");
       del("user_seats", "owner_user_id");
       del("lab_members"); // a user's lab memberships die with the user (FK -> users)

@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Gauge, Lock, CheckCircle2, AlertTriangle, XCircle, Newspaper } from "lucide-react";
-import { summarizeRollup, badModules } from "@/lib/readinessRollup";
+import { summarizeRollup, badModules, groupsInRollup, filterRollupByGroup, groupSections, ROLLUP_GROUP_KIND_LABEL } from "@/lib/readinessRollup";
+import { RollupGroupsDialog, type RollupGroupsData } from "@/components/RollupGroupsDialog";
 
 interface ModuleReadiness {
   key: string; label: string; status: "ok" | "attention" | "overdue"; overdue: number; due_soon: number; total: number; headline: string;
@@ -51,6 +52,19 @@ export default function ReadinessDashboardPage() {
   const [rollup, setRollup] = useState<Readiness[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  // Roll-up groups (Michael 2026-11-16, Phase 1): named groups of labs (a region, a consultant's labs) the command center
+  // can be cut to or broken out by. The server sends only groups the reader runs or owns, cut to the labs they see.
+  const [groupsData, setGroupsData] = useState<RollupGroupsData>({ groups: [], can_build: { personal: { lab_ids: [] }, organizations: [] } });
+  const [groupFilter, setGroupFilter] = useState<"all" | "none" | number>("all");
+  const [breakout, setBreakout] = useState(false);
+  const [manageOpen, setManageOpen] = useState(false);
+
+  async function loadGroups() {
+    try {
+      const gRes = await fetch(`${API_BASE}/api/rollup-groups`, { headers: authHeaders() });
+      if (gRes.ok) setGroupsData(await gRes.json());
+    } catch { /* groups are an extra; the roll-up stands without them */ }
+  }
 
   async function load() {
     if (!activeLabId) return;
@@ -59,6 +73,7 @@ export default function ReadinessDashboardPage() {
       const [rRes, rollRes] = await Promise.all([
         fetch(`${API_BASE}/api/labs/${activeLabId}/readiness`, { headers: authHeaders() }),
         fetch(`${API_BASE}/api/readiness/rollup`, { headers: authHeaders() }),
+        loadGroups(),
       ]);
       if (!rRes.ok) throw new Error(`readiness ${rRes.status}`);
       setData(await rRes.json());
@@ -116,10 +131,22 @@ export default function ReadinessDashboardPage() {
         // every lab the user is on. No filter = the full roll-up (unchanged).
         const scopedRollup = orgFilter != null ? rollup.filter(l => (l.organization_id ?? null) === orgFilter) : rollup;
         const isMultiLab = scopedRollup.length > 1;
-        const s = isMultiLab ? summarizeRollup(scopedRollup as any) : null;
+        // Lab groups: those holding a lab of this roll-up. A group filter cuts the summary, the feed and the heatmap to that
+        // group; "By group" breaks the heatmap out with subtotals per group. A filter left over from another view is ignored.
+        const shownGroups = groupsInRollup(scopedRollup as any, groupsData.groups);
+        const activeGroup = typeof groupFilter === "number" ? shownGroups.find(g => g.id === groupFilter) ?? null : null;
+        const noneCount = shownGroups.length ? filterRollupByGroup(scopedRollup as any, shownGroups, "none").length : 0;
+        const effectiveFilter: "all" | "none" | number = groupFilter === "none" && noneCount > 0 ? "none" : activeGroup ? activeGroup.id : "all";
+        const viewRollup = effectiveFilter === "all" ? scopedRollup : filterRollupByGroup(scopedRollup as any, shownGroups, effectiveFilter);
+        const s = isMultiLab && viewRollup.length ? summarizeRollup(viewRollup as any) : null;
+        const sections = breakout && effectiveFilter === "all" ? groupSections(scopedRollup as any, shownGroups) : [];
+        const canGroup = groupsData.groups.length > 0 || groupsData.can_build.personal.lab_ids.length > 1 || groupsData.can_build.organizations.some(o => o.lab_ids.length > 1);
+        const labNames = new Map(rollup.map(l => [l.lab_id, l.lab_name || l.clia_number || `Lab ${l.lab_id}`]));
         // Name the network after its organization when the roll-up is one org.
         const rollupOrgNames = Array.from(new Set(scopedRollup.map(l => l.organization_name).filter(Boolean))) as string[];
-        const networkTitle = rollupOrgNames.length === 1 ? `Network readiness: ${rollupOrgNames[0]}` : "Network readiness";
+        const networkTitle = activeGroup ? `Group readiness: ${activeGroup.name}`
+          : effectiveFilter === "none" ? "Labs not in a group"
+          : rollupOrgNames.length === 1 ? `Network readiness: ${rollupOrgNames[0]}` : "Network readiness";
         const cellBg = (st: string) =>
           st === "overdue" ? "bg-red-500/15 text-red-700 dark:text-red-300"
           : st === "attention" ? "bg-amber-500/15 text-amber-700 dark:text-amber-300"
@@ -165,8 +192,60 @@ export default function ReadinessDashboardPage() {
         // Network command center (System tier / multi-lab): summary band, a
         // worst-first "where to look" action feed, and a site x domain heatmap.
         // Everything click-throughs to the lab.
+        // One heatmap row (the same row whether or not the heatmap is broken out by group).
+        const labRow = (l: any, keyPrefix: string) => {
+          const byKey = new Map(((l.modules || []) as any[]).map(m => [m.key, m]));
+          return (
+            <tr key={`${keyPrefix}${l.lab_id}`} className="border-b last:border-b-0">
+              <td className="py-2 pr-2 font-medium sticky left-0 bg-card">
+                <Link href={`/labs/${l.lab_id}/readiness`} className="hover:underline">{l.lab_name || l.clia_number || `Lab ${l.lab_id}`}</Link>
+              </td>
+              <td className="py-2 px-2"><span className="inline-flex items-center gap-1.5"><StatusIcon s={l.overall.status} /> <span className={statusColor(l.overall.status)}>{statusLabel(l.overall.status)}</span></span></td>
+              {(s?.cols || []).map(c => {
+                const m = byKey.get(c.key) as any;
+                if (!m) return <td key={c.key} className="py-1.5 px-1.5 text-center text-muted-foreground">-</td>;
+                const n = m.overdue || m.due_soon || 0;
+                return (
+                  <td key={c.key} className="py-1.5 px-1.5">
+                    <div className={`text-center rounded px-1.5 py-1 text-xs font-medium ${cellBg(m.status)}`} title={`${m.label}: ${statusLabel(m.status)}`}>{m.status === "ok" ? "OK" : n}</div>
+                  </td>
+                );
+              })}
+            </tr>
+          );
+        };
+
+        // Lab groups bar: pick a group, or break the heatmap out by group; Manage groups opens the editor.
+        const inScope = new Set(scopedRollup.map(l => l.lab_id));
+        const groupBar = isMultiLab && canGroup && (
+          <div className="flex flex-wrap items-center gap-2" data-testid="rollup-group-bar">
+            <span className="text-sm font-medium">Lab groups</span>
+            {shownGroups.length > 0 && (
+              <>
+                <select aria-label="Show a group" className="h-9 rounded-md border border-input bg-background px-2 text-sm" value={String(effectiveFilter)}
+                  onChange={e => { const v = e.target.value; setGroupFilter(v === "all" || v === "none" ? v : Number(v)); if (v !== "all") setBreakout(false); }}
+                  data-testid="rollup-group-filter">
+                  <option value="all">All labs ({scopedRollup.length})</option>
+                  {shownGroups.map(g => <option key={g.id} value={g.id}>{g.name} ({g.lab_ids.filter(id => inScope.has(id)).length})</option>)}
+                  {noneCount > 0 && <option value="none">Not in a group ({noneCount})</option>}
+                </select>
+                <div className="inline-flex rounded-md border overflow-hidden" role="group" aria-label="Heatmap layout">
+                  <button type="button" aria-pressed={!breakout} className={`px-3 h-9 text-sm ${!breakout ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}
+                    onClick={() => setBreakout(false)} data-testid="rollup-view-labs">All labs</button>
+                  <button type="button" aria-pressed={breakout} className={`px-3 h-9 text-sm border-l ${breakout ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}
+                    onClick={() => { setBreakout(true); setGroupFilter("all"); }} data-testid="rollup-view-groups">By group</button>
+                </div>
+              </>
+            )}
+            <Button size="sm" variant="outline" className="ml-auto" onClick={() => setManageOpen(true)} data-testid="rollup-manage-groups">
+              {groupsData.groups.length ? "Manage groups" : "Group labs"}
+            </Button>
+          </div>
+        );
+
         const networkView = s && (
           <div className="space-y-4">
+            {groupBar}
             <Card>
               <CardHeader className="pb-2"><CardTitle className="text-base">{networkTitle}</CardTitle></CardHeader>
               <CardContent>
@@ -213,32 +292,28 @@ export default function ReadinessDashboardPage() {
                         {s.cols.map(c => (<th key={c.key} className="py-2 px-2 whitespace-nowrap">{c.label}</th>))}
                       </tr>
                     </thead>
-                    <tbody>
-                      {s.rows.map(l => {
-                        const byKey = new Map((l.modules || []).map(m => [m.key, m]));
-                        return (
-                          <tr key={l.lab_id} className="border-b last:border-b-0">
-                            <td className="py-2 pr-2 font-medium sticky left-0 bg-card">
-                              <Link href={`/labs/${l.lab_id}/readiness`} className="hover:underline">{l.lab_name || l.clia_number || `Lab ${l.lab_id}`}</Link>
-                            </td>
-                            <td className="py-2 px-2"><span className="inline-flex items-center gap-1.5"><StatusIcon s={l.overall.status} /> <span className={statusColor(l.overall.status)}>{statusLabel(l.overall.status)}</span></span></td>
-                            {s.cols.map(c => {
-                              const m = byKey.get(c.key) as any;
-                              if (!m) return <td key={c.key} className="py-1.5 px-1.5 text-center text-muted-foreground">-</td>;
-                              const n = m.overdue || m.due_soon || 0;
-                              return (
-                                <td key={c.key} className="py-1.5 px-1.5">
-                                  <div className={`text-center rounded px-1.5 py-1 text-xs font-medium ${cellBg(m.status)}`} title={`${m.label}: ${statusLabel(m.status)}`}>{m.status === "ok" ? "OK" : n}</div>
-                                </td>
-                              );
-                            })}
-                          </tr>
-                        );
-                      })}
-                    </tbody>
+                    {sections.length ? sections.map(sec => (
+                      <tbody key={sec.group ? `g${sec.group.id}` : "none"} data-testid={sec.group ? `rollup-group-section-${sec.group.id}` : "rollup-group-section-none"}>
+                        <tr>
+                          <td colSpan={2 + s.cols.length} className="py-2 px-2 bg-muted/60 border-y">
+                            <span className="font-semibold text-sm">{sec.group ? sec.group.name : "Not in a group"}</span>
+                            {sec.group && <span className="ml-2 text-xs rounded border bg-background px-1.5 py-0.5">{ROLLUP_GROUP_KIND_LABEL[sec.group.kind] || "Group"}</span>}
+                            <span className="ml-3 text-xs text-muted-foreground" data-testid="rollup-group-subtotal">
+                              {sec.summary.ready}/{sec.summary.sites} ready · {sec.summary.overdueSites} action needed · {sec.summary.totalOverdue} overdue {sec.summary.totalOverdue === 1 ? "item" : "items"} · {sec.summary.readinessPct}% readiness
+                            </span>
+                          </td>
+                        </tr>
+                        {sec.labs.map(l => labRow(l, sec.group ? `g${sec.group.id}-` : "n-"))}
+                      </tbody>
+                    )) : (
+                      <tbody>{s.rows.map(l => labRow(l, ""))}</tbody>
+                    )}
                   </table>
                 </div>
-                <p className="text-xs text-muted-foreground mt-3">One login, every site. Click any lab to open it. Each lab's readiness is computed from its own module data.</p>
+                <p className="text-xs text-muted-foreground mt-3">
+                  One login, every site. Click any lab to open it. Each lab's readiness is computed from its own module data.
+                  {sections.length ? " A lab in two groups shows in both." : ""}
+                </p>
               </CardContent>
             </Card>
           </div>
@@ -250,6 +325,9 @@ export default function ReadinessDashboardPage() {
           return (
             <>
               {networkView}
+              {canGroup && (
+                <RollupGroupsDialog open={manageOpen} onOpenChange={setManageOpen} data={groupsData} labNames={labNames} onChanged={loadGroups} />
+              )}
               <div className="mt-8 mb-3">
                 <h2 className="text-lg font-semibold">Active site: {data.lab_name || `Lab ${data.lab_id}`}</h2>
                 <p className="text-xs text-muted-foreground">The lab selected in the switcher. Switch sites in the top bar, or click any lab above.</p>
