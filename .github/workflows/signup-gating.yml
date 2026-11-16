@@ -162,6 +162,12 @@ jobs:
         # invite holds no seat and doesn't block a re-invite, and invitations nobody accepted in 30 days end with one email
         # to the owner and the seat given back.
         run: npm run test:seat-count-system-scope
+      - name: Run roll-up groups integration test
+        # 2026-11-16 (Michael): named groups of labs for the readiness command center. Presentation only: a group never opens
+        # a lab, reads are cut to the labs the reader's roll-up holds, and only a group's owner or its system's org admin edits it.
+        run: npm run test:rollup-groups
+      - name: Roll-up groups arrangement (filter, sections, subtotals)
+        run: npx tsx scripts/verify-readiness-rollup-groups.mts
       - name: Excel header and footer stay within 255 characters
         # 2026-11-13: Excel opens a workbook with a longer header or footer only in repair mode; the license stamp now
         # shortens its own line to fit, keeps the sheet's lab identity and a demo lab's sample-data mark.
