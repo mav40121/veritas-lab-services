@@ -284,6 +284,10 @@ export const EXPORT_TABLES: Record<string, ExportTable> = {
   organization_members: exclude(ORG),
   organization_billing_line_items: exclude(ORG),
   system_documents: exclude(ORG),
+  // Roll-up groups (server/rollupGroups.ts): a system's or one person's grouping of labs for the readiness command center.
+  // They belong to the organization or that person, not to any one lab, and hold no lab record.
+  rollup_groups: exclude("A readiness roll-up grouping that belongs to an organization or one person's network, not to one lab."),
+  rollup_group_labs: exclude("Which labs a roll-up grouping holds; the grouping belongs to an organization or one person, not to one lab."),
   contact_messages: exclude(VLS_BUSINESS),
   discount_codes: exclude(VLS_BUSINESS),
   founding_lab_applications: exclude(VLS_BUSINESS),

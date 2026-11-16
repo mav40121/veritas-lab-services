@@ -2645,6 +2645,55 @@ try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_org_members_org  ON organizati
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_org_members_user ON organization_members(user_id, status)`); } catch {}
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_labs_org ON labs(organization_id) WHERE organization_id IS NOT NULL`); } catch {}
 
+// Roll-up groups (Michael 2026-11-16: "Could her consultants get a roll up of their labs with a bigger system roll up for
+// angie? ... This would fit many larger systems regional director roll ups."; Phase 1, server/rollupGroups.ts). A named
+// group of labs (a region, a consultant's labs) the readiness command center can be broken out by. Exactly one scope:
+// organization_id (a system's groups, edited by its org_owner or org_admin) or owner_user_id (one person's own network,
+// holding only labs they are a member of). Presentation only: a group never grants anyone access to a lab. Not the
+// lab_groups table (people inside one lab). NEW DB TABLE RULE: CREATE + PRAGMA-checked ALTERs below.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS rollup_groups (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    kind TEXT NOT NULL DEFAULT 'other',
+    organization_id INTEGER,
+    owner_user_id INTEGER,
+    created_by_user_id INTEGER,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (organization_id) REFERENCES organizations(id),
+    FOREIGN KEY (owner_user_id) REFERENCES users(id)
+  );
+  CREATE TABLE IF NOT EXISTS rollup_group_labs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    group_id INTEGER NOT NULL,
+    lab_id INTEGER NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (group_id) REFERENCES rollup_groups(id),
+    FOREIGN KEY (lab_id) REFERENCES labs(id),
+    UNIQUE(group_id, lab_id)
+  );
+`);
+{
+  const rgCols = (sqlite.prepare("PRAGMA table_info(rollup_groups)").all() as any[]).map((c: any) => c.name);
+  const ensureRg = (col: string, sql: string) => { if (!rgCols.includes(col)) { try { sqlite.exec(sql); rgCols.push(col); } catch {} } };
+  ensureRg("name",               "ALTER TABLE rollup_groups ADD COLUMN name TEXT NOT NULL DEFAULT ''");
+  ensureRg("kind",               "ALTER TABLE rollup_groups ADD COLUMN kind TEXT NOT NULL DEFAULT 'other'");
+  ensureRg("organization_id",    "ALTER TABLE rollup_groups ADD COLUMN organization_id INTEGER");
+  ensureRg("owner_user_id",      "ALTER TABLE rollup_groups ADD COLUMN owner_user_id INTEGER");
+  ensureRg("created_by_user_id", "ALTER TABLE rollup_groups ADD COLUMN created_by_user_id INTEGER");
+  ensureRg("created_at",         "ALTER TABLE rollup_groups ADD COLUMN created_at TEXT");
+  ensureRg("updated_at",         "ALTER TABLE rollup_groups ADD COLUMN updated_at TEXT");
+  const rglCols = (sqlite.prepare("PRAGMA table_info(rollup_group_labs)").all() as any[]).map((c: any) => c.name);
+  const ensureRgl = (col: string, sql: string) => { if (!rglCols.includes(col)) { try { sqlite.exec(sql); rglCols.push(col); } catch {} } };
+  ensureRgl("group_id",   "ALTER TABLE rollup_group_labs ADD COLUMN group_id INTEGER NOT NULL DEFAULT 0");
+  ensureRgl("lab_id",     "ALTER TABLE rollup_group_labs ADD COLUMN lab_id INTEGER NOT NULL DEFAULT 0");
+  ensureRgl("created_at", "ALTER TABLE rollup_group_labs ADD COLUMN created_at TEXT");
+}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_rollup_groups_org   ON rollup_groups(organization_id) WHERE organization_id IS NOT NULL`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_rollup_groups_owner ON rollup_groups(owner_user_id) WHERE owner_user_id IS NOT NULL`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_rollup_group_labs_lab ON rollup_group_labs(lab_id)`); } catch {}
+
 // Phase 3b (docs/SYSTEM_ENTITY_DESIGN.md): org-level billing, Option 1 =
 // ONE subscription/renewal on the organization with PER-LAB line items (one
 // invoice to the system, each lab a line item for the customer's own cost
