@@ -168,7 +168,7 @@ function reportCalls(sqlite: any, ctx: ExportCtx): ReportCall[] {
     calls.push({ module: "VeritaQC", what: `IQCP plan ${p.id}`, method: "GET", path: `/api/labs/${L}/iqcp/plans/${p.id}/pdf`, fallbackName: `IQCP_Plan_${p.id}.pdf` });
   }
   if (ids("SELECT id FROM cms116_drafts WHERE lab_id = ?", L).length) {
-    calls.push({ module: "VeritaLab", what: "CMS-116 draft", method: "GET", path: `/api/labs/${L}/veritalab/cms116-draft/pdf`, fallbackName: "CMS-116_Draft.pdf" });
+    calls.push({ module: "VeritaLab", what: "CMS-116 worksheet", method: "GET", path: `/api/labs/${L}/veritalab/cms116-draft/pdf`, fallbackName: "CMS-116_Worksheet.pdf" });
   }
   return calls;
 }

@@ -14,6 +14,8 @@
 //   working Download PDF button ships a live generator. Removed from both
 //   rendered strings in Cms116FormTab.
 //
+//   #10 (2026-11-15) the CMS-116 tab and PDF follow Form CMS-116 (04/2026) and are a worksheet for CMS's own form.
+//
 //   #7 the demo misattributed the CLIA auto-populate source to "your CMS-116
 //   application"; CLIA is auto-populated from the account's CLIA verification at
 //   signup (the CMS-116 wire-back is a separate path).
@@ -49,7 +51,18 @@ ok("#6 Cms116FormTab no longer tells the user 'PDF generation lands in Phase 4'"
 ok("#6 Cms116FormTab signature note no longer says 'printed PDF (Phase 4)'",
   !/printed PDF \(Phase 4\)/.test(cms));
 ok("#6 Cms116FormTab points the user at the shipped Download PDF flow",
-  /Use Download PDF to generate the CMS-116 for wet-ink signature/.test(cms));
+  /Download PDF gives a worksheet to copy onto CMS's current Form CMS-116/.test(cms));
+
+// #10 Form CMS-116 (04/2026), Michael 2026-11-15 Q339 = 1: the tab and its PDF are a worksheet for CMS's current
+// form, which the director or owner signs and files; neither tells the lab to mail the printout itself.
+const cmsPdf = read("server/cms116Pdf.ts");
+ok("#10 the tab names the 04/2026 form", /CMS116_FORM_LABEL/.test(cms) && /Form CMS-116 \(04\/2026\)/.test(read("shared/cms116Form.ts")));
+ok("#10 the PDF tells the lab to copy the entries onto CMS's current form",
+  /Copy these entries onto CMS's current Form CMS-116/.test(cmsPdf));
+ok("#10 the PDF no longer says to mail this printout or wet-sign it",
+  !/Mail the signed packet/.test(cmsPdf) && !/wet ink required/i.test(cmsPdf));
+ok("#10 the tab no longer says to wet-sign the printed PDF",
+  !/wet-sign Section X|wet-ink signature/i.test(cms));
 
 // #7 demo CLIA source corrected
 ok("#7 demo no longer claims CLIA is auto-populated 'from your CMS-116 application'",

@@ -1,32 +1,13 @@
-// CMS-116 form-fill tab (parking-lot #22 Phase 3).
+// CMS-116 tab (VeritaLab): the lab's draft of Form CMS-116 (04/2026), the CLIA Application, OMB 0938-0581.
 //
-// Renders the federal CLIA Application for Certification (CMS Form 116,
-// OMB control 0938-0581) as a fillable web form, persisted per-lab to
-// cms116_drafts. The lab director downloads the draft as a PDF
-// (Phase 4), wet-signs it, and mails it to their State Agency.
+// Sections 1-10 and the signature lines follow the 04/2026 form (Michael 2026-11-15, Q339 = 1: CMS released it in
+// November 2026; the tab had been laid out on its own reading of the 03/24 form). The fields, lists and the reading of
+// a saved draft live in shared/cms116Form.ts, which the worksheet PDF (server/cms116Pdf.ts) reads too. A draft saved on
+// the tab's earlier layout opens with what fits carried over and the rest listed above the form; Save Draft stores it
+// on the 04/2026 layout.
 //
-// Field layout sourced from the current public CMS-116 form on
-// https://www.cms.gov (the form is publicly distributed by CMS).
-// Spot-check by Michael (MLS(ASCP), former TJC surveyor) is the
-// editorial gate before merge; the form layout has been stable for
-// years but CMS does occasionally republish revisions.
-//
-// Sections I-X follow the official form headings:
-//   I.   General Information
-//   II.  Type of Certificate Requested
-//   III. Type of Laboratory
-//   IV.  Hours of Laboratory Testing
-//   V.   Multiple Sites
-//   VI.  Waived Testing
-//   VII. Provider-Performed Microscopy Procedures
-//   VIII. Non-Waived Testing (Specialty / Subspecialty)
-//   IX.  Total Annual Test Volume
-//   X.   Type of Control / Director Information
-//
-// The PUT /api/labs/:labId/veritalab/cms116-draft endpoint upserts
-// one row per lab. Each section is stored as a JSON blob so future
-// CMS form revisions can land via Phase-3 component updates without
-// a schema migration.
+// The PUT /api/labs/:labId/veritalab/cms116-draft endpoint upserts one row per lab, one JSON blob per section; section N
+// of the form is the Nth column (1 -> i ... 10 -> x).
 
 import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -44,196 +25,41 @@ import { API_BASE } from "@/lib/queryClient";
 import { downloadPdfToken } from "@/lib/utils";
 import { authHeaders } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
-import { FileSignature, Save, CheckCircle2, AlertTriangle } from "lucide-react";
-
-interface SectionI {
-  legal_name: string;
-  dba: string;
-  street: string;
-  city: string;
-  state: string;
-  zip: string;
-  county: string;
-  telephone: string;
-  fax: string;
-  email: string;
-  federal_tax_id: string;
-}
-
-interface SectionII {
-  certificate_type: "" | "waiver" | "ppm" | "compliance" | "accreditation";
-  accrediting_org: string; // only relevant if certificate_type === "accreditation"
-}
-
-interface SectionIII {
-  lab_type: string; // one of LAB_TYPES below
-  lab_type_other: string;
-}
-
-interface SectionIV {
-  hours_per_week: string;
-}
-
-interface SectionV {
-  multiple_sites: "" | "yes" | "no";
-  sites_text: string; // free-text list of additional addresses
-}
-
-interface SectionVI {
-  has_waived_testing: "" | "yes" | "no";
-  estimated_annual_volume: string;
-}
-
-interface SectionVII {
-  has_ppm: "" | "yes" | "no";
-  estimated_annual_volume: string;
-}
-
-interface SectionVIII {
-  // Specialty / subspecialty checkboxes (categories per 42 CFR 493.2 / Subpart I)
-  histocompatibility: boolean;
-  micro_bacteriology: boolean;
-  micro_mycobacteriology: boolean;
-  micro_mycology: boolean;
-  micro_parasitology: boolean;
-  micro_virology: boolean;
-  immuno_syphilis_serology: boolean;
-  immuno_general: boolean;
-  chem_routine: boolean;
-  chem_urinalysis: boolean;
-  chem_endocrinology: boolean;
-  chem_toxicology: boolean;
-  hematology: boolean;
-  immunohem_abo_rh: boolean;
-  immunohem_antibody_detection: boolean;
-  immunohem_antibody_id: boolean;
-  immunohem_compatibility: boolean;
-  pathology_histopathology: boolean;
-  pathology_oral: boolean;
-  pathology_cytology: boolean;
-  radiobioassay: boolean;
-  clinical_cytogenetics: boolean;
-}
-
-interface SectionIX {
-  total_annual_volume: string;
-}
-
-interface SectionX {
-  control_type: "" | "sole_proprietorship" | "partnership" | "corporation" | "government" | "other";
-  control_other: string;
-  director_name: string;
-  director_credentials: string;
-  director_npi: string;
-  director_clia_director_number: string; // CLIA director ID if known
-}
+import { FileSignature, Save, CheckCircle2, AlertTriangle, Plus, Trash2, Info } from "lucide-react";
+import {
+  ACCREDITING_ORGS, CERTIFICATE_TYPES, CMS116_FORM_LABEL, CONTROL_TYPES, DAYS, LAB_TYPES, PPM_PROCEDURES,
+  SECTION_TITLES, SITE_EXCEPTIONS, SPECIALTY_GROUPS, emptyCms116, emptyNonWaivedTest, emptyOtherLab, emptySite,
+  emptyWaivedTest, normalizeCms116, type Cms116Sections, type CertificateType, type SiteException, type YesNo,
+} from "@shared/cms116Form";
 
 interface DraftPayload {
-  sections: {
-    i: SectionI;
-    ii: SectionII;
-    iii: SectionIII;
-    iv: SectionIV;
-    v: SectionV;
-    vi: SectionVI;
-    vii: SectionVII;
-    viii: SectionVIII;
-    ix: SectionIX;
-    x: SectionX;
-  };
+  sections: Cms116Sections;
   director_signature_name: string;
   director_signature_date: string;
   status: "draft" | "submitted" | "issued";
   notes: string;
 }
 
-const LAB_TYPES = [
-  "Ambulatory Surgical Center",
-  "Ancillary Testing Site in Health Care Facility",
-  "Assisted Living Facility",
-  "Blood Banks",
-  "Community Clinic",
-  "Comprehensive Outpatient Rehab Facility",
-  "End-Stage Renal Disease Dialysis Facility",
-  "Federally Qualified Health Center",
-  "Health Maintenance Organization",
-  "Home Health Agency",
-  "Hospice",
-  "Hospital",
-  "Independent",
-  "Industrial",
-  "Insurance",
-  "Intermediate Care Facility / Individuals with Intellectual Disabilities",
-  "Mobile Laboratory",
-  "Other Practitioner",
-  "Pharmacy",
-  "Physician Office",
-  "Prison",
-  "Public Health Laboratory",
-  "Rural Health Clinic",
-  "School/Student Health Service",
-  "Skilled Nursing/Nursing Facility",
-  "Tissue Bank/Repositories",
-  "Other",
-];
-
 function emptyDraft(): DraftPayload {
-  return {
-    sections: {
-      i: { legal_name: "", dba: "", street: "", city: "", state: "", zip: "", county: "", telephone: "", fax: "", email: "", federal_tax_id: "" },
-      ii: { certificate_type: "", accrediting_org: "" },
-      iii: { lab_type: "", lab_type_other: "" },
-      iv: { hours_per_week: "" },
-      v: { multiple_sites: "", sites_text: "" },
-      vi: { has_waived_testing: "", estimated_annual_volume: "" },
-      vii: { has_ppm: "", estimated_annual_volume: "" },
-      viii: {
-        histocompatibility: false,
-        micro_bacteriology: false, micro_mycobacteriology: false, micro_mycology: false,
-        micro_parasitology: false, micro_virology: false,
-        immuno_syphilis_serology: false, immuno_general: false,
-        chem_routine: false, chem_urinalysis: false, chem_endocrinology: false, chem_toxicology: false,
-        hematology: false,
-        immunohem_abo_rh: false, immunohem_antibody_detection: false,
-        immunohem_antibody_id: false, immunohem_compatibility: false,
-        pathology_histopathology: false, pathology_oral: false, pathology_cytology: false,
-        radiobioassay: false, clinical_cytogenetics: false,
-      },
-      ix: { total_annual_volume: "" },
-      x: { control_type: "", control_other: "", director_name: "", director_credentials: "", director_npi: "", director_clia_director_number: "" },
-    },
-    director_signature_name: "",
-    director_signature_date: "",
-    status: "draft",
-    notes: "",
-  };
+  return { sections: emptyCms116(), director_signature_name: "", director_signature_date: "", status: "draft", notes: "" };
 }
 
-function parseDbDraft(row: any): DraftPayload {
-  if (!row) return emptyDraft();
-  const empty = emptyDraft();
-  const parse = (s: any, fallback: any) => {
-    if (!s) return fallback;
-    try { return { ...fallback, ...(typeof s === "string" ? JSON.parse(s) : s) }; }
-    catch { return fallback; }
-  };
+function parseDbDraft(row: any): { draft: DraftPayload; carriedNotes: string[] } {
+  if (!row) return { draft: emptyDraft(), carriedNotes: [] };
+  const { sections, carriedNotes } = normalizeCms116({
+    i: row.section_i_json, ii: row.section_ii_json, iii: row.section_iii_json, iv: row.section_iv_json,
+    v: row.section_v_json, vi: row.section_vi_json, vii: row.section_vii_json, viii: row.section_viii_json,
+    ix: row.section_ix_json, x: row.section_x_json,
+  });
   return {
-    sections: {
-      i:    parse(row.section_i_json,    empty.sections.i),
-      ii:   parse(row.section_ii_json,   empty.sections.ii),
-      iii:  parse(row.section_iii_json,  empty.sections.iii),
-      iv:   parse(row.section_iv_json,   empty.sections.iv),
-      v:    parse(row.section_v_json,    empty.sections.v),
-      vi:   parse(row.section_vi_json,   empty.sections.vi),
-      vii:  parse(row.section_vii_json,  empty.sections.vii),
-      viii: parse(row.section_viii_json, empty.sections.viii),
-      ix:   parse(row.section_ix_json,   empty.sections.ix),
-      x:    parse(row.section_x_json,    empty.sections.x),
+    draft: {
+      sections,
+      director_signature_name: row.director_signature_name || "",
+      director_signature_date: row.director_signature_date || "",
+      status: (row.status === "submitted" || row.status === "issued") ? row.status : "draft",
+      notes: row.notes || "",
     },
-    director_signature_name: row.director_signature_name || "",
-    director_signature_date: row.director_signature_date || "",
-    status: (row.status === "submitted" || row.status === "issued") ? row.status : "draft",
-    notes: row.notes || "",
+    carriedNotes,
   };
 }
 
@@ -242,9 +68,12 @@ interface Props {
   isReadOnly: boolean;
 }
 
+const SECTION_KEYS = ["i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x"] as const;
+
 export function Cms116FormTab({ labId, isReadOnly }: Props) {
   const { toast } = useToast();
   const [draft, setDraft] = useState<DraftPayload>(emptyDraft());
+  const [carriedNotes, setCarriedNotes] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
@@ -258,7 +87,9 @@ export function Cms116FormTab({ labId, isReadOnly }: Props) {
         if (!res.ok) throw new Error(`Failed to load draft: ${res.status}`);
         const data = await res.json();
         if (cancelled) return;
-        setDraft(parseDbDraft(data.draft));
+        const parsed = parseDbDraft(data.draft);
+        setDraft(parsed.draft);
+        setCarriedNotes(parsed.carriedNotes);
         if (data.draft?.updated_at) setLastSavedAt(data.draft.updated_at);
       } catch (e) {
         if (!cancelled) console.error("Failed to load CMS-116 draft:", e);
@@ -269,18 +100,24 @@ export function Cms116FormTab({ labId, isReadOnly }: Props) {
     return () => { cancelled = true; };
   }, [labId]);
 
+  async function putDraft() {
+    const res = await fetch(`${API_BASE}/api/labs/${labId}/veritalab/cms116-draft`, {
+      method: "PUT",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify(draft),
+    });
+    if (!res.ok) throw new Error(`Save failed: ${res.status}`);
+    return res.json();
+  }
+
   async function handleSave() {
     if (!labId) { toast({ title: "No active lab", variant: "destructive" }); return; }
     setSaving(true);
     try {
-      const res = await fetch(`${API_BASE}/api/labs/${labId}/veritalab/cms116-draft`, {
-        method: "PUT",
-        headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify(draft),
-      });
-      if (!res.ok) throw new Error(`Save failed: ${res.status}`);
-      const data = await res.json();
+      const data = await putDraft();
       if (data.draft?.updated_at) setLastSavedAt(data.draft.updated_at);
+      // Saved on the 04/2026 layout, so the carried-over list no longer applies.
+      setCarriedNotes([]);
       toast({ title: "Draft saved" });
     } catch (e: any) {
       toast({ title: "Save failed", description: e?.message || "Unknown error", variant: "destructive" });
@@ -297,11 +134,11 @@ export function Cms116FormTab({ labId, isReadOnly }: Props) {
       // Persist any unsaved field edits first so the PDF reflects what the
       // user just typed, not whatever was last saved to the cms116_drafts row.
       // A view-only login has no edits to persist (and the PUT would 403).
-      if (!isReadOnly) await fetch(`${API_BASE}/api/labs/${labId}/veritalab/cms116-draft`, {
-        method: "PUT",
-        headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify(draft),
-      });
+      if (!isReadOnly) {
+        const data = await putDraft();
+        if (data.draft?.updated_at) setLastSavedAt(data.draft.updated_at);
+        setCarriedNotes([]);
+      }
       const res = await fetch(`${API_BASE}/api/labs/${labId}/veritalab/cms116-draft/pdf`, { headers: authHeaders() });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -310,8 +147,8 @@ export function Cms116FormTab({ labId, isReadOnly }: Props) {
       const { token } = await res.json();
       if (!token) throw new Error("No token returned");
       // Anchor download via the token endpoint (no popup / about:blank tab; parking lot #63).
-      downloadPdfToken(token, "CMS-116_Draft.pdf");
-      toast({ title: "CMS-116 PDF generated" });
+      downloadPdfToken(token, "CMS-116_Worksheet.pdf");
+      toast({ title: "CMS-116 worksheet generated" });
     } catch (e: any) {
       toast({ title: "PDF generation failed", description: e?.message || "Unknown error", variant: "destructive" });
     } finally {
@@ -319,7 +156,7 @@ export function Cms116FormTab({ labId, isReadOnly }: Props) {
     }
   }
 
-  function updateSection<K extends keyof DraftPayload["sections"]>(key: K, patch: Partial<DraftPayload["sections"][K]>) {
+  function updateSection<K extends keyof Cms116Sections>(key: K, patch: Partial<Cms116Sections[K]>) {
     setDraft((d) => ({ ...d, sections: { ...d.sections, [key]: { ...d.sections[key], ...patch } } }));
   }
 
@@ -328,6 +165,8 @@ export function Cms116FormTab({ labId, isReadOnly }: Props) {
   }
 
   const s = draft.sections;
+  const labType = LAB_TYPES.find((t) => t.code === s.iii.lab_type);
+  const control = CONTROL_TYPES.find((c) => c.code === s.ix.control_type);
 
   return (
     <div className="space-y-4">
@@ -337,10 +176,11 @@ export function Cms116FormTab({ labId, isReadOnly }: Props) {
           <div className="flex items-start gap-3 min-w-0 flex-1">
             <FileSignature size={20} className="text-primary mt-0.5 shrink-0" />
             <div className="min-w-0">
-              <h3 className="font-semibold">CMS Form 116 - CLIA Application for Certification</h3>
+              <h3 className="font-semibold">{CMS116_FORM_LABEL}, CLIA Application</h3>
               <p className="text-xs text-muted-foreground mt-1">
-                OMB control 0938-0581. After completion, click Download PDF, wet-sign Section X
-                on the printed form, and mail to your State Agency.
+                OMB 0938-0581. Sections follow the 04/2026 form. Fill in what applies and click Save Draft.
+                Download PDF gives a worksheet of these entries to copy onto CMS's current Form CMS-116, which
+                the laboratory director or owner signs and sends to your state agency.
               </p>
               {lastSavedAt && (
                 <p className="text-xs text-muted-foreground mt-1">
@@ -369,239 +209,346 @@ export function Cms116FormTab({ labId, isReadOnly }: Props) {
         </CardContent>
       </Card>
 
+      {carriedNotes.length > 0 && (
+        <div data-testid="cms116-carried-notes" className="rounded-lg border border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200 px-4 py-3 text-sm">
+          <div className="flex items-start gap-2">
+            <Info size={16} className="shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <p className="font-medium">This draft was saved on the earlier CMS-116 layout.</p>
+              <p className="mt-1">
+                Entries that fit the 04/2026 form are carried over below. These have no matching field or need a
+                choice; enter what applies, then click Save Draft to store the draft on the 04/2026 layout.
+              </p>
+              <ul className="list-disc pl-5 mt-2 space-y-0.5">
+                {carriedNotes.map((n, i) => <li key={i}>{n}</li>)}
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* #84 Phase 3: the CMS-116 draft is VeritaLab setup (PUT is
           requireModuleEdit('veritalab')). A view-only login (e.g. a Staff
           login) reads every section open, with the fields disabled. */}
       <fieldset disabled={isReadOnly} className="contents">
-      <Accordion type="multiple" defaultValue={isReadOnly ? ["i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x", "signature"] : ["i"]} className="space-y-2">
-        {/* SECTION I */}
+      <Accordion type="multiple" defaultValue={isReadOnly ? [...SECTION_KEYS, "signature"] : ["i"]} className="space-y-2">
+        {/* SECTION 1 */}
         <AccordionItem value="i" className="border rounded-lg px-4">
-          <AccordionTrigger className="text-left font-medium">
-            I. General Information
-          </AccordionTrigger>
-          <AccordionContent className="pt-2">
+          <AccordionTrigger className="text-left font-medium">{SECTION_TITLES.i}</AccordionTrigger>
+          <AccordionContent className="pt-2 space-y-4">
+            <div className="grid sm:grid-cols-2 gap-2 text-sm">
+              <Check label="Initial application" checked={s.i.app_initial} onChange={(v) => updateSection("i", { app_initial: v })} />
+              <Check label="Survey" checked={s.i.app_survey} onChange={(v) => updateSection("i", { app_survey: v })} />
+              <Check label="Change in certificate type" checked={s.i.app_change_cert_type} onChange={(v) => updateSection("i", { app_change_cert_type: v })} />
+              <Check label="Change in laboratory director" checked={s.i.app_change_director} onChange={(v) => updateSection("i", { app_change_director: v })} />
+              <Check label="Other changes" checked={s.i.app_other_changes} onChange={(v) => updateSection("i", { app_other_changes: v })} />
+            </div>
+            <div className="grid sm:grid-cols-3 gap-3">
+              {s.i.app_initial && (
+                <Field label="Anticipated start date" type="date" value={s.i.anticipated_start_date} onChange={(v) => updateSection("i", { anticipated_start_date: v })} />
+              )}
+              {s.i.app_other_changes && (
+                <Field label="Other changes (specify)" value={s.i.other_changes_text} onChange={(v) => updateSection("i", { other_changes_text: v })} />
+              )}
+              <Field label="Effective date" type="date" value={s.i.effective_date} onChange={(v) => updateSection("i", { effective_date: v })} />
+            </div>
             <div className="grid sm:grid-cols-2 gap-3">
-              <Field label="Legal name of laboratory" value={s.i.legal_name} onChange={(v) => updateSection("i", { legal_name: v })} />
-              <Field label="Doing business as (DBA)" value={s.i.dba} onChange={(v) => updateSection("i", { dba: v })} />
-              <Field label="Street address" value={s.i.street} onChange={(v) => updateSection("i", { street: v })} className="sm:col-span-2" />
+              <Field label="CLIA Identification Number (blank for an initial application)" value={s.i.clia_number} onChange={(v) => updateSection("i", { clia_number: v })} />
+              <Field label="Federal Tax Identification Number (TIN)" value={s.i.federal_tax_id} onChange={(v) => updateSection("i", { federal_tax_id: v })} />
+              <Field label="Facility name" value={s.i.facility_name} onChange={(v) => updateSection("i", { facility_name: v })} className="sm:col-span-2" />
+              <Field label="Email address 1" type="email" value={s.i.email_1} onChange={(v) => updateSection("i", { email_1: v })} />
+              <Field label="Email address 2 (optional)" type="email" value={s.i.email_2} onChange={(v) => updateSection("i", { email_2: v })} />
+              <Field label="Email address 3 (optional)" type="email" value={s.i.email_3} onChange={(v) => updateSection("i", { email_3: v })} />
+              <Field label="Email address for CLIA fee coupons (if applicable)" type="email" value={s.i.email_fee_coupons} onChange={(v) => updateSection("i", { email_fee_coupons: v })} />
+              <Field label="Phone number" value={s.i.phone} onChange={(v) => updateSection("i", { phone: v })} />
+              <Field label="Fax number" value={s.i.fax} onChange={(v) => updateSection("i", { fax: v })} />
+              <Field label="Facility address (physical location, no P.O. boxes)" value={s.i.street} onChange={(v) => updateSection("i", { street: v })} className="sm:col-span-2" />
+              <Field label="Facility address line 2 (building, floor, suite, if applicable)" value={s.i.street_2} onChange={(v) => updateSection("i", { street_2: v })} className="sm:col-span-2" />
               <Field label="City" value={s.i.city} onChange={(v) => updateSection("i", { city: v })} />
               <div className="grid grid-cols-2 gap-3">
                 <Field label="State" value={s.i.state} onChange={(v) => updateSection("i", { state: v })} maxLength={2} />
-                <Field label="ZIP" value={s.i.zip} onChange={(v) => updateSection("i", { zip: v })} />
+                <Field label="ZIP code" value={s.i.zip} onChange={(v) => updateSection("i", { zip: v })} />
               </div>
-              <Field label="County" value={s.i.county} onChange={(v) => updateSection("i", { county: v })} />
-              <Field label="Federal Tax ID" value={s.i.federal_tax_id} onChange={(v) => updateSection("i", { federal_tax_id: v })} />
-              <Field label="Telephone" value={s.i.telephone} onChange={(v) => updateSection("i", { telephone: v })} />
-              <Field label="Fax" value={s.i.fax} onChange={(v) => updateSection("i", { fax: v })} />
-              <Field label="Email" type="email" value={s.i.email} onChange={(v) => updateSection("i", { email: v })} className="sm:col-span-2" />
+              <Field label="Name of Laboratory Director (Last, First, Middle initial)" value={s.i.director_name} onChange={(v) => updateSection("i", { director_name: v })} />
+              <Field label="Laboratory Director phone number" value={s.i.director_phone} onChange={(v) => updateSection("i", { director_phone: v })} />
+              <Field label="Name of Owner" value={s.i.owner_name} onChange={(v) => updateSection("i", { owner_name: v })} />
+              <Field label="Owner phone number" value={s.i.owner_phone} onChange={(v) => updateSection("i", { owner_phone: v })} />
             </div>
+            <p className="text-xs text-muted-foreground">
+              For a PPM, compliance or accreditation certificate, proof of the laboratory director's qualifications
+              (state licensure where it applies, education, credentials and laboratory experience) goes with the form.
+            </p>
           </AccordionContent>
         </AccordionItem>
 
-        {/* SECTION II */}
+        {/* SECTION 2 */}
         <AccordionItem value="ii" className="border rounded-lg px-4">
-          <AccordionTrigger className="text-left font-medium">II. Type of Certificate Requested</AccordionTrigger>
+          <AccordionTrigger className="text-left font-medium">{SECTION_TITLES.ii}</AccordionTrigger>
           <AccordionContent className="pt-2 space-y-3">
-            <Select value={s.ii.certificate_type || ""} onValueChange={(v) => updateSection("ii", { certificate_type: v as SectionII["certificate_type"] })}>
-              <SelectTrigger><SelectValue placeholder="Select certificate type" /></SelectTrigger>
+            <Select value={s.ii.certificate_type || ""} onValueChange={(v) => updateSection("ii", { certificate_type: v as CertificateType })}>
+              <SelectTrigger aria-label="Type of certificate"><SelectValue placeholder="Select certificate type" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="waiver">Certificate of Waiver</SelectItem>
-                <SelectItem value="ppm">Certificate for Provider-Performed Microscopy (PPM)</SelectItem>
-                <SelectItem value="compliance">Certificate of Compliance</SelectItem>
-                <SelectItem value="accreditation">Certificate of Accreditation</SelectItem>
+                {CERTIFICATE_TYPES.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
               </SelectContent>
             </Select>
+            {s.ii.certificate_type && (
+              <p className="text-xs text-muted-foreground">
+                Complete {CERTIFICATE_TYPES.find((c) => c.value === s.ii.certificate_type)?.sections}.
+              </p>
+            )}
             {s.ii.certificate_type === "accreditation" && (
-              <Field label="Accrediting organization (TJC, CAP, COLA, AABB, etc.)" value={s.ii.accrediting_org} onChange={(v) => updateSection("ii", { accrediting_org: v })} />
+              <div>
+                <label className="text-sm font-medium mb-1 block">Accreditation organization(s) for CLIA purposes (accredited by, or applied to)</label>
+                <div className="grid sm:grid-cols-3 gap-1 text-sm">
+                  {ACCREDITING_ORGS.map((o) => (
+                    <Check key={o} label={o} checked={s.ii.accrediting_orgs.includes(o)}
+                      onChange={(v) => updateSection("ii", { accrediting_orgs: v ? [...s.ii.accrediting_orgs, o] : s.ii.accrediting_orgs.filter((x) => x !== o) })} />
+                  ))}
+                </div>
+              </div>
             )}
           </AccordionContent>
         </AccordionItem>
 
-        {/* SECTION III */}
+        {/* SECTION 3 */}
         <AccordionItem value="iii" className="border rounded-lg px-4">
-          <AccordionTrigger className="text-left font-medium">III. Type of Laboratory</AccordionTrigger>
+          <AccordionTrigger className="text-left font-medium">{SECTION_TITLES.iii}</AccordionTrigger>
           <AccordionContent className="pt-2 space-y-3">
             <Select value={s.iii.lab_type || ""} onValueChange={(v) => updateSection("iii", { lab_type: v })}>
-              <SelectTrigger><SelectValue placeholder="Select laboratory type" /></SelectTrigger>
+              <SelectTrigger aria-label="Type of laboratory"><SelectValue placeholder="Select laboratory type" /></SelectTrigger>
               <SelectContent className="max-h-72">
-                {LAB_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                {LAB_TYPES.map((t) => <SelectItem key={t.code} value={t.code}>{t.code} {t.label}{t.cms ? "*" : ""}</SelectItem>)}
               </SelectContent>
             </Select>
-            {s.iii.lab_type === "Other" && (
-              <Field label="Specify other laboratory type" value={s.iii.lab_type_other} onChange={(v) => updateSection("iii", { lab_type_other: v })} />
+            {labType?.specify && (
+              <Field label="Specify" value={s.iii.lab_type_other} onChange={(v) => updateSection("iii", { lab_type_other: v })} />
+            )}
+            <p className="text-xs text-muted-foreground">* A facility type CMS certifies.</p>
+            <YesNoSelect label="Is the laboratory located within a CMS-certified health care facility (types marked *)?"
+              value={s.iii.in_cms_certified_facility} onChange={(v) => updateSection("iii", { in_cms_certified_facility: v })} />
+            {s.iii.in_cms_certified_facility === "yes" && (
+              <Field label="CMS Certification Numbers (CCNs)" value={s.iii.ccns} onChange={(v) => updateSection("iii", { ccns: v })} />
             )}
           </AccordionContent>
         </AccordionItem>
 
-        {/* SECTION IV */}
+        {/* SECTION 4 */}
         <AccordionItem value="iv" className="border rounded-lg px-4">
-          <AccordionTrigger className="text-left font-medium">IV. Hours of Laboratory Testing</AccordionTrigger>
-          <AccordionContent className="pt-2">
-            <Field label="Total hours per week of laboratory testing" value={s.iv.hours_per_week} onChange={(v) => updateSection("iv", { hours_per_week: v })} />
-          </AccordionContent>
-        </AccordionItem>
-
-        {/* SECTION V */}
-        <AccordionItem value="v" className="border rounded-lg px-4">
-          <AccordionTrigger className="text-left font-medium">V. Multiple Sites</AccordionTrigger>
+          <AccordionTrigger className="text-left font-medium">{SECTION_TITLES.iv}</AccordionTrigger>
           <AccordionContent className="pt-2 space-y-3">
-            <Select value={s.v.multiple_sites || ""} onValueChange={(v) => updateSection("v", { multiple_sites: v as SectionV["multiple_sites"] })}>
-              <SelectTrigger><SelectValue placeholder="Does this lab operate at multiple sites?" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="no">No</SelectItem>
-                <SelectItem value="yes">Yes</SelectItem>
-              </SelectContent>
-            </Select>
-            {s.v.multiple_sites === "yes" && (
-              <div>
-                <label className="text-sm font-medium mb-1 block">Address of each site</label>
-                <Textarea rows={4} value={s.v.sites_text} onChange={(e) => updateSection("v", { sites_text: e.target.value })} placeholder="Site 1: 123 Main St, ..." />
+            <Check label="Testing 24/7" checked={s.iv.testing_24_7} onChange={(v) => updateSection("iv", { testing_24_7: v })} />
+            {!s.iv.testing_24_7 && (
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground">The times laboratory testing is performed each day (HH:MM). Leave a day blank if there is no testing.</p>
+                {DAYS.map((d) => (
+                  <div key={d.key} className="grid grid-cols-[6rem_1fr_1fr] gap-2 items-end">
+                    <span className="text-sm pb-2">{d.label}</span>
+                    <Field label="From" type="time" value={s.iv.hours[d.key].from}
+                      onChange={(v) => updateSection("iv", { hours: { ...s.iv.hours, [d.key]: { ...s.iv.hours[d.key], from: v } } })} />
+                    <Field label="To" type="time" value={s.iv.hours[d.key].to}
+                      onChange={(v) => updateSection("iv", { hours: { ...s.iv.hours, [d.key]: { ...s.iv.hours[d.key], to: v } } })} />
+                  </div>
+                ))}
               </div>
             )}
           </AccordionContent>
         </AccordionItem>
 
-        {/* SECTION VI */}
-        <AccordionItem value="vi" className="border rounded-lg px-4">
-          <AccordionTrigger className="text-left font-medium">VI. Waived Testing</AccordionTrigger>
+        {/* SECTION 5 */}
+        <AccordionItem value="v" className="border rounded-lg px-4">
+          <AccordionTrigger className="text-left font-medium">{SECTION_TITLES.v}</AccordionTrigger>
           <AccordionContent className="pt-2 space-y-3">
-            <Select value={s.vi.has_waived_testing || ""} onValueChange={(v) => updateSection("vi", { has_waived_testing: v as SectionVI["has_waived_testing"] })}>
-              <SelectTrigger><SelectValue placeholder="Does the lab perform waived testing?" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="no">No</SelectItem>
-                <SelectItem value="yes">Yes</SelectItem>
-              </SelectContent>
-            </Select>
-            {s.vi.has_waived_testing === "yes" && (
-              <Field label="Estimated annual waived test volume" value={s.vi.estimated_annual_volume} onChange={(v) => updateSection("vi", { estimated_annual_volume: v })} />
-            )}
-          </AccordionContent>
-        </AccordionItem>
-
-        {/* SECTION VII */}
-        <AccordionItem value="vii" className="border rounded-lg px-4">
-          <AccordionTrigger className="text-left font-medium">VII. Provider-Performed Microscopy Procedures</AccordionTrigger>
-          <AccordionContent className="pt-2 space-y-3">
-            <Select value={s.vii.has_ppm || ""} onValueChange={(v) => updateSection("vii", { has_ppm: v as SectionVII["has_ppm"] })}>
-              <SelectTrigger><SelectValue placeholder="Does the lab perform PPM procedures?" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="no">No</SelectItem>
-                <SelectItem value="yes">Yes</SelectItem>
-              </SelectContent>
-            </Select>
-            {s.vii.has_ppm === "yes" && (
-              <Field label="Estimated annual PPM test volume" value={s.vii.estimated_annual_volume} onChange={(v) => updateSection("vii", { estimated_annual_volume: v })} />
-            )}
-          </AccordionContent>
-        </AccordionItem>
-
-        {/* SECTION VIII */}
-        <AccordionItem value="viii" className="border rounded-lg px-4">
-          <AccordionTrigger className="text-left font-medium">VIII. Non-Waived Testing (Specialty / Subspecialty)</AccordionTrigger>
-          <AccordionContent className="pt-2">
-            <p className="text-xs text-muted-foreground mb-3">
-              Check every specialty and subspecialty the lab performs. Mirrors the categories in 42 CFR 493.2 and Subpart I.
-            </p>
-            <div className="grid sm:grid-cols-2 gap-y-1 gap-x-6 text-sm">
-              <CheckGroup label="Histocompatibility" items={[
-                { key: "histocompatibility", label: "Histocompatibility" },
-              ]} section={s.viii} onChange={(k, v) => updateSection("viii", { [k]: v } as any)} />
-              <CheckGroup label="Microbiology" items={[
-                { key: "micro_bacteriology", label: "Bacteriology" },
-                { key: "micro_mycobacteriology", label: "Mycobacteriology" },
-                { key: "micro_mycology", label: "Mycology" },
-                { key: "micro_parasitology", label: "Parasitology" },
-                { key: "micro_virology", label: "Virology" },
-              ]} section={s.viii} onChange={(k, v) => updateSection("viii", { [k]: v } as any)} />
-              <CheckGroup label="Diagnostic Immunology" items={[
-                { key: "immuno_syphilis_serology", label: "Syphilis Serology" },
-                { key: "immuno_general", label: "General Immunology" },
-              ]} section={s.viii} onChange={(k, v) => updateSection("viii", { [k]: v } as any)} />
-              <CheckGroup label="Chemistry" items={[
-                { key: "chem_routine", label: "Routine Chemistry" },
-                { key: "chem_urinalysis", label: "Urinalysis" },
-                { key: "chem_endocrinology", label: "Endocrinology" },
-                { key: "chem_toxicology", label: "Toxicology" },
-              ]} section={s.viii} onChange={(k, v) => updateSection("viii", { [k]: v } as any)} />
-              <CheckGroup label="Hematology" items={[
-                { key: "hematology", label: "Hematology" },
-              ]} section={s.viii} onChange={(k, v) => updateSection("viii", { [k]: v } as any)} />
-              <CheckGroup label="Immunohematology" items={[
-                { key: "immunohem_abo_rh", label: "ABO Group and Rh" },
-                { key: "immunohem_antibody_detection", label: "Antibody Detection" },
-                { key: "immunohem_antibody_id", label: "Antibody Identification" },
-                { key: "immunohem_compatibility", label: "Compatibility Testing" },
-              ]} section={s.viii} onChange={(k, v) => updateSection("viii", { [k]: v } as any)} />
-              <CheckGroup label="Pathology" items={[
-                { key: "pathology_histopathology", label: "Histopathology" },
-                { key: "pathology_oral", label: "Oral Pathology" },
-                { key: "pathology_cytology", label: "Cytology" },
-              ]} section={s.viii} onChange={(k, v) => updateSection("viii", { [k]: v } as any)} />
-              <CheckGroup label="Other" items={[
-                { key: "radiobioassay", label: "Radiobioassay" },
-                { key: "clinical_cytogenetics", label: "Clinical Cytogenetics" },
-              ]} section={s.viii} onChange={(k, v) => updateSection("viii", { [k]: v } as any)} />
-            </div>
-          </AccordionContent>
-        </AccordionItem>
-
-        {/* SECTION IX */}
-        <AccordionItem value="ix" className="border rounded-lg px-4">
-          <AccordionTrigger className="text-left font-medium">IX. Total Annual Test Volume</AccordionTrigger>
-          <AccordionContent className="pt-2">
-            <Field label="Total annual non-waived test volume (estimate)" value={s.ix.total_annual_volume} onChange={(v) => updateSection("ix", { total_annual_volume: v })} />
-            <p className="text-xs text-muted-foreground mt-2">
-              Used by CMS to calculate certificate fee per the published CLIA fee schedule.
-            </p>
-          </AccordionContent>
-        </AccordionItem>
-
-        {/* SECTION X */}
-        <AccordionItem value="x" className="border rounded-lg px-4">
-          <AccordionTrigger className="text-left font-medium">X. Type of Control + Laboratory Director</AccordionTrigger>
-          <AccordionContent className="pt-2 space-y-3">
-            <div>
-              <label className="text-sm font-medium mb-1 block">Type of Control</label>
-              <Select value={s.x.control_type || ""} onValueChange={(v) => updateSection("x", { control_type: v as SectionX["control_type"] })}>
-                <SelectTrigger><SelectValue placeholder="Select control type" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="sole_proprietorship">Sole Proprietorship</SelectItem>
-                  <SelectItem value="partnership">Partnership</SelectItem>
-                  <SelectItem value="corporation">Corporation</SelectItem>
-                  <SelectItem value="government">Government</SelectItem>
-                  <SelectItem value="other">Other</SelectItem>
-                </SelectContent>
-              </Select>
-              {s.x.control_type === "other" && (
-                <div className="mt-2">
-                  <Field label="Specify other control type" value={s.x.control_other} onChange={(v) => updateSection("x", { control_other: v })} />
+            <YesNoSelect label="Applying for a single site CLIA certificate to cover multiple testing locations?"
+              value={s.v.multiple_sites} onChange={(v) => updateSection("v", { multiple_sites: v })} />
+            {s.v.multiple_sites === "yes" && (
+              <>
+                <div className="space-y-1 text-sm">
+                  <label className="text-sm font-medium block">Regulatory exception that applies</label>
+                  {SITE_EXCEPTIONS.map((e) => (
+                    <Check key={e.value} label={e.label} checked={s.v.exception === e.value}
+                      onChange={(v) => updateSection("v", { exception: (v ? e.value : "") as SiteException })} />
+                  ))}
                 </div>
-              )}
-            </div>
-            <div className="grid sm:grid-cols-2 gap-3">
-              <Field label="Director name" value={s.x.director_name} onChange={(v) => updateSection("x", { director_name: v })} />
-              <Field label="Director credentials (MD, DO, PhD, etc.)" value={s.x.director_credentials} onChange={(v) => updateSection("x", { director_credentials: v })} />
-              <Field label="Director NPI" value={s.x.director_npi} onChange={(v) => updateSection("x", { director_npi: v })} />
-              <Field label="CLIA Director ID (if previously assigned)" value={s.x.director_clia_director_number} onChange={(v) => updateSection("x", { director_clia_director_number: v })} />
-            </div>
+                <Field label="Number of sites under this certificate" value={s.v.site_count} onChange={(v) => updateSection("v", { site_count: v })} />
+                <Rows
+                  label="Sites"
+                  rows={s.v.sites}
+                  columns={[
+                    { key: "name", label: "Laboratory or hospital department" },
+                    { key: "address", label: "Address or location" },
+                    { key: "city", label: "City" },
+                    { key: "state", label: "State" },
+                    { key: "zip", label: "ZIP code" },
+                    { key: "phone", label: "Phone number" },
+                    { key: "tests", label: "Tests performed / specialty / subspecialty" },
+                  ]}
+                  newRow={emptySite}
+                  onChange={(rows) => updateSection("v", { sites: rows })}
+                  addLabel="Add site"
+                />
+              </>
+            )}
           </AccordionContent>
         </AccordionItem>
 
-        {/* Director affirmation + signature */}
-        <AccordionItem value="signature" className="border rounded-lg px-4">
-          <AccordionTrigger className="text-left font-medium">Director Affirmation and Signature</AccordionTrigger>
+        {/* SECTION 6 */}
+        <AccordionItem value="vi" className="border rounded-lg px-4">
+          <AccordionTrigger className="text-left font-medium">{SECTION_TITLES.vi}</AccordionTrigger>
           <AccordionContent className="pt-2 space-y-3">
-            <div className="bg-amber-50 border border-amber-300 text-amber-900 rounded px-3 py-2 text-sm flex items-start gap-2">
+            <Check label="No waived tests are performed" checked={s.vi.none_performed} onChange={(v) => updateSection("vi", { none_performed: v })} />
+            {!s.vi.none_performed && (
+              <>
+                <Rows
+                  label="Each analyte, test system or device"
+                  rows={s.vi.tests}
+                  columns={[
+                    { key: "analyte", label: "Analyte/Test" },
+                    { key: "test_name", label: "Test Name" },
+                    { key: "manufacturer", label: "Manufacturer" },
+                  ]}
+                  newRow={emptyWaivedTest}
+                  onChange={(rows) => updateSection("vi", { tests: rows })}
+                  addLabel="Add waived test"
+                />
+                <Field label="Estimated total annual test volume for all waived tests" value={s.vi.total_volume} onChange={(v) => updateSection("vi", { total_volume: v })} />
+              </>
+            )}
+          </AccordionContent>
+        </AccordionItem>
+
+        {/* SECTION 7 */}
+        <AccordionItem value="vii" className="border rounded-lg px-4">
+          <AccordionTrigger className="text-left font-medium">{SECTION_TITLES.vii}</AccordionTrigger>
+          <AccordionContent className="pt-2 space-y-3">
+            <Check label="No PPM tests are performed" checked={s.vii.none_performed} onChange={(v) => updateSection("vii", { none_performed: v })} />
+            {!s.vii.none_performed && (
+              <>
+                <div className="space-y-1 text-sm">
+                  <label className="text-sm font-medium block">PPM procedures that will be performed</label>
+                  {PPM_PROCEDURES.map((p) => (
+                    <Check key={p.key} label={p.label} checked={Boolean(s.vii.procedures[p.key])}
+                      onChange={(v) => updateSection("vii", { procedures: { ...s.vii.procedures, [p.key]: v } })} />
+                  ))}
+                </div>
+                <Field label="Estimated total annual test volume for all PPM tests" value={s.vii.total_volume} onChange={(v) => updateSection("vii", { total_volume: v })} />
+              </>
+            )}
+          </AccordionContent>
+        </AccordionItem>
+
+        {/* SECTION 8 */}
+        <AccordionItem value="viii" className="border rounded-lg px-4">
+          <AccordionTrigger className="text-left font-medium">{SECTION_TITLES.viii}</AccordionTrigger>
+          <AccordionContent className="pt-2 space-y-4">
+            <p className="text-xs text-muted-foreground">
+              Only for a Certificate of Compliance or a Certificate of Accreditation. M = moderate complexity, H = high complexity.
+            </p>
+            <Rows
+              label="Each analyte, test system or device"
+              rows={s.viii.tests}
+              columns={[
+                { key: "analyte", label: "Analyte/Test" },
+                { key: "test_name", label: "Test Name" },
+                { key: "manufacturer", label: "Manufacturer" },
+                { key: "complexity", label: "M or H", options: ["M", "H"] },
+              ]}
+              newRow={emptyNonWaivedTest}
+              onChange={(rows) => updateSection("viii", { tests: rows })}
+              addLabel="Add non-waived test"
+            />
+            <div>
+              <label className="text-sm font-medium mb-1 block">Specialties and subspecialties performed</label>
+              <p className="text-xs text-muted-foreground mb-2">
+                Check each one the laboratory performs and enter its estimated annual test volume. For a Certificate of
+                Accreditation, name the accreditation organization for CLIA purposes beside each.{" "}
+                Mirrors the categories in 42 CFR 493.2 and Subpart I.
+              </p>
+              <div className="space-y-3">
+                {SPECIALTY_GROUPS.map((g) => (
+                  <div key={g.label}>
+                    <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">{g.label}</div>
+                    <div className="space-y-1">
+                      {g.items.map((it) => {
+                        const sp = s.viii.specialties[it.key];
+                        const set = (patch: Partial<typeof sp>) => updateSection("viii", { specialties: { ...s.viii.specialties, [it.key]: { ...sp, ...patch } } });
+                        return (
+                          <div key={it.key} className="grid sm:grid-cols-[1fr_12rem_9rem] gap-2 items-center">
+                            <Check label={`${it.label} (${it.code})`} checked={sp.checked} onChange={(v) => set({ checked: v })} />
+                            <Input aria-label={`${it.label} accrediting organization`} placeholder="Accrediting organization" value={sp.accrediting_org} onChange={(e) => set({ accrediting_org: e.target.value })} disabled={!sp.checked} />
+                            <Input aria-label={`${it.label} annual test volume`} placeholder="Annual volume" value={sp.volume} onChange={(e) => set({ volume: e.target.value })} disabled={!sp.checked} />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <Field label="Total estimated annual test volume (all non-waived testing, PPM included)" value={s.viii.total_volume} onChange={(v) => updateSection("viii", { total_volume: v })} />
+            <p className="text-xs text-muted-foreground">
+              Don't count waived tests, testing not subject to CLIA, calculations, quality control, quality assurance or
+              proficiency testing. The form's Guidelines for Counting Tests give the rule for each specialty.
+            </p>
+          </AccordionContent>
+        </AccordionItem>
+
+        {/* SECTION 9 */}
+        <AccordionItem value="ix" className="border rounded-lg px-4">
+          <AccordionTrigger className="text-left font-medium">{SECTION_TITLES.ix}</AccordionTrigger>
+          <AccordionContent className="pt-2 space-y-3">
+            <Select value={s.ix.control_type || ""} onValueChange={(v) => updateSection("ix", { control_type: v })}>
+              <SelectTrigger aria-label="Type of control"><SelectValue placeholder="Select the one most descriptive of ownership type" /></SelectTrigger>
+              <SelectContent>
+                {CONTROL_TYPES.map((c) => <SelectItem key={c.code} value={c.code}>{c.group}: {c.code} {c.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            {control?.specify && (
+              <Field label={control.code === "09" ? "Specify (country or province)" : "Specify"} value={s.ix.control_other} onChange={(v) => updateSection("ix", { control_other: v })} />
+            )}
+            <YesNoSelect label="Does this facility have partial or full ownership or control by a non-United States-based government or entity?"
+              value={s.ix.foreign_ownership} onChange={(v) => updateSection("ix", { foreign_ownership: v })} />
+            {s.ix.foreign_ownership === "yes" && (
+              <Field label="Country of origin of the foreign entity" value={s.ix.foreign_country} onChange={(v) => updateSection("ix", { foreign_country: v })} />
+            )}
+          </AccordionContent>
+        </AccordionItem>
+
+        {/* SECTION 10 */}
+        <AccordionItem value="x" className="border rounded-lg px-4">
+          <AccordionTrigger className="text-left font-medium">{SECTION_TITLES.x}</AccordionTrigger>
+          <AccordionContent className="pt-2 space-y-3">
+            <p className="text-xs text-muted-foreground">
+              Only if this laboratory's director also directs other, separately certified laboratories. For a PPM,
+              compliance or accreditation certificate, one person can direct no more than five certificates.
+            </p>
+            <Rows
+              label="Other laboratories"
+              rows={s.x.other_labs}
+              columns={[
+                { key: "clia_number", label: "CLIA Number" },
+                { key: "lab_name", label: "Name of Laboratory" },
+              ]}
+              newRow={emptyOtherLab}
+              onChange={(rows) => updateSection("x", { other_labs: rows })}
+              addLabel="Add laboratory"
+            />
+          </AccordionContent>
+        </AccordionItem>
+
+        {/* Signature */}
+        <AccordionItem value="signature" className="border rounded-lg px-4">
+          <AccordionTrigger className="text-left font-medium">Signature of Laboratory Director or Owner</AccordionTrigger>
+          <AccordionContent className="pt-2 space-y-3">
+            <div className="bg-amber-50 border border-amber-300 text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200 rounded px-3 py-2 text-sm flex items-start gap-2">
               <AlertTriangle size={14} className="shrink-0 mt-0.5" />
               <span>
-                CMS requires a wet ink signature on the printed CMS-116. This field captures the
-                director's name and date for the draft only; the printed PDF carries
-                the signature block the director signs by hand before mailing.
+                The laboratory director or owner signs CMS's Form CMS-116, in ink or with a secure electronic signature.
+                These fields only record the printed name and date for the worksheet.
               </span>
             </div>
             <div className="grid sm:grid-cols-2 gap-3">
-              <Field label="Director name (typed)" value={draft.director_signature_name} onChange={(v) => setDraft((d) => ({ ...d, director_signature_name: v }))} />
-              <Field label="Date" type="date" value={draft.director_signature_date} onChange={(v) => setDraft((d) => ({ ...d, director_signature_date: v }))} />
+              <Field label="Print name of Laboratory Director/Owner" value={draft.director_signature_name} onChange={(v) => setDraft((d) => ({ ...d, director_signature_name: v }))} />
+              <Field label="Date signed" type="date" value={draft.director_signature_date} onChange={(v) => setDraft((d) => ({ ...d, director_signature_date: v }))} />
             </div>
             <div>
               <label className="text-sm font-medium mb-1 block">Internal notes (not on the form)</label>
@@ -612,12 +559,12 @@ export function Cms116FormTab({ labId, isReadOnly }: Props) {
       </Accordion>
       </fieldset>
 
-      {/* Footer save button + Phase-4 note */}
+      {/* Footer save button */}
       <Card>
         <CardContent className="p-4 flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <CheckCircle2 size={14} className="text-emerald-600" />
-            Draft autosaves when you click Save. Use Download PDF to generate the CMS-116 for wet-ink signature.
+            <CheckCircle2 size={14} className="text-emerald-600 shrink-0" />
+            Saved when you click Save Draft. Download PDF gives a worksheet to copy onto CMS's current Form CMS-116.
           </div>
           <Button size="sm" onClick={handleSave} disabled={saving || isReadOnly} className="bg-primary hover:bg-primary/90">
             <Save size={14} className="mr-1.5" />
@@ -643,6 +590,7 @@ function Field(props: {
     <div className={props.className}>
       <label className="text-sm font-medium mb-1 block">{props.label}</label>
       <Input
+        aria-label={props.label}
         type={props.type || "text"}
         value={props.value}
         onChange={(e) => props.onChange(e.target.value)}
@@ -652,26 +600,74 @@ function Field(props: {
   );
 }
 
-function CheckGroup<T extends Record<string, any>>(props: {
-  label: string;
-  items: Array<{ key: keyof T; label: string }>;
-  section: T;
-  onChange: (k: keyof T, v: boolean) => void;
-}) {
+function Check(props: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
   return (
-    <div className="space-y-1">
-      <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{props.label}</div>
-      {props.items.map((it) => (
-        <label key={String(it.key)} className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={Boolean(props.section[it.key])}
-            onChange={(e) => props.onChange(it.key, e.target.checked)}
-            className="rounded border-input"
-          />
-          <span>{it.label}</span>
-        </label>
-      ))}
+    <label className="flex items-start gap-2 cursor-pointer text-sm">
+      <input
+        type="checkbox"
+        checked={props.checked}
+        onChange={(e) => props.onChange(e.target.checked)}
+        className="rounded border-input mt-0.5"
+      />
+      <span>{props.label}</span>
+    </label>
+  );
+}
+
+function YesNoSelect(props: { label: string; value: YesNo; onChange: (v: YesNo) => void }) {
+  return (
+    <div>
+      <label className="text-sm font-medium mb-1 block">{props.label}</label>
+      <Select value={props.value || ""} onValueChange={(v) => props.onChange(v as YesNo)}>
+        <SelectTrigger aria-label={props.label} className="max-w-[12rem]"><SelectValue placeholder="Select" /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="yes">Yes</SelectItem>
+          <SelectItem value="no">No</SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+// A list the lab adds rows to; each row is a set of short text fields (or a pick from `options`).
+function Rows<T extends Record<string, any>>(props: {
+  label: string;
+  rows: T[];
+  columns: Array<{ key: keyof T & string; label: string; options?: string[] }>;
+  newRow: () => T;
+  onChange: (rows: T[]) => void;
+  addLabel: string;
+}) {
+  const set = (i: number, key: keyof T, value: string) =>
+    props.onChange(props.rows.map((r, n) => (n === i ? { ...r, [key]: value } : r)));
+  return (
+    <div>
+      <label className="text-sm font-medium mb-1 block">{props.label}</label>
+      {props.rows.length === 0 && <p className="text-xs text-muted-foreground mb-2">None entered.</p>}
+      <div className="space-y-2">
+        {props.rows.map((row, i) => (
+          <div key={i} className="rounded-md border p-2 flex items-start gap-2">
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-2 flex-1 min-w-0">
+              {props.columns.map((c) => c.options ? (
+                <Select key={c.key} value={String(row[c.key] || "")} onValueChange={(v) => set(i, c.key, v)}>
+                  <SelectTrigger aria-label={`${c.label}, row ${i + 1}`}><SelectValue placeholder={c.label} /></SelectTrigger>
+                  <SelectContent>
+                    {c.options.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input key={c.key} aria-label={`${c.label}, row ${i + 1}`} placeholder={c.label} value={String(row[c.key] || "")} onChange={(e) => set(i, c.key, e.target.value)} />
+              ))}
+            </div>
+            <Button type="button" size="icon" variant="ghost" aria-label={`Remove row ${i + 1}`} onClick={() => props.onChange(props.rows.filter((_, n) => n !== i))}>
+              <Trash2 size={14} />
+            </Button>
+          </div>
+        ))}
+      </div>
+      <Button type="button" size="sm" variant="outline" className="mt-2" onClick={() => props.onChange([...props.rows, props.newRow()])}>
+        <Plus size={14} className="mr-1.5" /> {props.addLabel}
+      </Button>
     </div>
   );
 }

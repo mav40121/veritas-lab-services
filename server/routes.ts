@@ -296,6 +296,7 @@ import { insertStudySchema, insertContactSchema, registerSchema, loginSchema, ty
 // Each study type has its own pass/fail rule derived from the raw dataPoints.
 import { isCensored, censorValueForMath, type CensoringPolicy } from "@shared/censoring";
 import { lotCohortsFor, pairInCohort } from "@shared/lotToLotCohort";
+import { cms116DirectorName } from "@shared/cms116Form";
 import { calculateRefInterval } from "../client/src/lib/calculations";
 import { deepResolveCensored, computeStudyResults, notEvaluableReason } from "../client/src/lib/studyResults";
 import { heldForVerdictRuleDecision, refIntervalHoldReasons } from "./verdictRuleHold";
@@ -33224,15 +33225,13 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
             return null;
           };
           const expirationDate = issuedCert.expirationDate || computeDefaultExpiration(issuedDate);
-          // Director name preferred from the signature block, fall back
-          // to section X director_name when missing.
-          let directorName: string | null = fields.director_signature_name as any;
-          if (!directorName) {
-            try {
-              const secX = sections.x || {};
-              directorName = (secX.director_name || null) as any;
-            } catch {}
-          }
+          // Director name preferred from the signature block, then section 1's
+          // director (Form CMS-116 04/2026; an earlier-layout draft kept it in
+          // section X, which normalizeCms116 reads the same way).
+          let directorName: string | null = null;
+          try {
+            directorName = cms116DirectorName(fields.director_signature_name as any, sections);
+          } catch {}
           const insertResult = sqlite.prepare(
             `INSERT INTO lab_certificates (
                user_id, lab_id, cert_type, cert_name, cert_number, issuing_body,
@@ -33264,8 +33263,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   });
 
   // GET /api/labs/:labId/veritalab/cms116-draft/pdf — render the lab's
-  // current CMS-116 draft to a 5-page print-ready PDF. Director downloads,
-  // wet-signs Section X / signature block, and mails to State Agency.
+  // CMS-116 draft as a worksheet in Form CMS-116 (04/2026) order
+  // (server/cms116Pdf.ts). The director copies it onto CMS's current form,
+  // signs that, and sends it to the state agency (Michael Q339 = 1).
   // Returns { token } so the client opens /api/pdf/<token> to download
   // (same pattern as VeritaCheck / VeritaOps PDFs).
   app.get("/api/labs/:labId/veritalab/cms116-draft/pdf", authMiddleware, async (req: any, res) => {
@@ -33303,10 +33303,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const { generateCms116Pdf } = await import("./cms116Pdf");
       const pdfBuffer = await generateCms116Pdf(draftForPdf, {
         labName: lab.lab_name || "",
-        cliaNumber: lab.clia_number || "Pending",
+        cliaNumber: lab.clia_number || "",
       });
       const safeName = (lab.lab_name || "Lab").replace(/[^A-Za-z0-9_-]+/g, "_").slice(0, 40);
-      const filename = `CMS-116_Draft_${safeName}.pdf`;
+      const filename = `CMS-116_Worksheet_${safeName}.pdf`;
       const token = storePdfToken(pdfBuffer, filename);
       res.json({ token });
     } catch (err: any) {
