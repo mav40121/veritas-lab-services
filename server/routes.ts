@@ -242,6 +242,8 @@ import { summarizeCspReport, cspHeaderName } from "./securityHeaders";
 import { normalizeChecklistItems } from "@shared/competencyChecklist";
 import { checklistImageIdProblem, checklistItemImageIds, checklistForAudit, checklistImageMap, withChecklistImages, snapshotChecklistItemImages } from "./competencyChecklistImages";
 import { FORM_OWNED_ROWS, personPageEntryCount, holdsPersonPageEntriesMessage, planRecordSaveRestore, applyRecordSaveRestore, recordLosses } from "./competencyRecordRestore";
+import { quizScoreRows, rowsForPerson, buildQuizScoresWorkbook } from "./quizScores";
+import { filterQuizScores, type QuizScoreRow } from "../shared/quizScores";
 import { notApplicableRows, notApplicableIds, notApplicableProblem, NOT_APPLICABLE_REASON_MAX } from "./competencyNotApplicable";
 import { noPhiAcknowledgmentStatus, recordNoPhiAcknowledgment } from "./noPhiAcknowledgment";
 import { termsGateMiddleware, termsStatus, acceptTerms, activateTerms, deactivateTerms, acceptanceCounts, activeTermsVersion } from "./termsOfUse";
@@ -26408,6 +26410,60 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       } catch { questions = []; }
     }
     res.json({ quiz: quizInfo, own_only: !!staffOwn, question_format: quiz.question_format || "plain", ...(questions ? { questions } : {}), people });
+  });
+
+  // Quiz scores (Michael 2026-11-17, Q347 = 1: "it is difficult to find peoples quiz scores"; server/quizScores.ts,
+  // shared/quizScores.ts). Every scored quiz in the lab: assigned quizzes taken on a staff login, quizzes given on a record,
+  // and scores typed on Element 6. The reach is the quiz card's Results: the lab's owner or admin and anyone with edit on
+  // VeritaComp see everyone; a Staff login (staffOwnScope) sees only their own rows, and asking for anyone else's is
+  // 403 STAFF_OWN_ONLY; anyone else (a view-only seat) is refused 403 QUIZ_RESULTS_EDIT_ONLY. ?staffEmployeeId= gives one
+  // person (the person page). No answers and no answer key: those stay under Results on the quiz.
+  const quizScoresFor = (req: any, res: any): { rows: QuizScoreRow[]; ownOnly: boolean } | null => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) { res.status(403).json({ error: "VeritaComp™ subscription required" }); return null; }
+    const labId = Number(req.scope.labId);
+    const staffOwn = staffOwnIn(req, labId);
+    if (!staffOwn && !hasModuleEditAccess(labId, req.userId, "veritacomp")) {
+      res.status(403).json({ error: "Quiz scores are for the lab's owner or admin and anyone with edit access to VeritaComp™.", code: "QUIZ_RESULTS_EDIT_ONLY" });
+      return null;
+    }
+    const asked = req.query.staffEmployeeId;
+    const one = asked != null && asked !== "" ? Number(asked) : null;
+    if (one != null && !Number.isInteger(one)) { res.status(400).json({ error: "staffEmployeeId must be a number" }); return null; }
+    if (staffOwn && one != null && one !== staffOwn.employeeId) { refuseStaffOwn(res); return null; }
+    let rows = quizScoreRows((db as any).$client, labId);
+    if (staffOwn) rows = staffOwn.employeeId != null ? rowsForPerson(rows, staffOwn.employeeId) : [];
+    if (one != null) rows = rowsForPerson(rows, one);
+    return { rows, ownOnly: !!staffOwn };
+  };
+  app.get("/api/labs/:labId/competency/quiz-scores", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    const out = quizScoresFor(req, res);
+    if (!out) return;
+    res.json({ own_only: out.ownOnly, rows: out.rows });
+  });
+  // The same rows as one customer-facing workbook (CLAUDE.md section 6), cut by the screen's filters (?person, ?quiz,
+  // ?result, ?from, ?to, read by the same filterQuizScores).
+  app.get("/api/labs/:labId/competency/quiz-scores/export.xlsx", authMiddleware, labScopeMiddleware, async (req: any, res) => {
+    const out = quizScoresFor(req, res);
+    if (!out) return;
+    const q = (k: string) => (typeof req.query[k] === "string" && req.query[k] ? String(req.query[k]) : undefined);
+    const filters = { person: q("person"), quiz: q("quiz"), result: q("result"), from: q("from"), to: q("to") };
+    const rows = filterQuizScores(out.rows, filters);
+    try {
+      const lab = (db as any).$client.prepare("SELECT lab_name, clia_number FROM labs WHERE id = ?").get(req.scope.labId) as any;
+      const labName = String(lab?.lab_name || "").trim() || "Laboratory";
+      const clia = String(lab?.clia_number || "").trim() || "Not on file";
+      const today = labToday();
+      const buf = await buildQuizScoresWorkbook(
+        { labName, clia, today, rows, filtered: Object.values(filters).some(Boolean), ownOnly: out.ownOnly },
+        (wb) => applyLicenseToExcelJS(wb, licenseCtxFromReq(req, "VeritaComp™")),
+      );
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", `attachment; filename="VeritaComp_Quiz_Scores_${today}.xlsx"`);
+      res.send(buf);
+    } catch (err: any) {
+      console.error("[quiz-scores/export] error:", err);
+      res.status(500).json({ error: "Could not build the quiz scores workbook" });
+    }
   });
 
   // POST /api/veritacomp/quizzes/:id/retake
