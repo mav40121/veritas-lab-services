@@ -91,6 +91,7 @@ export function StaffOwnHome() {
       {ownEmployeeId != null && (
         <div className="flex flex-wrap gap-2">
           <Button asChild variant="outline" size="sm"><Link href={labRoute("/veritacomp-app/signed")} data-testid="staff-own-signed">My signed competencies</Link></Button>
+          <Button asChild variant="outline" size="sm"><Link href={labRoute("/veritacomp-app/quiz-scores")} data-testid="staff-own-quiz-scores">My quiz scores</Link></Button>
           <Button asChild variant="outline" size="sm"><Link href={labRoute("/my-signoffs")} data-testid="staff-own-signoffs">My sign-offs</Link></Button>
         </div>
       )}

@@ -748,6 +748,13 @@ function EmployeeRosterSection() {
       Signed competencies
     </button>
   );
+  // Michael 2026-11-17 (Q347 = 1): every scored quiz in one list, by person, quiz, result and date.
+  const quizScoresLink = (
+    <button type="button" onClick={() => navigate(labRoute("/veritacomp-app/quiz-scores"))} data-testid="roster-quiz-scores-link"
+      className="text-[11px] px-2.5 py-1 rounded-md border border-border text-muted-foreground hover:text-foreground hover:border-primary/40 shrink-0">
+      Quiz scores
+    </button>
+  );
   const toggle = (
     <div className="inline-flex rounded-md border border-border overflow-hidden text-[11px] shrink-0" role="group" aria-label="View competency by person or by instrument">
       {(["person", "instrument"] as const).map((v) => (
@@ -765,7 +772,7 @@ function EmployeeRosterSection() {
           <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Instruments</h3>
           <span className="text-xs text-muted-foreground">{"·"} {instruments.length} on your VeritaMap&reg;</span>
           <div className="flex-1 border-t border-border/60 ml-2" />
-          {signedLink}{toggle}
+          {signedLink}{quizScoresLink}{toggle}
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {instruments.map((r) => {
@@ -807,7 +814,7 @@ function EmployeeRosterSection() {
         <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Employees</h3>
         <span className="text-xs text-muted-foreground">{"·"} {employees.length} with assigned test systems</span>
         <div className="flex-1 border-t border-border/60 ml-2" />
-        {signedLink}{toggle}
+        {signedLink}{quizScoresLink}{toggle}
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         {employees.map((e) => {
