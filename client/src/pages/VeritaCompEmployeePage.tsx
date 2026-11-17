@@ -31,6 +31,7 @@ import { Input } from "@/components/ui/input";
 import { Loader2, ChevronLeft, FlaskConical, FileDown, Plus, X } from "lucide-react";
 import type { El5Sample } from "@shared/competencyEl5Samples";
 import MethodSignOffPanel, { signoffSummary, type MethodSignState } from "@/components/MethodSignOffPanel";
+import { QuizScoresList } from "@/components/QuizScoresList";
 import { MILESTONE_LABEL } from "@shared/competencySignoff";
 import { ObserverInitialsField, type QualifiedObserver } from "@/components/ObserverInitialsField";
 import { WaivedSpecimenRows } from "@/components/WaivedSpecimenRows";
@@ -478,6 +479,14 @@ export default function VeritaCompEmployeePage() {
                   )}
                 </CardContent>
               </Card>
+            </div>
+          )}
+
+          {/* Michael 2026-11-17 (Q347 = 1): this person's quiz scores, every kind, in one place. Hidden for a reader the
+              Results rule refuses (a view-only seat). */}
+          {activeLabId && (
+            <div className="pt-2" data-testid="person-quiz-scores">
+              <QuizScoresList labId={Number(activeLabId)} staffEmployeeId={employeeId} compact heading={ownOnly ? "My quiz scores" : "Quiz scores"} />
             </div>
           )}
         </>

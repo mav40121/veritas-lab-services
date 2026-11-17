@@ -630,19 +630,13 @@ _(item #88 closed 2026-10-08; see C91 below)_
 
 ---
 
-### 122. VeritaComp: people's quiz scores are hard to find
-
-**Effort:** S (1-3 days) for one place that lists scores by person and by quiz; to be sized once the screens are walked
-**Importance:** High. Evaluators need a person's score to fill Element 6 and to answer an inspector; Redington already lost time looking for one on 11/11.
-
-**What:** Michael, 2026-11-17: "it is difficult to find peoples quiz scores". Today a score shows in two places: on each quiz card under Results (every person assigned that quiz, every attempt, with View answers; built 11/11 after Redington couldn't find a failed result), and on a competency record's Element 6 once the evaluator enters it. There is no list of one person's scores across quizzes, and no lab-wide list of scores, so finding "how did this person do" means knowing which quiz to open. Next step: walk the screens as an evaluator and as a Staff login, then bring Michael a short proposal (for example a Quiz scores tab with filters by person, quiz and pass/fail, and a link from each person's page) before building.
-
-**Source:** Michael in the coding session, 2026-11-17, mid BUG-174; parked to finish the Redington restore first.
-**Status:** Open. Parked; picked up after BUG-174.
-
----
-
 ## CLOSED (audit trail)
+
+### C118. VeritaComp: people's quiz scores are hard to find (was #122)
+
+**Effort:** was S / **Importance:** High.
+
+**Closure evidence:** Built on Michael's pick Q347 = 1 (2026-11-17) in the Quiz scores pull request: one list of every scored quiz in the lab (assigned attempts, quizzes given on a record, scores typed on Element 6) with person, quiz, result and date filters and an Excel download, a Quiz scores section on each person's page, and "My quiz scores" for a Staff login. tests/integration/quiz-scores.test.ts and scripts/verify-quiz-scores-ui.mjs are the receipts. Closed 2026-11-17.
 
 ### C117. Precision guide: 12 lines said VeritaCheck with no ® (was #119)
 

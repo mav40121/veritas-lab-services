@@ -98,6 +98,7 @@ const VeritaCompInstrumentPage = lazy(() => import("@/pages/VeritaCompInstrument
 const VeritaCompByInstrumentPage = lazy(() => import("@/pages/VeritaCompByInstrumentPage"));
 const VeritaCompMethodGroupsPage = lazy(() => import("@/pages/VeritaCompMethodGroupsPage"));
 const VeritaCompSignedPage = lazy(() => import("@/pages/VeritaCompSignedPage"));
+const VeritaCompQuizScoresPage = lazy(() => import("@/pages/VeritaCompQuizScoresPage"));
 const VeritaPTPage = lazy(() => import("@/pages/VeritaPTPage"));
 const VeritaPTAppPage = lazy(() => import("@/pages/VeritaPTAppPage"));
 const VeritaPTEnrollmentsPage = lazy(() => import("@/pages/VeritaPTEnrollmentsPage"));
@@ -600,6 +601,7 @@ function AppContent() {
           <Route path="/labs/:labId/veritacomp-app/instruments" component={StaffOwnGatedCompByInstrument} />
           <Route path="/labs/:labId/veritacomp-app/method-groups" component={StaffOwnGatedCompMethodGroups} />
           <Route path="/labs/:labId/veritacomp-app/signed" component={VeritaCompSignedPage} />
+          <Route path="/labs/:labId/veritacomp-app/quiz-scores" component={VeritaCompQuizScoresPage} />
           <Route path="/labs/:labId/veritacomp-app/instrument/:instrumentId" component={StaffOwnGatedCompInstrument} />
           <Route path="/labs/:labId/veritacomp-app/:programId" component={VeritaCompAppPage} />
           <Route path="/labs/:labId/veritapt/app" component={VeritaPTAppPage} />
