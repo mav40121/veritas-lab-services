@@ -30,7 +30,12 @@ const moved = (v: string, days: number, months: number): string => addLabDays(v.
 /** The fewest whole cycles (1 or more) that bring `due` to today or later; null when it is today or later already. */
 export function cyclesToCurrent(due: string, today: string, days: number, months: number): number | null {
   if (due >= today || (days <= 0 && months <= 0)) return null;
-  for (let k = 1; k <= 400; k++) if (addLabDays(due, days * k, months * k) >= today) return k;
+  if (months <= 0) {
+    // Days only: exact, so a daily cycle years behind still moves.
+    const behind = Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${due.slice(0, 10)}T00:00:00Z`)) / 86400000);
+    return Math.max(1, Math.ceil(behind / days));
+  }
+  for (let k = 1; k <= 1200; k++) if (addLabDays(due, days * k, months * k) >= today) return k;
   return null;
 }
 

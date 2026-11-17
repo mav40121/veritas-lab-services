@@ -49,6 +49,7 @@ async function main() {
   // Pure helpers
   check("0. cyclesToCurrent: a date today or later needs no cycle", cyclesToCurrent(today, today, 0, 12) === null && cyclesToCurrent(d(5), today, 0, 12) === null);
   check("0. cyclesToCurrent: 10 days past a monthly cycle is 1 cycle, 40 days past is 2", cyclesToCurrent(d(-10), today, 0, 1) === 1 && cyclesToCurrent(d(-40), today, 0, 1) === 2);
+  check("0. cyclesToCurrent: a daily cycle 800 days behind is 800 cycles, a 7-day cycle 15 days behind is 3", cyclesToCurrent(d(-800), today, 1, 0) === 800 && cyclesToCurrent(d(-15), today, 7, 0) === 3);
   check("0. monthsBetween rounds to the month", monthsBetween("2024-03-01", "2026-02-28") === 24 && monthsBetween("2024-04-15", "2026-04-14") === 24 && monthsBetween("2025-01-10", "2026-01-12") === 12);
 
   // People, the QA system and a client system
