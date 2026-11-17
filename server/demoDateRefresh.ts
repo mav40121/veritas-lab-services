@@ -259,8 +259,11 @@ const SCHEDULE_DUE = ["six_month_due_at", "first_annual_due_at", "annual_due_at"
 const SCHEDULE_DONE = ["initial_completed_at", "six_month_completed_at", "first_annual_completed_at", "last_annual_completed_at"];
 
 // Competency (VeritaStaff and VeritaComp): an overdue testing employee has their whole competency timeline (hire date,
-// schedule, method sign-offs and method history) moved by whole years, the fewest that make the app's own status read not
-// overdue with no done date in the future. Anyone that can't be brought current that way is left as is.
+// schedule, method sign-offs and method history) moved by the fewest whole months that make the app's own status read not
+// overdue with no done date in the future. Whole years left a new hire behind (a year moves the hire date past today), so
+// the step is a month (2026-11-16 production run: a hire of 2026-03, 6-month due 2026-11-01). When no shift of the whole
+// timeline works (a method signed in the last month would land in the future), the VeritaStaff schedule record moves on its
+// own, by the same rule; the method sign-offs keep their own clocks. Anyone that can't be brought current is left as is.
 function planCompetency(sqlite: any, labId: number, today: string): DatePlanRow[] {
   const out: DatePlanRow[] = [];
   let emps: any[] = [];
@@ -281,32 +284,39 @@ function planCompetency(sqlite: any, labId: number, today: string): DatePlanRow[
     const rowsOf = (sql: string) => { try { return sqlite.prepare(sql).all(labId, e.id) as any[]; } catch { return []; } };
     const signoffs = rowsOf("SELECT id, signed_date FROM competency_method_signoffs WHERE lab_id = ? AND staff_employee_id = ? AND revoked_at IS NULL");
     const history = rowsOf("SELECT id, completed_date FROM competency_method_history WHERE lab_id = ? AND staff_employee_id = ? AND removed_at IS NULL");
-    for (let years = 1; years <= 5; years++) {
-      const months = 12 * years;
-      const plan: DatePlanRow[] = [];
-      let future = false;
-      const done = (v: string) => { const to = moved(v, 0, months); if (to.slice(0, 10) > today) future = true; return to; };
-      if (dayOf(e.hire_date)) plan.push({ module: "competency", table: "staff_employees", id: e.id, labId, changes: { hire_date: [e.hire_date, done(e.hire_date)] } });
-      if (e.schedule_id != null) {
-        const ch: DatePlanRow["changes"] = {};
-        for (const c of SCHEDULE_DONE) if (dayOf(e[c])) ch[c] = [e[c], done(e[c])];
-        for (const c of SCHEDULE_DUE) if (dayOf(e[c])) ch[c] = [e[c], moved(e[c], 0, months)];
-        if (Object.keys(ch).length) plan.push({ module: "competency", table: "staff_competency_schedules", id: e.schedule_id, labId, changes: ch });
+    let found: DatePlanRow[] | null = null;
+    for (const scope of ["timeline", "schedule"] as const) {
+      for (let months = 1; months <= 60 && !found; months++) {
+        const plan: DatePlanRow[] = [];
+        let future = false;
+        const done = (v: string) => { const to = moved(v, 0, months); if (to.slice(0, 10) > today) future = true; return to; };
+        if (scope === "timeline" && dayOf(e.hire_date)) plan.push({ module: "competency", table: "staff_employees", id: e.id, labId, changes: { hire_date: [e.hire_date, done(e.hire_date)] } });
+        if (e.schedule_id != null) {
+          const ch: DatePlanRow["changes"] = {};
+          for (const c of SCHEDULE_DONE) if (dayOf(e[c])) ch[c] = [e[c], done(e[c])];
+          for (const c of SCHEDULE_DUE) if (dayOf(e[c])) ch[c] = [e[c], moved(e[c], 0, months)];
+          if (Object.keys(ch).length) plan.push({ module: "competency", table: "staff_competency_schedules", id: e.schedule_id, labId, changes: ch });
+        }
+        if (scope === "timeline") {
+          for (const s of signoffs) if (dayOf(s.signed_date)) plan.push({ module: "competency", table: "competency_method_signoffs", id: s.id, labId, changes: { signed_date: [s.signed_date, done(s.signed_date)] } });
+          for (const h of history) if (dayOf(h.completed_date)) plan.push({ module: "competency", table: "competency_method_history", id: h.id, labId, changes: { completed_date: [h.completed_date, done(h.completed_date)] } });
+        }
+        // A done date past today only gets later with a bigger shift, so this scope is finished.
+        if (future || !plan.length) break;
+        sqlite.exec("SAVEPOINT demo_dates_competency");
+        let ok = false;
+        try {
+          applyDemoDates(sqlite, plan);
+          ok = statusOf(e.id) !== "overdue";
+        } finally {
+          sqlite.exec("ROLLBACK TO demo_dates_competency");
+          sqlite.exec("RELEASE demo_dates_competency");
+        }
+        if (ok) found = plan;
       }
-      for (const s of signoffs) if (dayOf(s.signed_date)) plan.push({ module: "competency", table: "competency_method_signoffs", id: s.id, labId, changes: { signed_date: [s.signed_date, done(s.signed_date)] } });
-      for (const h of history) if (dayOf(h.completed_date)) plan.push({ module: "competency", table: "competency_method_history", id: h.id, labId, changes: { completed_date: [h.completed_date, done(h.completed_date)] } });
-      if (future || !plan.length) break;
-      sqlite.exec("SAVEPOINT demo_dates_competency");
-      let ok = false;
-      try {
-        applyDemoDates(sqlite, plan);
-        ok = statusOf(e.id) !== "overdue";
-      } finally {
-        sqlite.exec("ROLLBACK TO demo_dates_competency");
-        sqlite.exec("RELEASE demo_dates_competency");
-      }
-      if (ok) { out.push(...plan); break; }
+      if (found) break;
     }
+    if (found) out.push(...found);
   }
   return out;
 }

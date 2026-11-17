@@ -112,6 +112,14 @@ async function main() {
     const staffLab = insert("staff_labs", { user_id: ownerId, lab_name: "Made-up Staff Lab", tier2_lab_id: lab });
     ids.emp = insert("staff_employees", { lab_id: staffLab, tier2_lab_id: lab, user_id: ownerId, first_name: "Made-up", last_name: `Tester${lab}`, hire_date: d(-900), status: "active", performs_testing: 1, created_at: today, updated_at: today });
     ids.sched = insert("staff_competency_schedules", { employee_id: ids.emp, lab_id: staffLab, initial_completed_at: d(-880), six_month_due_at: d(-700), six_month_completed_at: d(-700), first_annual_due_at: d(-515), first_annual_completed_at: d(-515), annual_due_at: d(-35), last_annual_completed_at: d(-400) });
+    // A new hire past their 6-month (production 2026-11-16, lab 1): a whole year would put the hire date after today.
+    ids.newHire = insert("staff_employees", { lab_id: staffLab, tier2_lab_id: lab, user_id: ownerId, first_name: "Made-up", last_name: `NewHire${lab}`, hire_date: d(-260), status: "active", performs_testing: 1, created_at: today, updated_at: today });
+    ids.newHireSched = insert("staff_competency_schedules", { employee_id: ids.newHire, lab_id: staffLab, initial_completed_at: d(-200), six_month_due_at: addLabDays(d(-200), 0, 6) });
+    // A long-time tester whose annual is past due and who had a method signed 20 days ago (production, lab 3): moving the
+    // whole timeline puts that sign-off after today, so only the schedule record moves.
+    ids.veteran = insert("staff_employees", { lab_id: staffLab, tier2_lab_id: lab, user_id: ownerId, first_name: "Made-up", last_name: `Veteran${lab}`, hire_date: d(-3000), status: "active", performs_testing: 1, created_at: today, updated_at: today });
+    ids.veteranSched = insert("staff_competency_schedules", { employee_id: ids.veteran, lab_id: staffLab, initial_completed_at: d(-2970), six_month_due_at: d(-2790), six_month_completed_at: d(-2790), first_annual_due_at: d(-2605), first_annual_completed_at: d(-2605), annual_due_at: d(-60), last_annual_completed_at: d(-425) });
+    ids.veteranSignoff = insert("competency_method_signoffs", { lab_id: lab, staff_employee_id: ids.veteran, instrument_id: 0, milestone: "initial", signed_date: d(-20), created_at: today });
     return ids;
   };
   const A = fixtures(labA, owner);
@@ -122,6 +130,7 @@ async function main() {
     return deriveCompetencyStatus(row, t, labMethodClocks(sqlite, lab).get(emp)).bucket;
   };
   check("0. the fixture tester reads overdue before the refresh", competencyBucket(labA, A.emp) === "overdue", competencyBucket(labA, A.emp));
+  check("0. so do the new hire and the tester with a recent method sign-off", competencyBucket(labA, A.newHire) === "overdue" && competencyBucket(labA, A.veteran) === "overdue", `${competencyBucket(labA, A.newHire)} ${competencyBucket(labA, A.veteran)}`);
 
   const app = express();
   app.use(express.json());
@@ -183,7 +192,12 @@ async function main() {
     check("4. an auto-expired policy is approved again with its new date", val("policy_documents", A.polAuto, "status") === "approved" && val("policy_documents", A.polAuto, "next_review_date") === addLabDays(d(-90), 0, 24));
     check("4. an open finding and an open scan item move by 30 days", val("findings", A.findOpen, "due_date") === d(15) && val("veritascan_items", A.scanOpen, "due_date") === d(27));
     check("4. an open effectiveness check and an unsigned sign-off group move by 30 days; verified and signed ones stay", val("finding_effectiveness_checks", A.effOpen, "due_date") === d(20) && val("study_signoff_groups", A.groupOpen, "due_date") === d(25) && val("finding_effectiveness_checks", A.effDone, "due_date") === d(-10) && val("study_signoff_groups", A.groupSigned, "due_date") === d(-5));
-    check("4. the overdue tester's timeline moves a year and reads not overdue", val("staff_competency_schedules", A.sched, "annual_due_at") === addLabDays(d(-35), 0, 12) && val("staff_employees", A.emp, "hire_date") === addLabDays(d(-900), 0, 12) && competencyBucket(labA, A.emp) !== "overdue", competencyBucket(labA, A.emp));
+    const kEmp = cyclesToCurrent(d(-35), today, 0, 1)!;
+    check("4. the overdue tester's timeline moves by the fewest whole months and reads not overdue", val("staff_competency_schedules", A.sched, "annual_due_at") === addLabDays(d(-35), 0, kEmp) && val("staff_employees", A.emp, "hire_date") === addLabDays(d(-900), 0, kEmp) && competencyBucket(labA, A.emp) !== "overdue", `${kEmp} ${val("staff_competency_schedules", A.sched, "annual_due_at")} ${competencyBucket(labA, A.emp)}`);
+    const kNew = cyclesToCurrent(addLabDays(d(-200), 0, 6), today, 0, 1)!;
+    check("4. a new hire past their 6-month moves by months, hire date still on or before today, and reads not overdue", val("staff_employees", A.newHire, "hire_date") === addLabDays(d(-260), 0, kNew) && val("staff_employees", A.newHire, "hire_date") <= today && val("staff_competency_schedules", A.newHireSched, "initial_completed_at") === addLabDays(d(-200), 0, kNew) && competencyBucket(labA, A.newHire) !== "overdue", `${kNew} ${val("staff_employees", A.newHire, "hire_date")} ${competencyBucket(labA, A.newHire)}`);
+    const kVet = cyclesToCurrent(d(-60), today, 0, 1)!;
+    check("4. with a method signed 20 days ago, only the schedule record moves and the tester reads not overdue", val("staff_competency_schedules", A.veteranSched, "annual_due_at") === addLabDays(d(-60), 0, kVet) && val("competency_method_signoffs", A.veteranSignoff, "signed_date") === d(-20) && val("staff_employees", A.veteran, "hire_date") === d(-3000) && competencyBucket(labA, A.veteran) !== "overdue", `${kVet} ${val("staff_competency_schedules", A.veteranSched, "annual_due_at")} ${competencyBucket(labA, A.veteran)}`);
     check("4. readiness after the write has nothing overdue", res.j.readiness?.after?.[labA]?.overdue_items === 0, JSON.stringify(res.j.readiness?.after?.[labA]));
 
     // 5. History and current rows
