@@ -77,6 +77,13 @@ function getS3Client() {
   return s3Client;
 }
 
+// The bucket and its client for another backup job in this process (server/fileBackup.ts, the stored documents), or
+// null when BACKUP_S3_* isn't set.
+export function backupBucket(): { client: S3Client; bucket: string } | null {
+  const client = getS3Client();
+  return client && S3_BUCKET ? { client, bucket: S3_BUCKET } : null;
+}
+
 // Which tier failed, and on which Railway service: one bucket serves the main app and VeritaStock (BUG-082), and the
 // 2026-10-16 16:30 alert said "Nightly" for VeritaStock's hourly copy, so the reader could not tell what broke.
 export function backupAlertSubject(tier: BackupTier, env: NodeJS.ProcessEnv = process.env): string {

@@ -302,6 +302,8 @@ export const EXPORT_TABLES: Record<string, ExportTable> = {
   phi_scan_log: exclude("Veritas system monitoring (counts only)."),
   continuous_backup_probe: exclude("Veritas system monitoring (backup restore probes)."),
   continuous_backup_checks: exclude("Veritas system monitoring (backup watchdog results)."),
+  backup_files: exclude("Veritas system monitoring (the document backup's content index: hashes and sizes, no names)."),
+  backup_file_runs: exclude("Veritas system monitoring (document backup runs and restore tests, counts only)."),
   nightly_snapshots: exclude("Daily counts Veritas derives from the records; the records themselves are exported."),
   pt_vendor_programs: exclude(REFERENCE),
   state_lab_licensure_registry: exclude(REFERENCE),

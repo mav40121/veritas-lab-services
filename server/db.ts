@@ -7741,6 +7741,44 @@ try {
     sqlite.exec(`ALTER TABLE backup_integrity_log ADD COLUMN real_user_emails TEXT`);
   }
 } catch {}
+
+// Off-site backup of the stored documents (Michael 2026-11-17, Leads Q10 = 2; server/fileBackup.ts). backup_files: each
+// distinct file content uploaded to the bucket (files/sha256/<hex>), when it went up and the last run that saw it, which
+// retention reads. backup_file_runs: one row per backup run or restore test, counts only.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS backup_files (
+    sha256 TEXT PRIMARY KEY,
+    size_bytes INTEGER NOT NULL,
+    first_uploaded_at TEXT NOT NULL,
+    last_seen_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS backup_file_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    kind TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    finished_at TEXT,
+    ok INTEGER NOT NULL DEFAULT 0,
+    files INTEGER,
+    bytes INTEGER,
+    uploaded INTEGER,
+    uploaded_bytes INTEGER,
+    pruned INTEGER,
+    manifest_key TEXT,
+    detail_json TEXT,
+    error TEXT
+  );
+`);
+try {
+  const bfCols = (sqlite.prepare(`PRAGMA table_info(backup_files)`).all() as any[]).map((c: any) => c.name);
+  for (const [col, type] of [["size_bytes", "INTEGER NOT NULL DEFAULT 0"], ["first_uploaded_at", "TEXT NOT NULL DEFAULT ''"], ["last_seen_at", "TEXT NOT NULL DEFAULT ''"]] as const) {
+    if (!bfCols.includes(col)) sqlite.exec(`ALTER TABLE backup_files ADD COLUMN ${col} ${type}`);
+  }
+  const brCols = (sqlite.prepare(`PRAGMA table_info(backup_file_runs)`).all() as any[]).map((c: any) => c.name);
+  for (const [col, type] of [["finished_at", "TEXT"], ["files", "INTEGER"], ["bytes", "INTEGER"], ["uploaded", "INTEGER"], ["uploaded_bytes", "INTEGER"],
+    ["pruned", "INTEGER"], ["manifest_key", "TEXT"], ["detail_json", "TEXT"], ["error", "TEXT"]] as const) {
+    if (!brCols.includes(col)) sqlite.exec(`ALTER TABLE backup_file_runs ADD COLUMN ${col} ${type}`);
+  }
+} catch {}
 try { (sqlite.prepare(`PRAGMA table_info(founding_lab_applications)`).all() as any[]); } catch {}
 
 // VeritaQC PRAGMA-guarded ALTER migration blocks per CLAUDE.md §8 NEW DB TABLE
