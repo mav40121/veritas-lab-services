@@ -84,6 +84,7 @@ import {
 import { registerSecuritySettingsRoutes } from "./securitySettingsRoutes";
 import { recordViewMiddleware, accessReport, accessReportExcel } from "./recordViews";
 import { DEMO_FIXTURE_NAME, planDemoFixtureRename, demoFixtureRenameReport, applyDemoFixtureRename, fixtureCliaForSampleReport } from "./demoFixtureRename";
+import { DEMO_DATES_CONFIRM, demoDatesLabRefusal, eligibleDemoDateLabs, planDemoDates, applyDemoDates, demoDatesReadiness, previewDemoDatesReadiness, demoDatesSummary } from "./demoDateRefresh";
 import { resealAll } from "./secretRotation";
 import { labWideCorrelation, correlationPeerInstruments, describeCorrelationInstrument, rowComplexity, mapComplianceGaps } from "./labWideCorrelation";
 import { attachSopLinks, sopLinksByDocument, effectiveSop } from "./veritamapSopLink";
@@ -1707,6 +1708,52 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
     console.log(`[admin/demo-fixture/rename] changed ${changed.length} of ${plan.rows.length} planned row(s)`);
     res.json({ dryRun, ...report, changed: changed.length, remaining: planDemoFixtureRename(sqlite, DEMO_USER_EMAIL).rows.length });
+  });
+
+  // Demo dates refresh (Michael 2026-11-16, option 1: his test labs 1, 3, 24 and 49, performed dates included): rolls passed
+  // expiration, due and performed dates forward by whole cycles of their own period (server/demoDateRefresh.ts). labIds is
+  // required; a lab outside the QA system, or not owned by its billing owner or the demo user, refuses the whole request and
+  // nothing is written. Dry run unless dryRun is false AND confirm is DEMO_DATES_CONFIRM. Answers ids, dates and statuses, no
+  // names, with each lab's readiness before and after. One audit row per row changed, with its values before and after.
+  app.post("/api/admin/demo-dates/refresh", (req: any, res) => {
+    const secret = req.headers["x-admin-secret"] as string | undefined;
+    if (!secret || secret !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    const sqlite = (db as any).$client;
+    const demoUserId = (sqlite.prepare("SELECT id FROM users WHERE email = ?").get(DEMO_USER_EMAIL) as any)?.id ?? null;
+    const dryRun = req.body?.dryRun !== false;
+    if (!dryRun && req.body?.confirm !== DEMO_DATES_CONFIRM) {
+      return res.status(400).json({ error: `A write needs confirm set to "${DEMO_DATES_CONFIRM}".`, code: "CONFIRM_REQUIRED" });
+    }
+    const labIds = Array.isArray(req.body?.labIds)
+      ? Array.from(new Set((req.body.labIds as any[]).map(Number))).filter((n) => Number.isInteger(n) && n > 0)
+      : [];
+    if (!labIds.length) {
+      return res.status(400).json({ error: "labIds is required.", code: "LAB_IDS_REQUIRED", eligible: eligibleDemoDateLabs(sqlite, demoUserId) });
+    }
+    const refused = labIds.map((labId) => ({ labId, code: demoDatesLabRefusal(sqlite, labId, demoUserId) })).filter((r) => r.code);
+    if (refused.length) return res.status(400).json({ error: "Only labs in the QA system that its owner owns can move.", code: "LAB_NOT_ELIGIBLE", refused });
+    const plan = labIds.flatMap((labId) => planDemoDates(sqlite, labId));
+    const before = Object.fromEntries(labIds.map((labId) => [labId, demoDatesReadiness(sqlite, labId)]));
+    if (dryRun) {
+      const after = previewDemoDatesReadiness(sqlite, plan, labIds);
+      return res.json({ dryRun, labIds, planned: plan.length, byLab: demoDatesSummary(plan), readiness: { before, after }, changes: plan });
+    }
+    const changed = applyDemoDates(sqlite, plan);
+    for (const r of changed) {
+      logAudit({
+        userId: 0, module: "admin", action: "update", entityType: r.table, entityId: r.id,
+        entityLabel: `Demo dates moved forward (lab ${r.labId}, ${r.table} ${r.id})`,
+        before: Object.fromEntries(Object.entries(r.changes).map(([c, v]) => [c, v[0]])),
+        after: Object.fromEntries(Object.entries(r.changes).map(([c, v]) => [c, v[1]])),
+        ipAddress: req.ip,
+      });
+    }
+    const after = Object.fromEntries(labIds.map((labId) => [labId, demoDatesReadiness(sqlite, labId)]));
+    console.log(`[admin/demo-dates/refresh] labs ${labIds.join(",")}: changed ${changed.length} of ${plan.length} planned row(s)`);
+    res.json({
+      dryRun, labIds, planned: plan.length, changed: changed.length, byLab: demoDatesSummary(changed), readiness: { before, after },
+      changes: changed, remaining: labIds.flatMap((labId) => planDemoDates(sqlite, labId)).length,
+    });
   });
 
   // BUG-068 cleanup (Q52 = 1): clear the made-up competency values the old startup backfill wrote. Dry run unless
