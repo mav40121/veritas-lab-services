@@ -227,6 +227,12 @@ function planLab(sqlite: any, labId: number, today: string): DatePlanRow[] {
   for (const f of all("SELECT id, due_date FROM findings WHERE lab_id = ? AND status IN ('open', 'drafting', 'rejected_resubmit')", labId)) {
     roll("findings", "findings", f, "due_date", 30, 0);
   }
+  for (const c of all("SELECT id, due_date FROM finding_effectiveness_checks WHERE lab_id = ? AND status = 'pending'", labId)) {
+    roll("findings", "finding_effectiveness_checks", c, "due_date", 30, 0);
+  }
+  for (const g of all("SELECT id, due_date FROM study_signoff_groups WHERE lab_id = ? AND signed_at IS NULL", labId)) {
+    roll("veritacheck", "study_signoff_groups", g, "due_date", 30, 0);
+  }
   for (const i of all("SELECT i.id, i.due_date FROM veritascan_items i JOIN veritascan_scans s ON s.id = i.scan_id WHERE s.lab_id = ? AND i.status NOT IN ('Compliant', 'Not Applicable', 'N/A')", labId)) {
     roll("veritascan", "veritascan_items", i, "due_date", 30, 0);
   }
@@ -237,6 +243,9 @@ function planLab(sqlite: any, labId: number, today: string): DatePlanRow[] {
   // Staff: license and credential documents, and quiz assignments not yet taken.
   for (const d of all("SELECT d.id, d.expiration_date FROM staff_employee_documents d JOIN staff_employees e ON e.id = d.employee_id WHERE e.tier2_lab_id = ? AND e.status = 'active'", labId)) {
     roll("staff", "staff_employee_documents", d, "expiration_date", 0, 12);
+  }
+  for (const d of all("SELECT d.id, d.expiration_date FROM competency_element_documents d JOIN competency_assessments a ON a.id = d.assessment_id JOIN competency_programs p ON p.id = a.program_id WHERE p.lab_id = ?", labId)) {
+    roll("staff", "competency_element_documents", d, "expiration_date", 0, 12);
   }
   for (const q of all("SELECT id, due_date FROM competency_quiz_assignments WHERE lab_id = ? AND status = 'assigned' AND completed_at IS NULL", labId)) {
     roll("staff", "competency_quiz_assignments", q, "due_date", 30, 0);
@@ -324,6 +333,9 @@ const WRITABLE: Record<string, string[]> = {
   iqcp_plans: ["next_review"],
   policy_attestations: ["due_date"],
   findings: ["due_date"],
+  finding_effectiveness_checks: ["due_date"],
+  study_signoff_groups: ["due_date"],
+  competency_element_documents: ["expiration_date"],
   veritascan_items: ["due_date"],
   veritascan_custom_item_status: ["due_date"],
   staff_employee_documents: ["expiration_date"],

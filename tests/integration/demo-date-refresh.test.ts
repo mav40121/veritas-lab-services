@@ -101,6 +101,10 @@ async function main() {
     // Findings and scan items
     ids.findOpen = insert("findings", { user_id: ownerId, lab_id: lab, accreditor: "TJC", due_date: d(-45), status: "open" });
     ids.findClosed = insert("findings", { user_id: ownerId, lab_id: lab, accreditor: "TJC", due_date: d(-45), status: "closed" });
+    ids.effOpen = insert("finding_effectiveness_checks", { finding_id: ids.findOpen, lab_id: lab, interval_days: 90, due_date: d(-10), status: "pending" });
+    ids.effDone = insert("finding_effectiveness_checks", { finding_id: ids.findClosed, lab_id: lab, interval_days: 90, due_date: d(-10), status: "effective", verified_at: today });
+    ids.groupOpen = insert("study_signoff_groups", { lab_id: lab, name: "Made-up group", due_date: d(-5), status: "open", created_at: today });
+    ids.groupSigned = insert("study_signoff_groups", { lab_id: lab, name: "Made-up signed group", due_date: d(-5), status: "signed", created_at: today, signed_at: today });
     ids.scan = insert("veritascan_scans", { user_id: ownerId, lab_id: lab, name: "Made-up Scan", created_at: today, updated_at: today });
     ids.scanOpen = insert("veritascan_items", { scan_id: ids.scan, item_id: 1, status: "Needs Attention", due_date: d(-3), updated_at: today });
     ids.scanDone = insert("veritascan_items", { scan_id: ids.scan, item_id: 2, status: "Compliant", due_date: d(-3), updated_at: today });
@@ -178,6 +182,7 @@ async function main() {
     check("4. a policy review moves by its interval", val("policy_documents", A.pol, "next_review_date") === addLabDays(d(-15), 0, 12) && val("policy_documents", A.pol, "status") === "approved");
     check("4. an auto-expired policy is approved again with its new date", val("policy_documents", A.polAuto, "status") === "approved" && val("policy_documents", A.polAuto, "next_review_date") === addLabDays(d(-90), 0, 24));
     check("4. an open finding and an open scan item move by 30 days", val("findings", A.findOpen, "due_date") === d(15) && val("veritascan_items", A.scanOpen, "due_date") === d(27));
+    check("4. an open effectiveness check and an unsigned sign-off group move by 30 days; verified and signed ones stay", val("finding_effectiveness_checks", A.effOpen, "due_date") === d(20) && val("study_signoff_groups", A.groupOpen, "due_date") === d(25) && val("finding_effectiveness_checks", A.effDone, "due_date") === d(-10) && val("study_signoff_groups", A.groupSigned, "due_date") === d(-5));
     check("4. the overdue tester's timeline moves a year and reads not overdue", val("staff_competency_schedules", A.sched, "annual_due_at") === addLabDays(d(-35), 0, 12) && val("staff_employees", A.emp, "hire_date") === addLabDays(d(-900), 0, 12) && competencyBucket(labA, A.emp) !== "overdue", competencyBucket(labA, A.emp));
     check("4. readiness after the write has nothing overdue", res.j.readiness?.after?.[labA]?.overdue_items === 0, JSON.stringify(res.j.readiness?.after?.[labA]));
 
