@@ -4866,9 +4866,9 @@ return (
             {!isLoggedIn ? (
               // Signed out: an applied code is already kept for this tab; sign-in is the hero's own entry.
               <div className="flex flex-col items-center gap-2">
-                <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold" data-testid="button-vc-signin-subscribe">
+                <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold max-w-full h-auto py-2.5 whitespace-normal text-center" data-testid="button-vc-signin-subscribe">
                   <Link href="/login">
-                    Sign in or create an account to subscribe <ChevronRight size={15} className="ml-1" />
+                    Sign in or create an account to subscribe <ChevronRight size={15} className="ml-1 shrink-0" />
                   </Link>
                 </Button>
                 <p className="text-sm text-muted-foreground" data-testid="vc-price-line">{vcPriceLine(discountApplied)}</p>
@@ -4880,7 +4880,7 @@ return (
                   size="lg"
                   onClick={subscribeVcUnlimited}
                   disabled={subscribeLoading || discountLoading}
-                  className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold"
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold max-w-full h-auto py-2.5 whitespace-normal text-center"
                   data-testid="button-vc-subscribe"
                 >
                   {subscribeLoading ? <Loader2 size={15} className="animate-spin mr-1.5" /> : null}
