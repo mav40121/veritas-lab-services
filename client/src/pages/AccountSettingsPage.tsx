@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { useMemberships } from "@/hooks/useMemberships";
+import { readPendingDiscountCode, clearPendingDiscountCode, startVcUnlimitedCheckout, VC_SUBSCRIBE_LABEL, vcPriceLine, vcFirstYearLine, codeTermsText, type VcFirstYear } from "@/lib/vcCheckout";
 import { Save, Tag, Loader2, CheckCircle2, AlertTriangle } from "lucide-react";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { validateClia, CLIA_FORMAT_HINT } from "@shared/validateClia";
@@ -301,38 +302,71 @@ export default function AccountSettingsPage() {
   // Discount code state
   const [discountCode, setDiscountCode] = useState("");
   const [discountLoading, setDiscountLoading] = useState(false);
-  const [discountApplied, setDiscountApplied] = useState<{ code: string; pct: number; partnerName: string; trialDays?: number } | null>(null);
+  const [discountApplied, setDiscountApplied] = useState<({ code: string; pct: number; partnerName: string; trialDays?: number } & VcFirstYear) | null>(null);
   const [discountError, setDiscountError] = useState("");
   const [checkoutLoading, setCheckoutLoading] = useState(false);
 
-  // Resolve the user's current plan to the Stripe priceType. Used for both
-  // discount validation and checkout. If the user is on free/per_study, the
-  // Activate Subscription flow falls back to community so the discount panel
-  // still works for legacy demo accounts; this should be rare in practice.
-  // Billing uses the user's OWN plan, not the active-lab overlay on user.plan.
-  const userPriceType = planToPriceType(user?.personalPlan ?? user?.plan) || "community";
+  // Resolve the plan to the Stripe priceType. Used for both discount validation and checkout. Billing uses the
+  // user's OWN plan (users.plan), not the active-lab overlay on user.plan. BUG-173: an owner whose own plan is free
+  // holds the subscription on their lab, so the lab they own and call home comes next (a comped VeritaCheck Unlimited
+  // owner checked out as Community before), and that lab's id goes in the checkout. If neither names a paid plan, the
+  // Activate Subscription flow falls back to community so the discount panel still works for legacy demo accounts.
+  const ownerHomeLab = memberships?.find((m) => m.role === "owner" && m.isAccountHomeLab) ?? null;
+  const personalPriceType = planToPriceType(user?.personalPlan);
+  const ownerLabPriceType = planToPriceType(ownerHomeLab?.plan);
+  const userPriceType = personalPriceType || ownerLabPriceType || "community";
+  const checkoutLabId = !personalPriceType && ownerLabPriceType && ownerHomeLab ? ownerHomeLab.labId : null;
+  // A comped VeritaCheck Unlimited lab (plan set by hand, no card subscription) can subscribe with no code applied.
+  const showVcSubscribe = ownerHomeLab?.plan === "veritacheck_only" && ownerHomeLab.hasCardSubscription === false;
 
-  async function applyDiscount() {
-    if (!discountCode.trim()) return;
+  // A code applied on the VeritaCheck page earlier in this tab fills the box (not validated until clicked).
+  useEffect(() => {
+    const pending = readPendingDiscountCode();
+    if (pending) setDiscountCode((cur) => (cur.trim() ? cur : pending));
+  }, []);
+
+  // Returns the applied code, or null when it didn't validate.
+  async function applyDiscount(priceType: string = userPriceType): Promise<string | null> {
+    if (!discountCode.trim()) return null;
     setDiscountLoading(true);
     setDiscountError("");
     try {
       const res = await fetch(`${API_BASE}/api/discount/validate`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ code: discountCode.trim(), priceType: userPriceType }),
+        body: JSON.stringify({ code: discountCode.trim(), priceType }),
       });
       const data = await res.json();
       if (!res.ok || !data.valid) {
         setDiscountError(data.message || data.error || "Invalid discount code.");
       } else {
-        setDiscountApplied({ code: discountCode.trim().toUpperCase(), pct: data.discountPct, partnerName: data.partnerName, trialDays: data.trialDays });
+        const code = discountCode.trim().toUpperCase();
+        setDiscountApplied({ code, pct: data.discountPct, partnerName: data.partnerName, trialDays: data.trialDays, appliedAs: data.appliedAs, firstYearCents: data.firstYearCents });
         setDiscountError("");
+        return code;
       }
     } catch {
       setDiscountError("Could not validate code. Please try again.");
     } finally {
       setDiscountLoading(false);
+    }
+    return null;
+  }
+
+  // BUG-173: VeritaCheck Unlimited checkout on the owner's lab, with the applied code if any. A code in the box that
+  // hasn't been applied is checked first, so it isn't dropped; one that doesn't validate shows its error and stops.
+  async function subscribeVcUnlimited() {
+    if (!ownerHomeLab) return;
+    setCheckoutLoading(true);
+    let code = discountApplied?.code ?? null;
+    if (!code && discountCode.trim()) {
+      code = await applyDiscount("veritacheck_only");
+      if (!code) { setCheckoutLoading(false); return; }
+    }
+    const err = await startVcUnlimitedCheckout({ labId: ownerHomeLab.labId, discountCode: code });
+    if (err) {
+      toast({ title: "Checkout not started", description: err, variant: "destructive" });
+      setCheckoutLoading(false);
     }
   }
 
@@ -343,10 +377,11 @@ export default function AccountSettingsPage() {
       const res = await fetch(`${API_BASE}/api/stripe/checkout`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ priceType: userPriceType, discountCode: discountApplied.code }),
+        body: JSON.stringify({ priceType: userPriceType, discountCode: discountApplied.code, ...(checkoutLabId ? { labId: checkoutLabId } : {}) }),
       });
       const data = await res.json();
       if (data.url) {
+        clearPendingDiscountCode();
         // Fire GA4 begin_checkout at the moment the Stripe session is actually
         // created, with the real priceType the user is being charged for. This
         // replaces the earlier Subscribe-click event on PricingPage which fired
@@ -827,7 +862,7 @@ export default function AccountSettingsPage() {
                 className="max-w-xs"
               />
               <Button
-                onClick={applyDiscount}
+                onClick={() => applyDiscount()}
                 disabled={discountLoading || !discountCode.trim()}
                 variant="outline"
               >
@@ -840,9 +875,12 @@ export default function AccountSettingsPage() {
               <CheckCircle2 size={16} className="text-green-600 mt-0.5 shrink-0" />
               <div className="flex-1">
                 <p className="text-sm font-medium text-green-800">
-                  <strong>{discountApplied.code}</strong>: {[discountApplied.trialDays ? `${discountApplied.trialDays}-day free trial` : "", discountApplied.pct ? `${discountApplied.pct}% off` : ""].filter(Boolean).join(" + ")} via {discountApplied.partnerName}
+                  <strong>{discountApplied.code}</strong>{codeTermsText(discountApplied)} via {discountApplied.partnerName}
                 </p>
-                {discountApplied.trialDays ? (
+                {/* BUG-173: on VeritaCheck Unlimited the first year the buyer will really pay. */}
+                {vcFirstYearLine(discountApplied) ? (
+                  <p className="text-xs text-green-700 mt-0.5" data-testid="account-vc-first-year-line">{vcFirstYearLine(discountApplied)}</p>
+                ) : discountApplied.trialDays ? (
                   <p className="text-xs text-green-700 mt-0.5">{discountApplied.trialDays}-day free trial{discountApplied.pct ? ` + ${discountApplied.pct}% off first year` : ""} - card required</p>
                 ) : discountApplied.pct === 100 ? (
                   <p className="text-xs text-green-700 mt-0.5">No payment method required.</p>
@@ -850,7 +888,7 @@ export default function AccountSettingsPage() {
               </div>
               <button
                 className="text-xs text-muted-foreground underline"
-                onClick={() => { setDiscountApplied(null); setDiscountCode(""); }}
+                onClick={() => { setDiscountApplied(null); setDiscountCode(""); clearPendingDiscountCode(); }}
               >
                 Remove
               </button>
@@ -859,7 +897,21 @@ export default function AccountSettingsPage() {
           {discountError && (
             <p className="text-sm text-red-500">{discountError}</p>
           )}
-          {discountApplied && (
+          {showVcSubscribe ? (
+            // BUG-173: a comped VeritaCheck Unlimited lab subscribes here with or without a code.
+            <div className="space-y-1">
+              <Button
+                onClick={subscribeVcUnlimited}
+                disabled={checkoutLoading || discountLoading}
+                className="bg-primary hover:bg-primary/90 text-primary-foreground"
+                data-testid="button-account-vc-subscribe"
+              >
+                {checkoutLoading ? <Loader2 size={14} className="animate-spin mr-1.5" /> : null}
+                {checkoutLoading ? "Redirecting..." : VC_SUBSCRIBE_LABEL}
+              </Button>
+              <p className="text-xs text-muted-foreground" data-testid="account-vc-price-line">{vcPriceLine(discountApplied)}</p>
+            </div>
+          ) : discountApplied && (
             <Button
               onClick={goToCheckout}
               disabled={checkoutLoading}
