@@ -26,6 +26,7 @@ import { computeUsageQty, validateTransfer, validateBatch, matchKey, countOnHand
 import { sendNewsletter, verifyUnsubscribeToken, resolveRecipients, buildProductUpdateHtml, PRODUCT_UPDATE_FROM } from "./newsletter";
 import { registerScheduleRoutes } from "./schedule";
 import { stripe, PRICES, SEAT_PRICES, WEBHOOK_SECRET, FRONTEND_URL, PLAN_LIMITS, SEAT_PRICING, getSeatPrice, getSeatPriceForTier, VC_UNLIMITED_FIRST_YEAR_COUPON, getViewOnlyAddOnConfig } from "./stripe";
+import { checkoutMetadataLabId, hasActiveCardSubscription, vcCheckoutRefusal, vcFirstYear, vcCheckoutCoupon, vcFirstYearFields } from "./vcCheckout";
 import crypto from "crypto";
 import { Resend } from "resend";
 import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCompetencyPDF, generateEmployeeCompetencyRecordPDF, generateCMS209PDF, generateVeritaPTPDF, generateCms2567PDF, validateCms2567POC, generateCapResponsePDF, validateCapResponse, generateTjcEscPDF, validateTjcEsc, generateColaResponsePDF, validateColaResponse, generateAabbNerPDF, validateAabbNer, generateInternalNcePDF, validateInternalNce, generateCeuTranscriptPDF, generateTypeReportPDF, validateTypeReport, TYPE_REPORT_KINDS } from "./pdfReport";
@@ -6769,6 +6770,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         trialDays: row.trial_days || 0,
         partnerName: row.partner_name,
         message: parts.join(" + ") || "Discount applied",
+        ...vcFirstYearFields(priceType, { percentOff: row.discount_pct }),
       });
     }
 
@@ -6778,7 +6780,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         const coupon = await stripe.coupons.retrieve(code.trim());
         if (coupon && coupon.valid) {
           const pct = coupon.percent_off ?? 0;
-          return res.json({ valid: true, discountPct: pct, partnerName: coupon.name || "Partner", message: `${pct}% discount applied`, stripeId: coupon.id });
+          return res.json({ valid: true, discountPct: pct, partnerName: coupon.name || "Partner", message: `${pct}% discount applied`, stripeId: coupon.id, ...vcFirstYearFields(priceType, { percentOff: coupon.percent_off, amountOffCents: coupon.amount_off }) });
         }
       } catch (stripeErr: any) {
         console.error("[validate-discount] Stripe coupon lookup error:", stripeErr?.message);
@@ -7841,6 +7843,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         l.plan,
         l.subscription_status,
         l.subscription_expires_at,
+        l.stripe_subscription_id,
         l.accreditation_cap,
         l.accreditation_tjc,
         l.accreditation_cola,
@@ -7963,6 +7966,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       plan: m.plan,
       subscriptionStatus: m.subscription_status,
       subscriptionExpiresAt: m.subscription_expires_at,
+      // BUG-173: the lab pays by card through Stripe (a subscription id and status 'active'). A boolean only, never the
+      // id; VeritaCheck and Account Settings offer VeritaCheck Unlimited checkout to a comped Unlimited lab by it.
+      hasCardSubscription: hasActiveCardSubscription(m),
       cliaCertExpirationDate: m.clia_cert_expiration_date || null,
     })));
   });
@@ -20400,6 +20406,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   });
 
   app.post("/api/stripe/checkout", authMiddleware, async (req: any, res) => {
+    // BUG-173: VeritaCheck Unlimited refuses a lab the buyer doesn't own (403 NOT_LAB_OWNER) and a lab that already pays
+    // by card (409 ALREADY_SUBSCRIBED). Checked first, so a refusal never reaches Stripe (server/vcCheckout.ts).
+    if (req.body?.priceType === "veritacheck_only") {
+      const refusal = vcCheckoutRefusal((db as any).$client, req.userId, req.body?.labId);
+      if (refusal) return res.status(refusal.status).json(refusal.body);
+    }
     if (!stripe) return res.status(503).json({ error: "Payments not configured" });
     const { priceType, discountCode, additionalSeats } = req.body;
     // priceType: "perStudy" | "waived" | "community" | "hospital" | "large_hospital" | "veritacheck_only"
@@ -20426,6 +20438,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     let couponId: string | undefined;
     let discountRow: any = null;
     let discountPct = 0;
+    let codeAmountOffCents: number | null = null;
     let trialDays: number | null = null;
     if (discountCode) {
       // Check internal discount_codes table first
@@ -20439,25 +20452,30 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         // Discount code path (independent of trial)
         if (discountRow.discount_pct) {
           discountPct = discountRow.discount_pct;
-          // First try using the code itself as a direct Stripe coupon ID (e.g. TdFkdMWg)
-          try {
-            const existing = await stripe.coupons.retrieve(discountCode.trim());
-            if (existing && existing.valid) {
-              couponId = existing.id;
-            }
-          } catch {}
-          // If not a Stripe coupon ID, create one on the fly
-          if (!couponId) {
+          // BUG-173: on VeritaCheck Unlimited a code that gives less than the $200 first-year discount isn't used (see
+          // vcCheckoutCoupon below), so no Stripe coupon is looked up or made for it.
+          const vcCodeLoses = priceType === "veritacheck_only" && vcFirstYear({ percentOff: discountRow.discount_pct }).use !== "code";
+          if (!vcCodeLoses) {
+            // First try using the code itself as a direct Stripe coupon ID (e.g. TdFkdMWg)
             try {
-              const name = `${discountRow.partner_name} - ${discountRow.discount_pct}% off`.slice(0, 40);
-              const coupon = await stripe.coupons.create({
-                percent_off: discountRow.discount_pct,
-                duration: "once",
-                name,
-              });
-              couponId = coupon.id;
-            } catch (err: any) {
-              console.error("Stripe coupon creation error:", err.message);
+              const existing = await stripe.coupons.retrieve(discountCode.trim());
+              if (existing && existing.valid) {
+                couponId = existing.id;
+              }
+            } catch {}
+            // If not a Stripe coupon ID, create one on the fly
+            if (!couponId) {
+              try {
+                const name = `${discountRow.partner_name} - ${discountRow.discount_pct}% off`.slice(0, 40);
+                const coupon = await stripe.coupons.create({
+                  percent_off: discountRow.discount_pct,
+                  duration: "once",
+                  name,
+                });
+                couponId = coupon.id;
+              } catch (err: any) {
+                console.error("Stripe coupon creation error:", err.message);
+              }
             }
           }
         }
@@ -20468,6 +20486,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           if (stripeCoupon && stripeCoupon.valid) {
             couponId = stripeCoupon.id;
             discountPct = stripeCoupon.percent_off ?? 0;
+            // An amount-off coupon (in cents), weighed against the first-year discount on VeritaCheck Unlimited.
+            codeAmountOffCents = stripeCoupon.amount_off ?? null;
           }
         } catch {}
       }
@@ -20483,12 +20503,18 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     }
 
     // Auto-apply VC Unlimited first-year discount ($200 off once -> Y1 = $299,
-    // Y2+ = $499 list). Only applies if the customer did not enter another
-    // discount code. The coupon's duration:'once' means Stripe charges the
+    // Y2+ = $499 list). The coupon's duration:'once' means Stripe charges the
     // discounted amount on the first invoice only; subsequent annual renewals
-    // bill the underlying $499 base price.
-    if (priceType === "veritacheck_only" && !couponId) {
-      couponId = VC_UNLIMITED_FIRST_YEAR_COUPON;
+    // bill the underlying $499 base price. BUG-173: a discount code no longer
+    // replaces it outright. The buyer gets whichever makes the first year
+    // cheaper (a 10% code had billed $449.10), and Unlimited never gets a trial,
+    // so a code's trial_days doesn't apply here (server/vcCheckout.ts).
+    let codeCouponUsed = true;
+    if (priceType === "veritacheck_only") {
+      const vc = vcCheckoutCoupon({ codeCouponId: couponId ?? null, percentOff: discountPct, amountOffCents: codeAmountOffCents, firstYearCouponId: VC_UNLIMITED_FIRST_YEAR_COUPON });
+      couponId = vc.couponId;
+      trialDays = vc.trialDays;
+      codeCouponUsed = vc.codeUsed;
     }
 
     try {
@@ -20554,22 +20580,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       //   1. req.body.labId (caller explicitly chose a lab)
       //   2. users.default_lab_id (the user's active/default lab)
       //   3. omit (Phase 4.1 webhook falls back to userId → primary lab)
-      let metadataLabId: string | undefined;
-      if (req.body?.labId) {
-        const requestedLabId = parseInt(String(req.body.labId)) || 0;
-        if (requestedLabId) {
-          const member = (db as any).$client.prepare(
-            "SELECT id FROM lab_members WHERE user_id = ? AND lab_id = ? AND status = 'active' LIMIT 1"
-          ).get(user.id, requestedLabId);
-          if (member) metadataLabId = String(requestedLabId);
-        }
-      }
-      if (!metadataLabId) {
-        const u = (db as any).$client.prepare(
-          "SELECT default_lab_id FROM users WHERE id = ?"
-        ).get(user.id) as any;
-        if (u?.default_lab_id) metadataLabId = String(u.default_lab_id);
-      }
+      // The rule lives in server/vcCheckout.ts so the VeritaCheck Unlimited refusals above judge the same lab.
+      const stampedLabId = checkoutMetadataLabId((db as any).$client, user.id, req.body?.labId);
+      const metadataLabId: string | undefined = stampedLabId ? String(stampedLabId) : undefined;
 
       const sessionParams: any = {
         customer: customerId,
@@ -20598,7 +20611,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
       const session = await stripe.checkout.sessions.create(sessionParams);
 
-      if (discountRow && (couponId || trialDays)) {
+      // A code counts as used only when it went on the session (on VeritaCheck Unlimited the first-year discount can win).
+      if (discountRow && ((couponId && codeCouponUsed) || trialDays)) {
         db.$client.prepare("UPDATE discount_codes SET uses = uses + 1 WHERE id = ?").run(discountRow.id);
       }
 

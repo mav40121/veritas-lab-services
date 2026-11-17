@@ -45,6 +45,9 @@ import { triggerStudyCreditsExhausted } from "@/components/StudyCreditsModal";
 import { authHeaders } from "@/lib/auth";
 import { trackEvent } from "@/lib/analytics";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
+import { useMemberships } from "@/hooks/useMemberships";
+import { pickCurrentMembership } from "@/lib/currentLab";
+import { savePendingDiscountCode, readPendingDiscountCode, clearPendingDiscountCode, startVcUnlimitedCheckout, VC_SUBSCRIBE_LABEL, vcPriceLine, vcFirstYearLine, codeTermsText, type VcFirstYear } from "@/lib/vcCheckout";
 import type { InsertStudy } from "@shared/schema";
 import { isCensored, parseCensoredInput, displayPointValue, type CensoredPoint } from "@shared/censoring";
 import { hasRunDetails, parseRunDetails, serializeRunDetails, type AnalyzerRunDetails } from "@shared/studyRunDetails";
@@ -226,10 +229,21 @@ export default function VeritaCheckPage() {
   const { isLoggedIn, user } = useAuth();
   const [paymentStatus, setPaymentStatus] = useState<"success" | "cancelled" | null>(null);
   const [discountCode, setDiscountCode] = useState("");
-  const [discountApplied, setDiscountApplied] = useState<{ code: string; pct: number; partnerName: string; trialDays?: number } | null>(null);
+  const [discountApplied, setDiscountApplied] = useState<({ code: string; pct: number; partnerName: string; trialDays?: number } & VcFirstYear) | null>(null);
   const [discountLoading, setDiscountLoading] = useState(false);
   const [discountError, setDiscountError] = useState("");
+  const [subscribeLoading, setSubscribeLoading] = useState(false);
   const [phiBannerDismissed, setPhiBannerDismissed] = useState(false);
+  // BUG-173: the pricing section offers VeritaCheck Unlimited checkout. The active lab is the one AuthContext overlays
+  // onto user.plan (the same pick), so the section reads the plan the rest of the page reads.
+  const { data: memberships } = useMemberships();
+  const activeMembership = pickCurrentMembership(memberships, editingLabId);
+  // A comped Unlimited lab (plan set by hand, no card subscription) can subscribe; a lab paying by card can't.
+  const compedUnlimited = activeMembership?.plan === "veritacheck_only" && activeMembership.hasCardSubscription === false;
+  const showPricing = !isLoggedIn || !user?.plan || user.plan === "free" || user.plan === "per_study" || compedUnlimited;
+  // Subscribing changes the lab's plan, so only its owner may (the server refuses anyone else, 403 NOT_LAB_OWNER);
+  // someone with no lab subscribes their own account. Waits for the lab list, so a seat user never sees it flash.
+  const canSubscribe = isLoggedIn && Array.isArray(memberships) && (activeMembership ? activeMembership.role === "owner" : true);
 
   // Phase 2 (2026-06-15): a signed-off study is corrected with an amendment,
   // never edited in place. The server already 409s the PUT; this guards the
@@ -285,8 +299,9 @@ export default function VeritaCheckPage() {
     }
   }, [search]);
 
-  const applyDiscount = async (priceType: string) => {
-    if (!discountCode.trim()) return;
+  // Returns the applied code, or null when it didn't validate.
+  const applyDiscount = async (priceType: string): Promise<string | null> => {
+    if (!discountCode.trim()) return null;
     setDiscountLoading(true);
     setDiscountError("");
     try {
@@ -297,8 +312,12 @@ export default function VeritaCheckPage() {
       });
       const data = await res.json();
       if (data.valid) {
-        setDiscountApplied({ code: discountCode.trim().toUpperCase(), pct: data.discountPct, partnerName: data.partnerName, trialDays: data.trialDays });
+        const code = discountCode.trim().toUpperCase();
+        setDiscountApplied({ code, pct: data.discountPct, partnerName: data.partnerName, trialDays: data.trialDays, appliedAs: data.appliedAs, firstYearCents: data.firstYearCents });
         setDiscountError("");
+        // Parking lot #89: keep the code for checkout, sign-in and Account Settings in this tab.
+        savePendingDiscountCode(code);
+        return code;
       } else {
         setDiscountError(data.message || "Invalid code");
         setDiscountApplied(null);
@@ -307,6 +326,29 @@ export default function VeritaCheckPage() {
       setDiscountError("Could not validate code");
     } finally {
       setDiscountLoading(false);
+    }
+    return null;
+  };
+
+  // A code kept from earlier in this tab fills the box (it isn't validated until Apply or Subscribe is clicked).
+  useEffect(() => {
+    const pending = readPendingDiscountCode();
+    if (pending) setDiscountCode((cur) => (cur.trim() ? cur : pending));
+  }, []);
+
+  // BUG-173: VeritaCheck Unlimited checkout on the active lab with the applied code. A code typed in the box but not
+  // applied is checked first, so it isn't dropped on the way; one that doesn't validate shows its error and stops.
+  const subscribeVcUnlimited = async () => {
+    setSubscribeLoading(true);
+    let code = discountApplied?.code ?? null;
+    if (!code && discountCode.trim()) {
+      code = await applyDiscount("veritacheck_only");
+      if (!code) { setSubscribeLoading(false); return; }
+    }
+    const err = await startVcUnlimitedCheckout({ labId: activeMembership?.labId ?? null, discountCode: code });
+    if (err) {
+      toast({ title: "Checkout not started", description: err, variant: "destructive" });
+      setSubscribeLoading(false);
     }
   };
 
@@ -4760,9 +4802,9 @@ return (
         </div>
       </section>
 
-      {/* Pricing CTA — only show for free/per-study users */}
-      {(!user?.plan || user.plan === "free" || user.plan === "per_study") && (
-        <section className="section-padding bg-secondary/20" id="pricing">
+      {/* Pricing CTA: signed out, free/per-study labs, and a comped VeritaCheck Unlimited lab with no card subscription (BUG-173) */}
+      {showPricing && (
+        <section className="section-padding bg-secondary/20" id="pricing" data-testid="vc-pricing-section">
           <div className="container-default max-w-2xl text-center">
             <div className="flex items-center justify-center gap-2 mb-3">
               <DollarSign size={18} className="text-primary" />
@@ -4797,9 +4839,12 @@ return (
                   <CheckCircle2 size={16} className="text-green-600 mt-0.5 shrink-0" />
                   <div className="flex-1">
                     <p className="text-sm font-medium text-green-800">
-                      <strong>{discountApplied.code}</strong>: {[discountApplied.trialDays ? `${discountApplied.trialDays}-day free trial` : "", discountApplied.pct ? `${discountApplied.pct}% off` : ""].filter(Boolean).join(" + ")} via {discountApplied.partnerName}
+                      <strong>{discountApplied.code}</strong>{codeTermsText(discountApplied)} via {discountApplied.partnerName}
                     </p>
-                    {discountApplied.trialDays ? (
+                    {/* BUG-173: on VeritaCheck Unlimited the first year the buyer will really pay (the code or the $200 first-year discount, whichever is less). */}
+                    {vcFirstYearLine(discountApplied) ? (
+                      <p className="text-xs text-green-700 mt-0.5" data-testid="vc-first-year-line">{vcFirstYearLine(discountApplied)}</p>
+                    ) : discountApplied.trialDays ? (
                       <p className="text-xs text-green-700 mt-0.5">{discountApplied.trialDays}-day free trial{discountApplied.pct ? ` + ${discountApplied.pct}% off first year` : ""} - card required</p>
                     ) : discountApplied.pct === 100 ? (
                       <p className="text-xs text-green-700 mt-0.5">No payment method required.</p>
@@ -4807,7 +4852,7 @@ return (
                   </div>
                   <button
                     className="text-xs text-muted-foreground underline"
-                    onClick={() => { setDiscountApplied(null); setDiscountCode(""); }}
+                    onClick={() => { setDiscountApplied(null); setDiscountCode(""); clearPendingDiscountCode(); }}
                   >
                     Remove
                   </button>
@@ -4818,11 +4863,39 @@ return (
               )}
             </div>
 
-            <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
-              <Link href="/pricing">
-                View Pricing <ChevronRight size={15} className="ml-1" />
-              </Link>
-            </Button>
+            {!isLoggedIn ? (
+              // Signed out: an applied code is already kept for this tab; sign-in is the hero's own entry.
+              <div className="flex flex-col items-center gap-2">
+                <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold max-w-full h-auto py-2.5 whitespace-normal text-center" data-testid="button-vc-signin-subscribe">
+                  <Link href="/login">
+                    Sign in or create an account to subscribe <ChevronRight size={15} className="ml-1 shrink-0" />
+                  </Link>
+                </Button>
+                <p className="text-sm text-muted-foreground" data-testid="vc-price-line">{vcPriceLine(discountApplied)}</p>
+                <Link href="/pricing" className="text-sm text-primary hover:underline" data-testid="link-see-all-plans">See all plans</Link>
+              </div>
+            ) : canSubscribe ? (
+              <div className="flex flex-col items-center gap-2">
+                <Button
+                  size="lg"
+                  onClick={subscribeVcUnlimited}
+                  disabled={subscribeLoading || discountLoading}
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold max-w-full h-auto py-2.5 whitespace-normal text-center"
+                  data-testid="button-vc-subscribe"
+                >
+                  {subscribeLoading ? <Loader2 size={15} className="animate-spin mr-1.5" /> : null}
+                  {subscribeLoading ? "Starting checkout..." : VC_SUBSCRIBE_LABEL}
+                </Button>
+                <p className="text-sm text-muted-foreground" data-testid="vc-price-line">{vcPriceLine(discountApplied)}</p>
+                <Link href="/pricing" className="text-sm text-primary hover:underline" data-testid="link-see-all-plans">See all plans</Link>
+              </div>
+            ) : (
+              <Button asChild size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
+                <Link href="/pricing">
+                  View Pricing <ChevronRight size={15} className="ml-1" />
+                </Link>
+              </Button>
+            )}
           </div>
         </section>
       )}
