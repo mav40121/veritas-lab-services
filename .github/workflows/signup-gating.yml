@@ -262,6 +262,10 @@ jobs:
         # BUG-173 (Michael 2026-11-17, "1"): a comped Unlimited lab can check out; a lab paying by card is refused 409 ALREADY_SUBSCRIBED and a lab the
         # buyer doesn't own 403 NOT_LAB_OWNER, before any Stripe call (run with no Stripe key). GET /api/labs/me carries hasCardSubscription, never the id.
         run: npm run test:vc-checkout
+      - name: Run competency whole-record save integration test
+        # BUG-174 (Michael 2026-11-17, Q346 = 1): saving a whole record from the program form replaces only the form's own rows, so the person
+        # page's entries and a sign-off's rows stay; a record holding them isn't deleted from the list; the admin restore puts back an old save's rows exactly.
+        run: npm run test:competency-whole-record-save
       - name: Run VeritaScan auto-completion integration test
         # Site review 2026-11-05: a passing assessment marks only what its record supports (technical: item 60, with all six procedures shown;
         # waived and non-technical: nothing), a draft or failed study marks nothing, the lab's own answer stays, and the admin audit is counts only.

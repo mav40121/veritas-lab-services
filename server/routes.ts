@@ -241,6 +241,7 @@ import { loadQualifiedObservers, observerProblem, itemObserverEntries, storedObs
 import { summarizeCspReport, cspHeaderName } from "./securityHeaders";
 import { normalizeChecklistItems } from "@shared/competencyChecklist";
 import { checklistImageIdProblem, checklistItemImageIds, checklistForAudit, checklistImageMap, withChecklistImages, snapshotChecklistItemImages } from "./competencyChecklistImages";
+import { FORM_OWNED_ROWS, personPageEntryCount, holdsPersonPageEntriesMessage, planRecordSaveRestore, applyRecordSaveRestore, recordLosses } from "./competencyRecordRestore";
 import { notApplicableRows, notApplicableIds, notApplicableProblem, NOT_APPLICABLE_REASON_MAX } from "./competencyNotApplicable";
 import { noPhiAcknowledgmentStatus, recordNoPhiAcknowledgment } from "./noPhiAcknowledgment";
 import { termsGateMiddleware, termsStatus, acceptTerms, activateTerms, deactivateTerms, acceptanceCounts, activeTermsVersion } from "./termsOfUse";
@@ -25026,7 +25027,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     return { ...item, waivedEvidence: c.evidence, waivedDate: c.date, waivedInitials: c.initials, passed: c.passed };
   });
   const saveWaivedSpecimens = (assessmentId: number | string, items: any[]) => {
-    const stmt = (db as any).$client.prepare("UPDATE competency_assessment_items SET waived_specimens_json = ? WHERE assessment_id = ? AND waived_method_number = ?");
+    // BUG-174: only the form's own rows; a person-page waived row on the same record keeps its specimens.
+    const stmt = (db as any).$client.prepare(`UPDATE competency_assessment_items SET waived_specimens_json = ? WHERE assessment_id = ? AND waived_method_number = ? AND ${FORM_OWNED_ROWS}`);
     for (const item of items) {
       if (Number(item?.waivedMethodNumber) !== WAIVED_BLIND_METHOD || !Array.isArray(item?.waivedSpecimens)) continue;
       stmt.run(waivedSpecimenColumns(cleanWaivedSpecimens(item.waivedSpecimens)).json, assessmentId, WAIVED_BLIND_METHOD);
@@ -25225,7 +25227,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       );
       (db as any).$client.transaction(() => { // BUG-094 sweep: the delete and the re-insert commit together or not at all
-        (db as any).$client.prepare("DELETE FROM competency_assessment_items WHERE assessment_id = ?").run(req.params.id);
+        // BUG-174: replace only the form's own rows. Rows the person page wrote (instrument_id) and rows frozen by a
+        // sign-off (signoff_id) aren't in the form, so deleting them lost a person's entries (Redington 2026-11-16).
+        (db as any).$client.prepare(`DELETE FROM competency_assessment_items WHERE assessment_id = ? AND ${FORM_OWNED_ROWS}`).run(req.params.id);
         for (const item of withWaivedSpecimenColumns(items)) {
           stmt.run(
             req.params.id,
@@ -25289,6 +25293,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (accountLabCount(dataUserId) > 1) return res.status(409).json({ error: "This account manages multiple labs. Open the lab first so this change is scoped to the correct one, then retry.", multiLab: true });
     const legacyBlock = competencyAssessmentDeleteBlock(req.params.id);
     if (legacyBlock) return res.status(409).json({ error: legacyBlock, code: "ASSESSMENT_SIGNED" });
+    // BUG-174: a record holding the person page's entries (or a sign-off's rows) isn't deleted from the record list.
+    const legacyHeld = personPageEntryCount((db as any).$client, req.params.id);
+    if (legacyHeld > 0) return res.status(409).json({ error: holdsPersonPageEntriesMessage(legacyHeld), code: "HOLDS_PERSON_PAGE_ENTRIES", entries: legacyHeld });
     const delAssessment = (db as any).$client.prepare("SELECT * FROM competency_assessments WHERE id = ?").get(req.params.id) as any;
     const delAssessItems = (db as any).$client.prepare("SELECT * FROM competency_assessment_items WHERE assessment_id = ?").all(req.params.id);
     logAudit({ userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritacomp", action: "delete", entityType: "assessment", entityId: req.params.id, entityLabel: delAssessment ? `${delAssessment.employee_name} - ${delAssessment.program_name}` : undefined, before: { assessment: delAssessment, items: delAssessItems }, ipAddress: req.ip });
@@ -25629,7 +25636,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       );
       sqlite.transaction(() => { // BUG-094 sweep: the delete and the re-insert commit together or not at all
-        sqlite.prepare("DELETE FROM competency_assessment_items WHERE assessment_id = ?").run(req.params.id);
+        // BUG-174: replace only the form's own rows; person-page rows (instrument_id) and sign-off rows (signoff_id) stay.
+        sqlite.prepare(`DELETE FROM competency_assessment_items WHERE assessment_id = ? AND ${FORM_OWNED_ROWS}`).run(req.params.id);
         for (const item of withWaivedSpecimenColumns(items)) {
           stmt.run(
             req.params.id,
@@ -25704,6 +25712,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (!assessment) return res.status(404).json({ error: "Assessment not found" });
     const scopedBlock = competencyAssessmentDeleteBlock(req.params.id);
     if (scopedBlock) return res.status(409).json({ error: scopedBlock, code: "ASSESSMENT_SIGNED" });
+    // BUG-174: a record holding the person page's entries (or a sign-off's rows) isn't deleted from the record list.
+    const scopedHeld = personPageEntryCount((db as any).$client, req.params.id);
+    if (scopedHeld > 0) return res.status(409).json({ error: holdsPersonPageEntriesMessage(scopedHeld), code: "HOLDS_PERSON_PAGE_ENTRIES", entries: scopedHeld });
     const delAssessItems = (db as any).$client.prepare("SELECT * FROM competency_assessment_items WHERE assessment_id = ?").all(req.params.id);
     logAudit({ userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritacomp", action: "delete", entityType: "assessment", entityId: req.params.id, entityLabel: assessment ? `${assessment.employee_name ?? ''} - ${assessment.program_name ?? ''}`.trim() : undefined, before: { assessment, items: delAssessItems }, ipAddress: req.ip });
     (db as any).$client.prepare("DELETE FROM competency_assessment_items WHERE assessment_id = ?").run(req.params.id);
@@ -35797,6 +35808,41 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const count = (o: string) => results.filter((r: any) => r.outcome === o).length;
     res.json({ dryRun: !apply, wouldClearOrCleared: count("cleared"), alreadyCleared: count("already_cleared"), existingStaff: count("existing_staff"),
       hasOtherDates: count("has_other_dates"), beforeHire: count("before_hire"), results: results.map((r: any) => ({ staffEmployeeId: r.staffEmployeeId, name: r.name, labId: r.labId, outcome: r.outcome, initialDate: r.initialDate, source: r.source })) });
+  });
+
+  // BUG-174 (Michael 2026-11-17, Q346 = 1; server/competencyRecordRestore.ts). Header x-admin-secret only.
+  // GET: every whole-record save that removed person-page or signed entry rows, and every deleted record that held them
+  // (?since=ISO, ?labId=N). Read-only, counts and ids only.
+  app.get("/api/admin/competency/record-losses", (req, res) => {
+    if (req.headers["x-admin-secret"] !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    const labId = req.query.labId != null && req.query.labId !== "" ? Number(req.query.labId) : undefined;
+    if (labId !== undefined && !Number.isInteger(labId)) return res.status(400).json({ error: "labId must be a number" });
+    const out = recordLosses((db as any).$client, { since: req.query.since ? String(req.query.since) : undefined, labId });
+    res.json({
+      ...out,
+      totals: {
+        savesWithLoss: out.saves.length, rowsLost: out.saves.reduce((n, s) => n + s.lostRows, 0),
+        rowsHoldingEntriesLost: out.saves.reduce((n, s) => n + s.lostRowsHoldingEntries, 0), restorableNow: out.saves.reduce((n, s) => n + s.restorableNow, 0),
+        deletesHoldingPersonPageEntries: out.deletes.filter((d) => d.personPageRowsHoldingEntries > 0).length,
+      },
+    });
+  });
+  // POST {auditId, dryRun?, expectedTotal?}: put back the rows one whole-record save removed, exactly as its audit row
+  // holds them. A dry run unless dryRun is false, which needs expectedTotal equal to the dry run's total (409 COUNT_CHANGED).
+  // Skips an instrument the person page has saved since and a sign-off that's gone, revoked or already has its rows.
+  app.post("/api/admin/competency/restore-record-save", (req, res) => {
+    if (req.headers["x-admin-secret"] !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    const auditId = Number(req.body?.auditId);
+    if (!Number.isInteger(auditId) || auditId <= 0) return res.status(400).json({ error: "auditId required", code: "AUDIT_ID_REQUIRED" });
+    const sqlite = (db as any).$client;
+    if (req.body?.dryRun !== false) {
+      const p = planRecordSaveRestore(sqlite, auditId);
+      if (!p.ok) return res.status(p.status).json({ error: p.error, code: p.code });
+      return res.json({ dryRun: true, ...p.plan });
+    }
+    const r = applyRecordSaveRestore(sqlite, auditId, req.body?.expectedTotal);
+    if (!r.ok) return res.status(r.status).json({ error: r.error, code: r.code, ...(r.plan ? { plan: r.plan } : {}) });
+    res.json({ dryRun: false, ...r.plan, restored: r.restoredItemIds.length, restoredItemIds: r.restoredItemIds });
   });
 
   app.get("/api/admin/competency/not-cleared-audit", (req, res) => {
