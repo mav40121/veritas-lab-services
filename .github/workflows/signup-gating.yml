@@ -254,6 +254,10 @@ jobs:
         # Michael Q190 = 1: the demo lab fixture is Sample Regional Medical Center, because a real hospital has the old name. Nothing in the repo uses the old name; a deploy renames
         # no existing row; the admin rename is a dry run by default, moves only the fixture, and never a customer row with the same name.
         run: npm run test:demo-fixture-rename
+      - name: Run demo dates refresh integration test
+        # Michael 2026-11-16 (option 1): the admin refresh moves passed dates forward by whole cycles in his own QA-system labs only. A client lab or
+        # another owner's lab refuses the whole request; a dry run writes nothing; history stays; no performed date lands after today; a rerun changes nothing.
+        run: npm run test:demo-date-refresh
       - name: Run VeritaScan auto-completion integration test
         # Site review 2026-11-05: a passing assessment marks only what its record supports (technical: item 60, with all six procedures shown;
         # waived and non-technical: nothing), a draft or failed study marks nothing, the lab's own answer stays, and the admin audit is counts only.
