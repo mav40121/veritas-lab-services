@@ -1928,6 +1928,9 @@ const compQuizNewCols: [string, string][] = [
   // GET /api/veritacomp/quizzes/:id (without ?withAnswers) returns the
   // questions shuffled per request. Builder/preview always sees stored order.
   ["randomize_questions", "INTEGER DEFAULT 0"],
+  // 2026-11-18 (Redington, Michael Q3 = 1; shared/quizAutoRetake.ts): a failed attempt on a staff login opens the next attempt
+  // at once, and that attempt's review leaves out the correct answers. Off by default.
+  ["auto_retake", "INTEGER DEFAULT 0"],
   // 2026-06-09: signal that the `questions[].question` field may contain
   // HTML (sanitized client-side via DOMPurify). Lets the player render
   // inline tables (e.g., ABO/Rh forward/reverse reaction grids) instead of

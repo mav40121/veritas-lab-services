@@ -90,6 +90,7 @@ import { QuizQuestionImage, QuizImagePicker } from "@/components/QuizQuestionIma
 import { isQuizImage, quizImageProblem } from "@shared/quizImages";
 import { optionLetter, optionIndexFor, shownOptions } from "@shared/quizOptions";
 import { voidReasonProblem, voidedLine, VOID_REASON_MAX } from "@shared/quizAttemptVoid";
+import { AUTO_RETAKE_LABEL, AUTO_RETAKE_HELP } from "@shared/quizAutoRetake";
 import { ObserverInitialsField, type QualifiedObserver } from "@/components/ObserverInitialsField";
 import { PriorYearComparisonDialog } from "@/components/PriorYearComparisonDialog";
 import { CompetencyRemindersCard } from "@/components/CompetencyRemindersCard";
@@ -233,6 +234,8 @@ interface QuizListItem {
   // /api/veritacomp/quizzes/:id GET (employee-take view) shuffles the
   // questions array on the server per request.
   randomize_questions?: number | null;
+  // 2026-11-18 (Michael Q3 = 1; shared/quizAutoRetake.ts): a failed attempt opens the next one by itself.
+  auto_retake?: number | null;
   // 2026-06-09 PR1: 'html' tells the player to render question.question
   // through DOMPurify with table support, so docx-derived quizzes can show
   // forward/reverse reaction grids inline. 'plain' (default) renders as
@@ -5495,6 +5498,7 @@ function QuizCardWithAssignStatus({
             <div className="text-[11px] text-muted-foreground truncate">
               {methodGroupLabel} &middot; created {labDayOf(quiz.created_at)}
               {quiz.randomize_questions ? " · randomized" : ""}
+              {quiz.auto_retake ? " · retakes automatically" : ""}
             </div>
             {followsLine && <div className="text-[11px] text-muted-foreground" data-testid="quiz-follows-group">{followsLine}</div>}
           </div>
@@ -6166,6 +6170,7 @@ function NewQuizDialog({
   // 2026-06-09 PR1: per-quiz randomization toggle. Server shuffles the
   // questions array on every tech-take fetch when this is true.
   const [randomizeQuestions, setRandomizeQuestions] = useState(false);
+  const [autoRetake, setAutoRetake] = useState(false);
   // 2026-06-09 PR1: question_format. 'html' renders prompts via DOMPurify
   // so reaction tables / formatted clinical scenarios render inline.
   // Auto-inferred from meta block when uploading JSON; user can toggle
@@ -6272,6 +6277,7 @@ function NewQuizDialog({
           // question.question through DOMPurify with table support.
           randomizeQuestions,
           questionFormat,
+          autoRetake,
         }),
       });
       if (!res.ok) {
@@ -6470,6 +6476,17 @@ function NewQuizDialog({
               <span>
                 <span className="font-medium">Question prompts contain HTML</span>
                 <span className="block text-[10px] text-muted-foreground">Enable for prompts that include tables (e.g., forward/reverse reaction grids). HTML is sanitized on render; only safe tags and attributes survive.</span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2 text-xs cursor-pointer">
+              <Checkbox
+                checked={autoRetake}
+                onCheckedChange={(v) => setAutoRetake(v === true)}
+                data-testid="quiz-new-auto-retake"
+              />
+              <span>
+                <span className="font-medium">{AUTO_RETAKE_LABEL}</span>
+                <span className="block text-[10px] text-muted-foreground">{AUTO_RETAKE_HELP}</span>
               </span>
             </label>
           </div>
@@ -6782,6 +6799,8 @@ function EditQuizDialog({
   });
   const [variantTitle, setVariantTitle] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
+  // Automatic retakes (shared/quizAutoRetake.ts): edited here, carried to a new quiz saved from this one.
+  const [autoRetake, setAutoRetake] = useState<boolean>(Number((quiz as any).auto_retake) === 1);
 
   function toggleGroup(id: number) {
     setSelectedGroupIds(prev => {
@@ -6856,6 +6875,7 @@ function EditQuizDialog({
           questions,
           randomizeQuestions: !!(quiz as any).randomize_questions,
           questionFormat: (quiz as any).question_format === "html" ? "html" : "plain",
+          autoRetake,
         }),
       });
       if (!res.ok) {
@@ -6929,6 +6949,7 @@ function EditQuizDialog({
           questions: renumbered,
           randomizeQuestions: !!(quiz as any).randomize_questions,
           questionFormat: (quiz as any).question_format === "html" ? "html" : "plain",
+          autoRetake,
         }),
       });
       if (!res.ok) {
@@ -7062,6 +7083,21 @@ function EditQuizDialog({
             <Button variant="outline" size="sm" onClick={addQuestion}>
               <Plus className="h-3.5 w-3.5 mr-1" /> Add Question
             </Button>
+          </div>
+
+          <div className="space-y-2 pt-2 border-t border-border">
+            <Label className="text-xs">Quiz Options</Label>
+            <label className="flex items-start gap-2 text-xs cursor-pointer">
+              <Checkbox
+                checked={autoRetake}
+                onCheckedChange={(v) => setAutoRetake(v === true)}
+                data-testid="quiz-edit-auto-retake"
+              />
+              <span>
+                <span className="font-medium">{AUTO_RETAKE_LABEL}</span>
+                <span className="block text-[10px] text-muted-foreground">{AUTO_RETAKE_HELP} It applies to attempts taken from now on.</span>
+              </span>
+            </label>
           </div>
 
           {/* Save subset as a new quiz: lets the director derive a role-

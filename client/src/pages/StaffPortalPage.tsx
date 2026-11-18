@@ -30,6 +30,7 @@ import type { WaivedSpecimen } from "@shared/competencyWaivedSpecimens";
 import { REVISION_IN_PROGRESS_NOTE } from "@shared/policyApprovedVersion";
 import { shownOptions, optionIndexFor } from "@shared/quizOptions";
 import { voidedLine } from "@shared/quizAttemptVoid";
+import { nextAttemptLine } from "@shared/quizAutoRetake";
 import { clearAuth } from "@/lib/auth";
 import { useAuth } from "@/components/AuthContext";
 import { useLabRoute } from "@/hooks/useLabRoute";
@@ -1658,6 +1659,10 @@ interface PortalQuizResultPayload {
   date_taken: string;
   question_format: string;
   already_completed: boolean;
+  // Automatic retakes (shared/quizAutoRetake.ts): the correct answers left out of a failed attempt's review, and the attempt
+  // that opened by itself.
+  key_hidden?: boolean;
+  next_attempt?: { assignment_id: number; attempt_no: number } | null;
   questions: Array<{
     id: string;
     question: string;
@@ -1782,18 +1787,38 @@ function StaffPortalQuizzesView({
                 This quiz was already on record; the prior attempt is shown.
               </div>
             )}
+            {result.key_hidden && (
+              <div className="text-xs text-muted-foreground mt-1" data-testid="sp-quiz-key-hidden">
+                The questions you missed are marked. The correct answers aren't shown, because this quiz gives you another attempt right away.
+              </div>
+            )}
+            {result.next_attempt && (
+              <div className="mt-2 flex flex-wrap items-center gap-2" data-testid="sp-quiz-next-attempt">
+                <span className="text-xs font-medium">{nextAttemptLine(result.next_attempt.attempt_no)}</span>
+                <button
+                  type="button"
+                  onClick={() => openQuiz({ assignment_id: result.next_attempt!.assignment_id } as PortalQuiz)}
+                  className="text-xs px-3 py-1.5 text-white rounded"
+                  style={{ backgroundColor: "#01696F" }}
+                  data-testid="sp-quiz-take-next"
+                >
+                  {`Take attempt ${result.next_attempt.attempt_no}`}
+                </button>
+              </div>
+            )}
           </div>
           <div className="space-y-3">
             {result.questions.map((q, qi) => (
-              <div key={q.id} className="border border-border rounded p-3 bg-card">
+              <div key={q.id} className="border border-border rounded p-3 bg-card" data-testid="sp-quiz-review-question" data-correct={q.was_correct ? "true" : "false"}>
                 <div className="text-xs font-semibold mb-1">Q{qi + 1}: {renderPrompt(q.question, result.question_format)}</div>
                 <QuizQuestionImage src={q.image} className="my-1 max-h-48 max-w-full rounded border border-border bg-white object-contain" />
                 <div className="space-y-0.5 text-xs">
                   {shownOptions(q.options).map(({ text: opt, index }) => {
                     // The key and the answer name an option by position (shared/quizOptions.ts); an answer saved before
-                    // 2026-11-18 held the option's first character, which optionIndexFor still reads.
+                    // 2026-11-18 held the option's first character, which optionIndexFor still reads. With the key left out
+                    // (automatic retakes), only the person's own pick is marked, right or wrong, from was_correct.
                     const isSel = optionIndexFor(q.options, q.selected_answer) === index;
-                    const isCorrect = optionIndexFor(q.options, q.correct_answer) === index;
+                    const isCorrect = result.key_hidden ? isSel && !!q.was_correct : optionIndexFor(q.options, q.correct_answer) === index;
                     return (
                       <div key={index} className={`px-1 py-0.5 rounded ${isSel && isCorrect ? "bg-emerald-100 dark:bg-emerald-900/30" : isSel ? "bg-red-100 dark:bg-red-900/30" : isCorrect ? "bg-emerald-50 dark:bg-emerald-950/20" : ""}`}>
                         {isSel ? "●" : "○"} {opt}

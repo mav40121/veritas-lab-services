@@ -294,6 +294,10 @@ jobs:
         # Redington 2026-11-18 (Michael Q2 = 1): a scored attempt on an assigned quiz can be voided with a reason; it stays in the
         # history and stops counting as a Pass or Fail on Results, the quiz card, Quiz scores and the staff login's list.
         run: npm run test:quiz-attempt-void
+      - name: Run quiz automatic retake test
+        # Redington 2026-11-18 (Michael Q3 = 1): a quiz set to retake automatically opens the next attempt after a failed one on
+        # a staff login, and that failed attempt's review leaves out the correct answers.
+        run: npm run test:quiz-auto-retake
       - name: Run VeritaScan auto-completion integration test
         # Site review 2026-11-05: a passing assessment marks only what its record supports (technical: item 60, with all six procedures shown;
         # waived and non-technical: nothing), a draft or failed study marks nothing, the lab's own answer stays, and the admin audit is counts only.
