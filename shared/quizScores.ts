@@ -10,7 +10,7 @@ export type QuizScoreSource =
 
 /** Pass and Fail are a scored quiz's own result (VeritaComp passes a quiz at 100%). A typed Element 6 score reads
  *  Pass when its element is marked Pass and Not marked otherwise, never Fail (Michael Q179 = 1). */
-export type QuizScoreResult = "pass" | "fail" | "not_marked";
+export type QuizScoreResult = "pass" | "fail" | "not_marked" | "voided";
 
 export interface QuizScoreRow {
   key: string;
@@ -26,6 +26,8 @@ export interface QuizScoreRow {
   date_taken: string | null;
   score: number | null;
   result: QuizScoreResult;
+  /** Why an attempt was voided (shared/quizAttemptVoid.ts); only on a voided row. */
+  void_reason?: string | null;
 }
 
 export const SOURCE_LABEL: Record<QuizScoreSource, string> = {
@@ -34,7 +36,8 @@ export const SOURCE_LABEL: Record<QuizScoreSource, string> = {
   element6: "Entered on Element 6",
 };
 
-export const RESULT_LABEL: Record<QuizScoreResult, string> = { pass: "Pass", fail: "Fail", not_marked: "Not marked" };
+/** A voided attempt (2026-11-18) keeps its score on the list and reads Voided, never Pass or Fail. */
+export const RESULT_LABEL: Record<QuizScoreResult, string> = { pass: "Pass", fail: "Fail", not_marked: "Not marked", voided: "Voided" };
 
 /** The person a row belongs to, for the person filter: the roster id when known, else the competency employee. */
 export function personKey(r: Pick<QuizScoreRow, "staff_employee_id" | "competency_employee_id">): string {

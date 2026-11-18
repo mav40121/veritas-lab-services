@@ -13,7 +13,7 @@ const nameOf = (first: any, last: any, fallback: any) => `${first || ""} ${last 
 
 export function quizScoreRows(sqlite: any, labId: number): QuizScoreRow[] {
   const results = sqlite.prepare(
-    `SELECT qr.id, qr.quiz_id, qr.score, qr.passed, qr.date_taken, qr.source,
+    `SELECT qr.id, qr.quiz_id, qr.score, qr.passed, qr.date_taken, qr.source, qr.voided_at, qr.void_reason,
             COALESCE(qr.staff_employee_id, ce.staff_employee_id) AS staff_employee_id, ce.id AS competency_employee_id,
             ce.name AS ce_name, ce.title AS ce_title, se.first_name, se.last_name, se.title AS se_title,
             q.title AS quiz_title, q.method_group_name, qa.attempt_no
@@ -39,7 +39,9 @@ export function quizScoreRows(sqlite: any, labId: number): QuizScoreRow[] {
       attempt_no: assigned ? Number(r.attempt_no ?? 1) : null,
       date_taken: r.date_taken || null,
       score: r.score != null ? Number(r.score) : null,
-      result: Number(r.passed) === 1 ? "pass" : "fail",
+      // A voided attempt (server/quizAttemptVoid.ts) reads Voided whatever it scored.
+      result: r.voided_at ? "voided" : Number(r.passed) === 1 ? "pass" : "fail",
+      ...(r.voided_at ? { void_reason: r.void_reason ?? null } : {}),
     };
   });
 
@@ -174,7 +176,7 @@ export async function buildQuizScoresWorkbook(
   body(`The Quiz Scores sheet lists ${ownOnly ? "your" : "every"} scored competency quiz in VeritaComp for this laboratory, one row per attempt, newest first: the date taken, the person, the quiz, what it covers, the attempt number for an assigned quiz, the score and the result. It holds three kinds of score: a quiz assigned to a staff member and taken on their own login, a quiz an evaluator gave on a competency record, and a score typed on a record's Element 6 for a quiz taken outside VeritaComp.`);
   blank();
   section("What this export covers");
-  body(`${rows.length} score${rows.length === 1 ? "" : "s"} for ${people} ${people === 1 ? "person" : "people"}: ${count("pass")} Pass, ${count("fail")} Fail, ${count("not_marked")} Not marked.${filtered ? " These are the rows the screen's filters showed when the workbook was downloaded." : ""} Exported ${today}.`);
+  body(`${rows.length} score${rows.length === 1 ? "" : "s"} for ${people} ${people === 1 ? "person" : "people"}: ${count("pass")} Pass, ${count("fail")} Fail, ${count("not_marked")} Not marked${count("voided") ? `, ${count("voided")} Voided` : ""}.${filtered ? " These are the rows the screen's filters showed when the workbook was downloaded." : ""} Exported ${today}.`);
   blank();
   section("How to use this workbook");
   body("Filter Person to see one person's scores, Quiz to see everyone who took one quiz, or Result to find the attempts that need a retake. A VeritaComp quiz passes at 100%. A score typed on Element 6 reads Pass when the element is marked Pass and Not marked otherwise; the evaluator decides it on the record. The answers given on each attempt stay in VeritaComp, under Results on the quiz.");
@@ -208,11 +210,13 @@ export async function buildQuizScoresWorkbook(
     cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
     cell.border = border;
   });
-  const color: Record<string, string> = { pass: "FF437A22", fail: "FFA12C7B", not_marked: "FF7A7974" };
+  const color: Record<string, string> = { pass: "FF437A22", fail: "FFA12C7B", not_marked: "FF7A7974", voided: "FF7A7974" };
   rows.forEach((row, i) => {
+    // A voided attempt's Result cell carries its reason, so the workbook says why as the screen does.
+    const resultText = row.result === "voided" && row.void_reason ? `Voided: ${row.void_reason}` : RESULT_LABEL[row.result];
     const out = ws.addRow([
       row.date_taken ?? "", row.person_name, row.person_title ?? "", row.quiz_title, row.covers ?? "",
-      row.attempt_no ?? "", row.score ?? "", RESULT_LABEL[row.result], SOURCE_LABEL[row.source],
+      row.attempt_no ?? "", row.score ?? "", resultText, SOURCE_LABEL[row.source],
     ]);
     const even = (i + 2) % 2 === 0;
     out.eachCell({ includeEmpty: true }, (cell, col) => {

@@ -1970,6 +1970,11 @@ const compQuizResultsNewCols: [string, string][] = [
   ["source", "TEXT DEFAULT 'inline_assessment'"],
   ["staff_employee_id", "INTEGER"],
   ["typed_signature", "TEXT"],
+  // 2026-11-18 (Redington, Michael Q2 = 1; server/quizAttemptVoid.ts): a scored attempt can be voided with a reason. The row
+  // stays; it stops counting as a Pass or Fail. Never cleared once set.
+  ["voided_at", "TEXT"],
+  ["voided_by_user_id", "INTEGER"],
+  ["void_reason", "TEXT"],
 ];
 for (const [col, colType] of compQuizResultsNewCols) {
   if (!compQuizResultsColNames.includes(col)) {

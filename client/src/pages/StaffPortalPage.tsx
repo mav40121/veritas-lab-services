@@ -29,6 +29,7 @@ import { WaivedSpecimenRows } from "@/components/WaivedSpecimenRows";
 import type { WaivedSpecimen } from "@shared/competencyWaivedSpecimens";
 import { REVISION_IN_PROGRESS_NOTE } from "@shared/policyApprovedVersion";
 import { shownOptions, optionIndexFor } from "@shared/quizOptions";
+import { voidedLine } from "@shared/quizAttemptVoid";
 import { clearAuth } from "@/lib/auth";
 import { useAuth } from "@/components/AuthContext";
 import { useLabRoute } from "@/hooks/useLabRoute";
@@ -1635,6 +1636,9 @@ interface PortalQuiz {
   completed_at: string | null;
   score: number | null;
   passed: number | null;
+  voided?: boolean;
+  voided_at?: string | null;
+  void_reason?: string | null;
 }
 // A retake is a new assignment with the next attempt number (2026-11-11); attempt 1 reads as it always did.
 const attemptLabel = (q: PortalQuiz) => ((q.attempt_no ?? 1) > 1 ? `Attempt ${q.attempt_no}` : "");
@@ -1998,9 +2002,14 @@ function StaffPortalQuizzesView({
                           {q.completed_at ? `Completed ${labDayOf(q.completed_at)}` : ""}
                           {q.score != null ? <span className="ml-2">Score: <span className="font-semibold">{q.score}%</span></span> : null}
                         </div>
+                        {q.voided && (
+                          <div className="text-[11px] text-muted-foreground mt-0.5" data-testid={`sp-quiz-voided-${q.assignment_id}`}>
+                            {voidedLine(q, labDayOf)}
+                          </div>
+                        )}
                       </div>
-                      <span className={`text-xs font-semibold ${q.passed ? "text-emerald-700" : "text-amber-700"}`}>
-                        {q.passed ? "Passed" : "Recorded"}
+                      <span className={`text-xs font-semibold ${q.voided ? "text-muted-foreground" : q.passed ? "text-emerald-700" : "text-amber-700"}`}>
+                        {q.voided ? "Voided" : q.passed ? "Passed" : "Recorded"}
                       </span>
                     </div>
                   ))}

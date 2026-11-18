@@ -106,6 +106,8 @@ import { cleanWaivedSpecimens, waivedSpecimenColumns, waivedSpecimensFromRow, wa
 import { oneRowKey, sameTestNameOnMap, preferredSameTestName } from "@shared/presetAnalytes";
 import { quizImageProblem } from "@shared/quizImages";
 import { quizRetakeDecision } from "@shared/quizRetake";
+import { voidReasonProblem } from "@shared/quizAttemptVoid";
+import { voidTarget, applyVoid } from "./quizAttemptVoid";
 import { certificateExtras } from "./veritalabRegistry";
 
 // Express already URL-decodes route params before the handler runs, so
@@ -11043,7 +11045,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         `SELECT qa.id AS assignment_id, qa.quiz_id, qa.due_date, qa.status, qa.attempt_no,
                 qa.assigned_at, qa.completed_at, qa.completed_result_id,
                 q.title, q.method_group_name, q.question_format,
-                cqr.score, cqr.passed
+                cqr.score, cqr.passed, cqr.voided_at, cqr.void_reason
          FROM competency_quiz_assignments qa
          JOIN competency_quizzes q ON q.id = qa.quiz_id
          LEFT JOIN competency_quiz_results cqr ON cqr.id = qa.completed_result_id
@@ -11064,6 +11066,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           completed_at: r.completed_at,
           score: r.score,
           passed: r.passed,
+          // A voided attempt (2026-11-18) reads Voided, not its score's Pass or Fail.
+          voided: !!r.voided_at,
+          voided_at: r.voided_at ?? null,
+          void_reason: r.voided_at ? (r.void_reason ?? null) : null,
         })),
       });
     } catch (err: any) {
@@ -26311,7 +26317,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       `SELECT qa.id, qa.staff_employee_id, qa.due_date, qa.status, qa.attempt_no, qa.assigned_at,
               qa.completed_at, qa.completed_result_id,
               se.first_name, se.last_name, se.title,
-              cqr.score, cqr.passed
+              cqr.score, cqr.passed, cqr.voided_at
        FROM competency_quiz_assignments qa
        JOIN staff_employees se ON se.id = qa.staff_employee_id
        LEFT JOIN competency_quiz_results cqr ON cqr.id = qa.completed_result_id
@@ -26332,6 +26338,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         completed_result_id: r.completed_result_id,
         score: r.score,
         passed: r.passed,
+        voided: !!r.voided_at,
       })),
     });
   });
@@ -26359,7 +26366,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const rows = sqlite.prepare(
       `SELECT qa.id, qa.staff_employee_id, qa.attempt_no, qa.status, qa.assigned_at, qa.due_date, qa.completed_at,
               se.first_name, se.last_name, se.title, se.status AS roster_status, se.tier2_lab_id,
-              cqr.id AS result_id, cqr.score, cqr.passed, cqr.date_taken, cqr.answers
+              cqr.id AS result_id, cqr.score, cqr.passed, cqr.date_taken, cqr.answers, cqr.voided_at, cqr.void_reason
        FROM competency_quiz_assignments qa
        JOIN staff_employees se ON se.id = qa.staff_employee_id
        LEFT JOIN competency_quiz_results cqr ON cqr.id = qa.completed_result_id
@@ -26396,12 +26403,16 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         date_taken: r.date_taken ?? null,
         score: r.result_id != null ? r.score : null,
         passed: r.result_id != null ? Number(r.passed) === 1 : null,
+        // A voided attempt (2026-11-18, server/quizAttemptVoid.ts) keeps its score on file and reads Voided, not Pass or Fail.
+        voided: r.result_id != null && !!r.voided_at,
+        voided_at: r.result_id != null ? (r.voided_at ?? null) : null,
+        void_reason: r.result_id != null && r.voided_at ? (r.void_reason ?? null) : null,
         ...(staffOwn ? {} : { answers: r.result_id != null ? parseAnswers(r.answers) : [] }),
       });
     }
     for (const p of people) {
       const latest = p.attempts[p.attempts.length - 1];
-      const decision = quizRetakeDecision({ attemptNo: latest.attempt_no, status: latest.status, passed: latest.passed == null ? null : latest.passed ? 1 : 0 }, p.on_roster);
+      const decision = quizRetakeDecision({ attemptNo: latest.attempt_no, status: latest.status, passed: latest.passed == null ? null : latest.passed ? 1 : 0, voided: latest.voided }, p.on_roster);
       p.latest_attempt_no = latest.attempt_no;
       p.can_retake = !staffOwn && decision.ok;
       p.next_attempt_no = p.can_retake ? decision.nextAttemptNo : null;
@@ -26504,14 +26515,14 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const now = new Date().toISOString();
     const outcome = sqlite.transaction(() => {
       const latest = sqlite.prepare(
-        `SELECT qa.id, qa.attempt_no, qa.status, qa.assigned_at, qa.completed_at, cqr.id AS result_id, cqr.score, cqr.passed, cqr.date_taken
+        `SELECT qa.id, qa.attempt_no, qa.status, qa.assigned_at, qa.completed_at, cqr.id AS result_id, cqr.score, cqr.passed, cqr.date_taken, cqr.voided_at
          FROM competency_quiz_assignments qa
          LEFT JOIN competency_quiz_results cqr ON cqr.id = qa.completed_result_id
          WHERE qa.quiz_id = ? AND qa.staff_employee_id = ?
          ORDER BY qa.attempt_no DESC, qa.id DESC LIMIT 1`
       ).get(quiz.id, sid) as any;
       const decision = quizRetakeDecision(
-        latest ? { attemptNo: latest.attempt_no ?? 1, status: latest.status, passed: latest.result_id != null ? Number(latest.passed) : null } : null,
+        latest ? { attemptNo: latest.attempt_no ?? 1, status: latest.status, passed: latest.result_id != null ? Number(latest.passed) : null, voided: latest.result_id != null && !!latest.voided_at } : null,
         onActiveQuizRoster(sqlite, labId, sid),
       );
       if (!decision.ok) return { decision, latest };
@@ -26537,6 +26548,46 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       after: { assignment: created }, ipAddress: req.ip,
     });
     res.json({ ...created, employee_name: personName });
+  });
+
+  // POST /api/veritacomp/quiz-results/:id/void  Body: { reason }
+  //   Redington 2026-11-18 (Michael Q2 = 1; server/quizAttemptVoid.ts, shared/quizAttemptVoid.ts): void a scored attempt on an
+  //   assigned quiz. The row stays, marked with who, when and why, and stops counting as a Pass or Fail; it is never deleted or
+  //   un-voided. The reach is the retake's: the lab's owner or admin and anyone with edit on VeritaComp in the quiz's own lab; a
+  //   Staff login is refused like Results (403 QUIZ_RESULTS_EDIT_ONLY). A quiz given on a competency record is refused (409
+  //   NOT_ASSIGNED_ATTEMPT), already voided is 409 ALREADY_VOIDED, no reason is 400 VOID_REASON_REQUIRED. Audited as entity_type
+  //   'quiz_attempt_void', action 'update' (before: the attempt's score and result; after: when and why).
+  app.post("/api/veritacomp/quiz-results/:id/void", authMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const sqlite = (db as any).$client;
+    const resultId = Number(req.params.id);
+    if (!Number.isInteger(resultId) || resultId <= 0) return res.status(404).json({ error: "Attempt not found" });
+    // Reach first, from the attempt's own quiz, so a refusal never tells someone outside the lab what the attempt is.
+    const quiz = sqlite.prepare(
+      "SELECT q.id, q.user_id, q.lab_id FROM competency_quiz_results qr JOIN competency_quizzes q ON q.id = qr.quiz_id WHERE qr.id = ?",
+    ).get(resultId) as any;
+    if (!quiz || !userCanAccessLabRow('competency_quizzes', quiz.id, req)) return res.status(404).json({ error: "Attempt not found" });
+    const check = voidTarget(sqlite, resultId);
+    const labId = (check.ok ? check.target.labId : check.target?.labId) ?? quizAssignmentLabId(sqlite, quiz);
+    if (!labId || staffOwnIn(req, labId) || !hasModuleEditAccess(labId, req.userId, "veritacomp")) {
+      return res.status(403).json({ error: "Voiding an attempt is for the lab's owner or admin and anyone with edit access to VeritaComp™.", code: "QUIZ_RESULTS_EDIT_ONLY" });
+    }
+    if (!check.ok) return res.status(check.status).json({ error: check.message, code: check.code });
+    const problem = voidReasonProblem(req.body?.reason);
+    if (problem) return res.status(400).json({ error: problem, code: "VOID_REASON_REQUIRED" });
+    const reason = String(req.body.reason).trim();
+    const done = applyVoid(sqlite, resultId, reason, req.userId);
+    if (!done.ok) return res.status(409).json({ error: `Attempt ${check.target.attemptNo} was already voided.`, code: "ALREADY_VOIDED" });
+    const t = check.target;
+    const person = t.staffEmployeeId != null ? sqlite.prepare("SELECT first_name, last_name FROM staff_employees WHERE id = ?").get(t.staffEmployeeId) as any : null;
+    const personName = `${person?.first_name || ""} ${person?.last_name || ""}`.trim() || `Staff ${t.staffEmployeeId ?? ""}`.trim();
+    logAudit({
+      userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritacomp", action: "update", entityType: "quiz_attempt_void",
+      entityId: String(t.resultId), entityLabel: `${personName} / ${t.quizTitle}: attempt ${t.attemptNo}`,
+      before: { result_id: t.resultId, assignment_id: t.assignmentId, attempt_no: t.attemptNo, score: t.score, passed: t.passed, date_taken: t.dateTaken },
+      after: { voided_at: done.voidedAt, void_reason: reason }, ipAddress: req.ip,
+    });
+    res.json({ result_id: t.resultId, assignment_id: t.assignmentId, attempt_no: t.attemptNo, voided_at: done.voidedAt, void_reason: reason });
   });
 
   // DELETE /api/veritacomp/quiz-assignments/:id
@@ -35925,6 +35976,41 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (!Number.isFinite(Date.parse(before))) return res.status(400).json({ error: "before (an ISO time: when the fix went live) required", code: "BEFORE_REQUIRED" });
     const { quizLetterAudit } = await import("./quizLetterAudit");
     res.json(quizLetterAudit((db as any).$client, before));
+  });
+  // Redington 2026-11-18 (Michael Q2 = 1; server/quizAttemptVoid.ts). Header x-admin-secret only. Body { resultIds, reason,
+  // dryRun? }: voids attempts on assigned quizzes as Veritas (voided_by_user_id 0), the lab's own route's rule. A dry run unless
+  // dryRun is false; the dry run lists each id with its lab, quiz, attempt, score and whether it can be voided. Applying voids
+  // only when every id can be (409 NOT_ALL_VOIDABLE otherwise, nothing written), one audit row each (user 0). Ids and scores only.
+  app.post("/api/admin/veritacomp/quiz-results/void", (req, res) => {
+    if (req.headers["x-admin-secret"] !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    const sqlite = (db as any).$client;
+    const ids = Array.isArray(req.body?.resultIds) ? req.body.resultIds.map(Number).filter((n: number) => Number.isInteger(n) && n > 0) : [];
+    if (!ids.length) return res.status(400).json({ error: "resultIds required", code: "IDS_REQUIRED" });
+    const problem = voidReasonProblem(req.body?.reason);
+    if (problem) return res.status(400).json({ error: problem, code: "VOID_REASON_REQUIRED" });
+    const reason = String(req.body.reason).trim();
+    const checks = ids.map((id: number) => ({ id, check: voidTarget(sqlite, id) }));
+    const plan = checks.map(({ id, check }: any) => check.ok
+      ? { resultId: id, voidable: true, labId: check.target.labId, quizId: check.target.quizId, attemptNo: check.target.attemptNo, score: check.target.score, passed: check.target.passed }
+      : { resultId: id, voidable: false, code: check.code, labId: check.target?.labId ?? null, quizId: check.target?.quizId ?? null });
+    if (req.body?.dryRun !== false) return res.json({ dryRun: true, reason, plan });
+    if (plan.some((p: any) => !p.voidable)) return res.status(409).json({ error: "Not every attempt can be voided", code: "NOT_ALL_VOIDABLE", plan });
+    const voided: Array<{ resultId: number; voidedAt: string }> = [];
+    sqlite.transaction(() => {
+      for (const { id, check } of checks as any[]) {
+        const done = applyVoid(sqlite, id, reason, 0);
+        if (!done.ok) throw new Error(`ALREADY_VOIDED ${id}`);
+        voided.push({ resultId: id, voidedAt: done.voidedAt });
+        const t = check.target;
+        logAudit({
+          userId: 0, ownerUserId: 0, module: "veritacomp", action: "update", entityType: "quiz_attempt_void",
+          entityId: String(id), entityLabel: `Quiz ${t.quizId}: attempt ${t.attemptNo} (voided by Veritas)`,
+          before: { result_id: id, assignment_id: t.assignmentId, attempt_no: t.attemptNo, score: t.score, passed: t.passed, date_taken: t.dateTaken },
+          after: { voided_at: done.voidedAt, void_reason: reason }, ipAddress: req.ip,
+        });
+      }
+    })();
+    res.json({ dryRun: false, reason, voided });
   });
   // POST {labId, programId, backupKey? | before?, dryRun?, expectedTotal?}: put back a deleted program (its method groups,
   // checklist items and pictures, Not applicable rows) with its original ids from one database copy, read inside the
