@@ -243,6 +243,7 @@ import { normalizeChecklistItems } from "@shared/competencyChecklist";
 import { checklistImageIdProblem, checklistItemImageIds, checklistForAudit, checklistImageMap, withChecklistImages, snapshotChecklistItemImages } from "./competencyChecklistImages";
 import { FORM_OWNED_ROWS, personPageEntryCount, holdsPersonPageEntriesMessage, planRecordSaveRestore, applyRecordSaveRestore, recordLosses } from "./competencyRecordRestore";
 import { programQuizCount, orphanQuizzes, planDeletedProgramRestore, applyDeletedProgramRestore, RestoreRefused } from "./competencyProgramRestore";
+import { ownRosterRows, ownRosterRowForSession, labsForApprovals } from "./ownRoster";
 import { quizScoreRows, rowsForPerson, buildQuizScoresWorkbook } from "./quizScores";
 import { filterQuizScores, type QuizScoreRow } from "../shared/quizScores";
 import { notApplicableRows, notApplicableIds, notApplicableProblem, NOT_APPLICABLE_REASON_MAX } from "./competencyNotApplicable";
@@ -1004,9 +1005,11 @@ export function staffPortalAuthMiddleware(req: any, res: any, next: any) {
   if (check.isDemo) return res.status(401).json({ error: "Not a staff login session" });
   touchSession(sqlite, check.sid);
   const payload = { userId: check.userId };
-  const seat = sqlite.prepare(
-    "SELECT lab_id, staff_employee_id FROM user_seats WHERE seat_user_id = ? AND seat_type = 'staff_portal' AND status = 'active' AND staff_employee_id IS NOT NULL LIMIT 1"
-  ).get(payload.userId) as any;
+  // My sign-offs acts as the signed-in person's OWN roster row: a Staff login's seat, or (2026-11-18, Michael: quizzes go to
+  // admins as easily as to staff) the roster row an admin or editor's sign-in is linked to (server/ownRoster.ts). The lab in
+  // X-Active-Lab-Id picks among several.
+  const preferLab = Number(req.headers["x-active-lab-id"] || 0) || null;
+  const seat = ownRosterRowForSession(sqlite, payload.userId, preferLab);
   if (!seat || !seat.lab_id || !seat.staff_employee_id) {
     return res.status(401).json({ error: "Not a staff login session", code: "NOT_STAFF_PORTAL" });
   }
@@ -11705,9 +11708,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   //   staffPortalAuthMiddleware.
   app.get("/api/me/staff-portal-employee", authMiddleware, (req: any, res) => {
     const sqlite = (db as any).$client;
-    const seat = sqlite.prepare(
-      "SELECT lab_id, staff_employee_id FROM user_seats WHERE seat_user_id = ? AND seat_type = 'staff_portal' AND status = 'active' AND staff_employee_id IS NOT NULL LIMIT 1"
-    ).get(req.userId) as any;
+    // 2026-11-18: also an admin or editor whose sign-in is linked to their own roster row (server/ownRoster.ts).
+    const seat = ownRosterRowForSession(sqlite, req.userId, Number(req.headers["x-active-lab-id"] || 0) || null);
     const resolvedLabId: number | null = seat?.lab_id ?? null;
     const resolvedEmpId: number | null = seat?.staff_employee_id ?? null;
 
@@ -11752,16 +11754,21 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // an owner (that column holds the owner id on every row), so an owner's
     // bell listed all their staff's pending work as their own; the name-match
     // auto-link could never fire (column is NOT NULL). Both removed.
-    const empRows = (wantLabId
-      ? sqlite.prepare(
-          "SELECT staff_employee_id AS id, lab_id AS tier2_lab_id FROM user_seats WHERE seat_user_id = ? AND seat_type = 'staff_portal' AND status = 'active' AND staff_employee_id IS NOT NULL AND lab_id = ?"
-        ).all(req.userId, wantLabId)
-      : sqlite.prepare(
-          "SELECT staff_employee_id AS id, lab_id AS tier2_lab_id FROM user_seats WHERE seat_user_id = ? AND seat_type = 'staff_portal' AND status = 'active' AND staff_employee_id IS NOT NULL"
-        ).all(req.userId)) as any[];
+    // 2026-11-18 (Michael: "Quizzes can be assigned to admins just as easy as staff"): also the roster row an admin or
+    // editor's own sign-in is linked to (staff_employees.login_user_id), never staff_employees.user_id. server/ownRoster.ts.
+    const empRows = ownRosterRows(sqlite, req.userId, wantLabId) as any[];
+
+    // Documents waiting for this person's approval don't need a roster row: every lab they belong to (2026-11-18; before,
+    // only a Staff login's lab was looked at, so an admin approver never saw them on the bell).
+    const approvals: any[] = [];
+    for (const labId of labsForApprovals(sqlite, req.userId, wantLabId)) {
+      for (const a of approvalQueueFor(sqlite, labId, req.userId, labLocalDate(new Date().toISOString()))) {
+        approvals.push({ document_id: a.document_id, title: a.title, step_name: a.step_name });
+      }
+    }
 
     if (!empRows.length) {
-      return res.json({ quizzes: [], policies: [], competencies: [] });
+      return res.json({ approvals, quizzes: [], policies: [], competencies: [] });
     }
 
     // Pending quizzes: competency_quiz_assignments with status='assigned'.
@@ -11839,12 +11846,6 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       return true;
     });
 
-    const approvals: any[] = [];
-    for (const labId of new Set(empRows.map((r: any) => Number(r.tier2_lab_id)))) {
-      for (const a of approvalQueueFor(sqlite, labId, req.userId, labLocalDate(new Date().toISOString()))) {
-        approvals.push({ document_id: a.document_id, title: a.title, step_name: a.step_name });
-      }
-    }
     res.json({
       approvals,
       quizzes: dedupedQuizzes,

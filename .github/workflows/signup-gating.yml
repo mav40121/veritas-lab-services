@@ -282,6 +282,10 @@ jobs:
         # Michael 2026-11-17 (Q347 = 1): every scored quiz in a lab in one list (assigned attempts, quizzes given on a record, typed Element 6 scores),
         # with the quiz Results reach (Staff login own only, view-only refused), nothing across labs, and a section 6 workbook of the filtered rows.
         run: npm run test:quiz-scores
+      - name: Run admin own staff items integration test
+        # Michael 2026-11-18: quizzes go to admins as easily as to staff. An admin or editor linked to their own roster row
+        # (staff_employees.login_user_id) gets the bell and My sign-offs with their normal sign-in; the owner still maps to nobody.
+        run: npm run test:admin-own-staff-items
       - name: Run VeritaScan auto-completion integration test
         # Site review 2026-11-05: a passing assessment marks only what its record supports (technical: item 60, with all six procedures shown;
         # waived and non-technical: nothing), a draft or failed study marks nothing, the lab's own answer stays, and the admin audit is counts only.
