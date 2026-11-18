@@ -89,6 +89,7 @@ import { DocumentLinkDialog, COMP_DOC_TYPES } from "@/components/DocumentLinkDia
 import { QuizQuestionImage, QuizImagePicker } from "@/components/QuizQuestionImage";
 import { isQuizImage, quizImageProblem } from "@shared/quizImages";
 import { optionLetter, optionIndexFor, shownOptions } from "@shared/quizOptions";
+import { voidReasonProblem, voidedLine, VOID_REASON_MAX } from "@shared/quizAttemptVoid";
 import { ObserverInitialsField, type QualifiedObserver } from "@/components/ObserverInitialsField";
 import { PriorYearComparisonDialog } from "@/components/PriorYearComparisonDialog";
 import { CompetencyRemindersCard } from "@/components/CompetencyRemindersCard";
@@ -5438,6 +5439,7 @@ interface QuizAssignmentSummary {
   completed_result_id: number | null;
   score: number | null;
   passed: number | null;
+  voided?: boolean;
 }
 
 // One row per person: their latest attempt (a retake adds a row per attempt, 2026-11-11).
@@ -5473,9 +5475,11 @@ function QuizCardWithAssignStatus({
   // Counted by person, from each person's latest attempt.
   const latest = latestAttemptPerPerson(assignmentData?.assignments ?? []);
   const total = latest.length;
-  const completed = latest.filter(a => a.status === "completed").length;
-  const notPassed = latest.filter(a => a.status === "completed" && a.passed != null && !a.passed).length;
-  const pending = total - completed;
+  // A voided latest attempt (shared/quizAttemptVoid.ts) is neither completed nor not passed: it waits on a retake.
+  const voidedLatest = latest.filter(a => a.status === "completed" && a.voided).length;
+  const completed = latest.filter(a => a.status === "completed" && !a.voided).length;
+  const notPassed = latest.filter(a => a.status === "completed" && !a.voided && a.passed != null && !a.passed).length;
+  const pending = total - completed - voidedLatest;
   const today = labTodayIso();
   const overdue = latest.filter(a => a.status === "assigned" && a.due_date && a.due_date < today).length;
 
@@ -5533,6 +5537,7 @@ function QuizCardWithAssignStatus({
               {notPassed > 0 && <span className="text-red-700 dark:text-red-400"> ({notPassed} not passed)</span>}
             </span>
             <span className="font-medium text-amber-700 dark:text-amber-400">{pending} pending</span>
+            {voidedLatest > 0 && <span className="text-muted-foreground">{voidedLatest} voided, awaiting a retake</span>}
             {overdue > 0 && (
               <span className="font-semibold text-red-700 dark:text-red-400">{overdue} overdue</span>
             )}
@@ -5560,6 +5565,9 @@ interface QuizResultAttempt {
   date_taken: string | null;
   score: number | null;
   passed: boolean | null;
+  voided?: boolean;
+  voided_at?: string | null;
+  void_reason?: string | null;
   answers?: QuizResultAnswer[];
 }
 interface QuizResultPerson {
@@ -5586,6 +5594,7 @@ interface QuizResultsPayload {
 
 function AttemptOutcome({ attempt }: { attempt: QuizResultAttempt }) {
   if (attempt.status !== "completed") return <Badge variant="outline" className="text-[10px] border-amber-400 text-amber-700 dark:text-amber-400">Not taken yet</Badge>;
+  if (attempt.voided) return <Badge variant="outline" className="text-[10px] border-dashed text-muted-foreground" data-testid="quiz-attempt-voided">Voided</Badge>;
   if (attempt.passed == null) return <Badge variant="outline" className="text-[10px]">No score</Badge>;
   return attempt.passed
     ? <Badge className="text-[10px] bg-emerald-600 hover:bg-emerald-600 text-white">Pass</Badge>
@@ -5599,6 +5608,37 @@ function QuizResultsDialog({ quizId, onClose }: { quizId: number; onClose: () =>
   const [retakeFor, setRetakeFor] = useState<number | null>(null);
   const [retakeDue, setRetakeDue] = useState("");
   const [saving, setSaving] = useState(false);
+  // Void an attempt (2026-11-18, shared/quizAttemptVoid.ts): the result id being voided and the reason typed.
+  const [voidFor, setVoidFor] = useState<number | null>(null);
+  const [voidReason, setVoidReason] = useState("");
+
+  async function voidAttempt(a: QuizResultAttempt, person: QuizResultPerson) {
+    if (a.result_id == null) return;
+    const problem = voidReasonProblem(voidReason);
+    if (problem) { toast({ title: "Not voided", description: problem, variant: "destructive" }); return; }
+    setSaving(true);
+    try {
+      const r = await fetch(`${API_BASE}/api/veritacomp/quiz-results/${a.result_id}/void`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ reason: voidReason.trim() }),
+      });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(body.error || "The attempt wasn't voided");
+      toast({
+        title: `Attempt ${a.attempt_no} voided for ${person.employee_name}`,
+        description: "It stays in the history marked Voided and no longer counts as a Pass or Fail.",
+      });
+      setVoidFor(null);
+      setVoidReason("");
+    } catch (e: any) {
+      toast({ title: "Not voided", description: e.message, variant: "destructive" });
+    } finally {
+      setSaving(false);
+      qc.invalidateQueries({ queryKey: ["/api/veritacomp/quizzes", quizId, "results"] });
+      qc.invalidateQueries({ queryKey: ["/api/veritacomp/quizzes", quizId, "assignments"] });
+    }
+  }
 
   const { data, isLoading, error } = useQuery<QuizResultsPayload>({
     queryKey: ["/api/veritacomp/quizzes", quizId, "results"],
@@ -5662,7 +5702,8 @@ function QuizResultsDialog({ quizId, onClose }: { quizId: number; onClose: () =>
           <div className="space-y-3">
             <p className="text-xs text-muted-foreground">
               Everyone assigned this quiz and every attempt they've taken on their staff login. A pass needs 100%. Open an attempt to see the
-              answers given. When someone's latest attempt failed, Assign a retake gives them the next attempt; the failed attempt stays on record.
+              answers given. When someone's latest attempt failed or was voided, Assign a retake gives them the next attempt; the earlier attempt
+              stays on record. Void an attempt that shouldn't count (for example, one scored by a system error): it stays in the history with your reason.
             </p>
             {data.people.length === 0 ? (
               <div className="text-xs text-muted-foreground border border-border rounded-md p-4 text-center" data-testid="quiz-results-empty">
@@ -5693,15 +5734,58 @@ function QuizResultsDialog({ quizId, onClose }: { quizId: number; onClose: () =>
                         <span className="w-12 font-semibold" data-testid="quiz-results-score">{a.score != null ? `${a.score}%` : ""}</span>
                         <AttemptOutcome attempt={a} />
                         {a.status === "completed" && a.result_id != null && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-6 text-xs ml-auto"
-                            onClick={() => setViewing({ personId: p.staff_employee_id, assignmentId: a.assignment_id })}
-                            data-testid={`quiz-results-view-${a.assignment_id}`}
-                          >
-                            View answers
-                          </Button>
+                          <span className="ml-auto flex items-center gap-1">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 text-xs"
+                              onClick={() => setViewing({ personId: p.staff_employee_id, assignmentId: a.assignment_id })}
+                              data-testid={`quiz-results-view-${a.assignment_id}`}
+                            >
+                              View answers
+                            </Button>
+                            {!data.own_only && !a.voided && voidFor !== a.result_id && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-6 text-xs text-muted-foreground"
+                                onClick={() => { setVoidFor(a.result_id); setVoidReason(""); }}
+                                data-testid={`quiz-void-btn-${a.result_id}`}
+                              >
+                                Void
+                              </Button>
+                            )}
+                          </span>
+                        )}
+                        {a.voided && (
+                          <div className="basis-full text-[11px] text-muted-foreground" data-testid={`quiz-void-line-${a.result_id}`}>
+                            {voidedLine(a, labDayOfStamp)}
+                          </div>
+                        )}
+                        {!a.voided && voidFor === a.result_id && a.result_id != null && (
+                          <div className="basis-full space-y-2 border border-border rounded-md p-2 bg-muted/30" data-testid={`quiz-void-form-${a.result_id}`}>
+                            <p className="text-[11px] text-muted-foreground">
+                              Voiding keeps this attempt in the history, marked Voided with your reason, and it no longer counts as a Pass or Fail.
+                              It can't be undone. Assign a retake afterwards to give {p.employee_name} a new attempt.
+                            </p>
+                            <Label htmlFor={`quiz-void-reason-${a.result_id}`} className="text-xs">Reason (required)</Label>
+                            <Textarea
+                              id={`quiz-void-reason-${a.result_id}`}
+                              value={voidReason}
+                              onChange={(e) => setVoidReason(e.target.value)}
+                              maxLength={VOID_REASON_MAX}
+                              rows={2}
+                              className="text-xs"
+                              placeholder="For example: scored by a system error"
+                              data-testid={`quiz-void-reason-${a.result_id}`}
+                            />
+                            <div className="flex gap-2">
+                              <Button size="sm" variant="destructive" className="h-8 text-xs" disabled={saving || !voidReason.trim()} onClick={() => voidAttempt(a, p)} data-testid={`quiz-void-confirm-${a.result_id}`}>
+                                {saving ? "Voiding..." : `Void attempt ${a.attempt_no}`}
+                              </Button>
+                              <Button size="sm" variant="ghost" className="h-8 text-xs" disabled={saving} onClick={() => { setVoidFor(null); setVoidReason(""); }}>Cancel</Button>
+                            </div>
+                          </div>
                         )}
                       </div>
                     ))}
@@ -5778,6 +5862,7 @@ function QuizAttemptAnswers({
         <span className="font-semibold">{attempt.score != null ? `${attempt.score}%` : ""}</span>
         <AttemptOutcome attempt={attempt} />
         <span className="text-xs text-muted-foreground">{rightCount} of {questions.length} right</span>
+        {attempt.voided && <span className="basis-full text-[11px] text-muted-foreground">{voidedLine(attempt, labDayOfStamp)}</span>}
       </div>
       <p className="text-[11px] text-muted-foreground">Right or wrong is as the attempt was scored when it was submitted.</p>
       <ol className="space-y-3">

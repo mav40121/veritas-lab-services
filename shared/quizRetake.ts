@@ -12,6 +12,7 @@ export interface LatestQuizAttempt {
   attemptNo: number;
   status: string;            // competency_quiz_assignments.status: 'assigned' (open) or 'completed'
   passed: number | null;     // competency_quiz_results.passed for the completed attempt, null when no result is on file
+  voided?: boolean;          // the completed attempt was voided (shared/quizAttemptVoid.ts): it counts as not passed
 }
 
 export interface QuizRetakeDecision {
@@ -26,6 +27,8 @@ export function quizRetakeDecision(latest: LatestQuizAttempt | null, onRoster: b
   if (!onRoster) return no("NOT_ON_ROSTER", "This person isn't on this lab's active roster, so a retake can't be assigned.");
   if (!latest) return no("NO_ATTEMPT", "This person hasn't been assigned this quiz yet. Use Assign to give them attempt 1.");
   if (latest.status !== "completed") return no("RETAKE_OPEN", `Attempt ${latest.attemptNo} is still open. A retake can be assigned once it's taken and not passed.`);
+  // A voided attempt doesn't count, whatever it scored (2026-11-18), so the person can be given the next attempt.
+  if (latest.voided) return { ok: true, code: null, message: null, nextAttemptNo: latest.attemptNo + 1 };
   if (latest.passed == null) return no("RETAKE_NO_SCORE", `Attempt ${latest.attemptNo} has no score on file, so a retake can't be assigned.`);
   if (Number(latest.passed) === 1) return no("RETAKE_PASSED", `Attempt ${latest.attemptNo} passed, so no retake is needed.`);
   return { ok: true, code: null, message: null, nextAttemptNo: latest.attemptNo + 1 };

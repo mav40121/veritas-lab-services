@@ -27,6 +27,7 @@ const RESULT_CLS: Record<QuizScoreRow["result"], string> = {
   pass: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
   fail: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
   not_marked: "bg-muted text-muted-foreground",
+  voided: "bg-muted text-muted-foreground border border-dashed border-muted-foreground/50",
 };
 const selectCls = "h-8 text-xs rounded-md border bg-background px-2 max-w-full";
 
@@ -153,6 +154,11 @@ export function QuizScoresList({ labId, staffEmployeeId, compact = false, headin
                 <span className="text-sm font-semibold tabular-nums" data-testid="quiz-score-score">{r.score != null ? `${r.score}%` : ""}</span>
                 <Badge className={`text-[10px] ${RESULT_CLS[r.result]}`} data-testid="quiz-score-result">{RESULT_LABEL[r.result]}</Badge>
               </div>
+              {r.result === "voided" && r.void_reason && (
+                <div className="text-[11px] text-muted-foreground order-5 sm:order-none col-span-2 sm:col-span-full" data-testid="quiz-score-void-reason">
+                  Voided: {r.void_reason}
+                </div>
+              )}
             </div>
           );
         })}
