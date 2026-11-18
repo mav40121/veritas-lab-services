@@ -35915,6 +35915,17 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (req.headers["x-admin-secret"] !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
     res.json(orphanQuizzes((db as any).$client));
   });
+  // Redington 2026-11-18 (server/quizLetterAudit.ts, shared/quizOptions.ts). Header x-admin-secret only. Quizzes the quiz
+  // screens' old first-character letter rule graded against the answer key, and each attempt recorded before `?before=`
+  // (required: the ISO time the position rule went live, so no attempt saved under it is read back by the old rule) with its
+  // stored score and its score read by position. Read-only; ids, scores and counts only.
+  app.get("/api/admin/veritacomp/quiz-letter-audit", async (req, res) => {
+    if (req.headers["x-admin-secret"] !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    const before = typeof req.query.before === "string" ? req.query.before : "";
+    if (!Number.isFinite(Date.parse(before))) return res.status(400).json({ error: "before (an ISO time: when the fix went live) required", code: "BEFORE_REQUIRED" });
+    const { quizLetterAudit } = await import("./quizLetterAudit");
+    res.json(quizLetterAudit((db as any).$client, before));
+  });
   // POST {labId, programId, backupKey? | before?, dryRun?, expectedTotal?}: put back a deleted program (its method groups,
   // checklist items and pictures, Not applicable rows) with its original ids from one database copy, read inside the
   // server. backupKey names the copy; otherwise the newest copy of either tier made before `before` (an ISO time) is used.

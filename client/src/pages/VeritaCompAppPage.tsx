@@ -88,6 +88,7 @@ import {
 import { DocumentLinkDialog, COMP_DOC_TYPES } from "@/components/DocumentLinkDialog";
 import { QuizQuestionImage, QuizImagePicker } from "@/components/QuizQuestionImage";
 import { isQuizImage, quizImageProblem } from "@shared/quizImages";
+import { optionLetter, optionIndexFor, shownOptions } from "@shared/quizOptions";
 import { ObserverInitialsField, type QualifiedObserver } from "@/components/ObserverInitialsField";
 import { PriorYearComparisonDialog } from "@/components/PriorYearComparisonDialog";
 import { CompetencyRemindersCard } from "@/components/CompetencyRemindersCard";
@@ -4855,12 +4856,12 @@ function NewAssessmentDialog({
                                 <div key={qi} className="text-[10px] mb-2 border-t border-border pt-1">
                                   <div className="font-medium mb-1">Q{qi + 1}: {renderQuizPrompt(q.question, quizFormat)}</div>
                                   <QuizQuestionImage src={q.image} className="my-1 max-h-48 max-w-full rounded border border-border bg-white object-contain" />
-                                  {q.options?.map((opt: string) => {
-                                    const letter = opt.charAt(0);
-                                    const isSelected = q.selected_answer === letter;
-                                    const isCorrect = q.correct_answer === letter;
+                                  {shownOptions(q.options).map(({ text: opt, index }) => {
+                                    // By position, as the answer key is written (shared/quizOptions.ts).
+                                    const isSelected = optionIndexFor(q.options, q.selected_answer) === index;
+                                    const isCorrect = optionIndexFor(q.options, q.correct_answer) === index;
                                     return (
-                                      <div key={opt} className={`px-1 py-0.5 rounded ${isSelected && isCorrect ? "bg-emerald-100 dark:bg-emerald-900/30" : isSelected ? "bg-red-100 dark:bg-red-900/30" : isCorrect ? "bg-emerald-50 dark:bg-emerald-950/20" : ""}`}>
+                                      <div key={index} className={`px-1 py-0.5 rounded ${isSelected && isCorrect ? "bg-emerald-100 dark:bg-emerald-900/30" : isSelected ? "bg-red-100 dark:bg-red-900/30" : isCorrect ? "bg-emerald-50 dark:bg-emerald-950/20" : ""}`}>
                                         {isSelected ? "\u25CF" : "\u25CB"} {opt}
                                         {isCorrect && <span className="text-emerald-600 font-semibold ml-1">{"\u2713"}</span>}
                                         {isSelected && !isCorrect && <span className="text-red-600 font-semibold ml-1">{"\u2717"}</span>}
@@ -4888,10 +4889,10 @@ function NewAssessmentDialog({
                             <div className="text-xs font-medium mb-2">{renderQuizPrompt(q.question, quizFormat)}</div>
                             <QuizQuestionImage src={q.image} />
                             <div className="space-y-1.5">
-                              {q.options?.map((opt: string) => {
-                                const letter = opt.charAt(0);
+                              {shownOptions(q.options).map(({ text: opt, letter, index }) => {
+                                // The position letter, the one the answer key holds (shared/quizOptions.ts).
                                 return (
-                                  <label key={opt} className={`flex items-center gap-2 text-xs cursor-pointer p-1.5 rounded border ${quizAnswers[q.id] === letter ? "border-primary bg-primary/5" : "border-transparent hover:bg-muted/50"}`}>
+                                  <label key={index} className={`flex items-center gap-2 text-xs cursor-pointer p-1.5 rounded border ${quizAnswers[q.id] === letter ? "border-primary bg-primary/5" : "border-transparent hover:bg-muted/50"}`}>
                                     <input type="radio" name={`quiz-${q.id}`} checked={quizAnswers[q.id] === letter} onChange={() => setQuizAnswers(prev => ({ ...prev, [q.id]: letter }))} />
                                     {opt}
                                   </label>
@@ -5580,14 +5581,8 @@ interface QuizResultsPayload {
   people: QuizResultPerson[];
 }
 
-const optionLetter = (i: number) => String.fromCharCode(65 + i);
-// Which option an answer key names: by position letter (A, B, ...) as the quiz preview reads it, or else by the option's own
-// first character, as the staff login's quiz screen sends it.
-function optionIndexFor(options: string[], key: string | null | undefined): number {
-  if (key == null || key === "") return -1;
-  const byLetter = options.findIndex((_, i) => optionLetter(i) === key);
-  return byLetter >= 0 ? byLetter : options.findIndex((o) => String(o).trim().charAt(0) === key);
-}
+// optionLetter and optionIndexFor come from shared/quizOptions.ts: a key or answer names an option by position (A = first),
+// and an answer saved before 2026-11-18 by the option's first character.
 
 function AttemptOutcome({ attempt }: { attempt: QuizResultAttempt }) {
   if (attempt.status !== "completed") return <Badge variant="outline" className="text-[10px] border-amber-400 text-amber-700 dark:text-amber-400">Not taken yet</Badge>;
