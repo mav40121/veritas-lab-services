@@ -99,7 +99,7 @@ import { competencyDueColumns, competencySeedAtCreate, nextCompetencyDue } from 
 import { methodSignerOptions, nextMilestoneAfter, milestonesForComplexity, MILESTONE_LABEL, alignAnnualToMonth, MONTH_NAMES, type SignerCandidate, type MethodMilestone } from "@shared/competencySignoff";
 import { isManualMethod, groupProblem, suggestGroups, groupKey } from "@shared/competencyGrouping";
 import { cleanEl5Samples, el5Columns, el5SamplesFromRow } from "@shared/competencyEl5Samples";
-import { programHoldsRecordsMessage } from "@shared/competencyProgramDelete";
+import { programHoldsRecordsMessage, programHoldsQuizzesMessage } from "@shared/competencyProgramDelete";
 import { parseNontechnicalFrequency, nontechnicalFrequencyLabel, nontechnicalDueCounts } from "@shared/competencyNontechnicalFrequency";
 import { applySelfOps, planSelfElements, planSelfRecordRows, planSelfWaivedMethods, selfOpsCount, staffOwnScope, staffSeatEditsAny, staffSelfSeat, type StaffOwnScope } from "./competencySelfEntry";
 import { cleanWaivedSpecimens, waivedSpecimenColumns, waivedSpecimensFromRow, waivedEvidenceText, WAIVED_BLIND_METHOD } from "@shared/competencyWaivedSpecimens";
@@ -242,6 +242,7 @@ import { summarizeCspReport, cspHeaderName } from "./securityHeaders";
 import { normalizeChecklistItems } from "@shared/competencyChecklist";
 import { checklistImageIdProblem, checklistItemImageIds, checklistForAudit, checklistImageMap, withChecklistImages, snapshotChecklistItemImages } from "./competencyChecklistImages";
 import { FORM_OWNED_ROWS, personPageEntryCount, holdsPersonPageEntriesMessage, planRecordSaveRestore, applyRecordSaveRestore, recordLosses } from "./competencyRecordRestore";
+import { programQuizCount, orphanQuizzes, planDeletedProgramRestore, applyDeletedProgramRestore, RestoreRefused } from "./competencyProgramRestore";
 import { quizScoreRows, rowsForPerson, buildQuizScoresWorkbook } from "./quizScores";
 import { filterQuizScores, type QuizScoreRow } from "../shared/quizScores";
 import { notApplicableRows, notApplicableIds, notApplicableProblem, NOT_APPLICABLE_REASON_MAX } from "./competencyNotApplicable";
@@ -24291,7 +24292,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const checklistItems = (db as any).$client.prepare(
         "SELECT * FROM competency_checklist_items WHERE program_id = ? ORDER BY sort_order"
       ).all(p.id);
-      return { ...p, employeeCount, assessmentCount, methodGroups, checklistItems };
+      return { ...p, employeeCount, assessmentCount, quizCount: programQuizCount((db as any).$client, p.id), methodGroups, checklistItems };
     });
     res.json(result);
   });
@@ -24682,7 +24683,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
          WHERE assessment_id IN (SELECT id FROM competency_assessments WHERE program_id = ?)
             OR method_group_id IN (SELECT id FROM competency_method_groups WHERE program_id = ?)`
       ).get(programId, programId).n);
-      if (assessmentCount > 0 || itemCount > 0) return { assessmentCount, itemCount };
+      // REQ-157 (2026-11-18): a quiz lives under its program, so deleting the program left its quizzes out of sight on the
+      // Quiz tab (Redington's "2026 Body Fluid", with assignments and attempts). The program stays while it has quizzes.
+      const quizCount = programQuizCount(client, programId);
+      if (assessmentCount > 0 || itemCount > 0 || quizCount > 0) return { assessmentCount, itemCount, quizCount };
       // delete-reinsert-ok: program delete cascade (this line and the next); nothing is re-inserted
       client.prepare("DELETE FROM competency_method_groups WHERE program_id = ?").run(programId);
       client.prepare("DELETE FROM competency_checklist_items WHERE program_id = ?").run(programId);
@@ -24691,6 +24695,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       return null;
     })();
     if (!refusal) return res.json({ ok: true });
+    if (!refusal.assessmentCount && !refusal.itemCount) {
+      return res.status(409).json({ error: programHoldsQuizzesMessage(refusal.quizCount), code: "PROGRAM_HOLDS_QUIZZES", quiz_count: refusal.quizCount });
+    }
     const recordCount = refusal.assessmentCount || refusal.itemCount;
     return res.status(409).json({
       error: programHoldsRecordsMessage(recordCount), code: "PROGRAM_HOLDS_RECORDS",
@@ -24869,7 +24876,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const methodGroups = (db as any).$client.prepare(
         "SELECT * FROM competency_method_groups WHERE program_id = ?"
       ).all(p.id);
-      return { ...p, employeeCount, assessmentCount, methodGroups };
+      return { ...p, employeeCount, assessmentCount, quizCount: programQuizCount((db as any).$client, p.id), methodGroups };
     });
     res.json(result);
   });
@@ -35899,6 +35906,54 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const r = applyRecordSaveRestore(sqlite, auditId, req.body?.expectedTotal);
     if (!r.ok) return res.status(r.status).json({ error: r.error, code: r.code, ...(r.plan ? { plan: r.plan } : {}) });
     res.json({ dryRun: false, ...r.plan, restored: r.restoredItemIds.length, restoredItemIds: r.restoredItemIds });
+  });
+
+  // REQ-157 (2026-11-18; server/competencyProgramRestore.ts). Header x-admin-secret only. Quizzes whose program no
+  // longer exists, by lab: ids and counts only. Read-only.
+  app.get("/api/admin/competency/orphan-quizzes", (req, res) => {
+    if (req.headers["x-admin-secret"] !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    res.json(orphanQuizzes((db as any).$client));
+  });
+  // POST {labId, programId, backupKey? | before?, dryRun?, expectedTotal?}: put back a deleted program (its method groups,
+  // checklist items and pictures, Not applicable rows) with its original ids from one database copy, read inside the
+  // server. backupKey names the copy; otherwise the newest copy of either tier made before `before` (an ISO time) is used.
+  // A dry run unless dryRun is false, which needs expectedTotal equal to the dry run's total (409 COUNT_CHANGED).
+  app.post("/api/admin/competency/restore-deleted-program", async (req, res) => {
+    if (req.headers["x-admin-secret"] !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    const labId = Number(req.body?.labId), programId = Number(req.body?.programId);
+    if (!Number.isInteger(labId) || labId <= 0 || !Number.isInteger(programId) || programId <= 0) {
+      return res.status(400).json({ error: "labId and programId required", code: "IDS_REQUIRED" });
+    }
+    const { listBackupCopies, withBackupCopy } = await import("./backup");
+    let key = typeof req.body?.backupKey === "string" ? req.body.backupKey : "";
+    let copies: Array<{ key: string; lastModified: Date }>;
+    try { copies = await listBackupCopies(); } catch (e: any) { return res.status(503).json({ error: e?.message || "backup storage unavailable", code: "BACKUP_NOT_CONFIGURED" }); }
+    if (!key) {
+      const before = Date.parse(String(req.body?.before ?? ""));
+      if (!Number.isFinite(before)) return res.status(400).json({ error: "backupKey or before required", code: "COPY_REQUIRED" });
+      key = copies.find((c) => c.lastModified.getTime() < before)?.key || "";
+      if (!key) return res.status(404).json({ error: "no copy made before that time", code: "NO_COPY_BEFORE" });
+    }
+    const copy = copies.find((c) => c.key === key);
+    if (!copy) return res.status(404).json({ error: "no such copy", code: "NO_SUCH_COPY" });
+    const sqlite = (db as any).$client;
+    const older = copies.filter((c) => c.lastModified.getTime() < copy.lastModified.getTime()).slice(0, 3).map((c) => c.key);
+    try {
+      const out = await withBackupCopy(key, (rdb) => {
+        if (req.body?.dryRun !== false) return { status: 200, body: { dryRun: true, backupKey: key, backupMadeAt: copy.lastModified.toISOString(), olderCopies: older, ...planDeletedProgramRestore(sqlite, rdb, labId, programId) } };
+        try {
+          const plan = applyDeletedProgramRestore(sqlite, rdb, labId, programId, Number(req.body?.expectedTotal), key);
+          return { status: 200, body: { dryRun: false, backupKey: key, restored: plan.total, ...plan } };
+        } catch (e: any) {
+          if (e instanceof RestoreRefused) return { status: e.status, body: { error: e.code, code: e.code, backupKey: key, plan: e.plan } };
+          throw e;
+        }
+      });
+      res.status(out.status).json(out.body);
+    } catch (e: any) {
+      console.error("[restore-deleted-program]", e?.message || e);
+      res.status(500).json({ error: "could not read that copy", code: "COPY_READ_FAILED" });
+    }
   });
 
   app.get("/api/admin/competency/not-cleared-audit", (req, res) => {

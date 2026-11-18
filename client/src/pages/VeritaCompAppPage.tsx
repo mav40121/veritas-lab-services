@@ -91,7 +91,7 @@ import { isQuizImage, quizImageProblem } from "@shared/quizImages";
 import { ObserverInitialsField, type QualifiedObserver } from "@/components/ObserverInitialsField";
 import { PriorYearComparisonDialog } from "@/components/PriorYearComparisonDialog";
 import { CompetencyRemindersCard } from "@/components/CompetencyRemindersCard";
-import { programHoldsRecordsMessage } from "@shared/competencyProgramDelete";
+import { programHoldsRecordsMessage, programHoldsQuizzesMessage } from "@shared/competencyProgramDelete";
 import { CompetencyAnnualMonthCard, CompetencyMethodGroupsLinkCard } from "@/components/CompetencyAnnualMonthCard";
 import { CompetencyNontechnicalFrequencyCard, useNontechnicalDue, useNontechnicalFrequency, nontechnicalDueText, nontechnicalDueClass } from "@/components/CompetencyNontechnicalFrequencyCard";
 import { nontechnicalFrequencyLabel } from "@shared/competencyNontechnicalFrequency";
@@ -120,6 +120,8 @@ interface Program {
   updated_at: string;
   employeeCount: number;
   assessmentCount: number;
+  // REQ-157: quizzes sitting on the program (the program list); a program with quizzes isn't deleted.
+  quizCount?: number;
   methodGroups: MethodGroup[];
   checklistItems: ChecklistItem[];
   // BUG-114: picture id -> picture for the checklist items and the assessment items (program detail only).
@@ -1117,6 +1119,7 @@ function ProgramListView() {
       });
       if (res.status === 409) {
         const body = await res.json().catch(() => ({}));
+        if (body.code === "PROGRAM_HOLDS_QUIZZES") throw new Error(programHoldsQuizzesMessage(Number(body.quiz_count) || 0));
         throw new Error(programHoldsRecordsMessage(Number(body.record_count) || 0));
       }
       if (!res.ok) throw new Error("The program could not be deleted. Please try again.");
@@ -1340,6 +1343,7 @@ function ProgramListView() {
                     {!readOnly && <DeleteConfirmDialog
                       name={p.name}
                       recordCount={p.assessmentCount}
+                      quizCount={p.quizCount ?? 0}
                       onDelete={() => deleteProgram.mutateAsync(p.id)}
                     />}
                     <Button
@@ -1875,11 +1879,12 @@ function QuizHubDialog({ programs, onClose }: { programs: Program[]; onClose: ()
 
 // Michael 2026-11-06, Q184 = 1: a program holding competency records can't be deleted. The list's count shows the refusal as soon as
 // the box opens, so there is no Delete button to try; if the list is out of date, the server's refusal lands in the same box.
-function DeleteConfirmDialog({ name, recordCount, onDelete }: { name: string; recordCount: number; onDelete: () => Promise<void> }) {
+// REQ-157 (2026-11-18): the same for a program that still has quizzes, since a quiz shows on the Quiz tab only under its program.
+function DeleteConfirmDialog({ name, recordCount, quizCount, onDelete }: { name: string; recordCount: number; quizCount: number; onDelete: () => Promise<void> }) {
   const [open, setOpen] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const refusal = failure ?? (recordCount > 0 ? programHoldsRecordsMessage(recordCount) : null);
+  const refusal = failure ?? (recordCount > 0 ? programHoldsRecordsMessage(recordCount) : quizCount > 0 ? programHoldsQuizzesMessage(quizCount) : null);
   const confirmDelete = async () => {
     setDeleting(true);
     try {
