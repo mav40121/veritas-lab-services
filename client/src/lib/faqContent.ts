@@ -607,7 +607,7 @@ export const FAQ_CATEGORIES: FaqCategory[] = [
       },
       {
         q: "Can I export my data before canceling?",
-        a: "Yes. The lab owner can download all of the lab's records at any time, including after a subscription ends: one zip file with a workbook per module, every stored document (every policy version included), the reports the modules produce, and the same records as JSON for moving them into another system. Each module also has its own Excel or PDF export.",
+        a: "Yes. The lab owner can download all of the lab's records at any time, including after a subscription ends: one zip file with a workbook per module, every stored document (every policy version included), the reports the modules produce, and the same records as JSON for moving them into another system. Most modules also have their own Excel or PDF export.",
       },
       {
         q: "What happens after the 2-year retention period?",

@@ -7,7 +7,9 @@
 //   C2. FAQ: the export answer names the full download, which works after a subscription ends; the 2-year answer adds
 //       deletion on request confirmed in writing within 30 days, and that backup copies expire within 2 years
 //   C3. Privacy Policy section 7 says the same and the page carries the update date
-//   C4. Trust page section 10 says the same and points to the backup schedule in section 8
+//   C4. Trust page section 10 says the same and points to the backup schedule in section 8; section 8 names the stored
+//       documents' nightly copy and its restore test (2026-11-17, after PR 1941)
+//   (C2 also: the export answer says most modules have their own export, since VeritaPT has none; 2026-11-17)
 //   C5. phone width: the FAQ has no sideways scroll; dark mode: the FAQ answer reads at 4.5:1 or better
 // Screenshots go to OUT. Run: PW_BASE=http://localhost:5252 OUT=<dir> node scripts/verify-site-data-claims-ui.mjs
 import { createRequire } from "node:module";
@@ -54,6 +56,10 @@ try {
   const body = squash(await faq.locator("body").innerText());
   check("C2. the export answer names the full download and that it works after a subscription ends",
     body.includes("download all of the lab's records at any time, including after a subscription ends") && body.includes("the same records as JSON"), body.slice(body.indexOf(q1), body.indexOf(q1) + 500));
+  // 2026-11-17: VeritaPT has no export button and VeritaMaintain only its monthly review workbook, so not "each module".
+  check("C2. ... and says most modules have their own Excel or PDF export, not each one",
+    body.includes("Most modules also have their own Excel or PDF export.") && !body.includes("Each module also has its own Excel or PDF export"), body.slice(body.indexOf(q1), body.indexOf(q1) + 500));
+  await faq.getByRole("button", { name: q1 }).locator("xpath=ancestor::*[@data-state][1]/..").screenshot({ path: `${OUT}/faq-export-answer.png` });
   check("C2. the 2-year answer adds deletion on request, confirmed in writing within 30 days",
     body.includes("You can ask us to delete it sooner at any time, and we confirm the deletion in writing within 30 days."), body.slice(body.indexOf(q2), body.indexOf(q2) + 500));
   check("C2. ... and that backup copies expire within 2 years", body.includes("Copies already in our backups expire on our backup schedule, the last within 2 years."));
@@ -80,6 +86,18 @@ try {
   check("C4. Trust section 10: deleted and confirmed in writing within 30 days", trustText.includes("the data is deleted and the deletion confirmed in writing within 30 days"));
   check("C4. ... backup copies expire on section 8's schedule", trustText.includes("Copies already in the backups described in section 8 expire on that schedule, the last within two years."));
   await trust.locator("section", { hasText: "10. Your Records When You Leave" }).screenshot({ path: `${OUT}/trust-section-10.png` });
+  // 2026-11-17 (PR 1941): section 8 names the stored documents' nightly copy and its restore test, so section 10's
+  // "backups described in section 8" covers the files too.
+  check("C4. Trust section 8: stored documents are copied every night after the database, kept two years",
+    trustText.includes("Stored documents") && trustText.includes("every night, right after the database copy") && trustText.includes("kept two years"));
+  check("C4. ... and a restore test downloads every file on the newest list and checks its fingerprint",
+    trustText.includes("A restore test downloads every file on the newest list and checks it against its fingerprint."));
+  check("C4. ... and the page carries the update date", trustText.includes("Updated November 17, 2026"));
+  const s8 = trust.locator("section", { hasText: "8. Backups and Disaster Recovery" });
+  // Put the section below the sticky site header first; an element screenshot only scrolls when the element is off screen.
+  await s8.evaluate((el) => window.scrollTo(0, el.getBoundingClientRect().top + window.scrollY - 140));
+  await trust.waitForTimeout(200);
+  await s8.screenshot({ path: `${OUT}/trust-section-8.png` });
 
   // C5. Phone width and dark mode.
   const phone = await open("/faq", { viewport: { width: 390, height: 844 } });
