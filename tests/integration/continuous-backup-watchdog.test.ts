@@ -11,6 +11,9 @@
 //   5. R2 listing fails -> BEHIND with the error in the notes (an alarm, not a silent pass)
 //   6. retention: shipping rows older than 90 days and watchdog probes older than 30 days are pruned; restore rows kept
 //   7. GET /api/admin/continuous-backup/watchdog: 403 without the admin header; with it, the history newest first
+//   8. daily restore test: a restore stopped at its time limit is recorded TIMEOUT and tried once more; a retry that
+//      passes records PASS and sends no email; a second timeout records FAIL and emails once; a failure that is not a
+//      timeout (probe missing) emails at once with no retry
 // Run (from bash): DB_PATH=.tmp-cbw.db JWT_SECRET=test-jwt-secret ADMIN_SECRET=test-admin-secret STRIPE_SECRET_KEY=sk_test_dummy STRIPE_WEBHOOK_SECRET=whsec_dummy npx tsx tests/integration/continuous-backup-watchdog.test.ts
 import http from "node:http";
 import express from "express";
@@ -23,7 +26,7 @@ const check = (name: string, cond: boolean, detail = "") => { console.log(`${con
 async function main() {
   const { db } = await import("../../server/db");
   const { registerRoutes } = await import("../../server/routes");
-  const { runShippingCheck, _resetAlertStateForTests } = await import("../../server/continuousBackupWatchdog");
+  const { runShippingCheck, runDailyRestoreTest, _resetAlertStateForTests } = await import("../../server/continuousBackupWatchdog");
   const { continuousBackupReplicaPath } = await import("../../server/continuousBackup");
   const sqlite = (db as any).$client;
   const ADMIN = process.env.ADMIN_SECRET || "test-admin-secret";
@@ -104,6 +107,35 @@ async function main() {
   check("7. watchdog route: 403 without the admin header; history newest first with a summary",
     no.status === 403 && yes.status === 200 && j.checks?.length === 5 && j.checks[0].id > j.checks[1].id && Array.isArray(j.summary) && j.checks[0].details?.verdict === "OK",
     JSON.stringify({ no: no.status, yes: yes.status, n: j.checks?.length, first: j.checks?.[0]?.verdict, summary: j.summary }));
+
+  const timedOut = { ran: true, verdict: "FAIL", timedOut: true, restoreMs: 600019, notes: ["the restore did not finish within 10 minutes and was stopped"] };
+  const passed = { ran: true, verdict: "PASS", restoreMs: 21769, probeFound: true, integrityCheck: "ok", notes: [] };
+  const probeMissing = { ran: true, verdict: "FAIL", restoreMs: 9000, probeFound: false, notes: ["the change written 5 s before the restore is not in the restored copy"] };
+  const restoreRows = () => sqlite.prepare("SELECT verdict FROM continuous_backup_checks WHERE kind = 'restore' ORDER BY id").all().map((r: any) => r.verdict);
+  const runWith = async (results: any[]) => {
+    let calls = 0;
+    const before = restoreRows().length;
+    const m0 = mails.length;
+    const r = await runDailyRestoreTest(sqlite, { ...deps, restoreTest: async () => results[calls++] } as any);
+    return { r, calls, rows: restoreRows().slice(before), newMails: mails.slice(m0) };
+  };
+
+  const a = await runWith([timedOut, passed]);
+  check("8a. timeout then PASS: TIMEOUT and PASS recorded, two attempts, no email, the retry says why",
+    a.calls === 2 && JSON.stringify(a.rows) === JSON.stringify(["TIMEOUT", "PASS"]) && a.newMails.length === 0 && a.r.retried === true && a.r.firstAttempt?.restoreMs === 600019 && /first attempt was stopped/.test(a.r.notes?.[0] || ""),
+    JSON.stringify({ calls: a.calls, rows: a.rows, mails: a.newMails, notes: a.r.notes }));
+  const b = await runWith([timedOut, timedOut]);
+  check("8b. timeout twice: TIMEOUT and FAIL recorded, one FAILED email",
+    b.calls === 2 && JSON.stringify(b.rows) === JSON.stringify(["TIMEOUT", "FAIL"]) && b.newMails.length === 1 && /restore test FAILED/.test(b.newMails[0]),
+    JSON.stringify({ calls: b.calls, rows: b.rows, mails: b.newMails }));
+  const c = await runWith([probeMissing, passed]);
+  check("8c. a failure that is not a timeout: one attempt, FAIL recorded, one FAILED email",
+    c.calls === 1 && JSON.stringify(c.rows) === JSON.stringify(["FAIL"]) && c.newMails.length === 1 && /restore test FAILED/.test(c.newMails[0]),
+    JSON.stringify({ calls: c.calls, rows: c.rows, mails: c.newMails }));
+  const d = await runWith([passed]);
+  check("8d. a plain PASS: one attempt, PASS recorded, no email",
+    d.calls === 1 && JSON.stringify(d.rows) === JSON.stringify(["PASS"]) && d.newMails.length === 0,
+    JSON.stringify({ calls: d.calls, rows: d.rows, mails: d.newMails }));
 
   server.close();
   console.log(failures ? `\n${failures} FAILED` : "\nALL PASS");

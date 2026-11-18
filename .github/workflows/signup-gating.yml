@@ -270,6 +270,10 @@ jobs:
         # Michael 2026-11-17 (Leads Q10 = 2): the stored documents go into the nightly off-site backup (each content once, a list per night, two-year
         # retention), and the restore test downloads every file the newest list names and checks each one; a corrupted or missing object fails it.
         run: npm run test:file-backup
+      - name: Run continuous backup watchdog integration test
+        # 2026-11-18: the hourly shipping check (OK, BEHIND, re-alert, recovery) and the daily restore test, where a restore stopped at its time
+        # limit is recorded TIMEOUT and tried once more, and only a retry that also fails (or any other failure) emails FAILED.
+        run: npm run test:continuous-backup-watchdog
       - name: Run quiz scores integration test
         # Michael 2026-11-17 (Q347 = 1): every scored quiz in a lab in one list (assigned attempts, quizzes given on a record, typed Element 6 scores),
         # with the quiz Results reach (Staff login own only, view-only refused), nothing across labs, and a section 6 workbook of the filtered rows.

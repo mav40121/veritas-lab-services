@@ -7,7 +7,10 @@
 //   - Every hour: write a probe row, wait, and confirm a new file reached the R2 replica's level-0 folder after the
 //     probe (proof the change left the server, not just that Litestream is running). BEHIND emails info@ once, then
 //     every 6 hours while it stays behind, and a recovery email when it is OK again.
-//   - Daily at 07:15 UTC (03:15 ET): the full restore self-test (continuousRestoreSelfTest); FAIL emails info@.
+//   - Daily at 07:15 UTC (03:15 ET): the full restore self-test (continuousRestoreSelfTest); FAIL emails info@. A
+//     restore that was still running at its time limit is recorded as TIMEOUT and tried once more, and only the
+//     retry's verdict can email (2026-11-18: one restore stalled past 10 minutes with no error while replication
+//     shipped normally, and the re-run passed in 22 s). Any other failure emails at once.
 //   - Every result is recorded in continuous_backup_checks: the record behind the "about one second" claim.
 
 import { continuousBackupStatus, continuousBackupReplicaPath, continuousRestoreSelfTest } from "./continuousBackup";
@@ -27,6 +30,8 @@ export interface WatchdogDeps {
   sleep: (ms: number) => Promise<void>;
   now: () => Date;
   status: () => { enabled: boolean; reason?: string; generation: number };
+  // The restore self-test; the default is continuousRestoreSelfTest with a 5 s wait. Tests pass a stand-in.
+  restoreTest?: (sqlite: any) => Promise<any>;
 }
 
 const HOUR = 60 * 60 * 1000;
@@ -124,7 +129,15 @@ export async function runShippingCheck(sqlite: any, deps: WatchdogDeps, waitMs =
 
 export async function runDailyRestoreTest(sqlite: any, deps: WatchdogDeps): Promise<any> {
   if (!deps.status().enabled) return { verdict: "SKIP" };
-  const r = await continuousRestoreSelfTest(sqlite, 5000);
+  const test = deps.restoreTest || ((s: any) => continuousRestoreSelfTest(s, 5000));
+  let r = await test(sqlite);
+  if (r.verdict === "FAIL" && r.timedOut) {
+    record(sqlite, "restore", "TIMEOUT", r, deps.now());
+    console.log("[backup-watchdog] daily restore test ran out of time; trying once more");
+    const first = { restoreMs: r.restoreMs, probeWrittenAt: r.probeWrittenAt, notes: r.notes };
+    const retry = await test(sqlite);
+    r = { ...retry, retried: true, firstAttempt: first, notes: [`retry: the first attempt was stopped at its time limit (${first.notes?.[0] || "no detail"})`, ...(retry.notes || [])] };
+  }
   record(sqlite, "restore", r.verdict, r, deps.now());
   if (r.verdict === "FAIL") {
     await deps.alert(

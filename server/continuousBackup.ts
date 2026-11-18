@@ -289,10 +289,11 @@ export function continuousBackupStatus(): State {
   return { ...state, log: [...state.log] };
 }
 
-function run(bin: string, args: string[], timeoutMs: number): Promise<{ ok: boolean; out: string }> {
+// timedOut: the command was still running at timeoutMs and Node stopped it (execFile sets err.killed).
+function run(bin: string, args: string[], timeoutMs: number): Promise<{ ok: boolean; out: string; timedOut: boolean }> {
   return new Promise((resolve) => {
     execFile(bin, args, { timeout: timeoutMs, maxBuffer: 4 * 1024 * 1024, env: process.env, windowsHide: true }, (err, stdout, stderr) => {
-      resolve({ ok: !err, out: `${stdout || ""}${stderr || ""}`.trim() || (err ? String(err.message) : "") });
+      resolve({ ok: !err, out: `${stdout || ""}${stderr || ""}`.trim() || (err ? String(err.message) : ""), timedOut: !!(err as any)?.killed });
     });
   });
 }
@@ -318,7 +319,10 @@ export interface ContinuousRestoreResult {
   live?: ReturnType<typeof countCore>;
   notes?: string[];
   elapsedMs?: number;
+  timedOut?: boolean;
 }
+
+export const RESTORE_TIMEOUT_MS = 10 * 60 * 1000;
 
 // Restore self-test for the continuous replica, inside the container: write a probe row, wait, restore the replica to a
 // temp file, check integrity, check the probe is there (the measured data-loss window), compare row counts with live,
@@ -333,8 +337,9 @@ export async function continuousRestoreSelfTest(sqlite: Database.Database, waitM
   const notes: string[] = [];
   try {
     const r0 = Date.now();
-    const r = await run(state.bin, ["restore", "-config", state.configPath, "-o", out, state.dbPath], 10 * 60 * 1000);
+    const r = await run(state.bin, ["restore", "-config", state.configPath, "-o", out, state.dbPath], RESTORE_TIMEOUT_MS);
     const restoreMs = Date.now() - r0;
+    if (r.timedOut) return { ran: true, verdict: "FAIL", timedOut: true, probeWrittenAt: probeAt, waitedMs: waitMs, restoreMs, notes: [`the restore did not finish within ${RESTORE_TIMEOUT_MS / 60000} minutes and was stopped${r.out ? `: ${r.out.slice(0, 400)}` : ""}`], elapsedMs: Date.now() - t0 };
     if (!r.ok || !fs.existsSync(out)) return { ran: true, verdict: "FAIL", probeWrittenAt: probeAt, waitedMs: waitMs, restoreMs, notes: [`restore failed: ${r.out.slice(0, 500)}`], elapsedMs: Date.now() - t0 };
     const restoredBytes = fs.statSync(out).size;
     const rdb = new Database(out, { readonly: true, fileMustExist: true });
