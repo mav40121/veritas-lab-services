@@ -99,6 +99,8 @@ export const PURGE_EXCLUDED: Record<string, PurgeRule> = {
   phi_scan_log: retain(MONITORING),
   continuous_backup_probe: retain(MONITORING),
   continuous_backup_checks: retain(MONITORING),
+  backup_files: retain(MONITORING),
+  backup_file_runs: retain(MONITORING),
   nightly_snapshots: del(`user_id ${IN("accounts")}`),
   pt_vendor_programs: retain(REFERENCE),
   state_lab_licensure_registry: retain(REFERENCE),

@@ -266,6 +266,10 @@ jobs:
         # BUG-174 (Michael 2026-11-17, Q346 = 1): saving a whole record from the program form replaces only the form's own rows, so the person
         # page's entries and a sign-off's rows stay; a record holding them isn't deleted from the list; the admin restore puts back an old save's rows exactly.
         run: npm run test:competency-whole-record-save
+      - name: Run document backup integration test
+        # Michael 2026-11-17 (Leads Q10 = 2): the stored documents go into the nightly off-site backup (each content once, a list per night, two-year
+        # retention), and the restore test downloads every file the newest list names and checks each one; a corrupted or missing object fails it.
+        run: npm run test:file-backup
       - name: Run quiz scores integration test
         # Michael 2026-11-17 (Q347 = 1): every scored quiz in a lab in one list (assigned attempts, quizzes given on a record, typed Element 6 scores),
         # with the quiz Results reach (Staff login own only, view-only refused), nothing across labs, and a section 6 workbook of the filtered rows.

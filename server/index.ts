@@ -549,6 +549,13 @@ app.use((req, res, next) => {
   // and reminder jobs above.
   try {
     const { runNightlyBackup } = await import("./backup");
+    const { runFileBackup } = await import("./fileBackup");
+    // The stored documents go up right after the database (Michael 2026-11-17, Leads Q10 = 2; server/fileBackup.ts).
+    // Each catches its own failure, so one never stops the other.
+    const runNightlyAll = () => runNightlyBackup()
+      .catch((err) => console.error("[backup] Run failed:", err?.message || err))
+      .then(() => runFileBackup())
+      .catch((err) => console.error("[file-backup] Run failed:", err?.message || err));
     const scheduleNightlyBackup = () => {
       const now = new Date();
       const next = new Date(now);
@@ -557,10 +564,10 @@ app.use((req, res, next) => {
       const msUntil = next.getTime() - now.getTime();
       setTimeout(() => {
         console.log("[backup] Running nightly off-site backup...");
-        runNightlyBackup().catch((err) => console.error("[backup] Run failed:", err?.message || err));
+        runNightlyAll();
         setInterval(() => {
           console.log("[backup] Running nightly off-site backup...");
-          runNightlyBackup().catch((err) => console.error("[backup] Run failed:", err?.message || err));
+          runNightlyAll();
         }, 24 * 60 * 60 * 1000);
       }, msUntil);
       console.log(`[backup] Nightly off-site backup scheduled in ${Math.round(msUntil / 60000)} minutes`);

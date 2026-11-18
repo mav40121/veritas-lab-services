@@ -38084,6 +38084,31 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     }
   });
 
+  // ── ADMIN: off-site backup of the stored documents (server/fileBackup.ts) ──
+  // Michael 2026-11-17 (Leads Q10 = 2). Header x-admin-secret only. Run and restore test go in the background, since a first
+  // run uploads every document and the test downloads every one; each writes a backup_file_runs row that status shows.
+  //   POST /api/admin/file-backup/run            202 {started}; 409 FILE_BACKUP_RUNNING while one runs
+  //   POST /api/admin/file-backup/restore-test   202 {started}: download every file the newest list names, server-side, and check it
+  //   GET  /api/admin/file-backup/status         the content index (count, bytes) and the last runs, counts only
+  app.post("/api/admin/file-backup/run", async (req, res) => {
+    if (req.headers["x-admin-secret"] !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    const { runFileBackup, fileBackupStatus } = await import("./fileBackup");
+    if (fileBackupStatus().running) return res.status(409).json({ error: "A document backup is already running.", code: "FILE_BACKUP_RUNNING" });
+    runFileBackup().catch((err) => console.error("[file-backup] Run failed:", err?.message || err));
+    res.status(202).json({ started: true });
+  });
+  app.post("/api/admin/file-backup/restore-test", async (req, res) => {
+    if (req.headers["x-admin-secret"] !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    const { fileRestoreTest } = await import("./fileBackup");
+    fileRestoreTest().catch((err) => console.error("[file-backup] Restore test failed:", err?.message || err));
+    res.status(202).json({ started: true });
+  });
+  app.get("/api/admin/file-backup/status", async (req, res) => {
+    if (req.headers["x-admin-secret"] !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    const { fileBackupStatus } = await import("./fileBackup");
+    res.json(fileBackupStatus());
+  });
+
   // ── ADMIN: continuous backup (Litestream) status and restore self-test ────
   // Status: whether Litestream is running, its recent log lines, the journal mode and Litestream's own local status.
   // Restore test: writes a probe row, waits, restores the replica to a temp file in the container, checks integrity
