@@ -68,7 +68,7 @@ const SUITE_PLANS = [
     name: "Clinic",
     price: "$999",
     period: "/yr",
-    description: "Certificate of Waiver labs and small clinics.",
+    description: "Certificate of Waiver labs, small clinics, and critical access hospitals.",
     features: [
       "Full VeritaAssure\u00AE suite including all future modules",
       "2 active seats included ($500/seat)",

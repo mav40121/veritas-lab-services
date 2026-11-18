@@ -558,7 +558,7 @@ export const FAQ_CATEGORIES: FaqCategory[] = [
       },
       {
         q: "How does pricing scale with lab size?",
-        a: "Full Suite tiers differ by the number of active seats included, not by per-instrument or per-test volume. Clinic ($999/yr, 2 active seats) is for Certificate of Waiver labs and small clinics. Community ($2,125/yr, 5 active seats) for community hospitals and independent labs. Hospital ($4,995/yr, 15 active seats) for regional and acute care hospital labs. System (custom quote) for health systems with multiple CLIA labs. All Full Suite plans include the full module suite.",
+        a: "Full Suite tiers differ by the number of active seats included, not by per-instrument or per-test volume. Clinic ($999/yr, 2 active seats) is for Certificate of Waiver labs, small clinics, and critical access hospitals. Community ($2,125/yr, 5 active seats) for community hospitals and independent labs. Hospital ($4,995/yr, 15 active seats) for regional and acute care hospital labs. System (custom quote) for health systems with multiple CLIA labs. All Full Suite plans include the full module suite.",
       },
       {
         q: "How is my plan tier determined?",
