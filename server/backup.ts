@@ -317,6 +317,61 @@ export async function newestObjectUnder(prefix: string): Promise<{ key: string; 
   return best;
 }
 
+// Every database copy of both tiers, newest first. Throws when R2 is not set up.
+export async function listBackupCopies(): Promise<Array<{ key: string; lastModified: Date; tier: BackupTier }>> {
+  const client = getS3Client();
+  if (!client) throw new Error("backup storage (BACKUP_S3_*) is not configured");
+  const out: Array<{ key: string; lastModified: Date; tier: BackupTier }> = [];
+  for (const tier of ["nightly", "hourly"] as BackupTier[]) {
+    for (const o of await listAll(client, TIER_PREFIX[tier])) {
+      if (o.Key && o.Key.endsWith(".db.gz") && o.LastModified) out.push({ key: o.Key, lastModified: o.LastModified, tier });
+    }
+  }
+  return out.sort((a, b) => b.lastModified.getTime() - a.lastModified.getTime());
+}
+
+// One named database copy, opened read-only inside the server for fn, the way restoreSelfTest reads one (REQ-157,
+// 2026-11-18: putting back a deleted VeritaComp program without bringing any customer's data onto a PC). Only a key of
+// either tier is accepted. The download and the restored file are removed whatever happens.
+export async function withBackupCopy<T>(key: string, fn: (rdb: Database.Database) => T | Promise<T>): Promise<T> {
+  const client = getS3Client();
+  if (!client) throw new Error("backup storage (BACKUP_S3_*) is not configured");
+  if (!(key.startsWith(TIER_PREFIX.nightly) || key.startsWith(TIER_PREFIX.hourly)) || !key.endsWith(".db.gz") || key.includes("..")) {
+    throw new Error("not a database backup key");
+  }
+  const tmpGz = backupTempPath(`copy-read-${Date.now()}-${key}`);
+  const tmpDb = `${tmpGz}.db`;
+  try {
+    const obj = await client.send(new GetObjectCommand({ Bucket: S3_BUCKET, Key: key }));
+    await new Promise<void>((resolve, reject) => {
+      const body = obj.Body as unknown as NodeJS.ReadableStream;
+      const dest = fs.createWriteStream(tmpGz);
+      body.on("error", reject);
+      dest.on("error", reject);
+      dest.on("finish", resolve);
+      body.pipe(dest);
+    });
+    await new Promise<void>((resolve, reject) => {
+      const source = fs.createReadStream(tmpGz);
+      const dest = fs.createWriteStream(tmpDb);
+      const gunzip = zlib.createGunzip();
+      source.on("error", reject);
+      dest.on("error", reject);
+      gunzip.on("error", reject);
+      dest.on("finish", resolve);
+      source.pipe(gunzip).pipe(dest);
+    });
+    const rdb = new Database(tmpDb, { readonly: true, fileMustExist: true });
+    try {
+      return await fn(rdb);
+    } finally {
+      rdb.close();
+    }
+  } finally {
+    for (const f of [tmpGz, tmpDb, `${tmpDb}-wal`, `${tmpDb}-shm`]) { try { fs.unlinkSync(f); } catch {} }
+  }
+}
+
 // A system alert to info@ (same sender and recipient as the backup failure emails). Returns whether it was sent.
 export async function sendSystemAlert(subject: string, html: string): Promise<boolean> {
   if (!process.env.RESEND_API_KEY) return false;

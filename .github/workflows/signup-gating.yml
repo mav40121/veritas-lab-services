@@ -202,6 +202,10 @@ jobs:
         # Michael 2026-11-06, Q184 = 1: a program holding competency records can't be deleted, on either route: 409 with the count, nothing removed. An empty
         # program still deletes with its setup. The count never reaches someone who can't delete there.
         run: npm run test:competency-program-delete
+      - name: Run competency program quizzes and restore integration test
+        # REQ-157 (2026-11-18): a program that still has quizzes isn't deleted (409 PROGRAM_HOLDS_QUIZZES), since a quiz shows on the Quiz tab only under
+        # its program; the admin orphan list and the restore of a deleted program from a database copy, with its original ids, read inside the server.
+        run: npm run test:competency-program-restore
       - name: Non-technical competency frequency math
         # Michael 2026-11-04, Q216 = 1: the due date from a person's signed records, the status at each boundary, and the technical dates on the same known inputs.
         run: npx tsx scripts/verify-nontechnical-frequency.mts
