@@ -107,6 +107,7 @@ import { oneRowKey, sameTestNameOnMap, preferredSameTestName } from "@shared/pre
 import { quizImageProblem } from "@shared/quizImages";
 import { quizRetakeDecision } from "@shared/quizRetake";
 import { voidReasonProblem } from "@shared/quizAttemptVoid";
+import { autoRetakeFlag, isAutoRetake, hideKeyOnReview } from "@shared/quizAutoRetake";
 import { voidTarget, applyVoid } from "./quizAttemptVoid";
 import { certificateExtras } from "./veritalabRegistry";
 
@@ -11151,7 +11152,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const sqlite = (db as any).$client;
 
       const assn = sqlite.prepare(
-        `SELECT id, quiz_id, status, completed_result_id
+        `SELECT id, quiz_id, status, completed_result_id, attempt_no, due_date
          FROM competency_quiz_assignments
          WHERE id = ? AND staff_employee_id = ? AND lab_id = ?`
       ).get(assignmentId, employeeId, labId) as any;
@@ -11226,17 +11227,43 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
            SET status = 'completed', completed_result_id = ?, completed_at = ?
            WHERE id = ?`
         ).run(Number(result.lastInsertRowid), now, assn.id);
-        return result.lastInsertRowid;
+        // Automatic retake (Michael Q3 = 1, shared/quizAutoRetake.ts): a failed attempt on a quiz set to retake automatically
+        // opens the next attempt now, with the failed one's due date, while the person is on the lab's active roster. It sits in
+        // this transaction, and a completed assignment returns above before getting here, so a double submit opens one.
+        let next: { id: number; attempt_no: number } | null = null;
+        if (!passed && isAutoRetake(quiz) && onActiveQuizRoster(sqlite, labId, employeeId)) {
+          const top = sqlite.prepare("SELECT MAX(attempt_no) AS n FROM competency_quiz_assignments WHERE quiz_id = ? AND staff_employee_id = ?").get(quiz.id, employeeId) as any;
+          const attemptNo = Number(top?.n ?? assn.attempt_no ?? 1) + 1;
+          const ins = sqlite.prepare(
+            `INSERT INTO competency_quiz_assignments (quiz_id, staff_employee_id, lab_id, assigned_by_user_id, assigned_at, due_date, status, attempt_no)
+             VALUES (?, ?, ?, 0, ?, ?, 'assigned', ?)`
+          ).run(quiz.id, employeeId, labId, now, assn.due_date ?? null, attemptNo);
+          next = { id: Number(ins.lastInsertRowid), attempt_no: attemptNo };
+        }
+        return { resultId: result.lastInsertRowid, next };
       });
-      const newId = tx();
+      const { resultId: newId, next } = tx();
+      if (next) {
+        const se = sqlite.prepare("SELECT first_name, last_name FROM staff_employees WHERE id = ?").get(employeeId) as any;
+        const lab = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(labId) as any;
+        logAudit({
+          userId: 0, ownerUserId: Number(lab?.owner_user_id ?? 0), module: "veritacomp", action: "create", entityType: "quiz_retake",
+          entityId: String(next.id), entityLabel: `${`${se?.first_name || ""} ${se?.last_name || ""}`.trim() || `Staff ${employeeId}`} / ${quiz.title || quiz.method_group_name || `Quiz ${quiz.id}`}: attempt ${next.attempt_no} (opened automatically)`,
+          before: { latest_attempt: { assignment_id: assn.id, attempt_no: assn.attempt_no ?? 1, status: "completed", result_id: Number(newId), score, passed: false, date_taken: dateTaken } },
+          after: { assignment: { id: next.id, quiz_id: quiz.id, staff_employee_id: employeeId, lab_id: labId, attempt_no: next.attempt_no, status: "assigned", assigned_at: now, due_date: assn.due_date ?? null, automatic: true } },
+          ipAddress: req.ip,
+        });
+      }
 
       // Return the scored result with question explanations so the tech
-      // can see what they got right/wrong.
+      // can see what they got right/wrong. On a quiz set to retake automatically, a failed attempt's review leaves out the
+      // correct answers and explanations (Michael Q3 = 1), so the next attempt can't be passed by copying the key.
+      const hideKey = hideKeyOnReview(isAutoRetake(quiz), passed);
       const fullQs = questions.map((q: any) => {
         const ga = graded.find((a: any) => a.question_id === q.id);
         return {
           id: q.id, question: q.question, options: q.options, image: q.image ?? null,
-          correct_answer: q.correct_answer, explanation: q.explanation,
+          ...(hideKey ? {} : { correct_answer: q.correct_answer, explanation: q.explanation }),
           selected_answer: ga?.selected_answer, was_correct: ga?.correct,
         };
       });
@@ -11248,6 +11275,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         question_format: quiz.question_format || "plain",
         questions: fullQs,
         already_completed: false,
+        key_hidden: hideKey,
+        next_attempt: next ? { assignment_id: next.id, attempt_no: next.attempt_no } : null,
       });
     } catch (err: any) {
       console.error("[staff-portal-session/quizzes POST attempt] error:", err);
@@ -25951,7 +25980,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // quiz the owner authored in OTHER programs/labs (cross-lab bleed for a
     // multi-lab owner or seat user); program_id already scopes to this program.
     const quizzes = (db as any).$client.prepare(
-      "SELECT id, user_id, program_id, method_group_id, method_group_name, title, method_group_ids, randomize_questions, question_format, created_at FROM competency_quizzes WHERE program_id = ? OR user_id = 0"
+      "SELECT id, user_id, program_id, method_group_id, method_group_name, title, method_group_ids, randomize_questions, question_format, auto_retake, created_at FROM competency_quizzes WHERE program_id = ? OR user_id = 0"
     ).all(req.params.id);
     res.json(quizzes);
   });
@@ -25962,7 +25991,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const program = userCanAccessLabRow('competency_programs', req.params.id, req);
     if (!program) return res.status(404).json({ error: "Program not found" });
-    const { methodGroupId, methodGroupName, methodGroupIds, title, questions, randomizeQuestions, questionFormat } = req.body;
+    const { methodGroupId, methodGroupName, methodGroupIds, title, questions, randomizeQuestions, questionFormat, autoRetake } = req.body;
     if (!questions || !Array.isArray(questions)) return res.status(400).json({ error: "questions array required" });
     // Validate question shape so we fail fast at the boundary instead of
     // exploding later in the scoring path (POST /quiz-results expects
@@ -25997,9 +26026,11 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // existing quizzes rendering as plain text.
     const randomizeFlag = randomizeQuestions === true || randomizeQuestions === 1 ? 1 : 0;
     const qFormat = questionFormat === "html" ? "html" : "plain";
+    // Automatic retakes (shared/quizAutoRetake.ts), off unless asked for.
+    const autoRetakeOn = autoRetakeFlag(autoRetake, 0);
     const now = new Date().toISOString();
     const result = (db as any).$client.prepare(
-      "INSERT INTO competency_quizzes (user_id, program_id, method_group_id, method_group_name, title, method_group_ids, created_by_user_id, questions, randomize_questions, question_format, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      "INSERT INTO competency_quizzes (user_id, program_id, method_group_id, method_group_name, title, method_group_ids, created_by_user_id, questions, randomize_questions, question_format, auto_retake, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     ).run(
       dataUserId,
       parseInt(req.params.id),
@@ -26011,6 +26042,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       JSON.stringify(questions),
       randomizeFlag,
       qFormat,
+      autoRetakeOn,
       now,
     );
     // write-path Shape A (batch 2): tag the ACTIVE lab. Quiz reads never filter
@@ -26031,6 +26063,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       title: title || null,
       randomize_questions: randomizeFlag,
       question_format: qFormat,
+      auto_retake: autoRetakeOn,
       created_at: now,
     });
   });
@@ -26152,12 +26185,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // post-hoc), only DELETE is blocked.
   app.put("/api/veritacomp/quizzes/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
-    const quiz = (db as any).$client.prepare("SELECT id, user_id, randomize_questions, question_format FROM competency_quizzes WHERE id = ?").get(req.params.id) as any;
+    const quiz = (db as any).$client.prepare("SELECT id, user_id, randomize_questions, question_format, auto_retake FROM competency_quizzes WHERE id = ?").get(req.params.id) as any;
     if (!quiz) return res.status(404).json({ error: "Quiz not found" });
     if (quiz.user_id === 0) return res.status(403).json({ error: "Cannot edit a system-default quiz" });
     const owned = userCanAccessLabRow('competency_quizzes', req.params.id, req);
     if (!owned) return res.status(404).json({ error: "Quiz not found" });
-    const { title, methodGroupId, methodGroupName, methodGroupIds, questions, randomizeQuestions, questionFormat } = req.body || {};
+    const { title, methodGroupId, methodGroupName, methodGroupIds, questions, randomizeQuestions, questionFormat, autoRetake } = req.body || {};
     if (!questions || !Array.isArray(questions)) return res.status(400).json({ error: "questions array required" });
     for (const q of questions) {
       if (!q || typeof q.id !== "string" || typeof q.question !== "string" ||
@@ -26191,8 +26224,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const qFormat = questionFormat === undefined
       ? (quiz.question_format === "html" ? "html" : "plain")
       : (questionFormat === "html" ? "html" : "plain");
+    // The same rule for automatic retakes: left out of the body, it keeps the quiz's own setting.
+    const autoRetakeOn = autoRetakeFlag(autoRetake, quiz.auto_retake);
     (db as any).$client.prepare(
-      "UPDATE competency_quizzes SET title = ?, method_group_id = ?, method_group_name = ?, method_group_ids = ?, questions = ?, randomize_questions = ?, question_format = ? WHERE id = ?"
+      "UPDATE competency_quizzes SET title = ?, method_group_id = ?, method_group_name = ?, method_group_ids = ?, questions = ?, randomize_questions = ?, question_format = ?, auto_retake = ? WHERE id = ?"
     ).run(
       title || null,
       methodGroupId || null,
@@ -26201,6 +26236,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       JSON.stringify(questions),
       randomizeFlag,
       qFormat,
+      autoRetakeOn,
       req.params.id,
     );
     res.json({
@@ -26211,6 +26247,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       method_group_ids: mgIdsJson ? JSON.parse(mgIdsJson) : null,
       randomize_questions: randomizeFlag,
       question_format: qFormat,
+      auto_retake: autoRetakeOn,
       question_count: questions.length,
     });
   });
