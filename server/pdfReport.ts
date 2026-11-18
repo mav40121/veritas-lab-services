@@ -12,6 +12,7 @@ import { stampPdfAuthor } from "./pdfMeta";
 import { labLocalDate, labToday } from "./dateLocal";
 import type { Study } from "@shared/schema";
 import { isQuizImage } from "@shared/quizImages";
+import { optionIndexFor, shownOptions } from "@shared/quizOptions";
 import { hasRunDetails, runDetailRows } from "@shared/studyRunDetails";
 import { studyLotRows } from "@shared/studyLotRows";
 import { PT_CHECKLIST, parseTypeDetails, ptScorePercent, PATIENT_IMPACT, FDA_DISPOSITIONS, QC_CAUSES } from "@shared/findingTypes";
@@ -6006,10 +6007,13 @@ export function buildCompetencyHTML(input: CompetencyPDFInput): string {
         if (isQuizImage(q.image)) {
           html += `<div><img src="${q.image}" alt="" style="max-height:2in;max-width:100%;margin:2px 0 6px;border:1px solid #e0e4e8;"></div>`;
         }
-        for (const opt of (q.options || [])) {
-          const optLetter = opt.charAt(0);
-          const isSelected = a?.selected_answer === optLetter;
-          const isCorrect = q.correct_answer === optLetter;
+        // The key and the answer name an option by position (shared/quizOptions.ts); an answer saved before 2026-11-18
+        // held the option's first character, which optionIndexFor still reads. A blank option (an unused slot) isn't printed.
+        const selectedIdx = optionIndexFor(q.options, a?.selected_answer);
+        const correctIdx = optionIndexFor(q.options, q.correct_answer);
+        for (const { text: opt, index } of shownOptions(q.options)) {
+          const isSelected = selectedIdx === index;
+          const isCorrect = correctIdx === index;
           const bgClass = isSelected && isCorrect ? "quiz-correct" : isSelected && !isCorrect ? "quiz-incorrect" : isCorrect ? "quiz-correct" : "";
           html += `<div class="${bgClass}" style="font-size:7.5pt;padding:2px 6px;margin:1px 0;border-radius:2px;">
             ${isSelected ? "\u25CF" : "\u25CB"} ${esc(opt)}

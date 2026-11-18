@@ -28,6 +28,7 @@ import { StaffApprovalsView } from "@/components/StaffApprovalsView";
 import { WaivedSpecimenRows } from "@/components/WaivedSpecimenRows";
 import type { WaivedSpecimen } from "@shared/competencyWaivedSpecimens";
 import { REVISION_IN_PROGRESS_NOTE } from "@shared/policyApprovedVersion";
+import { shownOptions, optionIndexFor } from "@shared/quizOptions";
 import { clearAuth } from "@/lib/auth";
 import { useAuth } from "@/components/AuthContext";
 import { useLabRoute } from "@/hooks/useLabRoute";
@@ -1784,12 +1785,13 @@ function StaffPortalQuizzesView({
                 <div className="text-xs font-semibold mb-1">Q{qi + 1}: {renderPrompt(q.question, result.question_format)}</div>
                 <QuizQuestionImage src={q.image} className="my-1 max-h-48 max-w-full rounded border border-border bg-white object-contain" />
                 <div className="space-y-0.5 text-xs">
-                  {q.options.map((opt) => {
-                    const letter = opt.charAt(0);
-                    const isSel = q.selected_answer === letter;
-                    const isCorrect = q.correct_answer === letter;
+                  {shownOptions(q.options).map(({ text: opt, index }) => {
+                    // The key and the answer name an option by position (shared/quizOptions.ts); an answer saved before
+                    // 2026-11-18 held the option's first character, which optionIndexFor still reads.
+                    const isSel = optionIndexFor(q.options, q.selected_answer) === index;
+                    const isCorrect = optionIndexFor(q.options, q.correct_answer) === index;
                     return (
-                      <div key={opt} className={`px-1 py-0.5 rounded ${isSel && isCorrect ? "bg-emerald-100 dark:bg-emerald-900/30" : isSel ? "bg-red-100 dark:bg-red-900/30" : isCorrect ? "bg-emerald-50 dark:bg-emerald-950/20" : ""}`}>
+                      <div key={index} className={`px-1 py-0.5 rounded ${isSel && isCorrect ? "bg-emerald-100 dark:bg-emerald-900/30" : isSel ? "bg-red-100 dark:bg-red-900/30" : isCorrect ? "bg-emerald-50 dark:bg-emerald-950/20" : ""}`}>
                         {isSel ? "●" : "○"} {opt}
                         {isCorrect && <span className="text-emerald-600 font-semibold ml-1">{"✓"}</span>}
                         {isSel && !isCorrect && <span className="text-red-600 font-semibold ml-1">{"✗"}</span>}
@@ -1831,11 +1833,12 @@ function StaffPortalQuizzesView({
             <div className="text-sm font-medium mb-3">{renderPrompt(q.question, taking.question_format)}</div>
             <QuizQuestionImage src={q.image} className="mb-3 max-h-80 max-w-full rounded border border-border bg-white object-contain" />
             <div className="space-y-2">
-              {q.options.map((opt) => {
-                const letter = opt.charAt(0);
+              {shownOptions(q.options).map(({ text: opt, letter, index }) => {
+                // Each choice carries its position letter, the one the answer key holds (shared/quizOptions.ts), never
+                // the first character of its text: "True" is A when it is the first option.
                 const checked = answers[q.id] === letter;
                 return (
-                  <label key={opt} className={`flex items-center gap-2 text-sm cursor-pointer p-2 rounded border ${checked ? "border-primary bg-primary/5" : "border-border hover:bg-muted/40"}`}>
+                  <label key={index} className={`flex items-center gap-2 text-sm cursor-pointer p-2 rounded border ${checked ? "border-primary bg-primary/5" : "border-border hover:bg-muted/40"}`}>
                     <input
                       type="radio"
                       name={`quiz-${q.id}`}
