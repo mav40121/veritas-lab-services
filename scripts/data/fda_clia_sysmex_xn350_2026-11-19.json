@@ -1,0 +1,25 @@
+{
+  "_source": "FDA CLIA database bulk file clia_detail.zip (https://www.accessdata.fda.gov/premarket/ftparea/clia_detail.zip; clia_detail.txt dated 2026-03-23, the copy the BUG-009 review used), read 2026-11-19: every record whose test system name is exactly the XN-350's, and the XN-450's for comparison. Both are FDA document CR170022 (with the XN-550), effective 2018-06-29, nine analytes, all MODERATE. Specialty ID 4 is Hematology in FDA's legend (scripts/fda-menus/build_report.py).",
+  "Sysmex\u00ae XN-350 Automated Hematology Analyzer": [
+    {"DOCUMENT_NUMBER": "CR170022", "TEST_SYSTEM_ID": "25989", "ANALYTE_ID": "199", "ANALYTE_NAME": "Hematocrit", "QUALIFIER1": "", "SPECIALTY_ID": "4", "COMPLEXITY": "MODERATE", "EFFECTIVE_DATE": "2018-06-29"},
+    {"DOCUMENT_NUMBER": "CR170022", "TEST_SYSTEM_ID": "25989", "ANALYTE_ID": "16", "ANALYTE_NAME": "Hemoglobin", "QUALIFIER1": "", "SPECIALTY_ID": "4", "COMPLEXITY": "MODERATE", "EFFECTIVE_DATE": "2018-06-29"},
+    {"DOCUMENT_NUMBER": "CR170022", "TEST_SYSTEM_ID": "25989", "ANALYTE_ID": "1103", "ANALYTE_NAME": "IG (Immature Granulocyte) Count", "QUALIFIER1": "", "SPECIALTY_ID": "4", "COMPLEXITY": "MODERATE", "EFFECTIVE_DATE": "2018-06-29"},
+    {"DOCUMENT_NUMBER": "CR170022", "TEST_SYSTEM_ID": "25989", "ANALYTE_ID": "336", "ANALYTE_NAME": "IRF (immature reticulocyte fraction)", "QUALIFIER1": "", "SPECIALTY_ID": "4", "COMPLEXITY": "MODERATE", "EFFECTIVE_DATE": "2018-06-29"},
+    {"DOCUMENT_NUMBER": "CR170022", "TEST_SYSTEM_ID": "25989", "ANALYTE_ID": "128", "ANALYTE_NAME": "Platelet count", "QUALIFIER1": "", "SPECIALTY_ID": "4", "COMPLEXITY": "MODERATE", "EFFECTIVE_DATE": "2018-06-29"},
+    {"DOCUMENT_NUMBER": "CR170022", "TEST_SYSTEM_ID": "25989", "ANALYTE_ID": "312", "ANALYTE_NAME": "Red blood cell count (erythrocyte count) (RBC)", "QUALIFIER1": "", "SPECIALTY_ID": "4", "COMPLEXITY": "MODERATE", "EFFECTIVE_DATE": "2018-06-29"},
+    {"DOCUMENT_NUMBER": "CR170022", "TEST_SYSTEM_ID": "25989", "ANALYTE_ID": "210", "ANALYTE_NAME": "Reticulocyte count", "QUALIFIER1": "", "SPECIALTY_ID": "4", "COMPLEXITY": "MODERATE", "EFFECTIVE_DATE": "2018-06-29"},
+    {"DOCUMENT_NUMBER": "CR170022", "TEST_SYSTEM_ID": "25989", "ANALYTE_ID": "313", "ANALYTE_NAME": "White blood cell count (leukocyte count) (WBC)", "QUALIFIER1": "", "SPECIALTY_ID": "4", "COMPLEXITY": "MODERATE", "EFFECTIVE_DATE": "2018-06-29"},
+    {"DOCUMENT_NUMBER": "CR170022", "TEST_SYSTEM_ID": "25990", "ANALYTE_ID": "202", "ANALYTE_NAME": "White blood cell differential (WBC diff)", "QUALIFIER1": "5-part differential", "SPECIALTY_ID": "4", "COMPLEXITY": "MODERATE", "EFFECTIVE_DATE": "2018-06-29"}
+  ],
+  "Sysmex\u00ae XN-450 Automated Hematology Analyzer": [
+    {"DOCUMENT_NUMBER": "CR170022", "TEST_SYSTEM_ID": "25987", "ANALYTE_ID": "199", "ANALYTE_NAME": "Hematocrit", "QUALIFIER1": "", "SPECIALTY_ID": "4", "COMPLEXITY": "MODERATE", "EFFECTIVE_DATE": "2018-06-29"},
+    {"DOCUMENT_NUMBER": "CR170022", "TEST_SYSTEM_ID": "25987", "ANALYTE_ID": "16", "ANALYTE_NAME": "Hemoglobin", "QUALIFIER1": "", "SPECIALTY_ID": "4", "COMPLEXITY": "MODERATE", "EFFECTIVE_DATE": "2018-06-29"},
+    {"DOCUMENT_NUMBER": "CR170022", "TEST_SYSTEM_ID": "25987", "ANALYTE_ID": "1103", "ANALYTE_NAME": "IG (Immature Granulocyte) Count", "QUALIFIER1": "", "SPECIALTY_ID": "4", "COMPLEXITY": "MODERATE", "EFFECTIVE_DATE": "2018-06-29"},
+    {"DOCUMENT_NUMBER": "CR170022", "TEST_SYSTEM_ID": "25987", "ANALYTE_ID": "336", "ANALYTE_NAME": "IRF (immature reticulocyte fraction)", "QUALIFIER1": "", "SPECIALTY_ID": "4", "COMPLEXITY": "MODERATE", "EFFECTIVE_DATE": "2018-06-29"},
+    {"DOCUMENT_NUMBER": "CR170022", "TEST_SYSTEM_ID": "25987", "ANALYTE_ID": "128", "ANALYTE_NAME": "Platelet count", "QUALIFIER1": "", "SPECIALTY_ID": "4", "COMPLEXITY": "MODERATE", "EFFECTIVE_DATE": "2018-06-29"},
+    {"DOCUMENT_NUMBER": "CR170022", "TEST_SYSTEM_ID": "25987", "ANALYTE_ID": "312", "ANALYTE_NAME": "Red blood cell count (erythrocyte count) (RBC)", "QUALIFIER1": "", "SPECIALTY_ID": "4", "COMPLEXITY": "MODERATE", "EFFECTIVE_DATE": "2018-06-29"},
+    {"DOCUMENT_NUMBER": "CR170022", "TEST_SYSTEM_ID": "25987", "ANALYTE_ID": "210", "ANALYTE_NAME": "Reticulocyte count", "QUALIFIER1": "", "SPECIALTY_ID": "4", "COMPLEXITY": "MODERATE", "EFFECTIVE_DATE": "2018-06-29"},
+    {"DOCUMENT_NUMBER": "CR170022", "TEST_SYSTEM_ID": "25987", "ANALYTE_ID": "313", "ANALYTE_NAME": "White blood cell count (leukocyte count) (WBC)", "QUALIFIER1": "", "SPECIALTY_ID": "4", "COMPLEXITY": "MODERATE", "EFFECTIVE_DATE": "2018-06-29"},
+    {"DOCUMENT_NUMBER": "CR170022", "TEST_SYSTEM_ID": "25988", "ANALYTE_ID": "202", "ANALYTE_NAME": "White blood cell differential (WBC diff)", "QUALIFIER1": "5-part differential", "SPECIALTY_ID": "4", "COMPLEXITY": "MODERATE", "EFFECTIVE_DATE": "2018-06-29"}
+  ]
+}

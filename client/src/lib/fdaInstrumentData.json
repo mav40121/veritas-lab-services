@@ -41748,5 +41748,149 @@
       }
     },
     "menuLastVerifiedAt": "2026-11-09"
+  },
+  "Sysmex XN-350": {
+    "vendor": "Sysmex",
+    "category": "Hematology",
+    "testCount": 34,
+    "tests": {
+      "WBC": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "RBC": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "HGB": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "HCT": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "MCV": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "MCH": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "MCHC": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "PLT": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "NEUT%": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "NEUT#": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "LYMPH%": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "LYMPH#": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "MONO%": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "MONO#": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "EO%": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "EO#": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "BASO%": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "BASO#": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "IG%": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "IG#": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "RDW-CV": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "RDW-SD": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "MPV": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "RET%": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "RET#": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "IRF": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "RET-He": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "WBC-BF": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "RBC-BF": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "MN%": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "MN#": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "PMN%": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "PMN#": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      },
+      "TC-BF#": {
+        "complexity": "MODERATE",
+        "specialty": "Hematology"
+      }
+    },
+    "menuLastVerifiedAt": "2026-11-19"
   }
 }
