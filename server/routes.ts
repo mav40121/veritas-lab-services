@@ -108,6 +108,9 @@ import { quizImageProblem } from "@shared/quizImages";
 import { quizRetakeDecision } from "@shared/quizRetake";
 import { voidReasonProblem } from "@shared/quizAttemptVoid";
 import { autoRetakeFlag, isAutoRetake, hideKeyOnReview } from "@shared/quizAutoRetake";
+import { gradeQuizAnswers, unansweredMessage } from "@shared/quizGrading";
+import { withUniqueQuestionIds } from "@shared/quizQuestionIds";
+import { quizQuestionIdAudit, repairQuizQuestionIds } from "./quizQuestionIdRepair";
 import { voidTarget, applyVoid } from "./quizAttemptVoid";
 import { certificateExtras } from "./veritalabRegistry";
 
@@ -11176,16 +11179,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       if (!quiz) return res.status(404).json({ error: "Quiz not found" });
       const questions = JSON.parse(quiz.questions || "[]");
 
-      // Score by question.id (display order may have been shuffled).
-      let correct = 0;
-      const graded = answers.map((a: any) => {
-        const q = questions.find((qq: any) => qq.id === a.question_id);
-        const isCorrect = q && a.selected_answer === q.correct_answer;
-        if (isCorrect) correct++;
-        return { question_id: a.question_id, selected_answer: a.selected_answer, correct: !!isCorrect };
-      });
-      const score = questions.length > 0 ? Math.round((correct / questions.length) * 100) : 0;
-      const passed = score === 100;
+      // Score by question.id (display order may have been shuffled), each question once (shared/quizGrading.ts). Every
+      // question needs an answer that is one of its own choices (Redington 2026-11-19); the screen asks for the same.
+      const { graded, score, passed, unanswered, byQuestion } = gradeQuizAnswers(questions, answers);
+      if (unanswered.length > 0) {
+        return res.status(400).json({ error: unansweredMessage(unanswered), code: "QUIZ_UNANSWERED", questions: unanswered });
+      }
       const now = new Date().toISOString();
       const dateTaken = labToday();
 
@@ -11259,8 +11258,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       // can see what they got right/wrong. On a quiz set to retake automatically, a failed attempt's review leaves out the
       // correct answers and explanations (Michael Q3 = 1), so the next attempt can't be passed by copying the key.
       const hideKey = hideKeyOnReview(isAutoRetake(quiz), passed);
-      const fullQs = questions.map((q: any) => {
-        const ga = graded.find((a: any) => a.question_id === q.id);
+      const fullQs = questions.map((q: any, qi: number) => {
+        const ga = byQuestion[qi];
         return {
           id: q.id, question: q.question, options: q.options, image: q.image ?? null,
           ...(hideKey ? {} : { correct_answer: q.correct_answer, explanation: q.explanation }),
@@ -26039,7 +26038,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       title || null,
       mgIdsJson,
       req.user.userId,
-      JSON.stringify(questions),
+      JSON.stringify(withUniqueQuestionIds(questions).questions), // every id unique (shared/quizQuestionIds.ts)
       randomizeFlag,
       qFormat,
       autoRetakeOn,
@@ -26233,7 +26232,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       methodGroupId || null,
       methodGroupName || null,
       mgIdsJson,
-      JSON.stringify(questions),
+      JSON.stringify(withUniqueQuestionIds(questions).questions), // every id unique (shared/quizQuestionIds.ts)
       randomizeFlag,
       qFormat,
       autoRetakeOn,
@@ -26678,24 +26677,16 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const labIds = [quiz.lab_id, employee.lab_id, assessmentLabId].filter((x: any) => x != null);
     if (new Set(labIds).size > 1) return res.status(400).json({ error: "Quiz, employee, and assessment must belong to the same lab" });
     const questions = JSON.parse(quiz.questions || "[]");
-    // Score
-    let correct = 0;
-    const gradedAnswers = answers.map((a: any) => {
-      const q = questions.find((qq: any) => qq.id === a.question_id);
-      const isCorrect = q && a.selected_answer === q.correct_answer;
-      if (isCorrect) correct++;
-      return { question_id: a.question_id, selected_answer: a.selected_answer, correct: !!isCorrect };
-    });
-    const score = questions.length > 0 ? Math.round((correct / questions.length) * 100) : 0;
-    const passed = score === 100;
+    // Score: each question once, against its own key (shared/quizGrading.ts).
+    const { graded: gradedAnswers, score, passed, byQuestion } = gradeQuizAnswers(questions, answers);
     const now = new Date().toISOString();
     const dateTaken = labToday();
     const result = (db as any).$client.prepare(
       "INSERT INTO competency_quiz_results (assessment_id, quiz_id, employee_id, answers, score, passed, date_taken, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
     ).run(assessmentId || null, quizId, employeeId, JSON.stringify(gradedAnswers), score, passed ? 1 : 0, dateTaken, now);
     // Return full result including correct answers + explanations for review
-    const fullQuestions = questions.map((q: any) => {
-      const ga = gradedAnswers.find((a: any) => a.question_id === q.id);
+    const fullQuestions = questions.map((q: any, qi: number) => {
+      const ga = byQuestion[qi];
       return { ...q, selected_answer: ga?.selected_answer, was_correct: ga?.correct };
     });
     res.json({
@@ -36014,6 +36005,23 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const { quizLetterAudit } = await import("./quizLetterAudit");
     res.json(quizLetterAudit((db as any).$client, before));
   });
+  // Redington 2026-11-19 (server/quizQuestionIdRepair.ts, shared/quizQuestionIds.ts). Header x-admin-secret only. Quizzes whose
+  // questions share an id (a later one was graded against an earlier one's key), with the new id each repeat would get and the
+  // attempts on each quiz (result ids, dates, scores, voided). Read-only; ids, scores and counts only.
+  app.get("/api/admin/veritacomp/quiz-question-id-audit", (req, res) => {
+    if (req.headers["x-admin-secret"] !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    res.json(quizQuestionIdAudit((db as any).$client));
+  });
+  // Body { quizIds?, dryRun?, expectedTotal? }: gives each repeated question id a new one (the first question keeps its id).
+  // A dry run unless dryRun is false with expectedTotal = the dry run's total (409 COUNT_CHANGED otherwise, nothing written).
+  // Attempts on file are left as recorded. One audit row per quiz (user 0).
+  app.post("/api/admin/veritacomp/quiz-question-ids/repair", (req, res) => {
+    if (req.headers["x-admin-secret"] !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    const quizIds = Array.isArray(req.body?.quizIds) ? req.body.quizIds.map(Number).filter((n: number) => Number.isInteger(n) && n > 0) : undefined;
+    const out = repairQuizQuestionIds((db as any).$client, { quizIds, dryRun: req.body?.dryRun, expectedTotal: req.body?.expectedTotal });
+    if (!out.ok) return res.status(out.status).json({ error: out.message, code: out.code, total: out.total });
+    res.json(out);
+  });
   // Redington 2026-11-18 (Michael Q2 = 1; server/quizAttemptVoid.ts). Header x-admin-secret only. Body { resultIds, reason,
   // dryRun? }: voids attempts on assigned quizzes as Veritas (voided_by_user_id 0), the lab's own route's rule. A dry run unless
   // dryRun is false; the dry run lists each id with its lab, quiz, attempt, score and whether it can be voided. Applying voids
@@ -38412,7 +38420,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       title || null,
       mgIdsJson,
       0, // 0 = uploaded by admin (no specific user session)
-      JSON.stringify(questions),
+      JSON.stringify(withUniqueQuestionIds(questions).questions), // every id unique (shared/quizQuestionIds.ts)
       now,
     );
     // write-path Shape A (batch 2): admin-upload route (no user session); a quiz
@@ -38481,7 +38489,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       methodGroupId || null,
       methodGroupName || null,
       mgIdsJson,
-      JSON.stringify(questions),
+      JSON.stringify(withUniqueQuestionIds(questions).questions), // every id unique (shared/quizQuestionIds.ts)
       req.params.id,
     );
     logAudit({

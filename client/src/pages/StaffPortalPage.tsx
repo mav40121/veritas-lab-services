@@ -31,6 +31,7 @@ import { REVISION_IN_PROGRESS_NOTE } from "@shared/policyApprovedVersion";
 import { shownOptions, optionIndexFor } from "@shared/quizOptions";
 import { voidedLine } from "@shared/quizAttemptVoid";
 import { nextAttemptLine } from "@shared/quizAutoRetake";
+import { isChoiceOf, unansweredMessage } from "@shared/quizGrading";
 import { clearAuth } from "@/lib/auth";
 import { useAuth } from "@/components/AuthContext";
 import { useLabRoute } from "@/hooks/useLabRoute";
@@ -1730,8 +1731,11 @@ function StaffPortalQuizzesView({
   async function submitAttempt() {
     if (!taking) return;
     if (!signature.trim()) { setSubmitError("Type your name to sign before submitting."); return; }
-    if (taking.questions.some(q => !answers[q.id])) {
-      setSubmitError("Answer every question before submitting.");
+    // A question counts as answered only when its pick is one of its own choices (shared/quizGrading.ts); the server refuses
+    // an attempt otherwise (QUIZ_UNANSWERED) and names the questions.
+    const missing = taking.questions.map((q, i) => (isChoiceOf(q, answers[q.id]) ? 0 : i + 1)).filter(Boolean);
+    if (missing.length) {
+      setSubmitError(unansweredMessage(missing));
       return;
     }
     setSubmitting(true);
@@ -1842,7 +1846,9 @@ function StaffPortalQuizzesView({
   // ── Take-quiz screen ───────────────────────────────────────────────
   if (taking) {
     const q = taking.questions[currentQ];
-    const allAnswered = taking.questions.every(qq => !!answers[qq.id]);
+    const answered = (qq: { id: string; options: unknown }) => isChoiceOf(qq, answers[qq.id]);
+    const unansweredAt = taking.questions.map((qq, i) => (answered(qq) ? 0 : i + 1)).filter(Boolean);
+    const allAnswered = unansweredAt.length === 0;
     return (
       <div className="min-h-screen bg-background p-6">
         <div className="max-w-2xl mx-auto">
@@ -1895,7 +1901,7 @@ function StaffPortalQuizzesView({
             {currentQ < taking.questions.length - 1 ? (
               <button
                 type="button"
-                disabled={!answers[q.id]}
+                disabled={!answered(q)}
                 onClick={() => setCurrentQ(p => p + 1)}
                 className="text-xs px-3 py-1.5 text-white rounded disabled:opacity-40"
                 style={{ backgroundColor: "#01696F" }}
@@ -1904,8 +1910,10 @@ function StaffPortalQuizzesView({
                 {"Next ->"}
               </button>
             ) : (
-              <span className="text-[11px] text-muted-foreground">
-                {allAnswered ? "All answered. Sign and submit below." : "Answer every question to enable Submit."}
+              <span className="text-[11px] text-muted-foreground" data-testid="sp-quiz-answered-line">
+                {allAnswered
+                  ? "All answered. Sign and submit below."
+                  : `Answer every question to enable Submit. Not answered: question${unansweredAt.length === 1 ? "" : "s"} ${unansweredAt.join(", ")}.`}
               </span>
             )}
           </div>

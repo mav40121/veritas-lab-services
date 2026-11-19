@@ -259,7 +259,7 @@ async function main() {
     check("3n. a quiz id that doesn't exist is still 404", (await call("GET", "/api/veritacomp/quizzes/999999", undefined, OWNER.token)).s === 404);
     const listed = await call("GET", `/api/staff-portal-session/quizzes?employee_id=${staffRow}`, undefined, STAFF.token);
     const opened = await call("GET", `/api/staff-portal-session/quizzes/${assignment}?employee_id=${staffRow}`, undefined, STAFF.token);
-    const taken = await call("POST", `/api/staff-portal-session/quizzes/${assignment}/attempt`, { employee_id: staffRow, answers: [{ question_id: "q1", selected_answer: "a" }], typed_signature: "Made ZZ-LABA-Tech" }, STAFF.token);
+    const taken = await call("POST", `/api/staff-portal-session/quizzes/${assignment}/attempt`, { employee_id: staffRow, answers: [{ question_id: "q1", selected_answer: "A" }], typed_signature: "Made ZZ-LABA-Tech" }, STAFF.token);
     check("3o. a Staff login still lists, opens and takes their assigned quiz", listed.s === 200 && opened.s === 200 && taken.s === 200, `${listed.s}/${opened.s}/${taken.s} ${taken.j.error ?? ""}`);
     const otherStaffOpens = await call("GET", `/api/staff-portal-session/quizzes/${assignment}?employee_id=${outRow}`, undefined, OUTSTAFF.token);
     check("3p. a Staff login in another lab can't open that assignment", denied(otherStaffOpens.s), `${otherStaffOpens.s}`);

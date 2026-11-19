@@ -920,7 +920,7 @@ async function main() {
     check("41c. their quiz is still listed", myQuizzes.s === 200 && !!myAssignment, JSON.stringify(myQuizzes.j).slice(0, 200));
     const myAssignmentId = myAssignment?.assignment_id ?? myAssignment?.id;
     const quizOpen = await call("GET", `/api/staff-portal-session/quizzes/${myAssignmentId}?employee_id=${annId}`, undefined, ANN.token);
-    const quizTaken = await call("POST", `/api/staff-portal-session/quizzes/${myAssignmentId}/attempt`, { employee_id: annId, answers: [{ question_id: "q1", selected_answer: "a" }], typed_signature: "Ann Self" }, ANN.token);
+    const quizTaken = await call("POST", `/api/staff-portal-session/quizzes/${myAssignmentId}/attempt`, { employee_id: annId, answers: [{ question_id: "q1", selected_answer: "A" }], typed_signature: "Ann Self" }, ANN.token);
     check("41d. they can still open and take it", quizOpen.s === 200 && quizTaken.s === 200, `${quizOpen.s}/${quizTaken.s} ${quizTaken.j.error ?? ""}`);
     const annAck = await call("POST", `/api/staff-portal-session/competencies/${techRec.j.id}/sign`, { employee_id: annId, typed_signature: "Ann Self" }, ANN.token);
     check("41e. Sign Competencies still works", annAck.s === 200, `${annAck.s} ${annAck.j.error ?? ""}`);
