@@ -7384,7 +7384,11 @@ sqlite.exec(`
   try {
     const cols = (sqlite.prepare("PRAGMA table_info(finding_effectiveness_checks)").all() as { name: string }[]).map(c => c.name);
     if (cols.length > 0) {
-      // Future ALTER TABLE finding_effectiveness_checks ADD COLUMN ... blocks go here.
+      // Measured monitoring (Lifepoint ask, Michael 2026-11-19; shared/effectivenessMeasure.ts): how many items the lab
+      // audited at this checkpoint and how many were compliant. NULL on checkpoints recorded before, and on any recorded
+      // as plain effective / not effective.
+      if (!cols.includes("audited_count")) sqlite.exec("ALTER TABLE finding_effectiveness_checks ADD COLUMN audited_count INTEGER");
+      if (!cols.includes("compliant_count")) sqlite.exec("ALTER TABLE finding_effectiveness_checks ADD COLUMN compliant_count INTEGER");
     }
   } catch {
     // fresh DB: CREATE TABLE above handled it
@@ -7443,6 +7447,11 @@ sqlite.exec(`
       // category, QC look-back, alternative-assessment verification, FDA disposition) as JSON, sanitized against
       // shared/findingTypes.ts before every write.
       if (!have.has("type_details")) sqlite.exec("ALTER TABLE findings ADD COLUMN type_details TEXT");
+      // Measured monitoring plan (Lifepoint ask, Michael 2026-11-19): what the lab audits, its target compliance rate
+      // (1-100) and how many it audits at each checkpoint. All optional; NULL keeps the plain effective / not effective flow.
+      if (!have.has("monitor_measure")) sqlite.exec("ALTER TABLE findings ADD COLUMN monitor_measure TEXT");
+      if (!have.has("monitor_target_pct")) sqlite.exec("ALTER TABLE findings ADD COLUMN monitor_target_pct INTEGER");
+      if (!have.has("monitor_sample")) sqlite.exec("ALTER TABLE findings ADD COLUMN monitor_sample INTEGER");
     }
   } catch {
     // fresh DB: CREATE TABLE above handled it

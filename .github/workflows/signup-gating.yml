@@ -446,6 +446,10 @@ jobs:
         # SAFER keys stored on inspection findings only; the ESC rule (placement required; a High likelihood to harm
         # also needs leadership involvement and preventive analysis) gates the PDF; what the ESC prints (2026-11-19).
         run: npm run test:tjc-safer-esc
+      - name: Run VeritaResponse measured effectiveness monitoring integration test
+        # Schedules and the monitoring plan; with a target, a checkpoint's counts decide effective or not (below reopens a
+        # closed finding); without one, the sent status decides as before; plan edits keep recorded results (2026-11-19).
+        run: npm run test:effectiveness-measured
       - name: Run VeritaResponse legacy cleanup integration test
         # #109: dry run by default; voided-run findings close or flag (the #100 rule); old QC/AAA escalations move to
         # their entry types with due dates kept; idempotent.
