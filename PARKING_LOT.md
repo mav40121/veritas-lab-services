@@ -514,18 +514,6 @@ _(item #88 closed 2026-10-08; see C91 below)_
 
 ---
 
-### 96. FAQ promises data retention, exports and a deletion notice the product does not have
-
-**Effort:** XS (under a day for the copy fix; the features themselves would be M)
-**Importance:** High. Public promises the product does not keep; a buyer's legal or security review (Lifepoint is in one now) can hold us to the FAQ.
-
-**What:** the "Data Retention and Cancellation" answers in client/src/lib/faqContent.ts (lines 605-614 on main, 2026-10-14) say: data is kept 2 years after a subscription ends and can be reactivated; "every module that generates structured data has an Excel or PDF export function"; and after 2 years the account is deleted with an email notice first. In the product, cancelling drops the lab to the free plan, which blocks most exports; Equipment (VeritaMaintain) has no export and VeritaPT has no export button although its page promises a PDF (VeritaPTPage.tsx line 22); no 2-year deletion job or notice email exists. Fix the copy to say what the product does (or build the missing pieces, Michael's call), then check the FAQ page and its prerendered/static copy.
-
-**Source:** found 2026-10-09 during the Mike Hiltunen and Natalie Lamb replies; promised as "its own item" that day and never raised. Parked 2026-10-14 from the weekly review.
-**Status:** Copy corrected 2026-11-13 (Michael Q325 = 1, before Lifepoint's review), with the full download (live since 10/16) and the one-customer delete (PR 1914, live 6db8257d) behind it: the FAQ export answer names the full download; the 2-year and early-deletion answers, Privacy section 7 and Trust section 10 add deletion confirmed in writing within 30 days and backup copies expiring within 2 years. The 2-year deletion and its email notice stay manual (the purge route plus an email). Fix/site-data-claims PR. Michael closes. **2026-11-17 (Michael: "fix #96 and #120 on the site"):** the export answer still said "Each module also has its own Excel or PDF export"; VeritaPT has no export button (its PDF route is a placeholder no screen calls) and VeritaMaintain has only its monthly review workbook, so it now says most modules do. Trust section 8 now names the stored documents' nightly copy (PR 1941) and its restore test, so section 10's "backups described in section 8" covers the files too. fix/site-claims-exports PR. **2026-11-06:** the Privacy Policy repeats the deletion promise. client/src/pages/PrivacyPage.tsx line 56 (section 7, Data Retention) says data is kept 2 years after cancellation, then permanently deleted with an email notice first, so whichever way Michael decides has to reach that page as well as the FAQ.
-
----
-
 ### 98. VeritaComp employee form keeps saving an empty TC/TS placeholder row
 
 **Effort:** XS (under a day, UI change plus a browser test)
@@ -606,18 +594,6 @@ _(item #88 closed 2026-10-08; see C91 below)_
 
 ---
 
-### 120. Homepage says "nothing for a breach, or an inspector, to expose" while staff records are held
-
-**Effort:** XS (one line of copy once Michael decides)
-**Importance:** High. Same kind of problem as #96: a public statement a buyer's legal or security review can hold us to.
-
-**What:** client/src/pages/HomePage.tsx line 158, under "We never store PHI. By design.", ends "so there is nothing for a breach, or an inspector, to expose." The product holds no PHI by design, but it does hold staff records: rosters, credential documents, competency records, CE transcripts and read-and-sign history, and a tissue record names a surgeon. The PHI point doesn't support "nothing to expose", so the last clause says more than the rest of the paragraph can back up. It's a decision for Michael, best taken with the data retention promises in #96. Changing it is one line.
-
-**Source:** read on main at 9c701920, 2026-11-06. Parked on Michael's Q216 = 1.
-**Status:** Copy fixed 2026-11-13 (Michael Q325 = 1, before Lifepoint's review): the clause is gone; the card ends "never patient data." Fix/site-data-claims PR. Michael closes.
-
----
-
 ### 121. VeritaComp: evidence files on each competency element (VHC Health ask)
 
 **Effort:** M (1-2 weeks) to store uploaded files with a patient-information refusal; none if the links that exist today cover it
@@ -631,6 +607,18 @@ _(item #88 closed 2026-10-08; see C91 below)_
 ---
 
 ## CLOSED (audit trail)
+
+### C120. Homepage says "nothing for a breach, or an inspector, to expose" while staff records are held (was #120)
+
+**Effort:** was XS / **Importance:** High.
+
+**Closure evidence:** Copy fixed in fd774193 (2026-11-17, Site data claims, Michael Q325 = 1). Re-read on the LIVE site 2026-11-19 (vls-ops/site_copy_96_120_check.sh: /, /faq, /trust and /privacy HTTP 200, 131 JS files): 'nothing for a breach' found in 0 files, 'never patient data' in 1. Closed 2026-11-19 on Michael's go.
+
+### C119. FAQ promises data retention, exports and a deletion notice the product does not have (was #96)
+
+**Effort:** was XS / **Importance:** High.
+
+**Closure evidence:** Copy corrected in fd774193 (2026-11-17, Site data claims, Michael Q325 = 1), with the full download and the one-customer delete (PR 1914) behind it; the 2-year deletion and its email stay manual (the purge route plus an email). Re-read on the LIVE site 2026-11-19 (vls-ops/site_copy_96_120_check.sh: /, /faq, /trust and /privacy HTTP 200, 131 JS files): 'has an Excel or PDF export function' found in 0 files, 'can download all of the lab' in 2, 'confirm the deletion in writing within 30 days' in 2. Closed 2026-11-19 on Michael's go.
 
 ### C118. VeritaComp: people's quiz scores are hard to find (was #122)
 
