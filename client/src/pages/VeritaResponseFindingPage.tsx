@@ -15,8 +15,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { rootCauseLabel } from "@shared/ptFailure";
 import { isHardDeadline, isFindingOpen } from "@shared/findingCounts";
-import { findingTemplate, parseTypeDetails, ptScorePercent } from "@shared/findingTypes";
+import { findingTemplate, parseTypeDetails, ptScorePercent, tjcEscElements, validateTjcEscFields } from "@shared/findingTypes";
 import { FindingTypeDetails } from "@/components/FindingTypeDetails";
+import { TjcSaferCard } from "@/components/TjcSaferCard";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import {
   Dialog,
@@ -117,17 +118,12 @@ function clientValidateCap(finding: any): { ok: boolean; missing: string[] } {
   return { ok: missing.length === 0, missing };
 }
 
-// TJC Evidence of Standards Compliance guard. The May 2024 TJC update
-// requires documenting patient-impact factors found during root-cause
-// analysis; the findings schema folds that into root_cause. Mirrors
-// server-side validateTjcEsc.
+// TJC Evidence of Standards Compliance guard: the same rule the server's
+// validateTjcEsc applies (shared/findingTypes.ts validateTjcEscFields), so the
+// checklist and the PDF gate can't disagree. Includes the SAFER placement and,
+// for a High likelihood to harm, leadership involvement and preventive analysis.
 function clientValidateTjc(finding: any): { ok: boolean; missing: string[] } {
-  const missing: string[] = [];
-  if (!finding) return { ok: false, missing: ["finding"] };
-  if (!finding.description || !String(finding.description).trim()) missing.push("Deficiency description");
-  if (!finding.root_cause || !String(finding.root_cause).trim()) missing.push("Root cause analysis (including patient-impact factors)");
-  if (!finding.corrective_action || !String(finding.corrective_action).trim()) missing.push("Corrective action");
-  return { ok: missing.length === 0, missing };
+  return validateTjcEscFields(finding);
 }
 
 // COLA consultative-narrative guard. COLA has no hard regulatory minimum
@@ -1237,11 +1233,7 @@ export default function VeritaResponseFindingPage() {
           CAP cards so the UX is uniform per accreditor. */}
       {finding.accreditor === "TJC" && labAllowedAccreditors.has("TJC") && (() => {
         const tjc = clientValidateTjc(finding);
-        const elements = [
-          { key: "description", label: "Deficiency description" },
-          { key: "root_cause", label: "Root cause analysis (including patient-impact factors, per the current TJC standard)" },
-          { key: "corrective_action", label: "Corrective action" },
-        ];
+        const elements = tjcEscElements(finding);
         return (
           <Card>
             <CardHeader className="py-3 px-4 border-b">
@@ -1260,14 +1252,13 @@ export default function VeritaResponseFindingPage() {
             </CardHeader>
             <CardContent className="p-4 space-y-2">
               <div className="text-xs text-muted-foreground">
-                TJC submits one ESC per Requirement for Improvement through Joint Commission Connect under the Survey Process post-survey workflow. Required minimum: deficiency description, root cause analysis with patient-impact factors, and a corrective action. Optional fields (immediate action, preventive action, monitoring, completion date) strengthen the response and are recommended.
+                TJC submits one ESC per Requirement for Improvement through Joint Commission Connect under the Survey Process post-survey workflow. Required minimum: deficiency description, SAFER placement, root cause analysis with patient-impact factors, and a corrective action. A High likelihood to harm also needs leadership involvement and a preventive analysis. Optional fields (immediate action, preventive action, monitoring, completion date) strengthen the response and are recommended.
               </div>
-              <ul className="space-y-1">
+              <ul className="space-y-1" data-testid="tjc-esc-checklist">
                 {elements.map((el) => {
-                  const val = finding[el.key];
-                  const present = !!(val && String(val).trim());
+                  const present = el.present;
                   return (
-                    <li key={el.key} className="flex items-center gap-2 text-sm">
+                    <li key={el.label} className="flex items-center gap-2 text-sm" data-testid="tjc-esc-element" data-present={present ? "1" : "0"}>
                       {present
                         ? <CheckCircle2 size={14} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
                         : <XCircle size={14} className="text-red-600 dark:text-red-400 shrink-0" />}
@@ -1671,6 +1662,12 @@ export default function VeritaResponseFindingPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* SAFER placement on a TJC survey finding (2026-11-19): the grid, and for a High likelihood to harm the
+          leadership involvement and preventive analysis the ESC then needs. */}
+      {finding.accreditor === "TJC" && (finding.source_type || "inspection") === "inspection" && (
+        <TjcSaferCard finding={finding} setField={setField} readOnly={isReadOnly} />
+      )}
 
       {/* Entry-type templates (2026-10-26): the type's own questions (PT checklist, NCE details, QC look-back, ...). */}
       <FindingTypeDetails finding={finding} setField={setField} readOnly={isReadOnly} />

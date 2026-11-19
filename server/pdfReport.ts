@@ -15,7 +15,7 @@ import { isQuizImage } from "@shared/quizImages";
 import { optionIndexFor, shownOptions } from "@shared/quizOptions";
 import { hasRunDetails, runDetailRows } from "@shared/studyRunDetails";
 import { studyLotRows } from "@shared/studyLotRows";
-import { PT_CHECKLIST, parseTypeDetails, ptScorePercent, PATIENT_IMPACT, FDA_DISPOSITIONS, QC_CAUSES } from "@shared/findingTypes";
+import { PT_CHECKLIST, parseTypeDetails, ptScorePercent, PATIENT_IMPACT, FDA_DISPOSITIONS, QC_CAUSES, saferPlacement, validateTjcEscFields } from "@shared/findingTypes";
 import { rootCauseLabel } from "@shared/ptFailure";
 import { assessmentTypeLabel, evaluationDueDate } from "@shared/competencyEvaluation";
 import { el5SamplesFromRow } from "@shared/competencyEl5Samples";
@@ -7677,19 +7677,14 @@ export async function generateCapResponsePDF(input: Cms2567Input, licenseCtx?: P
 // care found during root-cause analysis; the findings schema's common
 // spine has no dedicated patient-impact column, so root_cause is the
 // catch-all and the PDF labels that section to prompt the user. Minimum
-// floor for TJC: description + root_cause + corrective_action.
+// floor for TJC: description + SAFER placement + root_cause + corrective_action,
+// and for a High likelihood-to-harm placement also leadership involvement and
+// preventive analysis (2026-11-19). The page checklist reads the same function.
 export function validateTjcEsc(finding: any): { ok: boolean; missing: string[] } {
-  const missing: string[] = [];
-  if (!finding) {
-    return { ok: false, missing: ["finding"] };
-  }
-  if (!finding.description || !String(finding.description).trim()) missing.push("Deficiency description");
-  if (!finding.root_cause || !String(finding.root_cause).trim()) missing.push("Root cause analysis (including patient-impact factors)");
-  if (!finding.corrective_action || !String(finding.corrective_action).trim()) missing.push("Corrective action");
-  return { ok: missing.length === 0, missing };
+  return validateTjcEscFields(finding);
 }
 
-function buildTjcEscHTML(input: Cms2567Input): string {
+export function buildTjcEscHTML(input: Cms2567Input): string {
   const { finding, user } = input;
   const labName = escHtml(user?.lab_name || user?.name || "Laboratory");
   const cliaRaw = user?.clia_number || user?.cliaNumber || "";
@@ -7715,6 +7710,13 @@ function buildTjcEscHTML(input: Cms2567Input): string {
   const completionDate = escHtml(finding.completion_date || "");
   const signedBy = escHtml(finding.signed_by || "");
   const signedAt = finding.signed_at ? escHtml(labLocalDate(finding.signed_at, true)) : "";
+  // SAFER placement (2026-11-19). A High likelihood-to-harm placement adds leadership involvement and preventive
+  // analysis; either one prints whenever the lab wrote it.
+  const tjcDetails = parseTypeDetails(finding.type_details);
+  const safer = saferPlacement(tjcDetails);
+  const saferText = escHtml(safer ? safer.label : "Not placed");
+  const leadership = escHtml(String(tjcDetails.leadership_involvement || "")).replace(/\n/g, "<br>");
+  const preventiveAnalysis = escHtml(String(tjcDetails.preventive_analysis || "")).replace(/\n/g, "<br>");
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>TJC Evidence of Standards Compliance - ${findingNum}</title>
 <style>
@@ -7771,7 +7773,7 @@ function buildTjcEscHTML(input: Cms2567Input): string {
 
   <div class="ident-grid">
     <div><div class="label">RFI / Standard</div><div class="value">${standardRef}</div></div>
-    <div><div class="label">Phase / Severity</div><div class="value">${phase}</div></div>
+    <div><div class="label">SAFER Placement</div><div class="value">${saferText}</div></div>
     <div><div class="label">Final Report Posted</div><div class="value">${anchor}</div></div>
     <div><div class="label">Response Due</div><div class="value">${due}</div></div>
     ${inspectionId ? `<div style="grid-column: 1 / span 4;"><div class="label">Inspection / Survey Reference</div><div class="value">${inspectionId}</div></div>` : ""}
@@ -7791,7 +7793,7 @@ function buildTjcEscHTML(input: Cms2567Input): string {
   <div class="section">
     <div class="section-head">
       Evidence of Standards Compliance
-      <div class="section-sub">(Required minimum: description, root cause with patient-impact factors, corrective action)</div>
+      <div class="section-sub">(Required minimum: description, SAFER placement, root cause with patient-impact factors, corrective action${safer?.highRow ? "; for a High likelihood to harm, leadership involvement and preventive analysis" : ""})</div>
     </div>
     <div class="section-body">
       ${immediateAction ? `<div class="resp-element"><div class="resp-label">Immediate Action</div><div class="resp-content">${immediateAction}</div></div>` : ""}
@@ -7802,6 +7804,8 @@ function buildTjcEscHTML(input: Cms2567Input): string {
         <div class="resp-content">${rootCause || "<em>Not recorded.</em>"}</div>
       </div>
       <div class="resp-element"><div class="resp-label">Corrective Action</div><div class="resp-content">${correctiveAction || "<em>Not recorded.</em>"}</div></div>
+      ${(safer?.highRow || leadership) ? `<div class="resp-element"><div class="resp-label">Leadership Involvement</div><div class="resp-content">${leadership || "<em>Not recorded.</em>"}</div></div>` : ""}
+      ${(safer?.highRow || preventiveAnalysis) ? `<div class="resp-element"><div class="resp-label">Preventive Analysis</div><div class="resp-content">${preventiveAnalysis || "<em>Not recorded.</em>"}</div></div>` : ""}
       ${preventiveAction ? `<div class="resp-element"><div class="resp-label">Preventive / System-Level Action</div><div class="resp-content">${preventiveAction}</div></div>` : ""}
       ${monitoringPlan ? `<div class="resp-element"><div class="resp-label">Effectiveness Monitoring</div><div class="resp-content">${monitoringPlan}</div></div>` : ""}
       ${completionDate ? `<div class="resp-element"><div class="resp-label">Completion Date</div><div class="resp-content">${completionDate}</div></div>` : ""}

@@ -72,6 +72,59 @@ export const PT_CHECKLIST = [
   { value: "patient_impact", label: "Patient impact", hint: "Patient results from the testing window reviewed; corrected reports issued, if any." },
 ];
 
+// SAFER placement on a TJC Requirement for Improvement (Lifepoint ask, Michael 2026-11-19). The Joint Commission places
+// each finding on its SAFER matrix: likelihood to harm (Low, Moderate, High) by scope (Limited, Pattern, Widespread).
+// An ESC for a finding in the High row also addresses leadership involvement and preventive analysis; the other
+// placements do not. Stored in findings.type_details on inspection findings; shown and required on TJC findings only.
+export const SAFER_LIKELIHOOD: readonly Opt[] = [
+  { value: "low", label: "Low" }, { value: "moderate", label: "Moderate" }, { value: "high", label: "High" },
+];
+export const SAFER_SCOPE: readonly Opt[] = [
+  { value: "limited", label: "Limited" }, { value: "pattern", label: "Pattern" }, { value: "widespread", label: "Widespread" },
+];
+export const TJC_SAFER_FIELDS: DetailField[] = [
+  { key: "safer_likelihood", label: "Likelihood to harm", kind: "enum", options: SAFER_LIKELIHOOD },
+  { key: "safer_scope", label: "Scope", kind: "enum", options: SAFER_SCOPE },
+  { key: "leadership_involvement", label: "Leadership involvement", kind: "text", long: true },
+  { key: "preventive_analysis", label: "Preventive analysis", kind: "text", long: true },
+];
+
+export interface SaferPlacement { likelihood: string; scope: string; label: string; highRow: boolean }
+
+// The finding's SAFER placement, or null until both likelihood and scope are set.
+export function saferPlacement(typeDetails: unknown): SaferPlacement | null {
+  const d = parseTypeDetails(typeDetails);
+  const l = SAFER_LIKELIHOOD.find((o) => o.value === d.safer_likelihood);
+  const s = SAFER_SCOPE.find((o) => o.value === d.safer_scope);
+  if (!l || !s) return null;
+  return { likelihood: l.value, scope: s.value, label: `${l.label} / ${s.label}`, highRow: l.value === "high" };
+}
+
+// What a TJC Evidence of Standards Compliance needs before it renders. One list for the page checklist and the server
+// PDF gate. The May 2024 TJC update asks for patient-impact factors from the root-cause analysis (kept in root_cause).
+export function tjcEscElements(finding: any): { label: string; present: boolean }[] {
+  const filled = (v: unknown) => !!(v && String(v).trim());
+  const d = parseTypeDetails(finding?.type_details);
+  const placement = saferPlacement(d);
+  const out = [
+    { label: "Deficiency description", present: filled(finding?.description) },
+    { label: "SAFER placement (likelihood to harm and scope)", present: !!placement },
+    { label: "Root cause analysis (including patient-impact factors)", present: filled(finding?.root_cause) },
+    { label: "Corrective action", present: filled(finding?.corrective_action) },
+  ];
+  if (placement?.highRow) {
+    out.push({ label: "Leadership involvement (High likelihood to harm)", present: filled(d.leadership_involvement) });
+    out.push({ label: "Preventive analysis (High likelihood to harm)", present: filled(d.preventive_analysis) });
+  }
+  return out;
+}
+
+export function validateTjcEscFields(finding: any): { ok: boolean; missing: string[] } {
+  if (!finding) return { ok: false, missing: ["finding"] };
+  const missing = tjcEscElements(finding).filter((e) => !e.present).map((e) => e.label);
+  return { ok: missing.length === 0, missing };
+}
+
 const NO_PHI = "No patient names or record numbers.";
 const INSPECTION_PLAN: FindingTypeTemplate["plan"] = {
   immediate_action: { label: "Immediate action", placeholder: "What was done the same day the citation was received." },
@@ -226,7 +279,10 @@ export function sanitizeTypeDetails(sourceType: string | null | undefined, input
   const out: Record<string, unknown> = {};
   if (!input || typeof input !== "object" || Array.isArray(input)) return out;
   const src = input as Record<string, unknown>;
-  for (const f of findingTemplate(sourceType).details) {
+  const tpl = findingTemplate(sourceType);
+  // Inspection findings also keep the TJC SAFER keys (the page shows them on TJC findings only).
+  const fields = tpl === FINDING_TYPE_TEMPLATES.inspection ? [...tpl.details, ...TJC_SAFER_FIELDS] : tpl.details;
+  for (const f of fields) {
     if ((f as any).column) continue;
     const v = src[f.key];
     if (v === undefined || v === null || v === "") continue;
