@@ -91,6 +91,7 @@ import { isQuizImage, quizImageProblem } from "@shared/quizImages";
 import { optionLetter, optionIndexFor, shownOptions } from "@shared/quizOptions";
 import { voidReasonProblem, voidedLine, VOID_REASON_MAX } from "@shared/quizAttemptVoid";
 import { AUTO_RETAKE_LABEL, AUTO_RETAKE_HELP } from "@shared/quizAutoRetake";
+import { nextQuestionId, withUniqueQuestionIds } from "@shared/quizQuestionIds";
 import { ObserverInitialsField, type QualifiedObserver } from "@/components/ObserverInitialsField";
 import { PriorYearComparisonDialog } from "@/components/PriorYearComparisonDialog";
 import { CompetencyRemindersCard } from "@/components/CompetencyRemindersCard";
@@ -6139,9 +6140,11 @@ function questionGroupOption(group: MethodGroup): string {
   return `Tests knowledge of: ${group.name}${others.length ? ` (with ${others.join(", ")})` : ""}`;
 }
 
-function emptyQuestion(idx: number): QuizQuestion {
+// A new question's id is one no question on the quiz has (shared/quizQuestionIds.ts): "q<count + 1>" repeated an id on a quiz
+// whose ids have gaps, and every answer finds its question by id (Redington 2026-11-19).
+function emptyQuestion(existing: readonly QuizQuestion[]): QuizQuestion {
   return {
-    id: `q${idx}`,
+    id: nextQuestionId(existing),
     question: "",
     type: "multiple_choice",
     options: ["A. ", "B. ", "C. ", "D. "],
@@ -6164,7 +6167,7 @@ function NewQuizDialog({
   const [title, setTitle] = useState("");
   const [selectedGroupIds, setSelectedGroupIds] = useState<number[]>(groups.map(g => g.id));
   const [source, setSource] = useState<"author" | "upload">("author");
-  const [questions, setQuestions] = useState<QuizQuestion[]>([emptyQuestion(1)]);
+  const [questions, setQuestions] = useState<QuizQuestion[]>([emptyQuestion([])]);
   const [uploadedFileName, setUploadedFileName] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
   // 2026-06-09 PR1: per-quiz randomization toggle. Server shuffles the
@@ -6182,11 +6185,11 @@ function NewQuizDialog({
   }
 
   function addQuestion() {
-    setQuestions(prev => [...prev, emptyQuestion(prev.length + 1)]);
+    setQuestions(prev => [...prev, emptyQuestion(prev)]);
   }
 
   function removeQuestion(idx: number) {
-    setQuestions(prev => prev.filter((_, i) => i !== idx).map((q, i) => ({ ...q, id: `q${i + 1}` })));
+    setQuestions(prev => prev.filter((_, i) => i !== idx));
   }
 
   function updateQuestion(idx: number, patch: Partial<QuizQuestion>) {
@@ -6211,15 +6214,16 @@ function NewQuizDialog({
         toast({ title: "No questions found", description: "Expected an array of questions, or {questions:[...]}", variant: "destructive" });
         return;
       }
-      const normalized: QuizQuestion[] = raw.map((q: any, i: number) => ({
-        id: typeof q.id === "string" ? q.id : `q${i + 1}`,
+      // A file's ids can repeat or be missing; withUniqueQuestionIds gives each of those a free id.
+      const normalized: QuizQuestion[] = withUniqueQuestionIds(raw.map((q: any) => ({
+        id: typeof q.id === "string" ? q.id : "",
         question: String(q.question || ""),
         type: q.type || "multiple_choice",
         options: Array.isArray(q.options) ? q.options.map((o: any) => String(o)) : [],
         correct_answer: String(q.correct_answer || "A"),
         explanation: q.explanation ? String(q.explanation) : "",
         image: typeof q.image === "string" ? q.image : null,
-      }));
+      }))).questions;
       // Inherit title from meta block if present and the title field is empty.
       if (!title && parsed.meta && typeof parsed.meta.title === "string") {
         setTitle(parsed.meta.title);
@@ -6767,9 +6771,11 @@ function EditQuizDialog({
 
   const [title, setTitle] = useState<string>(quiz.title || quiz.method_group_name || "");
   const [selectedGroupIds, setSelectedGroupIds] = useState<number[]>(initialGroupIds);
-  const [questions, setQuestions] = useState<QuizQuestion[]>(
-    quiz.questions.map((q, i) => ({
-      id: q.id || `q${i + 1}`,
+  // Each question keeps its stored id, which the answers of attempts on file point to; a repeated or missing one gets a
+  // free id (shared/quizQuestionIds.ts), the rule the server applies on save.
+  const [loadedQuestions] = useState<QuizQuestion[]>(() => withUniqueQuestionIds(
+    quiz.questions.map((q) => ({
+      id: q.id || "",
       question: q.question,
       type: q.type || "multiple_choice",
       options: Array.isArray(q.options) ? q.options.map(String) : [],
@@ -6779,7 +6785,8 @@ function EditQuizDialog({
       method_group_name: q.method_group_name ?? null,
       image: q.image ?? null,
     }))
-  );
+  ).questions);
+  const [questions, setQuestions] = useState<QuizQuestion[]>(loadedQuestions);
   // Per-question "include" flag, used only by the Save-as-New-Quiz path.
   // Untouched by Save Changes (which always persists every question on the
   // source quiz). Initial state: questions tagged to a NOT-selected method
@@ -6787,8 +6794,8 @@ function EditQuizDialog({
   // Include column reflects current method-group scope on first render.
   const [included, setIncluded] = useState<Record<string, boolean>>(() => {
     const inc: Record<string, boolean> = {};
-    quiz.questions.forEach((q, i) => {
-      const qid = q.id || `q${i + 1}`;
+    loadedQuestions.forEach((q) => {
+      const qid = q.id;
       if (q.method_group_id == null) {
         inc[qid] = true;
       } else {
@@ -6823,10 +6830,11 @@ function EditQuizDialog({
     });
   }
   function addQuestion() {
-    setQuestions(prev => [...prev, emptyQuestion(prev.length + 1)]);
+    setQuestions(prev => [...prev, emptyQuestion(prev)]);
   }
+  // The others keep their ids: attempts on file find their questions by id, so renumbering pointed them at other questions.
   function removeQuestion(idx: number) {
-    setQuestions(prev => prev.filter((_, i) => i !== idx).map((q, i) => ({ ...q, id: `q${i + 1}` })));
+    setQuestions(prev => prev.filter((_, i) => i !== idx));
   }
   function updateQuestion(idx: number, patch: Partial<QuizQuestion>) {
     setQuestions(prev => prev.map((q, i) => i === idx ? { ...q, ...patch } : q));
@@ -7015,7 +7023,7 @@ function EditQuizDialog({
                       </label>
                     </div>
                     {questions.length > 1 && (
-                      <Button variant="ghost" size="sm" className="h-6 px-1.5 text-destructive" onClick={() => removeQuestion(qIdx)}>
+                      <Button variant="ghost" size="sm" className="h-6 px-1.5 text-destructive" onClick={() => removeQuestion(qIdx)} aria-label={`Remove question ${qIdx + 1}`} data-testid={`quiz-edit-remove-${qIdx}`}>
                         <X className="h-3.5 w-3.5" />
                       </Button>
                     )}
@@ -7025,6 +7033,7 @@ function EditQuizDialog({
                     value={q.question}
                     onChange={e => updateQuestion(qIdx, { question: e.target.value })}
                     className="text-xs min-h-[60px]"
+                    data-testid={`quiz-edit-question-${qIdx}`}
                   />
                   <QuizImagePicker
                     value={q.image}
@@ -7065,6 +7074,7 @@ function EditQuizDialog({
                             value={opt}
                             onChange={e => updateOption(qIdx, oIdx, e.target.value)}
                             className="text-xs h-7"
+                            data-testid={`quiz-edit-option-${qIdx}-${oIdx}`}
                           />
                         </div>
                       );
@@ -7080,7 +7090,7 @@ function EditQuizDialog({
               </Card>
               );
             })}
-            <Button variant="outline" size="sm" onClick={addQuestion}>
+            <Button variant="outline" size="sm" onClick={addQuestion} data-testid="quiz-edit-add-question">
               <Plus className="h-3.5 w-3.5 mr-1" /> Add Question
             </Button>
           </div>

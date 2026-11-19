@@ -158,7 +158,7 @@ async function main() {
     // Off the roster, the staff list may not show the quiz, so submit straight to the assignment.
     sqlite.prepare("UPDATE staff_employees SET status = 'inactive' WHERE id = ?").run(gusId);
     const gusAssignment = attemptsOf(autoId, gusId)[0]?.id;
-    const gusFail = await call("POST", `/api/staff-portal-session/quizzes/${gusAssignment}/attempt`, { employee_id: gusId, answers: QUESTIONS.map((q) => ({ question_id: q.id, selected_answer: "C" })), typed_signature: "Made Up" }, GUS.token);
+    const gusFail = await call("POST", `/api/staff-portal-session/quizzes/${gusAssignment}/attempt`, { employee_id: gusId, answers: QUESTIONS.map((q) => ({ question_id: q.id, selected_answer: q.correct_answer === "A" ? "B" : "A" })), typed_signature: "Made Up" }, GUS.token);
     check("8. someone off the lab's active roster gets no automatic attempt (refused, or scored with none opened)",
       !!gusAssignment && attemptsOf(autoId, gusId).length === 1 && (gusFail.s !== 200 || (gusFail.j.passed === false && gusFail.j.next_attempt === null)),
       `${gusFail.s} ${JSON.stringify(gusFail.j).slice(0, 160)}`);

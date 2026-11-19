@@ -298,6 +298,10 @@ jobs:
         # Redington 2026-11-18 (Michael Q3 = 1): a quiz set to retake automatically opens the next attempt after a failed one on
         # a staff login, and that failed attempt's review leaves out the correct answers.
         run: npm run test:quiz-auto-retake
+      - name: Run quiz question id test
+        # Redington 2026-11-19: two questions sharing an id were graded against one key; ids are now unique on every save, each
+        # question is graded once against its own key, and a staff attempt with a question unanswered is refused.
+        run: npm run test:quiz-question-ids
       - name: Run VeritaScan auto-completion integration test
         # Site review 2026-11-05: a passing assessment marks only what its record supports (technical: item 60, with all six procedures shown;
         # waived and non-technical: nothing), a draft or failed study marks nothing, the lab's own answer stays, and the admin audit is counts only.
