@@ -23601,7 +23601,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (finding.accreditor !== "CAP") {
       return res.status(400).json({ error: `CAP renderer only applies to CAP-accreditor findings; this finding is ${finding.accreditor}.` });
     }
-    const labIdForGate = getUserPrimaryLabId(dataUserId);
+    const labIdForGate = finding.lab_id ?? getUserPrimaryLabId(dataUserId); // the finding's own lab (2026-11-19); a legacy finding with no lab falls back to the primary lab
     const allowed = getLabAllowedAccreditors(labIdForGate);
     if (!allowed.has('CAP')) {
       return res.status(400).json({
@@ -23659,7 +23659,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (finding.accreditor !== "TJC") {
       return res.status(400).json({ error: `TJC renderer only applies to TJC-accreditor findings; this finding is ${finding.accreditor}.` });
     }
-    const labIdForGate = getUserPrimaryLabId(dataUserId);
+    const labIdForGate = finding.lab_id ?? getUserPrimaryLabId(dataUserId); // the finding's own lab (2026-11-19); a legacy finding with no lab falls back to the primary lab
     const allowed = getLabAllowedAccreditors(labIdForGate);
     if (!allowed.has('TJC')) {
       return res.status(400).json({
@@ -23716,7 +23716,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (finding.accreditor !== "COLA") {
       return res.status(400).json({ error: `COLA renderer only applies to COLA-accreditor findings; this finding is ${finding.accreditor}.` });
     }
-    const labIdForGate = getUserPrimaryLabId(dataUserId);
+    const labIdForGate = finding.lab_id ?? getUserPrimaryLabId(dataUserId); // the finding's own lab (2026-11-19); a legacy finding with no lab falls back to the primary lab
     const allowed = getLabAllowedAccreditors(labIdForGate);
     if (!allowed.has('COLA')) {
       return res.status(400).json({
@@ -23775,7 +23775,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (finding.accreditor !== "AABB") {
       return res.status(400).json({ error: `AABB renderer only applies to AABB-accreditor findings; this finding is ${finding.accreditor}.` });
     }
-    const labIdForGate = getUserPrimaryLabId(dataUserId);
+    const labIdForGate = finding.lab_id ?? getUserPrimaryLabId(dataUserId); // the finding's own lab (2026-11-19); a legacy finding with no lab falls back to the primary lab
     const allowed = getLabAllowedAccreditors(labIdForGate);
     if (!allowed.has('AABB')) {
       return res.status(400).json({
