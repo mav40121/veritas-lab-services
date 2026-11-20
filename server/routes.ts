@@ -37,6 +37,7 @@ import { parseRunDetails, serializeRunDetails } from "@shared/studyRunDetails";
 import { CLIA_PRESETS } from "@shared/cliaPresets";
 import { classifyCriterion, criterionOf } from "@shared/studyCriterion";
 import { sanitizeTypeDetails, parseTypeDetails, FINDING_SOURCE_TYPES } from "@shared/findingTypes";
+import { scheduleIntervals, parseMonitoringPlan, parseCounts, measuredStatus, type MonitoringPlan } from "@shared/effectivenessMeasure";
 import { PT_ROOT_CAUSE_CATEGORIES } from "@shared/ptFailure";
 import { studyRowToClient, resolveInstrumentDisplay, studyPdfFilename } from "./studyPdf";
 import { scanPhi } from "./phiScan";
@@ -23949,14 +23950,31 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // Idempotent via the UNIQUE(finding_id, interval_days) constraint. Requires a
   // completion_date (you cannot monitor effectiveness of an action not yet
   // completed).
+  // Measured monitoring (Lifepoint ask, Michael 2026-11-19; shared/effectivenessMeasure.ts): the body may name a schedule
+  // (30/60/90 days, monthly for 4 or 6 months) and the plan (what is audited, target %, sample). A body with none of
+  // them behaves as before: 30/60/90 days and the plan left as it is.
+  const saveMonitoringPlan = (sqlite: any, findingId: number, plan: MonitoringPlan) =>
+    sqlite.prepare("UPDATE findings SET monitor_measure = ?, monitor_target_pct = ?, monitor_sample = ?, updated_at = datetime('now') WHERE id = ?")
+      .run(plan.measure, plan.targetPct, plan.sample, findingId);
+  const sendsPlan = (b: any) => !!b && ["measure", "target_pct", "sample"].some((k) => b[k] !== undefined);
+
   app.post("/api/labs/:labId/findings/:id/effectiveness-checks/generate", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritaresponse"), (req: any, res) => {
     const finding = findingForLabScope(req);
     if (!finding) return res.status(404).json({ error: "Finding not found" });
     const anchor = finding.completion_date;
     if (!anchor) return res.status(400).json({ error: "Set a completion date on the finding before starting effectiveness monitoring." });
+    const intervals = req.body?.schedule === undefined ? EFFECTIVENESS_INTERVALS : scheduleIntervals(req.body.schedule);
+    if (!intervals) return res.status(400).json({ error: "Pick a monitoring schedule from the list.", code: "SCHEDULE_UNKNOWN" });
+    let plan: MonitoringPlan | null = null;
+    if (sendsPlan(req.body)) {
+      const parsed = parseMonitoringPlan(req.body);
+      if (!parsed.ok) return res.status(400).json({ error: parsed.error, code: "PLAN_INVALID" });
+      plan = parsed.plan;
+    }
     const sqlite = (db as any).$client;
+    if (plan) saveMonitoringPlan(sqlite, finding.id, plan);
     let created = 0;
-    for (const days of EFFECTIVENESS_INTERVALS) {
+    for (const days of intervals) {
       const d = new Date(anchor);
       if (isNaN(d.getTime())) return res.status(400).json({ error: "Finding completion_date is not a valid date." });
       d.setUTCDate(d.getUTCDate() + days);
@@ -23969,10 +23987,26 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     }
     try {
       sqlite.prepare("INSERT INTO finding_history (finding_id, event, by_user_id, payload) VALUES (?, 'effectiveness_started', ?, ?)")
-        .run(finding.id, req.user?.userId ?? null, JSON.stringify({ created, anchor }));
+        .run(finding.id, req.user?.userId ?? null, JSON.stringify({ created, anchor, intervals, plan }));
     } catch {}
     const rows = sqlite.prepare("SELECT * FROM finding_effectiveness_checks WHERE finding_id = ? ORDER BY interval_days ASC").all(finding.id);
-    res.json({ ok: true, created, checks: rows });
+    res.json({ ok: true, created, checks: rows, finding: sqlite.prepare("SELECT * FROM findings WHERE id = ?").get(finding.id) });
+  });
+
+  // PUT the monitoring plan (what is audited, target %, sample) on its own, before or after the checkpoints exist.
+  // Checkpoints already recorded keep the result they were given.
+  app.put("/api/labs/:labId/findings/:id/effectiveness-plan", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritaresponse"), (req: any, res) => {
+    const finding = findingForLabScope(req);
+    if (!finding) return res.status(404).json({ error: "Finding not found" });
+    const parsed = parseMonitoringPlan(req.body);
+    if (!parsed.ok) return res.status(400).json({ error: parsed.error, code: "PLAN_INVALID" });
+    const sqlite = (db as any).$client;
+    saveMonitoringPlan(sqlite, finding.id, parsed.plan);
+    try {
+      sqlite.prepare("INSERT INTO finding_history (finding_id, event, by_user_id, payload) VALUES (?, 'monitoring_plan_updated', ?, ?)")
+        .run(finding.id, req.user?.userId ?? null, JSON.stringify(parsed.plan));
+    } catch {}
+    res.json({ ok: true, finding: sqlite.prepare("SELECT * FROM findings WHERE id = ?").get(finding.id) });
   });
 
   // PUT record a checkpoint outcome. "not_effective" reopens the finding to
@@ -23981,7 +24015,17 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   app.put("/api/labs/:labId/findings/:id/effectiveness-checks/:checkId", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritaresponse"), (req: any, res) => {
     const finding = findingForLabScope(req);
     if (!finding) return res.status(404).json({ error: "Finding not found" });
-    const { status, outcome_note, verified_by } = req.body || {};
+    const { outcome_note, verified_by } = req.body || {};
+    let { status } = req.body || {};
+    // Measured monitoring (2026-11-19): with counts sent, they are stored, and when the finding has a target the
+    // result is decided from them (measuredStatus), whatever status was sent. Without counts it works as before.
+    let counts: { audited: number; compliant: number } | null = null;
+    if (req.body?.audited_count !== undefined || req.body?.compliant_count !== undefined) {
+      const parsed = parseCounts(req.body?.audited_count, req.body?.compliant_count);
+      if (!parsed.ok) return res.status(400).json({ error: parsed.error, code: "COUNTS_INVALID" });
+      counts = { audited: parsed.audited, compliant: parsed.compliant };
+      if (finding.monitor_target_pct) status = measuredStatus(counts.audited, counts.compliant, Number(finding.monitor_target_pct));
+    }
     if (!["effective", "not_effective"].includes(status)) {
       return res.status(400).json({ error: "status must be 'effective' or 'not_effective'" });
     }
@@ -23992,8 +24036,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (!check) return res.status(404).json({ error: "Checkpoint not found" });
     const now = new Date().toISOString();
     sqlite.prepare(
-      "UPDATE finding_effectiveness_checks SET status = ?, outcome_note = ?, verified_at = ?, verified_by = ? WHERE id = ?"
-    ).run(status, outcome_note ?? null, now, verified_by ?? (req.user?.name ?? null), check.id);
+      "UPDATE finding_effectiveness_checks SET status = ?, outcome_note = ?, verified_at = ?, verified_by = ?, audited_count = ?, compliant_count = ? WHERE id = ?"
+    ).run(status, outcome_note ?? null, now, verified_by ?? (req.user?.name ?? null), counts?.audited ?? null, counts?.compliant ?? null, check.id);
     let reopened = false;
     if (status === "not_effective" && finding.status === "closed") {
       sqlite.prepare("UPDATE findings SET status = 'drafting', updated_at = ? WHERE id = ?").run(now, finding.id);
@@ -24002,7 +24046,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     try {
       sqlite.prepare("INSERT INTO finding_history (finding_id, event, by_user_id, payload) VALUES (?, ?, ?, ?)")
         .run(finding.id, status === "effective" ? "effectiveness_verified" : "effectiveness_failed", req.user?.userId ?? null,
-             JSON.stringify({ interval_days: check.interval_days, reopened }));
+             JSON.stringify({ interval_days: check.interval_days, reopened, ...(counts ? { audited: counts.audited, compliant: counts.compliant, target_pct: finding.monitor_target_pct ?? null } : {}) }));
     } catch {}
     res.json({ ok: true, reopened, check: sqlite.prepare("SELECT * FROM finding_effectiveness_checks WHERE id = ?").get(check.id) });
   });

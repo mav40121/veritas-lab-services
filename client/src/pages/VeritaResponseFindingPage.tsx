@@ -18,6 +18,7 @@ import { isHardDeadline, isFindingOpen } from "@shared/findingCounts";
 import { findingTemplate, parseTypeDetails, ptScorePercent, tjcEscElements, validateTjcEscFields } from "@shared/findingTypes";
 import { FindingTypeDetails } from "@/components/FindingTypeDetails";
 import { TjcSaferCard } from "@/components/TjcSaferCard";
+import { EffectivenessPanel } from "@/components/EffectivenessPanel";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import {
   Dialog,
@@ -228,186 +229,6 @@ function LinkagePanel({ activeLabId, findingId }: { activeLabId: number; finding
   );
 }
 
-// Wave C3 (2026-06-12): effectiveness monitoring panel. Generates and tracks
-// the 30/60/90-day checkpoints that verify a corrective action stayed effective
-// after the plan of correction closed. A "not effective" outcome reopens the
-// finding, so the parent refetches.
-interface EffCheck {
-  id: number;
-  interval_days: number;
-  due_date: string;
-  status: "pending" | "effective" | "not_effective";
-  outcome_note: string | null;
-  verified_at: string | null;
-  verified_by: string | null;
-}
-function EffectivenessPanel({ activeLabId, findingId, completionDate, canEdit, onFindingChange }: {
-  activeLabId: number; findingId: string; completionDate: string | null; canEdit: boolean; onFindingChange: () => void;
-}) {
-  const { toast } = useToast();
-  const [checks, setChecks] = useState<EffCheck[] | null>(null);
-  const [checksError, setChecksError] = useState(false);
-  const [busy, setBusy] = useState(false);
-  // Audit #9: the outcome note is captured in a styled dialog, not a native
-  // window.prompt (which is unstyled and is suppressed inside sandboxed
-  // iframes / embedded previews, dead-ending the flow). recordTarget holds the
-  // checkpoint + outcome being recorded; a "not effective" outcome reopens the
-  // finding.
-  const [recordTarget, setRecordTarget] = useState<{ check: EffCheck; status: "effective" | "not_effective" } | null>(null);
-  const [noteText, setNoteText] = useState("");
-  const base = `${API_BASE}/api/labs/${activeLabId}/findings/${findingId}/effectiveness-checks`;
-
-  const load = async () => {
-    try {
-      const r = await fetch(base, { headers: authHeaders() });
-      if (!r.ok) throw new Error(`load ${r.status}`);
-      setChecks(await r.json());
-      setChecksError(false);
-    } catch {
-      // Audit #9: a failed load must not read as "no checkpoints yet".
-      setChecksError(true);
-    }
-  };
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [findingId, activeLabId]);
-
-  const generate = async () => {
-    setBusy(true);
-    try {
-      const r = await fetch(`${base}/generate`, { method: "POST", headers: { ...authHeaders(), "Content-Type": "application/json" } });
-      const data = await r.json().catch(() => ({}));
-      if (r.ok) { setChecks(data.checks || []); setChecksError(false); }
-      else toast({ variant: "destructive", title: "Could not start monitoring", description: data.error || "Please try again." });
-    } finally { setBusy(false); }
-  };
-
-  const openRecord = (check: EffCheck, status: "effective" | "not_effective") => {
-    setNoteText("");
-    setRecordTarget({ check, status });
-  };
-
-  const submitRecord = async () => {
-    if (!recordTarget) return;
-    const { check, status } = recordTarget;
-    setBusy(true);
-    try {
-      const r = await fetch(`${base}/${check.id}`, {
-        method: "PUT",
-        headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ status, outcome_note: noteText.trim() || null }),
-      });
-      const data = await r.json().catch(() => ({}));
-      if (r.ok) {
-        setRecordTarget(null);
-        await load();
-        if (data.reopened) onFindingChange();
-      } else {
-        toast({ variant: "destructive", title: "Could not record checkpoint", description: data.error || "Please try again." });
-      }
-    } catch {
-      toast({ variant: "destructive", title: "Could not record checkpoint", description: "Check your connection and try again." });
-    } finally { setBusy(false); }
-  };
-
-  const hasChecks = checks && checks.length > 0;
-  return (
-    <Card>
-      <CardHeader className="py-3 px-4 border-b">
-        <CardTitle className="text-base font-semibold">Effectiveness monitoring</CardTitle>
-      </CardHeader>
-      <CardContent className="p-4 space-y-3">
-        <p className="text-xs text-muted-foreground">
-          A plan of correction is not finished when it is signed. CLIA and CAP expect the lab to verify the corrective action stayed effective. These 30, 60, and 90 day checkpoints are anchored on the completion date and appear on the VeritaTrack worklist until resolved.
-        </p>
-        {checksError && !hasChecks ? (
-          <div className="flex items-center gap-3 text-sm">
-            <AlertTriangle size={16} className="text-destructive shrink-0" />
-            <span className="text-muted-foreground">Couldn't load the checkpoints.</span>
-            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={load}>Retry</Button>
-          </div>
-        ) : !hasChecks ? (
-          <div className="flex items-center gap-3">
-            <Button size="sm" onClick={generate} disabled={busy || !canEdit || !completionDate}>
-              Start 30/60/90 day monitoring
-            </Button>
-            {!completionDate && <span className="text-xs text-amber-700">Set a completion date above first.</span>}
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {checks!.map(c => {
-              const overdue = c.status === "pending" && new Date(c.due_date) < new Date();
-              return (
-                <div key={c.id} className="flex items-center gap-3 rounded-md border p-2.5 text-sm">
-                  <span className="font-medium w-16 shrink-0">{c.interval_days}-day</span>
-                  <span className={`text-xs ${overdue ? "text-red-600 font-medium" : "text-muted-foreground"} w-28 shrink-0`}>Due {c.due_date}</span>
-                  <div className="flex-1 min-w-0">
-                    {c.status === "pending" ? (
-                      <span className={`text-xs ${overdue ? "text-red-600" : "text-muted-foreground"}`}>{overdue ? "Overdue" : "Pending"}</span>
-                    ) : (
-                      <span className={`text-xs font-medium ${c.status === "effective" ? "text-emerald-700" : "text-red-700"}`}>
-                        {c.status === "effective" ? "Verified effective" : "Not effective (finding reopened)"}
-                        {c.verified_by ? ` by ${c.verified_by}` : ""}
-                        {c.outcome_note ? `: ${c.outcome_note}` : ""}
-                      </span>
-                    )}
-                  </div>
-                  {c.status === "pending" && canEdit && (
-                    <div className="flex gap-1 shrink-0">
-                      <Button size="sm" variant="outline" className="h-7 text-xs" disabled={busy} onClick={() => openRecord(c, "effective")}>Effective</Button>
-                      <Button size="sm" variant="outline" className="h-7 text-xs text-red-700" disabled={busy} onClick={() => openRecord(c, "not_effective")}>Not effective</Button>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Audit #9: styled record dialog replacing the native window.prompt. */}
-        <Dialog open={!!recordTarget} onOpenChange={(o) => { if (!o) setRecordTarget(null); }}>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>
-                {recordTarget?.status === "effective"
-                  ? `Verify effective at ${recordTarget?.check.interval_days} days`
-                  : `Record recurrence at ${recordTarget?.check.interval_days} days`}
-              </DialogTitle>
-            </DialogHeader>
-            <div className="space-y-2">
-              <Label htmlFor="eff-note" className="text-sm">
-                {recordTarget?.status === "effective"
-                  ? "What evidence shows the corrective action held?"
-                  : "What recurred? Recording this reopens the finding."}
-              </Label>
-              <Textarea
-                id="eff-note"
-                value={noteText}
-                onChange={(e) => setNoteText(e.target.value)}
-                rows={4}
-                placeholder="Optional but recommended for the surveyor-facing record."
-              />
-              {recordTarget?.status === "not_effective" && (
-                <p className="text-xs text-amber-700 dark:text-amber-400">
-                  This marks the checkpoint not effective and reopens the finding for further corrective action.
-                </p>
-              )}
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setRecordTarget(null)} disabled={busy}>Cancel</Button>
-              <Button
-                onClick={submitRecord}
-                disabled={busy}
-                className={recordTarget?.status === "not_effective" ? "bg-red-600 hover:bg-red-700 text-white" : ""}
-              >
-                {busy ? "Saving..." : recordTarget?.status === "effective" ? "Mark effective" : "Reopen finding"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </CardContent>
-    </Card>
-  );
-}
-
 // FDA product deviation panel (21 CFR 606.171, St. Charles REQ-065, 2026-10-14). Shows the 606.171(b)
 // reportability answers and the 45-day report-by date, and records the Form FDA 3486 submission.
 function FdaDeviationPanel({ finding, labId, onSaved }: { finding: any; labId: number | null; onSaved: (f: any) => void }) {
@@ -491,6 +312,7 @@ function findingHistoryText(h: { event: string; payload: any }): string {
     case "effectiveness_started": return "Effectiveness checks scheduled";
     case "effectiveness_verified": return "Effectiveness check: effective";
     case "effectiveness_failed": return "Effectiveness check: not effective, finding reopened";
+    case "monitoring_plan_updated": return "Monitoring plan updated";
     case "fda_fields_updated": return "FDA report details updated";
     case "qc_run_voided": return "Linked QC run voided";
     case "closed_qc_run_voided": return "Linked QC run voided; finding closed";
@@ -1777,8 +1599,7 @@ export default function VeritaResponseFindingPage() {
       {activeLabId && (
         <EffectivenessPanel
           activeLabId={activeLabId}
-          findingId={id!}
-          completionDate={finding.completion_date}
+          finding={finding}
           canEdit={hasPlanAccess && !isReadOnly}
           onFindingChange={fetchFinding}
         />

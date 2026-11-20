@@ -25,7 +25,7 @@ test.describe("VeritaResponse effectiveness monitoring (Wave C3)", () => {
     const panel = page.getByText(/Effectiveness monitoring/i).first();
     await expect(panel).toBeVisible({ timeout: 20000 });
     // Either the start button (not yet generated) or 30-day checkpoint rows.
-    const start = page.getByRole("button", { name: /Start 30\/60\/90 day monitoring/i });
+    const start = page.getByRole("button", { name: /Start monitoring/i });
     const dayRow = page.getByText(/30-day/i);
     const present = (await start.count()) + (await dayRow.count());
     expect(present).toBeGreaterThanOrEqual(1);
