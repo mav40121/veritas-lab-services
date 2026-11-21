@@ -24,7 +24,9 @@ export function toCsv<T extends Record<string, unknown>>(
   columns: CsvColumn<T>[],
 ): string {
   const headerLine = columns.map((c) => toCsvCell(c.header)).join(",");
-  const dataLines = rows.map((row) =>
+  // A caller handed something that isn't a row list gets the header alone, never a throw
+  // ("n.map is not a function" on Export CSV, Sentry 7859390250, 2026-11-20).
+  const dataLines = (Array.isArray(rows) ? rows : []).map((row) =>
     columns
       .map((c) => {
         const v = c.format ? c.format(row) : (row as Record<string, unknown>)[c.key as string];
