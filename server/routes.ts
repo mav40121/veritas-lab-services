@@ -35,6 +35,7 @@ import { labLocalDate, labToday, addLabDays, labClockMiddleware, setRequestLabTz
 import { labTimeZoneInfo, isValidLabTimeZone, TIME_ZONE_CHOICES } from "@shared/labTimeZone";
 import { parseRunDetails, serializeRunDetails } from "@shared/studyRunDetails";
 import { CLIA_PRESETS } from "@shared/cliaPresets";
+import { refRangeEntered } from "@shared/refRangeEntered";
 import { classifyCriterion, criterionOf } from "@shared/studyCriterion";
 import { sanitizeTypeDetails, parseTypeDetails, FINDING_SOURCE_TYPES } from "@shared/findingTypes";
 import { scheduleIntervals, parseMonitoringPlan, parseCounts, measuredStatus, type MonitoringPlan } from "@shared/effectivenessMeasure";
@@ -16244,7 +16245,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const row = (db as any).$client.prepare(
       `SELECT * FROM veritamap_analyte_values WHERE ${BAND_WHERE}`
     ).get(...bandArgs(mapId, analyte, band)) as any;
-    if (!row || !row.ref_range_low || !row.ref_range_high) {
+    // A one-sided range ("<200", ">60") is a complete verified range (shared/refRangeEntered.ts); only a band with
+    // neither end is refused.
+    if (!row || !refRangeEntered(row)) {
       return res.status(400).json({ error: "Enter the verified reference range first; an empty range cannot be attested" });
     }
     const now = new Date().toISOString();
@@ -18014,7 +18017,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
             : (av?.critical_low || av?.critical_high) ? "Pending MEC review" : "";
           const refAttestCell = av?.ref_locked
             ? `Attested by ${av.ref_attested_by}, ${av.ref_attested_title} on ${String(av.ref_attested_at).slice(0, 10)}`
-            : (av?.ref_range_low && av?.ref_range_high) ? "Pending director attestation" : "";
+            : refRangeEntered(av) ? "Pending director attestation" : "";
 
           return [
             t.analyte,
