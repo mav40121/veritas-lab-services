@@ -1,4 +1,5 @@
 import { normalizeSpecimen, SPECIMEN_SUGGESTIONS, SPECIMEN_MAX_LENGTH, specimenLabel } from "@shared/veritamapSpecimen";
+import { refRangeEntered, bandAttestCounts } from "@shared/refRangeEntered";
 import { labTodayIso, labDayOf } from "@/lib/labDate";
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Link, useRoute, useLocation } from "wouter";
@@ -1983,6 +1984,16 @@ function TestRow({ test, onChange, onChangeMany, onRowMount, analyteBands, amrVa
                       </button>
                     );
                   })}
+                  {/* Each band is attested on its own and the panel opens on the first band, so an attested band
+                      elsewhere read as "not saved" when the panel reopened (Heywood 2026-11-20). Say how many are. */}
+                  {onProvenance && (() => {
+                    const { withRange, attested } = bandAttestCounts(bands);
+                    return withRange > 0 ? (
+                      <span className="w-full text-[10px] text-muted-foreground" data-testid="band-attest-count">
+                        Reference range attested on {attested} of {withRange} {withRange === 1 ? "band" : "bands"}. Each band is attested on its own.
+                      </span>
+                    ) : null;
+                  })()}
                 </>
               )}
               {!readOnly && onSaveAnalyteValues && !addingBand && (
@@ -2166,7 +2177,7 @@ function TestRow({ test, onChange, onChangeMany, onRowMount, analyteBands, amrVa
                       </button>
                     )}
                   </>
-                ) : (localAv.ref_range_low && localAv.ref_range_high && !readOnly) ? (
+                ) : (refRangeEntered(localAv) && !readOnly) ? (
                   <button type="button" className="text-[10px] underline text-blue-600 hover:text-blue-800" onClick={() => { setAttestFor(f => f === "ref" ? null : "ref"); setMecOpen(false); }}>
                     Attest reference range (director or designee)
                   </button>
@@ -2324,6 +2335,19 @@ function TestRow({ test, onChange, onChangeMany, onRowMount, analyteBands, amrVa
                       await onSaveAmrValues(test.analyte, inst.id, amrSaveBody(inst.id));
                       amrSavedRef.current.set(inst.id, amrEditsRef.current.get(inst.id) ?? 0);
                     }
+                  }
+                  // A sign-off form that is open and filled in is recorded by Save values too, after the values it
+                  // signs are saved (Heywood 2026-11-20: "I signed off and saved but when you back in it is not saved";
+                  // production held 0 attestations, so the filled form was dropped when Save values was clicked
+                  // instead of its own Attest and lock / Record review button).
+                  if (onProvenance && attestFor !== null && attestBy.trim() && attestTitle.trim()) {
+                    if (attestFor === "ref") await onProvenance("attest-ref", test.analyte, { attested_by: attestBy.trim(), attested_title: attestTitle.trim(), ...bandFields });
+                    else await onProvenance("attest-amr", test.analyte, { attested_by: attestBy.trim(), attested_title: attestTitle.trim(), specimen_type: activeSpecimen }, attestFor);
+                    setAttestFor(null);
+                  }
+                  if (onProvenance && mecOpen && !localAv.mec_reviewed_at && mecDate && mecBy.trim()) {
+                    await onProvenance("mec-review", test.analyte, { reviewed_at: mecDate, recorded_by: mecBy.trim(), ...bandFields });
+                    setMecOpen(false);
                   }
                 } catch {
                   setAutosaveStatus("error");
