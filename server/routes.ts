@@ -17068,6 +17068,11 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const nameOf = (a: string) => sameTestNameOnMap(a, others);
     client.transaction(() => {
       const exSnapshot = captureInstrumentExemptions(instId, mapId).map((e) => ({ ...e, k: nameOf(e.k).toLowerCase().trim() }));
+      // 2026-11-21: the lab-entered IFU link (ifu_url) lives on these rows too, and the delete below dropped it on every
+      // menu save (the page then fell back to the manufacturer's portal link). Carry it over by test, as the exemptions are.
+      const ifuSnapshot = (client.prepare(
+        "SELECT analyte, ifu_url FROM veritamap_instrument_tests WHERE instrument_id = ? AND map_id = ? AND ifu_url IS NOT NULL AND trim(ifu_url) != ''"
+      ).all(instId, mapId) as Array<{ analyte: string; ifu_url: string }>).map((r) => ({ k: nameOf(r.analyte).toLowerCase().trim(), u: r.ifu_url }));
       // 2026-11-11 (Q281 = 1): the delete below would lose when each test became active; a row that was already active
       // keeps its date (NULL for rows from before active_since existed), anything newly active gets now.
       const priorRaw = snapshotActiveSince(client, instId, mapId);
@@ -17081,6 +17086,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         ins.run(instId, mapId, name, String(t.specialty || ''), String(t.complexity || ''), active, activeSinceOnReplace(active, before, now));
       }
       restoreInstrumentExemptions(instId, mapId, exSnapshot);
+      const putIfu = client.prepare("UPDATE veritamap_instrument_tests SET ifu_url = ? WHERE instrument_id = ? AND map_id = ? AND lower(trim(analyte)) = ? AND ifu_url IS NULL");
+      for (const s of ifuSnapshot) putIfu.run(s.u, instId, mapId, s.k);
       rebuildMapTests(mapId);
     })();
   }
