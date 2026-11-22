@@ -506,15 +506,7 @@ _(item #89 closed 2026-11-22; see C121 below)_
 
 ---
 
-### 98. VeritaComp employee form keeps saving an empty TC/TS placeholder row
-
-**Effort:** XS (under a day, UI change plus a browser test)
-**Importance:** Low. No visible effect since the BUG-044 server fix; the data just stays untidy.
-
-**What:** ticking TC or TS on the employee form saves an empty specialty placeholder row each time. The BUG-044 server fix makes those rows harmless everywhere they are read. Fix: drop the empty row once a real specialty is added, with a browser test.
-
-**Source:** BUG-044 follow-up, Q128 (2026-10-12, 9:36 PM ET; Claude recommended parking it until after the 10/14 demo). Q128 was never answered.
-**Status:** Open. Waiting on Michael's Q128 (park and build, or leave as is).
+_(item #98 closed 2026-11-22; see C122 below)_
 
 ---
 
@@ -599,6 +591,12 @@ _(item #89 closed 2026-11-22; see C121 below)_
 ---
 
 ## CLOSED (audit trail)
+
+### C122. VeritaStaff employee form keeps saving an empty TC/TS placeholder row (was #98)
+
+**Effort:** was XS / **Importance:** Low.
+
+**Closure evidence:** Michael 2026-11-22 (Decision 10 = 1, answering the old Q128): fixed on the server, where every path that writes an employee's roles meets (both create and both update routes, and the bulk import): server/cms209Roles.ts withoutPlaceholderRoles drops a specialty-less TC/TS row when the same role also has a specialty number or the entire-lab flag, and keeps it when it is the role's only row. The form is unchanged; its kept row is no longer stored beside a specialty. Rows saved before stay as they are (isPlaceholderRole still skips them). tests/integration/staff-role-placeholder.test.ts 8/8 (6 FAIL on main 59257e1c); scripts/verify-cms209-partb.mts ALL PASS. Closed 2026-11-22 on Michael's go.
 
 ### C121. VeritaCheck page: a discount code shows "applied" and is then dropped (was #89)
 

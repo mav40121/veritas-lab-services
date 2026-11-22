@@ -45,7 +45,7 @@ import { scanPhi } from "./phiScan";
 import { evaluateQcRun, rulesForRun } from "./qcWestgard";
 import { resolveBasis, computeBasis, basisConfig, sampleStats, type QcBasis } from "./qcBasis";
 import { buildWasteReport, generateWasteReportPDF, generateWasteReportExcel, type WasteEventRow, type WasteReportContext } from "./wasteReport";
-import { entireLabFlag, sanitizeSpecialties, expandEntireLabRoles, cms209Gaps } from "./cms209Roles";
+import { entireLabFlag, sanitizeSpecialties, expandEntireLabRoles, cms209Gaps, withoutPlaceholderRoles } from "./cms209Roles";
 import { computeCoverageForLab, setLinearityExemption, alignStudyToAnalyte, resolvePresetMapAnalyte, presetCorroboratesName, studyNeedsAttribution, analyteMatch, stampMapDatesFromStudies, recordOutsideStudies, voidOutsideRecord } from "./veritacheckCoverage";
 import { buildCoverageReportRows, generateCoverageReportExcel } from "./coverageReport";
 import { CATEGORY_TO_MAP_FIELD, analyteFromTaskName, MAP_SIGNOFF_FIELDS } from "./veritatrackMapSync";
@@ -27771,7 +27771,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // Insert roles
     if (roles && Array.isArray(roles)) {
       const roleStmt = (db as any).$client.prepare("INSERT INTO staff_roles (employee_id, lab_id, role, specialty_number, all_specialties) VALUES (?,?,?,?,?)");
-      for (const r of roles) {
+      for (const r of withoutPlaceholderRoles(roles)) {
         roleStmt.run(empId, lab.id, r.role, r.specialtyNumber || null, entireLabFlag(r));
       }
       // Phase 3.9 dual-write tier2_lab_id on the newly inserted role rows.
@@ -27841,7 +27841,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const roleStmt = (db as any).$client.prepare("INSERT INTO staff_roles (employee_id, lab_id, role, specialty_number, all_specialties) VALUES (?,?,?,?,?)");
       (db as any).$client.transaction(() => { // BUG-094 sweep: the delete and the re-insert commit together or not at all
         (db as any).$client.prepare("DELETE FROM staff_roles WHERE employee_id = ?").run(req.params.id);
-        for (const r of roles) {
+        for (const r of withoutPlaceholderRoles(roles)) {
           roleStmt.run(req.params.id, lab.id, r.role, r.specialtyNumber || null, entireLabFlag(r));
         }
       })();
@@ -28063,7 +28063,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       if (linkLogin) sqlite.prepare("UPDATE staff_employees SET login_user_id = ? WHERE id = ?").run(Number(loginUserId), id);
       if (Array.isArray(roles)) {
         const roleStmt = sqlite.prepare("INSERT INTO staff_roles (employee_id, lab_id, tier2_lab_id, role, specialty_number, all_specialties) VALUES (?,?,?,?,?,?)");
-        for (const r of roles) roleStmt.run(id, lab.id, tier2LabId, r.role, r.specialtyNumber || null, entireLabFlag(r));
+        for (const r of withoutPlaceholderRoles(roles)) roleStmt.run(id, lab.id, tier2LabId, r.role, r.specialtyNumber || null, entireLabFlag(r));
       }
       if (performsTesting) {
         // Shared engine seed: NYS non-waived = hire-anchored (hire+6/+12/+24); every
@@ -28125,7 +28125,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       if (Array.isArray(roles)) {
         sqlite.prepare("DELETE FROM staff_roles WHERE employee_id = ?").run(req.params.id);
         const roleStmt = sqlite.prepare("INSERT INTO staff_roles (employee_id, lab_id, tier2_lab_id, role, specialty_number, all_specialties) VALUES (?,?,?,?,?,?)");
-        for (const r of roles) roleStmt.run(req.params.id, emp.lab_id, tier2LabId, r.role, r.specialtyNumber || null, entireLabFlag(r));
+        for (const r of withoutPlaceholderRoles(roles)) roleStmt.run(req.params.id, emp.lab_id, tier2LabId, r.role, r.specialtyNumber || null, entireLabFlag(r));
       }
       // Seed a competency schedule row if this employee now performs testing and has
       // none yet (NYS non-waived = hire-anchored; every other case null until the initial
@@ -32057,7 +32057,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
                 "active", now, now
               );
               const empId = Number(result.lastInsertRowid);
-              for (const role of p.roles) {
+              for (const role of withoutPlaceholderRoles(p.roles)) {
                 insertRoleStmt.run(empId, lab.id, lab.tier2_lab_id ?? null, role.role, role.specialtyNumber);
               }
               if (p.performsTesting === 1) {
@@ -32078,7 +32078,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
                 now, p.employeeId, lab.id
               );
               deleteRolesStmt.run(p.employeeId);
-              for (const role of p.roles) {
+              for (const role of withoutPlaceholderRoles(p.roles)) {
                 insertRoleStmt.run(p.employeeId, lab.id, lab.tier2_lab_id ?? null, role.role, role.specialtyNumber);
               }
               // Add schedule if newly performs testing and none exists

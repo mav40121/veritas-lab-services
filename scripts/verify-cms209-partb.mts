@@ -2,7 +2,7 @@
 // exported helpers (server/cms209Roles.ts) that the 209 routes call, across
 // every branch: entire-lab expansion, empty-list preservation, dedup, and the
 // needs-review gap detector. Run: npx tsx scripts/verify-cms209-partb.mts
-import { entireLabFlag, sanitizeSpecialties, expandEntireLabRoles, cms209Gaps } from "../server/cms209Roles";
+import { entireLabFlag, sanitizeSpecialties, expandEntireLabRoles, cms209Gaps, withoutPlaceholderRoles } from "../server/cms209Roles";
 
 let fails = 0;
 function check(name: string, cond: boolean, detail?: string) {
@@ -86,6 +86,18 @@ check("sanitize non-array -> []", JSON.stringify(sanitizeSpecialties(null)) === 
   check("BUG-044 209 rows: a placeholder beside an entire-lab TS expands to the lab list only", JSON.stringify(specs(entire)) === JSON.stringify([1, 5, 7]), JSON.stringify(entire));
   const only = out.find((e: any) => e.id === 21)!.roles!;
   check("BUG-044 209 rows: a TC with only the placeholder keeps its row (still surfaces as needs-review)", only.length === 1 && only[0].role === "TC" && only[0].specialty_number == null);
+}
+
+// Parking lot #98 (2026-11-22): every role write drops the form's empty TC/TS row beside a specialty or the entire-lab flag.
+{
+  const show = (rows: any[]) => rows.map((r) => `${r.role}:${r.specialtyNumber || "-"}${r.allSpecialties ? ":all" : ""}`).join(",");
+  check("#98 empty TC dropped beside TC 1", show(withoutPlaceholderRoles([{ role: "TC", specialtyNumber: null }, { role: "TC", specialtyNumber: 1 }])) === "TC:1");
+  check("#98 a TS with nothing chosen keeps its one empty row", show(withoutPlaceholderRoles([{ role: "TS", specialtyNumber: null }])) === "TS:-");
+  check("#98 empty TS dropped beside an entire-lab TS", show(withoutPlaceholderRoles([{ role: "TS", specialtyNumber: null }, { role: "TS", specialtyNumber: null, allSpecialties: true }])) === "TS:-:all");
+  check("#98 a specialty on TC doesn't drop an empty TS", show(withoutPlaceholderRoles([{ role: "TC", specialtyNumber: 2 }, { role: "TS", specialtyNumber: null }])) === "TC:2,TS:-");
+  check("#98 other roles with no specialty are untouched", show(withoutPlaceholderRoles([{ role: "GS", specialtyNumber: null }, { role: "LD", specialtyNumber: null }, { role: "TC", specialtyNumber: 5 }])) === "GS:-,LD:-,TC:5");
+  check("#98 specialty 0 or blank counts as none, as the write stores it", show(withoutPlaceholderRoles([{ role: "TC", specialtyNumber: 0 }, { role: "TC", specialtyNumber: "" }, { role: "TC", specialtyNumber: 4 }])) === "TC:4");
+  check("#98 not an array passes through", withoutPlaceholderRoles(null as any) === null);
 }
 
 console.log(fails === 0 ? "\nALL PASS" : `\n${fails} FAILURE(S)`);
