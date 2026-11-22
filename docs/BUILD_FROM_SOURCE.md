@@ -14,7 +14,8 @@ uses a bundled headless Chromium (Puppeteer); LibreOffice/Word are **not** requi
 
 ## 1. Prerequisites
 
-- **Node.js 20.x** (built and verified on v20.20.2) and **npm 10.x** (10.8.2).
+- **Node.js 22.x** (`package.json` engines `>=22.12.0`; production's `Dockerfile` uses `node:22-slim`) and **npm 10.x**.
+  Node 22 reaches end of life on 2027-04-30.
 - A C/C++ toolchain for the `better-sqlite3` native addon:
   - Linux: `build-essential` (gcc/g++/make) and Python 3.
   - Windows: "Desktop development with C++" (MSVC build tools) and Python 3.
@@ -60,10 +61,9 @@ back to `./veritas.db` when `/data` does not exist).
   full production schema exactly; no manual migration step is required.
   (Verify with `node scripts/audit-sql-columns.mjs <path-to-db>`, which prepares every
   static query against the schema and should report 0 failures.)
-- **Restore production data:** to bring up an instance with existing data, place a
-  decompressed backup snapshot at `DB_PATH` **before** first boot. See
-  `docs/disaster-recovery.md` section 2b (download the latest `.db.gz` from off-site
-  backup, `gunzip`, put it at `DB_PATH`).
+- **Restore production data:** follow `docs/RESTORE_AND_RUN.md` (one page). It covers the
+  continuous, hourly and nightly database copies, the stored documents
+  (`scripts/restore-files.mjs`), and the settings that must keep production's values.
 
 ## 5. Build
 
@@ -98,6 +98,9 @@ dashboard loads. `npm run check` runs the TypeScript type-check.
   Stripe/Resend/Sentry/S3 are optional integrations gated behind env vars.
 - **No hidden state in the schema.** As of 2026-09-28 a clean boot yields the same
   148-table / 1820-column schema as production; there is no dependency on an
-  accumulated volume to obtain a complete schema.
+  accumulated volume to obtain a complete schema. Re-checked 2026-11-22 on 24d68d8e:
+  226 app tables, 0 columns missing against production's structure-only copy (the two
+  `_litestream_*` tables are Litestream's own). Nothing in CI guards this; re-check
+  before an escrow deposit.
 - All operational credentials live in environment variables (Section 3); none are
   compiled into the source.
