@@ -5,6 +5,8 @@
 
 This is an internal document. Em-dashes and frank language permitted. Public-facing security posture lives at `/trust` and in the security roadmap PDF.
 
+> **To restore data, use `docs/RESTORE_AND_RUN.md` (one page, checked 2026-11-22).** This runbook was written in May 2026, when the nightly database copy was the only off-site backup. Since then there are also a continuous copy (Litestream, 72-hour point in time, since 2026-10-16), hourly copies (7 days, since 2026-10-16) and a nightly copy of the stored documents (since 2026-11-18), all in the same R2 bucket. Section 2b below describes the nightly copy only.
+
 ---
 
 ## 1. Critical assets inventory
@@ -59,7 +61,7 @@ You have two recovery sources:
 If Railway is hard-down (not transient):
 
 1. Confirm via https://status.railway.com.
-2. The backup is independent (Cloudflare R2). Latest backup is at most 24 hours old.
+2. The backup is independent (Cloudflare R2). The continuous copy is about a second behind and the hourly copy at most an hour; documents are copied nightly.
 3. To migrate elsewhere quickly: stand up a new node service on Fly.io, Render, or AWS. The app is a single Express server + SQLite file. Requires:
    - Run `npm install && npm run build`
    - Copy the latest R2 backup to the new host's persistent volume as `/data/veritas.db`
@@ -151,8 +153,8 @@ These are commitments only after Sprint 2 ships. Today they're aspirational.
 |---|---|---|
 | Application crash | < 5 minutes (Railway auto-restart) | 0 (no data loss) |
 | Bad deploy on main | < 30 minutes (revert + redeploy) | 0 |
-| Database corruption | < 2 hours (R2 restore) | < 24 hours (nightly backup) |
-| Railway provider outage | < 8 hours (migrate to alt host) | < 24 hours |
+| Database corruption | < 2 hours (R2 restore) | Seconds within 72 hours (continuous); 1 hour (hourly) |
+| Railway provider outage | < 8 hours (migrate to alt host) | Database seconds to 1 hour; documents up to 24 hours (nightly) |
 | Security incident | Variable (depends on scope) | Variable |
 
 ---
