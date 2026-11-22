@@ -7,6 +7,8 @@ import {
   returnUnusedRefusal, solutionExpiredAtImplant, tissueFlags, tissueIdKey, yesNo, ISSUE_ROW_FIELDS, OTHER_DISPOSITION_LABELS, SOLUTION_EXPIRED_NOTE_LABEL,
   TISSUE_FIELD_LABELS, TISSUE_STATE_LABELS,
   TISSUE_CFR_CODE_CITATION, TISSUE_CFR_CODE_QUOTE, TISSUE_CFR_TRACKING_CITATION, TISSUE_CFR_TRACKING_QUOTE, TISSUE_NO_PHI_NOTICE,
+  addYearsYmd, finalDispositionDate, parseTissueRetentionYears, storedTissueRetentionYears, tissueRetention, tissueRetentionPolicyText,
+  TISSUE_RETENTION_NOT_SET, TISSUE_RETENTION_OPEN_VALUE, TISSUE_RETENTION_UNSET_NOTE,
 } from "../shared/tissueRules";
 
 let failures = 0;
@@ -124,6 +126,36 @@ const ECFR_B1 = "You must establish and maintain a system of HCT/P tracking that
 const ECFR_C = "Distinct identification code. As part of your tracking system, you must ensure: That each HCT/P that you manufacture is assigned and labeled with a distinct identification code,";
 check("the quote is verbatim in 1271.290(b)(1)", ECFR_B1.includes(TISSUE_CFR_TRACKING_QUOTE) && TISSUE_CFR_TRACKING_CITATION === "21 CFR 1271.290(b)(1)");
 check("the code's name is verbatim in 1271.290(c)", ECFR_C.includes(TISSUE_CFR_CODE_QUOTE) && TISSUE_CFR_CODE_CITATION === "21 CFR 1271.290(c)");
+
+// Record retention: the lab's own period (Michael 2026-11-22, Decision 11 = 1, parking lot #115)
+const parsed = (raw: unknown) => { const p = parseTissueRetentionYears(raw); return "error" in p ? "error" : p.years; };
+check("retention: 1, 10 and 99 years save", parsed(1) === 1 && parsed(10) === 10 && parsed("10") === 10 && parsed(" 25 ") === 25 && parsed(99) === 99);
+check("retention: blank or null clears", parsed(null) === null && parsed("") === null);
+check("retention: 0, 100, a fraction, words, true, a list or nothing at all is refused",
+  [0, 100, -1, 2.5, "2.5", "ten", "10 years", true, false, [10], undefined, {}].every((v) => parsed(v) === "error"));
+check("retention: a stored value outside the range reads as not set", storedTissueRetentionYears(0) === null && storedTissueRetentionYears(150) === null && storedTissueRetentionYears(null) === null && storedTissueRetentionYears("7") === 7);
+check("retention: years add on the same day", addYearsYmd("2026-11-05", 10) === "2036-11-05" && addYearsYmd("2026-01-31", 1) === "2027-01-31");
+check("retention: Feb 29 lands on Feb 28 in a year with none, and stays Feb 29 in one with it", addYearsYmd("2028-02-29", 1) === "2029-02-28" && addYearsYmd("2028-02-29", 4) === "2032-02-29");
+check("retention: final disposition is the implant date, or the other disposition's date",
+  finalDispositionDate({ state: "implanted", implanted_date: "2026-11-05" }) === "2026-11-05"
+  && ["wasted", "returned", "expired"].every((s) => finalDispositionDate({ state: s, disposition_date: "2026-10-01" }) === "2026-10-01"));
+check("retention: an open unit has no final disposition, whatever dates it holds",
+  ["received_mm", "stored", "issued"].every((s) => finalDispositionDate({ state: s, implanted_date: "2026-11-05", disposition_date: "2026-11-05" }) === null));
+check("retention: the policy line is the mock's", tissueRetentionPolicyText(10) === "10 years after final disposition (implant, return to supplier, or discard)" && tissueRetentionPolicyText(1).startsWith("1 year after"));
+const rImpl = tissueRetention({ state: "implanted", implanted_date: "2026-11-05" }, 10);
+check("retention set, implanted: the mock's keep-until date, policy and note",
+  rImpl.years === 10 && rImpl.basis_date === "2026-11-05" && rImpl.keep_until === "2036-11-05" && rImpl.keep_until_text === "2036-11-05"
+  && rImpl.policy_text === "10 years after final disposition (implant, return to supplier, or discard)"
+  && rImpl.note === "Set by the laboratory on the Tissue page. The keep-until date counts from this unit's final disposition, implanted 2026-11-05.", JSON.stringify(rImpl));
+const rRet = tissueRetention({ state: "returned", disposition_date: "2026-09-30" }, 7);
+check("retention set, returned to supplier: counts from the disposition date and says so", rRet.keep_until === "2033-09-30" && /final disposition, returned to supplier 2026-09-30\.$/.test(rRet.note), JSON.stringify(rRet));
+check("retention set, wasted and expired name their disposition",
+  /, wasted 2026-09-30\.$/.test(tissueRetention({ state: "wasted", disposition_date: "2026-09-30" }, 7).note) && /, recorded as expired 2026-09-30\.$/.test(tissueRetention({ state: "expired", disposition_date: "2026-09-30" }, 7).note));
+const rOpen = tissueRetention({ state: "issued" }, 10);
+check("retention set, not final yet: no date, it counts from final disposition", rOpen.keep_until === null && rOpen.basis_date === null && rOpen.keep_until_text === TISSUE_RETENTION_OPEN_VALUE && rOpen.policy_text !== null && /which isn't recorded yet\.$/.test(rOpen.note), JSON.stringify(rOpen));
+const rUnset = tissueRetention({ state: "implanted", implanted_date: "2026-11-05" }, null);
+check("retention not set: Not set and the mock's note, never a number we supply", rUnset.years === null && rUnset.keep_until === null && rUnset.keep_until_text === TISSUE_RETENTION_NOT_SET && rUnset.policy_text === null && rUnset.note === TISSUE_RETENTION_UNSET_NOTE && !/\d/.test(rUnset.note), JSON.stringify(rUnset));
+check("retention: no em dash in any of its words", ![rImpl, rRet, rOpen, rUnset].some((r) => /—/.test(JSON.stringify(r))));
 
 console.log(failures ? `${failures} FAILED` : "ALL PASS");
 process.exit(failures ? 1 : 0);

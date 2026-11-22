@@ -13,12 +13,15 @@ import { stampPdfAuthor } from "./pdfMeta";
 import { setPdfContent } from "./pdfContent";
 import { labLocalDate, labTimeZoneById, labToday } from "./dateLocal";
 import {
-  OTHER_DISPOSITION_LABELS, SOLUTION_EXPIRED_NOTE_LABEL, TISSUE_FIELD_LABELS, TISSUE_STATE_LABELS, liveSteps, solutionExpiredAtImplant, type OtherDisposition, type TissueState,
+  OTHER_DISPOSITION_LABELS, SOLUTION_EXPIRED_NOTE_LABEL, TISSUE_FIELD_LABELS, TISSUE_RETENTION_KEEP_LABEL, TISSUE_RETENTION_POLICY_LABEL, TISSUE_RETENTION_TITLE, TISSUE_STATE_LABELS,
+  liveSteps, solutionExpiredAtImplant, storedTissueRetentionYears, tissueRetention, type OtherDisposition, type TissueState,
 } from "../shared/tissueRules";
 
 export interface TissueRecordContext {
   labName: string | null;
   cliaNumber: string | null;
+  /** The lab's record retention period in whole years (labs.tissue_retention_years), null when not set. Decision 11 = 1. */
+  retentionYears?: number | null;
   /** The lab's today, the day the record was generated. */
   generated: string;
   /** The lab's time zone, for the time a correction or undo was entered (those have no step date of their own). */
@@ -172,6 +175,19 @@ const f = (label: string, value: unknown, flex = 0) =>
   `<div class="f"${flex ? ` style="flex:${flex}"` : ""}><span>${esc(label)}</span><b>${value === null || value === undefined || value === "" ? "&nbsp;" : esc(value)}</b></div>`;
 const sec = (title: (typeof TISSUE_RECORD_SECTIONS)[number], body: string) => `<div class="sec"><div class="st">${esc(title)}</div><div class="sb">${body}</div></div>`;
 
+/**
+ * The "Record retention" box under the tissue ID (Michael 2026-11-22, Decision 11 = 1; the approved mock, Tissue retention mock
+ * 2026-11-22): the lab's own period and the keep-until date it gives, or Not set. Never a number VeritaStock supplies. Its own
+ * box, not one of the form's sections.
+ */
+export function tissueRetentionBoxHTML(u: any, retentionYears: unknown): string {
+  const r = tissueRetention(u, retentionYears);
+  const body = r.policy_text
+    ? f(TISSUE_RETENTION_KEEP_LABEL, r.keep_until_text, 2) + f(TISSUE_RETENTION_POLICY_LABEL, r.policy_text, 3)
+    : f(TISSUE_RETENTION_KEEP_LABEL, r.keep_until_text, 5);
+  return `<div class="sec ret-sec"><div class="st">${esc(TISSUE_RETENTION_TITLE)}</div><div class="sb">${body}<div class="note">${esc(r.note)}</div></div></div>`;
+}
+
 /** The record as HTML: the mock's layout, filled from the unit's row and its events. Pure, so the tests read it directly. */
 export function buildTissueRecordHTML(u: any, events: TissueEventRow[], ctx: TissueRecordContext): string {
   const cliaLine = ctx.cliaNumber ? `CLIA: ${esc(ctx.cliaNumber)}` : "CLIA: Not on file - enter in account settings";
@@ -225,6 +241,7 @@ export function buildTissueRecordHTML(u: any, events: TissueEventRow[], ctx: Tis
   <div class="band"><div><h1>VeritaStock&trade; Tissue Record</h1><div class="sub">One unit, receipt to final disposition, as recorded in VeritaStock&trade;</div></div>
     <div class="lab"><b>${esc(ctx.labName || "Lab name not on file")}</b>${cliaLine}<br>Generated ${esc(ctx.generated)}</div></div>
   <div class="idbar"><span>Tissue ID</span><span class="id">${esc(u.source_id)}</span><span class="status" style="color:${statusColor(String(u.state))}">Status: ${esc(stateText)}</span></div>
+  ${tissueRetentionBoxHTML(u, ctx.retentionYears ?? null)}
   ${body}
   <div class="reg">${esc(TISSUE_RECORD_CLOSING_LINE)}</div>
 </body></html>`;
@@ -236,14 +253,14 @@ export const TISSUE_RECORD_FOOTER_TEMPLATE = `<div style="font-size:7px;width:10
 export function loadTissueRecord(sqlite: any, labId: number, unitId: number): { unit: any; events: TissueEventRow[]; ctx: TissueRecordContext } | null {
   const unit = sqlite.prepare("SELECT * FROM tissue_units WHERE id = ? AND lab_id = ?").get(unitId, labId) as any;
   if (!unit) return null;
-  const lab = sqlite.prepare("SELECT lab_name, clia_number FROM labs WHERE id = ?").get(labId) as any;
+  const lab = sqlite.prepare("SELECT lab_name, clia_number, tissue_retention_years FROM labs WHERE id = ?").get(labId) as any;
   const events = sqlite.prepare(
     "SELECT id, event_type, event_date, event_time, performed_by, checks_json, detail_json, recorded_by_name, created_at FROM tissue_unit_events WHERE unit_id = ? ORDER BY id ASC"
   ).all(unit.id) as TissueEventRow[];
   const storageNames: Record<number, string> = {};
   for (const s of sqlite.prepare("SELECT id, name FROM temp_log_units WHERE lab_id = ?").all(labId) as any[]) storageNames[Number(s.id)] = s.name;
   const tz = labTimeZoneById(sqlite, labId);
-  return { unit, events, ctx: { labName: lab?.lab_name ?? null, cliaNumber: lab?.clia_number ?? null, generated: labToday(tz), tz, storageNames } };
+  return { unit, events, ctx: { labName: lab?.lab_name ?? null, cliaNumber: lab?.clia_number ?? null, retentionYears: storedTissueRetentionYears(lab?.tissue_retention_years), generated: labToday(tz), tz, storageNames } };
 }
 
 export async function generateTissueRecordPDF(u: any, events: TissueEventRow[], ctx: TissueRecordContext): Promise<Buffer> {

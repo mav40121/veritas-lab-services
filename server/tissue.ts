@@ -26,7 +26,8 @@ import { generateTissueLogExcel, generateTissueLogPDF } from "./tissueLogExport"
 import { generateTissueRecordPDF, loadTissueRecord } from "./tissueRecordPdf";
 import {
   ISSUE_ROW_FIELDS, OTHER_DISPOSITIONS, TISSUE_STATE_LABELS, correctableFields, expiredSolutionRefusal, findTissuePhi, isBefore, isFinalState, isHhMm, isYmd,
-  issueRefusals, lastLiveReturn, liveSteps, returnUnusedRefusal, solutionExpiredAtImplant, tissueFlags, tissueIdKey, tissuePhiMessage, yesNo, type TissueState,
+  issueRefusals, lastLiveReturn, liveSteps, parseTissueRetentionYears, returnUnusedRefusal, solutionExpiredAtImplant, storedTissueRetentionYears, tissueFlags, tissueIdKey,
+  tissuePhiMessage, tissueRetention, tissueRetentionPolicyText, yesNo, type TissueState,
 } from "../shared/tissueRules";
 
 const sqliteOf = () => (db as any).$client;
@@ -42,6 +43,11 @@ const userName = (sqlite: any, id: number): string | null => {
   const u = sqlite.prepare("SELECT name, email FROM users WHERE id = ?").get(id) as any;
   return u ? u.name || u.email || null : null;
 };
+
+/** The lab's tissue record retention period in whole years, or null when it hasn't set one (Decision 11 = 1, parking lot #115). */
+export function readTissueRetentionYears(sqlite: any, labId: number): number | null {
+  return storedTissueRetentionYears((sqlite.prepare("SELECT tissue_retention_years AS y FROM labs WHERE id = ?").get(labId) as any)?.y);
+}
 
 export function decorateTissueUnit(u: any, today: string) {
   return { ...u, state_label: TISSUE_STATE_LABELS[u.state as TissueState] || u.state, flags: tissueFlags(u, today) };
@@ -375,7 +381,37 @@ export function registerTissueRoutes(
         storage = { ...s, last_reading: last || null, out_of_range_while_stored: Number(out?.n || 0) };
       }
     }
-    res.json({ ...decorateTissueUnit(u, today), events, storage, correctable_fields: correctableFields(u) });
+    res.json({ ...decorateTissueUnit(u, today), events, storage, correctable_fields: correctableFields(u), retention: tissueRetention(u, readTissueRetentionYears(sqlite, u.lab_id)) });
+  });
+
+  // ── The lab's record retention period (Michael 2026-11-22, Decision 11 = 1, parking lot #115) ─────────────────────
+  // 21 CFR 1271.270(d) doesn't bind a hospital that only receives, stores and implants (1271.15(d)), so the period is the lab's,
+  // blank until set. Anyone who reads the log reads it; only the lab's owner or an admin changes it, the rule the competency
+  // frequency uses for a site policy, so an editor or a Staff seat can't. Saving writes this one column: keep-until dates are
+  // worked out when read, so no unit is rewritten.
+  const ownerOrAdmin = (req: any) => req.scope?.role === "owner" || req.scope?.role === "admin";
+  app.get(`${BASE}/settings`, ...read, (req: any, res: any) => {
+    const years = readTissueRetentionYears(sqliteOf(), req.scope.labId);
+    res.json({ retention_years: years, retention_policy: years == null ? null : tissueRetentionPolicyText(years), can_edit: ownerOrAdmin(req) });
+  });
+
+  app.put(`${BASE}/settings`, ...record, (req: any, res: any) => {
+    if (!ownerOrAdmin(req)) return res.status(403).json({ error: "Only the lab's owner or an admin can change the retention period.", code: "OWNER_OR_ADMIN_ONLY" });
+    const parsed = parseTissueRetentionYears(req.body?.retention_years);
+    if ("error" in parsed) return res.status(400).json({ error: parsed.error, code: "BAD_RETENTION" });
+    const sqlite = sqliteOf();
+    const labId = req.scope.labId;
+    const before = readTissueRetentionYears(sqlite, labId);
+    sqlite.prepare("UPDATE labs SET tissue_retention_years = ? WHERE id = ?").run(parsed.years, labId);
+    try {
+      logAudit({
+        userId: req.userId, ownerUserId: req.scope?.lab?.owner_user_id ?? req.userId, module: "veritastock", action: "update",
+        entityType: "tissue_retention", entityId: labId,
+        entityLabel: `Tissue record retention: ${parsed.years == null ? "not set" : tissueRetentionPolicyText(parsed.years)}`,
+        before: { tissue_retention_years: before }, after: { tissue_retention_years: parsed.years }, ipAddress: req.ip,
+      });
+    } catch { /* best-effort, as the unit audits are */ }
+    res.json({ retention_years: parsed.years, retention_policy: parsed.years == null ? null : tissueRetentionPolicyText(parsed.years), can_edit: true });
   });
 
   // ── One unit's record as a PDF (Michael 2026-11-09), laid out as the Heywood mock he approved. Same reach as the unit view. ──
