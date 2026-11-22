@@ -61,6 +61,27 @@ export function isPlaceholderRole(r: RoleRow, all: RoleRow[]): boolean {
   return all.some((o) => o !== r && o.role === r.role && (o.specialty_number != null || o.all_specialties === 1 || o.all_specialties === true));
 }
 
+// Parking lot #98 (Michael 2026-11-22, BUG-044 follow-up): the employee form keeps that specialty-less TC/TS row so a
+// ticked role stays ticked before a specialty is picked, and sends it with every save, so it was stored again each
+// time. Every write of an employee's roles (create and update on both routes, and the bulk import) passes its rows
+// through here: the row is dropped when the same role also carries a specialty number or the entire-lab flag, and
+// kept when it is the role's only row (a TC/TS with nothing chosen yet stays a gap on the 209). Rows saved before stay
+// as they are; isPlaceholderRole still skips them when read. Request shape (camelCase); a specialty number of 0 or ""
+// counts as none, as the writes store `specialtyNumber || null`.
+export interface RoleInput {
+  role: string;
+  specialtyNumber?: number | string | null;
+  allSpecialties?: number | boolean | null;
+}
+const scopedInput = (r: RoleInput): boolean => !!r.specialtyNumber || r.allSpecialties === true || r.allSpecialties === 1;
+export function withoutPlaceholderRoles<T extends RoleInput>(roles: T[]): T[] {
+  if (!Array.isArray(roles)) return roles;
+  return roles.filter((r) => {
+    if (!r || (r.role !== "TC" && r.role !== "TS") || scopedInput(r)) return true;
+    return !roles.some((o) => o !== r && !!o && o.role === r.role && scopedInput(o));
+  });
+}
+
 // Turn any TC/TS role flagged all_specialties=1 into one role row per specialty
 // the lab performs, so the real CMS-209 renders the whole-lab convention (one
 // row per specialty, the number in both columns). Deduplicates on
