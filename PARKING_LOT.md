@@ -502,15 +502,7 @@ _(item #88 closed 2026-10-08; see C91 below)_
 
 ---
 
-### 89. VeritaCheck page: a discount code shows "applied" and is then dropped
-
-**Effort:** S
-**Importance:** Medium. Printed collateral carries codes (LABREADY10, COLA2026); a prospect who types one on the VeritaCheck page is told it worked and then loses it.
-
-**What:** the "Have a discount code?" box in the free/per-study pricing section of client/src/pages/VeritaCheckPage.tsx validates the code (POST /api/discount/validate) and shows a green "applied" banner, but the only next step is the View Pricing link to /pricing, which neither receives nor reads the code. The code is applied for real only in Account Settings > Discount Code (Activate Subscription). Decide one: (a) carry the code forward (e.g. /pricing?code= and on into Account Settings checkout), or (b) replace the box with a line pointing to Account Settings after sign-in. Found while removing the dead purchase path for #87.
-
-**Source:** #87 cleanup, 2026-10-08 (read the code; Account Settings is the only page that sends a discount code to checkout).
-**Status:** Open. Needs Michael's call on (a) vs (b).
+_(item #89 closed 2026-11-22; see C121 below)_
 
 ---
 
@@ -607,6 +599,12 @@ _(item #88 closed 2026-10-08; see C91 below)_
 ---
 
 ## CLOSED (audit trail)
+
+### C121. VeritaCheck page: a discount code shows "applied" and is then dropped (was #89)
+
+**Effort:** was S / **Importance:** Medium.
+
+**Closure evidence:** Fixed in 48fb1733 (2026-11-17, BUG-173, "a checked code kept for the tab (parking lot #89)"), option (a), carry the code forward: the VeritaCheck page's box keeps a checked code for the browser tab (client/src/lib/vcCheckout.ts savePendingDiscountCode); signed out, "Sign in or create an account to subscribe" and the code is still filled in after sign-in; a lab owner's Subscribe on the page sends it to checkout (subscribeVcUnlimited); Account Settings reads the same kept code. The entry was left Open when that change merged. Production bundle checked 2026-11-22: /assets/VeritaCheckPage-ChHGAaz7.js carries the sign-in button. Closed 2026-11-22 on Michael's go.
 
 ### C120. Homepage says "nothing for a breach, or an inspector, to expose" while staff records are held (was #120)
 
