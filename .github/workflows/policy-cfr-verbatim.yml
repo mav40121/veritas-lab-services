@@ -49,6 +49,11 @@ jobs:
       - name: Every crosswalk CFR citation names a section in the eCFR
         run: node scripts/verify-policy-crosswalk-cfr.mjs
 
+      # BUG-182 (2026-11-23): 18 of 58 Master List rows showed another policy's Notes in the tracker and the Excel
+      # download. Fails when a note names a topic its own row doesn't cover.
+      - name: Every Master List note is about its own policy
+        run: node scripts/verify-veritapolicy-master-notes.mjs
+
       # BUG-012 / BUG-029 (2026-10-11): verification, correlation and competency citations across the app name
       # paragraphs that exist in the eCFR (42 CFR 493.1235 has none; the six elements are 493.1451(b)(8) / 493.1413(b)(8)).
       - name: Every verification and competency CFR citation names a real paragraph
