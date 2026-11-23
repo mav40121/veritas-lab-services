@@ -1,6 +1,8 @@
 # Antimicrobial stewardship: the laboratory's share, inside VeritaAssure
 
-Scope document for parking lot #81. Written 2026-10-09. Scope only; nothing here is built.
+Scope document for parking lot #81. Written 2026-10-09.
+
+**Status (2026-11-23):** Michael picked the minimum version now (Decision 14 = 2). Built as the VeritaQA Stewardship tab (server/stewardship.ts, shared/antibiogramRules.ts): the antibiogram builder from LIS totals (manual entry and CSV upload, lab-configurable threshold, versions, Excel), the committee log, and the readiness view with CFR rows only. The signed antibiogram PDF waits on Michael's approval of the mock. The default settings wait on the purchased CLSI M39 ED5 (2022). 42 CFR 485.640 was not added to the requirement library: that moves the public "286" CFR count on the VeritaDC pages; the readiness view carries its own verbatim (b)(2)(i) text instead.
 
 **Ask (Lisa, 2026-10-07):** "Lets scope an antimicrobial stewardship program in the system."
 
@@ -24,7 +26,7 @@ The requirement sits on the **hospital**, not on CLIA. 42 CFR Part 493 has no an
 
 > (b) Standard: Antibiotic stewardship program organization and policies. The hospital must demonstrate that: (1) An individual (or individuals), who is qualified through education, training, or experience in infectious diseases and/or antibiotic stewardship, is appointed by the governing body as the leader(s) of the antibiotic stewardship program and that the appointment is based on the recommendations of medical staff leadership and pharmacy leadership; (2) The hospital-wide antibiotic stewardship program: (i) Demonstrates coordination among all components of the hospital responsible for antibiotic use and resistance, including, but not limited to, the infection prevention and control program, the QAPI program, the medical staff, nursing services, and pharmacy services; (ii) Documents the evidence-based use of antibiotics in all departments and services of the hospital; and (iii) Documents any improvements, including sustained improvements, in proper antibiotic use; (3) The antibiotic stewardship program adheres to nationally recognized guidelines, as well as best practices, for improving antibiotic use; and (4) The antibiotic stewardship program reflects the scope and complexity of the hospital services provided.
 
-**42 CFR 485.640(b)** applies to critical access hospitals; eCFR text as of 2026-10-01. Its wording is the same as 482.42(b), except that it says "CAH" for "hospital" and adds "or responsible individual" to the appointment in (b)(1). This matters for customers like Redington-Fairview, a 25-bed critical access hospital.
+**42 CFR 485.640(b)** applies to critical access hospitals; eCFR text as of 2026-10-01. Its wording is the same as 482.42(b), except that it says "CAH" for "hospital", "facility-wide" for "hospital-wide" in (b)(2), and adds "or responsible individual" to the appointment in (b)(1) (rechecked against eCFR as of 2026-11-19). This matters for customers like Redington-Fairview, a 25-bed critical access hospital.
 
 **Where the lab fits:** (b)(2)(i) requires "coordination among all components of the hospital responsible for antibiotic use and resistance." The laboratory produces the resistance data (the antibiogram) and sets the susceptibility reporting rules, which shape prescribing. A lab that can hand the committee a current antibiogram, its reporting rules, and minutes showing it attended is demonstrating that coordination.
 
@@ -87,7 +89,7 @@ It shows what the lab can hand a surveyor or the committee.
 | **485.640 is NOT in the library** | n/a | add it (CAH customers) |
 | Culture contamination PI metrics (blood, urine, AFB) | `client/src/lib/piStarterLibrary.ts` (VeritaQA) | part 2.3 sits beside these |
 | Microbiology isolation and identification policy template (mentions susceptibility) | `server/policyTemplates/data/040_microbiology_isolation_id.json` | link the reporting-rules register to it |
-| Master-list note "Antimicrobial stewardship support: antibiogram production cadence and reporting cascades. Annual antibiogram is the common deliverable." | `server/veritapolicyMasterList.ts`, **on policy 66, Manual Hematology QC Policy** | **looks misplaced** (a microbiology note on a hematology QC policy); confirm and move it |
+| Master-list note "Antimicrobial stewardship support: antibiogram production cadence and reporting cascades. Annual antibiogram is the common deliverable." | `server/veritapolicyMasterList.ts`, on policy 40, Microbiology Isolation and Identification Policy | moved there from policy 66 (Manual Hematology QC) under BUG-182 (PR 1962), with the other misaligned master-list notes |
 | Signed-PDF and Excel standards, lab identity stamping | existing PDF and Excel helpers | the antibiogram outputs |
 
 ---
@@ -124,5 +126,5 @@ Minimum version total: **M (1-2 weeks)**. Pharmacy-side stewardship (days of the
 2. **Data intake:** do we accept only LIS antibiogram totals (recommended; HIPAA-free), or also isolate-level rows with a lab-generated, non-identifying key so we can de-duplicate ourselves? The second needs a privacy review before it is considered.
 3. **Which customer asks first?** A hospital customer's stewardship committee (for example Lisa's Milford or St. Charles) would set the minimum-version priority and confirm the report format their committee uses.
 4. **Accreditor sources:** we need the TJC hospital/CAH stewardship standard text and the CAP microbiology checklist item(s) before any accreditor row ships.
-5. **Master-list note on policy 66:** confirm it belongs on a microbiology policy and move it.
+5. **Master-list note:** answered. It sat on policy 66 (Manual Hematology QC); it now sits on policy 40 (Microbiology Isolation and Identification), moved under BUG-182 (PR 1962), which found 18 of the 58 master-list notes on the wrong row.
 6. **M39 edition:** confirm the current CLSI M39 conventions (first-isolate rule, isolate threshold, period) against the document before build.
