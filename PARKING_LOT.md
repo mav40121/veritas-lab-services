@@ -242,7 +242,7 @@ part-time community manager.
 
 **Pre- vs post-COLA:** Post-COLA. No customer urgency.
 
-**Status:** Open. Work-pass 2026-10-04: BUSINESS DECISION, needs Michael. SWOT verdict stands (do not build a paid forum; economics kill it). The recommended free invite-only Slack/Discord plus quarterly roundtable is an operational commitment, not a build, gated on the three-question decision rule above. No code to produce. Needs Michael's go/no-go on the free alternative.
+**Status:** Parked (Michael 2026-11-22, Decision 13 = 1): no-go for now on both the paid forum and the free alternative. Nothing was started and nothing was promised to anyone. It comes back at the first weekly review in February 2027 (Thu 2027-02-04), once the wave 1 outreach results are in; an info@ calendar reminder is set for that day. Before that review, re-check the stale figures above: the Hospital tier is $4,995 now, not $1,999, and the David split and the 47 COLA contacts have not been re-verified.
 
 ---
 
@@ -478,7 +478,7 @@ a new module), isolate data intake (LIS export vs manual), and whether the
 antibiogram is a PDF deliverable or a live table.
 
 **Source:** Lisa, 2026-10-07 ~13:40 ("Lets scope an antimicrobial stewardship program in the system"), then parked before scoping.
-**Status:** Open. Scope document WRITTEN 2026-10-09: docs/ANTIMICROBIAL_STEWARDSHIP_SCOPE.md (verbatim 42 CFR 482.42(b) and 485.640(b); five lab-side parts; MVP M 1-2 weeks; recommends a Stewardship tab in VeritaQA, aggregate LIS totals only so it stays HIPAA-free). Six open questions for Lisa and Michael before any build. Also found: the master-list stewardship note sits on policy 66 (Manual Hematology QC), likely misplaced.
+**Status:** In build (Michael 2026-11-23, Decision 14 = 2): go on the minimum version now. Scope document: docs/ANTIMICROBIAL_STEWARDSHIP_SCOPE.md (written 2026-10-09). The decision answers the open questions as follows: (1) a Stewardship tab inside VeritaQA, no new module; (2) aggregate LIS totals only, no isolate-level rows (HIPAA-free); (3) no customer has asked, so the build goes ahead without one; (4) no TJC or CAP rows ship until their source text is verified, CFR rows only; (5) the misplaced master-list note turned out to be 18 of 58 rows, tracked and fixed as BUG-182; (6) Michael buys the current CLSI M39 so the first-isolate rule, the isolate threshold and the period defaults are checked before release; until then they ship as lab-configurable settings. Minimum version: the antibiogram builder (manual entry plus LIS-totals CSV upload, suppression threshold, signed PDF after Michael approves a mock, Excel), the committee log, and the readiness view; 42 CFR 485.640 is added to the requirement library for critical access hospitals.
 
 ---
 
@@ -554,7 +554,7 @@ _(item #98 closed 2026-11-22; see C122 below)_
 **What:** Michael wants a detailed conversation about schedules before anything is built or changed. Which schedules are meant, and how they touch the UNC Nash engagement, is for that conversation; nothing is assumed here. Bring to it: what VeritaAssure schedules today (VeritaShift Scheduler, competency and calibration due dates, VeritaTrack tasks) and the open UNC Nash work items, so the discussion can map his concerns to the product and the engagement.
 
 **Source:** Michael, 2026-10-27: "Parking lot: I want to have a detailed conversation about schedules it may have impact on Unc Nash".
-**Status:** Open. The general schedules discussion happened 2026-11-02, with Michael speaking in generalities (weekend rotation, shift length and workforce age, his 6-position 12-hour template). Scheduling was kept out of the Nash report. Michael decides when it returns to Nash.
+**Status:** Open (Michael 2026-11-23, Decision 15 = 2). The general schedules discussion happened 2026-11-02, with Michael speaking in generalities (weekend rotation, shift length and workforce age, his 6-position 12-hour template). Scheduling was kept out of the Nash report. It returns to Nash as a topic in the coaching sessions with Shairee once they are booked (no session booked as of 2026-11-23). Claude prepared a one-page outline of the general principles, with no Nash facts, for Michael to use there. No product change.
 
 ---
 
@@ -587,7 +587,7 @@ _(item #98 closed 2026-11-22; see C122 below)_
 **What:** On Michael's VHC Health demo (Tue 2026-11-10, about 29:47 in the recording), their quality specialist asked to attach evidence to each competency element, such as QC log sheets, maintenance logs and blind-sample records, the way another lab she works with does. Michael said on the call he was happy to build it, and flagged the PHI risk: direct observation and result-reporting evidence is often a patient record. What exists on main (14d727b9): each element of a competency record already takes linked documents (competency_element_documents, types QC record, PT report, blind sample record, observation notes, quiz scan and other), through POST /api/labs/:labId/competency/assessments/:id/elements/:el/documents, stored as an http(s) link to the lab's own storage, not an uploaded file. VeritaStaff person documents are links too (staff_employee_documents.url), so no module stores uploaded evidence today. The gap is uploading the file itself, which is exactly where the PHI risk sits; a link keeps the file, and anything patient-related in it, in the lab's own system. Choices for Michael: show the per-element links as they are (no build); add uploads with the patient-information refusal plus a "no patient identifiers" confirmation at upload; or allow uploads only for record types that rarely carry patient data (QC, maintenance, blind-sample records).
 
 **Source:** VLS Leads, 2026-11-11, from the 11/10 VHC Health demo recording; code read on origin/main 14d727b9.
-**Status:** Open. Michael is considering it; nothing promised to VHC. No build until Michael decides.
+**Status:** Parked (Michael 2026-11-22, Decision 12 = 1): no build now. The per-element links stay as they are, and nothing was promised to VHC. Comes back only if VHC Health buys or a second lab asks for uploads; until then it needs no decision.
 
 ---
 
