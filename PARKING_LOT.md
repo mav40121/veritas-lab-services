@@ -478,7 +478,7 @@ a new module), isolate data intake (LIS export vs manual), and whether the
 antibiogram is a PDF deliverable or a live table.
 
 **Source:** Lisa, 2026-10-07 ~13:40 ("Lets scope an antimicrobial stewardship program in the system"), then parked before scoping.
-**Status:** Open. Scope document WRITTEN 2026-10-09: docs/ANTIMICROBIAL_STEWARDSHIP_SCOPE.md (verbatim 42 CFR 482.42(b) and 485.640(b); five lab-side parts; MVP M 1-2 weeks; recommends a Stewardship tab in VeritaQA, aggregate LIS totals only so it stays HIPAA-free). Six open questions for Lisa and Michael before any build. Also found: the master-list stewardship note sits on policy 66 (Manual Hematology QC), likely misplaced.
+**Status:** In build (Michael 2026-11-23, Decision 14 = 2): go on the minimum version now. Scope document: docs/ANTIMICROBIAL_STEWARDSHIP_SCOPE.md (written 2026-10-09). The decision answers the open questions as follows: (1) a Stewardship tab inside VeritaQA, no new module; (2) aggregate LIS totals only, no isolate-level rows (HIPAA-free); (3) no customer has asked, so the build goes ahead without one; (4) no TJC or CAP rows ship until their source text is verified, CFR rows only; (5) the misplaced master-list note turned out to be 18 of 58 rows, tracked and fixed as BUG-182; (6) Michael buys the current CLSI M39 so the first-isolate rule, the isolate threshold and the period defaults are checked before release; until then they ship as lab-configurable settings. Minimum version: the antibiogram builder (manual entry plus LIS-totals CSV upload, suppression threshold, signed PDF after Michael approves a mock, Excel), the committee log, and the readiness view; 42 CFR 485.640 is added to the requirement library for critical access hospitals.
 
 ---
 
