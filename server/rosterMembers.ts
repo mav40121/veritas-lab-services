@@ -222,3 +222,39 @@ export function rosterLinkProblem(sqlite: any, labId: number, userId: unknown): 
   if (isOnRoster(sqlite, labId, uid)) return { status: 409, error: "This person is already on the roster.", code: "ALREADY_ON_ROSTER" };
   return null;
 }
+
+/**
+ * Tie an invited admin or editor to the roster entry they already have (BUG-183, Redington 2026-11-23: an admin assigned the Micro quizzes
+ * had an empty bell, because the sign-in and the roster entry had no link until someone used "Link to" in VeritaStaff).
+ *
+ * The name is the one the director typed on the invite (user_seats.invitee_name), never the name the person typed for themselves at
+ * sign-up: a roster entry is who signs documents and takes quizzes, so a self-typed name can't choose it. Only when exactly one active
+ * entry in the lab has that name and nobody's sign-in or Staff invite is on it. Anything else waits on the VeritaStaff prompt, as before.
+ * Returns the roster entry it linked, or null.
+ */
+export function linkInvitedMemberToRoster(sqlite: any, seatId: number): { labId: number; userId: number; employeeId: number } | null {
+  const seat = sqlite.prepare(
+    "SELECT seat_user_id, lab_id, invitee_name, COALESCE(seat_type, 'active') AS seat_type FROM user_seats WHERE id = ? AND status = 'active'"
+  ).get(seatId) as { seat_user_id: number | null; lab_id: number | null; invitee_name: string | null; seat_type: string } | undefined;
+  if (!seat?.seat_user_id || !seat.lab_id || seat.seat_type === "staff_portal") return null;
+  const labId = Number(seat.lab_id), userId = Number(seat.seat_user_id);
+  const { firstName, lastName } = splitName(seat.invitee_name);
+  const first = norm(firstName), last = norm(lastName);
+  if (!first || !last) return null;
+  if (rosterLinkProblem(sqlite, labId, userId)) return null;
+  if (sqlite.prepare("SELECT 1 FROM staff_roster_prompt_hidden WHERE lab_id = ? AND user_id = ?").get(labId, userId)) return null;
+  // The whole first name, or the first word of it when the other side is one word ("Cal" and "Cal R."); never "Mary Ann" for "Mary Beth".
+  const sameFirst = (a: string, b: string) => {
+    const x = a.split(/\s+/), y = b.split(/\s+/);
+    return a === b || ((x.length === 1 || y.length === 1) && x[0] === y[0]);
+  };
+  const same = (sqlite.prepare("SELECT id, first_name, last_name FROM staff_employees WHERE tier2_lab_id = ? AND status = 'active'").all(labId) as { id: number; first_name: string; last_name: string }[])
+    .filter((e) => norm(e.last_name) === last && sameFirst(norm(e.first_name), first));
+  if (same.length !== 1) return null;
+  const employeeId = same[0].id;
+  if (!unlinkedEmployees(sqlite, labId).some((e) => e.id === employeeId)) return null;
+  if (sqlite.prepare("SELECT 1 FROM user_seats WHERE staff_employee_id = ? AND seat_type = 'staff_portal' AND " + SEAT_HOLDS_PLACE + " LIMIT 1").get(employeeId)) return null;
+  const done = sqlite.prepare("UPDATE staff_employees SET login_user_id = ?, updated_at = ? WHERE id = ? AND login_user_id IS NULL")
+    .run(userId, new Date().toISOString(), employeeId);
+  return Number(done.changes || 0) === 1 ? { labId, userId, employeeId } : null;
+}
