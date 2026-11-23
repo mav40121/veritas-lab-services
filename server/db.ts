@@ -2462,6 +2462,10 @@ try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_lab_members_token ON la
   // months a non-technical competency stays current (shared/competencyNontechnicalFrequency.ts). NULL = not set: non-technical
   // records have no due date, which is what every lab has today. Due dates are worked out when read, so no record is rewritten.
   ensure("competency_nontechnical_months", "ALTER TABLE labs ADD COLUMN competency_nontechnical_months INTEGER");
+  // VeritaStock tissue record retention (Michael 2026-11-22, Decision 11 = 1, parking lot #115): the lab's own period in whole years
+  // after a unit's final disposition, set once on the Tissue page (shared/tissueRules.ts tissueRetention). NULL = not set, which is
+  // every lab until it sets one; VeritaStock never supplies a number (21 CFR 1271.15(d)). Keep-until dates are worked out when read.
+  ensure("tissue_retention_years", "ALTER TABLE labs ADD COLUMN tissue_retention_years INTEGER");
   // Corrective-action due window override (days from the anchor date). NULL =
   // the accreditor default in dueDateForFinding (CAP 30, TJC 60, CMS 10, AABB
   // 45, COLA 30). Set per lab, or per organization (organizations.finding_due_days)

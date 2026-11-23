@@ -240,6 +240,87 @@ export function expiredSolutionRefusal(expiration: unknown, implantedDate: unkno
   return `The solution expired on ${expiration}, before the implant on ${implantedDate}. The implant is still recorded: say what was done about it.`;
 }
 
+// ── Record retention: the laboratory's own period (Michael 2026-11-22, Decision 11 = 1, parking lot #115) ────────────────────
+// 21 CFR 1271.270(d)'s 10 years binds an establishment that performs a manufacturing step; a hospital that only receives, stores
+// and implants tissue in its own facility is excepted by 1271.15(d). So VeritaStock never supplies a number: the period is the
+// lab's, set once on the Tissue page (labs.tissue_retention_years), blank until set, like reference ranges and critical values.
+// The keep-until date counts from the unit's final disposition and is worked out when read, never stored, so a correction or an
+// undo moves it. The words are the approved mock's (vls-ops/mock_tissue_retention_pdf.mjs, Tissue retention mock 2026-11-22).
+export const TISSUE_RETENTION_TITLE = "Record retention";
+export const TISSUE_RETENTION_KEEP_LABEL = "Keep this record until";
+export const TISSUE_RETENTION_POLICY_LABEL = "Laboratory's retention policy";
+export const TISSUE_RETENTION_NOT_SET = "Not set";
+export const TISSUE_RETENTION_UNSET_NOTE = "The laboratory hasn't set its tissue record retention period. Set it once on the Tissue page; every tissue record then shows its keep-until date.";
+export const TISSUE_RETENTION_OPEN_VALUE = "Counts from final disposition";
+export const TISSUE_RETENTION_MIN_YEARS = 1;
+export const TISSUE_RETENTION_MAX_YEARS = 99;
+
+const RETENTION_PROBLEM = `Enter a whole number of years from ${TISSUE_RETENTION_MIN_YEARS} to ${TISSUE_RETENTION_MAX_YEARS}, or leave it blank.`;
+
+/** What a save asked for: null clears it. A request that leaves the value out is refused, so it can't clear it by accident. */
+export function parseTissueRetentionYears(raw: unknown): { years: number | null } | { error: string } {
+  if (raw === null || raw === "") return { years: null };
+  if (raw === undefined || typeof raw === "boolean" || Array.isArray(raw) || (typeof raw === "string" && !/^\s*\d+\s*$/.test(raw))) return { error: RETENTION_PROBLEM };
+  const n = Number(raw);
+  return Number.isInteger(n) && n >= TISSUE_RETENTION_MIN_YEARS && n <= TISSUE_RETENTION_MAX_YEARS ? { years: n } : { error: RETENTION_PROBLEM };
+}
+
+/** A stored value as the rules read it: a whole number in range, else not set. */
+export function storedTissueRetentionYears(v: unknown): number | null {
+  const n = Number(v);
+  return v != null && v !== "" && Number.isInteger(n) && n >= TISSUE_RETENTION_MIN_YEARS && n <= TISSUE_RETENTION_MAX_YEARS ? n : null;
+}
+
+export const tissueRetentionYearsText = (years: number) => `${years} year${years === 1 ? "" : "s"}`;
+
+/** The policy line: "10 years after final disposition (implant, return to supplier, or discard)". */
+export const tissueRetentionPolicyText = (years: number) => `${tissueRetentionYearsText(years)} after final disposition (implant, return to supplier, or discard)`;
+
+/** The date the unit reached its final disposition, or null while it has none. */
+export function finalDispositionDate(unit: { state?: string | null; implanted_date?: string | null; disposition_date?: string | null }): string | null {
+  if (unit.state === "implanted") return isYmd(unit.implanted_date) ? unit.implanted_date : null;
+  if (unit.state === "wasted" || unit.state === "returned" || unit.state === "expired") return isYmd(unit.disposition_date) ? unit.disposition_date : null;
+  return null;
+}
+
+/** That final disposition in the note's words: "implanted", "wasted", "returned to supplier", "recorded as expired". */
+const FINAL_DISPOSITION_WORDS: Record<string, string> = { implanted: "implanted", wasted: "wasted", returned: "returned to supplier", expired: "recorded as expired" };
+
+/** A date plus whole years. A Feb 29 lands on Feb 28 in a year that has none. */
+export function addYearsYmd(ymd: string, years: number): string {
+  const [y, m, d] = ymd.split("-").map(Number);
+  const last = new Date(Date.UTC(y + years, m, 0)).getUTCDate();
+  return `${String(y + years).padStart(4, "0")}-${String(m).padStart(2, "0")}-${String(Math.min(d, last)).padStart(2, "0")}`;
+}
+
+export interface TissueRetention {
+  /** The lab's period in whole years, or null when not set. */
+  years: number | null;
+  /** The final disposition the date counts from, or null while the unit has none. */
+  basis_date: string | null;
+  keep_until: string | null;
+  /** What the box shows in "Keep this record until": the date, "Not set", or that it counts from final disposition. */
+  keep_until_text: string;
+  /** The policy line, or null when not set. */
+  policy_text: string | null;
+  note: string;
+}
+
+/** The box on the unit's screen and record PDF: set and final, set and not final yet, or not set. */
+export function tissueRetention(unit: { state?: string | null; implanted_date?: string | null; disposition_date?: string | null }, storedYears: unknown): TissueRetention {
+  const years = storedTissueRetentionYears(storedYears);
+  if (years == null) return { years: null, basis_date: null, keep_until: null, keep_until_text: TISSUE_RETENTION_NOT_SET, policy_text: null, note: TISSUE_RETENTION_UNSET_NOTE };
+  const basis = finalDispositionDate(unit);
+  const policy = tissueRetentionPolicyText(years);
+  if (!basis) {
+    return { years, basis_date: null, keep_until: null, keep_until_text: TISSUE_RETENTION_OPEN_VALUE, policy_text: policy,
+      note: "Set by the laboratory on the Tissue page. The keep-until date counts from this unit's final disposition, which isn't recorded yet." };
+  }
+  const keep = addYearsYmd(basis, years);
+  return { years, basis_date: basis, keep_until: keep, keep_until_text: keep, policy_text: policy,
+    note: `Set by the laboratory on the Tissue page. The keep-until date counts from this unit's final disposition, ${FINAL_DISPOSITION_WORDS[String(unit.state)]} ${basis}.` };
+}
+
 // ── The source line, confirmed against eCFR's renderer API (Title 21, 2026-10-01 and 2026-11-04 read the same) ────────────
 export const TISSUE_CFR_TRACKING_CITATION = "21 CFR 1271.290(b)(1)";
 export const TISSUE_CFR_TRACKING_QUOTE = "enables the tracking of all HCT/Ps from: (i) The donor to the consignee or final disposition; and (ii) The consignee or final disposition to the donor";

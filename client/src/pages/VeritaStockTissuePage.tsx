@@ -24,7 +24,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ArrowLeft, Download, FileText, Plus, Search, ShieldCheck, Thermometer, Undo2 } from "lucide-react";
 import {
   OTHER_DISPOSITION_LABELS, RETURN_UNUSED_PACKAGE_LABEL, RETURN_UNUSED_STORAGE_LABEL, SOLUTION_EXPIRED_NOTE_LABEL, TISSUE_CFR_CODE_CITATION, TISSUE_CFR_CODE_QUOTE,
-  TISSUE_FIELD_LABELS, TISSUE_NO_PHI_NOTICE, returnUnusedRefusal, solutionExpiredAtImplant, type OtherDisposition,
+  TISSUE_FIELD_LABELS, TISSUE_NO_PHI_NOTICE, TISSUE_RETENTION_KEEP_LABEL, TISSUE_RETENTION_MAX_YEARS, TISSUE_RETENTION_MIN_YEARS, TISSUE_RETENTION_POLICY_LABEL,
+  TISSUE_RETENTION_NOT_SET, TISSUE_RETENTION_TITLE, TISSUE_RETENTION_UNSET_NOTE, returnUnusedRefusal, solutionExpiredAtImplant, type OtherDisposition,
 } from "@shared/tissueRules";
 
 const localToday = () => new Date().toLocaleDateString("en-CA");
@@ -164,6 +165,7 @@ function LogView({ base, pagePath, onOpen }: { base: string; pagePath: string; o
         <Button size="sm" variant="outline" disabled={!!busy} onClick={() => download("xlsx")} data-testid="tissue-excel"><Download size={14} className="mr-1.5" />{busy === "xlsx" ? "Building..." : "Excel"}</Button>
       </div>
       <ErrorLine text={err} />
+      <RetentionSetting base={base} />
       <div className="flex flex-wrap gap-2" role="group" aria-label="Which units to show">
         {([["open", `Open (${data?.counts?.open ?? 0})`], ["all", `All (${data?.counts?.all ?? 0})`], ["card_pending", `Usage card not returned (${data?.counts?.card_pending ?? 0})`]] as const).map(([k, label]) => (
           <Button key={k} size="sm" variant={filter === k ? "secondary" : "ghost"} onClick={() => setFilter(k)} data-testid={`tissue-filter-${k}`}>{label}</Button>
@@ -206,6 +208,66 @@ function LogView({ base, pagePath, onOpen }: { base: string; pagePath: string; o
         </>
       )}
     </div>
+  );
+}
+
+// The lab's record retention period (Michael 2026-11-22, Decision 11 = 1, parking lot #115). Set once here; every unit's record
+// then shows its keep-until date. Blank until the lab sets it: VeritaStock never supplies a number. The owner or an admin changes
+// it; everyone else reads it. The server holds both rules (server/tissue.ts settings).
+function RetentionSetting({ base }: { base: string }) {
+  const qc = useQueryClient();
+  const key = [base, "settings"];
+  // The form fills from this read, so it's read fresh each time the page opens (client/src/lib/freshRecord.ts's rule).
+  const { data } = useQuery<any>({ queryKey: key, queryFn: () => api(`${base}/settings`), refetchOnMount: "always" });
+  const [editing, setEditing] = useState(false);
+  const [years, setYears] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  if (!data) return null;
+  const save = async (value: string | null) => {
+    setErr(null); setSaving(true);
+    try {
+      await api(`${base}/settings`, { method: "PUT", json: { retention_years: value } });
+      qc.invalidateQueries({ queryKey: key });
+      qc.invalidateQueries({ queryKey: [base, "unit"] });
+      setEditing(false);
+    } catch (e: any) { setErr(e.message); } finally { setSaving(false); }
+  };
+  return (
+    <Card>
+      <CardContent className="p-4 space-y-2" data-testid="tissue-retention-setting">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-medium">{TISSUE_RETENTION_TITLE}</div>
+            <div className="text-sm break-words" data-testid="tissue-retention-current">{data.retention_policy || TISSUE_RETENTION_NOT_SET}</div>
+            {!data.retention_policy && <p className="text-xs text-muted-foreground mt-1">{TISSUE_RETENTION_UNSET_NOTE}</p>}
+          </div>
+          {data.can_edit && !editing && (
+            <Button size="sm" variant="outline" onClick={() => { setYears(data.retention_years ? String(data.retention_years) : ""); setErr(null); setEditing(true); }} data-testid="tissue-retention-edit">
+              {data.retention_policy ? "Change" : "Set the retention period"}
+            </Button>
+          )}
+        </div>
+        {!data.can_edit && <p className="text-xs text-muted-foreground" data-testid="tissue-retention-readonly">The lab's owner or an admin sets this.</p>}
+        {editing && (
+          <div className="space-y-2" data-testid="tissue-retention-form">
+            <div className="flex flex-wrap items-end gap-2">
+              <div className="w-32">
+                <Field label="Years"><Input type="number" inputMode="numeric" min={TISSUE_RETENTION_MIN_YEARS} max={TISSUE_RETENTION_MAX_YEARS} step={1} value={years} onChange={(e) => setYears(e.target.value)} data-testid="tissue-retention-years" /></Field>
+              </div>
+              <span className="text-sm pb-2">after final disposition (implant, return to supplier, or discard)</span>
+            </div>
+            <p className="text-xs text-muted-foreground">Your laboratory's own period, from its record retention policy. Each record's keep-until date counts from that unit's final disposition.</p>
+            <ErrorLine text={err} />
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" onClick={() => save(years.trim())} disabled={saving} data-testid="tissue-retention-save">{saving ? "Saving..." : "Save"}</Button>
+              {data.retention_years != null && <Button size="sm" variant="ghost" onClick={() => save(null)} disabled={saving} data-testid="tissue-retention-clear">Clear it</Button>}
+              <Button size="sm" variant="ghost" onClick={() => setEditing(false)} disabled={saving} data-testid="tissue-retention-cancel">Cancel</Button>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -349,6 +411,17 @@ function UnitView({ base, labId, unitId, canEdit }: { base: string; labId: numbe
           <RecordPdfButton base={base} u={u} />
         </CardContent>
       </Card>
+
+      {u.retention && (
+        <Card><CardContent className="p-5" data-testid="unit-retention">
+          <h3 className="font-semibold mb-2">{TISSUE_RETENTION_TITLE}</h3>
+          <dl>
+            <Row label={TISSUE_RETENTION_KEEP_LABEL} value={<span className="font-medium" data-testid="unit-retention-keep">{u.retention.keep_until_text}</span>} />
+            {u.retention.policy_text && <Row label={TISSUE_RETENTION_POLICY_LABEL} value={u.retention.policy_text} />}
+          </dl>
+          <p className="text-xs text-muted-foreground mt-2" data-testid="unit-retention-note">{u.retention.note}</p>
+        </CardContent></Card>
+      )}
 
       <Section title="1. Receipt">
         <Row label="Quantity or size" value={u.quantity_or_size} />
