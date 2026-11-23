@@ -156,7 +156,7 @@ export const VERITAPOLICY_MASTER_LIST: VeritaPolicyMasterRow[] = [
     "cap_citations": "COM.06100; COM.30000; COM.30100; GEN.20325; GEN.40490; GEN.40491; GEN.40492; GEN.40511; GEN.40530; GEN.40545; GEN.40825; GEN.50057; GEN.61750",
     "cola_citations": "APM 1; PRE 1; PRE 19; PST 1; PST 2; QA 8; QA 9; QC 1; VER 1",
     "aabb_citations": "",
-    "notes": "Reference lab list, current CLIA cert for each, and the criteria used to select them. See policy 96."
+    "notes": "Downtime plan for each test system: which tests move to a backup analyzer, a manual method, or a reference laboratory (see policy 96), how clinicians are told, and what is checked before patient testing resumes. The accrediting body looks for a record of each downtime event and its recovery."
   },
   {
     "policy_id": "11",
@@ -170,7 +170,7 @@ export const VERITAPOLICY_MASTER_LIST: VeritaPolicyMasterRow[] = [
     "cap_citations": "COM.06100; GEN.20377; GEN.20385; GEN.20425; GEN.20430; GEN.20450; GEN.40490; GEN.40491; GEN.40492; GEN.40509; GEN.40511; GEN.40530; GEN.40545; GEN.40825; GEN.40930; GEN.41300; GEN.41303; GEN.41304; GEN.41306; GEN.41430; GEN.42195; GEN.42750; GEN.42800; GEN.42900; GEN.43022; GEN.43040; GEN.43055; GEN.43066; GEN.43150; GEN.43200; GEN.43262; GEN.43325; GEN.43875; GEN.43876; GEN.43878; GEN.43881; GEN.43887; GEN.43890; GEN.43893; GEN.43900; GEN.48500; GEN.48750; GEN.50057",
     "cola_citations": "CA 9; LIS 1; LIS 2; ORG 7; PRE 1; PRE 19; PST 23; PST 25",
     "aabb_citations": "",
-    "notes": "Look for documented method evaluation, calibration verification, reportable range, and any modifications to manufacturer instructions. CFR 493.1253 is the anchor."
+    "notes": "Critical value list approved by the medical staff, with time targets, who may receive the call, read-back, and where each notification is documented. The accrediting body samples notifications for time, recipient, and read-back. VeritaMap® holds the lab's own critical limits beside each test."
   },
   {
     "policy_id": "12",
@@ -240,7 +240,7 @@ export const VERITAPOLICY_MASTER_LIST: VeritaPolicyMasterRow[] = [
     "cap_citations": "GEN.41017; GEN.41042; GEN.54025; GEN.57050; GEN.59980; GEN.60000; GEN.60100; GEN.60150; GEN.60250; GEN.61350; GEN.61400; GEN.61500; GEN.61600; GEN.62000; GEN.62020; TRM.31900; TRM.42550",
     "cola_citations": "CA 1; FAC 1; FAC 2; FAC 3; LDR 3; MA 1",
     "aabb_citations": "3.0; 3.5; 3.5.1",
-    "notes": "Safety manual, OSHA bloodborne pathogen plan, exposure control plan. PPE training records and post-exposure documentation are commonly requested."
+    "notes": "Radiation safety program where the lab holds radioactive material: the NRC or state license, radiation safety officer, dosimetry, area posting and surveys, and the response to a spill or exposure. A lab with no radioactive material documents that the policy does not apply."
   },
   {
     "policy_id": "24",
@@ -254,7 +254,7 @@ export const VERITAPOLICY_MASTER_LIST: VeritaPolicyMasterRow[] = [
     "cap_citations": "COM.06100; GEN.40490; GEN.40491; GEN.40492; GEN.40509; GEN.40511; GEN.40530; GEN.40545; GEN.40825; GEN.40930; GEN.41303; GEN.41304; GEN.42195; GEN.42750; GEN.42800; GEN.42900; GEN.43022; GEN.43040; GEN.43055; GEN.43066; GEN.43150; GEN.43200; GEN.43262; GEN.43325; GEN.43875; GEN.43876; GEN.43878; GEN.43881; GEN.43887; GEN.43890; GEN.43893; GEN.48500; GEN.48750; GEN.50057",
     "cola_citations": "LIS 1; LIS 2; ORG 7; PRE 1; PRE 19",
     "aabb_citations": "",
-    "notes": "Access list with role-based privileges, audit log review cadence, and password/MFA policy. HIPAA Security Rule technical safeguards apply."
+    "notes": "LIS downtime procedure: paper requisitions and report forms, how results reach clinicians while the system is down, the backup schedule, and reconciliation of results once the system returns. The accrediting body looks for evidence the procedure was used or practiced and that restored data was checked."
   },
   {
     "policy_id": "28",
@@ -282,7 +282,7 @@ export const VERITAPOLICY_MASTER_LIST: VeritaPolicyMasterRow[] = [
     "cap_citations": "ANP.23580; ANP.57400; COM.04075; COM.10000; COM.10050; COM.10100; COM.10200; COM.10250; COM.10300; COM.10500; COM.30550; COM.30980; COM.40250; COM.40300; COM.40325; COM.40350; COM.40475; COM.40500; COM.40625; COM.40640; COM.40700; COM.40800; COM.40850; CYP.08300; DRA.10100; DRA.10125; DRA.10200; DRA.10430; DRA.10435; DRA.10437; DRA.10440; DRA.10445; DRA.10460; DRA.10475; DRA.10500; DRA.10700; DRA.11200; DRA.11300; DRA.11400; DRA.11425; DRA.11450; DRA.11475; DRA.11485; GEN.20375; GEN.40515; GEN.43040; GEN.53400; GEN.53600; GEN.53625; GEN.53650; GEN.54200; GEN.54750; GEN.55400; GEN.55450; GEN.55499; GEN.55500; GEN.55505; GEN.73200; GEN.73300; GEN.75800; GEN.78200; GEN.78225; GEN.78250; GEN.78300; GEN.78325; GEN.78350; GEN.78375; POC.06800; POC.06875; POC.06910; POC.06915; POC.08450",
     "cola_citations": "APM 1; APM 10; APM 11; APM 12; APM 17; APM 2; APM 3; APM 4; APM 5; APM 6; APM 7; APM 8; APM 9; LDR 1; LDR 2; LDR 3; LDR 4; LDR 5; MA 1; ORG 1; ORG 11; ORG 15; PER 1; PER 2; PER 3; PER 5; QC 1; VER 1; VER 12; VER 14; VER 2; VER 3; VER 4; VER 5; VER 6; VER 7",
     "aabb_citations": "2.1; 4.10.3; 6.1; 6.1.2",
-    "notes": "Indicator dashboard and review minutes. The accrediting body looks for trended data, threshold breaches, and documented response."
+    "notes": "Approval record for the procedure manual: the director's signature and date on each new procedure before use and on every substantive change, plus reviews at the interval the lab sets. Unsigned procedures and missed reviews are common gaps. VeritaDC™ tracks approvals, versions, and review dates."
   },
   {
     "policy_id": "34",
@@ -310,7 +310,7 @@ export const VERITAPOLICY_MASTER_LIST: VeritaPolicyMasterRow[] = [
     "cap_citations": "COM.04250; COM.04300; COM.40620; GEN.40560; GEN.40570; GEN.40580; GEN.40590; HEM.22050; HEM.34100; HEM.34300; HEM.34600; HEM.34655; HEM.35250; HEM.35357; HEM.35414; HEM.35528; HEM.35547; HEM.35650; HEM.35661; HEM.35912; HEM.35918; HEM.35920; HEM.35986; HEM.36030; HEM.36270; HEM.36300; HEM.37165; HEM.37363; HEM.37373; HEM.37375; HEM.37400; MIC.11380; MIC.11385; MIC.11390; MIC.11395; MIC.12040; MIC.12060; MIC.13325; MIC.13375; MIC.18968; MIC.18976; MIC.19060; MIC.21628; MIC.21632; MIC.21835; MIC.22280; MIC.22550; MIC.22600; MIC.22610; MIC.22620; MIC.22630; MIC.22635; MIC.22640; MIC.22675; MIC.31200; MIC.31640; MIC.32140; MIC.32200; MIC.32480; MIC.42025; MIC.42630; MIC.52193; MIC.62550; MIC.65560; MIC.65630; MIC.65700; MIC.65940",
     "cola_citations": "APM 1; LDR 5; PST 1; PST 12; PST 16; PST 27; PST 7; QA 1; QC 1; QC 5; VER 1; VER 10; VER 11; VER 9",
     "aabb_citations": "5.1.2; 5.1.2.1",
-    "notes": "Document control register, version history, and review cadence. CAP and TJC commonly cite expired SOPs and unsigned reviews."
+    "notes": "QC plan by test system: control levels, frequency, acceptance rules, and the response to a failed run, with an individualized quality control plan (IQCP) where the lab uses one. The accrediting body compares QC records with the plan and looks for corrective action on every failed run."
   },
   {
     "policy_id": "36",
@@ -324,7 +324,7 @@ export const VERITAPOLICY_MASTER_LIST: VeritaPolicyMasterRow[] = [
     "cap_citations": "ANP.23580; ANP.29510; ANP.57400; CHM.13000; CHM.13100; CHM.13125; CHM.13400; CHM.13500; CHM.13550; CHM.13600; CHM.16300; CHM.16550; CHM.34200; CHM.34300; COM.06100; COM.30450; COM.30550; COM.30690; COM.40300; COM.40325; COM.40350; COM.40475; COM.40500; COM.40625; COM.40640; COM.40700; COM.40800; COM.40850; GEN.40490; GEN.40491; GEN.40492; GEN.40509; GEN.40511; GEN.40530; GEN.40545; GEN.40825; GEN.40930; GEN.41303; GEN.41304; GEN.42195; GEN.42750; GEN.42800; GEN.42900; GEN.43022; GEN.43040; GEN.43055; GEN.43066; GEN.43150; GEN.43200; GEN.43262; GEN.43325; GEN.43875; GEN.43876; GEN.43878; GEN.43881; GEN.43887; GEN.43890; GEN.43893; GEN.48500; GEN.48750; GEN.50057; HEM.25760; HEM.25780; HEM.35914; HEM.35916; HEM.35924; HEM.35986; HEM.37360; HEM.37363; HEM.37365; HEM.37370; HEM.37373; HEM.37375; IMM.33374; IMM.33448; IMM.33670; IMM.33744; IMM.33800; IMM.33818; IMM.40300; IMM.40440; IMM.40720; IMM.40755; IMM.40790; IMM.40860; IMM.40980; IMM.41400; MIC.65100; MIC.65130; MIC.65140; MIC.65145; MIC.65150; MIC.65160; MIC.65170; POC.08100; POC.08150; POC.08300; POC.08400; POC.08450; POC.08500; POC.08600; POC.08925; POC.08980; TRM.30550; TRM.30575; TRM.30850; TRM.30866; TRM.30882; TRM.31234; TRM.31241; TRM.31400; TRM.40050; TRM.40150; TRM.40200; TRM.40210; TRM.40250; TRM.40300; TRM.40350; TRM.40680; TRM.40820; URN.24345; URN.24355; URN.24365",
     "cola_citations": "CA 1; CA 2; CA 3; CA 7; CA 8; CA 9; LIS 1; LIS 2; ORG 7; PRE 1; PRE 19; QC 1; QC 5; VER 1; VER 12; VER 14; VER 2; VER 3; VER 4; VER 5; VER 6; VER 7",
     "aabb_citations": "3.5; 3.5.1; 5.1.10; 5.1.2; 5.1.2.1",
-    "notes": "Risk assessment file: IQCP, biosafety, environmental, and information security risk registers may all live here."
+    "notes": "Verification file for each test system before patient reporting: accuracy, precision, reportable range, and reference intervals, plus any change to the manufacturer's instructions, which means the lab establishes its own specifications. CFR 493.1253 is the anchor. VeritaCheck® runs the studies and produces the signed reports."
   },
   {
     "policy_id": "37",
@@ -352,7 +352,7 @@ export const VERITAPOLICY_MASTER_LIST: VeritaPolicyMasterRow[] = [
     "cap_citations": "COM.04075; COM.30980; COM.40250; COM.40500",
     "cola_citations": "MA 1; VER 1",
     "aabb_citations": "",
-    "notes": "Job descriptions library; one per role, dated, with director signature. Pairs with org chart and credential verification."
+    "notes": "Reagent receipt and storage records, open and expiration dating, and lot acceptance before a new lot goes into use. Expired reagents in use and missing lot acceptance are common findings. VeritaStock™ tracks lots and expiration dates."
   },
   {
     "policy_id": "39",
@@ -366,7 +366,7 @@ export const VERITAPOLICY_MASTER_LIST: VeritaPolicyMasterRow[] = [
     "cap_citations": "COM.04075; COM.30980; COM.40250; COM.40500; GEN.20377; GEN.20385; GEN.20425; GEN.20430; GEN.41300; GEN.41430; GEN.43900; TRM.42213; TRM.42220; TRM.42222; TRM.42223; TRM.42224; TRM.42235; TRM.42245; TRM.42246; TRM.42255; TRM.42260; TRM.42265; TRM.42267; TRM.42280; TRM.44350; TRM.44450; TRM.44525; TRM.44537; TRM.44600",
     "cola_citations": "CA 9; MA 1; PST 27; PT 14; VER 1",
     "aabb_citations": "5.4; 5.5; 5.6",
-    "notes": "Continuing education log per testing personnel; CME records for licensed staff. The accrediting body verifies hours against the role's requirement."
+    "notes": "Labels on every reagent and solution the lab opens or prepares: content, lot, prepared and expiration dates, storage, and hazard information under the OSHA Hazard Communication Standard. Labels on secondary containers at the bench are commonly checked."
   },
   {
     "policy_id": "40",
@@ -380,7 +380,7 @@ export const VERITAPOLICY_MASTER_LIST: VeritaPolicyMasterRow[] = [
     "cap_citations": "GEN.40560; GEN.40570; GEN.40580; GEN.40590; MIC.11380; MIC.11385; MIC.11390; MIC.11395; MIC.12040; MIC.12060; MIC.13325; MIC.13375; MIC.18968; MIC.18976; MIC.19060; MIC.21628; MIC.21632; MIC.21835; MIC.22280; MIC.22600; MIC.22610; MIC.22620; MIC.22630; MIC.22635; MIC.22640; MIC.22675; MIC.31200; MIC.31640; MIC.32140; MIC.32200; MIC.32480; MIC.42630; MIC.52193; MIC.65560; MIC.65630; MIC.65940",
     "cola_citations": "APM 1; PT 1; PT 2; QC 1; VER 1",
     "aabb_citations": "",
-    "notes": "Onboarding checklist file. Verifies that pre-independent-testing training was completed before the testing personnel ran patient samples."
+    "notes": "Microbiology procedure manual: culture workup by specimen source, identification methods, susceptibility testing and which results are reported, and how significant pathogens are called. Antimicrobial stewardship support also lives here: antibiogram production cadence and susceptibility reporting rules. The annual antibiogram is the common deliverable."
   },
   {
     "policy_id": "66",
@@ -394,7 +394,7 @@ export const VERITAPOLICY_MASTER_LIST: VeritaPolicyMasterRow[] = [
     "cap_citations": "COM.01100; COM.01300; COM.01400; COM.01500; COM.01520; COM.01600; COM.01700; COM.01800; COM.01950; COM.04075; COM.04250; COM.04300; COM.30450; COM.30980; COM.40250; COM.40500; COM.40620; GEN.40560; GEN.40570; GEN.40580; GEN.40590; HEM.22050; HEM.34100; HEM.34300; HEM.34600; HEM.34655; HEM.35250; HEM.35357; HEM.35414; HEM.35528; HEM.35547; HEM.35650; HEM.35661; HEM.35912; HEM.35918; HEM.35920; HEM.35986; HEM.36030; HEM.36270; HEM.36300; HEM.37165; HEM.37363; HEM.37373; HEM.37375; HEM.37400; HEM.37924; HEM.37925; HEM.37930; HEM.37935; IMM.33448; IMM.33800; IMM.33818; IMM.40300; IMM.40440; IMM.40720; IMM.40755; IMM.40790; IMM.40825; IMM.40860; IMM.40980; IMM.41400; IMM.41420; IMM.41500; IMM.41600; IMM.41700; MIC.11380; MIC.11385; MIC.11390; MIC.11395; MIC.12040; MIC.12060; MIC.13325; MIC.13375; MIC.18968; MIC.18976; MIC.19060; MIC.21628; MIC.21632; MIC.21835; MIC.22280; MIC.22550; MIC.22600; MIC.22610; MIC.22620; MIC.22630; MIC.22635; MIC.22640; MIC.22675; MIC.31200; MIC.31640; MIC.32140; MIC.32200; MIC.32480; MIC.42025; MIC.42630; MIC.52193; MIC.62550; MIC.65560; MIC.65630; MIC.65700; MIC.65940; TRM.30550; TRM.30575; TRM.30850; TRM.31234; TRM.31241; TRM.31400; TRM.40050; TRM.40150; TRM.40200; TRM.40210; TRM.40250; TRM.40300; TRM.40350; TRM.40655; TRM.40680; TRM.40820",
     "cola_citations": "APM 1; MA 1; ORG 2; PT 1; PT 12; PT 2; QA 1; QC 1; QC 5; VER 1; VER 10; VER 11; VER 9",
     "aabb_citations": "5.1.10; 5.1.10.1; 5.1.2; 5.1.2.1",
-    "notes": "Antimicrobial stewardship support: antibiogram production cadence and reporting cascades. Annual antibiogram is the common deliverable."
+    "notes": "QC record for manual hematology methods such as the manual differential and manual or body fluid cell counts: control frequency, acceptance limits, and corrective action when controls fail. Slide review criteria often sit in the same procedure."
   },
   {
     "policy_id": "67",
@@ -422,7 +422,7 @@ export const VERITAPOLICY_MASTER_LIST: VeritaPolicyMasterRow[] = [
     "cap_citations": "GEN.40560; GEN.40570; GEN.40580; GEN.40590; IMM.40440; IMM.41500; IMM.41600; MIC.11380; MIC.11385; MIC.11390; MIC.11395; MIC.12040; MIC.12060; MIC.13325; MIC.13375; MIC.18968; MIC.18976; MIC.19060; MIC.21628; MIC.21632; MIC.21835; MIC.22280; MIC.22600; MIC.22610; MIC.22620; MIC.22630; MIC.22635; MIC.22640; MIC.22675; MIC.31200; MIC.31640; MIC.32140; MIC.32200; MIC.32480; MIC.42630; MIC.65560; MIC.65630; MIC.65940",
     "cola_citations": "APM 1; QC 1; VER 1",
     "aabb_citations": "",
-    "notes": "Differential SOP, slide review criteria, and tech competency for manual differential. Body fluid cell counts often live here too."
+    "notes": "Mixed lymphocyte culture procedure where offered: indications, method, controls, and reporting, usually kept with the HLA typing and crossmatch procedures. CFR 493.1278 anchors. Rare outside transplant centers; most labs send it out."
   },
   {
     "policy_id": "69",
@@ -436,7 +436,7 @@ export const VERITAPOLICY_MASTER_LIST: VeritaPolicyMasterRow[] = [
     "cap_citations": "COM.30000; COM.30100; GEN.41067; GEN.41077; GEN.41096; GEN.41300; GEN.41307; GEN.41310; GEN.41312; GEN.78400",
     "cola_citations": "PST 1; PST 2; PST 3; PST 4; PST 5",
     "aabb_citations": "",
-    "notes": "Histology SOP, embedding-to-slide accountability, and pathologist case turnaround. CAP Anatomic Pathology checklist is the working reference."
+    "notes": "Records for an inter-laboratory cell exchange where offered, most often in histocompatibility laboratories: the participant agreement, how exchange samples are received and handled, and the results reported back and reviewed."
   },
   {
     "policy_id": "70",
@@ -464,7 +464,7 @@ export const VERITAPOLICY_MASTER_LIST: VeritaPolicyMasterRow[] = [
     "cap_citations": "COM.06100; GEN.20377; GEN.20385; GEN.20425; GEN.20430; GEN.20450; GEN.40490; GEN.40491; GEN.40492; GEN.40511; GEN.40530; GEN.40545; GEN.40825; GEN.41300; GEN.41306; GEN.41430; GEN.43900; GEN.50057; TRM.44350; TRM.44450; TRM.44525; TRM.44537; TRM.44600",
     "cola_citations": "CA 9; PRE 1; PRE 10; PRE 11; PRE 12; PRE 19; PRE 2; PRE 3; PRE 4; PRE 5; PRE 6; PRE 7; PRE 8; PRE 9; PST 23; PST 25",
     "aabb_citations": "5.1.10; 5.4; 5.6",
-    "notes": "Cytology screening SOP, gyn rescreen percentage, and cytotech workload limits. CFR 493.1274 anchors."
+    "notes": "Procedure for tissue containing radioactive material, such as seed localization or sentinel lymph node specimens: notice from the operating room, shielding, dosimetry, holding for decay where required, and documentation of each case. Coordinate with the facility's radiation safety officer."
   },
   {
     "policy_id": "72",
@@ -506,7 +506,7 @@ export const VERITAPOLICY_MASTER_LIST: VeritaPolicyMasterRow[] = [
     "cap_citations": "COM.06100; COM.30000; COM.30100; GEN.40490; GEN.40491; GEN.40492; GEN.40511; GEN.40530; GEN.40545; GEN.40825; GEN.50057",
     "cola_citations": "PRE 1; PRE 19; PST 1; PST 2; PST 3",
     "aabb_citations": "",
-    "notes": "Cytogenetics SOP and reporting; molecular cytogenetics (FISH) procedures. Specialty consultation is common."
+    "notes": "Mohs frozen section procedure: tissue mapping and orientation, embedding, sectioning and staining, slide quality review, and the surgeon's documented review of the slides. Mohs laboratories are often in dermatology practices under their own CLIA certificate."
   },
   {
     "policy_id": "78",
@@ -520,7 +520,7 @@ export const VERITAPOLICY_MASTER_LIST: VeritaPolicyMasterRow[] = [
     "cap_citations": "COM.01100; COM.01300; COM.01400; COM.01500; COM.01520; COM.01600; COM.01700; COM.01950; GEN.40560; GEN.40570; GEN.40580; GEN.40590; IMM.40440; IMM.41500; IMM.41600; MIC.11380; MIC.11385; MIC.11390; MIC.11395; MIC.12040; MIC.12060; MIC.13325; MIC.13375; MIC.18968; MIC.18976; MIC.19060; MIC.21628; MIC.21632; MIC.21835; MIC.22280; MIC.22600; MIC.22610; MIC.22620; MIC.22630; MIC.22635; MIC.22640; MIC.22675; MIC.31200; MIC.31640; MIC.32140; MIC.32200; MIC.32480; MIC.42630; MIC.52193; MIC.65560; MIC.65630; MIC.65940",
     "cola_citations": "APM 1; ORG 2; PT 1; PT 2; QA 1; QC 1; VER 1",
     "aabb_citations": "",
-    "notes": "Radiobioassay program: NRC license requirements where applicable, dose monitoring, and disposal SOP."
+    "notes": "Parasitology procedure: specimen requirements and preservatives, examination methods, organism identification, and reporting. A reference collection of slides or photographs for identification is expected under CFR 493.1264."
   },
   {
     "policy_id": "79",
@@ -548,7 +548,7 @@ export const VERITAPOLICY_MASTER_LIST: VeritaPolicyMasterRow[] = [
     "cap_citations": "COM.04250; COM.04300; COM.40620; GEN.40560; GEN.40570; GEN.40580; GEN.40590; HEM.22050; HEM.34100; HEM.34300; HEM.34600; HEM.34655; HEM.35250; HEM.35357; HEM.35414; HEM.35528; HEM.35547; HEM.35650; HEM.35661; HEM.35912; HEM.35918; HEM.35920; HEM.35986; HEM.36030; HEM.36270; HEM.36300; HEM.37165; HEM.37363; HEM.37373; HEM.37375; HEM.37400; MIC.11380; MIC.11385; MIC.11390; MIC.11395; MIC.12040; MIC.12060; MIC.13325; MIC.13375; MIC.18968; MIC.18976; MIC.19060; MIC.21628; MIC.21632; MIC.21835; MIC.22280; MIC.22550; MIC.22600; MIC.22610; MIC.22620; MIC.22630; MIC.22635; MIC.22640; MIC.22675; MIC.31200; MIC.31640; MIC.32140; MIC.32200; MIC.32480; MIC.42025; MIC.42630; MIC.52193; MIC.62550; MIC.65560; MIC.65630; MIC.65700; MIC.65940",
     "cola_citations": "APM 1; LDR 5; QC 1; QC 5; VER 1; VER 10; VER 11; VER 9",
     "aabb_citations": "5.1.2; 5.1.2.1",
-    "notes": "HLA typing SOP and ASHI accreditation if applicable. Crossmatch SOP for solid organ and HSC transplant."
+    "notes": "Virology QC record: an uninoculated cell control beside each cell culture, and positive and negative controls for antigen and serology tests. CFR 493.1265 anchors. Molecular viral tests follow the molecular testing policy (policy 107)."
   },
   {
     "policy_id": "81",
@@ -562,7 +562,7 @@ export const VERITAPOLICY_MASTER_LIST: VeritaPolicyMasterRow[] = [
     "cap_citations": "COM.04050; COM.04075; COM.30800; COM.30980; COM.40250; COM.40500; GEN.57000",
     "cola_citations": "MA 1; QA 8; QA 9; QC 26; QC 27; VER 1",
     "aabb_citations": "",
-    "notes": "Donor compatibility SOP for hematopoietic and solid organ programs. Coordination with transplant program required."
+    "notes": "Sentinel event file: immediate response, root cause analysis, an action plan with owners and dates, and follow-up showing the actions worked. Ties to the facility's patient safety program."
   },
   {
     "policy_id": "89",
