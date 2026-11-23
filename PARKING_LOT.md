@@ -554,7 +554,7 @@ _(item #98 closed 2026-11-22; see C122 below)_
 **What:** Michael wants a detailed conversation about schedules before anything is built or changed. Which schedules are meant, and how they touch the UNC Nash engagement, is for that conversation; nothing is assumed here. Bring to it: what VeritaAssure schedules today (VeritaShift Scheduler, competency and calibration due dates, VeritaTrack tasks) and the open UNC Nash work items, so the discussion can map his concerns to the product and the engagement.
 
 **Source:** Michael, 2026-10-27: "Parking lot: I want to have a detailed conversation about schedules it may have impact on Unc Nash".
-**Status:** Open. The general schedules discussion happened 2026-11-02, with Michael speaking in generalities (weekend rotation, shift length and workforce age, his 6-position 12-hour template). Scheduling was kept out of the Nash report. Michael decides when it returns to Nash.
+**Status:** Open (Michael 2026-11-23, Decision 15 = 2). The general schedules discussion happened 2026-11-02, with Michael speaking in generalities (weekend rotation, shift length and workforce age, his 6-position 12-hour template). Scheduling was kept out of the Nash report. It returns to Nash as a topic in the coaching sessions with Shairee once they are booked (no session booked as of 2026-11-23). Claude prepared a one-page outline of the general principles, with no Nash facts, for Michael to use there. No product change.
 
 ---
 
