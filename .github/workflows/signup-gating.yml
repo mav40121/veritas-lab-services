@@ -254,6 +254,10 @@ jobs:
         # Michael 2026-11-22, Decision 11 = 1 (parking lot #115): the lab's own retention period, blank until set, changed only by the owner or an
         # admin, one lab at a time; each unit's keep-until date from its final disposition, on the screen and the record PDF, never stored.
         run: npm run test:veritastock-tissue-retention
+      - name: Run VeritaQA stewardship (antibiogram, committee log, readiness) checks
+        # Michael 2026-11-23, Decision 14 = 2 (parking lot #81): the antibiogram from LIS totals only (any unknown column refused), the lab's
+        # threshold and versions, release locks, the committee log and the CFR-only readiness view. Rules receipt, then the routes.
+        run: npm run test:veritaqa-stewardship
       - name: Run quiz follows method group integration test
         # REQ-131: an analyzer grouped on the Method groups tab shows on the quiz form and card. Nothing is stored: program rows, quizzes and what a program
         # credits stay the same. The Element 6 picker's old matches still win, and a group only fills in where it found nothing.
