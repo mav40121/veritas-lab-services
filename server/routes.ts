@@ -291,6 +291,7 @@ import { cliaAnalytes, ptCategoryLinks } from "./cliaAnalytes";
 import { createAnalyteMatcher, nzKey, specialtyCategory } from "./ptAnalyteMatcher";
 import { validateVendorPrograms, PT_VENDORS } from "./ptVendorCatalog";
 import { DEMO_USER_EMAIL, SIGNUP_ALERT_TO, BUSINESS_NOTICE_TO } from "./constants";
+import { isQuotedUserAgent } from "./signupGuards";
 
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
@@ -7218,6 +7219,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         const symProblem = passwordProblemFor(joinPolicy, password);
         if (symProblem) return res.status(400).json({ error: symProblem, code: "PASSWORD_RULE" });
       }
+    }
+    // Bot guard (server/signupGuards.ts): a public sign-up whose browser string is in quote marks is a script. It gets a
+    // person's answer; no account, no confirmation email to the address it used, no alert.
+    if (!claimsInvite && isQuotedUserAgent(req.headers["user-agent"])) {
+      console.log("[register] a script's public sign-up was dropped (quoted browser string)");
+      return res.json({ verification_required: true, email: email.toLowerCase(), email_sent: true });
     }
     const passwordHash = await bcrypt.hash(password, 10);
     if (replacesUnconfirmed) (db as any).$client.prepare("UPDATE users SET password_hash = ?, name = ? WHERE id = ?").run(passwordHash, name, earlierSignup!.id); // security-settings-ok: an unconfirmed account's first password
