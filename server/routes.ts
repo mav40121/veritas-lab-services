@@ -45092,6 +45092,11 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   const { registerTissueRoutes } = await import('./tissue');
   registerTissueRoutes(app, authMiddleware, requireWriteAccess, requireModuleEdit, ADMIN_SECRET);
 
+  // VeritaQA Stewardship tab (/api/labs/:labId/veritaqa/stewardship/*; parking lot #81, Decision 14 = 2): antibiogram from LIS
+  // totals, committee log, readiness (CFR rows only). No patient field.
+  const { registerStewardshipRoutes } = await import('./stewardship');
+  registerStewardshipRoutes(app, authMiddleware, requireWriteAccess, requireModuleEdit);
+
   // Compliance digest issue builder (/api/labs/:labId/digest/*; Q281 = 1, PR 3 of 5): settings, issues, read and acknowledgment.
   const { registerDigestIssueRoutes } = await import('./digestIssues');
   registerDigestIssueRoutes(app, authMiddleware, requireWriteAccess);

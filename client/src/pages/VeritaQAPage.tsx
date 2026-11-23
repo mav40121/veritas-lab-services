@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   Lock, Users, Activity, BarChart3, Save, Plus, Edit2, Trash2, FileText,
-  ChevronDown, ChevronRight, BookOpen, Library, AlertTriangle, Printer,
+  ChevronDown, ChevronRight, BookOpen, Library, AlertTriangle, Printer, FlaskConical,
 } from "lucide-react";
 import { useMemberships } from "@/hooks/useMemberships";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
@@ -35,6 +35,7 @@ import {
   PI_STARTER_LIBRARY, PI_STARTER_DEPARTMENTS, PHASE_LABELS, PHASE_COLORS,
   type StarterMetric,
 } from "@/lib/piStarterLibrary";
+import StewardshipTab from "@/components/veritaqa/StewardshipTab";
 
 // -- Types --------------------------------------------------------------------
 
@@ -889,7 +890,7 @@ export default function VeritaQAPage() {
   const { user, isLoggedIn } = useAuth();
   const readOnly = useIsReadOnly("veritabench");
   const { toast } = useToast();
-  const [tab, setTab] = useState<"dashboard" | "data" | "plan">("dashboard");
+  const [tab, setTab] = useState<"dashboard" | "data" | "plan" | "stewardship">("dashboard");
 
   // Data state
   const [departments, setDepartments] = useState<PIDepartment[]>([]);
@@ -1335,17 +1336,23 @@ export default function VeritaQAPage() {
   // #84 Phase 3: building the PI program is VeritaBench setup (every /api/pi
   // write is requireModuleEdit('veritabench')). A view-only login (e.g. a
   // Staff login) gets a plain note instead of the setup wizard.
-  if (isFirstTime && readOnly) {
+  // The Stewardship tab (parking lot #81) is the lab's own and needs no PI departments, so it opens even before the PI program is set up.
+  const stewardshipView = tab === "stewardship";
+
+  if (isFirstTime && readOnly && !stewardshipView) {
     return (
       <div className="max-w-xl mx-auto px-4 py-16 text-center" data-testid="pi-view-only-empty">
         <Library size={36} className="mx-auto mb-4" style={{ color: "#01696F" }} />
         <h1 className="text-lg font-semibold mb-2">No PI program set up yet</h1>
         <p className="text-sm text-muted-foreground">Your lab's quality indicators will appear here once the lab owner or an admin sets up the PI program.</p>
+        <Button variant="outline" size="sm" className="mt-4" onClick={() => setTab("stewardship")} data-testid="open-stewardship-first-time">
+          <FlaskConical size={14} className="mr-1.5" />Antimicrobial stewardship
+        </Button>
       </div>
     );
   }
 
-  if (isFirstTime) {
+  if (isFirstTime && !stewardshipView) {
     return (
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
         <div className="text-center mb-8">
@@ -1356,6 +1363,9 @@ export default function VeritaQAPage() {
           <p className="text-muted-foreground max-w-lg mx-auto">
             Select the metrics that matter to your laboratory. You can customize names, units, and benchmark thresholds after selection.
           </p>
+          <Button variant="outline" size="sm" className="mt-4" onClick={() => setTab("stewardship")} data-testid="open-stewardship-first-time">
+            <FlaskConical size={14} className="mr-1.5" />Antimicrobial stewardship
+          </Button>
         </div>
 
         <Card>
@@ -1436,9 +1446,13 @@ export default function VeritaQAPage() {
         <button onClick={() => setTab("plan")} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${tab === "plan" ? "border-[#01696F] text-[#01696F]" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
           <BookOpen size={14} className="inline mr-1.5" />Plan
         </button>
+        <button onClick={() => setTab("stewardship")} data-testid="qa-tab-stewardship" className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${tab === "stewardship" ? "border-[#01696F] text-[#01696F]" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
+          <FlaskConical size={14} className="inline mr-1.5" />Stewardship
+        </button>
       </div>
 
       {tab === "plan" && <PIPlanTab readOnly={readOnly} departments={departments} />}
+      {tab === "stewardship" && <StewardshipTab readOnly={readOnly} />}
 
       {/* -- Dashboard Tab -------------------------------------------------- */}
       {tab === "dashboard" && (

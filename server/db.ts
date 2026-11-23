@@ -7224,6 +7224,174 @@ try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_pi_plan_account ON pi_plan(acc
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_pi_plan_priority_plan ON pi_plan_priority(plan_id, account_id)`); } catch {}
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_pi_plan_review_plan ON pi_plan_review(plan_id, account_id)`); } catch {}
 
+// ── VeritaQA Stewardship tab (parking lot #81; Michael 2026-11-23, Decision 14 = 2) ─────────────────────────────────────
+// Lab-scoped (lab_id = labs.id), unlike the account-scoped PI tables above: an antibiogram is one laboratory's, under its CLIA.
+// Aggregate LIS totals only (organism x antimicrobial counts); no patient field exists in any of these tables.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS stewardship_settings (
+    lab_id INTEGER PRIMARY KEY,
+    isolate_threshold INTEGER NOT NULL DEFAULT 30,
+    below_threshold TEXT NOT NULL DEFAULT 'suppress',
+    period_months INTEGER NOT NULL DEFAULT 12,
+    first_isolate_note TEXT,
+    updated_by INTEGER,
+    updated_at TEXT DEFAULT (datetime('now'))
+  )
+`);
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(stewardship_settings)").all() as { name: string }[]).map((c) => c.name);
+  if (cols.length > 0) {
+    for (const [col, ddl] of [
+      ["below_threshold", "ALTER TABLE stewardship_settings ADD COLUMN below_threshold TEXT NOT NULL DEFAULT 'suppress'"],
+      ["period_months", "ALTER TABLE stewardship_settings ADD COLUMN period_months INTEGER NOT NULL DEFAULT 12"],
+      ["first_isolate_note", "ALTER TABLE stewardship_settings ADD COLUMN first_isolate_note TEXT"],
+      ["updated_by", "ALTER TABLE stewardship_settings ADD COLUMN updated_by INTEGER"],
+      ["updated_at", "ALTER TABLE stewardship_settings ADD COLUMN updated_at TEXT"],
+    ] as [string, string][]) {
+      if (!cols.includes(col)) { try { sqlite.exec(ddl); } catch {} }
+    }
+  }
+}
+
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS stewardship_antibiograms (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    period_start TEXT NOT NULL,
+    period_end TEXT NOT NULL,
+    source_filter TEXT,
+    data_source TEXT,
+    status TEXT NOT NULL DEFAULT 'draft',
+    version INTEGER NOT NULL DEFAULT 1,
+    previous_id INTEGER,
+    threshold_used INTEGER,
+    below_threshold_used TEXT,
+    first_isolate_note_used TEXT,
+    released_by_name TEXT,
+    released_by_title TEXT,
+    released_by_user_id INTEGER,
+    released_at TEXT,
+    created_by INTEGER,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )
+`);
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(stewardship_antibiograms)").all() as { name: string }[]).map((c) => c.name);
+  if (cols.length > 0) {
+    for (const [col, ddl] of [
+      ["source_filter", "ALTER TABLE stewardship_antibiograms ADD COLUMN source_filter TEXT"],
+      ["data_source", "ALTER TABLE stewardship_antibiograms ADD COLUMN data_source TEXT"],
+      ["version", "ALTER TABLE stewardship_antibiograms ADD COLUMN version INTEGER NOT NULL DEFAULT 1"],
+      ["previous_id", "ALTER TABLE stewardship_antibiograms ADD COLUMN previous_id INTEGER"],
+      ["threshold_used", "ALTER TABLE stewardship_antibiograms ADD COLUMN threshold_used INTEGER"],
+      ["below_threshold_used", "ALTER TABLE stewardship_antibiograms ADD COLUMN below_threshold_used TEXT"],
+      ["first_isolate_note_used", "ALTER TABLE stewardship_antibiograms ADD COLUMN first_isolate_note_used TEXT"],
+      ["released_by_name", "ALTER TABLE stewardship_antibiograms ADD COLUMN released_by_name TEXT"],
+      ["released_by_title", "ALTER TABLE stewardship_antibiograms ADD COLUMN released_by_title TEXT"],
+      ["released_by_user_id", "ALTER TABLE stewardship_antibiograms ADD COLUMN released_by_user_id INTEGER"],
+      ["released_at", "ALTER TABLE stewardship_antibiograms ADD COLUMN released_at TEXT"],
+      ["created_by", "ALTER TABLE stewardship_antibiograms ADD COLUMN created_by INTEGER"],
+      ["updated_at", "ALTER TABLE stewardship_antibiograms ADD COLUMN updated_at TEXT"],
+    ] as [string, string][]) {
+      if (!cols.includes(col)) { try { sqlite.exec(ddl); } catch {} }
+    }
+  }
+}
+
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS stewardship_antibiogram_rows (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    antibiogram_id INTEGER NOT NULL,
+    lab_id INTEGER NOT NULL,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    organism TEXT NOT NULL,
+    organism_group TEXT NOT NULL DEFAULT 'other',
+    antimicrobial TEXT NOT NULL,
+    tested INTEGER NOT NULL,
+    susceptible INTEGER NOT NULL,
+    intermediate INTEGER,
+    resistant INTEGER,
+    FOREIGN KEY (antibiogram_id) REFERENCES stewardship_antibiograms(id) ON DELETE CASCADE
+  )
+`);
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(stewardship_antibiogram_rows)").all() as { name: string }[]).map((c) => c.name);
+  if (cols.length > 0) {
+    for (const [col, ddl] of [
+      ["sort_order", "ALTER TABLE stewardship_antibiogram_rows ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0"],
+      ["organism_group", "ALTER TABLE stewardship_antibiogram_rows ADD COLUMN organism_group TEXT NOT NULL DEFAULT 'other'"],
+      ["intermediate", "ALTER TABLE stewardship_antibiogram_rows ADD COLUMN intermediate INTEGER"],
+      ["resistant", "ALTER TABLE stewardship_antibiogram_rows ADD COLUMN resistant INTEGER"],
+    ] as [string, string][]) {
+      if (!cols.includes(col)) { try { sqlite.exec(ddl); } catch {} }
+    }
+  }
+}
+
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS stewardship_meetings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    meeting_date TEXT NOT NULL,
+    lab_representative TEXT NOT NULL,
+    minutes_link TEXT,
+    notes TEXT,
+    created_by INTEGER,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )
+`);
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(stewardship_meetings)").all() as { name: string }[]).map((c) => c.name);
+  if (cols.length > 0) {
+    for (const [col, ddl] of [
+      ["minutes_link", "ALTER TABLE stewardship_meetings ADD COLUMN minutes_link TEXT"],
+      ["notes", "ALTER TABLE stewardship_meetings ADD COLUMN notes TEXT"],
+      ["created_by", "ALTER TABLE stewardship_meetings ADD COLUMN created_by INTEGER"],
+      ["updated_at", "ALTER TABLE stewardship_meetings ADD COLUMN updated_at TEXT"],
+    ] as [string, string][]) {
+      if (!cols.includes(col)) { try { sqlite.exec(ddl); } catch {} }
+    }
+  }
+}
+
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS stewardship_actions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    meeting_id INTEGER NOT NULL,
+    lab_id INTEGER NOT NULL,
+    action TEXT NOT NULL,
+    owner TEXT,
+    due_date TEXT,
+    status TEXT NOT NULL DEFAULT 'open',
+    completed_on TEXT,
+    created_by INTEGER,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (meeting_id) REFERENCES stewardship_meetings(id) ON DELETE CASCADE
+  )
+`);
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(stewardship_actions)").all() as { name: string }[]).map((c) => c.name);
+  if (cols.length > 0) {
+    for (const [col, ddl] of [
+      ["owner", "ALTER TABLE stewardship_actions ADD COLUMN owner TEXT"],
+      ["due_date", "ALTER TABLE stewardship_actions ADD COLUMN due_date TEXT"],
+      ["status", "ALTER TABLE stewardship_actions ADD COLUMN status TEXT NOT NULL DEFAULT 'open'"],
+      ["completed_on", "ALTER TABLE stewardship_actions ADD COLUMN completed_on TEXT"],
+      ["created_by", "ALTER TABLE stewardship_actions ADD COLUMN created_by INTEGER"],
+    ] as [string, string][]) {
+      if (!cols.includes(col)) { try { sqlite.exec(ddl); } catch {} }
+    }
+  }
+}
+
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_stewardship_abg_lab ON stewardship_antibiograms(lab_id, status)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_stewardship_abg_rows ON stewardship_antibiogram_rows(antibiogram_id)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_stewardship_meetings_lab ON stewardship_meetings(lab_id, meeting_date)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_stewardship_actions_meeting ON stewardship_actions(meeting_id)`); } catch {}
+
 // ── One-shot reconciliation: purge orphan veritamap_tests rows ───────────────
 // Background: prior to the fix in routes.ts, rebuildMapTests used
 // INSERT OR IGNORE only — it never deleted rows when an analyte was toggled

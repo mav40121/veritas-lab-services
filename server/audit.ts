@@ -20,10 +20,11 @@ export type AuditModule =
   | "veritastock"
   | "veritaqc"
   | "veritamaintain"
+  | "veritaqa"
   | "account"
   | "admin"; // ADMIN_SECRET-gated operator actions (no signed-in user), e.g. account deletion
 
-export type AuditAction = "create" | "update" | "delete" | "restore" | "transfer_out" | "transfer_in" | "transfer_rejected" | "receive" | "adjust" | "write_off";
+export type AuditAction = "create" | "update" | "delete" | "restore" | "transfer_out" | "transfer_in" | "transfer_rejected" | "receive" | "adjust" | "write_off" | "release";
 
 export interface AuditEntry {
   userId: number;

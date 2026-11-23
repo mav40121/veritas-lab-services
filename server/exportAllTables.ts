@@ -252,6 +252,12 @@ export const EXPORT_TABLES: Record<string, ExportTable> = {
   pi_plan: owner("VeritaQA", "account_id"),
   pi_plan_priority: owner("VeritaQA", "account_id"),
   pi_plan_review: owner("VeritaQA", "account_id"),
+  // The Stewardship tab (parking lot #81) is one laboratory's, so its tables carry lab_id.
+  stewardship_settings: lab("VeritaQA"),
+  stewardship_antibiograms: lab("VeritaQA"),
+  stewardship_antibiogram_rows: lab("VeritaQA"),
+  stewardship_meetings: lab("VeritaQA"),
+  stewardship_actions: lab("VeritaQA"),
   schedule_settings: lab("VeritaShift"),
   schedule_shift_defs: lab("VeritaShift"),
   schedule_shift_dept_requirements: lab("VeritaShift"),
