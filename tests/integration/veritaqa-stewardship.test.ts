@@ -18,6 +18,15 @@
 //   8. the committee log and action items, and the readiness view (CFR rows only, verbatim, as-of date) going from not met to met
 //   9. reach: another owner's lab, a sister lab's path for lab A's admin, a view-only seat and a Staff login are refused; a lab
 //      with no suite plan 403; another lab's antibiogram id is 404 on this lab's path
+//  10. patient information is refused on every write (detectPhi; 400 PHI_REFUSED with the field), nothing stored
+//  11. the PDF (Michael approved the mock 2026-11-23, with the standard review block), its words read with PyMuPDF (python -E):
+//      the live lab name and CLIA (or "Not on file"), the table, the review block on page 1 with the approver on a released one,
+//      the footer, the author; a released version keeps its own rule; a draft prints DRAFT and a blank block; a long antibiogram
+//      keeps the block on page 1; reach is exactly the antibiogram read's, and another lab's id is 404
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { execFileSync } from "node:child_process";
 import http from "node:http";
 import express from "express";
 import { createRequire } from "node:module";
@@ -297,6 +306,79 @@ async function main() {
   const r10o = await phiRefused(await call("PUT", `${B(labA)}/actions/${ACT2}`, { action: "SSN 123-45-6789 follow-up" }, OA.token), "action", "Social Security number");
   check("10o. editing an action item to an SSN is refused, the text unchanged", r10o.ok && (sqlite.prepare("SELECT action FROM stewardship_actions WHERE id = ?").get(ACT2) as any).action === "Send the antibiogram to pharmacy", JSON.stringify(r10o.b));
   await call("DELETE", `${B(labA)}/meetings/${M2}`, undefined, OA.token);
+
+  // ── 11. The antibiogram PDF (Michael approved the mock 2026-11-23, with the standard review block) ─────────────────────
+  // PyMuPDF reads the words the PDF itself carries (python -E, as the digest PDF test does).
+  const { PDFDocument } = await import("pdf-lib");
+  const work = fs.mkdtempSync(path.join(os.tmpdir(), "abg-pdf-"));
+  const pdfPages = (buf: Buffer, name: string): string[] => {
+    const file = path.join(work, name);
+    fs.writeFileSync(file, buf);
+    if (process.env.PDF_OUT) { fs.mkdirSync(process.env.PDF_OUT, { recursive: true }); fs.copyFileSync(file, path.join(process.env.PDF_OUT, name)); }
+    const out = execFileSync("python", ["-E", "-c",
+      "import sys, json, fitz\nsys.stdout.reconfigure(encoding='utf-8')\nprint(json.dumps([p.get_text() for p in fitz.open(sys.argv[1])]))", file]).toString("utf-8");
+    return JSON.parse(out);
+  };
+  const getPdf = async (lab: number, id: number, token = OA.token) => {
+    const r = await call("GET", `${B(lab)}/antibiograms/${id}/pdf`, undefined, token);
+    return { status: r.status, type: r.headers.get("content-type") || "", disp: r.headers.get("content-disposition") || "", buf: Buffer.from(await r.arrayBuffer()) };
+  };
+  const flat = (pages: string[]) => pages.join("\n").replace(/\s+/g, " ");
+  const REVIEW = "LABORATORY DIRECTOR OR DESIGNEE REVIEW";
+  const FOOTER = "VeritaAssure® | VeritaQA™ | Confidential, For Internal Lab Use Only | Page 1 of";
+
+  const relPdf = await getPdf(labA, A1);
+  const relDoc = await PDFDocument.load(relPdf.buf);
+  const relPages = pdfPages(relPdf.buf, "released.pdf");
+  const relText = flat(relPages);
+  check("11a. released: a PDF, named for its title and version with no DRAFT, author Perplexity Computer",
+    relPdf.status === 200 && relPdf.type === "application/pdf" && /filename="VeritaQA_Antibiogram_Made-up_2025_antibiogram_v1\.pdf"/.test(relPdf.disp) && relDoc.getAuthor() === "Perplexity Computer", `${relPdf.status} ${relPdf.disp} ${relDoc.getAuthor()}`);
+  check("11b. released page 1: the lab's name and CLIA from the live record, the title, period, threshold and status",
+    /Stewardship Main/.test(relPages[0]) && /CLIA: 99D9999999/.test(relPages[0]) && /VeritaQA™ Cumulative Antibiogram/.test(relPages[0]) && /2025-01-01 to 2025-12-31/.test(relText) && /Released \d{4}-\d{2}-\d{2}/.test(relText), relPages[0].slice(0, 600));
+  check("11c. released page 1: the standard review block, Accepted marked, the approver's name, title and release date on their lines",
+    relPages[0].replace(/\s+/g, " ").includes(REVIEW) && /☑ Accepted for release/.test(relText) && /Dr\. Made Up/.test(relPages[0]) && /Medical Director/.test(relPages[0]) && /Print Name/.test(relPages[0]) && /Signature/.test(relPages[0]), relText.slice(-700));
+  check("11d. released: the table's numbers (53, 88, 58, 100) and * for the 18-isolate cell, its rule's 30",
+    /\b53\b/.test(relText) && /\b88\b/.test(relText) && /\b58\b/.test(relText) && /\b100\b/.test(relText) && relText.includes("*") && /Fewer than 30 isolates in the period: percent not shown/.test(relText));
+  check("11e. the footer on page 1, no DRAFT, no SAMPLE, no em dash, medical director or designee wording",
+    relText.includes(FOOTER) && !/DRAFT/.test(relText) && !/SAMPLE/i.test(relText) && !relText.includes(String.fromCharCode(0x2014)) && /medical director or designee/.test(relText), relText.slice(-300));
+  check("11f. one page for a normal antibiogram, the review block on it", relDoc.getPageCount() === 1 && relPages.length === 1);
+
+  await call("PUT", `${B(labA)}/settings`, { isolate_threshold: 10, below_threshold: "flag" }, OA.token);
+  const relLaterText = flat(pdfPages((await getPdf(labA, A1)).buf, "released-after-settings.pdf"));
+  check("11g. a later settings change (10, flag) doesn't move the released PDF: still 30 and * for the 18", /Fewest isolates to report a percent 30/i.test(relLaterText) && relLaterText.includes("*") && !relLaterText.includes("†"), relLaterText.slice(0, 500));
+  const draft = await getPdf(labA, A1v2);
+  const draftText = flat(pdfPages(draft.buf, "draft.pdf"));
+  check("11h. a draft: named _DRAFT, the DRAFT mark, 'Draft, not released', today's rule (10, flag), the review block blank",
+    draft.status === 200 && /_v2_DRAFT\.pdf"/.test(draft.disp) && /DRAFT/.test(draftText) && /Draft, not released/.test(draftText) && /Fewest isolates to report a percent 10/i.test(draftText)
+      && draftText.includes(REVIEW) && /○ Accepted for release/.test(draftText) && !/Dr\. Made Up/.test(draftText), draftText.slice(0, 400));
+  await call("PUT", `${B(labA)}/settings`, { isolate_threshold: 30, below_threshold: "suppress" }, OA.token);
+
+  // CLIA not on file, on a lab of the same owner
+  try { sqlite.prepare("UPDATE labs SET clia_number = NULL WHERE id = ?").run(labA2); } catch { sqlite.prepare("UPDATE labs SET clia_number = '' WHERE id = ?").run(labA2); }
+  const S1 = (await j(await call("POST", `${B(labA2)}/antibiograms`, { title: "Annex 2025", period_start: "2025-01-01", period_end: "2025-12-31" }, OA.token))).id as number;
+  await call("PUT", `${B(labA2)}/antibiograms/${S1}/rows`, { rows: rows.slice(0, 2) }, OA.token);
+  const annexText = flat(pdfPages((await getPdf(labA2, S1)).buf, "no-clia.pdf"));
+  check("11i. a lab with no CLIA on file: 'CLIA: Not on file. Enter it in account settings.'", /Stewardship Annex/.test(annexText) && annexText.includes("CLIA: Not on file. Enter it in account settings."), annexText.slice(0, 300));
+
+  // A long antibiogram keeps the review block on page 1
+  const longRows: any[] = [];
+  for (let o = 1; o <= 36; o++) for (const d of ["Ampicillin", "Ceftriaxone", "Cefepime", "Meropenem", "Gentamicin", "Ciprofloxacin"]) longRows.push({ organism: `Made-up organism ${o}`, organism_group: o <= 24 ? "gram_negative" : "gram_positive", antimicrobial: d, tested: 40 + o, susceptible: 30 + (o % 10) });
+  const L = (await j(await call("POST", `${B(labA)}/antibiograms`, { title: "Long made-up", period_start: "2025-01-01", period_end: "2025-12-31" }, OA.token))).id as number;
+  const longSaved = await call("PUT", `${G(L)}/rows`, { rows: longRows }, OA.token);
+  const longPdf = await getPdf(labA, L);
+  const longPages = pdfPages(longPdf.buf, "long.pdf");
+  check("11j. 36 organisms run to page 2, and the review block stays on page 1", longSaved.status === 200 && longPages.length >= 2 && longPages[0].replace(/\s+/g, " ").includes(REVIEW) && !longPages.slice(1).join(" ").replace(/\s+/g, " ").includes(REVIEW), `${longPages.length} pages`);
+  check("11k. every page carries the footer with its page number", longPages.every((p, i) => p.replace(/\s+/g, " ").includes(`Confidential, For Internal Lab Use Only | Page ${i + 1} of ${longPages.length}`)));
+
+  // Reach: exactly the antibiogram read's
+  for (const [name, u] of [["a view-only seat", VIEWER], ["a Staff login", STAFF], ["another lab's owner", OB]] as const) {
+    const r = await getPdf(labA, A1, u.token);
+    check(`11l. ${name}: the PDF refused like the read (403)`, r.status === 403, String(r.status));
+  }
+  check("11m. an editor reads it, as it reads the antibiogram", (await getPdf(labA, A1, EDITOR.token)).status === 200);
+  check("11n. lab A's antibiogram id on the sister lab's path is 404", (await getPdf(labA2, A1)).status === 404);
+  check("11o. lab A's admin can't reach the sister lab's PDF path", (await getPdf(labA2, S1, ADMINU.token)).status === 403);
+  check("11p. an id that doesn't exist is 404", (await getPdf(labA, 999999)).status === 404);
 
   // ── 9. Reach ───────────────────────────────────────────────────────────
   for (const [name, u] of [["a view-only seat", VIEWER], ["a Staff login", STAFF], ["another lab's owner", OB]] as const) {

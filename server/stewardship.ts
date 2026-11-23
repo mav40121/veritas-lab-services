@@ -23,6 +23,7 @@ import { blockNonOperatorSeat } from "./seatAccess";
 import { labLocalDate, labTimeZoneById, labToday } from "./dateLocal";
 import { storePdfToken } from "./pdfTokens";
 import { generateAntibiogramExcel } from "./stewardshipExport";
+import { antibiogramPdfFilename, generateAntibiogramPDF } from "./antibiogramPdf";
 import {
   CFR_AS_OF, CFR_STEWARDSHIP, M39_PENDING_NOTE, STEWARDSHIP_DEFAULTS, computeAntibiogram, findCsvPhi, findStewardshipPhi, isYmd, parseAntibiogramCsv, parseSettings,
   stewardshipPhiMessage,
@@ -303,6 +304,26 @@ export function registerStewardshipRoutes(
     } catch (err: any) {
       console.error("[stewardship] antibiogram workbook failed:", err?.message || err);
       res.status(500).json({ error: "The workbook could not be built." });
+    }
+  });
+
+  // The antibiogram as a PDF (Michael approved the mock 2026-11-23, with the standard review block). Exactly the antibiogram
+  // read's reach (the same chain and loadAntibiogram on this lab), so another lab's id is the same 404. A draft prints DRAFT.
+  app.get(`${BASE}/antibiograms/:id/pdf`, ...read, async (req: any, res: any) => {
+    const sqlite = sqliteOf();
+    const out = loadAntibiogram(sqlite, req.scope.labId, Number(req.params.id));
+    if (!out) return res.status(404).json({ error: "That antibiogram isn't on this lab's list." });
+    const lab = sqlite.prepare("SELECT lab_name, clia_number FROM labs WHERE id = ?").get(req.scope.labId) as any;
+    try {
+      const generated = labToday(labTimeZoneById(sqlite, req.scope.labId));
+      const { pdf } = await generateAntibiogramPDF(out, { labName: lab?.lab_name ?? null, cliaNumber: lab?.clia_number ?? null, generated });
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader("Content-Disposition", `attachment; filename="${antibiogramPdfFilename(out.antibiogram)}"`);
+      res.setHeader("Content-Length", pdf.length);
+      res.send(pdf);
+    } catch (err: any) {
+      console.error("[stewardship] antibiogram PDF failed:", err?.message || err);
+      res.status(500).json({ error: "The PDF could not be built." });
     }
   });
 
