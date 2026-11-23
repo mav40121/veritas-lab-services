@@ -13,7 +13,7 @@ import { blockNonOperatorSeat } from "./seatAccess";
 import { isDelegationPosition, isDelegationComplexity, sanitizeResponsibilities, DELEGATION_CATALOG, DELEGATION_POSITIONS, DELEGATION_COMPLEXITIES } from "./directorDelegation";
 import { mayAttestAsDirectorOrDesignee, complexityForAnalyte, labHighestComplexity, isLabOwnerUser } from "./delegationGate";
 import { vlsContext, isVlsSupportUser, labAllowsVlsSupport, vlsSupportBlocked, recordVlsActivity } from "./vlsSupport";
-import { foldInviteDuplicates, membersNotOnRoster, reattachOrphanStaffInvites, rosterLinkProblem, rosterRowForInvite, rosterStaffStatus } from "./rosterMembers";
+import { foldInviteDuplicates, linkInvitedMemberToRoster, membersNotOnRoster, reattachOrphanStaffInvites, rosterLinkProblem, rosterRowForInvite, rosterStaffStatus } from "./rosterMembers";
 import { buildStaffListWorkbook, staffListRows } from "./staffListExport";
 import { staffInventoryBlocked, inventoryNotAllowedBody } from "./inventoryPermission";
 import { deriveAttestationStatus } from "./policyAttestationStatus";
@@ -7361,6 +7361,14 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       try { stampLablessSeatLab((db as any).$client, Number(seatInvite.id)); } catch (err: any) {
         console.error("[auth/register seat-accept] lab stamp failed (non-fatal):", err.message);
       }
+      // BUG-183: an invited admin or editor is tied to the roster entry they already have (rosterMembers.ts). After the stamp, so an
+      // older seat that only just got its lab counts too.
+      try {
+        const tied = linkInvitedMemberToRoster((db as any).$client, Number(seatInvite.id));
+        if (tied) logAudit({ userId: user.id, ownerUserId: Number(seatInvite.owner_user_id), module: "veritastaff", action: "update", entityType: "staff_employee.login_link", entityId: tied.employeeId, entityLabel: "linked on invite accept", after: { login_user_id: tied.userId, lab_id: tied.labId }, ipAddress: req.ip });
+      } catch (err: any) {
+        console.error("[auth/register seat-accept] roster link failed (non-fatal):", err.message);
+      }
     } else if (activeSeat) {
       // User is already an active seat (e.g. manually attached via admin endpoint)
       isSeatUser = true;
@@ -11683,6 +11691,16 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         "SELECT * FROM lab_members WHERE lab_id = ? AND user_id = ? ORDER BY id DESC LIMIT 1"
       ).get(req.scope.labId, seatUserId);
       auditLabMembership("create", newMembership, req.userId, (req.headers["x-forwarded-for"] as string) || null, "labs/:labId/members");
+      // BUG-183: someone who already has an account joins now, so their roster entry is tied now (rosterMembers.ts).
+      try {
+        const joined = sqlite.prepare(
+          "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_user_id = ? AND lab_id = ? AND status = 'active' AND invite_token = ?"
+        ).get(labOwnerId, seatUserId, req.scope.labId, inviteToken) as any;
+        const tied = joined ? linkInvitedMemberToRoster(sqlite, Number(joined.id)) : null;
+        if (tied) logAudit({ userId: req.userId, ownerUserId: Number(labOwnerId), module: "veritastaff", action: "update", entityType: "staff_employee.login_link", entityId: tied.employeeId, entityLabel: "linked on invite", after: { login_user_id: tied.userId, lab_id: tied.labId }, ipAddress: req.ip });
+      } catch (err: any) {
+        console.error("[labs/:labId/members POST] roster link failed (non-fatal):", err.message);
+      }
     }
 
     // Best-effort invite email (matches /api/account/seats template).

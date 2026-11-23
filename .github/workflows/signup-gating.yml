@@ -290,6 +290,10 @@ jobs:
         # Michael 2026-11-18: quizzes go to admins as easily as to staff. An admin or editor linked to their own roster row
         # (staff_employees.login_user_id) gets the bell and My sign-offs with their normal sign-in; the owner still maps to nobody.
         run: npm run test:admin-own-staff-items
+      - name: Run invite links roster integration test
+        # BUG-183 (Redington 2026-11-23): an admin or editor invite ties the person to the one roster entry with the name the
+        # director typed, so a quiz assigned to that entry reaches their bell; anything unclear stays on the VeritaStaff prompt.
+        run: npm run test:invite-links-roster
       - name: Run quiz option letters test
         # Redington 2026-11-18: the answer key names an option by position (A = first); the quiz screens read the letter from
         # the option's text, so options typed without "A." graded every pick wrong. shared/quizOptions.ts and the admin count.
