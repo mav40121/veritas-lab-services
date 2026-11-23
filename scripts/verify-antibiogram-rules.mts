@@ -3,8 +3,8 @@
 // input set, and the CFR text pinned to what eCFR returned (api/versioner/v1/full/2026-11-19/title-42.xml, sections 482.42 and
 // 485.640). The defaults are the lab's settings, pending confirmation against CLSI M39 ED5 (2022). Exits non-zero on any failure.
 import {
-  CFR_AS_OF, CFR_STEWARDSHIP, STEWARDSHIP_DEFAULTS, computeAntibiogram, isYmd, monthsBefore, parseAntibiogramCsv, parseCount, parseCsvText,
-  parseOrganismGroup, parseSettings, percentSusceptible, stewardshipReadiness, validateRow, validateRows, type AbgRow,
+  CFR_AS_OF, CFR_STEWARDSHIP, STEWARDSHIP_DEFAULTS, computeAntibiogram, findCsvPhi, findStewardshipPhi, isYmd, monthsBefore, parseAntibiogramCsv, parseCount, parseCsvText,
+  parseOrganismGroup, parseSettings, percentSusceptible, stewardshipPhiMessage, stewardshipReadiness, validateRow, validateRows, type AbgRow,
 } from "../shared/antibiogramRules";
 
 let failures = 0;
@@ -123,6 +123,18 @@ check("CFR: 482.42(b)(2)(i) verbatim", CFR_STEWARDSHIP[0].citation === "42 CFR 4
 check("CFR: 485.640(b)(2)(i) verbatim", CFR_STEWARDSHIP[1].citation === "42 CFR 485.640(b)(2)(i)" && CFR_STEWARDSHIP[1].text === "(i) Demonstrates coordination among all components of the CAH responsible for antibiotic use and resistance, including, but not limited to, the infection prevention and control program, the QAPI program, the medical staff, nursing services, and pharmacy services;");
 check("CFR: 485.640(b)(2) says facility-wide, 482.42(b)(2) says hospital-wide", /The facility-wide antibiotic stewardship program:$/.test(CFR_STEWARDSHIP[1].lead) && /The hospital-wide antibiotic stewardship program:$/.test(CFR_STEWARDSHIP[0].lead));
 check("CFR: no em dash in the pinned text", !CFR_STEWARDSHIP.some((c) => /—/.test(c.lead + c.text)));
+
+// Patient information (shared/phiPatterns.ts detectPhi through findStewardshipPhi and findCsvPhi)
+const nested = findStewardshipPhi({ title: "2025", rows: [{ organism: "E. coli" }, { organism: "MRN 12345678" }] });
+check("phi: nested field named rows[1].organism, labeled a record number", nested?.field === "rows[1].organism" && nested.labels.join() === "Medical record number", JSON.stringify(nested));
+check("phi: clean body is null (the word patient alone is fine)", findStewardshipPhi({ notes: "Reviewed the patient-care antibiogram", tested: 40 }) === null);
+check("phi: a skipped top-level key isn't read", findStewardshipPhi({ csv: "Patient Name: Made Up" }, "", ["csv"]) === null && findStewardshipPhi({ csv: "Patient Name: Made Up" })?.field === "csv");
+check("phi: SSN and DOB found", findStewardshipPhi({ a: "123-45-6789" })?.labels[0] === "Social Security number" && findStewardshipPhi({ b: "DOB 1/2/1960" })?.labels[0] === "Date of birth");
+const cell = findCsvPhi("Organism,Antimicrobial,Tested,Susceptible\nE. coli,Ampicillin,40,20\nMRN 12345678,Ampicillin,40,20\n");
+check("phi csv: names line 3 and its column, never the text", cell?.field === "line 3, organism" && !cell.field.includes("12345678"), JSON.stringify(cell));
+check("phi csv: a patient label in the header row is line 1", findCsvPhi("Patient name: X,Antimicrobial\n")?.field === "line 1, the header");
+check("phi csv: a clean file is null", findCsvPhi("Organism,Antimicrobial,Tested,Susceptible\nE. coli,Ampicillin,40,20\n") === null);
+check("phi message: says what it looks like, not the text", stewardshipPhiMessage(["Labeled patient name", "Medical record number"]) === "This looks like patient information (patient name and medical record number). Stewardship records never hold a patient's details. Remove it and save again.");
 
 console.log(failures ? `${failures} FAILED` : "ALL PASS");
 process.exit(failures ? 1 : 0);

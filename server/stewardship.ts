@@ -24,7 +24,8 @@ import { labLocalDate, labTimeZoneById, labToday } from "./dateLocal";
 import { storePdfToken } from "./pdfTokens";
 import { generateAntibiogramExcel } from "./stewardshipExport";
 import {
-  CFR_AS_OF, CFR_STEWARDSHIP, M39_PENDING_NOTE, STEWARDSHIP_DEFAULTS, computeAntibiogram, isYmd, parseAntibiogramCsv, parseSettings,
+  CFR_AS_OF, CFR_STEWARDSHIP, M39_PENDING_NOTE, STEWARDSHIP_DEFAULTS, computeAntibiogram, findCsvPhi, findStewardshipPhi, isYmd, parseAntibiogramCsv, parseSettings,
+  stewardshipPhiMessage,
   stewardshipReadiness, validateRows, type AbgRow, type BelowThresholdMode, type StewardshipSettings,
 } from "../shared/antibiogramRules";
 
@@ -97,7 +98,15 @@ export function registerStewardshipRoutes(
   // VeritaQA is a management view: a view-only seat or a Staff login is refused, as on every PI read (blockNonOperatorSeat).
   const operatorOnly = (req: any, res: any, next: any) => (blockNonOperatorSeat(req, res) ? undefined : next());
   const read = [authMiddleware, labScopeMiddleware, operatorOnly, planGate];
-  const edit = [authMiddleware, labScopeMiddleware, operatorOnly, requireWriteAccess, requireModuleEdit("veritabench"), planGate];
+  // Every text in every write is refused on patient information, as tissue, the stain log and the digest do (where the platform
+  // guard in the browser only warns): 400 PHI_REFUSED with the field and what it looks like, nothing stored. The upload's file is
+  // checked cell by cell in its route, so the message names the line and column.
+  const noPhi = (req: any, res: any, next: any) => {
+    const hit = findStewardshipPhi(req.body, "", ["csv"]);
+    if (hit) return res.status(400).json({ error: stewardshipPhiMessage(hit.labels), code: "PHI_REFUSED", field: hit.field, labels: hit.labels });
+    next();
+  };
+  const edit = [authMiddleware, labScopeMiddleware, operatorOnly, requireWriteAccess, requireModuleEdit("veritabench"), planGate, noPhi];
   const ownerOrAdmin = (req: any) => req.scope?.role === "owner" || req.scope?.role === "admin";
   const audit = (req: any, action: AuditAction, entityType: string, entityId: number, label: string, before: unknown, after: unknown) => {
     try {
@@ -209,6 +218,8 @@ export function registerStewardshipRoutes(
     const text = typeof req.body?.csv === "string" ? req.body.csv : null;
     if (!text) return res.status(400).json({ error: "Choose the CSV file from the LIS antibiogram report." });
     if (text.length > 2_000_000) return res.status(400).json({ error: "The file is too large." });
+    const csvPhi = findCsvPhi(text);
+    if (csvPhi) return res.status(400).json({ error: stewardshipPhiMessage(csvPhi.labels), code: "PHI_REFUSED", field: csvPhi.field, labels: csvPhi.labels });
     const parsed = parseAntibiogramCsv(text);
     if (parsed.unknown_columns.length) return res.status(400).json({ error: parsed.errors[0].message, code: "UNKNOWN_COLUMNS", unknown_columns: parsed.unknown_columns, errors: parsed.errors });
     if (parsed.errors.length) return res.status(400).json({ error: "Some lines need fixing. Nothing was saved.", code: "BAD_ROWS", errors: parsed.errors });

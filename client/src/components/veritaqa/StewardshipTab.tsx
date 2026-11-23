@@ -131,7 +131,10 @@ function AntibiogramEditor({ base, id, readOnly, onChanged, onOpen }: { base: st
   const { data, error: loadErr, refetch } = useQuery<any>({ queryKey: ["stewardship-abg", base, id], queryFn: () => api(`${base}/antibiograms/${id}`), retry: false });
   const [meta, setMeta] = useState({ title: "", period_start: "", period_end: "", source_filter: "", data_source: "" });
   const [grid, setGrid] = useState<GridRow[]>([]);
-  const [err, setErr] = useState<{ error: string | null; errors?: any[] }>({ error: null });
+  // Each form shows the server's refusal (a patient-information refusal names the field) where it was sent: at = which form.
+  type At = "top" | "meta" | "upload" | "grid" | "release";
+  const [err, setErr] = useState<{ at: At; error: string | null; errors?: any[] }>({ at: "top", error: null });
+  const errFor = (at: At) => (err.at === at ? <ErrorList error={err.error} errors={err.errors} /> : null);
   const [busy, setBusy] = useState(false);
   const [preview, setPreview] = useState<any>(null);
   const [csvText, setCsvText] = useState<string | null>(null);
@@ -140,42 +143,50 @@ function AntibiogramEditor({ base, id, readOnly, onChanged, onOpen }: { base: st
   const draft = a?.status === "draft";
   const canEdit = draft && !readOnly;
 
+  // The form refills from what was saved whenever the saved values themselves change. Keyed on the content, not updated_at:
+  // datetime('now') is to the second, so an upload saved in the second the draft was made left the grid empty, and its
+  // Save totals would then have replaced the uploaded totals.
+  const metaKey = a ? JSON.stringify([a.id, a.title, a.period_start, a.period_end, a.source_filter, a.data_source]) : "";
+  const rowsKey = data ? JSON.stringify([a?.id, a?.status, data.rows]) : "";
   useEffect(() => {
     if (!a) return;
     setMeta({ title: a.title || "", period_start: a.period_start || "", period_end: a.period_end || "", source_filter: a.source_filter || "", data_source: a.data_source || "" });
+  }, [metaKey]);
+  useEffect(() => {
+    if (!data) return;
     setGrid(data.rows.length ? toGrid(data.rows) : [emptyRow()]);
     setPreview(null); setCsvText(null);
-  }, [a?.id, a?.updated_at, a?.status]);
+  }, [rowsKey]);
 
-  const run = async (fn: () => Promise<any>, after?: (r: any) => void) => {
-    setBusy(true); setErr({ error: null });
+  const run = async (at: At, fn: () => Promise<any>, after?: (r: any) => void) => {
+    setBusy(true); setErr({ at, error: null });
     try { const r = await fn(); after?.(r); await refetch(); onChanged(); }
-    catch (e: any) { setErr({ error: e.message, errors: e.data?.errors }); }
+    catch (e: any) { setErr({ at, error: e.message, errors: e.data?.errors }); }
     finally { setBusy(false); }
   };
 
   if (loadErr) return <ErrorList error={(loadErr as any).message} />;
   if (!a) return <p className="text-sm text-muted-foreground">Loading...</p>;
 
-  const saveMeta = () => run(() => api(`${base}/antibiograms/${id}`, { method: "PUT", json: meta }));
-  const saveGrid = () => run(() => api(`${base}/antibiograms/${id}/rows`, { method: "PUT", json: { rows: grid.filter((r) => r.organism || r.antimicrobial || r.tested || r.susceptible) } }));
+  const saveMeta = () => run("meta", () => api(`${base}/antibiograms/${id}`, { method: "PUT", json: meta }));
+  const saveGrid = () => run("grid", () => api(`${base}/antibiograms/${id}/rows`, { method: "PUT", json: { rows: grid.filter((r) => r.organism || r.antimicrobial || r.tested || r.susceptible) } }));
   const onFile = async (f: File | null) => {
     if (!f) return;
     const text = await f.text();
     setCsvText(text);
-    setBusy(true); setErr({ error: null });
+    setBusy(true); setErr({ at: "upload", error: null });
     try { setPreview(await api(`${base}/antibiograms/${id}/upload`, { method: "POST", json: { csv: text, preview: true } })); }
-    catch (e: any) { setPreview(null); setErr({ error: e.message, errors: e.data?.errors }); }
+    catch (e: any) { setPreview(null); setErr({ at: "upload", error: e.message, errors: e.data?.errors }); }
     finally { setBusy(false); }
   };
-  const confirmUpload = () => run(() => api(`${base}/antibiograms/${id}/upload`, { method: "POST", json: { csv: csvText } }), () => { setPreview(null); setCsvText(null); });
-  const doRelease = () => run(() => api(`${base}/antibiograms/${id}/release`, { method: "POST", json: { released_by_name: release.name, released_by_title: release.title } }), () => setRelease({ open: false, name: "", title: "" }));
-  const newVersion = () => run(() => api(`${base}/antibiograms/${id}/new-version`, { method: "POST" }), (r) => onOpen(r.id));
-  const del = () => { if (window.confirm("Delete this draft? Its totals are removed.")) run(() => api(`${base}/antibiograms/${id}`, { method: "DELETE" }), () => { qc.removeQueries({ queryKey: ["stewardship-abg", base, id] }); onOpen(null); }); };
+  const confirmUpload = () => run("upload", () => api(`${base}/antibiograms/${id}/upload`, { method: "POST", json: { csv: csvText } }), () => { setPreview(null); setCsvText(null); });
+  const doRelease = () => run("release", () => api(`${base}/antibiograms/${id}/release`, { method: "POST", json: { released_by_name: release.name, released_by_title: release.title } }), () => setRelease({ open: false, name: "", title: "" }));
+  const newVersion = () => run("top", () => api(`${base}/antibiograms/${id}/new-version`, { method: "POST" }), (r) => onOpen(r.id));
+  const del = () => { if (window.confirm("Delete this draft? Its totals are removed.")) run("top", () => api(`${base}/antibiograms/${id}`, { method: "DELETE" }), () => { qc.removeQueries({ queryKey: ["stewardship-abg", base, id] }); onOpen(null); }); };
   const excel = async () => {
-    setErr({ error: null });
+    setErr({ at: "top", error: null });
     try { const r = await api(`${base}/antibiograms/${id}/xlsx`, { method: "POST", json: {} }); downloadPdfToken(r.token, r.filename); }
-    catch (e: any) { setErr({ error: e.message }); }
+    catch (e: any) { setErr({ at: "top", error: e.message }); }
   };
   const setCell = (i: number, k: keyof GridRow, v: string) => setGrid((g) => g.map((r, j) => (j === i ? { ...r, [k]: v } : r)));
 
@@ -200,7 +211,7 @@ function AntibiogramEditor({ base, id, readOnly, onChanged, onOpen }: { base: st
         </div>
       </CardHeader>
       <CardContent className="space-y-5">
-        <ErrorList error={err.error} errors={err.errors} />
+        {errFor("top")}
 
         {canEdit && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
@@ -209,7 +220,7 @@ function AntibiogramEditor({ base, id, readOnly, onChanged, onOpen }: { base: st
             <Field label="Period ends"><input type="date" className={fieldClass} value={meta.period_end} onChange={(e) => setMeta({ ...meta, period_end: e.target.value })} /></Field>
             <Field label="Specimen sources"><Input value={meta.source_filter} placeholder="All sources" onChange={(e) => setMeta({ ...meta, source_filter: e.target.value })} /></Field>
             <Field label="Data source"><Input value={meta.data_source} placeholder="LIS antibiogram report" onChange={(e) => setMeta({ ...meta, data_source: e.target.value })} /></Field>
-            <div className="lg:col-span-5"><Button size="sm" variant="outline" onClick={saveMeta} disabled={busy}>Save details</Button></div>
+            <div className="lg:col-span-5 space-y-2" data-testid="abg-meta-form">{errFor("meta")}<Button size="sm" variant="outline" onClick={saveMeta} disabled={busy} data-testid="abg-meta-save">Save details</Button></div>
           </div>
         )}
 
@@ -218,6 +229,7 @@ function AntibiogramEditor({ base, id, readOnly, onChanged, onOpen }: { base: st
             <p className="text-sm font-medium flex items-center gap-1.5"><Upload size={14} style={{ color: TEAL }} />Upload the totals from the LIS antibiogram report (CSV)</p>
             <p className="text-xs text-muted-foreground">Columns: {UPLOAD_COLUMNS_HELP}. Totals only: the LIS removes repeat isolates from the same patient before export. A file with any other column, such as a patient name or record number, is refused.</p>
             <input type="file" accept=".csv,text/csv" onChange={(e) => onFile(e.target.files?.[0] ?? null)} data-testid="abg-csv-input" className="text-sm" />
+            {errFor("upload")}
             {preview && (
               <div className="space-y-2" data-testid="abg-upload-preview">
                 <p className="text-sm">{preview.row_count} rows read. Check the table, then save it. Saving replaces the totals below.</p>
@@ -261,6 +273,7 @@ function AntibiogramEditor({ base, id, readOnly, onChanged, onOpen }: { base: st
                 </tbody>
               </table>
             </div>
+            {errFor("grid")}
             <div className="flex gap-2">
               <Button size="sm" variant="outline" onClick={() => setGrid((g) => [...g, { ...emptyRow(), organism_group: g[g.length - 1]?.organism_group ?? "gram_negative", organism: g[g.length - 1]?.organism ?? "" }])}><Plus size={13} className="mr-1" />Add row</Button>
               <Button size="sm" style={{ backgroundColor: TEAL }} className="text-white" onClick={saveGrid} disabled={busy} data-testid="abg-grid-save">Save totals</Button>
@@ -285,6 +298,7 @@ function AntibiogramEditor({ base, id, readOnly, onChanged, onOpen }: { base: st
                   <Field label="Approved by (name)"><Input value={release.name} onChange={(e) => setRelease({ ...release, name: e.target.value })} /></Field>
                   <Field label="Title"><Input value={release.title} placeholder="Medical Director" onChange={(e) => setRelease({ ...release, title: e.target.value })} /></Field>
                 </div>
+                {errFor("release")}
                 <div className="flex gap-2">
                   <Button size="sm" style={{ backgroundColor: TEAL }} className="text-white" onClick={doRelease} disabled={busy || !release.name.trim() || !release.title.trim()} data-testid="abg-release-confirm">Release this version</Button>
                   <Button size="sm" variant="ghost" onClick={() => setRelease({ open: false, name: "", title: "" })}>Cancel</Button>
@@ -367,9 +381,11 @@ function CommitteeSection({ base, readOnly }: { base: string; readOnly: boolean 
   const { data, refetch } = useQuery<any>({ queryKey: ["stewardship-meetings", base], queryFn: () => api(`${base}/meetings`), retry: false });
   const [form, setForm] = useState({ meeting_date: labTodayIso(), lab_representative: "", minutes_link: "", notes: "" });
   const [actionForms, setActionForms] = useState<Record<number, { action: string; owner: string; due_date: string }>>({});
-  const [err, setErr] = useState<string | null>(null);
+  // The server's refusal shows on the form that sent it: "meeting" (the new meeting form) or the meeting id whose action form or row sent it.
+  const [err, setErr] = useState<{ at: string; error: string | null }>({ at: "", error: null });
   const today = labTodayIso();
-  const run = async (fn: () => Promise<any>) => { setErr(null); try { await fn(); await refetch(); } catch (e: any) { setErr(e.message); } };
+  const run = async (at: string, fn: () => Promise<any>) => { setErr({ at, error: null }); try { await fn(); await refetch(); } catch (e: any) { setErr({ at, error: e.message }); } };
+  const errFor = (at: string) => (err.at === at ? <ErrorList error={err.error} /> : null);
   const items: any[] = data?.items ?? [];
   return (
     <Card>
@@ -378,14 +394,14 @@ function CommitteeSection({ base, readOnly }: { base: string; readOnly: boolean 
         <p className="text-xs text-muted-foreground">Each meeting the laboratory attended, who represented it, a link to the minutes, and the action items it took on.</p>
       </CardHeader>
       <CardContent className="space-y-4">
-        <ErrorList error={err} />
+
         {!readOnly && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end" data-testid="meeting-form">
             <Field label="Meeting date"><input type="date" className={fieldClass} value={form.meeting_date} onChange={(e) => setForm({ ...form, meeting_date: e.target.value })} /></Field>
             <Field label="Laboratory representative"><Input value={form.lab_representative} onChange={(e) => setForm({ ...form, lab_representative: e.target.value })} /></Field>
             <Field label="Minutes link (optional)"><Input value={form.minutes_link} placeholder="https://" onChange={(e) => setForm({ ...form, minutes_link: e.target.value })} /></Field>
             <Field label="Notes (optional)"><Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></Field>
-            <div className="lg:col-span-4"><Button size="sm" style={{ backgroundColor: TEAL }} className="text-white" onClick={() => run(async () => { await api(`${base}/meetings`, { method: "POST", json: form }); setForm({ meeting_date: today, lab_representative: "", minutes_link: "", notes: "" }); })} data-testid="meeting-add"><Plus size={14} className="mr-1" />Log meeting</Button></div>
+            <div className="lg:col-span-4 space-y-2">{errFor("meeting")}<Button size="sm" style={{ backgroundColor: TEAL }} className="text-white" onClick={() => run("meeting", async () => { await api(`${base}/meetings`, { method: "POST", json: form }); setForm({ meeting_date: today, lab_representative: "", minutes_link: "", notes: "" }); })} data-testid="meeting-add"><Plus size={14} className="mr-1" />Log meeting</Button></div>
           </div>
         )}
         {items.length === 0 ? <p className="text-sm text-muted-foreground" data-testid="meeting-empty">No meetings logged yet.</p> : (
@@ -400,7 +416,7 @@ function CommitteeSection({ base, readOnly }: { base: string; readOnly: boolean 
                       {m.minutes_link && <a href={m.minutes_link} target="_blank" rel="noopener noreferrer" className="text-xs underline" style={{ color: TEAL }}>Minutes</a>}
                       {m.notes && <p className="text-xs text-muted-foreground">{m.notes}</p>}
                     </div>
-                    {!readOnly && <Button size="sm" variant="ghost" onClick={() => { if (window.confirm("Remove this meeting and its action items?")) run(() => api(`${base}/meetings/${m.id}`, { method: "DELETE" })); }} aria-label="Remove meeting"><Trash2 size={13} /></Button>}
+                    {!readOnly && <Button size="sm" variant="ghost" onClick={() => { if (window.confirm("Remove this meeting and its action items?")) run(`m${m.id}`, () => api(`${base}/meetings/${m.id}`, { method: "DELETE" })); }} aria-label="Remove meeting"><Trash2 size={13} /></Button>}
                   </div>
                   {m.actions.length > 0 && (
                     <ul className="space-y-1">
@@ -413,20 +429,21 @@ function CommitteeSection({ base, readOnly }: { base: string; readOnly: boolean 
                             {a.owner && <span className="text-muted-foreground">Owner: {a.owner}</span>}
                             {a.due_date && <span className="text-muted-foreground">Due {a.due_date}</span>}
                             {!readOnly && (a.status === "open"
-                              ? <Button size="sm" variant="outline" className="h-6 text-xs" onClick={() => run(() => api(`${base}/actions/${a.id}`, { method: "PUT", json: { status: "done", completed_on: today } }))}>Mark done</Button>
-                              : <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => run(() => api(`${base}/actions/${a.id}`, { method: "PUT", json: { status: "open" } }))}>Reopen</Button>)}
+                              ? <Button size="sm" variant="outline" className="h-6 text-xs" onClick={() => run(`m${m.id}`, () => api(`${base}/actions/${a.id}`, { method: "PUT", json: { status: "done", completed_on: today } }))}>Mark done</Button>
+                              : <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => run(`m${m.id}`, () => api(`${base}/actions/${a.id}`, { method: "PUT", json: { status: "open" } }))}>Reopen</Button>)}
                           </li>
                         );
                       })}
                     </ul>
                   )}
+                  {errFor(`m${m.id}`)}
                   {!readOnly && (
-                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 items-end">
+                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 items-end" data-testid={`action-form-${m.id}`}>
                       <Input className="h-8 text-xs sm:col-span-2" placeholder="Action item" value={af.action} onChange={(e) => setActionForms({ ...actionForms, [m.id]: { ...af, action: e.target.value } })} aria-label="Action item" />
                       <Input className="h-8 text-xs" placeholder="Owner" value={af.owner} onChange={(e) => setActionForms({ ...actionForms, [m.id]: { ...af, owner: e.target.value } })} aria-label="Owner" />
                       <div className="flex gap-2">
                         <input type="date" className={`${fieldClass} h-8 text-xs`} value={af.due_date} onChange={(e) => setActionForms({ ...actionForms, [m.id]: { ...af, due_date: e.target.value } })} aria-label="Due date" />
-                        <Button size="sm" variant="outline" className="h-8" onClick={() => run(async () => { await api(`${base}/meetings/${m.id}/actions`, { method: "POST", json: af }); setActionForms({ ...actionForms, [m.id]: { action: "", owner: "", due_date: "" } }); })} aria-label="Add action item"><Plus size={13} /></Button>
+                        <Button size="sm" variant="outline" className="h-8" onClick={() => run(`m${m.id}`, async () => { await api(`${base}/meetings/${m.id}/actions`, { method: "POST", json: af }); setActionForms({ ...actionForms, [m.id]: { action: "", owner: "", due_date: "" } }); })} aria-label="Add action item"><Plus size={13} /></Button>
                       </div>
                     </div>
                   )}

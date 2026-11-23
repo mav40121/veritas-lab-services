@@ -11,6 +11,54 @@
 // PENDING CLSI M39 ED5 (2022): the defaults below (30 isolates, a 12-month period, the first-isolate note, whole-percent
 // rounding, intermediate not counted as susceptible) are lab settings, not claims. They are to be checked against the purchased
 // M39 before release to customers (Michael is buying it, Decision 14 = 2). Nothing on screen says "per CLSI M39" until then.
+//
+// Every text in every stewardship write also goes through the patient-information refusal (shared/phiPatterns.ts detectPhi),
+// as tissue, the stain log and the compliance digest do: 400 PHI_REFUSED with the field and what it looks like, nothing stored.
+// The upload is checked cell by cell (findCsvPhi), so the message names the line and column, never the text.
+
+import { detectPhi } from "./phiPatterns";
+
+/** The first string anywhere in a request body that looks like patient information: which field, and what it looks like. Never the text. */
+export function findStewardshipPhi(body: unknown, path = "", skipKeys: readonly string[] = []): { field: string; labels: string[] } | null {
+  if (typeof body === "string") {
+    const labels = detectPhi(body);
+    return labels.length ? { field: path, labels } : null;
+  }
+  if (Array.isArray(body)) {
+    for (let i = 0; i < body.length; i++) { const hit = findStewardshipPhi(body[i], `${path}[${i}]`, skipKeys); if (hit) return hit; }
+    return null;
+  }
+  if (body && typeof body === "object") {
+    for (const [k, v] of Object.entries(body as Record<string, unknown>)) {
+      if (!path && skipKeys.includes(k)) continue;
+      const hit = findStewardshipPhi(v, path ? `${path}.${k}` : k, skipKeys);
+      if (hit) return hit;
+    }
+  }
+  return null;
+}
+
+/** The first cell of an uploaded totals file that looks like patient information, as "line N, <column header>". */
+export function findCsvPhi(text: string): { field: string; labels: string[] } | null {
+  const table = parseCsvText(text);
+  const header = table[0] ?? [];
+  for (let r = 0; r < table.length; r++) {
+    for (let c = 0; c < table[r].length; c++) {
+      const labels = detectPhi(table[r][c]);
+      if (labels.length) {
+        const col = String(header[c] ?? `column ${c + 1}`).replace(/^﻿/, "").trim() || `column ${c + 1}`;
+        return { field: r === 0 ? `line 1, the header` : `line ${r + 1}, ${col.toLowerCase()}`, labels };
+      }
+    }
+  }
+  return null;
+}
+
+/** The refusal in plain words: what it looks like, never the text itself. */
+export function stewardshipPhiMessage(labels: string[]): string {
+  const what = labels.map((l) => l.toLowerCase().replace("labeled ", "")).join(" and ");
+  return `This looks like patient information (${what}). Stewardship records never hold a patient's details. Remove it and save again.`;
+}
 
 export type OrganismGroup = "gram_negative" | "gram_positive" | "other";
 export type BelowThresholdMode = "suppress" | "flag";

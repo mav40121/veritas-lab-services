@@ -244,6 +244,60 @@ async function main() {
   const dm = await call("DELETE", `${B(labA)}/meetings/${M1}`, undefined, OA.token);
   check("8h. removing a meeting removes its actions", dm.status === 200 && cnt("SELECT COUNT(*) AS n FROM stewardship_actions WHERE meeting_id = ?", M1) === 0);
 
+  // ── 10. Patient information is refused on every write (shared/phiPatterns.ts detectPhi; 400 PHI_REFUSED, field, labels) ──
+  const phiRefused = async (r: Response, field: string | RegExp, label: string) => {
+    const b = await j(r);
+    const fieldOk = typeof field === "string" ? b.field === field : field.test(String(b.field || ""));
+    return { ok: r.status === 400 && b.code === "PHI_REFUSED" && fieldOk && Array.isArray(b.labels) && b.labels.includes(label) && /patient information/.test(b.error || ""), b };
+  };
+  const nAbg = () => cnt("SELECT COUNT(*) AS n FROM stewardship_antibiograms WHERE lab_id = ?", labA);
+  const nMeet = () => cnt("SELECT COUNT(*) AS n FROM stewardship_meetings WHERE lab_id = ?", labA);
+  const nAct = () => cnt("SELECT COUNT(*) AS n FROM stewardship_actions WHERE lab_id = ?", labA);
+  const rowsOf = (id: number) => JSON.stringify(sqlite.prepare("SELECT organism, antimicrobial, tested, susceptible FROM stewardship_antibiogram_rows WHERE antibiogram_id = ? ORDER BY sort_order, id").all(id));
+  const abg0 = nAbg();
+  for (const [key, field, value, label] of [
+    ["10a", "title", "Patient Name: Made Up", "Labeled patient name"],
+    ["10b", "source_filter", "MRN 12345678", "Medical record number"],
+    ["10c", "data_source", "DOB 01/02/1960", "Date of birth"],
+  ] as const) {
+    const body: any = { title: "Made-up PHI check", period_start: "2025-01-01", period_end: "2025-12-31", [field]: value };
+    const r = await phiRefused(await call("POST", `${B(labA)}/antibiograms`, body, OA.token), field, label);
+    check(`${key}. a new antibiogram's ${field} with a ${label.toLowerCase()} is refused and nothing is stored`, r.ok && nAbg() === abg0, JSON.stringify(r.b));
+  }
+  const a2Title = (sqlite.prepare("SELECT title FROM stewardship_antibiograms WHERE id = ?").get(A2) as any).title;
+  const r10d = await phiRefused(await call("PUT", G(A2), { title: "MRN: 7654321" }, OA.token), "title", "Medical record number");
+  check("10d. editing a draft's title to a record number is refused, the title unchanged", r10d.ok && (sqlite.prepare("SELECT title FROM stewardship_antibiograms WHERE id = ?").get(A2) as any).title === a2Title, JSON.stringify(r10d.b));
+  const a2Rows = rowsOf(A2);
+  const r10e = await phiRefused(await call("PUT", `${G(A2)}/rows`, { rows: [{ organism: "Patient name: Made Up", antimicrobial: "Ampicillin", tested: 40, susceptible: 20 }] }, OA.token), "rows[0].organism", "Labeled patient name");
+  check("10e. a grid organism holding a patient name is refused, the rows unchanged", r10e.ok && rowsOf(A2) === a2Rows, JSON.stringify(r10e.b));
+  const r10f = await phiRefused(await call("POST", `${G(A2)}/upload`, { csv: "Organism,Antimicrobial,Tested,Susceptible\nMRN 12345678,Ampicillin,40,20\n" }, OA.token), /line 2.*organism/i, "Medical record number");
+  check("10f. an uploaded organism cell holding a record number is refused by line and column, the rows unchanged", r10f.ok && rowsOf(A2) === a2Rows, JSON.stringify(r10f.b));
+  const r10g = await phiRefused(await call("POST", `${G(A2)}/upload`, { csv: "Organism,Antimicrobial,Tested,Susceptible\nEscherichia coli,SSN 123-45-6789,40,20\n", preview: true }, OA.token), /line 2.*antimicrobial/i, "Social Security number");
+  check("10g. an uploaded antimicrobial cell holding an SSN is refused, on preview too", r10g.ok && rowsOf(A2) === a2Rows, JSON.stringify(r10g.b));
+  const r10h = await phiRefused(await call("POST", `${G(A2)}/release`, { released_by_name: "Patient Name: Made Up", released_by_title: "Medical Director" }, OA.token), "released_by_name", "Labeled patient name");
+  const r10h2 = await phiRefused(await call("POST", `${G(A2)}/release`, { released_by_name: "Dr. Made Up", released_by_title: "MRN 1234567" }, OA.token), "released_by_title", "Medical record number");
+  check("10h. a release's name or title holding patient information is refused, the draft still a draft", r10h.ok && r10h2.ok && (sqlite.prepare("SELECT status FROM stewardship_antibiograms WHERE id = ?").get(A2) as any).status === "draft", JSON.stringify([r10h.b, r10h2.b]));
+  const noteBefore = (sqlite.prepare("SELECT first_isolate_note AS n FROM stewardship_settings WHERE lab_id = ?").get(labA) as any)?.n ?? null;
+  const r10i = await phiRefused(await call("PUT", `${B(labA)}/settings`, { first_isolate_note: "As for DOB 1/2/1960" }, OA.token), "first_isolate_note", "Date of birth");
+  check("10i. a first-isolate note holding a date of birth is refused, the setting unchanged", r10i.ok && ((sqlite.prepare("SELECT first_isolate_note AS n FROM stewardship_settings WHERE lab_id = ?").get(labA) as any)?.n ?? null) === noteBefore, JSON.stringify(r10i.b));
+  const meet0 = nMeet();
+  const r10j = await phiRefused(await call("POST", `${B(labA)}/meetings`, { meeting_date: r0.today, lab_representative: "Patient name: Made Up" }, OA.token), "lab_representative", "Labeled patient name");
+  const r10k = await phiRefused(await call("POST", `${B(labA)}/meetings`, { meeting_date: r0.today, lab_representative: "M. Tech", notes: "Discussed MRN 1234567" }, OA.token), "notes", "Medical record number");
+  const r10k2 = await phiRefused(await call("POST", `${B(labA)}/meetings`, { meeting_date: r0.today, lab_representative: "M. Tech", minutes_link: "https://example.com/minutes?note=SSN 123-45-6789" }, OA.token), "minutes_link", "Social Security number");
+  check("10j. a new meeting's representative, notes or minutes link holding patient information is refused, nothing stored", r10j.ok && r10k.ok && r10k2.ok && nMeet() === meet0, JSON.stringify([r10j.b, r10k.b, r10k2.b]));
+  const M2 = (await j(await call("POST", `${B(labA)}/meetings`, { meeting_date: r0.today, lab_representative: "M. Tech", notes: "Reviewed the patient-care antibiogram and the cascade rules" }, OA.token))).id as number;
+  check("10k. clean text that mentions patients (no name, number or date of birth) still saves", !!M2 && nMeet() === meet0 + 1);
+  const r10l = await phiRefused(await call("PUT", `${B(labA)}/meetings/${M2}`, { notes: "MRN: 99887766" }, OA.token), "notes", "Medical record number");
+  check("10l. editing a meeting's notes to a record number is refused, the notes unchanged", r10l.ok && /patient-care antibiogram/.test((sqlite.prepare("SELECT notes FROM stewardship_meetings WHERE id = ?").get(M2) as any).notes), JSON.stringify(r10l.b));
+  const act0 = nAct();
+  const r10m = await phiRefused(await call("POST", `${B(labA)}/meetings/${M2}/actions`, { action: "Call about DOB 01/02/1960", owner: "M. Tech" }, OA.token), "action", "Date of birth");
+  const r10n = await phiRefused(await call("POST", `${B(labA)}/meetings/${M2}/actions`, { action: "Send the antibiogram", owner: "Pt name: Made Up" }, OA.token), "owner", "Labeled patient name");
+  check("10m. a new action item's text or owner holding patient information is refused, nothing stored", r10m.ok && r10n.ok && nAct() === act0, JSON.stringify([r10m.b, r10n.b]));
+  const ACT2 = (await j(await call("POST", `${B(labA)}/meetings/${M2}/actions`, { action: "Send the antibiogram to pharmacy", owner: "M. Tech" }, OA.token))).id as number;
+  const r10o = await phiRefused(await call("PUT", `${B(labA)}/actions/${ACT2}`, { action: "SSN 123-45-6789 follow-up" }, OA.token), "action", "Social Security number");
+  check("10o. editing an action item to an SSN is refused, the text unchanged", r10o.ok && (sqlite.prepare("SELECT action FROM stewardship_actions WHERE id = ?").get(ACT2) as any).action === "Send the antibiogram to pharmacy", JSON.stringify(r10o.b));
+  await call("DELETE", `${B(labA)}/meetings/${M2}`, undefined, OA.token);
+
   // ── 9. Reach ───────────────────────────────────────────────────────────
   for (const [name, u] of [["a view-only seat", VIEWER], ["a Staff login", STAFF], ["another lab's owner", OB]] as const) {
     const g = await call("GET", `${B(labA)}/antibiograms`, undefined, u.token);

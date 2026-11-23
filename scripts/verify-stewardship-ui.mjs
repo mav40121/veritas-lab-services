@@ -40,7 +40,7 @@ const labId = (await call("POST", "/api/admin/provision-demo-lab", { secret: ADM
 const scratch = (fn) => { const d = new Database(process.env.SCRATCH_DB); try { return fn(d); } finally { d.close(); } };
 scratch((d) => {
   d.prepare("UPDATE users SET has_completed_onboarding = 1, onboarding_seen = 1 WHERE email = ?").run(ownerEmail);
-  d.prepare("UPDATE labs SET has_completed_onboarding = 1, clia_number = '99D9990081' WHERE id = ?").run(labId);
+  d.prepare("UPDATE labs SET has_completed_onboarding = 1, clia_number = ? WHERE id = ?").run(`99D${String(stamp).slice(-7)}`, labId); // unique per run: the scratch DB can be reused
 });
 check("made-up lab and owner", !!labId && !!owner.token);
 const csvDir = fs.mkdtempSync(path.join(os.tmpdir(), "steward-ui-"));
@@ -83,11 +83,16 @@ try {
   await tid(page, "abg-new").click();
   const form = tid(page, "abg-new-form");
   const inputs = form.locator("input");
-  await inputs.nth(0).fill("Made-up 2025 antibiogram");
+  await inputs.nth(0).fill("Patient Name: Made Up");
   await inputs.nth(1).fill("2025-01-01");
   await inputs.nth(2).fill("2025-12-31");
   await inputs.nth(3).fill("All sources");
   await inputs.nth(4).fill("Made-up LIS report");
+  await tid(page, "abg-create").click();
+  await form.getByTestId("stewardship-error").waitFor({ timeout: 15000 });
+  check("2a. a title holding a patient name is refused on the new-antibiogram form itself, nothing created", /looks like patient information \(patient name\)/.test(await form.getByTestId("stewardship-error").innerText()) && (await tid(page, "antibiogram-editor").count()) === 0);
+  await shot(form, "phi-new-antibiogram");
+  await inputs.nth(0).fill("Made-up 2025 antibiogram");
   await tid(page, "abg-create").click();
   await tid(page, "antibiogram-editor").waitFor({ timeout: 15000 });
   check("2. the draft opens in the editor", (await tid(page, "antibiogram-editor").innerText()).includes("Made-up 2025 antibiogram"));
@@ -109,10 +114,30 @@ try {
   const tableText = await tid(page, "antibiogram-editor").getByTestId("antibiogram-table").last().innerText();
   check("4b. the saved table: 53 and 88 for E. coli, 58 and 100 for S. aureus, * for the 18-isolate cell", /53/.test(tableText) && /88/.test(tableText) && /58/.test(tableText) && /100/.test(tableText) && /\*/.test(tableText) && /fewer than 30/.test(tableText), tableText);
   await shot(tid(page, "antibiogram-editor"), "draft-editor");
+  const gridRows = await tid(page, "abg-grid").locator("tbody tr").count();
+  const firstOrg = await tid(page, "abg-grid").getByLabel("Organism, row 1").inputValue();
+  check("4b2. the typed grid now holds the 5 uploaded rows (it refills from what was saved, even in the same second)", gridRows === 5 && firstOrg === "Escherichia coli", `${gridRows} rows, first "${firstOrg}"`);
+
+  // 4c. A grid organism holding a record number: refused under the grid, the saved totals unchanged
+  const grid = tid(page, "abg-grid");
+  await grid.getByLabel("Organism, row 1").fill("MRN 12345678");
+  await tid(page, "abg-grid-save").click();
+  const gridErr = tid(page, "antibiogram-editor").getByTestId("stewardship-error");
+  await gridErr.waitFor({ timeout: 15000 });
+  const gridErrBox = await gridErr.boundingBox(), gridBox = await grid.boundingBox(), saveBox = await tid(page, "abg-grid-save").boundingBox();
+  check("4c. a grid organism holding a record number is refused just under the grid, above its Save totals", /medical record number/.test(await gridErr.innerText()) && gridErrBox && gridBox && saveBox && gridErrBox.y > gridBox.y && gridErrBox.y < saveBox.y);
+  await shot(tid(page, "antibiogram-editor"), "phi-grid");
+  await grid.getByLabel("Organism, row 1").fill("Escherichia coli");
 
   // 5. Release locks it
   await tid(page, "abg-release-open").click();
   const rf = tid(page, "abg-release-form");
+  await rf.locator("input").nth(0).fill("Patient Name: Made Up");
+  await rf.locator("input").nth(1).fill("Medical Director");
+  await tid(page, "abg-release-confirm").click();
+  await rf.getByTestId("stewardship-error").waitFor({ timeout: 15000 });
+  check("5-. a release name holding a patient name is refused inside the release form, still a draft", /patient information/.test(await rf.getByTestId("stewardship-error").innerText()) && (await tid(page, "released-line").count()) === 0);
+  await shot(rf, "phi-release");
   await rf.locator("input").nth(0).fill("Dr. Made Up");
   await rf.locator("input").nth(1).fill("Medical Director");
   await tid(page, "abg-release-confirm").click();
@@ -133,9 +158,27 @@ try {
   await mf.waitFor({ timeout: 15000 });
   await mf.locator("input").nth(1).fill("M. Tech, Microbiology");
   await mf.locator("input").nth(2).fill("https://example.com/made-up-minutes");
+  await mf.locator("input").nth(3).fill("Discussed MRN 1234567");
+  await tid(page, "meeting-add").click();
+  await mf.getByTestId("stewardship-error").waitFor({ timeout: 15000 });
+  check("7-. meeting notes holding a record number are refused inside the meeting form, nothing logged", /medical record number/.test(await mf.getByTestId("stewardship-error").innerText()) && (await tid(page, "meeting-empty").isVisible()));
+  await shot(mf, "phi-meeting");
+  await mf.locator("input").nth(3).fill("Reviewed the made-up antibiogram");
   await tid(page, "meeting-add").click();
   await tid(page, "meeting-list").waitFor({ timeout: 15000 });
   check("7. a meeting logs and lists", (await tid(page, "meeting-list").innerText()).includes("M. Tech, Microbiology"));
+  const af = page.locator('[data-testid^="action-form-"]').first();
+  await af.getByLabel("Action item", { exact: true }).fill("Send the antibiogram to pharmacy");
+  await af.getByLabel("Owner", { exact: true }).fill("Pt name: Made Up");
+  await af.getByLabel("Add action item").click();
+  const actErr = tid(page, "meeting-list").getByTestId("stewardship-error");
+  await actErr.waitFor({ timeout: 15000 });
+  check("7a. an action owner holding a patient name is refused in that meeting's block, not on the meeting form", /patient information/.test(await actErr.innerText()) && (await mf.getByTestId("stewardship-error").count()) === 0);
+  await shot(tid(page, "meeting-list"), "phi-action");
+  await af.getByLabel("Owner", { exact: true }).fill("M. Tech");
+  await af.getByLabel("Add action item").click();
+  await tid(page, "meeting-list").getByText("Send the antibiogram to pharmacy").waitFor({ timeout: 15000 });
+  check("7b. the corrected action item saves and the message clears", (await tid(page, "meeting-list").getByTestId("stewardship-error").count()) === 0);
   await shot(page, "committee");
 
   // 8. Readiness
