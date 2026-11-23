@@ -44,6 +44,23 @@ const VLS_BUSINESS = "Veritas Lab Services business records, not the lab's recor
 const REFERENCE = "Reference data that is the same for every lab.";
 const ORG = "Organization-level (system accounts); belongs to the organization, not one lab.";
 
+// A row whose parent column can be empty must not be scoped as a child: the empty ones would belong to nobody and drop out
+// (BUG-184: every quiz taken on a staff login, and every scan of an unknown barcode). tests/integration/export-all.test.ts
+// (1b) fails on a child table whose column can be empty.
+// A quiz attempt is the lab's when its competency record is, or by the Quiz Scores page's rule (server/quizScores.ts): its
+// assignment's lab, else the competency employee's, else the quiz's; with none of those, the quiz owner's.
+const QUIZ_RESULT_LAB = `COALESCE(
+  (SELECT qa.lab_id FROM competency_quiz_assignments qa WHERE qa.completed_result_id = competency_quiz_results.id),
+  (SELECT ce.lab_id FROM competency_employees ce WHERE ce.id = competency_quiz_results.employee_id),
+  (SELECT q.lab_id FROM competency_quizzes q WHERE q.id = competency_quiz_results.quiz_id))`;
+const QUIZ_RESULTS_WHERE = `${QUIZ_RESULT_LAB} = @labId
+  OR (${QUIZ_RESULT_LAB} IS NULL AND quiz_id IN (SELECT id FROM competency_quizzes WHERE user_id = @ownerUserId))
+  OR assessment_id IN (SELECT a.id FROM competency_assessments a JOIN competency_programs p ON p.id = a.program_id
+    WHERE p.lab_id = @labId OR (p.lab_id IS NULL AND p.user_id = @ownerUserId))`;
+// A scan of an unknown barcode has no item and no lab; it goes with the owner's account, as rows from before multi-lab do.
+const SCAN_EVENTS_WHERE = `inventory_item_id IN (SELECT id FROM inventory_items WHERE lab_id = @labId OR (lab_id IS NULL AND account_id = @ownerUserId))
+  OR (inventory_item_id IS NULL AND account_id = @ownerUserId)`;
+
 export const EXPORT_TABLES: Record<string, ExportTable> = {
   // Lab and members
   labs: { module: "Lab and members", scope: { kind: "sql", where: "id = @labId" } },
@@ -96,7 +113,7 @@ export const EXPORT_TABLES: Record<string, ExportTable> = {
   competency_element_documents: child("VeritaComp", "assessment_id", "competency_assessments"),
   competency_method_groups: child("VeritaComp", "program_id", "competency_programs"),
   competency_program_not_applicable: child("VeritaComp", "program_id", "competency_programs"),
-  competency_quiz_results: child("VeritaComp", "assessment_id", "competency_assessments"),
+  competency_quiz_results: { module: "VeritaComp", scope: { kind: "sql", where: QUIZ_RESULTS_WHERE } },
   competency_employees: labOrOwner("VeritaComp"),
   competency_quizzes: labOrOwner("VeritaComp"),
   competency_quiz_assignments: lab("VeritaComp"),
@@ -227,7 +244,7 @@ export const EXPORT_TABLES: Record<string, ExportTable> = {
   inventory_monthly_snapshots: lab("VeritaStock"),
   inventory_lot_use: lab("VeritaStock"),
   inventory_transfers: { module: "VeritaStock", scope: { kind: "sql", where: "from_lab_id = @labId OR to_lab_id = @labId" } },
-  scan_events: child("VeritaStock", "inventory_item_id", "inventory_items"),
+  scan_events: { module: "VeritaStock", scope: { kind: "sql", where: SCAN_EVENTS_WHERE } },
   stock_vendors: lab("VeritaStock"),
   stock_vendor_contacts: lab("VeritaStock"),
   stock_recalls: lab("VeritaStock"),

@@ -13,6 +13,7 @@
 //      files are untouched; references from rows that stay are cleared; the stored files and folders go; one audit row
 //      of counts with no names; foreign keys check clean; secure_delete is put back
 //   7. a failed apply rolls back whole
+//   6b. a customer whose staff took quizzes on their own sign-in deletes whole, and scans of an unknown barcode go too (BUG-184)
 //   8. purging by organization takes every lab in it
 // Run: rm -f .tmp-customerpurge.db && DB_PATH=.tmp-customerpurge.db JWT_SECRET=test-jwt-secret ADMIN_SECRET=test-admin-secret STRIPE_SECRET_KEY=sk_test_dummy STRIPE_WEBHOOK_SECRET=whsec_dummy npx tsx tests/integration/customer-purge.test.ts
 import http from "node:http";
@@ -124,6 +125,17 @@ async function main() {
   insert("nightly_snapshots", { user_id: aOwner, snapshot_date: "2026-11-12" });
   insert("nightly_snapshots", { user_id: bOwner, snapshot_date: "2026-11-12" });
 
+  // BUG-184: a quiz taken on a staff login (no competency record) and a scan of an unknown barcode, in each customer.
+  const quizFor = (labId: number, owner: number) => {
+    const program = insert("competency_programs", { lab_id: labId, user_id: owner, name: "Made-up program" });
+    const quizId = insert("competency_quizzes", { lab_id: labId, user_id: owner, program_id: program, title: "Made-up quiz" });
+    const resultId = insert("competency_quiz_results", { assessment_id: null, quiz_id: quizId, employee_id: 0 });
+    insert("competency_quiz_assignments", { quiz_id: quizId, lab_id: labId, completed_result_id: resultId, staff_employee_id: labId === A1 ? aEmp : bEmp });
+    insert("scan_events", { account_id: owner, inventory_item_id: null, user_id: owner, action: "unknown_barcode" });
+    return resultId;
+  };
+  const aResult = quizFor(A1, aOwner), bResult = quizFor(B1, bOwner);
+
   const fkProblems = () => (sqlite.prepare("PRAGMA foreign_key_check").all() as any[]).length;
   check("setup: the made-up data has no foreign key problems", fkProblems() === 0, JSON.stringify(sqlite.prepare("PRAGMA foreign_key_check").all().slice(0, 5)));
 
@@ -186,7 +198,7 @@ async function main() {
     check("4. ... it names what Veritas keeps for these people", p.retainedForPeople?.terms_acceptances?.rows === 1 && p.retainedForPeople?.newsletter_subscribers?.rows === 1 && p.retainedForPeople?.invoice_requests?.rows === 1, JSON.stringify(p.retainedForPeople));
     check("4. ... three stored files and the labs' folders", p.files?.count === 3 && p.files?.folders === 4, JSON.stringify(p.files));
     check("4. ... the confirm phrase and that applying is off here", p.confirmPhrase === `DELETE CUSTOMER owner-${aOwner}` && p.applyEnabled === false, `${p.confirmPhrase} ${p.applyEnabled}`);
-    const want: Record<string, number> = { labs: 2, users: 3, studies: 2, staff_labs: 1, staff_employees: 1, staff_roles: 1, policy_documents: 1, policy_versions: 1, pi_departments: 1, audit_log: 1, organizations: 1, organization_members: 2, nightly_snapshots: 1, user_sessions: 1, user_mfa: 1, password_history: 1, inventory_transfers: 1 };
+    const want: Record<string, number> = { labs: 2, users: 3, studies: 2, staff_labs: 1, staff_employees: 1, staff_roles: 1, policy_documents: 1, policy_versions: 1, pi_departments: 1, audit_log: 1, organizations: 1, organization_members: 2, nightly_snapshots: 1, user_sessions: 1, user_mfa: 1, password_history: 1, inventory_transfers: 1, competency_quizzes: 1, competency_quiz_results: 1, competency_quiz_assignments: 1, scan_events: 1 };
     const wrong = Object.entries(want).filter(([t, n]) => p.rowsByTable?.[t] !== n);
     check("4. ... the rows by table are the customer's", wrong.length === 0, JSON.stringify(wrong.map(([t, n]) => `${t}: want ${n} got ${p.rowsByTable?.[t]}`)));
 
@@ -220,6 +232,9 @@ async function main() {
     const identity = new Set(["users", "lab_members", "user_seats", "user_sessions", "organization_members"]);
     const bDiff = Object.keys({ ...bPlanBefore.rowsByTable, ...bPlanAfter.rowsByTable }).filter((t) => !identity.has(t) && bPlanBefore.rowsByTable[t] !== bPlanAfter.rowsByTable[t]);
     check("6. ... the other customer's records are all still there", bDiff.length === 0 && exists("studies", bStudy) && exists("studies", bLegacy) && exists("pi_departments", bDept) && exists("audit_log", bAudit) && exists("labs", B1), JSON.stringify(bDiff));
+    check("6b. the customer's quiz attempts and unknown-barcode scans are gone; the other customer's stay",
+      !exists("competency_quiz_results", aResult) && exists("competency_quiz_results", bResult)
+      && !sqlite.prepare("SELECT 1 FROM scan_events WHERE account_id = ?").get(aOwner) && !!sqlite.prepare("SELECT 1 FROM scan_events WHERE account_id = ?").get(bOwner));
     const gone = [aOwner, aStaff, aTech].filter((u) => exists("users", u));
     check("6. ... the customer's people are gone, with their sign-in rows", gone.length === 0 && !sqlite.prepare("SELECT 1 FROM user_sessions WHERE user_id = ?").get(aStaff) && !sqlite.prepare("SELECT 1 FROM user_mfa WHERE user_id = ?").get(aTech), JSON.stringify(gone));
     const sharedRow = sqlite.prepare("SELECT lab_id, default_lab_id FROM users WHERE id = ?").get(shared) as any;
