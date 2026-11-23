@@ -40,6 +40,9 @@ type Sqlite = any;
 
 const IN = (p: string) => `IN (SELECT value FROM json_each(@${p}))`;
 
+// The customer's rows of a labOrOwner table, as purgeRule writes it.
+const LAB_OR_OWNER = (ownerColumn: string) => `(lab_id ${IN("labs")} OR (lab_id IS NULL AND "${ownerColumn}" ${IN("accounts")}))`;
+
 export type PurgeRule =
   | { kind: "delete"; where: string }
   | { kind: "retain"; reason: string };
@@ -60,6 +63,13 @@ export const PURGE_OVERRIDES: Record<string, PurgeRule> = {
   user_seats: del(`lab_id ${IN("labs")} OR owner_user_id ${IN("accounts")} OR seat_user_id ${IN("people")}`),
   staff_labs: del(`id ${IN("staffLabs")}`),
   inventory_transfers: del(`from_lab_id ${IN("labs")} OR to_lab_id ${IN("labs")}`),
+  // BUG-184: an attempt goes when its quiz, its record, its assignment or its person does (its quiz_id can't be cleared), and
+  // a scan of an unknown barcode goes with the account it was made under.
+  competency_quiz_results: del(`quiz_id IN (SELECT id FROM competency_quizzes WHERE ${LAB_OR_OWNER("user_id")})
+    OR assessment_id IN (SELECT a.id FROM competency_assessments a WHERE a.program_id IN (SELECT id FROM competency_programs WHERE ${LAB_OR_OWNER("user_id")}))
+    OR id IN (SELECT completed_result_id FROM competency_quiz_assignments WHERE lab_id ${IN("labs")})
+    OR employee_id IN (SELECT id FROM competency_employees WHERE ${LAB_OR_OWNER("user_id")})`),
+  scan_events: del(`account_id ${IN("accounts")} OR inventory_item_id IN (SELECT id FROM inventory_items WHERE ${LAB_OR_OWNER("account_id")})`),
 };
 
 /** A rule for every table the export leaves out. */
@@ -115,7 +125,7 @@ export function purgeRule(table: string, depth = 0): PurgeRule | null {
   const s = spec.scope;
   switch (s.kind) {
     case "lab": return del(`lab_id ${IN("labs")}`);
-    case "labOrOwner": return del(`(lab_id ${IN("labs")} OR (lab_id IS NULL AND "${s.ownerColumn}" ${IN("accounts")}))`);
+    case "labOrOwner": return del(LAB_OR_OWNER(s.ownerColumn));
     case "owner": return del(`"${s.ownerColumn}" ${IN("accounts")}`);
     case "staffLab": return del(`lab_id ${IN("staffLabs")}`);
     case "child": {

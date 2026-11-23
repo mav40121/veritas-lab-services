@@ -5,6 +5,7 @@
 //   2. the owner of a CANCELLED lab gets a zip: Index, records workbooks, JSON, stored files, reports (BUG-067)
 //   3. only this lab's rows: another lab's study, and staff rows whose staff-lab id collides with this lab's id,
 //      stay out; rows saved before multi-lab support under the owner's account are in
+//   3f-3h. quiz attempts not tied to a competency record, and scans of an unknown barcode, are in their own lab's zip only (BUG-184)
 //   4. no sign-in secrets anywhere in the zip (password hashes, invite tokens, also inside audit JSON)
 //   5. a plan-gated report is in the zip, while the same route still refuses the owner outside the export job
 //      and refuses a request carrying a wrong job secret
@@ -26,6 +27,7 @@ import { createRequire } from "node:module";
 import jwt from "jsonwebtoken";
 import { registerRoutes } from "../../server/routes";
 import { db } from "../../server/db";
+import { EXPORT_TABLES } from "../../server/exportAllTables";
 import { unclassifiedTables, runWeeklyExports, setWeeklyExportMailerForTest, cleanupExports, zipPathFor } from "../../server/exportAll";
 import { registerExportSecret, revokeExportSecret, exportAllMiddleware, exportAllPlanBypass } from "../../server/exportAllContext";
 import { resolveVersionFilePath } from "../../server/veritapolicyApproval";
@@ -68,6 +70,11 @@ async function main() {
     const missing = unclassifiedTables(sqlite);
     check("1. every table is classified for the export", missing.length === 0, missing.join(", ") || "all classified");
 
+    // A child row with an empty parent column belongs to nobody and would drop out of the export (BUG-184).
+    const emptyable = Object.entries(EXPORT_TABLES).filter(([t, spec]) => spec.scope.kind === "child"
+      && (sqlite.prepare(`PRAGMA table_info("${t}")`).all() as any[]).some((c) => c.name === (spec.scope as any).column && !c.notnull)).map(([t]) => t);
+    check("1b. no child table's parent column can be empty", emptyable.length === 0, emptyable.join(", ") || "none");
+
     const A = await register("a"), B = await register("b"), C = await register("c"), T = await register("t");
     const LA = await provision(A.email, "IT Export Lab A");
     const LB = await provision(B.email, "IT Export Lab B");
@@ -100,6 +107,21 @@ async function main() {
     const ce = Number(sqlite.prepare("INSERT INTO competency_employees (user_id, name, status, lab_id, created_at) VALUES (?, 'Pat Alpha', 'active', ?, ?)").run(A.id, LA, now).lastInsertRowid);
     const asmt = Number(sqlite.prepare("INSERT INTO competency_assessments (program_id, employee_id, assessment_type, assessment_date, status, created_at) VALUES (?, ?, 'initial', '2026-10-01', 'draft', ?)").run(prog, ce, now).lastInsertRowid);
     sqlite.prepare("INSERT INTO competency_assessment_items (assessment_id, method_number, element_number, el1_specimen_id, el1_observer_initials) VALUES (?, 1, 1, 'ACC-A-77', 'TS')").run(asmt);
+    // Quiz attempts with no competency record (BUG-184): one taken on a staff login (tied to its assignment), one an evaluator
+    // gave, one on an older quiz with no lab, and one on a record; lab B holds one of its own. Scans of an unknown barcode.
+    const quiz = (uid: number, lab: number | null, title: string) => Number(sqlite.prepare("INSERT INTO competency_quizzes (user_id, lab_id, title, questions, created_at) VALUES (?, ?, ?, '[]', ?)").run(uid, lab, title, now).lastInsertRowid);
+    const result = (q: number, employee: number, score: number, assessment: number | null = null) => Number(sqlite.prepare("INSERT INTO competency_quiz_results (assessment_id, quiz_id, employee_id, answers, score, passed, date_taken, created_at) VALUES (?, ?, ?, '[]', ?, 1, '2026-10-01', ?)").run(assessment, q, employee, score, now).lastInsertRowid);
+    const assigned = (q: number, lab: number, r: number) => sqlite.prepare("INSERT INTO competency_quiz_assignments (quiz_id, staff_employee_id, lab_id, assigned_by_user_id, assigned_at, status, attempt_no, completed_result_id) VALUES (?, (SELECT MIN(id) FROM staff_employees), ?, 0, ?, 'completed', 1, ?)").run(q, lab, now, r);
+    const quizA = quiz(A.id, LA, "Quiz A"), quizOld = quiz(A.id, null, "Older quiz A"), quizB = quiz(B.id, LB, "Quiz B");
+    assigned(quizA, LA, result(quizA, 0, 91));
+    result(quizA, ce, 92);
+    result(quizOld, 0, 93);
+    result(quizA, ce, 94, asmt);
+    assigned(quizB, LB, result(quizB, 0, 61));
+    result(quizB, 0, 62);
+    const unknownScan = (account: number, barcode: string) => sqlite.prepare("INSERT INTO scan_events (account_id, inventory_item_id, user_id, action, barcode_value) VALUES (?, NULL, ?, 'unknown_barcode', ?)").run(account, account, barcode);
+    unknownScan(A.id, "BARCODE-A");
+    unknownScan(B.id, "BARCODE-B");
     // policy document with a stored file
     const manual = Number(sqlite.prepare("INSERT INTO policy_manuals (lab_id, name) VALUES (?, 'Chemistry')").run(LA).lastInsertRowid);
     const doc = Number(sqlite.prepare("INSERT INTO policy_documents (lab_id, manual_id, title, owner_user_id, status) VALUES (?, ?, 'Specimen Rejection', ?, 'active')").run(LA, manual, A.id).lastInsertRowid);
@@ -175,6 +197,11 @@ async function main() {
     check("3c. a row saved before multi-lab support under the owner's account is in", inv.some((i: any) => i.item_name === "Legacy gloves A"), inv.map((i: any) => i.item_name).join(", "));
     const items = await json("competency_assessment_items");
     check("3d. child rows follow their parents (program -> assessment -> item)", items.some((i: any) => i.el1_specimen_id === "ACC-A-77"), String(items.length));
+    const quizScores = (await json("competency_quiz_results")).map((r: any) => Number(r.score)).sort((a: number, b: number) => a - b);
+    check("3f. every quiz attempt of this lab is in: taken on a staff login, given by an evaluator, on an older quiz, and on a record", JSON.stringify(quizScores) === "[91,92,93,94]", JSON.stringify(quizScores));
+    check("3g. another lab's quiz attempts stay out", !quizScores.some((n: number) => n < 90), JSON.stringify(quizScores));
+    const scans = (await json("scan_events")).map((r: any) => r.barcode_value);
+    check("3h. a scan of an unknown barcode is in its own lab's zip, and another customer's stays out", JSON.stringify(scans) === '["BARCODE-A"]', JSON.stringify(scans));
     const users = await json("users");
     check("3e. members are listed with id, name and email only", users.length >= 2 && users.every((u: any) => Object.keys(u).sort().join(",") === "email,id,name"), JSON.stringify(users[0] || {}));
 
