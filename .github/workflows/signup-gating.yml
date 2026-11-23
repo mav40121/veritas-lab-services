@@ -333,6 +333,11 @@ jobs:
         # Site review 2026-11-05: the PDF reads what the tracker screen saves and lists the screen's rows, so its score and counts are the screen's;
         # the old requirement table never reaches it, and one lab's entries never reach another's report.
         run: npm run test:veritadc-readiness-report
+      - name: Run signup-bot-guard integration test
+        # Michael 2026-11-23: a script's public sign-up (its browser string is in quote marks) makes no account and sends no email; a
+        # person's sign-up and an invitation's link work as before.
+        run: npm run test:signup-bot-guard
+
       - name: Run email verification integration test
         # Michael 2026-11-05: a public sign-up can't sign in or hold a seat until its owner confirms the address with the link and the
         # password they chose. An invitation's link proves the address it was mailed to. Sign-up again replaces an unconfirmed account.
