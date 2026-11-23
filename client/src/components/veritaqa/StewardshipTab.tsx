@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CheckCircle2, CircleAlert, Download, FlaskConical, Plus, Trash2, Upload, Users, ClipboardCheck, Settings2 } from "lucide-react";
+import { CheckCircle2, CircleAlert, Download, FileText, FlaskConical, Plus, Trash2, Upload, Users, ClipboardCheck, Settings2 } from "lucide-react";
 import { ORGANISM_GROUP_LABELS, UPLOAD_COLUMNS_HELP, type AbgGroup, type OrganismGroup } from "@shared/antibiogramRules";
 
 async function api(path: string, init?: RequestInit & { json?: unknown }) {
@@ -139,6 +139,7 @@ function AntibiogramEditor({ base, id, readOnly, onChanged, onOpen }: { base: st
   const [preview, setPreview] = useState<any>(null);
   const [csvText, setCsvText] = useState<string | null>(null);
   const [release, setRelease] = useState<{ open: boolean; name: string; title: string }>({ open: false, name: "", title: "" });
+  const [pdfBusy, setPdfBusy] = useState(false);
   const a = data?.antibiogram;
   const draft = a?.status === "draft";
   const canEdit = draft && !readOnly;
@@ -188,6 +189,27 @@ function AntibiogramEditor({ base, id, readOnly, onChanged, onOpen }: { base: st
     try { const r = await api(`${base}/antibiograms/${id}/xlsx`, { method: "POST", json: {} }); downloadPdfToken(r.token, r.filename); }
     catch (e: any) { setErr({ at: "top", error: e.message }); }
   };
+  // The PDF (Michael approved the mock 2026-11-23), fetched with the sign-in header; a draft prints DRAFT.
+  const downloadPdf = async () => {
+    setPdfBusy(true); setErr({ at: "top", error: null });
+    try {
+      const r = await fetch(`${API_BASE}${base}/antibiograms/${id}/pdf`, { headers: authHeaders() });
+      if (!r.ok) {
+        let msg = `Request failed (${r.status})`;
+        try { msg = (await r.json())?.error || msg; } catch { /* not JSON */ }
+        throw new Error(msg);
+      }
+      const name = /filename="([^"]+)"/.exec(r.headers.get("Content-Disposition") || "")?.[1] || `VeritaQA_Antibiogram_${id}.pdf`;
+      const url = URL.createObjectURL(await r.blob());
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = name;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 30000);
+    } catch (e: any) { setErr({ at: "top", error: e.message }); } finally { setPdfBusy(false); }
+  };
   const setCell = (i: number, k: keyof GridRow, v: string) => setGrid((g) => g.map((r, j) => (j === i ? { ...r, [k]: v } : r)));
 
   return (
@@ -203,6 +225,7 @@ function AntibiogramEditor({ base, id, readOnly, onChanged, onOpen }: { base: st
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" onClick={downloadPdf} disabled={busy || pdfBusy} data-testid="abg-pdf"><FileText size={14} className="mr-1" />{pdfBusy ? "Building..." : "Download PDF"}</Button>
             <Button size="sm" variant="outline" onClick={excel} disabled={busy || !data.rows.length} data-testid="abg-excel"><Download size={14} className="mr-1" />Excel</Button>
             {!draft && !readOnly && <Button size="sm" variant="outline" onClick={newVersion} disabled={busy} data-testid="abg-new-version">Start a new version</Button>}
             {canEdit && <Button size="sm" variant="outline" onClick={del} disabled={busy} data-testid="abg-delete"><Trash2 size={14} className="mr-1" />Delete draft</Button>}

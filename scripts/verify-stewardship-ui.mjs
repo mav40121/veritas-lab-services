@@ -11,6 +11,7 @@ import { createRequire } from "node:module";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 const require = createRequire(import.meta.url);
 const { chromium } = require("@playwright/test");
 const Database = require("better-sqlite3");
@@ -69,6 +70,9 @@ const open = async (opts = {}) => {
   return page;
 };
 const tid = (p, id) => p.getByTestId(id);
+// The downloaded PDF's words, read with PyMuPDF (python -E), and its page 1 as a PNG beside the screenshots.
+const pdfWords = (file) => execFileSync("python", ["-E", "-c", "import sys, fitz\nsys.stdout.reconfigure(encoding='utf-8')\nprint(' '.join(p.get_text() for p in fitz.open(sys.argv[1])))", file]).toString("utf-8").replace(/\s+/g, " ");
+const pdfPage1Png = (file, png) => { execFileSync("python", ["-E", "-c", "import sys, fitz\nfitz.open(sys.argv[1])[0].get_pixmap(dpi=110).save(sys.argv[2])", file, png]); console.log("shot:", png); };
 
 try {
   // 1. No PI program yet: the setup screen opens the Stewardship tab
@@ -129,6 +133,14 @@ try {
   await shot(tid(page, "antibiogram-editor"), "phi-grid");
   await grid.getByLabel("Organism, row 1").fill("Escherichia coli");
 
+  // 4d. Download PDF on the draft: fetched with the sign-in header, named _DRAFT, the DRAFT mark on it
+  const [dlDraft] = await Promise.all([page.waitForEvent("download", { timeout: 30000 }), tid(page, "abg-pdf").click()]);
+  const draftPdf = path.join(OUT, dlDraft.suggestedFilename());
+  await dlDraft.saveAs(draftPdf);
+  const draftWords = pdfWords(draftPdf);
+  check("4d. Download PDF on the draft: a PDF named _DRAFT, with the DRAFT mark and a blank review block", /^VeritaQA_Antibiogram_Made-up_2025_antibiogram_v1_DRAFT\.pdf$/.test(dlDraft.suggestedFilename()) && fs.readFileSync(draftPdf).subarray(0, 5).toString() === "%PDF-" && /DRAFT/.test(draftWords) && /LABORATORY DIRECTOR OR DESIGNEE REVIEW/.test(draftWords), dlDraft.suggestedFilename());
+  pdfPage1Png(draftPdf, path.join(OUT, "stewardship-pdf-draft-page1.png"));
+
   // 5. Release locks it
   await tid(page, "abg-release-open").click();
   const rf = tid(page, "abg-release-form");
@@ -145,6 +157,17 @@ try {
   check("5a. released: the line names the approver", (await tid(page, "released-line").innerText()).includes("approved by Dr. Made Up, Medical Director"));
   check("5b. released: no upload, grid or release controls remain", (await tid(page, "abg-csv-input").count()) === 0 && (await tid(page, "abg-grid").count()) === 0 && (await tid(page, "abg-release-open").count()) === 0 && (await tid(page, "abg-new-version").isVisible()));
   await shot(tid(page, "antibiogram-editor"), "released");
+
+  // 5c. Download PDF on the released version: no DRAFT, Accepted for release, the approver on the review block, page 1
+  await shot(tid(page, "abg-pdf"), "pdf-button");
+  const [dlRel] = await Promise.all([page.waitForEvent("download", { timeout: 30000 }), tid(page, "abg-pdf").click()]);
+  const relPdf = path.join(OUT, dlRel.suggestedFilename());
+  await dlRel.saveAs(relPdf);
+  const relWords = pdfWords(relPdf);
+  check("5c. Download PDF on the released version: named v1 with no DRAFT; the review block on page 1 with Accepted, the approver and title; the footer",
+    /^VeritaQA_Antibiogram_Made-up_2025_antibiogram_v1\.pdf$/.test(dlRel.suggestedFilename()) && !/DRAFT/.test(relWords) && /LABORATORY DIRECTOR OR DESIGNEE REVIEW/.test(relWords)
+      && /☑ Accepted for release/.test(relWords) && /Dr\. Made Up/.test(relWords) && /Confidential, For Internal Lab Use Only \| Page 1 of 1/.test(relWords), relWords.slice(-400));
+  pdfPage1Png(relPdf, path.join(OUT, "stewardship-pdf-released-page1.png"));
 
   // 6. Excel downloads
   const [dl] = await Promise.all([page.waitForEvent("download", { timeout: 20000 }), tid(page, "abg-excel").click()]);
