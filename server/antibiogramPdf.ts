@@ -43,8 +43,19 @@ export interface AntibiogramPdfContext {
 const esc = (s: unknown) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 const cellClass = (pct: number | null) => (pct == null ? "" : pct >= 90 ? "hi" : pct >= 70 ? "mid" : "lo");
 
+/**
+ * The drug headings' size, so the longest word stays inside its column ("sulfamethoxazole" ran to the edge at 11 drugs). The drug columns
+ * share 73% of the table (organism 21%, isolates 6%) and the table is 965 px wide on Letter landscape; a bold Arial letter is about 0.56 em.
+ */
+export function drugHeadingPx(drugs: string[]): number {
+  const longest = Math.max(1, ...drugs.flatMap((d) => String(d).split(/[\s/-]+/).map((w) => w.length)));
+  const room = (965 * 0.73) / Math.max(1, drugs.length) - 8;
+  return Math.max(5, Math.min(7.5, Math.floor((room / (longest * 0.56)) * 10) / 10));
+}
+
 function groupTable(g: AbgGroup, threshold: number): string {
-  const head = `<tr><th class="org">Organism</th><th class="n">Isolates</th>${g.drugs.map((d) => `<th class="drug">${esc(d)}</th>`).join("")}</tr>`;
+  const px = drugHeadingPx(g.drugs);
+  const head = `<tr><th class="org">Organism</th><th class="n">Isolates</th>${g.drugs.map((d) => `<th class="drug" style="font-size:${px}px">${esc(d)}</th>`).join("")}</tr>`;
   const body = g.organisms.map((o) => {
     const cells = g.drugs.map((d) => {
       const c = o.cells[d];
@@ -99,7 +110,7 @@ export function buildAntibiogramHTML(input: AntibiogramPdfInput, ctx: Antibiogra
   .tt { margin:7px 0 3px; font-size:9px; font-weight:700; color:#01696F; text-transform:uppercase; letter-spacing:.4px; break-after:avoid; page-break-after:avoid; }
   table { width:100%; border-collapse:collapse; table-layout:fixed; } thead { display:table-header-group; } tr { page-break-inside:avoid; break-inside:avoid; }
   th, td { border:1px solid #D0D0D0; padding:2px 3px; text-align:center; }
-  th { background:#E6F2F2; color:#0A3A3D; font-size:7.5px; font-weight:700; vertical-align:bottom; } th.drug { height:30px; line-height:1.15; }
+  th { background:#E6F2F2; color:#0A3A3D; font-size:7.5px; font-weight:700; vertical-align:bottom; } th.drug { height:30px; line-height:1.15; overflow-wrap:break-word; }
   th.org, td.org { text-align:left; width:21%; } th.n, td.n { width:6%; } td { font-size:10px; height:17px; }
   td.hi { background:#E7F1E1; } td.mid { background:#FFF4E0; } td.lo { background:#F9E3EE; } td.nt { background:#F2F2F2; } td.sup { color:#7A7974; font-weight:700; } td.fl { font-style:italic; color:#7A7974; }
   .flag { font-size:7px; color:#964219; font-weight:700; }

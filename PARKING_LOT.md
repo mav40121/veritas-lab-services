@@ -242,7 +242,7 @@ part-time community manager.
 
 **Pre- vs post-COLA:** Post-COLA. No customer urgency.
 
-**Status:** Parked (Michael 2026-11-22, Decision 13 = 1): no-go for now on both the paid forum and the free alternative. Nothing was started and nothing was promised to anyone. It comes back at the first weekly review in February 2027 (Thu 2027-02-04), once the wave 1 outreach results are in; an info@ calendar reminder is set for that day. Before that review, re-check the stale figures above: the Hospital tier is $4,995 now, not $1,999, and the David split and the 47 COLA contacts have not been re-verified.
+**Status:** Parked (Michael 2026-11-23, Decision 13 = 1): no-go for now on both the paid forum and the free alternative. Nothing was started and nothing was promised to anyone. It comes back at the first weekly review in February 2027 (Thu 2027-02-04), once the wave 1 outreach results are in; an info@ calendar reminder is set for that day. Before that review, re-check the stale figures above: the Hospital tier is $4,995 now, not $1,999, and the David split and the 47 COLA contacts have not been re-verified.
 
 ---
 
