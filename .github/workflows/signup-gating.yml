@@ -169,7 +169,7 @@ jobs:
       - name: Roll-up groups arrangement (filter, sections, subtotals)
         run: npx tsx scripts/verify-readiness-rollup-groups.mts
       - name: Run readiness across a system integration test
-        # 2026-11-24 (Sanford program B2): findings, documents and verification studies in Inspection Readiness, "Not set up",
+        # 2026-11-24 (B2): findings, documents and verification studies in Inspection Readiness, "Not set up",
         # the cross-lab findings list for a system leader, and an org admin on the organization's plan. Nobody sees a lab they didn't.
         run: npm run test:system-readiness
       - name: Readiness command center arrangement (not set up, items with no date, findings filters)

@@ -8,7 +8,7 @@
 // equipment and certificate counts. "Today" is the request's lab clock (labToday()), so a caller with no request runs it
 // inside withLabClock.
 //
-// Findings, documents and verification studies, and "Not set up" (Sanford program B2, 2026-11-24). Each count is the one
+// Findings, documents and verification studies, and "Not set up" (B2, 2026-11-24). Each count is the one
 // its module's own screen shows, read through the same function: shared/findingCounts.ts (the VeritaResponse list),
 // server/policyComplianceCounts.ts (the VeritaDC compliance page) and VeritaCheck Coverage (server/coverageCounts.ts).
 //   - overdue   a date has passed: a finding past its deadline, a document past its review or expired, a study past due

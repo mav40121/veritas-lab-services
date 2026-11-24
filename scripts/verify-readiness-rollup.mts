@@ -78,7 +78,7 @@ check("empty rollup: 100% readiness, no divide-by-zero", empty.readinessPct === 
 const allOk = summarizeRollup([A, lab(9, "Delta", {}, { modules_total: 5, modules_ok: 5, attention_items: 0, overdue_items: 0, status: "ok" })]);
 check("all-ok network: empty feed", allOk.feed.length === 0);
 
-// --- Not set up (Sanford program B2, 2026-11-24): out of ready, out of the percent, never in the feed ---
+// --- Not set up (B2, 2026-11-24): out of ready, out of the percent, never in the feed ---
 const N = { lab_id: 20, lab_name: "Nova", clia_number: null,
   modules: mods({}).map((m) => ({ ...m, status: "not_set_up", total: 0 })),
   overall: { modules_total: 0, modules_ok: 0, modules_not_set_up: 5, attention_items: 0, overdue_items: 0, other_items: 0, status: "not_set_up" } } as RollupLab;

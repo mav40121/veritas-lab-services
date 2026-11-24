@@ -175,7 +175,7 @@ async function main() {
     check("3. it lists changes for this lab only", dry.j.planned > 0 && dry.j.changes.every((c: any) => c.labId === labA), String(dry.j.planned));
     const ra = dry.j.readiness;
     check("3. readiness before shows the lab overdue", ra?.before?.[labA]?.status === "overdue", JSON.stringify(ra?.before?.[labA]));
-    // Readiness counts documents since 2026-11-24 (Sanford program B2); the one someone expired by hand stays expired, so it is the one item left.
+    // Readiness counts documents since 2026-11-24 (B2); the one someone expired by hand stays expired, so it is the one item left.
     const onlyHandExpired = (r: any) => r?.overdue_items === 1 && Object.entries(r.modules).filter(([, s]) => s === "overdue").map(([k]) => k).join() === "documents";
     check("3. readiness after has nothing overdue but the document expired by hand", onlyHandExpired(ra?.after?.[labA]), JSON.stringify(ra?.after?.[labA]));
 

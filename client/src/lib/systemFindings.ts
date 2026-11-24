@@ -1,4 +1,4 @@
-// The cross-lab list of open findings (Sanford program B2, 2026-11-24; server/systemFindings.ts). Pure helpers, so
+// The cross-lab list of open findings (B2, 2026-11-24; server/systemFindings.ts). Pure helpers, so
 // scripts/verify-readiness-rollup.mts exercises what the page filters by. The server already cut the list to the labs the
 // reader's roll-up holds; a filter only takes rows away.
 import { findingTemplate } from "@shared/findingTypes";

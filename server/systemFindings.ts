@@ -1,6 +1,6 @@
 // server/systemFindings.ts
 //
-// The cross-lab list of open findings (Sanford program B2, 2026-11-24): GET /api/readiness/rollup/findings. For a system
+// The cross-lab list of open findings (B2, 2026-11-24): GET /api/readiness/rollup/findings. For a system
 // leader only, an active org_owner or org_admin of at least one organization. The labs are the ones handed in, which the
 // route takes from the roll-up's own list (server/rollupGroups.ts), so this can't show a lab the roll-up doesn't. A group
 // grants nothing here: the screen filters this answer by group and the answer is the same with or without groups.

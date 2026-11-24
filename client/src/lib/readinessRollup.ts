@@ -9,7 +9,7 @@
 // module columns for the heatmap, and severity-sorted rows.
 
 // not_set_up: nothing for the module (or the lab) to watch yet. It is neither ready nor late, so it stays out of the
-// ready count and the percent (Sanford program B2, 2026-11-24).
+// ready count and the percent (B2, 2026-11-24).
 export type RollupStatus = "ok" | "attention" | "overdue" | "not_set_up";
 
 export interface RollupModule {

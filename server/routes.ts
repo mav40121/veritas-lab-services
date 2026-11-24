@@ -31118,7 +31118,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   }
   // The labs of the multi-lab roll-up for this person, or null when neither their plan nor their organization's includes
   // readiness. An active org_owner or org_admin whose own account is free reads their organization's labs on the
-  // organization's plan (Sanford program B2, 2026-11-24): they used to get a 403, because with no membership of their own
+  // organization's plan (B2, 2026-11-24): they used to get a 403, because with no membership of their own
   // there is no active lab to take a plan from. Nobody gains a lab: it is the same list, cut to that organization.
   function rollupLabsForRequest(client: any, req: any): RollupLabRow[] | null {
     if (hasReadinessAccess(req.user, req.scope?.lab)) return rollupLabsFor(client, req.userId);
@@ -31160,7 +31160,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     }
   });
   // The cross-lab list of open findings, for a system leader only (an active org_owner or org_admin): every open finding in
-  // exactly the labs the roll-up above gives this person (server/systemFindings.ts). Sanford program B2, 2026-11-24.
+  // exactly the labs the roll-up above gives this person (server/systemFindings.ts). B2, 2026-11-24.
   app.get("/api/readiness/rollup/findings", authMiddleware, (req: any, res) => {
     const client = (db as any).$client;
     const organizations = managedOrganizations(client, req.userId);
