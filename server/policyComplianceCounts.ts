@@ -39,3 +39,21 @@ export function policyOverdueDocuments(sqlite: any, labId: number, today: string
     )
     .all(labId, { today }) as any[];
 }
+
+/** Every approved document whose next review date is today or within the next 30 days, soonest first (the page's Due soon list). */
+export function policyDueSoonDocuments(sqlite: any, labId: number, today: string): any[] {
+  return sqlite
+    .prepare(
+      `SELECT d.id, d.title, d.next_review_date, d.manual_id,
+              m.name AS manual_name
+         FROM policy_documents d
+         LEFT JOIN policy_manuals m ON m.id = d.manual_id
+        WHERE d.lab_id = ? AND d.archived_at IS NULL
+          AND d.status = 'approved'
+          AND d.next_review_date IS NOT NULL
+          AND date(d.next_review_date) >= date(@today)
+          AND date(d.next_review_date) <= date(@today, '+30 days')
+        ORDER BY d.next_review_date ASC`
+    )
+    .all(labId, { today }) as any[];
+}

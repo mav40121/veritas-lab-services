@@ -116,7 +116,23 @@ function instrTokens(s: string): Set<string> {
 function normAnalyte(s: string): string {
   return (s || "").toLowerCase().replace(/\([^)]*\)/g, "").replace(/[^a-z0-9]+/g, " ").trim();
 }
+// The answer for a pair of names, kept: Coverage compares every map test with every study, so the same few thousand pairs
+// come back over a hundred thousand times for one lab. A pure function of the two names, so a kept answer can't go stale.
+const matchKept = new Map<string, Map<string, boolean>>();
+let matchKeptPairs = 0;
 export function analyteMatch(a: string, b: string): boolean {
+  const x = a || "", y = b || "";
+  let row = matchKept.get(x);
+  if (!row) { row = new Map(); matchKept.set(x, row); }
+  let v = row.get(y);
+  if (v === undefined) {
+    if (matchKeptPairs >= 100000) { matchKept.clear(); matchKeptPairs = 0; row = new Map(); matchKept.set(x, row); }
+    v = analyteMatchWorkedOut(x, y);
+    row.set(y, v); matchKeptPairs++;
+  }
+  return v;
+}
+function analyteMatchWorkedOut(a: string, b: string): boolean {
   const na = normAnalyte(a), nb = normAnalyte(b);
   if (!na || !nb) return false;
   if (na === nb) return true;
@@ -423,7 +439,9 @@ export function computeCoverageFrom(instruments: Instrument[], combos: Combo[], 
   };
 }
 
-export function computeCoverageForLab(sqlite: any, labId: number): CoverageResult {
+// Exactly the rows computeCoverageForLab works from. server/coverageCounts.ts hashes them to know whether a lab's coverage
+// has changed since it was last worked out, so a row Coverage starts reading belongs here.
+export function coverageInputsForLab(sqlite: any, labId: number): { instruments: Instrument[]; combos: Combo[]; studies: Study[]; outside: OutsideRecord[] } {
   const instruments = sqlite.prepare(
     `SELECT i.id, i.instrument_name, i.nickname, i.serial_number
      FROM veritamap_instruments i JOIN veritamap_maps m ON m.id = i.map_id
@@ -442,7 +460,11 @@ export function computeCoverageForLab(sqlite: any, labId: number): CoverageResul
     `SELECT id, test_name, instrument, study_type, status, lifecycle_state, date, finalized_at, coverage_analyte
      FROM studies WHERE lab_id = ? AND archived_at IS NULL`
   ).all(labId) as Study[];
-  const outside = listOutsideRecords(sqlite, labId);
+  return { instruments, combos, studies, outside: listOutsideRecords(sqlite, labId) };
+}
+
+export function computeCoverageForLab(sqlite: any, labId: number): CoverageResult {
+  const { instruments, combos, studies, outside } = coverageInputsForLab(sqlite, labId);
   const result = computeCoverageFrom(instruments, combos, studies, outside);
   const instById = new Map<number, Instrument>(instruments.map((i) => [i.id, i]));
   const people = new Map<number, string>();

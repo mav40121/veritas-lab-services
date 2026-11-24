@@ -8,7 +8,8 @@
 //
 // Run: npx tsx scripts/verify-readiness-rollup.mts   (exits non-zero on fail)
 
-import { summarizeRollup, badModules, sev, type RollupLab } from "../client/src/lib/readinessRollup";
+import { summarizeRollup, badModules, sev, moduleWork, moduleCount, onlyUndated, type RollupLab } from "../client/src/lib/readinessRollup";
+import { accreditorLabel, filterFindings, labsForFilter } from "../client/src/lib/systemFindings";
 
 let pass = 0, fail = 0;
 function check(name: string, cond: boolean, detail = "") {
@@ -76,6 +77,38 @@ const empty = summarizeRollup([]);
 check("empty rollup: 100% readiness, no divide-by-zero", empty.readinessPct === 100 && empty.sites === 0);
 const allOk = summarizeRollup([A, lab(9, "Delta", {}, { modules_total: 5, modules_ok: 5, attention_items: 0, overdue_items: 0, status: "ok" })]);
 check("all-ok network: empty feed", allOk.feed.length === 0);
+
+// --- Not set up (Sanford program B2, 2026-11-24): out of ready, out of the percent, never in the feed ---
+const N = { lab_id: 20, lab_name: "Nova", clia_number: null,
+  modules: mods({}).map((m) => ({ ...m, status: "not_set_up", total: 0 })),
+  overall: { modules_total: 0, modules_ok: 0, modules_not_set_up: 5, attention_items: 0, overdue_items: 0, other_items: 0, status: "not_set_up" } } as RollupLab;
+const withN = summarizeRollup([N, A, C]);
+check("not set up: counted apart, not ready", withN.ready === 1 && withN.notSetUp === 1 && withN.sites === 3, `${withN.ready} ready, ${withN.notSetUp} not set up`);
+check("not set up: the percent is the same as without that lab", withN.readinessPct === summarizeRollup([A, C]).readinessPct, String(withN.readinessPct));
+check("not set up: no feed entry, no bad modules", !withN.feed.some((l) => l.lab_id === 20) && badModules(N).length === 0);
+check("not set up: sorts after attention and before ready", JSON.stringify(summarizeRollup([A, N, B]).rows.map((l) => l.lab_id)) === JSON.stringify([2, 20, 1]));
+check("only not-set-up labs: no percent at all", summarizeRollup([N]).readinessPct === null);
+// --- items with no date ---
+const M = (overdue: number, due_soon: number, other: number, other_label: string | null = null): any => ({ key: "k", label: "L", status: "attention", overdue, due_soon, other, other_label });
+check("a chip says what is outstanding", moduleWork(M(3, 2, 4, "missing")) === "3 overdue" && moduleWork(M(0, 2, 4, "missing")) === "2 due soon, 4 missing" && moduleWork(M(0, 0, 2, "waiting for approval")) === "2 waiting for approval" && moduleWork(M(0, 1, 0)) === "1 due soon");
+check("a cell's number: overdue, else everything amber", moduleCount(M(3, 2, 4)) === 3 && moduleCount(M(0, 2, 4)) === 6 && moduleCount(M(0, 0, 0)) === 0);
+check("amber with no date isn't called due soon", onlyUndated(M(0, 0, 4)) && !onlyUndated(M(0, 1, 4)) && !onlyUndated(M(1, 0, 4)));
+check("a server that sends no other count reads as before", moduleWork({ key: "k", label: "L", status: "attention", overdue: 0, due_soon: 2 } as any) === "2 due soon" && moduleCount({ overdue: 0, due_soon: 2 } as any) === 2);
+
+// --- the cross-lab findings list's filters ---
+const fl = (id: number, lab_id: number, accreditor: string, source_type = "inspection"): any => ({ id, lab_id, lab_name: null, organization_id: null, accreditor, source_type, finding_number: null, standard_ref: null, due_date: null, status: "open", past_due: false, past_target: false });
+const L = (lab_id: number, organization_id: number | null) => ({ lab_id, lab_name: null, clia_number: null, organization_id, organization_name: null });
+const FL = [L(1, 9), L(2, 9), L(3, null)], FR = [fl(1, 1, "CAP"), fl(2, 2, "TJC"), fl(3, 3, "CAP"), fl(4, 1, "Other", "pt_failure"), fl(5, 2, "ISO"), fl(6, 2, "CAP", "internal_nce")];
+const FG = [{ id: 50, name: "North", kind: "region", lab_ids: [1, 99] }];
+const all = { organizationId: null, group: "all" as const, accreditor: null };
+const idsOf = (f: any) => filterFindings(FR, FL, FG, { ...all, ...f }).map((r) => r.id).join(",");
+check("findings: the accreditor column reads the accreditor, ISO 15189, or the entry's type", accreditorLabel(FR[0]) === "CAP" && accreditorLabel(FR[4]) === "ISO 15189" && accreditorLabel(FR[3]) === "PT failure" && accreditorLabel(FR[5]) === "CAP" && accreditorLabel(fl(7, 1, "Other")) === "Other");
+check("findings: no filter, every row", idsOf({}) === "1,2,3,4,5,6");
+check("findings: by group, only that group's labs that are in the list", idsOf({ group: 50 }) === "1,4" && labsForFilter(FL, FG, { organizationId: null, group: 50 }).length === 1);
+check("findings: not in a group", idsOf({ group: "none" }) === "2,3,5,6");
+check("findings: by system", idsOf({ organizationId: 9 }) === "1,2,4,5,6");
+check("findings: by accreditor, and with a group", idsOf({ accreditor: "CAP" }) === "1,3,6" && idsOf({ accreditor: "CAP", group: 50 }) === "1" && idsOf({ accreditor: "PT failure" }) === "4");
+check("findings: a row for a lab not in the list never shows", filterFindings([fl(8, 77, "CAP")], FL, FG, all).length === 0);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail === 0 ? 0 : 1);

@@ -114,6 +114,7 @@ const EquipmentAppPage = lazy(() => import("@/pages/EquipmentAppPage"));
 const InstrumentTrailPage = lazy(() => import("@/pages/InstrumentTrailPage"));
 const StainLogPage = lazy(() => import("@/pages/StainLogPage"));
 const ReadinessDashboardPage = lazy(() => import("@/pages/ReadinessDashboardPage"));
+const SystemFindingsPage = lazy(() => import("@/pages/SystemFindingsPage"));
 const DigestPage = lazy(() => import("@/pages/DigestPage"));
 const SystemRepositoryPage = lazy(() => import("@/pages/SystemRepositoryPage"));
 const VeritaQCDailyReviewPage = lazy(() => import("@/pages/VeritaQCDailyReviewPage"));
@@ -510,6 +511,7 @@ function AppContent() {
           <Route path="/veritaqc-app/review">{wrapLegacy(VeritaQCDailyReviewPage)}</Route>
           <Route path="/equipment-app/stain-log">{wrapLegacy(StainLogPage)}</Route>
           <Route path="/equipment-app">{wrapLegacy(EquipmentAppPage)}</Route>
+          <Route path="/readiness/findings">{wrapLegacy(SystemFindingsPage)}</Route>
           <Route path="/readiness">{wrapLegacy(ReadinessDashboardPage)}</Route>
           {/* The nav's Compliance Digest entry off a lab page: resolves the active lab, as /readiness does. */}
           <Route path="/digest">{wrapLegacy(DigestPage)}</Route>
@@ -616,6 +618,8 @@ function AppContent() {
           <Route path="/labs/:labId/equipment-app/stain-log" component={StainLogPage} />
           <Route path="/labs/:labId/equipment-app" component={EquipmentAppPage} />
           <Route path="/labs/:labId/instruments/:instrumentId/trail" component={InstrumentTrailPage} />
+          {/* Open findings across a system's labs: reached from the readiness roll-up, for a system's owner or admin only. */}
+          <Route path="/labs/:labId/readiness/findings" component={SystemFindingsPage} />
           <Route path="/labs/:labId/readiness" component={ReadinessDashboardPage} />
           {/* Compliance digest (Q281 = 1, PR 4): reached from Inspection Readiness; not a module. */}
           <Route path="/labs/:labId/digest/:issueId" component={DigestPage} />

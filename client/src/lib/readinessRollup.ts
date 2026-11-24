@@ -8,7 +8,9 @@
 // summary band, a worst-first "where to look" action feed, the stable set of
 // module columns for the heatmap, and severity-sorted rows.
 
-export type RollupStatus = "ok" | "attention" | "overdue";
+// not_set_up: nothing for the module (or the lab) to watch yet. It is neither ready nor late, so it stays out of the
+// ready count and the percent (Sanford program B2, 2026-11-24).
+export type RollupStatus = "ok" | "attention" | "overdue" | "not_set_up";
 
 export interface RollupModule {
   key: string;
@@ -16,8 +18,11 @@ export interface RollupModule {
   status: RollupStatus;
   overdue: number;
   due_soon: number;
+  other?: number;              // needs someone and has no date (a study missing, a document waiting for approval)
+  other_label?: string | null;
   total?: number;
   headline?: string;
+  counts?: Record<string, number>;
 }
 
 export interface RollupLab {
@@ -26,25 +31,38 @@ export interface RollupLab {
   clia_number: string | null;
   modules: RollupModule[];
   overall: {
-    modules_total: number;
+    modules_total: number;       // modules set up; the not-set-up ones are counted apart
     modules_ok: number;
+    modules_not_set_up?: number;
+    other_items?: number;
     attention_items: number;
     overdue_items: number;
     status: RollupStatus;
   };
 }
 
-// Sort weight: overdue is worst, then attention, then ok.
-export const sev = (s: string): number => (s === "overdue" ? 2 : s === "attention" ? 1 : 0);
+// Sort weight: overdue is worst, then attention, then not set up, then ok.
+export const sev = (s: string): number => (s === "overdue" ? 2 : s === "attention" ? 1 : s === "not_set_up" ? 0.5 : 0);
+
+// A module's outstanding work in a few words ("3 overdue", "2 due soon, 4 missing"), and as one number for a heatmap cell.
+export function moduleWork(m: RollupModule): string {
+  if (m.overdue > 0) return `${m.overdue} overdue`;
+  const other = m.other || 0;
+  return [m.due_soon > 0 ? `${m.due_soon} due soon` : "", other > 0 ? `${other} ${m.other_label || "to do"}` : ""].filter(Boolean).join(", ");
+}
+export const moduleCount = (m: RollupModule): number => m.overdue || (m.due_soon + (m.other || 0));
+// Amber means due soon, unless everything amber in it has no date at all.
+export const onlyUndated = (m: { overdue: number; due_soon: number; other?: number }): boolean => m.overdue === 0 && m.due_soon === 0 && (m.other || 0) > 0;
 
 export interface RollupSummary {
   sites: number;
   ready: number;
   attention: number;
   overdueSites: number;
+  notSetUp: number;            // labs with no module set up
   totalOverdue: number;
   totalDueSoon: number;
-  readinessPct: number;
+  readinessPct: number | null; // null: labs, but none with a module set up
   cols: { key: string; label: string }[];
   feed: RollupLab[];
   rows: RollupLab[];
@@ -55,13 +73,14 @@ export function summarizeRollup(rollup: RollupLab[]): RollupSummary {
   const ready = rollup.filter((l) => l.overall.status === "ok").length;
   const attention = rollup.filter((l) => l.overall.status === "attention").length;
   const overdueSites = rollup.filter((l) => l.overall.status === "overdue").length;
+  const notSetUp = rollup.filter((l) => l.overall.status === "not_set_up").length;
   const totalOverdue = rollup.reduce((s, l) => s + (l.overall.overdue_items || 0), 0);
   const totalAttention = rollup.reduce((s, l) => s + (l.overall.attention_items || 0), 0);
   // attention_items includes overdue_items; due-soon is the non-overdue remainder.
   const totalDueSoon = Math.max(0, totalAttention - totalOverdue);
   const okModules = rollup.reduce((s, l) => s + (l.overall.modules_ok || 0), 0);
   const totalModules = rollup.reduce((s, l) => s + (l.overall.modules_total || 0), 0);
-  const readinessPct = totalModules ? Math.round((okModules / totalModules) * 100) : 100;
+  const readinessPct = totalModules ? Math.round((okModules / totalModules) * 100) : sites ? null : 100;
 
   // Stable union of module columns across all labs, first-seen order.
   const colMap = new Map<string, string>();
@@ -79,12 +98,12 @@ export function summarizeRollup(rollup: RollupLab[]): RollupSummary {
     .slice()
     .sort((a, b) => (sev(b.overall.status) - sev(a.overall.status)) || (b.overall.overdue_items - a.overall.overdue_items));
 
-  return { sites, ready, attention, overdueSites, totalOverdue, totalDueSoon, readinessPct, cols, feed, rows };
+  return { sites, ready, attention, overdueSites, notSetUp, totalOverdue, totalDueSoon, readinessPct, cols, feed, rows };
 }
 
 // Bad modules for one lab, worst-first (used by the action feed chips).
 export function badModules(lab: RollupLab): RollupModule[] {
-  return (lab.modules || []).filter((m) => m.status !== "ok").slice().sort((a, b) => sev(b.status) - sev(a.status));
+  return (lab.modules || []).filter((m) => m.status === "overdue" || m.status === "attention").slice().sort((a, b) => sev(b.status) - sev(a.status));
 }
 
 // ── Roll-up groups (Michael 2026-11-16, Phase 1; server/rollupGroups.ts) ─────────────────────────────────────────────

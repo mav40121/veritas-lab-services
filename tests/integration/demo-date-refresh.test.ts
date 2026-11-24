@@ -175,7 +175,9 @@ async function main() {
     check("3. it lists changes for this lab only", dry.j.planned > 0 && dry.j.changes.every((c: any) => c.labId === labA), String(dry.j.planned));
     const ra = dry.j.readiness;
     check("3. readiness before shows the lab overdue", ra?.before?.[labA]?.status === "overdue", JSON.stringify(ra?.before?.[labA]));
-    check("3. readiness after has nothing overdue", ra?.after?.[labA]?.overdue_items === 0, JSON.stringify(ra?.after?.[labA]));
+    // Readiness counts documents since 2026-11-24 (Sanford program B2); the one someone expired by hand stays expired, so it is the one item left.
+    const onlyHandExpired = (r: any) => r?.overdue_items === 1 && Object.entries(r.modules).filter(([, s]) => s === "overdue").map(([k]) => k).join() === "documents";
+    check("3. readiness after has nothing overdue but the document expired by hand", onlyHandExpired(ra?.after?.[labA]), JSON.stringify(ra?.after?.[labA]));
 
     // 4. Write
     const res = await post({ labIds: [labA], dryRun: false, confirm: DEMO_DATES_CONFIRM });
@@ -198,7 +200,7 @@ async function main() {
     check("4. a new hire past their 6-month moves by months, hire date still on or before today, and reads not overdue", val("staff_employees", A.newHire, "hire_date") === addLabDays(d(-260), 0, kNew) && val("staff_employees", A.newHire, "hire_date") <= today && val("staff_competency_schedules", A.newHireSched, "initial_completed_at") === addLabDays(d(-200), 0, kNew) && competencyBucket(labA, A.newHire) !== "overdue", `${kNew} ${val("staff_employees", A.newHire, "hire_date")} ${competencyBucket(labA, A.newHire)}`);
     const kVet = cyclesToCurrent(d(-60), today, 0, 1)!;
     check("4. with a method signed 20 days ago, only the schedule record moves and the tester reads not overdue", val("staff_competency_schedules", A.veteranSched, "annual_due_at") === addLabDays(d(-60), 0, kVet) && val("competency_method_signoffs", A.veteranSignoff, "signed_date") === d(-20) && val("staff_employees", A.veteran, "hire_date") === d(-3000) && competencyBucket(labA, A.veteran) !== "overdue", `${kVet} ${val("staff_competency_schedules", A.veteranSched, "annual_due_at")} ${competencyBucket(labA, A.veteran)}`);
-    check("4. readiness after the write has nothing overdue", res.j.readiness?.after?.[labA]?.overdue_items === 0, JSON.stringify(res.j.readiness?.after?.[labA]));
+    check("4. readiness after the write has nothing overdue but the document expired by hand", onlyHandExpired(res.j.readiness?.after?.[labA]), JSON.stringify(res.j.readiness?.after?.[labA]));
 
     // 5. History and current rows
     check("5. a current or inactive certificate stays", val("lab_certificates", A.certCurrent, "expiration_date") === d(165) && val("lab_certificates", A.certInactive, "expiration_date") === d(-400));
