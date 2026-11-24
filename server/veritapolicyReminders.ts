@@ -8,10 +8,10 @@
 //   on or past due      -> reminder_type='overdue'
 //   30 days past due    -> reminder_type='final'
 //
-// Idempotency: each (document_id, version_id, reminder_type) gets at most
+// Idempotency: each (document_id, reminder_type, review date) gets at most
 // one policy_review_reminders row with sent_at populated. The cron skips
-// any row already sent. A new version upload invalidates the chain
-// because version_id changes.
+// any row already sent. When the review date moves ahead (a review, a new
+// version), the next cycle gets its own notices (BUG-187, 2026-11-24).
 //
 // Auto-expire: shipped 2026-06-02 (parking-lot #39 sub-item, deferred
 // from Phase 6B). Policies past their next_review_date by 60+ days
@@ -105,10 +105,11 @@ export async function runPolicyReviewReminders(): Promise<{
         `SELECT 1 FROM policy_review_reminders
           WHERE document_id = ?
             AND reminder_type = ?
+            AND substr(reminder_date, 1, 10) = ?
             AND sent_at IS NOT NULL
           LIMIT 1`
       )
-      .get(r.id, reminderType);
+      .get(r.id, reminderType, dueDay);
     if (alreadySent) {
       stats.skipped += 1;
       continue;
