@@ -4641,6 +4641,29 @@ sqlite.exec(`
   try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_pt_event_reviews_lab ON pt_event_reviews(lab_id)"); } catch {}
 }
 
+// B11 (2026-11-24): the program's own report attached to a VeritaPT event, its bytes in the row as lab_certificate_documents has
+// them (server/ptDocuments.ts).
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS pt_event_documents (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    result_ids_json TEXT NOT NULL DEFAULT '[]',
+    user_id INTEGER NOT NULL,
+    original_filename TEXT NOT NULL,
+    file_size INTEGER NOT NULL DEFAULT 0,
+    mime_type TEXT NOT NULL,
+    file_data BLOB,
+    uploaded_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+`);
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(pt_event_documents)").all() as { name: string }[]).map((c) => c.name);
+  for (const [col, ddl] of [["lab_id", "INTEGER"], ["result_ids_json", "TEXT"], ["user_id", "INTEGER"], ["original_filename", "TEXT"], ["file_size", "INTEGER"], ["mime_type", "TEXT"], ["file_data", "BLOB"], ["uploaded_at", "TEXT"]] as const) {
+    if (!cols.includes(col)) sqlite.exec(`ALTER TABLE pt_event_documents ADD COLUMN ${col} ${ddl}`);
+  }
+  try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_pt_event_documents_lab ON pt_event_documents(lab_id)"); } catch {}
+}
+
 // MLC-2b (2026-08-11): VeritaPT submission-deadline reminders. Per-lab config +
 // a dedup/audit send-log, mirroring veritatrack_reminder_config / _log. Both are
 // CREATE TABLE IF NOT EXISTS (idempotent, safe on every boot).

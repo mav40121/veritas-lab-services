@@ -24,6 +24,7 @@ import {
 } from "@shared/ptEvents";
 import { ptEvaluationOpen, ptEvaluations, ptUngradedColumns } from "./ptEvaluations";
 import { ptReviewDetail, withPtReviews } from "./ptReviews";
+import { ptEventDocuments } from "./ptDocuments";
 
 export const NO_DEPARTMENT = "No department on VeritaMap";
 export const NO_PROGRAM = "Program not on file";
@@ -207,7 +208,10 @@ export function registerPtEventRoutes(app: Express, deps: PtDeps) {
     const event = ptEventOfResult(sqlite(), req.scope.labId, req.params.resultId);
     if (!event) return res.status(404).json({ error: "Event not found" });
     const canEdit = hasModuleEditAccess(req.scope.labId, req.userId, "veritapt");
-    res.json({ event, ...ptReviewDetail(sqlite(), req.scope.labId, event, canEdit), can_edit: canEdit, today: ptToday(sqlite(), req.scope.labId) });
+    res.json({
+      event, ...ptReviewDetail(sqlite(), req.scope.labId, event, canEdit), documents: ptEventDocuments(sqlite(), req.scope.labId, event, ptEventsOfLab(sqlite(), req.scope.labId)),
+      can_edit: canEdit, today: ptToday(sqlite(), req.scope.labId),
+    });
   });
 
   // A program of this lab, or null: an enrollment id of another lab is never recorded against.

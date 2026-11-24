@@ -1,4 +1,5 @@
-// One proficiency testing event (B11, 2026-11-24; server/ptEvents.ts): its results and its dates.
+// One proficiency testing event (B11, 2026-11-24; server/ptEvents.ts): its results and dates, the program's report, the
+// laboratory's evaluations of ungraded results, and its review.
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -8,9 +9,10 @@ import { useFreshRecord } from "@/lib/freshRecord";
 import { PT_SUBMISSION_LABEL, type PtEvent, type PtResult } from "@shared/ptEvents";
 import { PtUngradedResults } from "./PtEvaluationForm";
 import { PtReviewSection, type PtReviewData } from "./PtReviewSection";
+import { PtDocuments, type PtDocumentView } from "./PtDocuments";
 import { PtError, PtField, PtStatusBadge, ptInputClass, ptNum, ptRange, ptRequest, usePtChanged } from "./ptUi";
 
-export interface PtEventDetail extends PtReviewData { event: PtEvent; can_edit: boolean; today: string }
+export interface PtEventDetail extends PtReviewData { documents: PtDocumentView[]; event: PtEvent; can_edit: boolean; today: string }
 
 function EventDates({ labId, event, canEdit }: { labId: number; event: PtEvent; canEdit: boolean }) {
   const [due, setDue] = useState(event.due_date ?? "");
@@ -88,6 +90,7 @@ export function PtEventDialog({ labId, resultId, onClose, onEdit, onAdd }: {
               </div>
             </section>
             <PtUngradedResults labId={labId} results={e.results} today={data.today} canEdit={data.can_edit} />
+            <PtDocuments labId={labId} resultId={e.id} documents={data.documents} canEdit={data.can_edit} />
             <PtReviewSection labId={labId} event={e} data={data} canEdit={data.can_edit} />
           </div>
         )}

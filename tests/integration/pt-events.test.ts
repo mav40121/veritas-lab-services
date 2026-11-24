@@ -9,6 +9,8 @@
 //   4. Bias and trend: the numbers worked out on the server, "no peer data" where there is none, and the two review flags.
 //   5. The period report: on screen, as Excel and as a PDF, with the compliance digest's numbers unchanged.
 //   6. Into the method-by-method competency record: events the person tested, for the method's analytes; it marks nothing.
+//   7. The program's report attached to an event.
+//   8. "Download all of this lab's records" and the per-customer delete take every new table.
 //
 // Boots the REAL routes against a throwaway SQLite DB (made-up people, programs and numbers only). Run: npm run test:pt-events
 import { inspectionWorld } from "./inspectionFixture";
@@ -360,6 +362,57 @@ async function main() {
   seed("competency_method_groups", { program_id: prog, name: "Chem", analytes: JSON.stringify(["Glucose"]) });
   const pp = await call(EDITOR, "GET", `/api/labs/${A}/veritacomp/programs/${prog}/pt-samples`);
   check("6f. the program record's picker answers as before, from its own lab only", pp.s === 200 && pp.j.some((x: any) => x.id === kG && x.suggestedSampleId === "K-1" && x.suggestedSampleType === "PT" && x.suggestedAcceptable === 1) && pp.j.some((x: any) => x.eventId === "K-mo") && !pp.j.some((x: any) => x.eventId === "K-B") && pp.j.every((x: any) => x.analyte === "Glucose"));
+
+  // ── 7. The program's report ───────────────────────────────────────────────
+  const { PDFDocument } = await import("pdf-lib");
+  const pdfDoc = await PDFDocument.create(); pdfDoc.addPage([200, 200]);
+  const pdfBytes = Buffer.from(await pdfDoc.save());
+  const pngBytes = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64");
+  const attach = async (who: any, id: number, bytes: Buffer, name: string, type: string, lab = A) => {
+    const body = new FormData();
+    body.append("file", new Blob([new Uint8Array(bytes)], { type }), name);
+    const r = await fetch(`${w.base}${P(`events/${id}/documents`, lab)}`, { method: "POST", headers: who ? { Authorization: `Bearer ${who.token}` } : {}, body });
+    const text = await r.text(); let j: any = null; try { j = JSON.parse(text); } catch { /* not JSON */ }
+    return { s: r.status, j, text };
+  };
+  const ev7 = (await rec(EDITOR, { enrollment_id: hemeProg, event_id: "D-1", analyte: "Hemoglobin", pass_fail: "pass" })).j.id;
+  const ev7b = (await rec(EDITOR, { enrollment_id: hemeProg, event_id: "D-1", analyte: "Platelets", pass_fail: "pass" })).j.id;
+  for (const [who, u7] of [["a Staff login", STAFF], ["a view-only reviewer", VIEWER], ["an editor of another module", SCAN_ONLY], ["another customer", OTHER]] as const) check(`7a. ${who} can't attach one`, (await attach(u7, ev7, pdfBytes, "r.pdf", "application/pdf")).s === 403);
+  check("7b. another lab's event isn't found", (await attach(OTHER, ev7, pdfBytes, "r.pdf", "application/pdf", X)).s === 404);
+  const dPdf = await attach(EDITOR, ev7, pdfBytes, "Program A report.pdf", "application/octet-stream"), dPng = await attach(EDITOR, ev7b, pngBytes, "page.png", "image/png");
+  check("7c. a PDF or an image, by its own bytes", dPdf.s === 201 && dPdf.j.mime_type === "application/pdf" && dPng.s === 201 && dPng.j.mime_type === "image/png", `${dPdf.text} ${dPng.text}`);
+  for (const [what, bytes, name] of [["a page dressed as a PDF", Buffer.from("<html><script>1</script></html>"), "r.pdf"], ["a text file", Buffer.from("Made-up text"), "r.txt"], ["an empty file", Buffer.alloc(0), "r.pdf"]] as const) check(`7d. ${what}: refused`, (await attach(EDITOR, ev7, bytes, name, "application/pdf")).s === 400);
+  let d7 = await detail(ev7b);
+  check("7e. it shows on the event, whichever result it was attached from, with who and when", d7.documents.length === 2 && d7.documents[1].original_filename === "Program A report.pdf" && d7.documents[0].uploaded_by === "Ed Editor");
+  const get7 = (who: any, doc: number, ev = ev7, lab = A) => call(who, "GET", P(`events/${ev}/documents/${doc}`, lab));
+  const got = await get7(VIEWER, dPdf.j.id);
+  check("7f. what comes back is what went in, as a download", got.s === 200 && got.buf.equals(pdfBytes));
+  check("7g. a Staff login, another customer, another lab's path and another event's path don't open it", (await get7(STAFF, dPdf.j.id)).s === 403 && (await get7(OTHER, dPdf.j.id)).s === 403 && (await get7(OTHER, dPdf.j.id, ev7, X)).s === 404 && (await get7(EDITOR, dPdf.j.id, bad)).s === 404);
+  check("7h. attaching one doesn't change the review, and its event's results can't be deleted", d7.event.review.state === "not_reviewed" && (await call(EDITOR, "DELETE", `/api/veritapt/events/${ev7}`, undefined, A)).j?.code === "HOLDS_RECORDS");
+  for (const [who, u7] of [["a Staff login", STAFF], ["a view-only reviewer", VIEWER], ["another customer", OTHER]] as const) check(`7i. ${who} can't remove one`, (await call(u7, "DELETE", P(`events/${ev7}/documents/${dPng.j.id}`))).s === 403);
+  check("7j. removing one leaves its audit row, never the bytes", (await call(EDITOR, "DELETE", P(`events/${ev7}/documents/${dPng.j.id}`))).s === 200 && (await detail(ev7)).documents.length === 1 && w.audits("pt_event_document", dPng.j.id).map((x) => x.action).join() === "create,delete" && !w.audits("pt_event_document").some((x) => /file_data/.test(`${x.before_json}${x.after_json}`)));
+
+  // ── 8. The records export and the per-customer delete ─────────────────────
+  const { EXPORT_TABLES } = await import("../../server/exportAllTables");
+  const { exportContext, selectRecords } = await import("../../server/exportAll");
+  const NEW_TABLES = ["pt_event_evaluations", "pt_event_reviews", "pt_event_documents"];
+  const ctxA = (exportContext as any)(sqlite, A), ctxX = (exportContext as any)(sqlite, X);
+  for (const t of NEW_TABLES) {
+    const n = one(`SELECT COUNT(*) AS n FROM ${t} WHERE lab_id = ?`, A).n;
+    check(`8a. ${t}: the lab's export has every row and another customer's has none`, n > 0 && (EXPORT_TABLES as any)[t]?.scope.kind === "lab" && (selectRecords as any)(sqlite, t, ctxA).rows.length === n && !((selectRecords as any)(sqlite, t, ctxX)?.rows.length));
+  }
+  const dry = await fetch(`${w.base}/api/admin/customer-purge`, { method: "POST", headers: { "Content-Type": "application/json", "x-admin-secret": w.ADMIN }, body: JSON.stringify({ organizationId: w.ORG, dryRun: true }) });
+  const plan8 = (await dry.json() as any);
+  const byTable = plan8.plan?.rowsByTable ?? plan8.rowsByTable ?? {};
+  check("8b. the per-customer delete plans every row of them", dry.status === 200 && NEW_TABLES.every((t) => byTable[t] === one(`SELECT COUNT(*) AS n FROM ${t} WHERE lab_id IN (?, ?)`, A, B).n), JSON.stringify(Object.fromEntries(NEW_TABLES.map((t) => [t, byTable[t]]))));
+  check("8c. deleting an account clears its results' evaluations with them", await (async () => {
+    const { storage } = await import("../../server/storage");
+    const gone = await w.login("gone", "Gale Gone");
+    const r8 = seed("pt_events", { enrollment_id: 1, user_id: gone.id, lab_id: null, event_date: "2026-01-01", analyte: "Glucose", pass_fail: "ungraded" });
+    seed("pt_event_evaluations", { lab_id: 0, event_id: r8, method: "peer_group", acceptance_criteria: "x", conclusion: "pass", performed_date: "2026-01-01", recorded_by_user_id: gone.id });
+    storage.deleteUser(gone.id);
+    return one("SELECT COUNT(*) AS n FROM pt_event_evaluations WHERE event_id = ?", r8).n === 0;
+  })());
 
   w.finish();
 }

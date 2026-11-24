@@ -74,8 +74,9 @@ export const PURGE_OVERRIDES: Record<string, PurgeRule> = {
   // organization's indicator goes with either.
   pi_finding_links: del(`lab_id ${IN("labs")} OR finding_id IN (SELECT id FROM findings WHERE ${LAB_OR_OWNER("user_id")})`),
   org_quality_indicator_labs: del(`lab_id ${IN("labs")} OR organization_id ${IN("orgs")}`),
-  // VeritaPT: an event's review goes with the lab (server/ptReviews.ts); an evaluation with the lab, and with its result
-  // (server/ptEvaluations.ts).
+  // VeritaPT: an event's attached report and its review go with the lab (server/ptDocuments.ts, server/ptReviews.ts); an
+  // evaluation with the lab, and with its result (server/ptEvaluations.ts).
+  pt_event_documents: del(`lab_id ${IN("labs")}`),
   pt_event_reviews: del(`lab_id ${IN("labs")}`),
   pt_event_evaluations: del(`lab_id ${IN("labs")} OR event_id IN (SELECT id FROM pt_events WHERE ${LAB_OR_OWNER("user_id")})`),
   // BUG-184: an attempt goes when its quiz, its record, its assignment or its person does (its quiz_id can't be cleared), and
