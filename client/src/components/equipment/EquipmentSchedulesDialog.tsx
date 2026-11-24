@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ArrowDown, ArrowUp, ListChecks, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { cleanSteps, dueAfter, FREQUENCIES, limitsLabel, SCHEDULE_TYPE_LABEL, SCHEDULE_TYPES } from "@shared/equipmentSchedules";
+import { cleanDays, cleanSteps, dueWithDays, firstDue, FREQUENCIES, frequencyLabel, limitsLabel, parseDays, SCHEDULE_TYPE_LABEL, SCHEDULE_TYPES, WEEK_DAYS } from "@shared/equipmentSchedules";
 import { ApprovedDocumentDialog } from "./ApprovedDocumentDialog";
 import { CompleteScheduleDialog } from "./CompleteScheduleDialog";
 import { DocumentPicker, DueBadge, equipmentApi, ReasonDialog, sendJson, type Equipment, type Schedule } from "./equipmentShared";
@@ -24,17 +24,31 @@ function ScheduleForm({ base, labId, schedule, onClose, onSaved }: { base: strin
   const [type, setType] = useState(schedule?.schedule_type ?? "preventive_maintenance");
   const [frequency, setFrequency] = useState(schedule?.frequency ?? "daily");
   const [days, setDays] = useState(schedule?.interval_days ? String(schedule.interval_days) : "");
-  const first = (f: string, n: string) => (f === "daily" ? labTodayIso() : dueAfter(f, Number(n) || null, labTodayIso()) ?? "");
+  // The days a daily schedule is due: every day until the lab says otherwise.
+  const [week, setWeek] = useState<Set<number>>(new Set(parseDays(schedule?.days_of_week) ?? WEEK_DAYS.map((w) => w.value)));
+  const stored = (w: Set<number>) => cleanDays([...w], "daily").value ?? null;
+  const first = (f: string, n: string, w = week) => firstDue(f, Number(n) || null, labTodayIso(), f === "daily" ? stored(w) : null) ?? "";
   const [due, setDue] = useState(schedule ? schedule.next_due_date ?? "" : first("daily", ""));
   const [recipients, setRecipients] = useState((schedule?.recipients ?? []).map((r) => r.email).join(", "));
   const [sop, setSop] = useState<number | null>(schedule?.sop?.id ?? null);
   const [busy, setBusy] = useState(false);
   const pickFrequency = (f: string) => { setFrequency(f); if (!schedule) setDue(first(f, days)); };
+  const toggleDay = (d: number) => {
+    const w = new Set(week);
+    if (w.has(d)) w.delete(d); else w.add(d);
+    setWeek(w);
+    if (!w.size) return;
+    // The date goes with the days, as the server works it out; a date typed after that is kept.
+    if (!schedule || schedule.frequency !== "daily") setDue(first("daily", days, w));
+    else if (stored(w) === (schedule.days_of_week ?? null)) setDue(schedule.next_due_date ?? "");
+    else setDue(dueWithDays(schedule.next_due_date, stored(w), labTodayIso(), schedule.last_completed?.done_day === labTodayIso()) ?? "");
+  };
   async function save() {
     if (!name.trim()) { toast({ title: "Enter the schedule's name", variant: "destructive" }); return; }
+    if (frequency === "daily" && !week.size) { toast({ title: "Pick at least one day", variant: "destructive" }); return; }
     setBusy(true);
     try {
-      const body = { name: name.trim(), schedule_type: type, frequency, interval_days: frequency === "every_n_days" ? Number(days) : null, next_due_date: due || null, recipients, sop_document_id: sop };
+      const body = { name: name.trim(), schedule_type: type, frequency, interval_days: frequency === "every_n_days" ? Number(days) : null, days_of_week: frequency === "daily" ? [...week].sort() : null, next_due_date: due || null, recipients, sop_document_id: sop };
       const r = await sendJson(schedule ? `${base}/${schedule.id}` : base, schedule ? "PUT" : "POST", body);
       if (!r.ok) { toast({ title: r.data.error || "Could not save", variant: "destructive" }); return; }
       toast({ title: schedule ? "Schedule saved" : `Added ${name.trim()}` });
@@ -56,7 +70,22 @@ function ScheduleForm({ base, labId, schedule, onClose, onSaved }: { base: strin
           <div><Label htmlFor="sf-due">Next due</Label><Input id="sf-due" type="date" value={due} onChange={(e) => setDue(e.target.value)} data-testid="sf-due" /></div>
           <div className="sm:col-span-2"><Label htmlFor="sf-recipients">Remind these people</Label><Input id="sf-recipients" value={recipients} onChange={(e) => setRecipients(e.target.value)} placeholder="Blank uses the lab's reminder list" data-testid="sf-recipients" /><p className="text-[11px] text-muted-foreground mt-1">Emails, separated by commas. Reminders go out only while the lab has them turned on.</p></div>
           <div className="sm:col-span-2"><Label>SOP in VeritaDC&#8482;</Label><DocumentPicker labId={labId} value={sop} valueLabel={schedule?.sop ? [schedule.sop.doc_number, schedule.sop.title].filter(Boolean).join(" ") : null} onChange={(id) => setSop(id)} testId="sf-sop" /></div>
-          {frequency === "daily" && <p className="sm:col-span-2 text-xs text-muted-foreground">A daily schedule owes a record every day from today. A day with none shows on the monthly review, unless the instrument was out of service all day.</p>}
+          {frequency === "daily" && (
+            <div className="sm:col-span-2">
+              <Label>Days it is due</Label>
+              <div className="flex flex-wrap gap-1.5 mt-1" role="group" aria-label="Days it is due" data-testid="sf-days-of-week">
+                {WEEK_DAYS.map((w) => (
+                  <button
+                    key={w.value} type="button" aria-pressed={week.has(w.value)} aria-label={w.name} onClick={() => toggleDay(w.value)} data-testid={`sf-day-${w.value}`}
+                    className={`h-8 min-w-[3rem] rounded-md border px-2 text-xs font-medium ${week.has(w.value) ? "bg-primary text-primary-foreground border-primary" : "bg-background text-muted-foreground border-border"}`}
+                  >{w.short}</button>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1" data-testid="sf-days-said">
+                {week.size === 0 ? "Pick at least one day." : `${frequencyLabel("daily", null, stored(week))}. Each of those days owes a record${schedule ? "" : " from its first due date"}. A day with none shows on the monthly review, unless the instrument was out of service all day.${schedule ? " A change counts from today. The days before today are judged by the days picked then." : ""}`}
+              </p>
+            </div>
+          )}
         </div>
         <div className="flex justify-end gap-2 mt-2">
           <Button variant="outline" onClick={onClose} disabled={busy}>Cancel</Button>

@@ -154,7 +154,7 @@ export function registerEquipmentRoutes(app: Express, deps: {
     sqlite().prepare("SELECT id, down_from, reason FROM equipment_downtime WHERE lab_id = ? AND equipment_id = ? AND down_until IS NULL ORDER BY id DESC LIMIT 1").get(labId, equipmentId) ?? null;
   // The instrument's schedules, as the list shows them: the first one's status is the instrument's own.
   const schedulesFor = (row: any) => activeSchedules(sqlite(), row.lab_id, row.id).map((x) => ({
-    id: x.id, name: x.name, schedule_type: x.schedule_type, frequency: x.frequency, interval_days: x.interval_days, next_due_date: x.next_due_date, is_primary: x.is_primary,
+    id: x.id, name: x.name, schedule_type: x.schedule_type, frequency: x.frequency, interval_days: x.interval_days, days_of_week: x.days_of_week, next_due_date: x.next_due_date, is_primary: x.is_primary,
     has_checklist: !!currentChecklist(sqlite(), x.lab_id, x.id), status: x.is_primary ? equipmentStatus(x.next_due_date) : scheduleStatus(x, labToday()),
   }));
   const decorate = (row: any) => ({ ...row, maintenance_status: equipmentStatus(row.next_due_date), out_of_service: openDowntime(row.lab_id, row.id), schedules: schedulesFor(row) });
@@ -352,8 +352,8 @@ export function registerEquipmentRoutes(app: Express, deps: {
       keep(v.placed_in_service_date, ex.placed_in_service_date), keep(v.vendor_name, ex.vendor_name), keep(v.service_contract, ex.service_contract),
       keep(v.ifu_url, ex.ifu_url), keep(v.ifu_document_id, ex.ifu_document_id), now, ex.id,
     );
+    syncPrimaryFromEquipment(sqlite(), ex, sqlite().prepare("SELECT * FROM lab_equipment WHERE id = ?").get(ex.id), now, { id: req.userId, name: userName(req.userId) });
     const row = sqlite().prepare("SELECT * FROM lab_equipment WHERE id = ?").get(ex.id) as any;
-    syncPrimaryFromEquipment(sqlite(), ex, row, now, { id: req.userId, name: userName(req.userId) });
     const changed = Object.keys(row).filter((k) => k !== "updated_at" && row[k] !== ex[k]);
     if (changed.length) audit(req, "update", "equipment", ex.id, row.instrument_name, Object.fromEntries(changed.map((k) => [k, ex[k]])), Object.fromEntries(changed.map((k) => [k, row[k]])));
     res.json(decorate(row));
@@ -510,7 +510,7 @@ export function registerEquipmentRoutes(app: Express, deps: {
     eq: any; schedule: ScheduleRow; eventId: number; doneOn: string; typed: string | null; allowEarlier: boolean; waits: boolean; now: string; user: { id: number; name: string | null };
     version?: ChecklistVersion | null; outcomes?: StepOutcome[];
   }): Done {
-    const plan = planScheduleDue({ currentDue: o.schedule.next_due_date, frequency: o.schedule.frequency, intervalDays: o.schedule.interval_days, doneOn: o.doneOn, typedDue: o.typed, allowEarlier: o.allowEarlier });
+    const plan = planScheduleDue({ currentDue: o.schedule.next_due_date, frequency: o.schedule.frequency, intervalDays: o.schedule.interval_days, daysOfWeek: o.schedule.days_of_week, doneOn: o.doneOn, typedDue: o.typed, allowEarlier: o.allowEarlier });
     const dueSet = !o.waits && plan.computed && !plan.held ? plan.computed : null;
     const steps = o.version?.steps ?? [];
     const completionId = Number(sqlite().prepare(
@@ -535,7 +535,7 @@ export function registerEquipmentRoutes(app: Express, deps: {
   function replan(c: any, doneOn: string, o: { typed?: string | null; allowEarlier: boolean; now: string }): Done | null {
     const sc = scheduleRow(c.schedule_id, c.lab_id);
     if (!sc) return null;
-    const plan = planScheduleDue({ currentDue: sc.next_due_date, frequency: sc.frequency, intervalDays: sc.interval_days, doneOn, typedDue: o.typed ?? null, allowEarlier: o.allowEarlier });
+    const plan = planScheduleDue({ currentDue: sc.next_due_date, frequency: sc.frequency, intervalDays: sc.interval_days, daysOfWeek: sc.days_of_week, doneOn, typedDue: o.typed ?? null, allowEarlier: o.allowEarlier });
     const dueSet = plan.computed && !plan.held ? plan.computed : null;
     const inForce = !!c.due_set && c.due_set === sc.next_due_date;
     sqlite().prepare("UPDATE equipment_schedule_completions SET counts = 1, counted_at = COALESCE(counted_at, ?), due_before = ?, due_set = ? WHERE id = ?")
@@ -937,7 +937,7 @@ export function registerEquipmentRoutes(app: Express, deps: {
       counts.events = events.length;
       // Its schedules and checklists go on there, starting that day, reminding that lab's list; what was completed here goes along read-only.
       const schedules = sqlite().prepare("SELECT * FROM equipment_schedules WHERE equipment_id = ? AND lab_id = ? ORDER BY id").all(eq.id, eq.lab_id) as any[];
-      const scheduleIds = copyRows(sqlite(), "equipment_schedules", schedules, (r) => ({ lab_id: target.id, equipment_id: newId, recipients_json: "[]", sop_document_id: null, starts_on: labToday(labTimeZoneById(sqlite(), target.id)) }));
+      const scheduleIds = copyRows(sqlite(), "equipment_schedules", schedules, (r) => ({ lab_id: target.id, equipment_id: newId, recipients_json: "[]", sop_document_id: null, starts_on: labToday(labTimeZoneById(sqlite(), target.id)), days_history: null }));
       const versions = sqlite().prepare("SELECT * FROM equipment_checklist_versions WHERE equipment_id = ? AND lab_id = ? ORDER BY id").all(eq.id, eq.lab_id) as any[];
       const versionIds = copyRows(sqlite(), "equipment_checklist_versions", versions, (r) => ({ lab_id: target.id, equipment_id: newId, schedule_id: scheduleIds.get(r.schedule_id) ?? null }));
       const steps = sqlite().prepare("SELECT s.* FROM equipment_checklist_steps s JOIN equipment_checklist_versions v ON v.id = s.version_id WHERE v.equipment_id = ? AND v.lab_id = ? ORDER BY s.id").all(eq.id, eq.lab_id) as any[];

@@ -69,7 +69,7 @@ export function LogMaintenanceDialog({ labId, equipment, requireVendorReport, on
   const pm = completesPm && canCompletePm(type) && !firstHasList;
   const pickType = (t: string) => { setType(t); setCompletesPm(completesPmByDefault(t)); setAllowEarlier(false); if (!canCompletePm(t)) setNextDue(""); };
   // What the server will do with the due date, worked out by the same rule, before the person says anything about moving it back.
-  const plan = pm && date ? planScheduleDue({ currentDue: equipment.next_due_date, frequency: first?.frequency ?? "manual", intervalDays: first?.interval_days ?? null, doneOn: date, typedDue: nextDue || null }) : null;
+  const plan = pm && date ? planScheduleDue({ currentDue: equipment.next_due_date, frequency: first?.frequency ?? "manual", intervalDays: first?.interval_days ?? null, daysOfWeek: first?.days_of_week ?? null, doneOn: date, typedDue: nextDue || null }) : null;
   const otherPm = canCompletePm(type) && rest.some((x) => others.has(x.id) && x.schedule_type === "preventive_maintenance");
   const waits = (pm || otherPm) && vendor && requireVendorReport && !report;
 

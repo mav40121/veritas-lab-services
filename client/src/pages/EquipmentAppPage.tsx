@@ -373,7 +373,7 @@ export default function EquipmentAppPage() {
                         {e.awaiting_vendor_report ? <div className="text-xs font-medium text-amber-800 dark:text-amber-300" data-testid={`equip-waiting-${e.id}`}>{e.awaiting_vendor_report === 1 ? "A vendor PM is" : `${e.awaiting_vendor_report} vendor PMs are`} waiting for the vendor report</div> : null}
                       </td>
                       <td className="py-2 pr-2 text-muted-foreground">{e.location || "-"}</td>
-                      <td className="py-2 pr-2 text-muted-foreground">{(() => { const first = e.schedules?.find(x => x.is_primary); return first && first.frequency !== "manual" ? (first.frequency === "every_n_days" ? `${first.interval_days} d` : frequencyLabel(first.frequency)) : e.pm_interval_days ? `${e.pm_interval_days} d` : "-"; })()}</td>
+                      <td className="py-2 pr-2 text-muted-foreground">{(() => { const first = e.schedules?.find(x => x.is_primary); return first && first.frequency !== "manual" ? (first.frequency === "every_n_days" ? `${first.interval_days} d` : frequencyLabel(first.frequency, first.interval_days, first.days_of_week)) : e.pm_interval_days ? `${e.pm_interval_days} d` : "-"; })()}</td>
                       <td className="py-2 pr-2">
                         {e.next_due_date ? <span className="whitespace-nowrap">{e.next_due_date}</span> : <span className="text-muted-foreground">-</span>}
                         {(e.schedules ?? []).filter(x => !x.is_primary).length > 0 && (

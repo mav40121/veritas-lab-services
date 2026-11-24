@@ -5,6 +5,8 @@
 //
 //   - An instrument has any number of schedules: how often, the next due date, its own reminder recipients (blank is the lab's list), and
 //     one of the lab's VeritaDC documents as its SOP, opened at the current approved version. The first one is the instrument's PM.
+//   - A daily schedule can name the days it is due (a lab closed on weekends). A change takes effect the day it is made: the days before are
+//     judged by what was in force, kept in a small JSON history on the row (days_history; server/db.ts says why it is there).
 //   - A schedule can carry a checklist. Editing it adds a version; a completion names the version it answered and keeps a copy of every
 //     step, so an edit never changes what was recorded. Someone answering an older version than the one on file is told, not recorded.
 //   - Completing a schedule logs a maintenance event in the person's own sign-in. A failed step, or a value outside its limits, needs its
@@ -19,8 +21,8 @@ import { approvedReadVersionId } from "./policyApprovedVersion";
 import { sendApprovedDocument } from "./approvedDocumentView";
 import { EMAIL_RE } from "./labGroups";
 import { isYmd } from "../shared/stainLogRules";
-import { cleanSteps, dueAfter, frequencyLabel, isFrequency, isScheduleType, judgeStep, sameSteps, scheduleStatus, type StepOutcome } from "../shared/equipmentSchedules";
-import { COMPLETION_JOIN, currentChecklist, mirrorPrimary, primaryOf, STANDING_COMPLETION, type ScheduleRow } from "./equipmentScheduleData";
+import { alignDue, cleanDays, cleanSteps, dueWithDays, firstDue, frequencyLabel, isFrequency, isScheduleType, judgeStep, sameSteps, scheduleStatus, withDaysChange, type StepOutcome } from "../shared/equipmentSchedules";
+import { COMPLETION_JOIN, completionsBetween, currentChecklist, mirrorPrimary, primaryOf, STANDING_COMPLETION, type ScheduleRow } from "./equipmentScheduleData";
 
 type Sqlite = any;
 
@@ -71,7 +73,7 @@ export function registerEquipmentScheduleRoutes(app: Express, ctx: ScheduleRoute
     const list = currentChecklist(sqlite(), s.lab_id, s.id);
     const { recipients_json: _hidden, ...rest } = s as any;
     return {
-      ...names(rest), status: s.active ? scheduleStatus(s, labToday()) : "none", frequency_label: frequencyLabel(s.frequency, s.interval_days),
+      ...names(rest), status: s.active ? scheduleStatus(s, labToday()) : "none", frequency_label: frequencyLabel(s.frequency, s.interval_days, s.days_of_week),
       // Who gets the emails is setup; a reader sees only whether it has its own list.
       recipients: manages ? recipientsOf(s) : [], has_own_recipients: recipientsOf(s).length > 0,
       sop: s.sop_document_id ? { id: s.sop_document_id, title: doc?.title ?? null, doc_number: doc?.doc_number ?? null, readable: approvedReadVersionId(doc) != null } : null,
@@ -105,8 +107,18 @@ export function registerEquipmentScheduleRoutes(app: Express, ctx: ScheduleRoute
       interval_days = Number(pick("interval_days"));
       if (!Number.isInteger(interval_days) || interval_days < 1 || interval_days > 3650) return { error: "Enter the number of days, 1 to 3650", code: "BAD_INTERVAL" };
     }
-    let next_due_date: string | null = b.next_due_date !== undefined ? (b.next_due_date || null) : from ? from.next_due_date ?? null : frequency === "daily" ? labToday() : dueAfter(frequency, interval_days, labToday());
+    // The days go with a daily schedule: any other refuses them, and a change to another frequency clears them.
+    const d = cleanDays(b.days_of_week !== undefined ? b.days_of_week : null, frequency);
+    if (d.error) return { error: d.error, code: "BAD_DAYS" };
+    const days_of_week = b.days_of_week !== undefined ? d.value! : frequency === "daily" ? from?.days_of_week ?? null : null;
+    let next_due_date: string | null = b.next_due_date !== undefined ? (b.next_due_date || null) : from ? from.next_due_date ?? null : firstDue(frequency, interval_days, labToday(), days_of_week);
     if (next_due_date && !isYmd(next_due_date)) return { error: "The next due date isn't a date", code: "BAD_DATE" };
+    if (next_due_date) next_due_date = alignDue(frequency, days_of_week, next_due_date);
+    // Its days changed, and the date wasn't typed as well: the date goes with them. A day added today is due today.
+    if (from && from.frequency === "daily" && frequency === "daily" && days_of_week !== (from.days_of_week ?? null) && next_due_date === (from.next_due_date ? alignDue(frequency, days_of_week, from.next_due_date) : null)) {
+      const doneToday = completionsBetween(sqlite(), eq.lab_id, from.id!, labToday(), labToday()).length > 0;
+      next_due_date = dueWithDays(from.next_due_date, days_of_week, labToday(), doneToday);
+    }
     let recipients_json = from?.recipients_json ?? "[]";
     if (b.recipients !== undefined) {
       const r = cleanRecipients(b.recipients);
@@ -122,8 +134,11 @@ export function registerEquipmentScheduleRoutes(app: Express, ctx: ScheduleRoute
         sop_document_id = doc.id;
       }
     }
-    return { v: { name, schedule_type, frequency, interval_days, next_due_date, recipients_json, sop_document_id } };
+    return { v: { name, schedule_type, frequency, interval_days, days_of_week, next_due_date, recipients_json, sop_document_id } };
   };
+
+  // A daily schedule owes its first record on its first due date: one set to start later owes nothing before that.
+  const startsOn = (v: { frequency: string; next_due_date: string | null }): string => (v.frequency === "daily" && v.next_due_date && v.next_due_date > labToday() ? v.next_due_date : labToday());
 
   const addVersion = (req: any, eq: any, s: ScheduleRow, steps: any[], note: string | null, now: string): number => {
     const no = Number((sqlite().prepare("SELECT COALESCE(MAX(version_no), 0) + 1 AS n FROM equipment_checklist_versions WHERE lab_id = ? AND schedule_id = ?").get(eq.lab_id, s.id) as any).n);
@@ -150,9 +165,9 @@ export function registerEquipmentScheduleRoutes(app: Express, ctx: ScheduleRoute
       // An instrument with no PM yet takes its first longer PM schedule as the one the list and readiness read.
       const primary = !primaryOf(sqlite(), eq.lab_id, eq.id) && v.schedule_type === "preventive_maintenance" && v.frequency !== "daily" && v.frequency !== "weekly" ? 1 : 0;
       id = Number(sqlite().prepare(
-        `INSERT INTO equipment_schedules (lab_id, equipment_id, name, schedule_type, frequency, interval_days, next_due_date, recipients_json, sop_document_id, is_primary, active, starts_on, created_by_user_id, created_by_name, created_at, updated_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,1,?,?,?,?,?)`
-      ).run(eq.lab_id, eq.id, v.name, v.schedule_type, v.frequency, v.interval_days, v.next_due_date, v.recipients_json, v.sop_document_id, primary, labToday(), req.userId, userName(req.userId), now, now).lastInsertRowid);
+        `INSERT INTO equipment_schedules (lab_id, equipment_id, name, schedule_type, frequency, interval_days, days_of_week, next_due_date, recipients_json, sop_document_id, is_primary, active, starts_on, created_by_user_id, created_by_name, created_at, updated_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,1,?,?,?,?,?)`
+      ).run(eq.lab_id, eq.id, v.name, v.schedule_type, v.frequency, v.interval_days, v.days_of_week, v.next_due_date, v.recipients_json, v.sop_document_id, primary, startsOn(v), req.userId, userName(req.userId), now, now).lastInsertRowid);
       const row = sqlite().prepare("SELECT * FROM equipment_schedules WHERE id = ?").get(id) as ScheduleRow;
       if (primary) mirrorPrimary(sqlite(), row, now);
       if (steps.steps!.length) addVersion(req, eq, row, steps.steps!, text(req.body?.change_note, 500), now);
@@ -174,10 +189,12 @@ export function registerEquipmentScheduleRoutes(app: Express, ctx: ScheduleRoute
     const v = c.v;
     const now = new Date().toISOString();
     // A schedule that becomes daily owes a record a day from the day it does, not from when it was made.
-    const starts = v.frequency === "daily" && s.frequency !== "daily" ? labToday() : s.starts_on;
+    const starts = v.frequency === "daily" && s.frequency !== "daily" ? startsOn(v) : s.starts_on;
+    // A change to its days takes effect today; the history keeps what was in force before, for the review of those days.
+    const days_history = v.frequency !== "daily" || s.frequency !== "daily" ? null : v.days_of_week !== s.days_of_week ? withDaysChange(s, v.days_of_week, labToday()) : s.days_history;
     sqlite().transaction(() => {
-      sqlite().prepare("UPDATE equipment_schedules SET name=?, schedule_type=?, frequency=?, interval_days=?, next_due_date=?, recipients_json=?, sop_document_id=?, starts_on=?, updated_at=? WHERE id=?")
-        .run(v.name, v.schedule_type, v.frequency, v.interval_days, v.next_due_date, v.recipients_json, v.sop_document_id, starts, now, s.id);
+      sqlite().prepare("UPDATE equipment_schedules SET name=?, schedule_type=?, frequency=?, interval_days=?, days_of_week=?, days_history=?, next_due_date=?, recipients_json=?, sop_document_id=?, starts_on=?, updated_at=? WHERE id=?")
+        .run(v.name, v.schedule_type, v.frequency, v.interval_days, v.days_of_week, days_history, v.next_due_date, v.recipients_json, v.sop_document_id, starts, now, s.id);
       const row = sqlite().prepare("SELECT * FROM equipment_schedules WHERE id = ?").get(s.id) as ScheduleRow;
       if (row.is_primary) mirrorPrimary(sqlite(), row, now);
     })();
@@ -216,7 +233,7 @@ export function registerEquipmentScheduleRoutes(app: Express, ctx: ScheduleRoute
     const now = new Date().toISOString();
     sqlite().transaction(() => {
       const other = primaryOf(sqlite(), eq.lab_id, eq.id);
-      sqlite().prepare("UPDATE equipment_schedules SET active = 1, ended_on = NULL, ended_at = NULL, ended_by_user_id = NULL, ended_by_name = NULL, end_reason = NULL, starts_on = ?, is_primary = ?, updated_at = ? WHERE id = ?")
+      sqlite().prepare("UPDATE equipment_schedules SET active = 1, ended_on = NULL, ended_at = NULL, ended_by_user_id = NULL, ended_by_name = NULL, end_reason = NULL, starts_on = ?, days_history = NULL, is_primary = ?, updated_at = ? WHERE id = ?")
         .run(labToday(), s.is_primary && !other ? 1 : 0, now, s.id);
       const row = sqlite().prepare("SELECT * FROM equipment_schedules WHERE id = ?").get(s.id) as ScheduleRow;
       if (row.is_primary) mirrorPrimary(sqlite(), row, now);

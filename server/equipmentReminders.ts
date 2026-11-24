@@ -13,7 +13,7 @@ import { db } from "./db";
 import { decideTaskReminder } from "./veritatrackReminders";
 import { daysUntilDateOnly } from "./veritatrack";
 import { labToday, labTimeZoneById } from "./dateLocal";
-import { reminderLeadDays } from "../shared/equipmentSchedules";
+import { alignDue, dueOnDay, reminderLeadDays } from "../shared/equipmentSchedules";
 import { PRIMARY_NAME } from "./equipmentScheduleData";
 
 // B10 (2026-11-24): the digest covers every schedule on an instrument, not only its PM date. A schedule with its own recipients goes to them;
@@ -74,8 +74,11 @@ export async function runEquipmentReminders(): Promise<EquipmentReminderSummary>
         ? own
         : [{ id: null, name: PRIMARY_NAME, frequency: "every_n_days", interval_days: eq.pm_interval_days, is_primary: 1, next_due_date: eq.next_due_date, recipients_json: "[]" }, ...own];
       for (const x of rows) {
-        const due = String(x.next_due_date || "").trim();
-        if (!due) continue;
+        const stored = String(x.next_due_date || "").trim();
+        if (!stored) continue;
+        // A daily schedule says nothing on a day it isn't due, overdue or not: it waits for the next day the lab works.
+        if (x.frequency === "daily" && !dueOnDay(x.days_of_week, today)) continue;
+        const due = alignDue(x.frequency, x.days_of_week, stored);
         let to: any[] = [];
         try { to = JSON.parse(x.recipients_json || "[]"); } catch { to = []; }
         to = Array.isArray(to) ? to.filter((r) => r && typeof r.email === "string" && r.email.includes("@")) : [];

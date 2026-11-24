@@ -2,6 +2,7 @@
 //
 // Browser receipt for VeritaMaintain schedules and checklists (B10, 2026-11-24). On a local production build with a scratch DB, made-up people and made-up instruments:
 //   S1. the PM interval shows as the first schedule; add a daily one with its SOP; the SOP opens at its approved version
+//   S1b. the days it is due: seven toggles, all on; weekdays picked, the row says "Daily, Monday to Friday"; none picked is refused; Edit shows them
 //   S2. set its checklist (a check, a value with limits); it is version 1
 //   S3. a Staff login gets Due now, answers it: a failed step asks for its corrective action; saved, it is due tomorrow and off Due now
 //   S4. edit the checklist: version 2; what was done still shows version 1's steps; the history shows the answers
@@ -113,6 +114,35 @@ try {
   check("S1. another, with its own reminder list", /bench@example\.com/.test(weekly.recipients_json));
   await page.getByTestId(`schedule-sop-${daily.id}`).click();
   check("S1. the SOP opens at its approved version", await page.frameLocator('[data-testid="approved-document-frame"]').getByText("Made-up daily maintenance SOP, approved version.").waitFor({ timeout: 8000 }).then(() => true).catch(() => false));
+  await closeTop(page);
+
+  // ── S1b ── the days it is due
+  await page.getByTestId("schedule-add").click();
+  await page.getByTestId("sf-name").fill("Weekday check");
+  await page.getByTestId("sf-type").selectOption("function_check");
+  const pressed = async (p) => Object.fromEntries(await Promise.all([0, 1, 2, 3, 4, 5, 6].map(async (d) => [d, await p.getByTestId(`sf-day-${d}`).getAttribute("aria-pressed")])));
+  check("S1b. Daily shows seven days, all on", Object.values(await pressed(page)).every((v) => v === "true") && /^Daily\. /.test(await page.getByTestId("sf-days-said").innerText()));
+  await page.getByTestId("sf-frequency").selectOption("weekly");
+  check("S1b. any other frequency has none", (await page.getByTestId("sf-days-of-week").count()) === 0);
+  await page.getByTestId("sf-frequency").selectOption("daily");
+  for (const d of [0, 1, 2, 3, 4, 5, 6]) await page.getByTestId(`sf-day-${d}`).click();
+  await page.getByTestId("sf-save").click();
+  await page.waitForTimeout(400);
+  check("S1b. none picked is refused", /Pick at least one day/.test(await page.getByTestId("sf-days-said").innerText()) && await page.getByTestId("schedule-form").isVisible() && !sql("SELECT id FROM equipment_schedules WHERE name = 'Weekday check'"));
+  for (const d of [1, 2, 3, 4, 5]) await page.getByTestId(`sf-day-${d}`).click();
+  check("S1b. weekdays picked, it says so", /^Daily, Monday to Friday\. /.test(await page.getByTestId("sf-days-said").innerText()));
+  const firstDay = new Date(`${await page.getByTestId("sf-due").inputValue()}T00:00:00Z`).getUTCDay();
+  check("S1b. its first due date is one of them", firstDay >= 1 && firstDay <= 5, String(firstDay));
+  await page.waitForTimeout(300);
+  await page.getByTestId("schedule-form").screenshot({ path: `${OUT}/check_form_light.png` });
+  await page.getByTestId("sf-save").click();
+  await page.getByText("Added Weekday check").first().waitFor({ timeout: 8000 });
+  const weekday = sql("SELECT id, days_of_week FROM equipment_schedules WHERE name = 'Weekday check'");
+  await page.getByTestId(`schedule-${weekday.id}`).waitFor({ timeout: 8000 });
+  check("S1b. the row says Daily, Monday to Friday", weekday.days_of_week === "1,2,3,4,5" && /Daily, Monday to Friday/.test(await page.getByTestId(`schedule-${weekday.id}`).innerText()), await page.getByTestId(`schedule-${weekday.id}`).innerText());
+  await page.getByTestId(`schedule-edit-${weekday.id}`).click();
+  const onEdit = await pressed(page);
+  check("S1b. Edit shows the days it has", onEdit[0] === "false" && onEdit[6] === "false" && [1, 2, 3, 4, 5].every((d) => onEdit[d] === "true"), JSON.stringify(onEdit));
   await closeTop(page);
 
   // ── S2 ──
@@ -240,6 +270,11 @@ try {
   await dark.getByTestId(`schedule-checklist-${daily.id}`).waitFor({ timeout: 8000 });
   await dark.waitForTimeout(400);
   await dark.getByTestId("schedules-dialog").screenshot({ path: `${OUT}/b910_schedules_dark.png` });
+  await dark.getByTestId(`schedule-edit-${weekday.id}`).click();
+  await dark.getByTestId("sf-days-of-week").waitFor({ timeout: 8000 });
+  await dark.waitForTimeout(400);
+  await dark.getByTestId("schedule-form").screenshot({ path: `${OUT}/check_form_dark.png` });
+  await closeTop(dark);
   await dark.getByTestId(`schedule-checklist-${daily.id}`).click();
   await dark.getByTestId("checklist-form").waitFor({ timeout: 8000 });
   await dark.waitForTimeout(400);
@@ -258,7 +293,11 @@ try {
   await phone.getByTestId(`schedule-checklist-${daily.id}`).click();
   await phone.getByTestId("checklist-form").waitFor({ timeout: 8000 });
   const o3 = await over("checklist-form"), o4 = await over("schedules-dialog");
-  check("S9. phone width: the page and the dialogs don't overflow", o1 <= 0 && o2 <= 0 && o3 <= 0 && o4 <= 0, `${o1} ${o2} ${o3} ${o4}`);
+  await closeTop(phone);
+  await phone.getByTestId(`schedule-edit-${weekday.id}`).click();
+  await phone.getByTestId("sf-days-of-week").waitFor({ timeout: 8000 });
+  const o5 = await over("schedule-form");
+  check("S9. phone width: the page and the dialogs don't overflow", [o1, o2, o3, o4, o5].every((x) => x <= 0), `${o1} ${o2} ${o3} ${o4} ${o5}`);
 } catch (e) {
   check("the run finished", false, String(e?.stack || e).slice(0, 700));
 } finally {

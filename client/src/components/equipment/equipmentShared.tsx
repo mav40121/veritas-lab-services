@@ -47,7 +47,7 @@ export interface Equipment {
 
 /** A schedule as the instrument list carries it. */
 export interface ScheduleSummary {
-  id: number; name: string; schedule_type: string; frequency: string; interval_days: number | null; next_due_date: string | null; is_primary: number; has_checklist: boolean;
+  id: number; name: string; schedule_type: string; frequency: string; interval_days: number | null; days_of_week: string | null; next_due_date: string | null; is_primary: number; has_checklist: boolean;
   status: "overdue" | "due_soon" | "ok" | "none";
 }
 

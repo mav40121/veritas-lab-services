@@ -6,13 +6,13 @@
 // The first schedule (is_primary) is the single PM interval every instrument had before. lab_equipment.pm_interval_days and next_due_date
 // stay its mirror, so the older readers (readiness, the digest, the instrument list) read what they always did: setScheduleDue writes
 // both, and syncPrimaryFromEquipment carries a change typed on the instrument's own form back to the schedule.
-import { addMonths, dueAfter, nominalDays } from "../shared/equipmentSchedules";
+import { addMonths, alignDue, dueAfter, nominalDays } from "../shared/equipmentSchedules";
 
 type Sqlite = any;
 
 export interface ScheduleRow {
   id: number; lab_id: number; equipment_id: number; name: string; schedule_type: string; frequency: string; interval_days: number | null;
-  next_due_date: string | null; recipients_json: string | null; sop_document_id: number | null; is_primary: number; active: number; starts_on: string | null;
+  days_of_week: string | null; days_history: string | null; next_due_date: string | null; recipients_json: string | null; sop_document_id: number | null; is_primary: number; active: number; starts_on: string | null;
   ended_at: string | null; ended_on: string | null; ended_by_name: string | null; end_reason: string | null; created_at: string; updated_at: string;
 }
 
@@ -60,8 +60,12 @@ export function syncPrimaryFromEquipment(sqlite: Sqlite, before: any, after: any
   const days = Number(after.pm_interval_days) > 0 ? Number(after.pm_interval_days) : null;
   // An interval that is just this schedule's own, written another way, leaves a monthly or quarterly schedule as it is.
   const frequency = !intervalChanged || (days !== null && days === nominalDays(s.frequency, s.interval_days)) ? s.frequency : days ? "every_n_days" : "manual";
-  sqlite.prepare("UPDATE equipment_schedules SET frequency = ?, interval_days = ?, next_due_date = ?, updated_at = ? WHERE id = ?")
-    .run(frequency, frequency === "every_n_days" ? days ?? s.interval_days : null, after.next_due_date ?? null, now, s.id);
+  // Its days go with the daily frequency, and a date typed on a day it isn't due goes to the next one, on the instrument too.
+  const keepDays = frequency === "daily";
+  const due = after.next_due_date ? alignDue(frequency, s.days_of_week, after.next_due_date) : null;
+  sqlite.prepare("UPDATE equipment_schedules SET frequency = ?, interval_days = ?, days_of_week = ?, days_history = ?, next_due_date = ?, updated_at = ? WHERE id = ?")
+    .run(frequency, frequency === "every_n_days" ? days ?? s.interval_days : null, keepDays ? s.days_of_week : null, keepDays ? s.days_history : null, due, now, s.id);
+  if (due !== (after.next_due_date || null)) sqlite.prepare("UPDATE lab_equipment SET next_due_date = ? WHERE id = ?").run(due, after.id);
 }
 
 /**
@@ -106,10 +110,10 @@ export function completionsBetween(sqlite: Sqlite, labId: number, scheduleId: nu
 }
 
 /** The next time a due date would come round after today, by whole cycles of its own frequency (server/demoDateRefresh.ts). */
-export function rollForward(frequency: string, intervalDays: number | null, due: string, today: string): string {
-  let next = due;
+export function rollForward(frequency: string, intervalDays: number | null, due: string, today: string, daysOfWeek: string | null | undefined): string {
+  let next = alignDue(frequency, daysOfWeek, due);
   for (let i = 0; i < 2000 && next < today; i += 1) {
-    const step = dueAfter(frequency, intervalDays, next) ?? addMonths(next, 12);
+    const step = dueAfter(frequency, intervalDays, next, daysOfWeek) ?? addMonths(next, 12);
     if (step <= next) break;
     next = step;
   }

@@ -49,7 +49,7 @@ export function CompleteScheduleDialog({ labId, equipmentId, equipmentName, sche
 
   const steps = sc?.checklist?.steps ?? [];
   const set = (id: number, a: Partial<StepAnswer>) => { setAnswers((p) => ({ ...p, [id]: { ...p[id], ...a } })); setBad(null); };
-  const plan = sc && date ? planScheduleDue({ currentDue: sc.next_due_date, frequency: sc.frequency, intervalDays: sc.interval_days, doneOn: date, typedDue: nextDue || null }) : null;
+  const plan = sc && date ? planScheduleDue({ currentDue: sc.next_due_date, frequency: sc.frequency, intervalDays: sc.interval_days, daysOfWeek: sc.days_of_week, doneOn: date, typedDue: nextDue || null }) : null;
   const pm = sc?.schedule_type === "preventive_maintenance";
   const waits = pm && vendor && requireVendorReport;
 
@@ -91,7 +91,7 @@ export function CompleteScheduleDialog({ labId, equipmentId, equipmentName, sche
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" data-testid="complete-dialog">
           <DialogHeader>
             <DialogTitle>{sc ? sc.name : "Complete"}</DialogTitle>
-            <DialogDescription>{equipmentName}{sc?.checklist ? `, checklist version ${sc.checklist.version_no}` : ""}{sc ? `, ${sc.frequency_label.toLowerCase()}` : ""}</DialogDescription>
+            <DialogDescription>{equipmentName}{sc?.checklist ? `, checklist version ${sc.checklist.version_no}` : ""}{sc ? `, ${sc.frequency_label.charAt(0).toLowerCase()}${sc.frequency_label.slice(1)}` : ""}</DialogDescription>
           </DialogHeader>
           {error && <p className="text-sm text-red-700 dark:text-red-400">{error}</p>}
           {!sc && !error && <p className="text-sm text-muted-foreground py-4">Loading...</p>}

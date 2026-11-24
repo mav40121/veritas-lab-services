@@ -56,7 +56,7 @@ function CorrectDialog({ labId, equipment, ev, onClose, onSaved }: { labId: numb
   const [busy, setBusy] = useState(false);
   const pm = completesPm && canCompletePm(type);
   const moves = date !== ev.event_date || pm !== wasPm;
-  const plan = moves && pm && date ? planScheduleDue({ currentDue: equipment.next_due_date, frequency: first?.frequency ?? "manual", intervalDays: first?.interval_days ?? null, doneOn: date }) : null;
+  const plan = moves && pm && date ? planScheduleDue({ currentDue: equipment.next_due_date, frequency: first?.frequency ?? "manual", intervalDays: first?.interval_days ?? null, daysOfWeek: first?.days_of_week ?? null, doneOn: date }) : null;
   const undoes = moves && !pm && wasPm && !!ev.next_due_date && ev.next_due_date === equipment.next_due_date;
 
   async function save() {

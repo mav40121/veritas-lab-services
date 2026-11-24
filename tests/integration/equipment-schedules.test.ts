@@ -9,6 +9,8 @@
 //   5. The reminder digest covers every schedule and goes to each schedule's own recipients; reminders sent before schedules still count.
 //   6. The review due email: off until turned on, from the 5th, to the medical director or designee, once a month, never when all is signed.
 //   7. The monthly review and its workbook: days with no record, past due schedules, checklist answers.
+//  7b. The days a daily schedule is due: every day unless it says, weekdays, a weekend record, a change part way through a month, the due date
+//      going to the next due day, no reminder on a day it isn't due, and any other frequency refusing days.
 //   8. Refusals: another lab, a view-only seat, a limited Staff login (which may complete one), Veritas support.
 //   9. Move, export-all and the customer purge.
 //
@@ -383,6 +385,103 @@ async function main() {
     const nowItem = await item(cur);
     check("7. today isn't over, so it isn't missed yet", !nowItem.problems.some((p: string) => p.includes(`${Number(today.slice(5, 7))}/${Number(today.slice(8, 10))}`)), JSON.stringify(nowItem.problems));
 
+    // ── 7b. The days a daily schedule is due ──
+    const K = await mkLab("k");
+    const KL = `/api/labs/${K.labId}`;
+    const kToday = labLocalDate(new Date().toISOString(), false, labTimeZoneById(sqlite, K.labId));
+    const kd = (n: number) => addLabDays(kToday, n);
+    const wd = (day: string) => new Date(`${day}T00:00:00Z`).getUTCDay();
+    const allBut = (...out: number[]) => [0, 1, 2, 3, 4, 5, 6].filter((x) => !out.includes(x));
+    const ke = await mk({ instrument_name: "Weekday analyzer" }, K.token, KL);
+    sqlite.prepare("UPDATE lab_equipment SET created_at = '2026-01-01T00:00:00.000Z' WHERE id = ?").run(ke);
+    const KS = `${KL}/equipment/${ke}/schedules`;
+    const kPost = (body: any) => call("POST", KS, { schedule_type: "function_check", frequency: "daily", ...body }, K.token);
+    const kPut = (id: number, body: any) => call("PUT", `${KS}/${id}`, body, K.token);
+    const kDone = (id: number, day: string) => call("POST", `${KS}/${id}/complete`, { done_on: day }, K.token);
+    const every = (await kPost({ name: "Every day" })).body;
+    check("7b. unless it says otherwise a daily schedule is due every day, from today", every.days_of_week === null && every.days_history === null && every.next_due_date === kToday && every.frequency_label === "Daily");
+    check("7b. a schedule made before days existed reads the same", sRow(daily.id).days_of_week === null && sRow(rvDaily.id).days_of_week === null);
+    for (const [label, body] of [["no days", { days_of_week: [] }], ["a day that isn't one", { days_of_week: [7] }], ["a word", { days_of_week: ["1"] }], ["a string", { days_of_week: "1,2" }], ["half a day", { days_of_week: [1.5] }], ["days on a weekly schedule", { frequency: "weekly", days_of_week: [1] }]] as [string, any][]) {
+      const r = await kPost({ name: "x", ...body });
+      check(`7b. ${label} is refused`, r.status === 400 && r.body.code === "BAD_DAYS", `${r.status} ${JSON.stringify(r.body)}`);
+    }
+    const wk = (await kPost({ name: "Weekday check", days_of_week: [5, 4, 3, 2, 1, 1], next_due_date: "2026-09-04" })).body;
+    check("7b. the days are kept sorted, and the label says them", wk.days_of_week === "1,2,3,4,5" && wk.frequency_label === "Daily, Monday to Friday" && (await kPost({ name: "Some days", days_of_week: [6, 1, 3] })).body.frequency_label === "Daily, Mon, Wed, Sat" && (await kPost({ name: "All seven", days_of_week: [0, 1, 2, 3, 4, 5, 6] })).body.days_of_week === null);
+    check("7b. the first due date is today when today is one of its days, else the next that is", (await kPost({ name: "Today's day", days_of_week: [wd(kToday)] })).body.next_due_date === kToday && (await kPost({ name: "Tomorrow's day", days_of_week: [wd(kd(1))] })).body.next_due_date === kd(1));
+    const later = (await kPost({ name: "Starts later", next_due_date: kd(9) })).body;
+    check("7b. one set to start later owes nothing before that; one already due starts today", later.starts_on === kd(9) && wk.starts_on === kToday, JSON.stringify([later.starts_on, wk.starts_on]));
+    const fri = await kDone(wk.id, "2026-09-04");
+    check("7b. done on a Friday, it is next due on Monday", fri.status === 201 && sRow(wk.id).next_due_date === "2026-09-07", sRow(wk.id).next_due_date);
+    const sat = await kDone(wk.id, "2026-09-05");
+    check("7b. done on the weekend as well, it stays Monday and nothing is held", sat.status === 201 && sRow(wk.id).next_due_date === "2026-09-07" && sat.body.due_date_held === null);
+    check("7b. a date typed on a day it isn't due goes to the next one", (await kPut(wk.id, { next_due_date: "2026-09-12" })).body.next_due_date === "2026-09-14");
+    sqlite.prepare("UPDATE equipment_schedules SET starts_on = '2026-09-01' WHERE id = ?").run(wk.id);
+    for (let n = 1; n <= 30; n += 1) {
+      const day = `2026-09-${String(n).padStart(2, "0")}`;
+      if ([0, 6].includes(wd(day)) || [4, 9].includes(n)) continue;
+      await kDone(wk.id, day);
+    }
+    const kItem = async () => (await call("GET", `${KL}/maintain-reviews?month=2026-09`, undefined, K.token)).body.items.find((i: any) => i.type === "equipment" && i.id === ke);
+    const k1 = await kItem();
+    check("7b. the review counts weekdays only: a weekend with nothing isn't missed, the weekday is, and the Saturday done counts as done", k1.problems.includes("Weekday check: 1 day with no record: 9/9") && k1.notes.includes("Weekday check: 22 of 23 days done"), JSON.stringify([k1.problems, k1.notes]));
+    const kSign = await call("POST", `${KL}/maintain-reviews`, { month: "2026-09", items: [{ type: "equipment", id: ke }], typed_signature: "Owner K", password: PW, corrective_action: "Spoken with the bench" }, K.token);
+    const kSigned = JSON.stringify((await kItem()).review);
+    check("7b. the month is signed", kSign.status === 201 && /9\/9/.test(kSigned), JSON.stringify(kSign.body));
+    // A change part way through a month
+    const mid = (await kPost({ name: "Changed part way" })).body;
+    sqlite.prepare("UPDATE equipment_schedules SET starts_on = '2026-09-01' WHERE id = ?").run(mid.id);
+    const midPut = await kPut(mid.id, { days_of_week: [1, 2, 3, 4, 5] });
+    check("7b. a change counts from the day it is made, and keeps the days before it", JSON.stringify(JSON.parse(midPut.body.days_history)) === JSON.stringify([{ from: "2026-09-01", days: null }, { from: kToday, days: "1,2,3,4,5" }]), midPut.body.days_history);
+    check("7b. ... with an audit row of what they were", audits("equipment_schedule", mid.id).some((r) => r.action === "update" && JSON.parse(r.before_json).days_of_week === null && JSON.parse(r.after_json).days_of_week === "1,2,3,4,5"));
+    sqlite.prepare("UPDATE equipment_schedules SET days_history = REPLACE(days_history, ?, '2026-09-16') WHERE id = ?").run(kToday, mid.id);
+    const k2 = await kItem();
+    check("7b. the first half is judged every day and the second by weekdays (15 + 11)", k2.summary.schedules.find((x: any) => x.name === "Changed part way")?.missed_days === 26, JSON.stringify(k2.summary.schedules));
+    await kPut(mid.id, { days_of_week: [1] });
+    await kPut(wk.id, { days_of_week: [2] });
+    check("7b. a later change rewrites no day before it", (await kItem()).summary.schedules.find((x: any) => x.name === "Changed part way")?.missed_days === 26 && (await kItem()).summary.schedules.find((x: any) => x.name === "Weekday check")?.missed_days === 1);
+    check("7b. and the signed month is exactly as it was signed", JSON.stringify((await kItem()).review) === kSigned);
+    // The due date goes with the days
+    await kDone(every.id, kToday);
+    const shrunk = await kPut(every.id, { days_of_week: allBut(wd(kd(1))) });
+    check("7b. a day taken away moves the due date past it", sRow(every.id).next_due_date === kd(2) && shrunk.status === 200, sRow(every.id).next_due_date);
+    const grown = await kPut(every.id, { days_of_week: [0, 1, 2, 3, 4, 5, 6] });
+    check("7b. a day put back is due again, and every day is blank", sRow(every.id).next_due_date === kd(1) && grown.body.days_of_week === null && grown.body.days_history === null, JSON.stringify([sRow(every.id).next_due_date, grown.body.days_history]));
+    const late = (await kPost({ name: "Late", next_due_date: kd(-3) })).body;
+    await kPut(late.id, { days_of_week: allBut(wd(kd(1))) });
+    check("7b. one that is overdue stays overdue", sRow(late.id).next_due_date === kd(-3), sRow(late.id).next_due_date);
+    const badPut = await kPut(wk.id, { frequency: "weekly", days_of_week: [1] });
+    check("7b. changing it to weekly with days is refused and changes nothing", badPut.body.code === "BAD_DAYS" && sRow(wk.id).frequency === "daily" && sRow(wk.id).days_of_week === "2");
+    await kPut(wk.id, { frequency: "weekly" });
+    check("7b. changing it to weekly clears them", sRow(wk.id).frequency === "weekly" && sRow(wk.id).days_of_week === null && sRow(wk.id).days_history === null);
+    await kPut(wk.id, { frequency: "daily" });
+    check("7b. back to daily, it is every day from today", sRow(wk.id).days_of_week === null && sRow(wk.id).starts_on === kToday);
+    const pmDay = await mk({ instrument_name: "Daily PM", pm_interval_days: 1, next_due_date: kToday }, K.token, KL);
+    const pmFirst = (await call("GET", `${KL}/equipment/${pmDay}/schedules`, undefined, K.token)).body.schedules[0].id;
+    await call("PUT", `${KL}/equipment/${pmDay}/schedules/${pmFirst}`, { frequency: "daily", days_of_week: [wd(kd(1))] }, K.token);
+    const viaForm = await call("PUT", `${KL}/equipment/${pmDay}`, { next_due_date: kToday }, K.token);
+    check("7b. a date typed on the instrument's own form follows its days too, on both", viaForm.body.next_due_date === kd(1) && sRow(pmFirst).next_due_date === kd(1) && eqRow(pmDay).next_due_date === kd(1), JSON.stringify(viaForm.body.next_due_date));
+    const kBook = await (async () => {
+      const r = await fetch(`${base}${KL}/maintain-reviews/report.xlsx?month=2026-09`, { headers: { Authorization: `Bearer ${K.token}` } });
+      const wb = new ExcelJS.Workbook(); await wb.xlsx.load(Buffer.from(await r.arrayBuffer()));
+      const rows: string[] = []; wb.getWorksheet("Schedules").eachRow((row: any) => rows.push((row.values as any[]).slice(1).map((v) => v ?? "").join("|")));
+      return rows;
+    })();
+    check("7b. the workbook says the days", kBook.some((r) => /\|Changed part way\|Function check\|Daily, Mon\|/.test(r)), kBook.join("\n"));
+    // No reminder on a day it isn't due
+    const kMail: any[] = [];
+    equipmentMailer.ready = () => true; equipmentMailer.send = async (m) => { kMail.push(m); };
+    sqlite.prepare("UPDATE equipment_reminder_config SET enabled = 0").run();
+    await call("PUT", `${KL}/equipment/reminder-config`, { enabled: true, lead_days: 14, recipients: [{ email: "k-list@example.com" }] }, K.token);
+    const rem = (await kPost({ name: "Not today", days_of_week: allBut(wd(kToday)), next_due_date: kd(1) })).body;
+    sqlite.prepare("UPDATE equipment_schedules SET next_due_date = ? WHERE id = ?").run(kd(-1), rem.id);
+    await runEquipmentReminders();
+    check("7b. overdue, it isn't reminded on a day it isn't due", !kMail.some((m) => /Not today/.test(m.text)) && kMail.some((m) => /Late: overdue by 3 days/.test(m.text)), kMail.map((m) => m.text).join("\n"));
+    kMail.length = 0;
+    sqlite.prepare("UPDATE equipment_schedules SET days_of_week = NULL WHERE id = ?").run(rem.id);
+    await runEquipmentReminders();
+    check("7b. on a day it is, it is", kMail.some((m) => /Not today: overdue by 1 day/.test(m.text)), kMail.map((m) => m.text).join("\n"));
+    equipmentMailer.ready = realReady; equipmentMailer.send = realSend;
+
     // ── 8. Refusals ──
     const setupTries: [string, string, any][] = [
       ["POST", SCH, { name: "x", frequency: "weekly" }], ["PUT", `${SCH}/${weekly.id}`, { name: "x" }], ["POST", `${SCH}/${weekly.id}/end`, { reason: "x" }], ["POST", `${SCH}/${weekly.id}/resume`, {}],
@@ -412,7 +511,7 @@ async function main() {
     const org = Number(sqlite.prepare("INSERT INTO organizations (name, billing_owner_user_id) VALUES ('Made-up System', ?)").run(A.userId).lastInsertRowid);
     sqlite.prepare("UPDATE labs SET organization_id = ? WHERE id IN (?, ?)").run(org, A.labId, B.labId);
     sqlite.prepare("INSERT INTO lab_members (lab_id, user_id, role, status, is_primary_lab, accepted_at, created_at, updated_at) VALUES (?, ?, 'admin', 'active', 0, ?, ?, ?)").run(B.labId, A.userId, now, now, now);
-    await call("PUT", `${SCH}/${daily.id}`, { recipients: ["daily@example.com"] }, editor.token);
+    await call("PUT", `${SCH}/${daily.id}`, { recipients: ["daily@example.com"], days_of_week: [1, 2, 3, 4, 5] }, editor.token);
     const aCompletions = JSON.stringify(sqlite.prepare("SELECT * FROM equipment_schedule_completions WHERE equipment_id = ? ORDER BY id").all(an));
     const mv = await call("POST", `${L}/equipment/${an}/move`, { to_lab_id: B.labId, reason: "Moved campus" }, A.token);
     const LB = `/api/labs/${B.labId}`;
@@ -421,6 +520,7 @@ async function main() {
     check("9. its schedules go along with their due dates, starting that day, reminding that lab's list, with no SOP link", mv.status === 200 && there.length === (sqlite.prepare("SELECT COUNT(*) AS n FROM equipment_schedules WHERE equipment_id = ?").get(an) as any).n && there.every((x) => x.sop === null && x.recipients.length === 0 && x.starts_on === bToday)
       && there.find((x) => x.is_primary)?.next_due_date === eqRow(an).next_due_date, JSON.stringify(there.map((x) => [x.name, x.starts_on, x.sop])));
     const bDaily = there.find((x) => x.name === "Daily maintenance");
+    check("9. the days it is due go along", bDaily.days_of_week === "1,2,3,4,5" && bDaily.days_history === null && bDaily.frequency_label === "Daily, Monday to Friday", JSON.stringify([bDaily.days_of_week, bDaily.days_history]));
     check("9. the current checklist goes along", bDaily.checklist?.version_no === 2 && bDaily.checklist.steps.length === 2);
     const carried = (await call("GET", `${LB}/equipment/${mv.body.equipment_id}/schedules/${bDaily.id}/completions`, undefined, B.token)).body;
     check("9. what was completed goes along, marked, with its answers", carried.length === 1 && carried[0].carried_from_lab_id === A.labId && carried[0].results.length === 3 && carried[0].checklist_version_no === 1);

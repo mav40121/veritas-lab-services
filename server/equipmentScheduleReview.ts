@@ -1,10 +1,11 @@
 // server/equipmentScheduleReview.ts
 //
 // What one month shows of an instrument's schedules (B10, 2026-11-24), for the monthly record review (server/maintainRecordReview.ts) and its
-// workbook. A daily schedule owes a record every day from the day it started: a day with none is a problem, unless the instrument was out
-// of service the whole day. Any other schedule is a problem when its due date has passed and nothing is recorded. The first schedule's own
+// workbook. A daily schedule owes a record every day it is due from the day it started: a due day with none is a problem, unless the
+// instrument was out of service the whole day. Which days it was due is what was in force on that day, so a change to the days never
+// rewrites the days before it, and a record on a day it wasn't due counts as done and is never a problem. Any other schedule is a problem when its due date has passed and nothing is recorded. The first schedule's own
 // "PM was due" line stays where it was, in the review.
-import { frequencyLabel, missedDays } from "../shared/equipmentSchedules";
+import { daysInForce, dueOnDay, frequencyLabel, missedDays } from "../shared/equipmentSchedules";
 import { addDays } from "../shared/equipmentPm";
 import { completionsBetween, type ScheduleRow } from "./equipmentScheduleData";
 
@@ -37,7 +38,7 @@ export function scheduleMonth(sqlite: Sqlite, labId: number, eq: any, o: { first
       if (s.ended_on && s.ended_on < to) to = s.ended_on;
       const left = retired ? eq.removed_from_service_date || String(eq.retired_at || eq.updated_at || "").slice(0, 10) : "";
       if (left && left < to) to = left;
-      const w = from <= to ? missedDays({ from, to, done: done_days, downtime: o.periods }) : { expected: 0, missed: [] };
+      const w = from <= to ? missedDays({ from, to, done: done_days, downtime: o.periods, dueOn: (day) => dueOnDay(daysInForce(s, day), day) }) : { expected: 0, missed: [] };
       expected = w.expected; missed = w.missed;
     }
     const overdue = s.frequency !== "daily" && !s.is_primary && s.active && !retired && s.next_due_date && s.next_due_date < o.asOf ? s.next_due_date : null;
@@ -46,7 +47,7 @@ export function scheduleMonth(sqlite: Sqlite, labId: number, eq: any, o: { first
     if (expected) out.notes.push(`${s.name}: ${expected - missed.length} of ${plural(expected, "day")} done`);
     else if (s.frequency !== "daily" && done_days.length) out.notes.push(`${s.name}: done ${dayList(done_days)}`);
     if (failed) out.notes.push(`${s.name}: ${plural(failed, "failed step")}, each with its corrective action`);
-    out.lines.push({ schedule: s, frequency: frequencyLabel(s.frequency, s.interval_days), done, done_days, expected, missed, failed_steps: failed, overdue });
+    out.lines.push({ schedule: s, frequency: frequencyLabel(s.frequency, s.interval_days, s.days_of_week), done, done_days, expected, missed, failed_steps: failed, overdue });
     if (!s.is_primary || done.length || missed.length) {
       out.summary.push({ name: s.name, frequency: s.frequency, done: done.length, ...(expected !== null ? { expected_days: expected, missed_days: missed.length } : {}), ...(failed ? { failed_steps: failed } : {}), ...(overdue ? { overdue } : {}) });
     }
