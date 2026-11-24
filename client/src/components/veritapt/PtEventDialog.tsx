@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Pencil, Plus } from "lucide-react";
 import { useFreshRecord } from "@/lib/freshRecord";
 import { PT_SUBMISSION_LABEL, type PtEvent, type PtResult } from "@shared/ptEvents";
+import { PtUngradedResults } from "./PtEvaluationForm";
 import { PtError, PtField, PtStatusBadge, ptInputClass, ptNum, ptRange, ptRequest, usePtChanged } from "./ptUi";
 
 export interface PtEventDetail { event: PtEvent; can_edit: boolean; today: string }
@@ -85,6 +86,7 @@ export function PtEventDialog({ labId, resultId, onClose, onEdit, onAdd }: {
                 </table>
               </div>
             </section>
+            <PtUngradedResults labId={labId} results={e.results} today={data.today} canEdit={data.can_edit} />
           </div>
         )}
         <DialogFooter><Button variant="outline" onClick={onClose}>Close</Button></DialogFooter>

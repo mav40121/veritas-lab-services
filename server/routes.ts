@@ -905,6 +905,10 @@ import { saveScanItemRows, scanActor, scanExportNotes, scanItemRowsFromBody, SCA
 import { registerVeritaScanCarryRoutes } from "./veritascanCarry";
 import { registerInspectionLinkRoutes } from "./inspectionLinks";
 import { registerPtEventRoutes } from "./ptEvents";
+import { ptUngradedColumns, registerPtEvaluationRoutes } from "./ptEvaluations";
+import { ptResultsHoldRecords } from "./ptRecords";
+import { ptTrendsForLab } from "./ptTrends";
+import { PT_AAA_METHODS } from "@shared/ptEvents";
 import { findingStudy, registerInspectionAssignRoutes } from "./inspectionAssign";
 import { autoCompleteVeritaScanItems, autoCompleteCompetencyScanItems, auditScanAutoCompletions, linkVeritaCheckEvidence, syncCoverageScanMarks } from "./integrations";
 import { planMarkCorrection, applyMarkCorrection, CORRECTED_SOURCE, correctionKeepsLink } from "./veritascanMarkCorrection";
@@ -22413,11 +22417,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // aa_records table that VeritaPT uses (in #18 Phase 2's matcher extension)
   // to compute a lab's true coverage as PT-covered + AAA-covered + Uncovered.
 
-  const VALID_AAA_METHODS = [
-    'split_sample_external','split_sample_internal','blind_replicate',
-    'calibration_verif_material','peer_group','manufacturer_material',
-    'clinical_correlation','other',
-  ];
+  const VALID_AAA_METHODS = PT_AAA_METHODS.map((m) => m.value);
 
   // GET all AAA records for the active data user
   app.get("/api/pt/aa-records", authMiddleware, (req: any, res) => {
@@ -34023,6 +34023,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (!existing) return res.status(404).json({ error: "Enrollment not found" });
     // Get event IDs for cascade delete
     const events = (db as any).$client.prepare("SELECT id FROM pt_events WHERE enrollment_id = ?").all(req.params.id) as any[];
+    if (ptResultsHoldRecords((db as any).$client, events.map((ev) => Number(ev.id)))) return res.status(409).json({ error: "A result of this enrollment has records on file, so it can't be deleted.", code: "HOLDS_RECORDS" });
     for (const ev of events) {
       (db as any).$client.prepare("DELETE FROM pt_corrective_actions WHERE event_id = ?").run(ev.id);
     }
@@ -34123,6 +34124,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (!enrollment_id || !event_date || !analyte?.trim()) {
       return res.status(400).json({ error: "Enrollment, event date, and analyte are required" });
     }
+    const ungraded = ptUngradedColumns(req.body, null, pass_fail || 'pending');
+    if (ungraded.error) return res.status(400).json({ error: ungraded.error, code: ungraded.code });
     // Auto-calculate SDI
     let sdi = null;
     if (your_result != null && peer_mean != null && peer_sd != null && peer_sd !== 0) {
@@ -34139,6 +34142,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     try {
       (db as any).$client.prepare("UPDATE pt_events SET lab_id = ? WHERE id = ?").run(resolveLegacyLabId(req) ?? null, result.lastInsertRowid);
     } catch {}
+    if (ungraded.cols.ungraded_reason) (db as any).$client.prepare("UPDATE pt_events SET ungraded_reason = ?, ungraded_reason_text = ? WHERE id = ?").run(ungraded.cols.ungraded_reason, ungraded.cols.ungraded_reason_text, result.lastInsertRowid);
     const created = (db as any).$client.prepare("SELECT * FROM pt_events WHERE id = ?").get(Number(result.lastInsertRowid));
     res.json(created);
   });
@@ -34150,6 +34154,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const existing = userCanAccessLabRow('pt_events', req.params.id, req);
     if (!existing) return res.status(404).json({ error: "Event not found" });
     const { enrollment_id, event_id, event_name, event_date, analyte, your_result, your_method, peer_mean, peer_sd, peer_n, acceptable_low, acceptable_high, pass_fail, notes, tested_by_employee_id, submission_due_date } = req.body;
+    const ungraded = ptUngradedColumns(req.body, existing, pass_fail ?? existing.pass_fail);
+    if (ungraded.error) return res.status(400).json({ error: ungraded.error, code: ungraded.code });
     const finalResult = your_result !== undefined ? your_result : existing.your_result;
     const finalPeerMean = peer_mean !== undefined ? peer_mean : existing.peer_mean;
     const finalPeerSd = peer_sd !== undefined ? peer_sd : existing.peer_sd;
@@ -34172,6 +34178,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       tested_by_employee_id !== undefined ? (tested_by_employee_id ? Number(tested_by_employee_id) : null) : existing.tested_by_employee_id,
       now, req.params.id
     );
+    (db as any).$client.prepare("UPDATE pt_events SET ungraded_reason = ?, ungraded_reason_text = ? WHERE id = ?").run(ungraded.cols.ungraded_reason, ungraded.cols.ungraded_reason_text, req.params.id);
     const updated = (db as any).$client.prepare("SELECT * FROM pt_events WHERE id = ?").get(req.params.id);
     res.json(updated);
   });
@@ -34182,6 +34189,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const existing = userCanAccessLabRow('pt_events', req.params.id, req);
     if (!existing) return res.status(404).json({ error: "Event not found" });
+    if (ptResultsHoldRecords((db as any).$client, [Number(req.params.id)])) return res.status(409).json({ error: "This result has records on file and can't be deleted.", code: "HOLDS_RECORDS" });
     (db as any).$client.prepare("DELETE FROM pt_corrective_actions WHERE event_id = ?").run(req.params.id);
     (db as any).$client.prepare("DELETE FROM pt_events WHERE id = ?").run(req.params.id);
     res.json({ ok: true });
@@ -34291,52 +34299,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // was the one PT read the 2026-06-09 Shape A sweep missed. A null lab
     // (no active lab / legacy account with no membership) yields no rows.
     const labId = resolveLegacyLabId(req);
-    // Only graded events count. Pending events are skipped — they don't
-    // affect state until the PT program sends the result.
-    const events = (db as any).$client.prepare(
-      `SELECT analyte, event_date, pass_fail
-         FROM pt_events
-        WHERE lab_id = ?
-          AND pass_fail IN ('pass', 'fail')
-        ORDER BY analyte ASC, event_date DESC`
-    ).all(labId) as Array<{ analyte: string; event_date: string; pass_fail: string }>;
-
-    // Group by analyte (already sorted within analyte by event_date DESC)
-    const byAnalyte: Record<string, Array<{ event_date: string; pass_fail: string }>> = {};
-    for (const e of events) {
-      if (!byAnalyte[e.analyte]) byAnalyte[e.analyte] = [];
-      byAnalyte[e.analyte].push({ event_date: e.event_date, pass_fail: e.pass_fail });
-    }
-
-    type TrendState = "OK" | "WATCH" | "AT-RISK";
-    type AnalyteTrend = {
-      analyte: string;
-      state: TrendState;
-      last3: Array<{ event_date: string; pass_fail: string }>;
-      fails_in_last_3: number;
-    };
-
-    const trends: AnalyteTrend[] = Object.keys(byAnalyte).map((analyte) => {
-      const last3 = byAnalyte[analyte].slice(0, 3);
-      const failsInLast3 = last3.filter((e) => e.pass_fail === "fail").length;
-      let state: TrendState = "OK";
-      if (failsInLast3 >= 2) state = "AT-RISK";
-      else if (failsInLast3 === 1) state = "WATCH";
-      return { analyte, state, last3, fails_in_last_3: failsInLast3 };
-    });
-
-    // Sort: AT-RISK first, then WATCH, then OK; within each state by analyte name.
-    const stateRank: Record<TrendState, number> = { "AT-RISK": 0, "WATCH": 1, "OK": 2 };
-    trends.sort((a, b) => {
-      const r = stateRank[a.state] - stateRank[b.state];
-      return r !== 0 ? r : a.analyte.localeCompare(b.analyte);
-    });
-
-    const counts = {
-      OK: trends.filter((t) => t.state === "OK").length,
-      WATCH: trends.filter((t) => t.state === "WATCH").length,
-      AT_RISK: trends.filter((t) => t.state === "AT-RISK").length,
-    };
+    // Only graded events count (server/ptTrends.ts; the rule is unchanged, and `history` is every one of them).
+    const { counts, trends } = ptTrendsForLab((db as any).$client, labId);
 
     res.json({
       counts,
@@ -45032,6 +44996,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // VeritaPT events: the list, its export and the result form (B11, server/ptEvents.ts).
   const ptDeps = { sqlite: () => (db as any).$client, authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit, hasModuleEditAccess, hasPTAccess, licenseCtxFromReq };
   registerPtEventRoutes(app, ptDeps);
+  // An ungraded result's own evaluation (B11, server/ptEvaluations.ts).
+  registerPtEvaluationRoutes(app, ptDeps);
 
   // VeritaTrack routes
   const { registerVeritaTrackRoutes } = await import('./veritatrack');

@@ -4,7 +4,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PtEventsTab } from "@/components/veritapt/PtEventsTab";
 import { PtEventDialog } from "@/components/veritapt/PtEventDialog";
 import { PtResultDialog } from "@/components/veritapt/PtResultDialog";
-import type { PtResult } from "@shared/ptEvents";
+import { PT_AAA_METHODS, type PtResult } from "@shared/ptEvents";
+import { PtTrendList, type PtTrendView } from "@/components/veritapt/PtTrendList";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { useAuth } from "@/components/AuthContext";
 import { ModuleHowToCard } from "@/components/ModuleHowToCard";
@@ -45,17 +46,6 @@ import {
 import { Link } from "wouter";
 import { useLabRoute } from "@/hooks/useLabRoute";
 
-
-const AAA_METHODS: { value: string; label: string }[] = [
-  { value: "split_sample_external", label: "Split sample, external reference lab" },
-  { value: "split_sample_internal", label: "Split sample, different method/instrument internally" },
-  { value: "blind_replicate", label: "Blind replicate testing of patient samples" },
-  { value: "calibration_verif_material", label: "Calibration verification material with assigned values" },
-  { value: "peer_group", label: "Peer-group comparison (assayed control + peer statistics)" },
-  { value: "manufacturer_material", label: "Manufacturer-assayed control material with target values" },
-  { value: "clinical_correlation", label: "Clinical correlation review (qualitative tests only)" },
-  { value: "other", label: "Other documented method approved by lab director" },
-];
 
 type FilterType = "all" | "gaps" | "covered" | "aaa" | "waived";
 
@@ -153,7 +143,7 @@ export default function VeritaPTAppPage() {
   // trends) or if every analyte is OK.
   const [trends, setTrends] = useState<{
     counts: { OK: number; WATCH: number; AT_RISK: number };
-    trends: Array<{ analyte: string; state: string; fails_in_last_3: number }>;
+    trends: PtTrendView[];
     framing?: Record<string, string>;
   } | null>(null);
   const [showAaaModal, setShowAaaModal] = useState(false);
@@ -481,17 +471,7 @@ export default function VeritaPTAppPage() {
               )}
             </div>
           </div>
-          {trends.trends && trends.trends.length > 0 && (
-            <ul className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-xs">
-              {trends.trends.filter(t => t.state !== "OK").slice(0, 8).map((t, i) => (
-                <li key={`${t.analyte}-${i}`} className="flex items-center gap-2">
-                  <span className={`inline-block w-1.5 h-1.5 rounded-full ${t.state === "AT-RISK" ? "bg-red-500" : "bg-amber-500"}`} />
-                  <span className="font-medium">{t.analyte}</span>
-                  <span className="text-muted-foreground">— {t.fails_in_last_3} fail(s) in last 3</span>
-                </li>
-              ))}
-            </ul>
-          )}
+          <PtTrendList trends={trends.trends ?? []} />
         </div>
       )}
 
@@ -819,7 +799,7 @@ export default function VeritaPTAppPage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {AAA_METHODS.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
+                      {PT_AAA_METHODS.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>

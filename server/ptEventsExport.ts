@@ -3,7 +3,7 @@
 // The VeritaPT event list as a workbook (server/ptEvents.ts), and the workbook frame the period report uses too
 // (server/ptReportExport.ts). CLAUDE.md section 6, customer-facing: About first and active, the lab's name and CLIA on About
 // and in every header and footer, every sheet protected, brand colors, blank cells for nothing, no em dashes.
-import { PT_STATUS_LABEL, PT_SUBMISSION_LABEL, ptStatusText, type PtEvent, type PtEventFilters } from "@shared/ptEvents";
+import { PT_CONCLUSION_LABEL, PT_STATUS_LABEL, PT_SUBMISSION_LABEL, ptMethodLabel, ptStatusText, ptUngradedReasonText, type PtEvent, type PtEventFilters, type PtResult } from "@shared/ptEvents";
 
 const TEAL = "FF01696F", TINT = "FFE6F2F2", ALT = "FFEBF3F8", TEXT = "FF28251D", DARK = "FF0A3A3D";
 export const PT_XLSX_COLORS = { green: "FF437A22", red: "FFA12C7B", amber: "FF964219", gray: "FF7A7974" } as const;
@@ -94,6 +94,13 @@ export async function buildPtWorkbook(input: PtWorkbookInput, applyLicense: (wb:
   return Buffer.from(await wb.xlsx.writeBuffer()) as Buffer;
 }
 
+/** The newest evaluation of an ungraded result in words, or that it is still open. */
+function evaluationWords(r: PtResult): string {
+  if (r.status !== "ungraded") return "";
+  const e = r.evaluations[0];
+  return e ? `${PT_CONCLUSION_LABEL[e.conclusion]} on ${e.performed_date}. ${ptMethodLabel(e.method)}; ${e.acceptance_criteria}. Recorded by ${e.recorded_by_name ?? "name not on file"}.` : "Open";
+}
+
 /** The filters in words, for the About sheet. */
 function filterWords(f: PtEventFilters): string {
   const parts = [
@@ -124,8 +131,8 @@ export function buildPtEventsWorkbook(
       },
       {
         name: "Results",
-        columns: [["Event", 26], ["Program", 34], ["Analyte", 24], ["Department", 20], ["Event Date", 13], ["Method", 20], ["Result", 11], ["Peer Mean", 11], ["Peer SD", 11], ["Peer Group Size", 11], ["SDI", 9], ["Lowest Acceptable", 12], ["Highest Acceptable", 12], ["Status", 16], ["Tested By", 22], ["Due Date", 13], ["Submitted Date", 14], ["Notes", 40]],
-        rows: input.events.flatMap((e) => e.results.map((r) => [e.name, e.program, r.analyte, r.department, r.event_date, r.your_method, r.your_result, r.peer_mean, r.peer_sd, r.peer_n, r.sdi, r.acceptable_low, r.acceptable_high, PT_STATUS_LABEL[r.status], r.tested_by, r.submission_due_date, r.submitted_date, r.notes])),
+        columns: [["Event", 26], ["Program", 34], ["Analyte", 24], ["Department", 20], ["Event Date", 13], ["Method", 20], ["Result", 11], ["Peer Mean", 11], ["Peer SD", 11], ["Peer Group Size", 11], ["SDI", 9], ["Lowest Acceptable", 12], ["Highest Acceptable", 12], ["Status", 16], ["Why Ungraded", 24], ["Laboratory's Evaluation", 34], ["Tested By", 22], ["Due Date", 13], ["Submitted Date", 14], ["Notes", 40]],
+        rows: input.events.flatMap((e) => e.results.map((r) => [e.name, e.program, r.analyte, r.department, r.event_date, r.your_method, r.your_result, r.peer_mean, r.peer_sd, r.peer_n, r.sdi, r.acceptable_low, r.acceptable_high, PT_STATUS_LABEL[r.status], ptUngradedReasonText(r.ungraded_reason, r.ungraded_reason_text), evaluationWords(r), r.tested_by, r.submission_due_date, r.submitted_date, r.notes])),
       },
     ],
   }, applyLicense);

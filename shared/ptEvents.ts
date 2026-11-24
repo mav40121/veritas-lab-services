@@ -24,6 +24,46 @@ export function ptStatus(passFail: unknown): PtStatus {
   return passFail === "pass" ? "acceptable" : passFail === "fail" ? "unacceptable" : passFail === "ungraded" ? "ungraded" : "not_graded";
 }
 
+/** Why a program didn't grade a result. Only an ungraded result carries one. */
+export const PT_UNGRADED_REASONS = [
+  { value: "no_consensus", label: "Lack of consensus" },
+  { value: "late_submission", label: "Late submission" },
+  { value: "not_scored", label: "Not scored by the program" },
+  { value: "educational", label: "Educational challenge" },
+  { value: "other", label: "Other" },
+] as const;
+export const ptUngradedReasonText = (reason: string | null, words: string | null): string => {
+  const label = PT_UNGRADED_REASONS.find((r) => r.value === reason)?.label ?? "";
+  return reason === "other" ? words || label : [label, words].filter(Boolean).join(": ");
+};
+
+/** How a laboratory verifies its own accuracy: alternative assessment records and the evaluation of an ungraded result. */
+export const PT_AAA_METHODS: ReadonlyArray<{ value: string; label: string }> = [
+  { value: "split_sample_external", label: "Split sample, external reference lab" },
+  { value: "split_sample_internal", label: "Split sample, different method/instrument internally" },
+  { value: "blind_replicate", label: "Blind replicate testing of patient samples" },
+  { value: "calibration_verif_material", label: "Calibration verification material with assigned values" },
+  { value: "peer_group", label: "Peer-group comparison (assayed control + peer statistics)" },
+  { value: "manufacturer_material", label: "Manufacturer-assayed control material with target values" },
+  { value: "clinical_correlation", label: "Clinical correlation review (qualitative tests only)" },
+  { value: "other", label: "Other documented method approved by lab director" },
+];
+export const ptMethodLabel = (value: string): string => PT_AAA_METHODS.find((m) => m.value === value)?.label ?? value;
+
+/** The laboratory's own evaluation of an ungraded result (server/ptEvaluations.ts). */
+export interface PtEvaluation {
+  id: number;
+  method: string;
+  method_notes: string | null;
+  acceptance_criteria: string;
+  result_summary: string | null;
+  conclusion: "pass" | "fail";
+  performed_date: string;
+  recorded_by_name: string | null;
+  recorded_at: string;
+}
+export const PT_CONCLUSION_LABEL: Record<"pass" | "fail", string> = { pass: "Acceptable", fail: "Unacceptable" };
+
 export interface PtResult {
   id: number;
   enrollment_id: number;
@@ -41,6 +81,12 @@ export interface PtResult {
   sdi: number | null;
   pass_fail: string;
   status: PtStatus;
+  ungraded_reason: string | null;
+  ungraded_reason_text: string | null;
+  /** Newest first; a Staff login reads none. */
+  evaluations: PtEvaluation[];
+  /** Ungraded with no evaluation on file. */
+  evaluation_open: boolean;
   notes: string | null;
   submission_due_date: string | null;
   submitted_date: string | null;
@@ -75,6 +121,8 @@ export interface PtEvent {
   analytes: string[];
   departments: string[];
   counts: Record<PtStatus, number>;
+  /** Ungraded results still waiting for the laboratory's own evaluation. */
+  open_evaluations: number;
   results: PtResult[];
 }
 
@@ -120,7 +168,8 @@ export function groupPtEvents(results: PtResult[], today: string): PtEvent[] {
       // One submitted date for the event only when every result has one: the day the last of them went in.
       submitted_date: submitted.length === rows.length ? submitted[submitted.length - 1] : null,
       submission: ptSubmissionOf(rows, today),
-      analytes: uniq(rows.map((r) => r.analyte)), departments: uniq(rows.map((r) => r.department)), counts, results: rows,
+      analytes: uniq(rows.map((r) => r.analyte)), departments: uniq(rows.map((r) => r.department)), counts,
+      open_evaluations: rows.filter((r) => r.evaluation_open).length, results: rows,
     };
   }).sort((a, b) => b.event_date.localeCompare(a.event_date) || b.id - a.id);
 }

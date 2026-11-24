@@ -2,6 +2,8 @@
 //
 // STANDING integration test for VeritaPT events (B11, 2026-11-24; server/ptEvents.ts, shared/ptEvents.ts).
 //   1. The event list: grouping, program, department, dates, filters, sort, the Excel export, recording and editing a result.
+//   2. Result status: ungraded and its reason, the laboratory's own evaluation, and the two-of-three flags with their full history,
+//      which an ungraded result never moves.
 //
 // Boots the REAL routes against a throwaway SQLite DB (made-up people, programs and numbers only). Run: npm run test:pt-events
 import { inspectionWorld } from "./inspectionFixture";
@@ -107,7 +109,70 @@ async function main() {
   check("1bb. signed out: refused", (await call(null, "GET", P("events"))).s === 401);
   check("1cc. a view-only reviewer reads it and is told it can't edit", (await list(VIEWER)).can_edit === false && (await list(EDITOR)).can_edit === true);
   check("1dd. the older routes answer as before", (await call(EDITOR, "GET", "/api/veritapt/events", undefined, A)).j.length === 5 && (await call(EDITOR, "POST", "/api/veritapt/events", { enrollment_id: hemeProg, event_date: "2026-03-02", event_id: "2026-A", analyte: "Platelets", pass_fail: "pass" }, A)).s === 200);
-  void mo; void SUPPORT;
+
+  // ── 2. Result status ──────────────────────────────────────────────────────
+  // The flag rule as GET /api/veritapt/trends had it before this change, worked out here from the rows.
+  const oldTrends = () => {
+    const by: Record<string, any[]> = {};
+    for (const e of all("SELECT analyte, event_date, pass_fail FROM pt_events WHERE lab_id = ? AND pass_fail IN ('pass', 'fail') ORDER BY analyte ASC, event_date DESC", A)) (by[e.analyte] ||= []).push(e);
+    return Object.keys(by).map((a) => { const n = by[a].slice(0, 3).filter((e) => e.pass_fail === "fail").length; return `${a}:${n >= 2 ? "AT-RISK" : n === 1 ? "WATCH" : "OK"}:${n}`; }).sort().join("|");
+  };
+  const trends = async (who: any = EDITOR) => (await call(who, "GET", "/api/veritapt/trends", undefined, A)).j;
+  const newTrends = async () => (await trends()).trends.map((t: any) => `${t.analyte}:${t.state}:${t.fails_in_last_3}`).sort().join("|");
+  const dateOf = (n: number) => `2026-0${n}-15`;
+  for (const [n, pf] of [[1, "fail"], [2, "pass"], [3, "fail"], [4, "pass"], [5, "pass"]] as const) await rec(EDITOR, { enrollment_id: chemProg, event_id: `C-${n}`, analyte: "Chloride", event_date: dateOf(n), pass_fail: pf });
+  const flags0 = await newTrends(), sum0 = (await call(EDITOR, "GET", "/api/veritapt/summary", undefined, A)).j;
+  check("2a. the flags read as they did", flags0 === oldTrends() && flags0.includes("Chloride:WATCH:1"), flags0);
+  const ungradedIds: number[] = [];
+  for (let i = 0; i < 3; i++) ungradedIds.push((await rec(EDITOR, { enrollment_id: chemProg, event_id: `C-U${i}`, analyte: "Chloride", event_date: `2026-06-1${i}`, pass_fail: "ungraded", ungraded_reason: "no_consensus" })).j?.id);
+  check("2b. three ungraded results move no flag, no pass rate and no open corrective action", (await newTrends()) === flags0 && oldTrends() === flags0 && (await call(EDITOR, "GET", "/api/veritapt/summary", undefined, A)).j.passRate === sum0.passRate);
+  const cl = (await trends()).trends.find((t: any) => t.analyte === "Chloride");
+  check("2c. the full history is there, newest first, with the flag each graded result left and none for an ungraded one", cl.history.map((h: any) => `${h.pass_fail}:${h.state}`).join() === "ungraded:null,ungraded:null,ungraded:null,pass:WATCH,pass:WATCH,fail:AT-RISK,pass:WATCH,fail:WATCH", JSON.stringify(cl.history));
+  check("2d. every flagged analyte is in the answer, not eight", await (async () => {
+    for (let i = 0; i < 10; i++) seed("pt_events", { enrollment_id: hemeProg, user_id: OWNER.id, lab_id: A, event_id: "F", event_date: "2026-04-01", analyte: `Made-up ${i}`, pass_fail: "fail" });
+    const t = await trends();
+    const ok = t.trends.filter((x: any) => x.state !== "OK").length === t.counts.WATCH + t.counts.AT_RISK && t.counts.WATCH >= 11 && (await newTrends()) === oldTrends();
+    sqlite.prepare("DELETE FROM pt_events WHERE lab_id = ? AND analyte LIKE 'Made-up %'").run(A);
+    return ok;
+  })());
+
+  // The reason
+  for (const [what, body, code] of [["no reason", { pass_fail: "ungraded" }, "UNGRADED_REASON_REQUIRED"], ["a reason that isn't one", { pass_fail: "ungraded", ungraded_reason: "lost" }, "UNGRADED_REASON_REQUIRED"], ["other with no words", { pass_fail: "ungraded", ungraded_reason: "other" }, "UNGRADED_REASON_REQUIRED"]] as const) {
+    const r = await rec(EDITOR, { enrollment_id: chemProg, analyte: "Chloride", ...body });
+    const o = await call(EDITOR, "POST", "/api/veritapt/events", { enrollment_id: chemProg, event_date: "2026-03-02", analyte: "Chloride", ...body }, A);
+    check(`2e. ungraded with ${what}: refused on both routes`, r.s === 400 && r.j?.code === code && o.s === 400 && o.j?.code === code);
+  }
+  const uOld = await call(EDITOR, "POST", "/api/veritapt/events", { enrollment_id: chemProg, event_date: "2026-07-02", event_id: "C-O", analyte: "Chloride", pass_fail: "ungraded", ungraded_reason: "other", ungraded_reason_text: "Vial arrived broken" }, A);
+  check("2f. the older route stores the reason too, and clears it with the status", uOld.s === 200 && uOld.j.ungraded_reason === "other" && uOld.j.ungraded_reason_text === "Vial arrived broken" && (await call(EDITOR, "PUT", `/api/veritapt/events/${uOld.j.id}`, { pass_fail: "pass" }, A)).j.ungraded_reason === null);
+  const u = ungradedIds[0];
+  const ev = async () => (await call(EDITOR, "GET", P(`events/${u}`))).j.event;
+  check("2g. it is open until the laboratory records its own evaluation", (await ev()).open_evaluations === 1 && (await ev()).results[0].evaluation_open === true && (await ev()).results[0].status === "ungraded");
+
+  // The evaluation
+  const EV = { method: "split_sample_external", acceptance_criteria: "Within the laboratory's own limit of 5 mmol/L", result_summary: "Two splits, both within", conclusion: "pass", performed_date: "2026-06-20" };
+  const evaluate = (who: any, id: number, body: any = EV, lab = A) => call(who, "POST", P(`results/${id}/evaluations`, lab), body);
+  for (const [what, body] of [["no method", { ...EV, method: "" }], ["a method that isn't on the list", { ...EV, method: "guess" }], ["other undescribed", { ...EV, method: "other" }], ["no criteria", { ...EV, acceptance_criteria: " " }], ["no conclusion", { ...EV, conclusion: "" }], ["a conclusion that isn't one", { ...EV, conclusion: "fine" }], ["no date", { ...EV, performed_date: "" }], ["a date ahead", { ...EV, performed_date: "2099-01-01" }]] as const) {
+    check(`2h. an evaluation with ${what}: refused`, (await evaluate(EDITOR, u, body)).s === 400);
+  }
+  for (const [who, p] of [["a Staff login", STAFF], ["a view-only reviewer", VIEWER], ["an editor of another module", SCAN_ONLY], ["another customer", OTHER], ["Veritas support", SUPPORT]] as const) {
+    const r = await evaluate(p, u);
+    check(`2i. ${who} can't record one`, r.s === 403 && (p !== SUPPORT || r.j?.code === "VLS_SUPPORT_CANNOT_SIGN"), `${r.s} ${r.text.slice(0, 120)}`);
+  }
+  check("2j. another lab's result isn't found, and a graded one doesn't take one", (await evaluate(OTHER, u, EV, X)).s === 404 && (await evaluate(EDITOR, g1.j.id)).j?.code === "NOT_UNGRADED" && one("SELECT COUNT(*) AS n FROM pt_event_evaluations").n === 0);
+  const flags1 = await newTrends();
+  const done = await evaluate(EDITOR, u);
+  const r1 = (await ev()).results[0];
+  check("2k. recorded: what it was compared against, the conclusion, who and when", done.s === 201 && r1.evaluation_open === false && r1.evaluations[0].method === EV.method && r1.evaluations[0].acceptance_criteria === EV.acceptance_criteria && r1.evaluations[0].conclusion === "pass" && r1.evaluations[0].recorded_by_name === "Ed Editor" && !!r1.evaluations[0].recorded_at && r1.evaluations[0].performed_date === "2026-06-20");
+  check("2l. it closes the evaluation and changes no status or flag", r1.status === "ungraded" && (await newTrends()) === flags1 && (await ev()).open_evaluations === 0);
+  check("2m. one audit row, by who recorded it", w.audits("pt_evaluation", done.j.id).length === 1 && w.audits("pt_evaluation", done.j.id)[0].user_id === EDITOR.id && JSON.parse(w.audits("pt_evaluation", done.j.id)[0].before_json).ungraded_reason === "no_consensus");
+  await evaluate(OWNER, u, { ...EV, conclusion: "fail" });
+  check("2n. a second one is added in front, the first kept", (await ev()).results[0].evaluations.map((x: any) => x.conclusion).join() === "fail,pass");
+  check("2o. a limited Staff login reads the status and no evaluation", await (async () => { const j = await list(STAFF); const row = j.events.flatMap((e: any) => e.results).find((r: any) => r.id === u); return row.status === "ungraded" && row.evaluations.length === 0 && !JSON.stringify(j).includes("Two splits"); })());
+  check("2p. a result holding one can't be deleted, nor its enrollment", (await call(EDITOR, "DELETE", `/api/veritapt/events/${u}`, undefined, A)).j?.code === "HOLDS_RECORDS" && (await call(EDITOR, "DELETE", `/api/veritapt/enrollments/${old}`, undefined, A)).j?.code === "HOLDS_RECORDS" && !!one("SELECT id FROM pt_events WHERE id = ?", u) && (await call(EDITOR, "DELETE", `/api/veritapt/events/${ungradedIds[2]}`, undefined, A)).s === 200);
+  const xr = await book((await call(EDITOR, "GET", `${P("events/export.xlsx")}?status=ungraded`)).buf);
+  check("2q. the export says why and what the laboratory concluded, or that it is open", rowsOf(xr.getWorksheet("Results")).some((r) => r.includes("Lack of consensus") && r.some((c) => String(c).startsWith("Unacceptable on 2026-06-20. Split sample"))) && rowsOf(xr.getWorksheet("Results")).some((r) => r.includes("Open")));
+  check("2r. the reminders still read only pending results", one("SELECT COUNT(*) AS n FROM pt_events WHERE lab_id = ? AND pass_fail = 'pending' AND id = ?", A, u).n === 0);
+  void mo;
 
   w.finish();
 }

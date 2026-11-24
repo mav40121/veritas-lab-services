@@ -22,6 +22,7 @@ import {
   PT_STATUS_STORED, filterPtEvents, groupPtEvents, ptEventChoices, ptStatus, sortPtEvents,
   type PtEvent, type PtEventFilters, type PtResult,
 } from "@shared/ptEvents";
+import { ptEvaluationOpen, ptEvaluations, ptUngradedColumns } from "./ptEvaluations";
 
 export const NO_DEPARTMENT = "No department on VeritaMap";
 export const NO_PROGRAM = "Program not on file";
@@ -82,16 +83,19 @@ export function ptResults(sqlite: any, labId: number): PtResult[] {
   const programs = ptPrograms(sqlite, labId), department = ptDepartmentOf(sqlite, labId);
   const people = new Map((sqlite.prepare("SELECT id, first_name, last_name FROM staff_employees WHERE tier2_lab_id = ?").all(labId) as any[])
     .map((p) => [Number(p.id), `${txt(p.first_name)} ${txt(p.last_name)}`.trim()]));
+  const evaluations = ptEvaluations(sqlite, labId);
   return (sqlite.prepare("SELECT * FROM pt_events WHERE lab_id = ? ORDER BY event_date DESC, id DESC").all(labId) as any[]).map((r) => {
     const v1 = programs.v1.get(Number(r.enrollment_id)), v2 = programs.v2.get(Number(r.enrollment_id));
     const program = (v1 && nzKey(v1.analyte) === nzKey(r.analyte) ? v1 : null) ?? v2 ?? v1 ?? { key: `none|${r.enrollment_id}`, label: NO_PROGRAM };
     const testedBy = r.tested_by_employee_id == null ? null : Number(r.tested_by_employee_id);
+    const evaluated = { status: ptStatus(r.pass_fail), evaluations: evaluations.get(Number(r.id)) ?? [] };
     return {
       id: Number(r.id), enrollment_id: Number(r.enrollment_id), event_id: r.event_id ?? null, event_name: r.event_name ?? null,
       event_date: String(r.event_date ?? "").slice(0, 10), analyte: txt(r.analyte),
       your_result: num(r.your_result), your_method: r.your_method ?? null, peer_mean: num(r.peer_mean), peer_sd: num(r.peer_sd), peer_n: num(r.peer_n),
       acceptable_low: num(r.acceptable_low), acceptable_high: num(r.acceptable_high), sdi: num(r.sdi),
-      pass_fail: r.pass_fail, status: ptStatus(r.pass_fail), notes: r.notes ?? null,
+      pass_fail: r.pass_fail, ...evaluated, evaluation_open: ptEvaluationOpen(evaluated),
+      ungraded_reason: r.ungraded_reason ?? null, ungraded_reason_text: r.ungraded_reason_text ?? null, notes: r.notes ?? null,
       submission_due_date: txt(r.submission_due_date).slice(0, 10) || null, submitted_date: txt(r.submitted_date).slice(0, 10) || null,
       tested_by_employee_id: testedBy, tested_by: testedBy == null ? null : people.get(testedBy) ?? null,
       program_key: program.key, program: program.label, department: department(r.analyte),
@@ -145,6 +149,9 @@ export function ptResultColumns(body: any, existing: any | null): { error?: stri
   if (cols.acceptable_low != null && cols.acceptable_high != null && cols.acceptable_low > cols.acceptable_high) return { error: "Lowest acceptable is above highest acceptable." };
   cols.pass_fail = b.pass_fail !== undefined && b.pass_fail !== null && b.pass_fail !== "" ? String(b.pass_fail) : existing?.pass_fail ?? "pending";
   if (cols.pass_fail !== existing?.pass_fail && !Object.values(PT_STATUS_STORED).includes(cols.pass_fail)) return { error: "Status must be Acceptable, Unacceptable, Ungraded or Not yet graded." };
+  const ungraded = ptUngradedColumns(b, existing, cols.pass_fail);
+  if (ungraded.error) return { error: ungraded.error, code: ungraded.code };
+  Object.assign(cols, ungraded.cols);
   // SDI as it has always been worked out here. Without a result, a peer mean and an SD there is none; one on file from before
   // stays until those numbers change.
   const changed = ["your_result", "peer_mean", "peer_sd"].some((k) => cols[k] !== num(existing?.[k]));
@@ -167,7 +174,7 @@ export function registerPtEventRoutes(app: Express, deps: PtDeps) {
     const labId = req.scope.labId, own = ptStaffOwn(sqlite(), req);
     const events = ptEventsOfLab(sqlite(), labId);
     res.json({
-      events: own ? events.map((e) => ({ ...e, results: e.results.map((r) => ({ ...r, tested_by: r.tested_by_employee_id != null && r.tested_by_employee_id === own.employeeId ? r.tested_by : null })) })) : events,
+      events: own ? events.map((e) => ({ ...e, open_evaluations: 0, results: e.results.map((r) => ({ ...r, evaluations: [], evaluation_open: false, tested_by: r.tested_by_employee_id != null && r.tested_by_employee_id === own.employeeId ? r.tested_by : null })) })) : events,
       programs: ptPrograms(sqlite(), labId).list, ...ptEventChoices(events),
       can_edit: !own && hasModuleEditAccess(labId, req.userId, "veritapt"), own_only: !!own, today: ptToday(sqlite(), labId),
     });

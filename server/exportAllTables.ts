@@ -193,6 +193,7 @@ export const EXPORT_TABLES: Record<string, ExportTable> = {
   pt_enrollments_v2: labOrOwner("VeritaPT"),
   pt_events: labOrOwner("VeritaPT"),
   pt_corrective_actions: labOrOwner("VeritaPT"),
+  pt_event_evaluations: lab("VeritaPT"), // the laboratory's own evaluation of an ungraded result (server/ptEvaluations.ts)
   pt_reminder_config: lab("VeritaPT"),
   pt_reminder_log: lab("VeritaPT"),
   aa_records: labOrOwner("VeritaPT"),

@@ -157,6 +157,7 @@ class DatabaseStorage implements IStorage {
       sqlite.prepare("DELETE FROM staff_competency_schedules WHERE employee_id IN (SELECT id FROM staff_employees WHERE user_id = ?)").run(id);
       sqlite.prepare("DELETE FROM staff_roles WHERE employee_id IN (SELECT id FROM staff_employees WHERE user_id = ?)").run(id);
       sqlite.prepare("DELETE FROM pt_corrective_actions WHERE user_id = ?").run(id);
+      sqlite.prepare("DELETE FROM pt_event_evaluations WHERE event_id IN (SELECT id FROM pt_events WHERE user_id = ?)").run(id);
       sqlite.prepare("DELETE FROM pt_events WHERE user_id = ?").run(id);
       sqlite.prepare("DELETE FROM staffing_hourly_data WHERE study_id IN (SELECT id FROM staffing_studies WHERE account_id = ?)").run(id);
       // VeritaQA: this account's departments, with what hangs on them, except those of a laboratory someone else owns now.

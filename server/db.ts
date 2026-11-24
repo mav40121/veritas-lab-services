@@ -4578,6 +4578,39 @@ for (const t of ["staff_employees", "staff_roles"]) {
   }
 }
 
+// B11 (2026-11-24): why a program didn't grade a result, and the laboratory's own evaluation of it (server/ptEvaluations.ts).
+// event_id carries no declared reference: a result holding an evaluation can't be deleted by the routes, and the account delete
+// clears them with the results.
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(pt_events)").all() as any[]).map(c => c.name);
+  for (const col of ["ungraded_reason", "ungraded_reason_text"]) {
+    if (!cols.includes(col)) { try { sqlite.exec(`ALTER TABLE pt_events ADD COLUMN ${col} TEXT`); } catch {} }
+  }
+}
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS pt_event_evaluations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    event_id INTEGER NOT NULL,
+    method TEXT NOT NULL,
+    method_notes TEXT,
+    acceptance_criteria TEXT NOT NULL,
+    result_summary TEXT,
+    conclusion TEXT NOT NULL,
+    performed_date TEXT NOT NULL,
+    recorded_by_user_id INTEGER NOT NULL,
+    recorded_by_name TEXT,
+    recorded_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+`);
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(pt_event_evaluations)").all() as { name: string }[]).map((c) => c.name);
+  for (const [col, ddl] of [["lab_id", "INTEGER"], ["event_id", "INTEGER"], ["method", "TEXT"], ["method_notes", "TEXT"], ["acceptance_criteria", "TEXT"], ["result_summary", "TEXT"], ["conclusion", "TEXT"], ["performed_date", "TEXT"], ["recorded_by_user_id", "INTEGER"], ["recorded_by_name", "TEXT"], ["recorded_at", "TEXT"]] as const) {
+    if (!cols.includes(col)) sqlite.exec(`ALTER TABLE pt_event_evaluations ADD COLUMN ${col} ${ddl}`);
+  }
+  try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_pt_event_evaluations_event ON pt_event_evaluations(lab_id, event_id)"); } catch {}
+}
+
 // MLC-2b (2026-08-11): VeritaPT submission-deadline reminders. Per-lab config +
 // a dedup/audit send-log, mirroring veritatrack_reminder_config / _log. Both are
 // CREATE TABLE IF NOT EXISTS (idempotent, safe on every boot).

@@ -140,6 +140,8 @@ const ALWAYS: Record<string, string> = {
   "POST /api/labs/:labId/veritaqa/pi/metrics/:id/assign": "assign an account-wide indicator to a laboratory",
   "DELETE /api/labs/:labId/veritaqa/pi/metrics/:id": "delete an indicator and its results",
   "POST /api/labs/:labId/veritaqa/pi/plan/reviews": "record a leadership review of the quality plan",
+  // VeritaPT: what the laboratory concludes about an ungraded result is the laboratory's own.
+  "POST /api/labs/:labId/pt/results/:id/evaluations": "record an evaluation of a proficiency testing result",
   // Compliance digest: an acknowledgment is a reader's own word that they read the issue.
   "POST /api/labs/:labId/digest/issues/:id/ack": "acknowledge a compliance digest issue",
   // The notice email goes out in the lab's name to its own people; the lab's owner or an admin sends it (PR 5).

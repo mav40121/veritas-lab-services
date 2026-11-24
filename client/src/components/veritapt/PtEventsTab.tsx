@@ -122,7 +122,7 @@ export function PtEventsTab({ labId, onOpen }: { labId: number; onOpen: (resultI
                     {e.submitted_date ?? ""}
                     {(e.submission === "late" || e.submission === "not_recorded") && <div className={e.submission === "late" ? "text-red-700 dark:text-red-400" : "text-amber-700 dark:text-amber-400"}>{PT_SUBMISSION_LABEL[e.submission]}</div>}
                   </td>
-                  <td className="py-2.5 px-3"><PtStatusBadges counts={e.counts} /></td>
+                  <td className="py-2.5 px-3"><PtStatusBadges counts={e.counts} />{e.open_evaluations > 0 && !data?.own_only && <div className="text-[11px] mt-1 text-amber-700 dark:text-amber-400" data-testid="pt-open-evaluations">{e.open_evaluations} {e.open_evaluations === 1 ? "evaluation" : "evaluations"} open</div>}</td>
                 </tr>
               ))}
               {shown.length === 0 && (

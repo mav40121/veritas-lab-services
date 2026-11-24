@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Button } from "@/components/ui/button";
 import { Info } from "lucide-react";
 import { labTodayIso } from "@/lib/labDate";
-import { PT_STATUS_LABEL, PT_STATUS_STORED, type PtResult, type PtStatus } from "@shared/ptEvents";
+import { PT_STATUS_LABEL, PT_STATUS_STORED, PT_UNGRADED_REASONS, type PtResult, type PtStatus } from "@shared/ptEvents";
 import { PtError, PtField, ptInputClass, ptNum, ptRequest, usePtChanged } from "./ptUi";
 
 export interface PtStaffName { id: number; first_name: string; last_name: string; middle_initial: string | null; title: string | null }
@@ -33,6 +33,7 @@ export function PtResultDialog({ labId, enrollments, staffRoster, result, like, 
     your_result: ptNum(result?.your_result), peer_mean: ptNum(result?.peer_mean), peer_sd: ptNum(result?.peer_sd), peer_n: ptNum(result?.peer_n),
     acceptable_low: ptNum(result?.acceptable_low), acceptable_high: ptNum(result?.acceptable_high),
     status: (result?.status ?? "not_graded") as PtStatus,
+    ungraded_reason: result?.ungraded_reason ?? "", ungraded_reason_text: result?.ungraded_reason_text ?? "",
     tested_by_employee_id: result?.tested_by_employee_id ? String(result.tested_by_employee_id) : "",
     submission_due_date: from?.submission_due_date ?? "", submitted_date: from?.submitted_date ?? "",
     notes: result?.notes ?? "",
@@ -52,6 +53,7 @@ export function PtResultDialog({ labId, enrollments, staffRoster, result, like, 
         your_result: numberOrNull(f.your_result), peer_mean: numberOrNull(f.peer_mean), peer_sd: numberOrNull(f.peer_sd), peer_n: numberOrNull(f.peer_n),
         acceptable_low: numberOrNull(f.acceptable_low), acceptable_high: numberOrNull(f.acceptable_high),
         pass_fail: PT_STATUS_STORED[f.status],
+        ...(f.status === "ungraded" ? { ungraded_reason: f.ungraded_reason, ungraded_reason_text: f.ungraded_reason_text } : {}),
         tested_by_employee_id: f.tested_by_employee_id ? Number(f.tested_by_employee_id) : null,
         submission_due_date: f.submission_due_date || null, submitted_date: f.submitted_date || null, notes: f.notes || null,
       };
@@ -110,6 +112,15 @@ export function PtResultDialog({ labId, enrollments, staffRoster, result, like, 
                 {staffRoster.map((emp) => <option key={emp.id} value={emp.id}>{emp.last_name}, {emp.first_name}{emp.middle_initial ? ` ${emp.middle_initial}.` : ""}{emp.title ? ` (${emp.title})` : ""}</option>)}
               </select>
             </PtField>
+            {f.status === "ungraded" && (
+              <PtField label="Why it was not graded" hint="If the program gave this result a score of 0, record Unacceptable instead.">
+                <select className={ptInputClass} value={f.ungraded_reason} onChange={set("ungraded_reason")} data-testid="pt-result-reason">
+                  <option value="">Select...</option>
+                  {PT_UNGRADED_REASONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+                </select>
+              </PtField>
+            )}
+            {f.status === "ungraded" && <PtField label={f.ungraded_reason === "other" ? "In words" : "More about why (optional)"}><input className={ptInputClass} value={f.ungraded_reason_text} onChange={set("ungraded_reason_text")} data-testid="pt-result-reason-text" /></PtField>}
             <PtField label="Method"><input className={ptInputClass} value={f.your_method} onChange={set("your_method")} data-testid="pt-result-your_method" /></PtField>
           </div>
           <PtField label="Notes"><textarea rows={2} className={ptInputClass} value={f.notes} onChange={set("notes")} data-testid="pt-result-notes" /></PtField>
