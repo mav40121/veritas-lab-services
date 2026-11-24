@@ -161,7 +161,6 @@ export function PtBiasTab({ labId, trends }: { labId: number; trends: PtTrendVie
           {current.trend && (
             <div>
               <h3 className="text-sm font-semibold">{current.analyte}: trend status by event</h3>
-              <p className="text-xs text-muted-foreground">Per 42 CFR §493.2, unsatisfactory performance in two consecutive or two out of three testing events is unsuccessful participation.</p>
               <PtTrendHistoryTable trend={current.trend} />
             </div>
           )}

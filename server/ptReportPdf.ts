@@ -23,8 +23,11 @@ export const PT_REPORT_FOOTER = `
   </div>
 </div>`;
 
+/** Each part on one line of its own width, so a date and its result stay together. */
+const parts = (text: string) => ({ html: text.split("; ").map((p) => `<span class="nb">${esc(p)}</span>`).join("; ") });
+const cell = (c: unknown): string => (c && typeof c === "object" && "html" in c ? String((c as { html: string }).html) : esc(c));
 const table = (heads: string[], rows: unknown[][], none: string): string => rows.length
-  ? `<table><thead><tr>${heads.map((h) => `<th>${esc(h)}</th>`).join("")}</tr></thead><tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${esc(c)}</td>`).join("")}</tr>`).join("")}</tbody></table>`
+  ? `<table><thead><tr>${heads.map((h) => `<th>${esc(h)}</th>`).join("")}</tr></thead><tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${cell(c)}</td>`).join("")}</tr>`).join("")}</tbody></table>`
   : `<p class="none">${esc(none)}</p>`;
 
 export function buildPtReportHTML(r: PtReport, lab: { labName: string | null; clia: string | null }): string {
@@ -50,6 +53,7 @@ export function buildPtReportHTML(r: PtReport, lab: { labName: string | null; cl
     th { background: ${TEAL}; color: white; padding: 4px 7px; text-align: left; font-weight: 600; font-size: 8pt; }
     tbody tr:nth-child(even) { background: #f9fafb; }
     td { padding: 4px 7px; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
+    .nb { white-space: nowrap; }
     .none { font-size: 8.5pt; color: #6b7280; }
     .note { margin-top: 16px; padding: 8px 10px; border: 1px solid #e5e7eb; border-radius: 4px; background: #f9fafb; font-size: 7.5pt; color: #555; line-height: 1.5; break-inside: avoid; }
   </style></head><body>
@@ -76,9 +80,9 @@ export function buildPtReportHTML(r: PtReport, lab: { labName: string | null; cl
     <h2>Open reviews, as of ${esc(r.as_of)}</h2>
     ${table(["Event", "Program", "Event date", "Review", "Evaluations open"], r.open_reviews.map((e) => [e.event, e.program, e.event_date, PT_REVIEW_LABEL[e.state], e.open_evaluations]), "Every event of this period with a status back is reviewed.")}
     <h2>Two of three, as of ${esc(r.period.end)}</h2>
-    ${table(["Analyte", "Flag", "Last three graded results"], r.two_of_three.map((t) => [t.analyte, PT_FLAG_LABEL[t.state], ptLast3Text(t.last3)]), "No analyte is at risk or on watch.")}
+    ${table(["Analyte", "Flag", "Last three graded results"], r.two_of_three.map((t) => [t.analyte, PT_FLAG_LABEL[t.state], parts(ptLast3Text(t.last3))]), "No analyte is at risk or on watch.")}
     <div class="note">
-      Results count by event date. Graded means acceptable or unacceptable; ungraded and not yet graded results are never in the rate or in the two-of-three list. Department is the VeritaMap® department of the analyzers that run the analyte. 42 CFR §493.2: unsatisfactory performance in two consecutive or two out of three testing events is unsuccessful participation.<br>
+      Results count by event date. Graded means acceptable or unacceptable; ungraded and not yet graded results are never in the rate or in the two-of-three list. Department is the VeritaMap® department of the analyzers that run the analyte.<br>
       Final approval and clinical determination must be made by the laboratory director or designee.
     </div>
   </body></html>`;
