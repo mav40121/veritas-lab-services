@@ -74,6 +74,9 @@ const ALWAYS: Record<string, string> = {
   "POST /api/labs/:labId/competency/assessments/:id/sign": "sign a competency assessment",
   "POST /api/labs/:labId/competency/assessments/:id/unlock": "unlock a signed competency assessment",
   "POST /api/labs/:labId/competency/employee/:employeeId/sign": "sign an employee competency record",
+  // Each method is signed off on its own since 2026-10-13.
+  "POST /api/labs/:labId/competency/employee/:employeeId/test-system/:instrumentId/sign": "sign a method's competency",
+  "POST /api/labs/:labId/competency/employee/:employeeId/test-system/:instrumentId/signoffs/:signoffId/revoke": "unlock a method's signed competency",
   "POST /api/labs/:labId/competency/assessments/bulk-commit": "commit signed competency records",
   "POST /api/labs/:labId/competency/assessments/cohort-commit": "commit signed competency records",
   // VeritaCheck
@@ -105,7 +108,11 @@ const ALWAYS: Record<string, string> = {
   "POST /api/labs/:labId/veritapolicy/workflows/:id/steps": "change a policy approval workflow",
   "DELETE /api/labs/:labId/veritapolicy/documents/:id": "delete a policy and its signatures",
   "DELETE /api/labs/:labId/veritapolicy/documents/:id/attestations/:assignmentId": "delete a policy attestation",
+  // VeritaStock recalls: the assigned manager or the lab's owner or admin signs off and closes a case.
+  "POST /api/labs/:labId/veritastock/recalls/:id/signoff": "sign off a recall",
+  "POST /api/labs/:labId/veritastock/recalls/:id/close": "close a recall",
   // VeritaMaintain, VeritaResponse
+  "POST /api/labs/:labId/maintain-reviews": "sign the monthly maintenance review",
   "POST /api/labs/:labId/equipment/:id/events": "log maintenance as performed",
   "POST /api/labs/:labId/equipment/:id/schedules/:scheduleId/complete": "complete a maintenance schedule",
   "POST /api/labs/:labId/equipment/:id/events/:eventId/correct": "correct a maintenance entry",
