@@ -19027,7 +19027,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (!Number.isInteger(docId)) return res.status(400).json({ error: "invalid document id" });
     const doc = sqlite.prepare(
       "SELECT file_name, file_type, file_size, file_data FROM system_documents WHERE id = ? AND organization_id = ? AND status = 'active' AND doc_kind = 'file'",
-    ).get(docId) as any;
+    ).get(docId, orgId) as any;
     if (!doc?.file_data) return res.status(404).json({ error: "File not found." });
     const safeName = String(doc.file_name || "document").replace(/[^\w.\- ]+/g, "_");
     res.setHeader("Content-Type", doc.file_type || "application/octet-stream");
