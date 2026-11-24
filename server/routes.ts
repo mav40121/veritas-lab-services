@@ -908,6 +908,7 @@ import { registerPtEventRoutes } from "./ptEvents";
 import { ptUngradedColumns, registerPtEvaluationRoutes } from "./ptEvaluations";
 import { ptResultsHoldRecords } from "./ptRecords";
 import { registerPtReviewRoutes } from "./ptReviews";
+import { registerPtBiasRoutes } from "./ptBiasRoutes";
 import { ptTrendsForLab } from "./ptTrends";
 import { PT_AAA_METHODS } from "@shared/ptEvents";
 import { findingStudy, registerInspectionAssignRoutes } from "./inspectionAssign";
@@ -45001,6 +45002,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   registerPtEvaluationRoutes(app, ptDeps);
   // The review of a whole event (B11, server/ptReviews.ts).
   registerPtReviewRoutes(app, ptDeps);
+  // Bias and trend per analyte (B11, server/ptBiasRoutes.ts).
+  registerPtBiasRoutes(app, ptDeps);
 
   // VeritaTrack routes
   const { registerVeritaTrackRoutes } = await import('./veritatrack');

@@ -6,6 +6,7 @@
 //      which an ungraded result never moves.
 //   3. The review of a whole event: what it saw, what it links to (never opened by itself), the laboratory director or designee
 //      review, and an event changed since.
+//   4. Bias and trend: the numbers worked out on the server, "no peer data" where there is none, and the two review flags.
 //
 // Boots the REAL routes against a throwaway SQLite DB (made-up people, programs and numbers only). Run: npm run test:pt-events
 import { inspectionWorld } from "./inspectionFixture";
@@ -252,6 +253,31 @@ async function main() {
   await review(EDITOR, await detail(bad), { corrective_action_ids: [ca] });
   const xv = rowsOf((await book((await call(EDITOR, "GET", P("events/export.xlsx"))).buf)).getWorksheet("Events"));
   check("3aa. the export carries the review", xv.some((r) => r.includes("Reviewed") && r.includes("Ed Editor")) && xv.some((r) => r.includes("Changed since review")) && xv.some((r) => r.includes("Not reviewed")));
+
+  // ── 4. Bias and trend ─────────────────────────────────────────────────────
+  const bias = async (who: any = EDITOR) => (await call(who, "GET", P("bias"))).j;
+  const q = (event_id: string, event_date: string, analyte: string, your_result: number | null, peer_mean: number | null, extra: any = {}) => rec(EDITOR, { enrollment_id: chemProg, event_id, event_date, analyte, your_result, peer_mean, peer_sd: 2, pass_fail: "pass", ...extra });
+  await q("Q-1", "2026-01-10", "Calcium", 9.4, 9.2, { acceptable_low: 8.2, acceptable_high: 10.2 });
+  await q("Q-2", "2026-02-10", "Calcium", 9.6, 9.5);
+  await q("Q-2b", "2026-02-20", "Calcium", 9.9, null);
+  await q("Q-3", "2026-03-10", "Calcium", 9.1, 9.0);
+  for (const [a, x] of [["Iron", 51], ["Lipase", 52], ["Uric Acid", 53]] as const) await q("Q-4", "2026-04-10", a, x, 50);
+  for (const x of [49, 48, 47]) await q("Q-5", "2026-05-10", "Iron", x, 50);
+  let bd = await bias();
+  const ca4 = bd.analytes.find((a: any) => a.analyte === "Calcium");
+  check("4a. each result's difference, percent difference and SDI come from the server", ca4.points[0].difference === 0.2 && ca4.points[0].percent === 2.17 && ca4.points[0].sdi === 0.1 && ca4.points[0].range_percent[0] === -10.87 && ca4.points[1].range_percent[0] === null, JSON.stringify(ca4.points[0]));
+  check("4b. a result with no peer mean says so: nothing is zero", (() => { const p = ca4.points.find((x: any) => x.event === "Q-2b"); return p.difference === null && p.percent === null && p.sdi === null && p.side === null; })());
+  check("4c. points run oldest first", ca4.points.map((p: any) => p.event).join() === "Q-1,Q-2,Q-2b,Q-3");
+  check("4d. three events in a row on one side, the one without peer data left out", ca4.flags.length === 1 && ca4.flags[0].rule === "three_events" && /above the peer mean in 3 events in a row \(Q-1, 2026-01-10; Q-2, 2026-02-10; Q-3, 2026-03-10\)/.test(ca4.flags[0].text), JSON.stringify(ca4.flags));
+  check("4e. one event, all its results on one side", bd.event_flags.some((f: any) => /all 3 results of Q-4 are above their peer mean/.test(f.text)));
+  check("4f. one analyte's results of one event, all on one side", bd.analytes.find((a: any) => a.analyte === "Iron").flags.some((f: any) => f.rule === "same_event" && /all 3 Iron results of Q-5 are below the peer mean/.test(f.text)));
+  check("4g. every flag says flag for review and none says biased or unacceptable; the rules come with it", [...bd.event_flags, ...bd.analytes.flatMap((a: any) => a.flags)].every((f: any) => /^Flag for review: /.test(f.text) && !/biased|unacceptable/i.test(f.text)) && Object.keys(bd.rules).length === 2);
+  check("4h. the analyte's two-of-three history rides along", bd.analytes.find((a: any) => a.analyte === "Calcium").trend.history.length === 4);
+  await q("Q-6", "2026-06-10", "Calcium", 8.9, 9.0);
+  await q("Q-7", "2026-07-10", "Calcium", 9.3, 9.0);
+  check("4i. a later event on the other side ends the run and keeps it on the record", (await bias()).analytes.find((a: any) => a.analyte === "Calcium").flags.length === 1);
+  check("4j. a view-only reviewer reads it; a limited Staff login and another customer don't", (await call(VIEWER, "GET", P("bias"))).s === 200 && (await call(STAFF, "GET", P("bias"))).j?.code === "STAFF_OWN_ONLY" && (await call(OTHER, "GET", P("bias"))).s === 403);
+  check("4k. a qualitative row (no number) isn't charted", !bd.analytes.some((a: any) => a.analyte === "Chloride"));
   void mo;
 
   w.finish();

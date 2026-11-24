@@ -3,6 +3,8 @@ import { labTodayIso } from "@/lib/labDate";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PtEventsTab } from "@/components/veritapt/PtEventsTab";
 import { PtEventDialog } from "@/components/veritapt/PtEventDialog";
+import { PtBiasTab } from "@/components/veritapt/PtBiasTab";
+import { useStaffOwnScope } from "@/hooks/useStaffLogin";
 import { PtResultDialog } from "@/components/veritapt/PtResultDialog";
 import { PT_AAA_METHODS, type PtResult } from "@shared/ptEvents";
 import { PtTrendList, type PtTrendView } from "@/components/veritapt/PtTrendList";
@@ -156,6 +158,7 @@ export default function VeritaPTAppPage() {
   const [openEvent, setOpenEvent] = useState<number | null>(null);
   const [resultForm, setResultForm] = useState<{ result?: PtResult; like?: PtResult } | null>(null);
   const [tab, setTab] = useState("coverage");
+  const { ownOnly } = useStaffOwnScope(); // a limited Staff login reads the event list only
   const [ptEvents, setPtEvents] = useState<any[]>([]); // MLC-2: events, for deadline surfacing
   const [staffRoster, setStaffRoster] = useState<Array<{ id: number; first_name: string; last_name: string; middle_initial: string | null; title: string | null }>>([]);
   const [saving, setSaving] = useState(false);
@@ -479,12 +482,14 @@ export default function VeritaPTAppPage() {
       <TabsList className="h-auto flex-wrap justify-start" data-testid="pt-tabs">
         <TabsTrigger value="coverage">Coverage</TabsTrigger>
         {activeLabId && <TabsTrigger value="events" data-testid="pt-tab-events">Events</TabsTrigger>}
+        {activeLabId && !ownOnly && <TabsTrigger value="bias" data-testid="pt-tab-bias">Bias and trend</TabsTrigger>}
       </TabsList>
       {activeLabId && (
         <TabsContent value="events" className="mt-0">
           <PtEventsTab labId={activeLabId} onOpen={setOpenEvent} />
         </TabsContent>
       )}
+      {activeLabId && !ownOnly && <TabsContent value="bias" className="mt-0"><PtBiasTab labId={activeLabId} /></TabsContent>}
       <TabsContent value="coverage" className="mt-0 space-y-6">
       {/* Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
