@@ -24,10 +24,12 @@ export function ptStatus(passFail: unknown): PtStatus {
   return passFail === "pass" ? "acceptable" : passFail === "fail" ? "unacceptable" : passFail === "ungraded" ? "ungraded" : "not_graded";
 }
 
-/** Why a program didn't grade a result. Only an ungraded result carries one. */
+/**
+ * Why a program didn't grade a result. Only an ungraded result carries one. A late submission isn't one of them: it is recorded
+ * as the program scored it, and the submitted date shows it was late.
+ */
 export const PT_UNGRADED_REASONS = [
   { value: "no_consensus", label: "Lack of consensus" },
-  { value: "late_submission", label: "Late submission" },
   { value: "not_scored", label: "Not scored by the program" },
   { value: "educational", label: "Educational challenge" },
   { value: "other", label: "Other" },

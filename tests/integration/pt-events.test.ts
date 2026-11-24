@@ -144,13 +144,16 @@ async function main() {
   })());
 
   // The reason
-  for (const [what, body, code] of [["no reason", { pass_fail: "ungraded" }, "UNGRADED_REASON_REQUIRED"], ["a reason that isn't one", { pass_fail: "ungraded", ungraded_reason: "lost" }, "UNGRADED_REASON_REQUIRED"], ["other with no words", { pass_fail: "ungraded", ungraded_reason: "other" }, "UNGRADED_REASON_REQUIRED"]] as const) {
+  for (const [what, body, code] of [["no reason", { pass_fail: "ungraded" }, "UNGRADED_REASON_REQUIRED"], ["a reason that isn't one", { pass_fail: "ungraded", ungraded_reason: "lost" }, "UNGRADED_REASON_REQUIRED"], ["a late submission, which isn't one", { pass_fail: "ungraded", ungraded_reason: "late_submission" }, "UNGRADED_REASON_REQUIRED"], ["other with no words", { pass_fail: "ungraded", ungraded_reason: "other" }, "UNGRADED_REASON_REQUIRED"]] as const) {
     const r = await rec(EDITOR, { enrollment_id: chemProg, analyte: "Chloride", ...body });
     const o = await call(EDITOR, "POST", "/api/veritapt/events", { enrollment_id: chemProg, event_date: "2026-03-02", analyte: "Chloride", ...body }, A);
     check(`2e. ungraded with ${what}: refused on both routes`, r.s === 400 && r.j?.code === code && o.s === 400 && o.j?.code === code);
   }
   const uOld = await call(EDITOR, "POST", "/api/veritapt/events", { enrollment_id: chemProg, event_date: "2026-07-02", event_id: "C-O", analyte: "Chloride", pass_fail: "ungraded", ungraded_reason: "other", ungraded_reason_text: "Vial arrived broken" }, A);
   check("2f. the older route stores the reason too, and clears it with the status", uOld.s === 200 && uOld.j.ungraded_reason === "other" && uOld.j.ungraded_reason_text === "Vial arrived broken" && (await call(EDITOR, "PUT", `/api/veritapt/events/${uOld.j.id}`, { pass_fail: "pass" }, A)).j.ungraded_reason === null);
+  const late2 = (await rec(EDITOR, { enrollment_id: hemeProg, event_id: "LATE-1", event_date: "2026-03-02", analyte: "Late Analyte", pass_fail: "fail", submission_due_date: "2026-03-10", submitted_date: "2026-03-12" })).j.id;
+  check("2f2. a late event is recorded as the program scored it, counts as that, and reads late from its dates", (await trends()).trends.find((t: any) => t.analyte === "Late Analyte").state === "WATCH" && (await eventNamed("LATE-1")).submission === "late" && (await newTrends()) === oldTrends());
+  sqlite.prepare("DELETE FROM pt_events WHERE id = ?").run(late2);
   const u = ungradedIds[0];
   const ev = async () => (await call(EDITOR, "GET", P(`events/${u}`))).j.event;
   check("2g. it is open until the laboratory records its own evaluation", (await ev()).open_evaluations === 1 && (await ev()).results[0].evaluation_open === true && (await ev()).results[0].status === "ungraded");

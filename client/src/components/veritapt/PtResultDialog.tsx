@@ -113,7 +113,7 @@ export function PtResultDialog({ labId, enrollments, staffRoster, result, like, 
               </select>
             </PtField>
             {f.status === "ungraded" && (
-              <PtField label="Why it was not graded" hint="If the program gave this result a score of 0, record Unacceptable instead.">
+              <PtField label="Why it was not graded" hint="Not for a late submission: record that as the program scored it. The submitted date shows it was late.">
                 <select className={ptInputClass} value={f.ungraded_reason} onChange={set("ungraded_reason")} data-testid="pt-result-reason">
                   <option value="">Select...</option>
                   {PT_UNGRADED_REASONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
