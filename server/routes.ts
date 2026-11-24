@@ -906,7 +906,7 @@ import { registerVeritaScanCarryRoutes } from "./veritascanCarry";
 import { registerInspectionLinkRoutes } from "./inspectionLinks";
 import { registerPtEventRoutes } from "./ptEvents";
 import { ptUngradedColumns, registerPtEvaluationRoutes } from "./ptEvaluations";
-import { ptResultsHoldRecords } from "./ptRecords";
+import { PT_PROGRAM_HOLDS_RECORDS, ptProgramHoldsRecords, ptResultsHoldRecords } from "./ptRecords";
 import { registerPtReviewRoutes } from "./ptReviews";
 import { registerPtBiasRoutes } from "./ptBiasRoutes";
 import { registerPtReportRoutes } from "./ptReport";
@@ -14795,6 +14795,24 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     return null;
   }
 
+  // A record's own laboratory decides who edits it (server/labAccessGuard.ts has the rule for an older seat).
+  function ptRecordEdit(table: "pt_events" | "pt_enrollments_v2" | "aa_records", notFound: string) {
+    return (req: any, res: any, next: any) => {
+      const row = userCanAccessLabRow(table, req.params.id, req);
+      if (!row) return res.status(404).json({ error: notFound });
+      if (editsInRecordLab(req, row, "veritapt")) return next();
+      return res.status(403).json({ error: `You have view-only access to ${seatModuleLabel("veritapt")}. Ask the account owner to grant edit access.` });
+    };
+  }
+  function editsInRecordLab(req: any, row: { user_id: number; lab_id: number | null }, module: string): boolean {
+    if (row.lab_id && hasModuleEditAccess(Number(row.lab_id), req.userId, module)) return true;
+    if (!row.lab_id && Number(row.user_id) === Number(req.userId)) return true;
+    // A record with no lab, or an older seat with no lab membership anywhere, is worked through its owner: that seat decides.
+    const member = row.lab_id && (db as any).$client.prepare("SELECT 1 FROM lab_members WHERE user_id = ? AND status = 'active' LIMIT 1").get(req.userId);
+    return !member && !!req.isSeatUser && ownerMatch(req, row.user_id, row.lab_id)
+      && effectiveSeatPermission(req.seatType, (req.seatPermissions || {}) as SeatPermissions, module) === "edit";
+  }
+
   // lab_certificates additionally has an is_active soft-delete column.
   // Inline the filter into the SELECT so we don't return tombstoned rows
   // even when the caller has access via direct ownership or lab membership.
@@ -22408,11 +22426,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   });
 
   // DELETE /api/pt/enrollments/:id
-  app.delete("/api/pt/enrollments/:id", authMiddleware, requireWriteAccess, requireModuleEdit("veritapt"), (req: any, res) => {
+  app.delete("/api/pt/enrollments/:id", authMiddleware, requireWriteAccess, ptRecordEdit("pt_enrollments_v2", "Enrollment not found"), (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user?.userId;
     const existing = userCanAccessLabRow('pt_enrollments_v2', req.params.id, req);
     if (!existing) return res.status(404).json({ error: "Enrollment not found" });
-    (db as any).$client.prepare("DELETE FROM pt_enrollments_v2 WHERE id = ?").run(req.params.id);
+    if (ptProgramHoldsRecords((db as any).$client, existing)) return res.status(409).json(PT_PROGRAM_HOLDS_RECORDS);
+    (db as any).$client.prepare("DELETE FROM pt_enrollments_v2 WHERE id = ?").run(existing.id);
     res.json({ success: true });
   });
 
@@ -22482,7 +22501,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   });
 
   // PUT update an AAA record
-  app.put("/api/pt/aa-records/:id", authMiddleware, requireWriteAccess, requireModuleEdit("veritapt"), (req: any, res) => {
+  app.put("/api/pt/aa-records/:id", authMiddleware, requireWriteAccess, ptRecordEdit("aa_records", "AAA record not found"), (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user?.userId;
     const existing = userCanAccessLabRow('aa_records', req.params.id, req);
     if (!existing) return res.status(404).json({ error: "AAA record not found" });
@@ -22531,7 +22550,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   });
 
   // DELETE an AAA record
-  app.delete("/api/pt/aa-records/:id", authMiddleware, requireWriteAccess, requireModuleEdit("veritapt"), (req: any, res) => {
+  app.delete("/api/pt/aa-records/:id", authMiddleware, requireWriteAccess, ptRecordEdit("aa_records", "AAA record not found"), (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user?.userId;
     const existing = userCanAccessLabRow('aa_records', req.params.id, req);
     if (!existing) return res.status(404).json({ error: "AAA record not found" });
@@ -22547,7 +22566,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // for tests with no PT program). One click opens the finding pre-filled from
   // the AAA context. CMS is always an allowed accreditor (every lab holds CLIA),
   // so the finding gate never blocks this path.
-  app.post("/api/pt/aa-records/:id/escalate-to-response", authMiddleware, requireWriteAccess, requireModuleEdit("veritapt"), (req: any, res) => {
+  app.post("/api/pt/aa-records/:id/escalate-to-response", authMiddleware, requireWriteAccess, ptRecordEdit("aa_records", "AAA record not found"), (req: any, res) => {
     const sqlite = (db as any).$client;
     const dataUserId = req.ownerUserId ?? req.user?.userId;
     if (!userCanAccessLabRow('aa_records', req.params.id, req)) return res.status(404).json({ error: "AAA record not found" });
@@ -22649,10 +22668,11 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   });
   app.delete("/api/labs/:labId/pt/enrollments/:id", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritapt"), (req: any, res) => {
     const existing = (db as any).$client.prepare(
-      "SELECT id FROM pt_enrollments_v2 WHERE id = ? AND lab_id = ?"
+      "SELECT * FROM pt_enrollments_v2 WHERE id = ? AND lab_id = ?"
     ).get(req.params.id, req.scope.labId);
     if (!existing) return res.status(404).json({ error: "Enrollment not found" });
-    (db as any).$client.prepare("DELETE FROM pt_enrollments_v2 WHERE id = ?").run(req.params.id);
+    if (ptProgramHoldsRecords((db as any).$client, existing)) return res.status(409).json(PT_PROGRAM_HOLDS_RECORDS);
+    (db as any).$client.prepare("DELETE FROM pt_enrollments_v2 WHERE id = ?").run(existing.id);
     res.json({ success: true });
   });
   // ── MLC-1: Equipment / instrument maintenance (VeritaMaintain; server/equipment.ts) ──
@@ -33941,67 +33961,6 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     res.json(rows);
   });
 
-  // Create enrollment
-  app.post("/api/veritapt/enrollments", authMiddleware, requireWriteAccess, requireModuleEdit('veritapt'), (req: any, res) => {
-    if (!hasPTAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaPT™ subscription required" });
-    const { analyte, specialty, pt_provider, program_code, enrollment_year, enrollment_date, status } = req.body;
-    if (!analyte?.trim() || !specialty?.trim() || !pt_provider?.trim() || !enrollment_year || !enrollment_date) {
-      return res.status(400).json({ error: "Analyte, specialty, PT provider, enrollment year, and enrollment date are required" });
-    }
-    const now = new Date().toISOString();
-    const dataUserId = req.ownerUserId ?? req.user.userId;
-    const result = (db as any).$client.prepare(
-      "INSERT INTO pt_enrollments (user_id, analyte, specialty, pt_provider, program_code, enrollment_year, enrollment_date, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-    ).run(dataUserId, analyte.trim(), specialty.trim(), pt_provider.trim(), program_code || null, enrollment_year, enrollment_date, status || 'active', now, now);
-    // write-path Shape A (batch 1, docs/shape-a-class-audit-2026-06-09.md): tag
-    // the ACTIVE lab, not the owner's default lab. resolveActiveLabForRequest
-    // falls back to the default lab with no X-Active-Lab-Id header, so single-lab
-    // users are unchanged. This table's reads key on user_id, so nothing hides.
-    try {
-      const activeLab = resolveActiveLabForRequest(req.userId, req);
-      (db as any).$client.prepare("UPDATE pt_enrollments SET lab_id = ? WHERE id = ?").run(activeLab?.id ?? null, result.lastInsertRowid);
-    } catch {}
-    const created = (db as any).$client.prepare("SELECT * FROM pt_enrollments WHERE id = ?").get(Number(result.lastInsertRowid));
-    res.json(created);
-  });
-
-  // Update enrollment
-  app.put("/api/veritapt/enrollments/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritapt'), (req: any, res) => {
-    if (!hasPTAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaPT™ subscription required" });
-    const dataUserId = req.ownerUserId ?? req.user.userId;
-    const existing = userCanAccessLabRow('pt_enrollments', req.params.id, req);
-    if (!existing) return res.status(404).json({ error: "Enrollment not found" });
-    const { analyte, specialty, pt_provider, program_code, enrollment_year, enrollment_date, status } = req.body;
-    const now = new Date().toISOString();
-    (db as any).$client.prepare(
-      "UPDATE pt_enrollments SET analyte = ?, specialty = ?, pt_provider = ?, program_code = ?, enrollment_year = ?, enrollment_date = ?, status = ?, updated_at = ? WHERE id = ?"
-    ).run(
-      analyte ?? existing.analyte, specialty ?? existing.specialty, pt_provider ?? existing.pt_provider,
-      program_code !== undefined ? program_code : existing.program_code,
-      enrollment_year ?? existing.enrollment_year, enrollment_date ?? existing.enrollment_date,
-      status ?? existing.status, now, req.params.id
-    );
-    const updated = (db as any).$client.prepare("SELECT * FROM pt_enrollments WHERE id = ?").get(req.params.id);
-    res.json(updated);
-  });
-
-  // Delete enrollment (cascade: events + their corrective actions)
-  app.delete("/api/veritapt/enrollments/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritapt'), (req: any, res) => {
-    if (!hasPTAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaPT™ subscription required" });
-    const dataUserId = req.ownerUserId ?? req.user.userId;
-    const existing = userCanAccessLabRow('pt_enrollments', req.params.id, req);
-    if (!existing) return res.status(404).json({ error: "Enrollment not found" });
-    // Get event IDs for cascade delete
-    const events = (db as any).$client.prepare("SELECT id FROM pt_events WHERE enrollment_id = ?").all(req.params.id) as any[];
-    if (ptResultsHoldRecords((db as any).$client, events.map((ev) => Number(ev.id)))) return res.status(409).json({ error: "A result of this enrollment has records on file, so it can't be deleted.", code: "HOLDS_RECORDS" });
-    for (const ev of events) {
-      (db as any).$client.prepare("DELETE FROM pt_corrective_actions WHERE event_id = ?").run(ev.id);
-    }
-    (db as any).$client.prepare("DELETE FROM pt_events WHERE enrollment_id = ?").run(req.params.id);
-    (db as any).$client.prepare("DELETE FROM pt_enrollments WHERE id = ?").run(req.params.id);
-    res.json({ ok: true });
-  });
-
   // GET /api/veritapt/programs?vendor=API — the vendor program CATALOG that
   // drives the enrollment modal's Program Name dropdown. Returns each program the
   // vendor offers with its PT category and the analytes it includes, so the lab
@@ -34118,7 +34077,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   });
 
   // Update event (recalculate SDI if needed)
-  app.put("/api/veritapt/events/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritapt'), (req: any, res) => {
+  app.put("/api/veritapt/events/:id", authMiddleware, requireWriteAccess, ptRecordEdit("pt_events", "Event not found"), (req: any, res) => {
     if (!hasPTAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaPT™ subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const existing = userCanAccessLabRow('pt_events', req.params.id, req);
@@ -34154,14 +34113,14 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   });
 
   // Delete event (cascade: corrective actions)
-  app.delete("/api/veritapt/events/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritapt'), (req: any, res) => {
+  app.delete("/api/veritapt/events/:id", authMiddleware, requireWriteAccess, ptRecordEdit("pt_events", "Event not found"), (req: any, res) => {
     if (!hasPTAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaPT™ subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const existing = userCanAccessLabRow('pt_events', req.params.id, req);
     if (!existing) return res.status(404).json({ error: "Event not found" });
     if (ptResultsHoldRecords((db as any).$client, [Number(req.params.id)])) return res.status(409).json({ error: "This result has records on file and can't be deleted.", code: "HOLDS_RECORDS" });
-    (db as any).$client.prepare("DELETE FROM pt_corrective_actions WHERE event_id = ?").run(req.params.id);
-    (db as any).$client.prepare("DELETE FROM pt_events WHERE id = ?").run(req.params.id);
+    (db as any).$client.prepare("DELETE FROM pt_corrective_actions WHERE event_id = ? AND lab_id IS ?").run(existing.id, existing.lab_id ?? null);
+    (db as any).$client.prepare("DELETE FROM pt_events WHERE id = ?").run(existing.id);
     res.json({ ok: true });
   });
 
@@ -34190,54 +34149,6 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       "SELECT * FROM pt_corrective_actions WHERE event_id = ?"
     ).get(req.params.eventId);
     res.json(row || null);
-  });
-
-  // Create corrective action
-  app.post("/api/veritapt/corrective-actions", authMiddleware, requireWriteAccess, requireModuleEdit('veritapt'), (req: any, res) => {
-    if (!hasPTAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaPT™ subscription required" });
-    const { event_id, root_cause, corrective_action, preventive_action, responsible_person, date_initiated, date_completed, status, verified_by, verified_date } = req.body;
-    if (!event_id || !corrective_action?.trim() || !date_initiated) {
-      return res.status(400).json({ error: "Event ID, corrective action, and date initiated are required" });
-    }
-    const now = new Date().toISOString();
-    const dataUserId = req.ownerUserId ?? req.user.userId;
-    const result = (db as any).$client.prepare(
-      "INSERT INTO pt_corrective_actions (event_id, user_id, root_cause, corrective_action, preventive_action, responsible_person, date_initiated, date_completed, status, verified_by, verified_date, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-    ).run(event_id, dataUserId, root_cause || null, corrective_action.trim(), preventive_action || null, responsible_person || null, date_initiated, date_completed || null, status || 'open', verified_by || null, verified_date || null, now, now);
-    // write-path Shape A (resolver unification): tag via resolveLegacyLabId —
-    // the SAME resolver the corrective-actions list read uses (now
-    // active-lab-aware) — so write and read agree in every branch.
-    try {
-      (db as any).$client.prepare("UPDATE pt_corrective_actions SET lab_id = ? WHERE id = ?").run(resolveLegacyLabId(req) ?? null, result.lastInsertRowid);
-    } catch {}
-    const created = (db as any).$client.prepare("SELECT * FROM pt_corrective_actions WHERE id = ?").get(Number(result.lastInsertRowid));
-    res.json(created);
-  });
-
-  // Update corrective action
-  app.put("/api/veritapt/corrective-actions/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritapt'), (req: any, res) => {
-    if (!hasPTAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaPT™ subscription required" });
-    const dataUserId = req.ownerUserId ?? req.user.userId;
-    const existing = userCanAccessLabRow('pt_corrective_actions', req.params.id, req);
-    if (!existing) return res.status(404).json({ error: "Corrective action not found" });
-    const { root_cause, corrective_action, preventive_action, responsible_person, date_initiated, date_completed, status, verified_by, verified_date } = req.body;
-    const now = new Date().toISOString();
-    (db as any).$client.prepare(
-      "UPDATE pt_corrective_actions SET root_cause = ?, corrective_action = ?, preventive_action = ?, responsible_person = ?, date_initiated = ?, date_completed = ?, status = ?, verified_by = ?, verified_date = ?, updated_at = ? WHERE id = ?"
-    ).run(
-      root_cause !== undefined ? root_cause : existing.root_cause,
-      corrective_action ?? existing.corrective_action,
-      preventive_action !== undefined ? preventive_action : existing.preventive_action,
-      responsible_person !== undefined ? responsible_person : existing.responsible_person,
-      date_initiated ?? existing.date_initiated,
-      date_completed !== undefined ? date_completed : existing.date_completed,
-      status ?? existing.status,
-      verified_by !== undefined ? verified_by : existing.verified_by,
-      verified_date !== undefined ? verified_date : existing.verified_date,
-      now, req.params.id
-    );
-    const updated = (db as any).$client.prepare("SELECT * FROM pt_corrective_actions WHERE id = ?").get(req.params.id);
-    res.json(updated);
   });
 
   // Summary stats

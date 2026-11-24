@@ -11,6 +11,7 @@
 //   6. Into the method-by-method competency record: events the person tested, for the method's analytes; it marks nothing.
 //   7. The program's report attached to an event.
 //   8. "Download all of this lab's records" and the per-customer delete take every new table.
+//   9. The older by-id routes: a record's own laboratory decides.
 //
 // Boots the REAL routes against a throwaway SQLite DB (made-up people, programs and numbers only). Run: npm run test:pt-events
 import { inspectionWorld } from "./inspectionFixture";
@@ -178,7 +179,7 @@ async function main() {
   await evaluate(OWNER, u, { ...EV, conclusion: "fail" });
   check("2n. a second one is added in front, the first kept", (await ev()).results[0].evaluations.map((x: any) => x.conclusion).join() === "fail,pass");
   check("2o. a limited Staff login reads the status and no evaluation", await (async () => { const j = await list(STAFF); const row = j.events.flatMap((e: any) => e.results).find((r: any) => r.id === u); return row.status === "ungraded" && row.evaluations.length === 0 && !JSON.stringify(j).includes("Two splits"); })());
-  check("2p. a result holding one can't be deleted, nor its enrollment", (await call(EDITOR, "DELETE", `/api/veritapt/events/${u}`, undefined, A)).j?.code === "HOLDS_RECORDS" && (await call(EDITOR, "DELETE", `/api/veritapt/enrollments/${old}`, undefined, A)).j?.code === "HOLDS_RECORDS" && !!one("SELECT id FROM pt_events WHERE id = ?", u) && (await call(EDITOR, "DELETE", `/api/veritapt/events/${ungradedIds[2]}`, undefined, A)).s === 200);
+  check("2p. a result holding one can't be deleted", (await call(EDITOR, "DELETE", `/api/veritapt/events/${u}`, undefined, A)).j?.code === "HOLDS_RECORDS" && !!one("SELECT id FROM pt_events WHERE id = ?", u) && (await call(EDITOR, "DELETE", `/api/veritapt/events/${ungradedIds[2]}`, undefined, A)).s === 200);
   const xr = await book((await call(EDITOR, "GET", `${P("events/export.xlsx")}?status=ungraded`)).buf);
   check("2q. the export says why and what the laboratory concluded, or that it is open", rowsOf(xr.getWorksheet("Results")).some((r) => r.includes("Lack of consensus") && r.some((c) => String(c).startsWith("Unacceptable on 2026-06-20. Split sample"))) && rowsOf(xr.getWorksheet("Results")).some((r) => r.includes("Open")));
   check("2r. the reminders still read only pending results", one("SELECT COUNT(*) AS n FROM pt_events WHERE lab_id = ? AND pass_fail = 'pending' AND id = ?", A, u).n === 0);
@@ -235,8 +236,8 @@ async function main() {
   const badU = (await rec(EDITOR, { enrollment_id: chemProg, event_id: "L-1", analyte: "Sodium", pass_fail: "ungraded", ungraded_reason: "educational" })).j.id;
   d = await detail(bad);
   check("3p. an unacceptable or ungraded result needs its corrective action or investigation", d.needs_link === true && (await review(EDITOR, d)).j?.code === "LINK_REQUIRED");
-  const ca = Number((await call(EDITOR, "POST", "/api/veritapt/corrective-actions", { event_id: bad, corrective_action: "Made-up action", date_initiated: "2026-03-20" }, A)).j.id);
-  const caOther = Number((await call(EDITOR, "POST", "/api/veritapt/corrective-actions", { event_id: okRow, corrective_action: "Another event's action", date_initiated: "2026-03-20" }, A)).j.id);
+  const caRow = (event_id: number, corrective_action: string) => seed("pt_corrective_actions", { event_id, user_id: OWNER.id, lab_id: A, corrective_action, date_initiated: "2026-03-20", status: "open" });
+  const ca = caRow(bad, "Made-up action"), caOther = caRow(okRow, "Another event's action");
   const f1 = Number((await call(EDITOR, "POST", `/api/labs/${A}/findings`, { accreditor: "CMS", anchor_date: "2026-11-01", standard_ref: "42 CFR 493.1253" })).j.id);
   const f2 = seed("findings", { user_id: OWNER.id, lab_id: A, accreditor: "Other", source_type: "pt_failure", pt_analyte: "Glucose", status: "open" });
   const fX = Number((await call(OTHER, "POST", `/api/labs/${X}/findings`, { accreditor: "CMS", anchor_date: "2026-11-01", standard_ref: "42 CFR 493.1253" })).j.id);
@@ -416,6 +417,50 @@ async function main() {
     storage.deleteUser(gone.id);
     return one("SELECT COUNT(*) AS n FROM pt_event_evaluations WHERE event_id = ?", r8).n === 0;
   })());
+
+  // ── 9. A record's own laboratory decides ──────────────────────────────────
+  const DUAL = await w.login("dual", "Dee Dual");
+  w.member(A, DUAL); w.seat(OWNER.id, DUAL, A);
+  w.member(B, DUAL); w.seat(OWNER.id, DUAL, B, { perms: { mode: "custom", overrides: { veritapt: "view", veritacomp: "edit" } } });
+  const mkEvent = (lab: number, x: any = {}) => seed("pt_events", { enrollment_id: lab === A ? chemProg : bProg, user_id: OWNER.id, lab_id: lab, event_id: "S9", event_date: "2026-03-02", analyte: "Glucose", pass_fail: "pass", event_name: "as it was", ...x });
+  const mkAa = (lab: number) => seed("aa_records", { user_id: OWNER.id, lab_id: lab, analyte: "Lipase", method: "peer_group", frequency_per_year: 2, last_pass_fail: "fail", acceptance_criteria: "as it was" });
+  const mkProg = (lab: number) => v2(lab, `Section 9 ${lab}`);
+  const nameOf = (id: number) => one("SELECT event_name FROM pt_events WHERE id = ?", id)?.event_name;
+  const eA9 = mkEvent(A), eB9 = mkEvent(B), aaA = mkAa(A), aaB = mkAa(B), pA9 = mkProg(A), pB9 = mkProg(B);
+  for (const [n9, header] of [A, B, undefined].entries()) {
+    const r = [
+      await call(DUAL, "PUT", `/api/veritapt/events/${eB9}`, { event_name: "changed" }, header), await call(DUAL, "DELETE", `/api/veritapt/events/${eB9}`, undefined, header),
+      await call(DUAL, "PUT", `/api/pt/aa-records/${aaB}`, { acceptance_criteria: "changed" }, header), await call(DUAL, "POST", `/api/pt/aa-records/${aaB}/escalate-to-response`, {}, header), await call(DUAL, "DELETE", `/api/pt/aa-records/${aaB}`, undefined, header),
+      await call(DUAL, "DELETE", `/api/pt/enrollments/${pB9}`, undefined, header),
+    ];
+    check(`9a. someone who edits one laboratory and views another changes nothing of the other's (${n9 + 1} of 3)`, r.every((x) => x.s === 403) && nameOf(eB9) === "as it was" && one("SELECT acceptance_criteria FROM aa_records WHERE id = ?", aaB)?.acceptance_criteria === "as it was" && !!one("SELECT id FROM pt_enrollments_v2 WHERE id = ?", pB9) && one("SELECT COUNT(*) AS n FROM findings WHERE lab_id = ?", B).n === 0, r.map((x) => x.s).join());
+  }
+  check("9b. and still changes their own laboratory's", (await call(DUAL, "PUT", `/api/veritapt/events/${eA9}`, { event_name: "one" }, A)).s === 200 && (await call(DUAL, "PUT", `/api/veritapt/events/${eA9}`, { event_name: "two" }, B)).s === 200 && nameOf(eA9) === "two" && (await call(DUAL, "PUT", `/api/pt/aa-records/${aaA}`, { acceptance_criteria: "changed" }, B)).s === 200);
+  for (const [who, u9] of [["a Staff login", STAFF], ["a view-only reviewer", VIEWER], ["an editor of another module", SCAN_ONLY], ["another customer", OTHER]] as const) {
+    const r = [await call(u9, "PUT", `/api/veritapt/events/${eA9}`, { event_name: "x" }, A), await call(u9, "DELETE", `/api/veritapt/events/${eA9}`, undefined, A), await call(u9, "DELETE", `/api/pt/enrollments/${pA9}`, undefined, A), await call(u9, "DELETE", `/api/pt/aa-records/${aaA}`, undefined, A)];
+    check(`9c. ${who}: refused`, r.every((x) => x.s === 403 || x.s === 404) && nameOf(eA9) === "two", r.map((x) => x.s).join());
+  }
+  check("9d. the owner and the lab's admin still can", (await call(OWNER, "PUT", `/api/veritapt/events/${eB9}`, { event_name: "owner" }, A)).s === 200 && nameOf(eB9) === "owner" && (await call(w.ADMIN_A, "PUT", `/api/veritapt/events/${eA9}`, { event_name: "admin" }, A)).s === 200 && nameOf(eA9) === "admin");
+  // Deletes: the row, and only what belongs to it
+  const caA9 = caRow(eA9, "this result's"), caElse = seed("pt_corrective_actions", { event_id: eA9, user_id: OWNER.id, lab_id: B, corrective_action: "another laboratory's row", date_initiated: "2026-03-20" });
+  check("9e. deleting a result takes its own laboratory's corrective actions and no other", (await call(DUAL, "DELETE", `/api/veritapt/events/${eA9}`, undefined, B)).s === 200 && !one("SELECT id FROM pt_corrective_actions WHERE id = ?", caA9) && !!one("SELECT id FROM pt_corrective_actions WHERE id = ?", caElse));
+  // One id in both enrollment tables, and results of each, in two laboratories
+  const both = mkProg(A);
+  seed("pt_enrollments", { id: both, user_id: OWNER.id, lab_id: A, analyte: "Digoxin", specialty: "Chemistry", pt_provider: "CAP", program_code: "T", enrollment_year: 2026, enrollment_date: "2026-01-01" });
+  const ofOld = mkEvent(A, { enrollment_id: both, analyte: "Digoxin" }), ofNew = mkEvent(A, { enrollment_id: both, analyte: "Magnesium" }), elsewhere = mkEvent(B, { enrollment_id: both, analyte: "Digoxin" });
+  const held = (ids: number[]) => ids.every((id) => !!one("SELECT id FROM pt_events WHERE id = ?", id));
+  await call(EDITOR, "PUT", P(`results/${ofOld}`), { pass_fail: "ungraded", ungraded_reason: "not_scored" });
+  await call(EDITOR, "POST", P(`results/${ofOld}/evaluations`), EV);
+  check("9f. an id in both enrollment tables: removing the program removes its row alone, though the older row's result holds records", (await call(EDITOR, "DELETE", P(`enrollments/${both}`))).s === 200 && !one("SELECT id FROM pt_enrollments_v2 WHERE id = ?", both) && !!one("SELECT id FROM pt_enrollments WHERE id = ?", both) && held([ofOld, ofNew, elsewhere]));
+  const both2 = mkProg(A);
+  seed("pt_enrollments", { id: both2, user_id: OWNER.id, lab_id: A, analyte: "Digoxin", specialty: "Chemistry", pt_provider: "CAP", program_code: "T", enrollment_year: 2026, enrollment_date: "2026-01-01" });
+  const ofNew2 = mkEvent(A, { enrollment_id: both2, analyte: "Magnesium", pass_fail: "ungraded", ungraded_reason: "not_scored" });
+  await call(EDITOR, "POST", P(`results/${ofNew2}/evaluations`), EV);
+  check("9g. a program whose own results hold records isn't removed, on either route", (await call(EDITOR, "DELETE", P(`enrollments/${both2}`))).j?.code === "HOLDS_RECORDS" && (await call(EDITOR, "DELETE", `/api/pt/enrollments/${both2}`, undefined, A)).j?.code === "HOLDS_RECORDS" && !!one("SELECT id FROM pt_enrollments_v2 WHERE id = ?", both2));
+  check("9h. one with none is, on the older route", (await call(DUAL, "DELETE", `/api/pt/enrollments/${pA9}`, undefined, B)).s === 200 && !one("SELECT id FROM pt_enrollments_v2 WHERE id = ?", pA9));
+  for (const [m, path9] of [["POST", "/api/veritapt/enrollments"], ["PUT", `/api/veritapt/enrollments/${both}`], ["DELETE", `/api/veritapt/enrollments/${both}`], ["POST", "/api/veritapt/corrective-actions"], ["PUT", `/api/veritapt/corrective-actions/${caElse}`]] as const) {
+    check(`9i. ${m} ${path9.replace(/\d+$/, ":id")} is gone`, (await call(OWNER, m, path9, {}, A)).s === 404);
+  }
 
   w.finish();
 }
