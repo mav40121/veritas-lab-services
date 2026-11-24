@@ -12,6 +12,7 @@ import { trackEvent } from "@/lib/analytics";
 import { useLabRoute } from "@/hooks/useLabRoute";
 import { passwordProblem, PASSWORD_RULE_TEXT } from "@shared/passwordRule";
 import { TwoFactorSetup } from "@/components/TwoFactorStep";
+import { openAcceptedLab } from "@/components/StaffInviteBanner";
 
 interface InviteInfo {
   valid: boolean;
@@ -19,12 +20,14 @@ interface InviteInfo {
   inviterName?: string;
   seatEmail?: string;
   inviteeName?: string | null;
+  // B3: a staff (read and sign) login, which an existing account can accept by signing in. Optional for deploy skew.
+  staffLogin?: boolean;
   reason?: "expired" | "not_found" | "already_accepted";
 }
 
 export default function JoinPage() {
   const labRoute = useLabRoute();
-  const { login } = useAuth();
+  const { login, logout, isLoggedIn, user } = useAuth();
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
@@ -160,6 +163,51 @@ export default function JoinPage() {
     );
   }
 
+  // B3: signed in already. The invited account accepts here; any other is told which address it was sent to.
+  async function acceptSignedIn() {
+    setLoading(true);
+    try {
+      const r = await (await apiRequest("POST", "/api/me/staff-invites/accept", { token })).json();
+      toast({ title: `You're on staff at ${invite?.labName}`, description: "Switch labs from the lab menu at the top." });
+      await openAcceptedLab(Number(r.labId), navigate);
+    } catch (err) {
+      toast({ title: apiErrorMessage(err, "That didn't work. Try again."), variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  }
+  if (invite.staffLogin && isLoggedIn && user && !mfaStep) {
+    const mine = String(user.email || "").toLowerCase() === String(invite.seatEmail || "").toLowerCase();
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center px-4 py-12">
+        <Card className="w-full max-w-md" data-testid={mine ? "join-accept" : "join-other-account"}>
+          <CardContent className="pt-8 pb-8 text-center space-y-4">
+            <FlaskConical className="h-10 w-10 text-primary mx-auto" />
+            <h2 className="text-xl font-semibold break-words">{invite.labName} invited you to a staff login</h2>
+            {mine ? (
+              <>
+                <p className="text-sm text-muted-foreground break-words">
+                  You're signed in as {user.email}. Accept to read and sign in this lab with the same login. Your access in other labs stays as it is.
+                </p>
+                <Button className="w-full" disabled={loading} onClick={acceptSignedIn} data-testid="join-accept-btn">
+                  {loading ? "Working..." : "Accept"}
+                </Button>
+                <Button variant="outline" className="w-full" disabled={loading} onClick={() => navigate(labRoute("/dashboard"))}>Not now</Button>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-muted-foreground break-words">
+                  This invitation was sent to {invite.seatEmail}. You're signed in as {user.email}. Sign out, then sign in as {invite.seatEmail} to accept it.
+                </p>
+                <Button className="w-full" onClick={() => logout()} data-testid="join-sign-out">Sign out</Button>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   if (mfaStep) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center px-4 py-12">
@@ -196,6 +244,13 @@ export default function JoinPage() {
               Create your account to get started. Your lab is already set up - you just need to sign in.
             </p>
           </div>
+
+          {invite.staffLogin && (
+            <div className="rounded-md border border-border bg-muted/40 p-3 space-y-2 text-center" data-testid="join-have-account">
+              <p className="text-sm">Already have a VeritaAssure&#174; login at {invite.seatEmail}? Sign in with it and accept there.</p>
+              <Button variant="outline" size="sm" onClick={() => navigate("/login")} data-testid="join-sign-in-to-accept">Sign in to accept</Button>
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1.5">

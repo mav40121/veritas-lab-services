@@ -40,13 +40,15 @@ export function staffOwnScope(sqlite: any, userId: unknown, labId: unknown, modu
   const uid = Number(userId), lid = Number(labId);
   const seats = (lid > 0
     ? sqlite.prepare(
-        `SELECT seat_type, status, permissions FROM user_seats
+        `SELECT seat_type, status, permissions, lab_id FROM user_seats
           WHERE seat_user_id = ? AND (lab_id = ? OR (lab_id IS NULL AND owner_user_id = (SELECT owner_user_id FROM labs WHERE id = ?)))`
       ).all(uid, lid, lid)
-    : sqlite.prepare("SELECT seat_type, status, permissions FROM user_seats WHERE seat_user_id = ?").all(uid)) as any[];
+    : sqlite.prepare("SELECT seat_type, status, permissions, lab_id FROM user_seats WHERE seat_user_id = ?").all(uid)) as any[];
   const staffSeats = seats.filter((s) => s.seat_type === "staff_portal");
   if (!staffSeats.length) return null;
-  if (seats.some((s) => s.status === "active" && s.seat_type !== "staff_portal")) return null;
+  // B3: an older seat with no lab is the owner's other lab's seat once a Staff seat is tied to this one (editSeatInLab's order).
+  const staffHere = lid > 0 && staffSeats.some((s) => s.status === "active" && s.lab_id != null);
+  if (seats.some((s) => s.status === "active" && s.seat_type !== "staff_portal" && !(staffHere && s.lab_id == null))) return null;
   if (staffSeats.some((s) => s.status === "active" && seatEdits(s.permissions, module))) return null;
   const manages = lid > 0
     ? sqlite.prepare(

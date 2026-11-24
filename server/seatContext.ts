@@ -24,8 +24,16 @@
 //   * An owner with no usable lab context acts as themselves. A seat they hold
 //     under their OWN account (self-seats exist for labs 2/6, 18, 25-28) keeps
 //     its legacy shape, so those owners see no change.
+//
+// One login, Staff in several labs (B3, BUG-193, 2026-11-24). A person can be Staff (read and sign) in lab B and a writer, an
+// admin or an owner in lab A with the same sign-in, so a Staff seat speaks only for its own lab:
+//   * A request that can land in a lab where they are only Staff acts under that Staff seat (staffLabForRequest), whatever
+//     they hold elsewhere. On a /api/labs/:labId route that lab is the one in the URL.
+//   * Anywhere else a Staff seat tied to another lab counts for nothing: the lab's own seat, else what they had before.
+//   * With no lab to go by (sign-in, /api/auth/me) a Staff seat stands in only when they have nothing more anywhere.
+// People with no Staff seat are unchanged.
 
-/** Seat lookup with no lab context. Non-owners: unchanged legacy first seat. Owners: only a seat under their own account. */
+/** Seat lookup with no lab context. Non-owners: the first seat that isn't a Staff seat, else a Staff seat when it's all they have. Owners: only a seat under their own account. */
 export function legacySeatForUser(sqlite: any, userId: number, cols = "owner_user_id"): any | null {
   const ownsLab = sqlite.prepare("SELECT 1 FROM labs WHERE owner_user_id = ? LIMIT 1").get(userId);
   if (ownsLab) {
@@ -35,18 +43,105 @@ export function legacySeatForUser(sqlite: any, userId: number, cols = "owner_use
         .get(userId, userId) ?? null
     );
   }
+  const more = nonStaffSeat(sqlite, userId, cols);
+  if (more) return more;
+  // A lab or system admin with no seat row acts as themselves, as they did before they were given a Staff login elsewhere.
+  if (managesLabWithoutStaffSeat(sqlite, userId)) return null;
   return (
     sqlite
-      .prepare(`SELECT ${cols} FROM user_seats WHERE seat_user_id = ? AND status = 'active' ORDER BY id LIMIT 1`) // seat-scope-ok: non-owner legacy fallback (#82)
+      .prepare(
+        `SELECT ${cols} FROM user_seats WHERE seat_user_id = @user AND status = 'active'
+          ORDER BY CASE WHEN lab_id = (SELECT default_lab_id FROM users WHERE id = @user) THEN 0 ELSE 1 END, id LIMIT 1`, // seat-scope-ok: only Staff seats are left here; the lab they were last in, then the oldest
+      )
+      .get({ user: userId }) ?? null
+  );
+}
+
+/** The first active seat that isn't a Staff seat, or null. */
+function nonStaffSeat(sqlite: any, userId: number, cols: string): any | null {
+  return (
+    sqlite
+      .prepare(`SELECT ${cols} FROM user_seats WHERE seat_user_id = ? AND status = 'active' AND COALESCE(seat_type, 'active') <> 'staff_portal' ORDER BY id LIMIT 1`) // seat-scope-ok: non-owner legacy fallback (#82)
       .get(userId) ?? null
   );
 }
 
-/** The active seat a user holds for one lab: a lab_id match, else a legacy lab-less seat under that lab's owner. */
+/** The lab's owner, its owner or admin by membership, or an owner or admin of its organization. */
+export function managesLab(sqlite: any, userId: number, labId: number): boolean {
+  return !!sqlite
+    .prepare(
+      `SELECT 1 AS ok FROM labs WHERE id = @lab AND owner_user_id = @user
+       UNION SELECT 1 AS ok FROM lab_members WHERE lab_id = @lab AND user_id = @user AND status = 'active' AND role IN ('owner','admin')
+       UNION SELECT 1 AS ok FROM organization_members om JOIN labs l ON l.organization_id = om.organization_id
+              WHERE l.id = @lab AND om.user_id = @user AND om.status = 'active' AND om.org_role IN ('org_owner','org_admin')
+       LIMIT 1`,
+    )
+    .get({ lab: labId, user: userId });
+}
+
+function managesLabWithoutStaffSeat(sqlite: any, userId: number): boolean {
+  const staffLab = "SELECT 1 FROM user_seats us WHERE us.seat_user_id = @user AND us.status = 'active' AND us.seat_type = 'staff_portal' AND us.lab_id = l.id";
+  return !!sqlite
+    .prepare(
+      `SELECT 1 AS ok FROM labs l
+        WHERE NOT EXISTS (${staffLab})
+          AND (EXISTS (SELECT 1 FROM lab_members lm WHERE lm.lab_id = l.id AND lm.user_id = @user AND lm.status = 'active' AND lm.role IN ('owner','admin'))
+            OR EXISTS (SELECT 1 FROM organization_members om WHERE om.organization_id = l.organization_id AND om.user_id = @user
+                        AND om.status = 'active' AND om.org_role IN ('org_owner','org_admin')))
+        LIMIT 1`,
+    )
+    .get({ user: userId });
+}
+
+/** True when this person is Staff (read and sign) in this lab and nothing more there: the rule requireModuleEdit judges by. */
+export function staffOnlyInLab(sqlite: any, userId: number, labId: number): boolean {
+  if (!(Number(userId) > 0) || !(Number(labId) > 0)) return false;
+  const seat = editSeatInLab(sqlite, Number(userId), Number(labId), "seat_type") as { seat_type: string | null } | null;
+  return seat?.seat_type === "staff_portal" && !managesLab(sqlite, Number(userId), Number(labId));
+}
+
+/** True when the person holds an accepted Staff seat anywhere. Nobody else's requests are read any differently. */
+export function holdsStaffSeat(sqlite: any, userId: number): boolean {
+  return !!sqlite.prepare("SELECT 1 FROM user_seats WHERE seat_user_id = ? AND status = 'active' AND seat_type = 'staff_portal' LIMIT 1").get(userId);
+}
+
+const labNumber = (v: unknown): number | null => {
+  const n = Number(v);
+  return Number.isInteger(n) && n > 0 ? n : null;
+};
+
+/**
+ * Every lab a request could land in. On a /api/labs/:labId route, that lab. On an older route with no lab in its URL, the labs
+ * it names (X-Active-Lab-Id, ?labId, and with no header the body's lab_id) that the person touches, and, when the header names
+ * none of theirs, the labs the older routes fall back to (resolveLegacyLabId, resolveLabForUser).
+ */
+export function labsRequestCanReach(sqlite: any, userId: number, req: any): number[] {
+  const path = labNumber(req?.params?.labId);
+  if (path) return [path];
+  const touches = (l: number | null): l is number => l != null && userTouchesLab(sqlite, userId, l);
+  const header = labNumber(req?.headers?.["x-active-lab-id"]);
+  const out = [header, labNumber(req?.query?.labId)];
+  if (!header) out.push(labNumber(req?.body?.lab_id));
+  if (!touches(header)) {
+    const u = sqlite.prepare("SELECT lab_id, default_lab_id FROM users WHERE id = ?").get(userId) as any;
+    const members = sqlite.prepare("SELECT lab_id FROM lab_members WHERE user_id = ? AND status = 'active' ORDER BY id").all(userId) as any[];
+    const primary = sqlite.prepare("SELECT lab_id FROM lab_members WHERE user_id = ? AND status = 'active' ORDER BY is_primary_lab DESC, lab_id LIMIT 1").get(userId) as any;
+    out.push(labNumber(u?.lab_id), labNumber(u?.default_lab_id), labNumber(members[0]?.lab_id), labNumber(primary?.lab_id));
+  }
+  return [...new Set(out.filter(touches))];
+}
+
+/** The lab this request could land in where the person is only Staff, or null. */
+export function staffLabForRequest(sqlite: any, userId: number, req: any): number | null {
+  if (!holdsStaffSeat(sqlite, userId)) return null;
+  return labsRequestCanReach(sqlite, userId, req).find((l) => staffOnlyInLab(sqlite, userId, l)) ?? null;
+}
+
+/** The active seat a user holds for one lab: a lab_id match (a writer seat before a Staff seat), else a legacy lab-less seat under that lab's owner. */
 export function seatForLab(sqlite: any, userId: number, labId: number, cols = "owner_user_id"): any | null {
   return (
     sqlite
-      .prepare(`SELECT ${cols} FROM user_seats WHERE seat_user_id = ? AND status = 'active' AND lab_id = ? ORDER BY id LIMIT 1`)
+      .prepare(`SELECT ${cols} FROM user_seats WHERE seat_user_id = ? AND status = 'active' AND lab_id = ? ORDER BY CASE WHEN seat_type = 'staff_portal' THEN 1 ELSE 0 END, id LIMIT 1`)
       .get(userId, labId) ??
     sqlite
       .prepare(
@@ -152,11 +247,19 @@ export function userTouchesLab(sqlite: any, userId: number, labId: number): bool
 
 /**
  * The seat a request acts under. `ctxLabId` is the lab being worked in (URL
- * :labId, else ?labId / X-Active-Lab-Id / Referer), or null.
+ * :labId, else ?labId / X-Active-Lab-Id / Referer), or null. `staffLabId` is
+ * staffLabForRequest's answer for the same request.
  */
-export function seatForRequest(sqlite: any, userId: number, ctxLabId: number | null, cols = "owner_user_id"): any | null {
+export function seatForRequest(sqlite: any, userId: number, ctxLabId: number | null, cols = "owner_user_id", staffLabId: number | null = null): any | null {
+  if (staffLabId) return seatForLab(sqlite, userId, staffLabId, cols);
   const ownsLab = sqlite.prepare("SELECT 1 FROM labs WHERE owner_user_id = ? LIMIT 1").get(userId);
-  if (!ownsLab) return legacySeatForUser(sqlite, userId, cols);
+  if (!ownsLab) {
+    // Not Staff in the lab being worked in, and Staff in another: that Staff seat says nothing here.
+    if (ctxLabId && holdsStaffSeat(sqlite, userId) && (userTouchesLab(sqlite, userId, ctxLabId) || managesLab(sqlite, userId, ctxLabId))) {
+      return seatForLab(sqlite, userId, ctxLabId, cols) ?? nonStaffSeat(sqlite, userId, cols);
+    }
+    return legacySeatForUser(sqlite, userId, cols);
+  }
   if (ctxLabId && userTouchesLab(sqlite, userId, ctxLabId)) return seatForLab(sqlite, userId, ctxLabId, cols);
   return legacySeatForUser(sqlite, userId, cols);
 }

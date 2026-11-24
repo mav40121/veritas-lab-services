@@ -8,7 +8,7 @@ import { logAudit } from "./audit";
 import { logConsumption } from "./consumptionLedger";
 import { logCount } from "./countLedger";
 import { addLot, reconcileLots } from "./inventoryLots";
-import { resolveLegacyLabId, ownerMatchCounts, ownerRowInReach } from "./labAccessGuard";
+import { resolveLegacyLabId, ownerMatchCounts, ownerRowInReach, staffOutsideRecordLab } from "./labAccessGuard";
 import { blockNonOperatorSeat } from "./seatAccess";
 import { DEMO_USER_EMAIL } from "./constants";
 import { labLocalDate, labToday } from "./dateLocal";
@@ -250,7 +250,7 @@ export function registerVeritaBenchRoutes(
     const accountId = req.ownerUserId ?? req.userId;
     const { id } = req.params;
     const row = sqlite.prepare("SELECT * FROM productivity_months WHERE id = ? AND account_id = ?").get(id, accountId) as any;
-    if (!row || !ownerRowInReach(sqlite, req.userId, accountId, row.lab_id)) return res.status(404).json({ error: "Entry not found" });
+    if (!row || !ownerRowInReach(sqlite, req.userId, accountId, row.lab_id, req)) return res.status(404).json({ error: "Entry not found" });
     sqlite.prepare("DELETE FROM productivity_months WHERE id = ?").run(id);
     res.json({ success: true });
   });
@@ -616,7 +616,7 @@ export function registerVeritaBenchRoutes(
     const accountId = req.ownerUserId ?? req.userId;
     const { id } = req.params;
     const study = sqlite.prepare("SELECT * FROM staffing_studies WHERE id = ? AND account_id = ?").get(id, accountId) as any;
-    if (!study || !ownerRowInReach(sqlite, req.userId, accountId, study.lab_id)) return res.status(404).json({ error: "Study not found" });
+    if (!study || !ownerRowInReach(sqlite, req.userId, accountId, study.lab_id, req)) return res.status(404).json({ error: "Study not found" });
     const data = sqlite.prepare("SELECT * FROM staffing_hourly_data WHERE study_id = ? ORDER BY week_number, day_of_week, hour_slot").all(id);
     res.json({ study, data });
   });
@@ -631,7 +631,7 @@ export function registerVeritaBenchRoutes(
     const accountId = req.ownerUserId ?? req.userId;
     const { id } = req.params;
     const study = sqlite.prepare("SELECT * FROM staffing_studies WHERE id = ? AND account_id = ?").get(id, accountId) as any;
-    if (!study || !ownerRowInReach(sqlite, req.userId, accountId, study.lab_id)) return res.status(404).json({ error: "Study not found" });
+    if (!study || !ownerRowInReach(sqlite, req.userId, accountId, study.lab_id, req)) return res.status(404).json({ error: "Study not found" });
     const { determination, note, attested_by, attested_title, clear } = req.body || {};
     const now = new Date().toISOString();
     if (clear) {
@@ -661,7 +661,7 @@ export function registerVeritaBenchRoutes(
     const accountId = req.ownerUserId ?? req.userId;
     const { id } = req.params;
     const study = sqlite.prepare("SELECT * FROM staffing_studies WHERE id = ? AND account_id = ?").get(id, accountId) as any;
-    if (!study || !ownerRowInReach(sqlite, req.userId, accountId, study.lab_id)) return res.status(404).json({ error: "Study not found" });
+    if (!study || !ownerRowInReach(sqlite, req.userId, accountId, study.lab_id, req)) return res.status(404).json({ error: "Study not found" });
 
     const items = req.body;
     if (!Array.isArray(items)) return res.status(400).json({ error: "Expected array of data items" });
@@ -694,7 +694,7 @@ export function registerVeritaBenchRoutes(
     const accountId = req.ownerUserId ?? req.userId;
     const { id } = req.params;
     const study = sqlite.prepare("SELECT * FROM staffing_studies WHERE id = ? AND account_id = ?").get(id, accountId) as any;
-    if (!study || !ownerRowInReach(sqlite, req.userId, accountId, study.lab_id)) return res.status(404).json({ error: "Study not found" });
+    if (!study || !ownerRowInReach(sqlite, req.userId, accountId, study.lab_id, req)) return res.status(404).json({ error: "Study not found" });
     sqlite.prepare("DELETE FROM staffing_hourly_data WHERE study_id = ?").run(id);
     sqlite.prepare("DELETE FROM staffing_studies WHERE id = ?").run(id);
     res.json({ success: true });
@@ -1697,6 +1697,8 @@ export function registerVeritaBenchRoutes(
     if (!item) return { item: null, status: 404 };
     const userId = req.userId;
     const ownerId = req.ownerUserId ?? req.userId;
+    // B3: only Staff in the item's lab, working in another one.
+    if (staffOutsideRecordLab(sqlite, req, item.lab_id)) return { item: null, status: 403 };
     // Legacy account_id direct match (single-tenant case), where the owner match counts for this item's lab (Michael Q191 = 1)
     if (item.account_id === ownerId && ownerMatchCounts(sqlite, userId, ownerId, item.lab_id)) return { item, status: 200 };
     // Multi-lab: any active member of the item's lab can mutate
@@ -2230,7 +2232,7 @@ export function registerVeritaBenchRoutes(
     const accountId = req.ownerUserId ?? req.userId;
     const { id } = req.params;
     const study = sqlite.prepare("SELECT * FROM staffing_studies WHERE id = ? AND account_id = ?").get(id, accountId) as any;
-    if (!study || !ownerRowInReach(sqlite, req.userId, accountId, study.lab_id)) return res.status(404).json({ error: "Study not found" });
+    if (!study || !ownerRowInReach(sqlite, req.userId, accountId, study.lab_id, req)) return res.status(404).json({ error: "Study not found" });
     const data = sqlite.prepare("SELECT * FROM staffing_hourly_data WHERE study_id = ?").all(id) as any[];
 
     try {

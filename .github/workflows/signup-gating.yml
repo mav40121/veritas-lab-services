@@ -315,6 +315,10 @@ jobs:
         # BUG-189 part 1: VeritaComp's Import from VeritaPT picker lists the active lab's own events, matches the tester
         # VeritaPT recorded, and fills the event id and name that exist (two made-up labs under one owner).
         run: npm run test:competency-pt-picker-lab
+      - name: Run staff login in several labs test
+        # B3 (BUG-193): a Staff login invite can go to an address with an account; nothing is granted until that person accepts,
+        # Staff limits are judged per lab on every request, and no role in another lab is lowered or raised.
+        run: npm run test:staff-login-many-labs
       - name: Run quiz option letters test
         # Redington 2026-11-18: the answer key names an option by position (A = first); the quiz screens read the letter from
         # the option's text, so options typed without "A." graded every pick wrong. shared/quizOptions.ts and the admin count.

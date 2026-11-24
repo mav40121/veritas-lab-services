@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/components/AuthContext";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { useMemberships } from "@/hooks/useMemberships";
-import { apiRequest, queryClient, getQueryFn, API_BASE } from "@/lib/queryClient";
+import { apiErrorMessage, apiRequest, queryClient, getQueryFn, API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { isStockHost } from "@/lib/host";
@@ -220,7 +220,7 @@ export default function LabMembersPage() {
       invalidate();
       queryClient.invalidateQueries({ queryKey: [`/api/labs/${activeLabId}/staff-portal-invites`] });
     },
-    onError: (err: any) => toast({ title: "Invite failed", description: String(err?.message || err), variant: "destructive" }),
+    onError: (err: any) => toast({ title: "Invite failed", description: apiErrorMessage(err, "Try again."), variant: "destructive" }),
   });
 
   const roleMutation = useMutation({
@@ -251,7 +251,7 @@ export default function LabMembersPage() {
       return res.json();
     },
     onSuccess: () => { toast({ title: "Email updated" }); setEditEmailFor(null); setEditEmailValue(""); invalidate(); },
-    onError: (err: any) => toast({ title: "Email change failed", description: String(err?.message || err), variant: "destructive" }),
+    onError: (err: any) => toast({ title: "Email change failed", description: apiErrorMessage(err, "Try again."), variant: "destructive" }),
   });
 
   // Inline name correction (2026-10-08): fixes a typo'd display name, e.g. a
@@ -264,7 +264,7 @@ export default function LabMembersPage() {
       return res.json();
     },
     onSuccess: () => { toast({ title: "Name updated" }); setEditNameFor(null); setEditNameValue(""); invalidate(); },
-    onError: (err: any) => toast({ title: "Name change failed", description: String(err?.message || err), variant: "destructive" }),
+    onError: (err: any) => toast({ title: "Name change failed", description: apiErrorMessage(err, "Try again."), variant: "destructive" }),
   });
 
   // Set (or clear) the lab's Laboratory Medical Director. Identified by email so it
