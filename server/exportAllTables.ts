@@ -103,6 +103,7 @@ export const EXPORT_TABLES: Record<string, ExportTable> = {
   lab_document_cross_links: lab("VeritaScan"),
   lab_document_type_defaults: lab("VeritaScan"),
   document_checklist_links: child("VeritaScan", "document_id", "lab_documents"),
+  veritascan_item_policy_links: lab("VeritaScan"), // VeritaDC documents linked to checklist items (server/inspectionLinks.ts)
 
   // VeritaComp
   competency_programs: labOrOwner("VeritaComp"),
@@ -223,6 +224,7 @@ export const EXPORT_TABLES: Record<string, ExportTable> = {
   finding_history: child("VeritaResponse", "finding_id", "findings"),
   finding_reminder_log: child("VeritaResponse", "finding_id", "findings"),
   finding_effectiveness_checks: lab("VeritaResponse"),
+  finding_policy_links: lab("VeritaResponse"), // VeritaDC documents linked to findings (server/inspectionLinks.ts)
 
   // VeritaMaintain (equipment and temperature logs)
   lab_equipment: lab("VeritaMaintain"),

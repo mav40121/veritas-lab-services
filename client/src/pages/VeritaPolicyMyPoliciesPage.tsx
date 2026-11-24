@@ -29,6 +29,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ApprovalRoutesDialog } from "@/components/ApprovalRoutesDialog";
 import { CarriedOverPanel, type CarriedRecord } from "@/components/CarriedOverPanel";
 import { DocumentSignatureRoster } from "@/components/DocumentSignatureRoster";
+import { DocumentLinkedFrom } from "@/components/DocumentLinkedFrom";
 import { ReadSignDialog, type ReadSignScopeRef } from "@/components/ReadSignDialog";
 import { PolicyShareLinks } from "@/components/PolicyShareLinks";
 import { ArchivedDocumentsDialog, type ArchivedDocument } from "@/components/ArchivedDocumentsDialog";
@@ -324,8 +325,12 @@ function PolicyEvidenceLinks({ labId, policyId }: { labId: number | null; policy
     },
   });
   const rows = q.data || [];
-  if (rows.length === 0) return null;
+  // The VeritaScan items and findings that link to this document (B8).
+  const linkedFrom = <DocumentLinkedFrom labId={labId} documentId={policyId} />;
+  if (rows.length === 0) return linkedFrom;
   return (
+    <>
+    {linkedFrom}
     <div className="rounded border bg-muted/30 p-2 text-xs space-y-1">
       <div className="font-medium flex items-center gap-1">
         <Link2 size={14} /> Evidence in VeritaScan&#174; ({rows.length})
@@ -351,6 +356,7 @@ function PolicyEvidenceLinks({ labId, policyId }: { labId: number | null; policy
         ))}
       </ul>
     </div>
+    </>
   );
 }
 

@@ -45,7 +45,7 @@ export function archivedDocumentGuard(sqlite: any, hasModuleEditAccess: CanEdit)
   };
 }
 
-function mayReadArchived(sqlite: any, labId: number, userId: number, hasModuleEditAccess: CanEdit): boolean {
+export function mayReadArchived(sqlite: any, labId: number, userId: number, hasModuleEditAccess: CanEdit): boolean {
   return hasModuleEditAccess(labId, userId, "veritapolicy") || (isVlsSupportUser(sqlite, userId) && labAllowsVlsSupport(sqlite, labId));
 }
 

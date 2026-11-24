@@ -49,11 +49,19 @@ import {
   GraduationCap,
   Eye,
   EyeOff,
+  UserRound,
+  Copy,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useLabRoute } from "@/hooks/useLabRoute";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
+import { useMemberships } from "@/hooks/useMemberships";
+import { AssignPersonDialog } from "@/components/AssignPersonDialog";
+import { BulkSetDialog, CopyToLabDialog } from "@/components/ScanBulkDialogs";
+import { Checkbox } from "@/components/ui/checkbox";
+import { LinkedDocDialog, docFlag, docLabel, type LinkedDoc } from "@/components/LinkedDcDocument";
+import { labDayOf } from "@/lib/labDate";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -72,6 +80,8 @@ interface ItemState {
   status: ScanStatus;
   notes: string;
   owner: string;
+  // The owner is a person on the lab (B6); `owner` is then their name, changed only by the picker.
+  ownerUserId?: number | null;
   dueDate: string;
   completionSource?: string;
   completionLink?: string;
@@ -79,6 +89,13 @@ interface ItemState {
   // Instructional explanation shown in the Teaching View. Distinct from
   // `notes`, which is the assessment finding.
   teachingNote?: string;
+  // A carried answer nobody has reviewed (B7). `status` stays Not Assessed, so it counts nowhere, until
+  // someone gives the item a status or sets the carried answer aside (clearCarried, read by the save).
+  carriedPending?: boolean;
+  carriedStatus?: ScanStatus;
+  carriedFromName?: string;
+  carriedFromDate?: string;
+  clearCarried?: boolean;
 }
 
 // Global running-tally ordinal map. Iterates DOMAINS in display order,
@@ -260,11 +277,16 @@ interface CoverageRow {
   linked_at: string;
 }
 
+// A VeritaDC document linked to an item (B8; server/inspectionLinks.ts), beside the web-address evidence.
+type DcLink = LinkedDoc & { link_id: number; checklist_item_id: number };
+
 interface EvidenceCtx {
   byItem: Record<number, CoverageRow[]>;
+  dcByItem: Record<number, DcLink[]>;
   labId: number | null;
   readOnly: boolean;
   invalidate: () => void;
+  openDoc: (d: LinkedDoc) => void;
 }
 
 const SCAN_DOC_TYPE_LABELS: Record<string, string> = {
@@ -286,18 +308,45 @@ function EvidencePicker({
   itemId,
   labId,
   alreadyLinkedDocIds,
+  alreadyLinkedDcIds,
   onClose,
   onLinked,
 }: {
   itemId: number;
   labId: number;
   alreadyLinkedDocIds: Set<number>;
+  alreadyLinkedDcIds: Set<number>;
   onClose: () => void;
   onLinked: () => void;
 }) {
   const { toast } = useToast();
   const labRoute = useLabRoute();
   const [search, setSearch] = useState("");
+  // Which evidence to pick from: the lab's VeritaDC documents, or the web addresses in the evidence library.
+  const [source, setSource] = useState<"veritadc" | "library">("veritadc");
+  const [term, setTerm] = useState("");
+  useEffect(() => { const t = setTimeout(() => setTerm(search.trim()), 250); return () => clearTimeout(t); }, [search]);
+  const dcQuery = useQuery<LinkedDoc[]>({
+    queryKey: [`/api/labs/${labId}/veritascan/policy-candidates`, term],
+    refetchOnMount: "always",
+    placeholderData: (prev) => prev,
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/api/labs/${labId}/veritascan/policy-candidates?q=${encodeURIComponent(term)}`, { headers: authHeaders() });
+      if (!res.ok) throw new Error(await responseErrorText(res, "Could not load your VeritaDC™ documents"));
+      return res.json();
+    },
+  });
+  const linkDc = useMutation({
+    mutationFn: async (documentId: number) => {
+      const res = await fetch(`${API_BASE}/api/labs/${labId}/veritascan/checklist/items/${itemId}/policy-links`, {
+        method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() }, body: JSON.stringify({ document_id: documentId }),
+      });
+      if (!res.ok) throw new Error(await responseErrorText(res, "Could not link that document"));
+      return res.json();
+    },
+    onSuccess: () => { toast({ title: "Document linked" }); onLinked(); onClose(); },
+    onError: (err: Error) => toast({ title: "Could not link the document", description: err.message, variant: "destructive" }),
+  });
 
   const docsQuery = useQuery<any[]>({
     queryKey: [`/api/labs/${labId}/veritascan/documents`, "evidence-picker"],
@@ -345,20 +394,52 @@ function EvidencePicker({
           <DialogTitle>Link evidence to this item</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" size="sm" className="h-7 text-xs" variant={source === "veritadc" ? "default" : "outline"} onClick={() => setSource("veritadc")} data-testid="evidence-source-veritadc">VeritaDC™ document</Button>
+            <Button type="button" size="sm" className="h-7 text-xs" variant={source === "library" ? "default" : "outline"} onClick={() => setSource("library")} data-testid="evidence-source-library">Evidence library (web address)</Button>
+          </div>
           <p className="text-xs text-muted-foreground">
-            Attach a document from your VeritaScan&#174; evidence library. Links point to your file in
-            SharePoint, Drive, or OneDrive; VeritaAssure&#174; stores the pointer, never the file.
+            {source === "veritadc"
+              ? "Pick an approved document. The link opens its current approved version here in the app."
+              : <>Attach a document from your VeritaScan&#174; evidence library. Links point to your file in SharePoint, Drive, or OneDrive; VeritaAssure&#174; stores the pointer, never the file.</>}
           </p>
           <div className="relative">
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <Input
-              placeholder="Search the evidence library"
+              placeholder={source === "veritadc" ? "Search your documents" : "Search the evidence library"}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="h-9 pl-8"
               data-testid="input-evidence-search"
             />
           </div>
+          {source === "veritadc" ? (
+            <div className="max-h-[46vh] overflow-y-auto space-y-1">
+              {(dcQuery.data ?? []).filter((d) => !alreadyLinkedDcIds.has(d.document_id)).map((d) => (
+                <button
+                  key={d.document_id}
+                  type="button"
+                  onClick={() => linkDc.mutate(d.document_id)}
+                  disabled={linkDc.isPending}
+                  className="w-full text-left p-2 rounded border hover:bg-muted/50 transition-colors disabled:opacity-50"
+                  data-testid={`evidence-pick-dc-${d.document_id}`}
+                >
+                  <span className="flex items-center gap-1.5 text-xs font-medium">
+                    <FileText className="h-3.5 w-3.5 text-primary shrink-0" />
+                    <span className="truncate">{docLabel(d)}</span>
+                  </span>
+                  <span className="block text-[10px] text-muted-foreground mt-0.5">
+                    {docFlag(d) ?? (d.next_review_date ? `Review due ${d.next_review_date}` : "Approved")}{d.revision_in_progress ? ", a revision is in progress" : ""}
+                  </span>
+                </button>
+              ))}
+              {(dcQuery.data ?? []).filter((d) => !alreadyLinkedDcIds.has(d.document_id)).length === 0 && (
+                <p className="text-xs text-muted-foreground italic py-6 text-center">
+                  {dcQuery.isLoading ? "Loading your documents…" : dcQuery.error ? (dcQuery.error as Error).message : "No approved documents match."}
+                </p>
+              )}
+            </div>
+          ) : (
           <div className="max-h-[46vh] overflow-y-auto space-y-1">
             {filtered.map((d: any) => (
               <button
@@ -385,6 +466,7 @@ function EvidencePicker({
               </p>
             )}
           </div>
+          )}
         </div>
         <DialogFooter className="sm:justify-between gap-2">
           <Button asChild variant="ghost" size="sm">
@@ -407,7 +489,17 @@ function ItemEvidence({ itemId, ctx }: { itemId: number; ctx: EvidenceCtx }) {
   const { toast } = useToast();
   const [pickerOpen, setPickerOpen] = useState(false);
   const rows = ctx.byItem[itemId] || [];
+  const dcRows = ctx.dcByItem[itemId] || [];
   const canEdit = !ctx.readOnly && !!ctx.labId;
+  const unlinkDc = useMutation({
+    mutationFn: async (row: DcLink) => {
+      const res = await fetch(`${API_BASE}/api/labs/${ctx.labId}/veritascan/checklist/items/${itemId}/policy-links/${row.link_id}`, { method: "DELETE", headers: authHeaders() });
+      if (!res.ok) throw new Error(await responseErrorText(res, "Could not remove that link"));
+      return res.json();
+    },
+    onSuccess: () => ctx.invalidate(),
+    onError: (err: Error) => toast({ title: "Could not remove evidence", description: err.message, variant: "destructive" }),
+  });
 
   const unlinkMutation = useMutation({
     mutationFn: async (row: CoverageRow) => {
@@ -425,7 +517,7 @@ function ItemEvidence({ itemId, ctx }: { itemId: number; ctx: EvidenceCtx }) {
     onError: (err: Error) => toast({ title: "Could not remove evidence", description: err.message, variant: "destructive" }),
   });
 
-  if (rows.length === 0 && !canEdit) return null;
+  if (rows.length === 0 && dcRows.length === 0 && !canEdit) return null;
 
   return (
     <div className="mt-2 flex flex-wrap items-center gap-1.5">
@@ -433,6 +525,22 @@ function ItemEvidence({ itemId, ctx }: { itemId: number; ctx: EvidenceCtx }) {
         <Link2 className="h-3 w-3" />
         Evidence
       </span>
+      {dcRows.map((d) => (
+        <span
+          key={`dc${d.link_id}`}
+          className={`inline-flex items-center gap-1.5 max-w-full rounded-md border px-2 py-0.5 text-[11px] ${docFlag(d) ? "border-amber-400/60 bg-amber-50 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200" : "border-primary/20 bg-primary/10 text-primary"}`}
+          title={docFlag(d) ? `VeritaDC™: ${docLabel(d)}. ${docFlag(d)}` : `VeritaDC™: ${docLabel(d)}`}
+        >
+          <FileText className="h-3 w-3 shrink-0" />
+          <button type="button" className="truncate max-w-[220px] hover:underline" onClick={() => ctx.openDoc(d)} data-testid={`evidence-open-dc-${d.link_id}`}>{docLabel(d)}</button>
+          {docFlag(d) && <span className="shrink-0">({docFlag(d)})</span>}
+          {canEdit && (
+            <button type="button" onClick={() => unlinkDc.mutate(d)} disabled={unlinkDc.isPending} className="ml-0.5 opacity-70 hover:opacity-100" title="Remove this evidence link" data-testid={`evidence-unlink-dc-${d.link_id}`}>
+              <X className="h-3 w-3" />
+            </button>
+          )}
+        </span>
+      ))}
       {rows.map((row) => (
         <span
           key={row.link_id}
@@ -472,7 +580,7 @@ function ItemEvidence({ itemId, ctx }: { itemId: number; ctx: EvidenceCtx }) {
           data-testid={`evidence-add-${itemId}`}
         >
           <Plus className="h-3 w-3" />
-          {rows.length === 0 ? "Link evidence" : "Add"}
+          {rows.length === 0 && dcRows.length === 0 ? "Link evidence" : "Add"}
         </button>
       )}
       {pickerOpen && ctx.labId && (
@@ -480,12 +588,27 @@ function ItemEvidence({ itemId, ctx }: { itemId: number; ctx: EvidenceCtx }) {
           itemId={itemId}
           labId={ctx.labId}
           alreadyLinkedDocIds={new Set(rows.map((r) => r.document_id))}
+          alreadyLinkedDcIds={new Set(dcRows.map((r) => r.document_id))}
           onClose={() => setPickerOpen(false)}
           onLinked={ctx.invalidate}
         />
       )}
     </div>
   );
+}
+
+// Assigning an item to a person (B6): who is signed in, whether they may assign, and how to open the picker.
+interface AssignCtx {
+  userId: number | null;
+  canAssign: boolean;
+  pick: (itemId: number) => void;
+  clear: (itemId: number) => void;
+  busy: boolean;
+  // Veritas support doesn't review a carried answer for the lab.
+  canReview: boolean;
+  // Selecting several items to set together; null when not selecting.
+  selected: Set<number> | null;
+  toggle: (itemIds: number[], on: boolean) => void;
 }
 
 // ─── Single checklist item row ────────────────────────────────────────────────
@@ -496,11 +619,13 @@ function ItemRow({
   accreditationChoice,
   displayNumber,
   evidence,
+  assign,
 }: {
   item: ScanItem;
   state: ItemState;
   onChange: (patch: Partial<ItemState>) => void;
   accreditationChoice: string;
+  assign: AssignCtx;
   // Domain-relative ordinal (1, 2, 3...) for the visible row label.
   // Underlying item.id is still the persistence key; this is rendering only.
   displayNumber: number;
@@ -514,12 +639,22 @@ function ItemRow({
   const showDueDate =
     state.status === "Needs Attention" || state.status === "Immediate Action";
   const vcEvidence = isVeritaCheckEvidence(state.completionSource, state.completionLink);
+  const pending = !!state.carriedPending && state.status === "Not Assessed";
 
   return (
     <div
-      className={`px-3 py-2.5 rounded-lg mb-1 transition-colors ${rowBorderClass(state.status)}`}
+      className={`px-3 py-2.5 rounded-lg mb-1 transition-colors ${pending ? "border-l-2 border-l-sky-400 bg-sky-50/40 dark:bg-sky-950/20" : rowBorderClass(state.status)}`}
     >
       <div className="flex items-start gap-2.5">
+        {assign.selected && (
+          <Checkbox
+            className="mt-0.5 shrink-0"
+            checked={assign.selected.has(item.id)}
+            onCheckedChange={(v) => assign.toggle([item.id], v === true)}
+            aria-label={`Select item ${displayNumber}`}
+            data-testid={`select-item-${item.id}`}
+          />
+        )}
         {/* Item number (domain-relative ordinal; persistence still uses item.id) */}
         <span className="text-[11px] font-mono text-muted-foreground/60 mt-0.5 shrink-0 w-7 text-right">
           {displayNumber}
@@ -569,13 +704,38 @@ function ItemRow({
             </TooltipProvider>
           )}
 
+          {/* A carried answer: where it came from, and the two ways to deal with it. Picking any status reviews it too. */}
+          {pending && (
+            <div className="mt-1.5 rounded-md border border-dashed border-sky-400/70 px-2 py-1.5 text-xs text-sky-900 dark:text-sky-200" data-testid={`carried-${item.id}`}>
+              <span className="font-semibold">Carried from {state.carriedFromName || "an earlier scan"}{state.carriedFromDate ? `, ${labDayOf(state.carriedFromDate)}` : ""}, not yet reviewed.</span>{" "}
+              Answer there: {state.carriedStatus}{state.dueDate ? `, due ${state.dueDate}` : ""}.
+              {!rowReadOnly && assign.canReview && (
+                <span className="inline-flex flex-wrap gap-1.5 ml-1.5 align-middle">
+                  {state.carriedStatus && state.carriedStatus !== "Not Assessed" && (
+                    <button type="button" className="rounded border border-sky-500/60 px-1.5 py-0.5 hover:bg-sky-100 dark:hover:bg-sky-900/40" onClick={() => onChange({ status: state.carriedStatus as ScanStatus })} data-testid={`carried-confirm-${item.id}`}>
+                      Reviewed: {state.carriedStatus}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="rounded border border-border px-1.5 py-0.5 text-muted-foreground hover:text-foreground hover:bg-muted"
+                    onClick={() => onChange({ clearCarried: true, carriedPending: false, notes: "", owner: "", ownerUserId: null, dueDate: "" })}
+                    data-testid={`carried-clear-${item.id}`}
+                  >
+                    Set aside and start fresh
+                  </button>
+                </span>
+              )}
+            </div>
+          )}
+
           {/* Controls row */}
           <div className="flex flex-wrap items-start gap-2 mt-2">
             {/* Status */}
             <Select
               value={state.status}
               onValueChange={(v) => onChange({ status: v as ScanStatus })}
-              disabled={rowReadOnly}
+              disabled={rowReadOnly || (pending && !assign.canReview)}
             >
               <SelectTrigger
                 className={`h-7 text-xs w-40 border ${STATUS_COLORS[state.status]}`}
@@ -599,14 +759,45 @@ function ItemRow({
               </SelectContent>
             </Select>
 
-            {/* Owner */}
-            <Input
-              className="h-7 text-xs w-32 min-w-0"
-              placeholder="Owner"
-              value={state.owner}
-              disabled={rowReadOnly}
-              onChange={(e) => onChange({ owner: e.target.value })}
-            />
+            {/* Owner: a person on the lab, or a typed name */}
+            {state.ownerUserId ? (
+              <span
+                className="inline-flex items-center gap-1 h-7 rounded-md border border-primary/30 bg-primary/10 text-primary px-2 text-xs max-w-[14rem]"
+                title={`Assigned to ${state.owner}`}
+                data-testid={`item-owner-${item.id}`}
+              >
+                <UserRound className="h-3 w-3 shrink-0" />
+                <span className="truncate">{state.owner}{state.ownerUserId === assign.userId ? " (you)" : ""}</span>
+                {assign.canAssign && (
+                  <>
+                    <button type="button" className="hover:underline" onClick={() => assign.pick(item.id)} disabled={assign.busy} data-testid={`item-reassign-${item.id}`}>change</button>
+                    <button type="button" title="Clear the assignment" onClick={() => assign.clear(item.id)} disabled={assign.busy} data-testid={`item-unassign-${item.id}`}><X className="h-3 w-3" /></button>
+                  </>
+                )}
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1">
+                <Input
+                  className="h-7 text-xs w-32 min-w-0"
+                  placeholder="Owner"
+                  value={state.owner}
+                  disabled={rowReadOnly}
+                  onChange={(e) => onChange({ owner: e.target.value })}
+                />
+                {assign.canAssign && (
+                  <button
+                    type="button"
+                    className="h-7 w-7 inline-flex items-center justify-center rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                    title="Assign to a person on this lab"
+                    onClick={() => assign.pick(item.id)}
+                    disabled={assign.busy}
+                    data-testid={`item-assign-${item.id}`}
+                  >
+                    <UserRound className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </span>
+            )}
 
             {/* Due date — only for gap statuses */}
             {showDueDate && (
@@ -656,6 +847,8 @@ function DomainSection({
   sectionRef,
   accreditationChoice,
   evidence,
+  assign,
+  visible,
 }: {
   domain: ScanDomain;
   items: Record<number, ItemState>;
@@ -663,6 +856,9 @@ function DomainSection({
   sectionRef?: (el: HTMLDivElement | null) => void;
   accreditationChoice: string;
   evidence: EvidenceCtx;
+  assign: AssignCtx;
+  // The "Show" filter: which items to list. The domain's counts stay the whole domain's.
+  visible: (id: number) => boolean;
 }) {
   // Total items in this domain (used for stats); active items exclude N/A
   // because N/A items render in the parked section at the bottom of the
@@ -671,6 +867,7 @@ function DomainSection({
   const activeDomainItems = allDomainItems.filter(
     (i) => (items[i.id]?.status ?? "Not Assessed") !== "N/A",
   );
+  const listed = activeDomainItems.filter((i) => visible(i.id));
   const stats = domainStats(domain, items);
   const denom = stats.total - stats.na;
   const pct = denom > 0 && stats.compliant + stats.gap > 0
@@ -680,6 +877,7 @@ function DomainSection({
   const colorClass = DOMAIN_COLORS[domain];
   // Extract just the text color class for the badge
   const badgeClasses = colorClass;
+  if (listed.length === 0 && activeDomainItems.length > 0) return null; // nothing here under the filter
 
   return (
     <div ref={sectionRef} className="mb-10">
@@ -707,11 +905,21 @@ function DomainSection({
             {stats.gap} gap{stats.gap !== 1 ? "s" : ""}
           </span>
         )}
+        {assign.selected && listed.length > 0 && (
+          <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
+            <Checkbox
+              checked={listed.every((i) => assign.selected!.has(i.id))}
+              onCheckedChange={(v) => assign.toggle(listed.map((i) => i.id), v === true)}
+              data-testid={`select-domain-${domain}`}
+            />
+            Select these {listed.length}
+          </label>
+        )}
       </div>
 
       {/* Item rows (N/A items omitted; they render in the Parked section) */}
       <div className="space-y-0.5">
-        {activeDomainItems.map((item) => (
+        {listed.map((item) => (
           <ItemRow
             key={item.id}
             item={item}
@@ -726,6 +934,7 @@ function DomainSection({
             onChange={(patch) => onChange(item.id, patch)}
             accreditationChoice={accreditationChoice}
             evidence={evidence}
+            assign={assign}
           />
         ))}
       </div>
@@ -745,16 +954,20 @@ function ParkedItemsSection({
   onChange,
   accreditationChoice,
   evidence,
+  assign,
+  visible,
 }: {
   items: Record<number, ItemState>;
   onChange: (id: number, patch: Partial<ItemState>) => void;
   accreditationChoice: string;
   evidence: EvidenceCtx;
+  assign: AssignCtx;
+  visible: (id: number) => boolean;
 }) {
   const naByDomain: Partial<Record<ScanDomain, ScanItem[]>> = {};
   for (const domain of DOMAINS) {
     naByDomain[domain] = SCAN_ITEMS.filter(
-      (i) => i.domain === domain && items[i.id]?.status === "N/A",
+      (i) => i.domain === domain && items[i.id]?.status === "N/A" && visible(i.id),
     );
   }
   const totalNa = Object.values(naByDomain).reduce(
@@ -811,6 +1024,7 @@ function ParkedItemsSection({
                   onChange={(patch) => onChange(item.id, patch)}
                   accreditationChoice={accreditationChoice}
                   evidence={evidence}
+                  assign={assign}
                 />
               ))}
             </div>
@@ -1029,9 +1243,22 @@ export default function VeritaScanScanPage() {
   const activeLabId = useActiveLabId();
   const params = useParams<{ id: string }>();
   const scanId = Number(params.id);
-  useAuth();
+  const { user } = useAuth();
   const qc = useQueryClient();
   const readOnly = useIsReadOnly('veritascan');
+  // Veritas support sets a lab up but doesn't assign work in its name (server/vlsSupport.ts).
+  const { data: memberships } = useMemberships();
+  const viaSupport = !!memberships?.find((m) => m.labId === activeLabId)?.viaVlsSupport;
+  const [show, setShow] = useState<"all" | "mine" | "carried">("all");
+  const [pickingFor, setPickingFor] = useState<number | null>(null);
+  // Several items set together, and this scan's answers copied to another lab (B7).
+  const [selected, setSelected] = useState<Set<number> | null>(null);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [copyOpen, setCopyOpen] = useState(false);
+  const { data: copyTargets } = useQuery<{ allowed: boolean; labs: Array<{ id: number; name: string }> }>({
+    queryKey: [`/api/labs/${activeLabId}/veritascan/copy-targets`],
+    enabled: !!activeLabId,
+  });
 
   // Local item state
   const [items, setItems] = useState<Record<number, ItemState>>(buildInitialItems);
@@ -1127,11 +1354,31 @@ export default function VeritaScanScanPage() {
     }
     return map;
   }, [coverageQuery.data]);
+  // The VeritaDC documents linked to the checklist, once for the lab, as the web addresses above.
+  const dcLinksKey = [`/api/labs/${activeLabId}/veritascan/policy-links`];
+  const dcLinksQuery = useQuery<DcLink[]>({
+    queryKey: dcLinksKey,
+    enabled: !!activeLabId,
+    refetchOnMount: "always",
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/api/labs/${activeLabId}/veritascan/policy-links`, { headers: authHeaders() });
+      if (!res.ok) throw new Error(`Failed to load linked documents (${res.status})`);
+      return res.json();
+    },
+  });
+  const dcByItem = useMemo(() => {
+    const map: Record<number, DcLink[]> = {};
+    for (const d of dcLinksQuery.data || []) (map[d.checklist_item_id] ??= []).push(d);
+    return map;
+  }, [dcLinksQuery.data]);
+  const [openDoc, setOpenDoc] = useState<LinkedDoc | null>(null);
   const evidenceCtx: EvidenceCtx = {
     byItem: evidenceByItem,
+    dcByItem,
     labId: activeLabId ?? null,
     readOnly,
-    invalidate: () => qc.invalidateQueries({ queryKey: coverageKey }),
+    invalidate: () => { qc.invalidateQueries({ queryKey: coverageKey }); qc.invalidateQueries({ queryKey: dcLinksKey }); },
+    openDoc: setOpenDoc,
   };
 
   // ── Fetch scan items ────────────────────────────────────────────────────
@@ -1163,11 +1410,16 @@ export default function VeritaScanScanPage() {
           status: (apiItem.status as ScanStatus) || "Not Assessed",
           notes: apiItem.notes || (apiItem as any).notes || "",
           owner: apiItem.owner || (apiItem as any).owner || "",
+          ownerUserId: (apiItem as any).owner_user_id ?? null,
           dueDate: apiItem.dueDate || (apiItem as any).due_date || "",
           completionSource: (apiItem as any).completion_source || (apiItem as any).completionSource || undefined,
           completionLink: (apiItem as any).completion_link || (apiItem as any).completionLink || undefined,
           completionNote: (apiItem as any).completion_note || (apiItem as any).completionNote || undefined,
           teachingNote: (apiItem as any).teaching_note || (apiItem as any).teachingNote || "",
+          carriedPending: !!(apiItem as any).carried_pending,
+          carriedStatus: (apiItem as any).carried_status || undefined,
+          carriedFromName: (apiItem as any).carried_from_name || undefined,
+          carriedFromDate: (apiItem as any).carried_from_date || undefined,
         };
       }
       return next;
@@ -1223,9 +1475,11 @@ export default function VeritaScanScanPage() {
     (id: number, patch: Partial<ItemState>) => {
       if (readOnly || !itemsReady) return;
       setItems((prev) => {
+        // Giving a carried item a status is its review (the server records who and when).
+        const reviewed = prev[id]?.carriedPending && patch.status && patch.status !== "Not Assessed" ? { carriedPending: false } : {};
         const next = {
           ...prev,
-          [id]: { ...prev[id], ...patch },
+          [id]: { ...prev[id], ...patch, ...reviewed },
         };
         dirtyRef.current = true;
         scheduleAutoSave(next);
@@ -1233,6 +1487,62 @@ export default function VeritaScanScanPage() {
       });
     },
     [scheduleAutoSave, readOnly, itemsReady]
+  );
+
+  // Assign an item to a person, or clear it. Saved on its own: the auto-save never changes the owner of an assigned item.
+  const assignMutation = useMutation({
+    mutationFn: async ({ itemId, userId }: { itemId: number; userId: number | null }) => {
+      const res = await fetch(`${API_BASE}/api/labs/${activeLabId}/veritascan/scans/${scanId}/items/${itemId}/assignee`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ user_id: userId }),
+      });
+      if (!res.ok) throw new Error(await responseErrorText(res, "Could not save the assignment"));
+      return { itemId, ...(await res.json()) } as { itemId: number; owner: string | null; owner_user_id: number | null; email: string };
+    },
+    onSuccess: (r) => {
+      setPickingFor(null);
+      setItems((prev) => {
+        const next = { ...prev, [r.itemId]: { ...prev[r.itemId], owner: r.owner ?? "", ownerUserId: r.owner_user_id } };
+        // A save already waiting holds the owner as it was before; send this one instead.
+        if (dirtyRef.current) scheduleAutoSave(next);
+        return next;
+      });
+      toast(r.owner_user_id
+        ? { title: `Assigned to ${r.owner}`, description: r.email === "failed" ? "The email could not be sent. Let them know yourself." : r.email === "sent" ? "They have been emailed." : undefined }
+        : { title: "Assignment cleared" });
+    },
+    onError: (e: Error) => toast({ title: "Assignment not saved", description: e.message, variant: "destructive" }),
+  });
+  const assignCtx: AssignCtx = {
+    userId: user?.id != null ? Number(user.id) : null,
+    canAssign: !readOnly && !!activeLabId && !viaSupport && itemsReady,
+    pick: (itemId) => setPickingFor(itemId),
+    clear: (itemId) => assignMutation.mutate({ itemId, userId: null }),
+    busy: assignMutation.isPending,
+    canReview: !viaSupport,
+    selected,
+    toggle: (ids, on) => setSelected((prev) => {
+      if (!prev) return prev;
+      const next = new Set(prev);
+      for (const id of ids) { if (on) next.add(id); else next.delete(id); }
+      return next;
+    }),
+  };
+  const isPending = (i: ItemState | undefined) => !!i?.carriedPending && i.status === "Not Assessed";
+  const carriedCount = SCAN_ITEMS.filter((i) => isPending(items[i.id])).length;
+  const canBulk = !readOnly && !!activeLabId && itemsReady;
+  // What the screen still holds goes first, so a save waiting on its timer can't land on top of a bulk change.
+  const flushSave = async () => {
+    if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null; }
+    if (dirtyRef.current) await saveMutation.mutateAsync(Object.values(items));
+  };
+  const mineCount = SCAN_ITEMS.filter((i) => items[i.id]?.ownerUserId && items[i.id].ownerUserId === assignCtx.userId).length;
+  const itemVisible = useCallback(
+    (id: number) => show === "all"
+      || (show === "mine" && !!items[id]?.ownerUserId && items[id].ownerUserId === Number(user?.id))
+      || (show === "carried" && !!items[id]?.carriedPending && items[id].status === "Not Assessed"),
+    [show, items, user?.id],
   );
 
   // Manual save
@@ -1490,6 +1800,13 @@ export default function VeritaScanScanPage() {
             )}
             Excel Export
           </Button>
+
+          {copyTargets?.allowed && !readOnly && (
+            <Button size="sm" variant="outline" className="w-full h-8 text-xs gap-1.5" onClick={async () => { await flushSave(); setCopyOpen(true); }} data-testid="copy-to-lab">
+              <Copy className="h-3.5 w-3.5" />
+              Copy to another lab
+            </Button>
+          )}
         </div>
       </aside>
 
@@ -1568,6 +1885,12 @@ export default function VeritaScanScanPage() {
             <FileSpreadsheet className="h-3.5 w-3.5" />
             Excel
           </Button>
+          {copyTargets?.allowed && !readOnly && (
+            <Button size="sm" variant="outline" className="flex-1 text-xs h-8 gap-1.5" onClick={async () => { await flushSave(); setCopyOpen(true); }}>
+              <Copy className="h-3.5 w-3.5" />
+              Copy to lab
+            </Button>
+          )}
         </div>
 
         {/* Desktop page title (visible in main content when sidebar present) */}
@@ -1578,6 +1901,7 @@ export default function VeritaScanScanPage() {
             </h1>
             <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
               <span>{totalAssessed}/{SCAN_ITEMS.length} assessed</span>
+              {carriedCount > 0 && <span className="text-sky-700 dark:text-sky-300" data-testid="carried-count">{carriedCount} carried, not reviewed</span>}
             </div>
             <div className="ml-auto flex items-center gap-2">
               {isTeaching && (
@@ -1635,6 +1959,24 @@ export default function VeritaScanScanPage() {
           />
         ) : (
           <>
+            {(mineCount > 0 || carriedCount > 0 || show !== "all" || canBulk) && (
+              <div className="flex flex-wrap items-center gap-2 mb-4" data-testid="scan-show">
+                {(mineCount > 0 || carriedCount > 0 || show !== "all") && (
+                  <>
+                    <span className="text-xs text-muted-foreground">Show</span>
+                    <Button size="sm" className="h-7 text-xs" variant={show === "all" ? "default" : "outline"} onClick={() => setShow("all")} data-testid="scan-show-all">All items</Button>
+                    {(mineCount > 0 || show === "mine") && <Button size="sm" className="h-7 text-xs" variant={show === "mine" ? "default" : "outline"} onClick={() => setShow("mine")} data-testid="scan-show-mine">Assigned to me ({mineCount})</Button>}
+                    {(carriedCount > 0 || show === "carried") && <Button size="sm" className="h-7 text-xs" variant={show === "carried" ? "default" : "outline"} onClick={() => setShow("carried")} data-testid="scan-show-carried">Carried, not reviewed ({carriedCount})</Button>}
+                  </>
+                )}
+                {canBulk && (
+                  <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setSelected((p) => (p ? null : new Set()))} data-testid="scan-select-toggle">
+                    {selected ? "Stop selecting" : "Select items"}
+                  </Button>
+                )}
+              </div>
+            )}
+            {show === "carried" && carriedCount === 0 && <p className="text-sm text-muted-foreground mb-6">Every carried answer has been reviewed.</p>}
             {/* Domain sections */}
             {DOMAINS.map((domain) => (
               <DomainSection
@@ -1647,6 +1989,8 @@ export default function VeritaScanScanPage() {
                 }}
                 accreditationChoice={accreditationChoice}
                 evidence={evidenceCtx}
+                assign={assignCtx}
+                visible={itemVisible}
               />
             ))}
 
@@ -1658,6 +2002,8 @@ export default function VeritaScanScanPage() {
               onChange={handleItemChange}
               accreditationChoice={accreditationChoice}
               evidence={evidenceCtx}
+              assign={assignCtx}
+              visible={itemVisible}
             />
 
             {/* #55 phase 3: the lab's own custom questions, scored in their own
@@ -1666,6 +2012,53 @@ export default function VeritaScanScanPage() {
           </>
         )}
       </div>
+      {selected && !teachingViewOn && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 flex flex-wrap items-center justify-center gap-2 rounded-lg border border-border bg-background shadow-lg px-3 py-2 max-w-[calc(100vw-2rem)]" data-testid="bulk-bar">
+          <span className="text-sm font-medium" data-testid="bulk-count">{selected.size} selected</span>
+          <Button size="sm" className="h-8" disabled={selected.size === 0} onClick={() => setBulkOpen(true)} data-testid="bulk-open">Set answers</Button>
+          <Button size="sm" variant="ghost" className="h-8" disabled={selected.size === 0} onClick={() => setSelected(new Set())}>Clear</Button>
+        </div>
+      )}
+      {bulkOpen && selected && activeLabId && (
+        <BulkSetDialog
+          labId={activeLabId}
+          scanId={scanId}
+          itemIds={[...selected]}
+          pendingCount={[...selected].filter((id) => isPending(items[id])).length}
+          viaSupport={viaSupport}
+          beforeSave={flushSave}
+          onDone={(r) => {
+            setBulkOpen(false);
+            setSelected(null);
+            setItems((prev) => {
+              const next = { ...prev };
+              for (const i of r.items) {
+                next[i.item_id] = {
+                  ...next[i.item_id], status: i.status, owner: i.owner ?? "", ownerUserId: i.owner_user_id, dueDate: i.due_date ?? "",
+                  carriedPending: next[i.item_id]?.carriedPending && i.status === "Not Assessed",
+                };
+              }
+              return next;
+            });
+          }}
+          onClose={() => setBulkOpen(false)}
+        />
+      )}
+      {openDoc && activeLabId && <LinkedDocDialog labId={activeLabId} doc={openDoc} onClose={() => setOpenDoc(null)} />}
+      {copyOpen && activeLabId && copyTargets && (
+        <CopyToLabDialog labId={activeLabId} scanId={scanId} scanName={scanMeta?.name ?? "Scan"} labs={copyTargets.labs} onClose={() => setCopyOpen(false)} />
+      )}
+      {pickingFor != null && activeLabId && (
+        <AssignPersonDialog
+          labId={activeLabId}
+          module="veritascan"
+          title={`Assign item ${GLOBAL_ORDINALS[pickingFor]}`}
+          currentUserId={items[pickingFor]?.ownerUserId ?? null}
+          busy={assignMutation.isPending}
+          onPick={(p) => assignMutation.mutate({ itemId: pickingFor, userId: p.userId })}
+          onClose={() => setPickingFor(null)}
+        />
+      )}
     </div>
   );
 }

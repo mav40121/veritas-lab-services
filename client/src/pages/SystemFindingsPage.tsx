@@ -1,4 +1,4 @@
-// Open findings across labs (Sanford program B2, 2026-11-24): reached from the Inspection Readiness roll-up, for a system's
+// Open findings across labs (B2, 2026-11-24): reached from the Inspection Readiness roll-up, for a system's
 // owner or admin only (the server refuses anyone else). The rows are every open VeritaResponse finding in exactly the labs
 // that roll-up shows this person; the lab group and accreditor filters only take rows away. A row opens the finding in its
 // own lab, where that lab's own rules apply.

@@ -109,6 +109,9 @@ const ALWAYS: Record<string, string> = {
   "POST /api/labs/:labId/equipment/:id/events": "log maintenance as performed",
   "POST /api/labs/:labId/findings/:id/signoff": "sign off a finding",
   "PUT /api/labs/:labId/findings/:id/effectiveness-checks/:checkId": "verify a corrective action",
+  // Assigning work emails a person in the lab's name; who does what is the lab's own decision (server/inspectionAssign.ts).
+  "PUT /api/labs/:labId/findings/:id/assignee": "assign a finding to a person",
+  "PUT /api/labs/:labId/veritascan/scans/:id/items/:itemId/assignee": "assign a VeritaScan item to a person",
   // Compliance digest: an acknowledgment is a reader's own word that they read the issue.
   "POST /api/labs/:labId/digest/issues/:id/ack": "acknowledge a compliance digest issue",
   // The notice email goes out in the lab's name to its own people; the lab's owner or an admin sends it (PR 5).
@@ -133,6 +136,8 @@ const WHEN_SIGNING: Record<string, { test: (b: any) => boolean; what: string }> 
   "PUT /api/labs/:labId/staff/employees/:id": { test: (b) => anyKey(b, QUAL_KEYS), what: "verify staff qualifications" },
   "POST /api/labs/:labId/studies/:id/points/:idx/exclude": { test: (b) => anyKey(b, ["justification"]), what: "override a study verdict" },
   "POST /api/labs/:labId/members": { test: (b) => b?.role === "medical_director", what: "invite a medical director" },
+  // Setting several VeritaScan items at once is setup; naming the person they belong to is the lab's (server/veritascanCarry.ts).
+  "POST /api/labs/:labId/veritascan/scans/:id/items/bulk-set": { test: (b) => b?.owner_user_id != null, what: "assign VeritaScan items to a person" },
   "POST /api/labs/:labId/staff-portal-invites": { test: (b) => b?.deliverEmail === false, what: "take a staff invitation link instead of emailing it" },
 };
 

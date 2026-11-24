@@ -1,6 +1,6 @@
 // tests/integration/system-readiness.test.ts
 //
-// Inspection Readiness across a system (Sanford program B2, 2026-11-24; server/labReadiness.ts, server/coverageCounts.ts,
+// Inspection Readiness across a system (B2, 2026-11-24; server/labReadiness.ts, server/coverageCounts.ts,
 // server/rollupGroups.ts, server/systemFindings.ts). Made-up people, labs and two organizations on a fresh database, through
 // the real routes. It checks:
 //   1. findings, documents and verification studies on a lab's readiness, each equal to its own module's screen, and the

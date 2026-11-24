@@ -1,6 +1,6 @@
 // scripts/verify-system-readiness-ui.mjs
 //
-// Browser receipt for readiness across a system (Sanford program B2, 2026-11-24; server/labReadiness.ts,
+// Browser receipt for readiness across a system (B2, 2026-11-24; server/labReadiness.ts,
 // server/systemFindings.ts, client/src/pages/ReadinessDashboardPage.tsx, client/src/pages/SystemFindingsPage.tsx). On a local
 // production build with a scratch DB: a made-up system of four labs, its admin on a free account with no membership of their
 // own, and a made-up member of two of the labs.

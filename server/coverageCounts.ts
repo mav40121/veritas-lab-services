@@ -1,6 +1,6 @@
 // server/coverageCounts.ts
 //
-// VeritaCheck Coverage as a few counts per lab, for Inspection Readiness and its multi-lab roll-up (Sanford program B2,
+// VeritaCheck Coverage as a few counts per lab, for Inspection Readiness and its multi-lab roll-up (B2,
 // 2026-11-24). The calculation is computeCoverageForLab's own (server/veritacheckCoverage.ts), never a second one: what it
 // answers for a lab is kept here as counts plus the dates each requirement is next due.
 //

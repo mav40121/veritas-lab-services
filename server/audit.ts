@@ -8,6 +8,7 @@ import { db } from "./db";
 import { vlsContext } from "./vlsSupport";
 import { findingTemplate } from "@shared/findingTypes";
 import { labToday, labTimeZoneById } from "./dateLocal";
+import { assignablePerson } from "./assignablePeople";
 
 export type AuditModule =
   | "veritamap"
@@ -274,11 +275,13 @@ export function findingReminderCandidates(sqlite: any): any[] {
     SELECT f.id, f.user_id, f.lab_id, f.accreditor, f.source_type, f.due_date, f.status,
            f.finding_number, f.standard_ref, f.qc_run_voided_note,
            u.email AS recipient_email, u.name AS recipient_name,
+           f.assignee_user_id, asg.email AS assignee_email,
            l.lab_name, l.clia_number,
            qc.analyte AS qc_analyte, qc.level AS qc_level, qc.lot_number AS qc_lot,
            qc.result_date AS qc_run_date, qc.instrument AS qc_instrument
     FROM findings f
     JOIN users u ON u.id = f.user_id
+    LEFT JOIN users asg ON asg.id = f.assignee_user_id
     LEFT JOIN labs l ON l.id = f.lab_id
     LEFT JOIN (
       SELECT ca.nce_reference, cl.analyte, cl.level, cl.lot_number, r.result_date, r.instrument
@@ -291,6 +294,18 @@ export function findingReminderCandidates(sqlite: any): any[] {
       AND f.due_date IS NOT NULL
       AND f.accreditor != 'COLA'
   `).all() as any[];
+}
+
+// Who a finding's reminder goes to: the account that created it, as always, and the person it is assigned to when that is
+// someone else (B6, 2026-11-24). Someone who has left the lab since being assigned gets nothing.
+export function findingReminderRecipients(sqlite: any, c: any): string[] {
+  const assignee = c.assignee_user_id && c.lab_id ? assignablePerson(sqlite, Number(c.lab_id), c.assignee_user_id)?.email ?? null : null;
+  const out: string[] = [];
+  for (const e of [c.recipient_email, assignee]) {
+    const to = String(e ?? "").trim();
+    if (to && !out.some((x) => x.toLowerCase() === to.toLowerCase())) out.push(to);
+  }
+  return out;
 }
 
 // The reminder email for one finding (plain text). A finding escalated from VeritaQC names the test, control level,
@@ -387,7 +402,8 @@ export async function runFindingReminders(): Promise<ReminderRunSummary> {
       continue;
     }
 
-    if (!c.recipient_email) {
+    const recipients = findingReminderRecipients(sqlite, c);
+    if (!recipients.length) {
       summary.skipped++;
       summary.details.push({ findingId: c.id, reminderType, status: 'skipped', reason: 'no recipient email' });
       continue;
@@ -404,13 +420,13 @@ export async function runFindingReminders(): Promise<ReminderRunSummary> {
     try {
       await resend.emails.send({
         from: "VeritaAssure <info@veritaslabservices.com>",
-        to: [c.recipient_email],
+        to: recipients,
         subject,
         text,
       });
       sqlite.prepare(
         "INSERT INTO finding_reminder_log (finding_id, reminder_type, sent_at, recipient_email) VALUES (?, ?, ?, ?)"
-      ).run(c.id, reminderType, new Date().toISOString(), c.recipient_email);
+      ).run(c.id, reminderType, new Date().toISOString(), recipients.join(", "));
       summary.sent++;
       summary.details.push({ findingId: c.id, reminderType, status: 'sent' });
     } catch (err: any) {
