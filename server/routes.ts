@@ -23325,6 +23325,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // exists to catch. Found by scripts/audit-delete-cascades.mjs 2026-06-13.
     (db as any).$client.prepare("DELETE FROM finding_effectiveness_checks WHERE finding_id = ?").run(req.params.id);
     (db as any).$client.prepare("DELETE FROM finding_policy_links WHERE finding_id = ?").run(req.params.id);
+    (db as any).$client.prepare("DELETE FROM pi_finding_links WHERE finding_id = ?").run(req.params.id);
     (db as any).$client.prepare("DELETE FROM findings WHERE id = ?").run(req.params.id);
     res.json({ success: true });
   });
@@ -23354,6 +23355,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // 2026-06-13 when a seeded QA finding with checkpoints could not be deleted.
     sqlite.prepare("DELETE FROM finding_effectiveness_checks WHERE finding_id = ?").run(req.params.id);
     sqlite.prepare("DELETE FROM finding_policy_links WHERE finding_id = ?").run(req.params.id);
+    sqlite.prepare("DELETE FROM pi_finding_links WHERE finding_id = ?").run(req.params.id);
     sqlite.prepare("DELETE FROM findings WHERE id = ?").run(req.params.id);
     res.json({ success: true });
   });
@@ -45022,6 +45024,13 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // VeritaBench routes (Productivity Tracker + Staffing Analyzer)
   const { registerVeritaBenchRoutes } = await import('./veritabench');
   registerVeritaBenchRoutes(app, authMiddleware, requireWriteAccess, requireModuleEdit);
+
+  // VeritaQA by laboratory (/api/labs/:labId/veritaqa/pi/*, and /api/pi/* for someone with no laboratory), and an organization's
+  // indicators with the report across its laboratories (/api/org-quality/*). B15.
+  const { registerVeritaQaPiRoutes } = await import('./veritaqaPi');
+  registerVeritaQaPiRoutes(app, { authMiddleware, requireWriteAccess, requireModuleEdit, hasModuleEditAccess });
+  const { registerOrgQualityRoutes } = await import('./orgQuality');
+  registerOrgQualityRoutes(app, { authMiddleware, requireWriteAccess });
 
   // VeritaStock recall tracker (/api/labs/:labId/veritastock/recalls/*)
   const { registerStockRecallRoutes } = await import('./stockRecalls');

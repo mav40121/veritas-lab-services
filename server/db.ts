@@ -7,6 +7,7 @@ import { classifyExistingNoPhiAcknowledgments } from "./noPhiAcknowledgment";
 import { seedLabsAlreadyWorkingTheOldWay } from "./policyReadSignSeed";
 import { backfillPrimarySchedules } from "./equipmentScheduleData";
 import { backfillApprovedVersions } from "./policyApprovedVersion";
+import { ensureVeritaQaLabColumns } from "./veritaqaLabColumn";
 
 // Use /data volume if available (Railway persistent volume), otherwise local
 const DB_PATH = process.env.DB_PATH || (_dbExistsSync('/data') ? '/data/veritas.db' : 'veritas.db');
@@ -10358,4 +10359,80 @@ sqlite.exec(`
     ["read_at", "TEXT"],
     ["acknowledged_at", "TEXT"],
   ]);
+}
+
+// VeritaQA by laboratory (B15; server/veritaqaLabColumn.ts): lab_id on the PI tables and the one-time assignment.
+ensureVeritaQaLabColumns(sqlite);
+
+// An organization's own quality indicators (B15; server/orgQuality.ts): defined once, every change kept as a version that says
+// the month it starts in, and turned on for chosen laboratories of that organization. A laboratory's numbers stay in its own
+// pi_metrics row (org_indicator_id) and pi_entries rows. pi_finding_links: a VeritaResponse entry linked to an indicator's month.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS org_quality_indicators (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    organization_id INTEGER NOT NULL,
+    created_by_user_id INTEGER,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE TABLE IF NOT EXISTS org_quality_indicator_versions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    indicator_id INTEGER NOT NULL,
+    version INTEGER NOT NULL,
+    effective_from TEXT NOT NULL,
+    name TEXT NOT NULL,
+    definition TEXT,
+    numerator_text TEXT,
+    denominator_text TEXT,
+    kind TEXT NOT NULL DEFAULT 'percent',
+    unit TEXT,
+    target REAL,
+    direction TEXT NOT NULL DEFAULT 'lower_is_better',
+    frequency TEXT NOT NULL DEFAULT 'monthly',
+    department TEXT NOT NULL DEFAULT '',
+    changed_by_user_id INTEGER,
+    changed_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(indicator_id, version)
+  );
+  CREATE TABLE IF NOT EXISTS org_quality_indicator_labs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    indicator_id INTEGER NOT NULL,
+    organization_id INTEGER NOT NULL,
+    lab_id INTEGER NOT NULL,
+    metric_id INTEGER NOT NULL,
+    turned_on_at TEXT NOT NULL DEFAULT (datetime('now')),
+    turned_on_by_user_id INTEGER,
+    turned_off_at TEXT,
+    turned_off_by_user_id INTEGER,
+    UNIQUE(indicator_id, lab_id)
+  );
+  CREATE TABLE IF NOT EXISTS pi_finding_links (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    metric_id INTEGER NOT NULL,
+    entry_id INTEGER NOT NULL,
+    finding_id INTEGER NOT NULL,
+    linked_by_user_id INTEGER,
+    linked_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(entry_id, finding_id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_org_quality_indicators_org ON org_quality_indicators(organization_id);
+  CREATE INDEX IF NOT EXISTS idx_org_quality_indicator_labs_lab ON org_quality_indicator_labs(lab_id);
+  CREATE INDEX IF NOT EXISTS idx_pi_finding_links_finding ON pi_finding_links(finding_id);
+`);
+// PRAGMA migration block per the New DB Table Rule (CLAUDE.md §8).
+{
+  const addMissing = (table: string, rows: { name: string }[], required: Array<[string, string]>) => {
+    const have = rows.map((c) => c.name);
+    for (const [c, ddl] of required) if (!have.includes(c)) sqlite.exec(`ALTER TABLE ${table} ADD COLUMN ${c} ${ddl}`);
+  };
+  addMissing("org_quality_indicators", sqlite.prepare("PRAGMA table_info(org_quality_indicators)").all() as { name: string }[], [["created_by_user_id", "INTEGER"], ["created_at", "TEXT"]]);
+  addMissing("org_quality_indicator_versions", sqlite.prepare("PRAGMA table_info(org_quality_indicator_versions)").all() as { name: string }[], [
+    ["effective_from", "TEXT"], ["definition", "TEXT"], ["numerator_text", "TEXT"], ["denominator_text", "TEXT"], ["kind", "TEXT NOT NULL DEFAULT 'percent'"], ["unit", "TEXT"],
+    ["target", "REAL"], ["direction", "TEXT NOT NULL DEFAULT 'lower_is_better'"], ["frequency", "TEXT NOT NULL DEFAULT 'monthly'"], ["department", "TEXT NOT NULL DEFAULT ''"],
+    ["changed_by_user_id", "INTEGER"], ["changed_at", "TEXT"],
+  ]);
+  addMissing("org_quality_indicator_labs", sqlite.prepare("PRAGMA table_info(org_quality_indicator_labs)").all() as { name: string }[], [
+    ["turned_on_at", "TEXT"], ["turned_on_by_user_id", "INTEGER"], ["turned_off_at", "TEXT"], ["turned_off_by_user_id", "INTEGER"],
+  ]);
+  addMissing("pi_finding_links", sqlite.prepare("PRAGMA table_info(pi_finding_links)").all() as { name: string }[], [["linked_by_user_id", "INTEGER"], ["linked_at", "TEXT"]]);
 }

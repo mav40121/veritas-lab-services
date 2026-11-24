@@ -2,6 +2,7 @@
  * Seed demo account data for Sample Regional Medical Center.
  * Runs on startup -- safe to re-run (uses INSERT OR IGNORE / upsert logic).
  */
+import { onlyLabOfAccount } from "./veritaqaLabColumn";
 import { db } from "./db";
 import bcrypt from "bcryptjs";
 import { DEMO_USER_EMAIL, OWNER_CLIA } from "./constants";
@@ -1490,20 +1491,21 @@ function seedLabCertificates(sqlite: any, demoUserId: number, now: string) {
 // ─── PI Dashboard: Departments + Metrics + Entries ───────────────────────────
 function seedPIDashboard(sqlite: any, demoUserId: number, now: string) {
   // Create departments
+  const labId = onlyLabOfAccount(sqlite, demoUserId);
   const dept1Result = sqlite.prepare(
-    "INSERT INTO pi_departments (account_id, name, sort_order, active) VALUES (?, ?, ?, 1)"
-  ).run(demoUserId, "Chemistry", 1);
+    "INSERT INTO pi_departments (account_id, lab_id, name, sort_order, active) VALUES (?, ?, ?, ?, 1)"
+  ).run(demoUserId, labId, "Chemistry", 1);
   const chemDeptId = Number(dept1Result.lastInsertRowid);
 
   const dept2Result = sqlite.prepare(
-    "INSERT INTO pi_departments (account_id, name, sort_order, active) VALUES (?, ?, ?, 1)"
-  ).run(demoUserId, "Hematology", 2);
+    "INSERT INTO pi_departments (account_id, lab_id, name, sort_order, active) VALUES (?, ?, ?, ?, 1)"
+  ).run(demoUserId, labId, "Hematology", 2);
   const hemeDeptId = Number(dept2Result.lastInsertRowid);
 
   // Create metrics
   const metricStmt = sqlite.prepare(`
-    INSERT INTO pi_metrics (department_id, account_id, name, unit, direction, benchmark_green, benchmark_yellow, benchmark_red, sort_order, active)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+    INSERT INTO pi_metrics (department_id, account_id, lab_id, name, unit, direction, benchmark_green, benchmark_yellow, benchmark_red, sort_order, active)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
   `);
 
   const metrics = [
@@ -1517,14 +1519,14 @@ function seedPIDashboard(sqlite: any, demoUserId: number, now: string) {
 
   const metricIds: number[] = [];
   for (const m of metrics) {
-    const result = metricStmt.run(m.deptId, demoUserId, m.name, m.unit, m.direction, m.green, m.yellow, m.red, m.sort);
+    const result = metricStmt.run(m.deptId, demoUserId, labId, m.name, m.unit, m.direction, m.green, m.yellow, m.red, m.sort);
     metricIds.push(Number(result.lastInsertRowid));
   }
 
   // Create entries — 6 months (Oct 2025 through Mar 2026) for each metric
   const entryStmt = sqlite.prepare(`
-    INSERT INTO pi_entries (metric_id, account_id, year, month, value, volume, notes)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO pi_entries (metric_id, account_id, lab_id, year, month, value, volume, notes)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const months = [
@@ -1550,7 +1552,7 @@ function seedPIDashboard(sqlite: any, demoUserId: number, now: string) {
 
   for (let mi = 0; mi < metricIds.length; mi++) {
     for (let mo = 0; mo < months.length; mo++) {
-      entryStmt.run(metricIds[mi], demoUserId, months[mo].year, months[mo].month, metricData[mi].values[mo], metricData[mi].volumes[mo], null);
+      entryStmt.run(metricIds[mi], demoUserId, labId, months[mo].year, months[mo].month, metricData[mi].values[mo], metricData[mi].volumes[mo], null);
     }
   }
 

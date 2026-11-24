@@ -25,8 +25,9 @@ test.describe("VeritaQA PI page hardening", () => {
       return;
     }
     await injectAuth(page, BASE, TOKEN);
-    await page.route("**/api/pi/departments", (r) => r.fulfill({ status: 500, body: "{}" }));
-    await page.route("**/api/pi/departments?*", (r) => r.fulfill({ status: 500, body: "{}" }));
+    // The laboratory's own route (B15), and the older one for someone with no laboratory.
+    await page.route("**/pi/departments", (r) => r.fulfill({ status: 500, body: "{}" }));
+    await page.route("**/pi/departments?*", (r) => r.fulfill({ status: 500, body: "{}" }));
 
     await page.goto(`${BASE}/veritabench/pi`, { waitUntil: "domcontentloaded" });
 

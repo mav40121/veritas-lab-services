@@ -107,8 +107,8 @@ async function main() {
     seed("veritacheck_verification_analytes", { verification_id: verification, analyte_name: "ZZ-LABA WBC" });
     const staffing = seed("staffing_studies", { account_id: OWNER.id, lab_id: labA, name: "ZZ-LABA staffing" });
     const costStudy = seed("veritaops_test_cost_studies", { account_id: OWNER.id, lab_id: labA, test_name: "ZZ-LABA cost" });
-    const department = seed("pi_departments", { account_id: OWNER.id, name: "ZZ-LABA department" });
-    const metric = seed("pi_metrics", { department_id: department, account_id: OWNER.id, name: "ZZ-LABA metric" });
+    const department = seed("pi_departments", { account_id: OWNER.id, lab_id: labA, name: "ZZ-LABA department" });
+    const metric = seed("pi_metrics", { department_id: department, account_id: OWNER.id, lab_id: labA, name: "ZZ-LABA metric" });
     const pendingSeat = seed("user_seats", { owner_user_id: OWNER.id, seat_email: `iso-pending-${stamp}@example.com`, invited_at: now, status: "pending", permissions: "{}", invite_token: `ZZ-LABA-token-${stamp}`, lab_id: labA, seat_type: "active" });
     const item = seed("inventory_items", { account_id: OWNER.id, lab_id: labA, item_name: "ZZ-LABA reagent" });
     seed("inventory_count_events", { lab_id: labA, account_id: OWNER.id, item_id: item, counted_qty: 5, previous_qty: 4, delta: 1, counted_by: "ZZ-LABA counter", source: "director", occurred_at: now, created_at: now });
@@ -188,7 +188,7 @@ async function main() {
       { route: "/api/staffing-studies/:id", url: `/api/staffing-studies/${staffing}` },
       { route: "/api/staffing-studies/:id/export", url: `/api/staffing-studies/${staffing}/export` },
       { route: "/api/veritaops/studies/:id", url: `/api/veritaops/studies/${costStudy}` },
-      { route: "/api/pi/metrics", url: `/api/pi/metrics?department_id=${department}`, outsider: OWN_LAB_ONLY, noLabOnRow: true },
+      { route: "/api/pi/metrics", url: `/api/pi/metrics?department_id=${department}`, outsider: OWN_LAB_ONLY },
       { route: "/api/inventory/count-history", url: `/api/inventory/count-history?item_id=${item}`, outsider: OWN_LAB_ONLY },
       // Reads that happen to be POST: a PDF or a workbook of one lab's row.
       { route: "POST /api/veritamap/maps/:id/excel", method: "POST", url: `/api/veritamap/maps/${mapId}/excel`, body: {}, belongs: [200, 400] },
@@ -197,7 +197,7 @@ async function main() {
       { route: "POST /api/competency/pdf/:assessmentId", method: "POST", url: `/api/competency/pdf/${a}`, body: {}, belongs: [200, 400] },
       { route: "POST /api/veritacheck/cumsum/trackers/:id/pdf", method: "POST", url: `/api/veritacheck/cumsum/trackers/${tracker}/pdf`, body: {}, belongs: [200, 400] },
       { route: "POST /api/veritacheck/verifications/:id/pdf", method: "POST", url: `/api/veritacheck/verifications/${verification}/pdf`, body: {}, belongs: [200, 400] },
-      { route: "POST /api/pi/metrics/:metricId/report", method: "POST", url: `/api/pi/metrics/${metric}/report`, body: {}, belongs: [200, 400], noLabOnRow: true },
+      { route: "POST /api/pi/metrics/:metricId/report", method: "POST", url: `/api/pi/metrics/${metric}/report`, body: {}, belongs: [200, 400] },
       { route: "POST /api/veritaops/studies/:id/pdf", method: "POST", url: `/api/veritaops/studies/${costStudy}/pdf`, body: {}, belongs: [200, 400] },
     ];
 
@@ -328,14 +328,12 @@ async function main() {
     }
     console.log(`SCOPED  ${scopedCount} tried; the owner sees lab A's data on ${scopedReached} of them; leaks: ${scopedLeaks.join(" | ") || "none"}`);
     // ── Lists: a sister-lab seat, in its own lab, with and without naming lab A (Michael Q191 = 1) ──
-    // pi/departments is by account with no lab on the row, so the owner match still counts there.
-    const NO_LAB_ON_ROWS = new Set(["/api/pi/departments"]);
     const listUrls: string[] = [];
     for (const layer of (app as any).router.stack) {
       const r = layer.route;
       if (!r?.methods?.get) continue;
       for (const p of Array.isArray(r.path) ? r.path : [r.path]) {
-        if (typeof p !== "string" || !p.startsWith("/api/") || NO_LAB_ON_ROWS.has(p) || /^\/api\/(admin|demo|pdf|zip|scheduling|surveyor|export-all|seats\/invite)/.test(p)) continue;
+        if (typeof p !== "string" || !p.startsWith("/api/") || /^\/api\/(admin|demo|pdf|zip|scheduling|surveyor|export-all|seats\/invite)/.test(p)) continue;
         if (p.replace(":labId", "").includes(":")) continue;
         listUrls.push(p.replace(":labId", String(labC)));
       }

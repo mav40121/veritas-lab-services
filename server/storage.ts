@@ -159,8 +159,13 @@ class DatabaseStorage implements IStorage {
       sqlite.prepare("DELETE FROM pt_corrective_actions WHERE user_id = ?").run(id);
       sqlite.prepare("DELETE FROM pt_events WHERE user_id = ?").run(id);
       sqlite.prepare("DELETE FROM staffing_hourly_data WHERE study_id IN (SELECT id FROM staffing_studies WHERE account_id = ?)").run(id);
-      sqlite.prepare("DELETE FROM pi_entries WHERE metric_id IN (SELECT id FROM pi_metrics WHERE department_id IN (SELECT id FROM pi_departments WHERE account_id = ?))").run(id);
-      sqlite.prepare("DELETE FROM pi_metrics WHERE department_id IN (SELECT id FROM pi_departments WHERE account_id = ?)").run(id);
+      // VeritaQA: this account's departments, with what hangs on them, except those of a laboratory someone else owns now.
+      const qaDepts = "SELECT id FROM pi_departments WHERE account_id = ? AND (lab_id IS NULL OR lab_id NOT IN (SELECT id FROM labs WHERE owner_user_id <> ?))";
+      sqlite.prepare(`DELETE FROM pi_finding_links WHERE metric_id IN (SELECT id FROM pi_metrics WHERE department_id IN (${qaDepts}))`).run(id, id);
+      sqlite.prepare(`DELETE FROM org_quality_indicator_labs WHERE metric_id IN (SELECT id FROM pi_metrics WHERE department_id IN (${qaDepts}))`).run(id, id);
+      sqlite.prepare(`DELETE FROM pi_entries WHERE metric_id IN (SELECT id FROM pi_metrics WHERE department_id IN (${qaDepts}))`).run(id, id);
+      sqlite.prepare(`DELETE FROM pi_metrics WHERE department_id IN (${qaDepts})`).run(id, id);
+      sqlite.prepare(`DELETE FROM pi_departments WHERE id IN (${qaDepts})`).run(id, id);
       // Roll-up groups (server/rollupGroups.ts): this person's own network groups and their lab rows.
       sqlite.prepare("DELETE FROM rollup_group_labs WHERE group_id IN (SELECT id FROM rollup_groups WHERE owner_user_id = ?)").run(id);
       // Direct children
@@ -195,7 +200,6 @@ class DatabaseStorage implements IStorage {
       del("productivity_months", "account_id");
       del("staffing_studies", "account_id");
       del("inventory_items", "account_id");
-      del("pi_departments", "account_id");
       // Finally delete the user
       del("users", "id");
     })();

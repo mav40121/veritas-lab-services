@@ -1,7 +1,7 @@
 // tests/playwright/pi-report.spec.ts
 //
 // Gate 3 step-8 evidence for the VeritaBench per-PI report button. The button
-// (data-testid="pi-report-<metricId>") POSTs to /api/pi/metrics/:id/report and
+// (data-testid="pi-report-<metricId>") POSTs to /api/labs/:labId/veritaqa/pi/metrics/:id/report and
 // opens the token PDF; on a blocked popup it toasts "Popup blocked" rather than
 // a false success (same class as the VeritaOps PDF fix).
 //

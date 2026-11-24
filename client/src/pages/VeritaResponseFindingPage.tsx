@@ -21,6 +21,7 @@ import { TjcSaferCard } from "@/components/TjcSaferCard";
 import { EffectivenessPanel } from "@/components/EffectivenessPanel";
 import { FindingAssigneeCard } from "@/components/FindingAssigneeCard";
 import { FindingDocumentsCard } from "@/components/FindingDocumentsCard";
+import { FindingIndicatorsCard } from "@/components/FindingIndicatorsCard";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import {
   Dialog,
@@ -333,6 +334,8 @@ function findingHistoryText(h: { event: string; payload: any }): string {
     case "reclassified": return "Reclassified";
     case "assigned": return `Assigned to ${p.after?.name || "someone"}`;
     case "assignment_changed": return `Assignment changed from ${p.before?.name || "someone"} to ${p.after?.name || "someone"}`;
+    case "indicator_linked": return `Linked quality indicator: ${p.name || "an indicator"}${p.year ? `, ${p.year}-${String(p.month).padStart(2, "0")}` : ""}`;
+    case "indicator_unlinked": return `Removed quality indicator: ${p.name || "an indicator"}${p.year ? `, ${p.year}-${String(p.month).padStart(2, "0")}` : ""}${p.reason ? `. ${p.reason}` : ""}`;
     case "document_linked": return `Linked document: ${p.title || "a VeritaDC document"}`;
     case "document_unlinked": return `Removed the link to ${p.title || "a VeritaDC document"}`;
     case "assignment_cleared": return `Assignment to ${p.before?.name || "someone"} cleared`;
@@ -1629,6 +1632,7 @@ export default function VeritaResponseFindingPage() {
 
       {/* VeritaDC documents and suggested SOPs (B8) */}
       {activeLabId && <FindingDocumentsCard labId={activeLabId} findingId={id!} savedAt={finding.updated_at ?? null} readOnly={isReadOnly} onChanged={fetchHistory} />}
+      {activeLabId && <FindingIndicatorsCard labId={activeLabId} findingId={id!} />}
 
       {/* Wave C4: cross-module linkage closure */}
       {activeLabId && <LinkagePanel activeLabId={activeLabId} findingId={id!} />}

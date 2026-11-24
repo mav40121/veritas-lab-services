@@ -8,9 +8,8 @@
 // The bug shape:
 //   `WHERE id = ? AND user_id = ?` or `WHERE id = ? AND account_id = ?`
 // on a table that has a lab_id column. Tables without lab_id
-// (productivity_months, staffing_studies, pi_departments, pi_metrics,
-// pi_entries) are intentional single-tenant scope; this script keeps
-// them on the allowlist.
+// (productivity_months, staffing_studies) are intentional single-tenant
+// scope; this script keeps them on the allowlist.
 
 import fs from "fs";
 import path from "path";
@@ -61,6 +60,12 @@ const MULTI_LAB_TABLES = new Set([
   "pt_corrective_actions",
   "studies",
   "findings",
+  "pi_departments",
+  "pi_metrics",
+  "pi_entries",
+  "pi_plan",
+  "pi_plan_priority",
+  "pi_plan_review",
 ]);
 
 // Tables without lab_id — intentional single-tenant scope. Lines that
@@ -68,14 +73,6 @@ const MULTI_LAB_TABLES = new Set([
 const SINGLE_TENANT_TABLES = [
   "productivity_months",
   "staffing_studies",
-  "pi_departments",
-  "pi_metrics",
-  "pi_entries",
-  // VeritaQA Phase 1: the PI plan / priorities / leadership-review log are
-  // account-scoped by design, same as the rest of the PI module above.
-  "pi_plan",
-  "pi_plan_priority",
-  "pi_plan_review",
 ];
 
 // File-level allowlist: documentation files where the pattern appears

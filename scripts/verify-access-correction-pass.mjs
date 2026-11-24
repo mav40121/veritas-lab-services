@@ -39,11 +39,14 @@ console.log("\n2. VeritaBench/VeritaStock data-write routes are requireModuleEdi
 for (const [label, re] of [
   ["POST /api/productivity", /app\.post\("\/api\/productivity", authMiddleware, requireWriteAccess, requireModuleEdit\('veritabench'\)/],
   ["POST /api/staffing-studies", /app\.post\("\/api\/staffing-studies", authMiddleware, requireWriteAccess, requireModuleEdit\('veritabench'\)/],
-  ["POST /api/pi/entries", /app\.post\("\/api\/pi\/entries", authMiddleware, requireWriteAccess, requireModuleEdit\('veritabench'\)/],
   ["POST /api/inventory", /app\.post\("\/api\/inventory", authMiddleware, requireWriteAccess, requireModuleEdit\('veritastock'\)/],
   ["PUT /api/inventory/:id", /app\.put\("\/api\/inventory\/:id", authMiddleware, requireWriteAccess, requireModuleEdit\('veritastock'\)/],
   ["DELETE /api/inventory/:id", /app\.delete\("\/api\/inventory\/:id", authMiddleware, requireWriteAccess, requireModuleEdit\('veritastock'\)/],
 ]) ok(`${label} gated`, re.test(bench));
+// VeritaQA's writes (server/veritaqaPi.ts, B15): the older routes and the laboratory's, both behind write access and the module gate.
+const pi = readFileSync(new URL("server/veritaqaPi.ts", root), "utf8");
+ok("POST /api/pi/entries gated", /register\("\/api\/pi", \[[^\]]*\], \[authMiddleware, requireWriteAccess, requireModuleEdit\("veritabench"\), planGate\]/.test(pi) && /app\.post\(`\$\{base\}\/entries`, \.\.\.edit/.test(pi));
+ok("POST /api/labs/:labId/veritaqa/pi/entries gated", /const labEdit = \[authMiddleware, labScopeMiddleware, labOperator, requireWriteAccess, requireModuleEdit\("veritabench"\), planGate, setLabView\]/.test(pi) && /register\(QA_LAB_BASE, labRead, labEdit, labView\)/.test(pi));
 ok("gated with the correct keys (veritabench + veritastock both present)",
   bench.includes("requireModuleEdit('veritabench')") && bench.includes("requireModuleEdit('veritastock')"));
 // Doc generators stay ungated so view-only seats can still produce reports.

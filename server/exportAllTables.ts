@@ -275,12 +275,15 @@ export const EXPORT_TABLES: Record<string, ExportTable> = {
   staffing_hourly_data: child("VeritaBench", "study_id", "staffing_studies"),
   staffing_grid_lines: labOrOwner("VeritaBench", "account_id"),
   veritaops_test_cost_studies: labOrOwner("VeritaOps", "account_id"),
-  pi_departments: owner("VeritaQA", "account_id"),
-  pi_metrics: owner("VeritaQA", "account_id"),
-  pi_entries: owner("VeritaQA", "account_id"),
-  pi_plan: owner("VeritaQA", "account_id"),
-  pi_plan_priority: owner("VeritaQA", "account_id"),
-  pi_plan_review: owner("VeritaQA", "account_id"),
+  // A laboratory's own rows, plus the owner's account-wide ones (lab_id NULL; server/veritaqaLabColumn.ts).
+  pi_departments: labOrOwner("VeritaQA", "account_id"),
+  pi_metrics: labOrOwner("VeritaQA", "account_id"),
+  pi_entries: labOrOwner("VeritaQA", "account_id"),
+  pi_plan: labOrOwner("VeritaQA", "account_id"),
+  pi_plan_priority: labOrOwner("VeritaQA", "account_id"),
+  pi_plan_review: labOrOwner("VeritaQA", "account_id"),
+  pi_finding_links: lab("VeritaQA"), // VeritaResponse findings linked to an indicator's month
+  org_quality_indicator_labs: lab("VeritaQA"), // which of the organization's indicators this laboratory has had on
   // The Stewardship tab (parking lot #81) is one laboratory's, so its tables carry lab_id.
   stewardship_settings: lab("VeritaQA"),
   stewardship_antibiograms: lab("VeritaQA"),
@@ -319,6 +322,8 @@ export const EXPORT_TABLES: Record<string, ExportTable> = {
   organization_members: exclude(ORG),
   organization_billing_line_items: exclude(ORG),
   system_documents: exclude(ORG),
+  org_quality_indicators: exclude(ORG),
+  org_quality_indicator_versions: exclude(ORG),
   // Roll-up groups (server/rollupGroups.ts): a system's or one person's grouping of labs for the readiness command center.
   // They belong to the organization or that person, not to any one lab, and hold no lab record.
   rollup_groups: exclude("A readiness roll-up grouping that belongs to an organization or one person's network, not to one lab."),

@@ -4,9 +4,13 @@
 // way the other client loads work (a dry run reads; apply writes). First use: SCAHC's 2027 QA/QI plan for San Carlos
 // (lab 2) and Bylas (lab 6), drafted as QUAL.001 and an indicator workbook.
 //
-// VeritaQA keeps its data per owner account (server/veritabench.ts: accountId = req.ownerUserId ?? req.userId), not per
-// lab, so the load names the owner account and the labs it expects that account to own. A wrong account id is refused
-// before anything is read or written, so one customer's plan can never land in another customer's account.
+// The load names the owner account and the labs it expects that account to own. A wrong account id is refused before
+// anything is read or written, so one customer's plan can never land in another customer's account.
+//
+// Which laboratory (B15): `labId`, one of expectedLabIds, puts the load in that laboratory. Without it the load goes to the
+// account's one laboratory, and on an account with several it is account-wide, as every load was before rows carried a
+// laboratory: it shows in each of them, labelled account-wide, until someone assigns it. What's already there is matched by
+// name among the rows that laboratory shows (its own and the account-wide ones).
 //
 // What a load does: adds each department and indicator that isn't there yet (matched by name), and adds the written PI
 // plan if the account has no active one. What it never does: change or delete a department, indicator, monthly result
@@ -16,6 +20,7 @@
 //   POST /api/admin/veritaqa/accounts/:ownerUserId/load      body: VeritaQaLoad below; apply: false is a dry run
 
 import { db } from "./db";
+import { onlyLabOfAccount } from "./veritaqaLabColumn";
 
 export const VERITAQA_LOAD_LIMITS = { departments: 60, metricsPerDepartment: 60, text: 6000, name: 200 };
 const UNITS = new Set(["%", "count", "minutes", "hours", "days", "ratio", "per 1,000", "rate"]);
@@ -37,6 +42,7 @@ export type VeritaQaMetric = {
 };
 export type VeritaQaLoad = {
   expectedLabIds: number[];
+  labId?: number | null;
   apply: boolean;
   departments: { name: string; metrics: VeritaQaMetric[] }[];
   plan?: { title: string; effective_year: number } & Partial<Record<(typeof PLAN_FIELDS)[number], string>>;
@@ -53,6 +59,7 @@ export function veritaQaLoadProblem(body: any): string | null {
   if (typeof body.apply !== "boolean") return "apply must be true or false.";
   if (!Array.isArray(body.expectedLabIds) || body.expectedLabIds.length === 0 || !body.expectedLabIds.every((n: unknown) => Number.isInteger(n) && (n as number) > 0))
     return "expectedLabIds must list the labs this account owns.";
+  if (body.labId != null && !body.expectedLabIds.includes(body.labId)) return "labId must be one of expectedLabIds.";
   if (!Array.isArray(body.departments) || body.departments.length === 0 || body.departments.length > L.departments) return `departments must hold 1 to ${L.departments} departments.`;
   const deptNames = new Set<string>();
   for (const [i, d] of body.departments.entries()) {
@@ -92,39 +99,48 @@ export function loadVeritaQa(sqlite: any, ownerUserId: number, input: VeritaQaLo
   const notOwned = input.expectedLabIds.filter((id) => !owned.has(id));
   if (notOwned.length) return { status: 409, body: { error: "This account doesn't own every lab named in the load.", code: "LAB_MISMATCH", notOwned } };
 
-  const findDept = sqlite.prepare("SELECT id FROM pi_departments WHERE account_id = ? AND lower(trim(name)) = lower(trim(?)) ORDER BY id LIMIT 1");
-  const findMetric = sqlite.prepare("SELECT id FROM pi_metrics WHERE department_id = ? AND lower(trim(name)) = lower(trim(?)) ORDER BY id LIMIT 1");
-  const maxDeptOrder = (sqlite.prepare("SELECT COALESCE(MAX(sort_order), -1) AS n FROM pi_departments WHERE account_id = ?").get(ownerUserId) as { n: number }).n;
-  const activePlan = sqlite.prepare("SELECT id FROM pi_plan WHERE account_id = ? AND status = 'active' ORDER BY id DESC LIMIT 1").get(ownerUserId) as { id: number } | undefined;
+  const labId = input.labId ?? onlyLabOfAccount(sqlite, ownerUserId);
+  if (labId != null && sqlite.prepare("SELECT 1 FROM labs WHERE id = ? AND (retired_at IS NOT NULL OR COALESCE(is_repository, 0) = 1)").get(labId)) {
+    return { status: 409, body: { error: "That laboratory is retired or a repository.", code: "LAB_NOT_ELIGIBLE" } };
+  }
+  // A laboratory's rows, then the account-wide ones it shows; with no laboratory, the account-wide ones.
+  const shows = labId != null ? "(lab_id = @lab OR (lab_id IS NULL AND account_id = @owner))" : "(lab_id IS NULL AND account_id = @owner)";
+  const at = labId != null ? { owner: ownerUserId, lab: labId } : { owner: ownerUserId };
+  const deptStmt = sqlite.prepare(`SELECT id, lab_id FROM pi_departments WHERE ${shows} AND lower(trim(name)) = lower(trim(@name)) ORDER BY lab_id IS NULL, id`);
+  const findDepts = (name: string) => deptStmt.all({ ...at, name }) as { id: number; lab_id: number | null }[];
+  const metricStmt = sqlite.prepare("SELECT id FROM pi_metrics WHERE department_id = ? AND lower(trim(name)) = lower(trim(?)) ORDER BY id LIMIT 1");
+  const maxDeptOrder = (sqlite.prepare(`SELECT COALESCE(MAX(sort_order), -1) AS n FROM pi_departments WHERE ${shows}`).get(at) as { n: number }).n;
+  const activePlan = sqlite.prepare(`SELECT id FROM pi_plan WHERE ${shows} AND status = 'active' ORDER BY id DESC LIMIT 1`).get(at) as { id: number } | undefined;
 
-  const insDept = sqlite.prepare("INSERT INTO pi_departments (account_id, name, sort_order, active, created_at) VALUES (?, ?, ?, 1, ?)");
+  const insDept = sqlite.prepare("INSERT INTO pi_departments (account_id, lab_id, name, sort_order, active, created_at) VALUES (?, ?, ?, ?, 1, ?)");
   const insMetric = sqlite.prepare(
-    `INSERT INTO pi_metrics (department_id, account_id, name, unit, direction, benchmark_green, benchmark_yellow, benchmark_red, sort_order, active,
+    `INSERT INTO pi_metrics (department_id, account_id, lab_id, name, unit, direction, benchmark_green, benchmark_yellow, benchmark_red, sort_order, active,
                              measurement_methodology, is_tat, tat_start_event, tat_end_event, tat_threshold_minutes, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)`
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)`
   );
   const insPlan = sqlite.prepare(
-    `INSERT INTO pi_plan (account_id, title, effective_year, status, program_scope, measurement_methods, analysis_methods, remediation_methods,
+    `INSERT INTO pi_plan (account_id, lab_id, title, effective_year, status, program_scope, measurement_methods, analysis_methods, remediation_methods,
                           monitor_sustain_methods, created_at, updated_at)
-     VALUES (?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?)`
+     VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?)`
   );
 
   const summary = { departmentsAdded: 0, departmentsExisting: 0, metricsAdded: 0, metricsExisting: 0, planAdded: false, planExisting: !!activePlan };
   const now = new Date().toISOString();
   const run = () => {
     input.departments.forEach((d, di) => {
-      const existing = findDept.get(ownerUserId, d.name) as { id: number } | undefined;
+      // A laboratory's own indicator sits in one of its own departments (server/veritaqaPi.ts).
+      const found = findDepts(d.name);
+      const existing = found.find((x) => (labId != null ? x.lab_id != null : x.lab_id == null));
       let deptId: number | null = existing?.id ?? null;
-      if (existing) summary.departmentsExisting++;
-      else {
-        summary.departmentsAdded++;
-        if (input.apply) deptId = Number(insDept.run(ownerUserId, d.name.trim(), maxDeptOrder + 1 + di, now).lastInsertRowid);
-      }
+      const ensureDept = () => { if (deptId == null && input.apply) deptId = Number(insDept.run(ownerUserId, labId, d.name.trim(), maxDeptOrder + 1 + di, now).lastInsertRowid); };
+      if (found.length) summary.departmentsExisting++;
+      else { summary.departmentsAdded++; ensureDept(); }
       d.metrics.forEach((m, mi) => {
-        if (deptId != null && findMetric.get(deptId, m.name)) { summary.metricsExisting++; return; }
+        if (found.some((x) => metricStmt.get(x.id, m.name))) { summary.metricsExisting++; return; }
         summary.metricsAdded++;
-        if (!input.apply || deptId == null) return;
-        insMetric.run(deptId, ownerUserId, m.name.trim(), m.unit, m.direction, m.benchmark_green, m.benchmark_yellow ?? null, m.benchmark_red ?? null, mi,
+        if (!input.apply) return;
+        ensureDept();
+        insMetric.run(deptId, ownerUserId, labId, m.name.trim(), m.unit, m.direction, m.benchmark_green, m.benchmark_yellow ?? null, m.benchmark_red ?? null, mi,
           m.measurement_methodology ?? null, m.is_tat ? 1 : 0, m.tat_start_event ?? null, m.tat_end_event ?? null, m.tat_threshold_minutes ?? null, now);
       });
     });
@@ -132,7 +148,7 @@ export function loadVeritaQa(sqlite: any, ownerUserId: number, input: VeritaQaLo
       summary.planAdded = true;
       if (input.apply) {
         const p = input.plan;
-        insPlan.run(ownerUserId, p.title.trim(), p.effective_year, p.program_scope ?? null, p.measurement_methods ?? null, p.analysis_methods ?? null,
+        insPlan.run(ownerUserId, labId, p.title.trim(), p.effective_year, p.program_scope ?? null, p.measurement_methods ?? null, p.analysis_methods ?? null,
           p.remediation_methods ?? null, p.monitor_sustain_methods ?? null, now, now);
       }
     }
@@ -140,23 +156,23 @@ export function loadVeritaQa(sqlite: any, ownerUserId: number, input: VeritaQaLo
       sqlite.prepare(
         `INSERT INTO audit_log (user_id, owner_user_id, module, action, entity_type, entity_id, entity_label, after_json, created_at)
          VALUES (0, ?, 'veritaqa', 'admin_load', 'pi_plan_load', ?, ?, ?, ?)`
-      ).run(ownerUserId, String(ownerUserId), "Quality indicator plan loaded by Veritas Lab Services", JSON.stringify({ ...summary, labs: input.expectedLabIds }), now);
+      ).run(ownerUserId, String(ownerUserId), "Quality indicator plan loaded by Veritas Lab Services", JSON.stringify({ ...summary, labs: input.expectedLabIds, labId }), now);
     }
   };
   if (input.apply) sqlite.transaction(run)(); else run();
-  return { status: 200, body: { ok: true, applied: input.apply, ownerUserId, labs: input.expectedLabIds, ...summary } };
+  return { status: 200, body: { ok: true, applied: input.apply, ownerUserId, labs: input.expectedLabIds, labId, ...summary } };
 }
 
 export function veritaQaSummary(sqlite: any, ownerUserId: number) {
   const owner = sqlite.prepare("SELECT id FROM users WHERE id = ?").get(ownerUserId);
   if (!owner) return null;
   const departments = sqlite.prepare(
-    `SELECT d.id, d.name, d.active, (SELECT COUNT(*) FROM pi_metrics m WHERE m.department_id = d.id) AS metrics
+    `SELECT d.id, d.name, d.active, d.lab_id, (SELECT COUNT(*) FROM pi_metrics m WHERE m.department_id = d.id) AS metrics
        FROM pi_departments d WHERE d.account_id = ? ORDER BY d.sort_order, d.id`
   ).all(ownerUserId);
   const metrics = (sqlite.prepare("SELECT COUNT(*) AS n FROM pi_metrics WHERE account_id = ?").get(ownerUserId) as { n: number }).n;
   const entries = (sqlite.prepare("SELECT COUNT(*) AS n FROM pi_entries WHERE account_id = ?").get(ownerUserId) as { n: number }).n;
-  const plans = sqlite.prepare("SELECT id, title, effective_year, status FROM pi_plan WHERE account_id = ? ORDER BY id").all(ownerUserId);
+  const plans = sqlite.prepare("SELECT id, title, effective_year, status, lab_id FROM pi_plan WHERE account_id = ? ORDER BY id").all(ownerUserId);
   const labs = (sqlite.prepare("SELECT id FROM labs WHERE owner_user_id = ? ORDER BY id").all(ownerUserId) as { id: number }[]).map((r) => r.id);
   return { ownerUserId, labs, departmentCount: departments.length, metricCount: metrics, entryCount: entries, departments, plans };
 }
