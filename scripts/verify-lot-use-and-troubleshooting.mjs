@@ -76,9 +76,12 @@ const tsEv = evList.find((e) => e.event_type === "troubleshooting");
 check("2. a troubleshooting entry is accepted and keeps problem/action/outcome", r2.status === 200 && !!tsEv && tsEv.notes === tsNotes, `${r2.status} ${JSON.stringify(tsEv || null)}`);
 const due1 = await nextDue();
 check("3a. troubleshooting leaves the PM next-due date unchanged", due1 === "2026-12-01", String(due1));
-await post(`${B}/equipment/${equip.id}/events`, { event_type: "calibration", event_date: "2026-10-01" });
+await post(`${B}/equipment/${equip.id}/events`, { event_type: "calibration", event_date: "2026-11-20" });
 const due2 = await nextDue();
-check("3b. a calibration entry still advances it (event + 30 days)", due2 === "2026-10-31", String(due2));
+check("3b. a calibration entry leaves it unchanged too (B9: only completed PM moves it)", due2 === "2026-12-01", String(due2));
+await post(`${B}/equipment/${equip.id}/events`, { event_type: "preventive_maintenance", event_date: "2026-11-20" });
+const due3 = await nextDue();
+check("3c. a PM entry advances it (event + 30 days)", due3 === "2026-12-20", String(due3));
 
 // --- Lot use ---
 const LU = `${B}/veritastock/items/${lotRow.item_id}/lot-use`;

@@ -3,20 +3,23 @@
 // One month of VeritaMaintain records with their review, as a workbook a lab can hand to an inspector (Michael 2026-11-04, Q161 = 1). Customer-facing workbook standard:
 // About sheet first, lab identity in three layers, brand colors, sheets protected.
 import { CODE_LABELS } from "../shared/stainLogRules";
+import { EQUIP_EVENT_LABEL, EQUIP_FILE_KIND_LABEL } from "../shared/equipmentPm";
+import { limitsLabel, SCHEDULE_TYPE_LABEL } from "../shared/equipmentSchedules";
+import { labLocalDate } from "./dateLocal";
 
 const TEAL = "FF01696F", TINT = "FFE6F2F2", ACCENT = "FF0A3A3D", INK = "FF28251D", ALT = "FFEBF3F8", GRID = "FFD0D0D0";
 const GREEN = "FF437A22", AMBER = "FF964219", RED = "FFA12C7B";
 
-const EVENT_LABEL: Record<string, string> = {
-  calibration: "Calibration", preventive_maintenance: "Preventive maintenance", pm: "Preventive maintenance", service: "Service", repair: "Repair",
-  function_check: "Function check", troubleshooting: "Troubleshooting", solution_change: "Solution change",
-};
+const EVENT_LABEL = EQUIP_EVENT_LABEL;
+// Files on an entry, as the query joins them (char 31 between kind and name, char 30 between files).
+const filesText = (v: string | null | undefined): string => String(v || "").split("\u001e").filter(Boolean)
+  .map((f) => { const [kind, name] = f.split("\u001f"); return `${EQUIP_FILE_KIND_LABEL[kind] ?? "File"}: ${name ?? ""}`; }).join("; ");
 
 // The stain log's sheets appear only in a month that has stain log entries, so a lab without one sees the workbook it always did.
 const ITEM_TYPE_LABEL: Record<string, string> = { equipment: "Instrument", temp_unit: "Temperature", stain_manual: "Manual stain log" };
 
 export async function generateMaintainReviewReport(
-  data: { month: string; items: any[]; readings: any[]; events: any[]; stainEntries?: any[]; manualEntries?: any[] },
+  data: { month: string; items: any[]; readings: any[]; events: any[]; stainEntries?: any[]; manualEntries?: any[]; downtime?: any[]; schedules?: any[]; answers?: any[] },
   identity: { labName: string; cliaNumber: string },
 ): Promise<Buffer> {
   const { default: ExcelJS } = await import("exceljs");
@@ -63,7 +66,10 @@ export async function generateMaintainReviewReport(
   section("How to use it");
   const stainEntries = data.stainEntries ?? [];
   const manualEntries = data.manualEntries ?? [];
-  body(`Monthly Review lists each instrument and temperature unit, what the records show, any problem found, the corrective action the reviewer recorded, and the signature. Temperature Readings and Equipment Entries are the underlying records for the month.${stainEntries.length ? " Stain Log lists each coded entry, with the lot number and expiration on a change; a voided entry stays listed with its reason." : ""}${manualEntries.length ? " Manual Stain Log lists each manual stain; it holds no specimen number, and the link to a patient stays in the lab's LIS." : ""} An entry added after a review was signed is called out on the Monthly Review sheet.`);
+  const downtime = data.downtime ?? [];
+  const schedules = data.schedules ?? [];
+  const answers = data.answers ?? [];
+  body(`Monthly Review lists each instrument and temperature unit, what the records show, any problem found, the corrective action the reviewer recorded, and the signature. Temperature Readings and Equipment Entries are the underlying records for the month. An entry names the files attached to it, and a corrected entry shows who corrected it and why.${schedules.length ? " Schedules lists each instrument's schedules, what was done this month, and for a daily one, the days with no record." : ""}${answers.length ? " Checklist Results lists each checklist step as it was answered, with the checklist's version and any corrective action." : ""}${downtime.length ? " Out of Service lists each period an instrument was out of service." : ""}${stainEntries.length ? " Stain Log lists each coded entry, with the lot number and expiration on a change; a voided entry stays listed with its reason." : ""}${manualEntries.length ? " Manual Stain Log lists each manual stain; it holds no specimen number, and the link to a patient stays in the lab's LIS." : ""} An entry added after a review was signed is called out on the Monthly Review sheet.`);
   section("Source");
   body("Every line comes from what this lab recorded in VeritaMaintain. Ranges, schedules and corrective actions are the lab's own. Nothing here is calculated beyond counting those records against the readings per day the lab set.");
   section("Coverage gaps");
@@ -124,10 +130,57 @@ export async function generateMaintainReviewReport(
   );
   await sheetFor(
     "Equipment Entries",
-    ["Instrument", "Date", "Entry", "Performed by", "Notes"],
-    [30, 12, 22, 20, 60],
-    data.events.map((x) => [x.instrument_name, x.event_date, EVENT_LABEL[x.event_type] || x.event_type, x.performed_by ?? "", x.notes ?? ""]),
+    ["Instrument", "Date", "Entry", "Performed by", "Notes", "Logged by", "Vendor", "Cost", "Attached files", "Completes PM", "Corrected", "Voided"],
+    [30, 12, 22, 20, 60, 20, 24, 10, 40, 16, 34, 30],
+    data.events.map((x) => [
+      x.instrument_name, x.event_date, EVENT_LABEL[x.event_type] || x.event_type, x.performed_by ?? "", x.notes ?? "", x.logged_by_name ?? "",
+      [x.vendor_company, x.vendor_technician].filter(Boolean).join(", "), x.cost ?? "", filesText(x.files),
+      x.completes_pm === 1 ? (x.pm_complete === 0 ? "Waiting for the vendor report" : "Yes") : "",
+      x.corrected_at ? `${labLocalDate(x.corrected_at)} by ${x.corrected_by_name ?? "an editor"}: ${x.correction_reason ?? ""}` : "",
+      x.voided_at ? `Voided ${labLocalDate(x.voided_at)}: ${x.void_reason ?? ""}` : "",
+    ]),
+    (row, v) => {
+      if (v[9] === "Waiting for the vendor report") row.getCell(10).font = { name: "Calibri", size: 10, bold: true, color: { argb: AMBER } };
+      if (v[11]) row.getCell(12).font = { name: "Calibri", size: 10, bold: true, color: { argb: RED } };
+    },
   );
+  if (schedules.length) {
+    await sheetFor(
+      "Schedules",
+      ["Instrument", "Schedule", "Type", "How often", "Next due", "Done this month", "Days expected", "Days with no record", "Which days", "Failed steps", "Overdue", "SOP", "Ended"],
+      [30, 28, 22, 18, 12, 12, 12, 12, 34, 10, 12, 30, 12],
+      schedules.map((x) => [
+        x.instrument_name, x.name, SCHEDULE_TYPE_LABEL[x.schedule_type] ?? "", x.frequency, x.next_due_date ?? "", x.done, x.expected ?? "", x.expected === null ? "" : x.missed.length,
+        x.missed.join(", "), x.failed_steps || "", x.overdue ? `Since ${x.overdue}` : "", x.sop ?? "", x.ended_on ?? "",
+      ]),
+      (row, v) => {
+        for (const col of [8, 11]) if (v[col - 1]) row.getCell(col).font = { name: "Calibri", size: 10, bold: true, color: { argb: RED } };
+        if (v[9]) row.getCell(10).font = { name: "Calibri", size: 10, bold: true, color: { argb: AMBER } };
+      },
+    );
+  }
+  if (answers.length) {
+    const RESULT: Record<string, string> = { pass: "Pass", fail: "Fail", na: "N/A" };
+    await sheetFor(
+      "Checklist Results",
+      ["Instrument", "Schedule", "Date", "Version", "Step", "Result", "Value", "Limits", "Corrective action", "Completed by"],
+      [28, 26, 12, 9, 46, 10, 10, 18, 44, 22],
+      answers.map((x) => [x.instrument_name, x.schedule, x.done_day, x.version_no ?? "", x.step_text, RESULT[x.result] ?? x.result, x.value ?? "", limitsLabel(x), x.corrective_action ?? "", x.completed_by_name ?? ""]),
+      (row, v) => {
+        const color = v[5] === "Fail" ? RED : v[5] === "Pass" ? GREEN : "FF7A7974";
+        row.getCell(6).font = { name: "Calibri", size: 10, bold: v[5] !== "N/A", color: { argb: color } };
+      },
+    );
+  }
+  if (downtime.length) {
+    await sheetFor(
+      "Out of Service",
+      ["Instrument", "Out of service", "Back in service", "In this month", "Reason", "Return note"],
+      [30, 18, 18, 14, 50, 40],
+      downtime.map((x) => [x.instrument_name, String(x.down_from).replace("T", " "), x.down_until ? String(x.down_until).replace("T", " ") : "Still out", x.month_label, x.reason ?? "", x.return_note ?? ""]),
+      (row, v) => { if (v[2] === "Still out") row.getCell(3).font = { name: "Calibri", size: 10, bold: true, color: { argb: AMBER } }; },
+    );
+  }
   const voidedText = (x: any) => (x.voided_at ? `Voided ${String(x.voided_at).slice(0, 10)}: ${x.void_reason ?? ""}` : "");
   const flagVoided = (col: number) => (row: any, v: any[]) => { if (v[col - 1]) row.getCell(col).font = { name: "Calibri", size: 10, bold: true, color: { argb: RED } }; };
   if (stainEntries.length) {

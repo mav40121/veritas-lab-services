@@ -16,6 +16,11 @@
 // The stain log (Michael Q178 = 1, 2026-11-06; server/stainLog.ts) reviews here too. An instrument's grid is part of that instrument's record
 // for the month, so one signature covers its maintenance and its stain log. The manual stain log is one more record for the month, when it has
 // entries. shared/stainLogRules.ts says what counts as a problem on a stain log.
+//
+// The instrument's own record (B9, 2026-11-24; server/equipment.ts): standing entries only (a corrected or voided one is replaced by what
+// stands, and a correction or void made after signing shows as added after the review), the files on them, and time out of service. A
+// moved instrument's history stays with the lab that made it, so those months are reviewed there and not again in the new lab.
+// Its schedules (B10; server/equipmentScheduleReview.ts): a day a daily schedule has no record, and any other schedule past due, are problems.
 import type { Express } from "express";
 import bcrypt from "bcryptjs";
 import { db } from "./db";
@@ -23,8 +28,11 @@ import { labLocalDate } from "./dateLocal";
 import { logAudit } from "./audit";
 import { exportAllPlanBypass } from "./exportAllContext";
 import { isLabOwnerUser, mayAttestAsDirectorOrDesignee } from "./delegationGate";
+import { staffOwnScope } from "./competencySelfEntry";
 import { positionLabel, type DelegationPosition } from "./directorDelegation";
 import { MANUAL_ITEM_TYPE, instrumentStainMonth, manualStainMonth } from "./stainLog";
+import { durationLabel, minutesInMonth } from "../shared/equipmentPm";
+import { scheduleMonth, scheduleReportRows } from "./equipmentScheduleReview";
 
 const GATE = "equipment_record_review" as const;
 const isMonth = (v: any): v is string => typeof v === "string" && /^\d{4}-(0[1-9]|1[0-2])$/.test(v);
@@ -78,6 +86,7 @@ export function monthReviewItems(sqlite: any, labId: number, month: string) {
   const last = lastOfMonth(month);
   const today = labLocalDate(new Date().toISOString());
   const asOf = last < today ? last : today;
+  const nowLocal = labLocalDate(new Date().toISOString(), true).replace(" ", "T");
   const reviews = reviewRows(sqlite, labId, month);
   const reviewOf = (type: string, id: number) => reviews.find((r) => r.item_type === type && r.item_id === id) ?? null;
   const items: any[] = [];
@@ -98,26 +107,55 @@ export function monthReviewItems(sqlite: any, labId: number, month: string) {
   // Instruments
   const equipment = sqlite.prepare("SELECT * FROM lab_equipment WHERE lab_id = ? ORDER BY instrument_name").all(labId) as any[];
   for (const e of equipment) {
-    const events = sqlite.prepare("SELECT event_type, event_date, created_at FROM equipment_maintenance_events WHERE lab_id = ? AND equipment_id = ? AND substr(event_date, 1, 7) = ?").all(labId, e.id, month) as any[];
+    const monthEvents = sqlite.prepare(
+      "SELECT id, root_event_id, event_type, event_date, created_at, corrects_event_id, superseded_by_event_id, voided_at, completes_pm, pm_complete FROM equipment_maintenance_events WHERE lab_id = ? AND equipment_id = ? AND substr(event_date, 1, 7) = ? AND carried_from_lab_id IS NULL"
+    ).all(labId, e.id, month) as any[];
+    const events = monthEvents.filter((v) => !v.superseded_by_event_id && !v.voided_at);
+    const roots = new Set(events.map((v) => v.root_event_id ?? v.id));
+    const files = (sqlite.prepare("SELECT event_id, uploaded_at, removed_at FROM equipment_files WHERE lab_id = ? AND equipment_id = ? AND event_id IS NOT NULL AND carried_from_lab_id IS NULL").all(labId, e.id) as any[]).filter((f) => roots.has(f.event_id));
+    const attached = files.filter((f) => !f.removed_at).length;
+    const periods = sqlite.prepare("SELECT down_from, down_until FROM equipment_downtime WHERE lab_id = ? AND equipment_id = ? AND carried_from_lab_id IS NULL AND substr(down_from, 1, 7) <= ? AND (down_until IS NULL OR substr(down_until, 1, 7) >= ?)").all(labId, e.id, month, month) as any[];
+    const downMinutes = periods.reduce((n, p) => n + minutesInMonth(p, month, nowLocal), 0);
     const retired = e.status && e.status !== "active";
     const createdDay = String(e.created_at || "").slice(0, 10);
     const stain = instrumentStainMonth(sqlite, labId, e.id, month, today);
     const stainHeld = stain.entries.length + stain.voided.length;
-    if (!reviewOf("equipment", e.id) && !events.length && !stainHeld && (retired || createdDay > last)) continue;
-    const late = events.filter((v) => String(v.created_at || "").slice(0, 10) > addDays(v.event_date, 2)).length;
+    const scheduled = scheduleMonth(sqlite, labId, e, { first, last, asOf, today, periods });
+    // An instrument retired during the month still answers for a daily record it owed before it left.
+    const leftOwing = retired && String(e.removed_from_service_date || "").slice(0, 7) === month && scheduled.problems.length > 0;
+    if (!reviewOf("equipment", e.id) && !events.length && !stainHeld && ((retired && !leftOwing) || createdDay > last)) continue;
+    // A correction is made later than the entry it corrects, so it isn't itself a late entry.
+    const late = events.filter((v) => !v.corrects_event_id && String(v.created_at || "").slice(0, 10) > addDays(v.event_date, 2)).length;
+    const corrected = events.filter((v) => v.corrects_event_id).length;
+    const voidedEvents = monthEvents.filter((v) => v.voided_at).length;
+    const waiting = events.filter((v) => v.completes_pm === 1 && v.pm_complete === 0).length;
     const troubleshooting = events.filter((v) => v.event_type === "troubleshooting").length;
     const solutions = events.filter((v) => v.event_type === "solution_change").length;
-    const overdue = e.next_due_date && e.next_due_date < asOf && !retired ? e.next_due_date : null;
-    const problems = [...(overdue ? [`PM was due ${overdue} and is not recorded as done`] : []), ...stain.findings.problems];
+    // A first schedule that is daily is judged by its days, below, not by its due date.
+    const dailyPm = scheduled.lines.some((l) => l.schedule.is_primary && l.schedule.active && l.schedule.frequency === "daily");
+    const overdue = e.next_due_date && e.next_due_date < asOf && !retired && !dailyPm ? e.next_due_date : null;
+    const problems = [...(overdue ? [`PM was due ${overdue} and is not recorded as done`] : []), ...scheduled.problems, ...stain.findings.problems];
     const notes = [
       events.length ? plural(events.length, "entry", "entries") : stainHeld ? "" : "No entries this month",
       solutions ? plural(solutions, "solution change") : "",
       troubleshooting ? plural(troubleshooting, "troubleshooting entry", "troubleshooting entries") : "",
       late ? `${plural(late, "entry", "entries")} added more than 2 days after the date` : "",
+      corrected ? plural(corrected, "corrected entry", "corrected entries") : "",
+      voidedEvents ? plural(voidedEvents, "voided entry", "voided entries") : "",
+      attached ? `${plural(attached, "file")} attached` : "",
+      waiting ? `${plural(waiting, "vendor PM", "vendor PMs")} waiting for the vendor report` : "",
+      downMinutes ? `Out of service ${durationLabel(downMinutes)}` : "",
+      ...scheduled.notes,
       ...stain.findings.notes,
     ].filter(Boolean);
-    const summary = { entries: events.length, solution_changes: solutions, troubleshooting, entered_late: late, pm_overdue: overdue, ...(stain.has_log ? stain.findings.summary : {}) };
-    finish("equipment", e.id, e.instrument_name, e.location || null, !!retired, summary, problems, notes, [...events.map((v) => v.created_at), ...stain.entry_times]);
+    const summary = {
+      entries: events.length, solution_changes: solutions, troubleshooting, entered_late: late, pm_overdue: overdue,
+      ...(corrected ? { corrected } : {}), ...(voidedEvents ? { voided_entries: voidedEvents } : {}), ...(attached ? { files_attached: attached } : {}),
+      ...(waiting ? { vendor_reports_waiting: waiting } : {}), ...(downMinutes ? { out_of_service_minutes: downMinutes } : {}),
+      ...(scheduled.summary.length ? { schedules: scheduled.summary } : {}), ...(stain.has_log ? stain.findings.summary : {}),
+    };
+    finish("equipment", e.id, e.instrument_name, e.location || null, !!retired, summary, problems, notes,
+      [...events.map((v) => v.created_at), ...monthEvents.filter((v) => v.voided_at).map((v) => v.voided_at), ...files.map((f) => f.uploaded_at), ...files.filter((f) => f.removed_at).map((f) => f.removed_at), ...stain.entry_times]);
   }
 
   // Temperature and humidity units
@@ -272,10 +310,24 @@ export function registerMaintainRecordReviewRoutes(app: Express, authMiddleware:
         WHERE r.lab_id = ? AND substr(r.reading_date, 1, 7) = ? ORDER BY u.name, r.reading_date, r.reading_time, r.id`
     ).all(labId, month) as any[];
     const events = db0.prepare(
-      `SELECT e.instrument_name, v.event_type, v.event_date, v.performed_by, v.notes
+      `SELECT e.instrument_name, v.event_type, v.event_date, v.performed_by, v.notes, v.logged_by_name, v.by_vendor, v.vendor_company, v.vendor_technician, v.cost,
+              v.completes_pm, v.pm_complete, v.corrected_at, v.corrected_by_name, v.correction_reason, v.voided_at, v.void_reason,
+              (SELECT GROUP_CONCAT(f.kind || char(31) || f.original_filename, char(30)) FROM equipment_files f
+                WHERE f.lab_id = v.lab_id AND f.event_id = COALESCE(v.root_event_id, v.id) AND f.removed_at IS NULL) AS files
          FROM equipment_maintenance_events v JOIN lab_equipment e ON e.id = v.equipment_id
-        WHERE v.lab_id = ? AND substr(v.event_date, 1, 7) = ? ORDER BY e.instrument_name, v.event_date, v.id`
+        WHERE v.lab_id = ? AND substr(v.event_date, 1, 7) = ? AND v.superseded_by_event_id IS NULL AND v.carried_from_lab_id IS NULL ORDER BY e.instrument_name, v.event_date, v.id`
     ).all(labId, month) as any[];
+    // A limited Staff login reads what was typed, as on paper, but not a coworker's sign-in name (server/equipment.ts).
+    const limited = !!staffOwnScope(db0, req.userId, labId, "veritamaintain");
+    if (limited) for (const e of events) { e.logged_by_name = null; e.corrected_by_name = null; }
+    const last = lastOfMonth(month);
+    const scheduled = scheduleReportRows(db0, labId, { first: `${month}-01`, last, asOf: last < today ? last : today, today });
+    if (limited) for (const a of scheduled.answers) if (a.completed_by_user_id !== req.userId) a.completed_by_name = null;
+    const nowLocal = labLocalDate(new Date().toISOString(), true).replace(" ", "T");
+    const downtime = (db0.prepare(
+      `SELECT e.instrument_name, d.down_from, d.down_until, d.reason, d.return_note FROM equipment_downtime d JOIN lab_equipment e ON e.id = d.equipment_id
+        WHERE d.lab_id = ? AND d.carried_from_lab_id IS NULL AND substr(d.down_from, 1, 7) <= ? AND (d.down_until IS NULL OR substr(d.down_until, 1, 7) >= ?) ORDER BY e.instrument_name, d.down_from`
+    ).all(labId, month, month) as any[]).map((d) => ({ ...d, month_label: durationLabel(minutesInMonth(d, month, nowLocal)) }));
     const stainEntries = db0.prepare(
       `SELECT e.instrument_name, r.name AS row_name, s.log_date, s.code, s.lot_number, s.expiration_date, s.initials, s.corrective_action, s.voided_at, s.void_reason
          FROM stain_log_entries s JOIN stain_log_rows r ON r.id = s.row_id AND r.lab_id = s.lab_id JOIN lab_equipment e ON e.id = s.equipment_id AND e.lab_id = s.lab_id
@@ -283,7 +335,7 @@ export function registerMaintainRecordReviewRoutes(app: Express, authMiddleware:
     ).all(labId, month) as any[];
     const manualEntries = db0.prepare("SELECT log_date, specimen_type, result, test_slide, initials, comments, voided_at, void_reason FROM stain_manual_entries WHERE lab_id = ? AND substr(log_date, 1, 7) = ? ORDER BY log_date, id").all(labId, month) as any[];
     const { generateMaintainReviewReport } = await import("./maintainReviewReport");
-    const buf = await generateMaintainReviewReport({ month, items, readings, events, stainEntries, manualEntries }, { labName: labRow?.lab_name || "Laboratory", cliaNumber: labRow?.clia_number || "Not on file" });
+    const buf = await generateMaintainReviewReport({ month, items, readings, events, stainEntries, manualEntries, downtime, schedules: scheduled.schedules, answers: scheduled.answers }, { labName: labRow?.lab_name || "Laboratory", cliaNumber: labRow?.clia_number || "Not on file" });
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.setHeader("Content-Disposition", `attachment; filename="VeritaMaintain_Monthly_Review_${month}.xlsx"`);
     res.send(buf);

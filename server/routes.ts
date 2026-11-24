@@ -269,6 +269,7 @@ import { assignedDocumentIds, loadReadSignContext, logStaffDocumentView, lookupD
 import { versionStandings } from "./policyVersionStanding";
 import { archivedDocumentGuard, mayOpenEarlierVersions, registerPolicyDocumentControlRoutes, type ApprovalDecision, type ApprovalDecisionInput } from "./policyDocumentControl";
 import { notifyStepSigners } from "./policyNotices";
+import { LIVE_EVENT } from "./equipment";
 import { approvedReadVersionId, approvedReadVersionSql, revisionInProgress, revisionInProgressSql, reviewOverdueSql, surveyorReadVersionId, surveyorReadVersionSql, surveyorReads, surveyorReadsSql } from "./policyApprovedVersion";
 import { assessmentTypeLabel, assessmentTypeProblem, isEvaluationProgram, normalizeRecordKind } from "@shared/competencyEvaluation";
 import { normalizeSpecimen, normalizeReportableField, specimenLabel } from "@shared/veritamapSpecimen";
@@ -22650,167 +22651,19 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     (db as any).$client.prepare("DELETE FROM pt_enrollments_v2 WHERE id = ?").run(req.params.id);
     res.json({ success: true });
   });
-  // ── MLC-1: Equipment / instrument maintenance ──────────────────────────────
-  // Per-instrument records with a next-due date + an append-only maintenance
-  // event log. Lab-scoped; gated on the same suite plan set as the other
-  // modules. maintenance_status is derived from next_due_date at read time.
-  function hasEquipmentAccess(user: any, lab?: any) {
-    if (exportAllPlanBypass(lab)) return true; // export-all job (server/exportAllContext.ts)
-    const plan = lab?.plan ?? user?.plan;
-    return ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "clinic", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(plan);
-  }
-  function equipmentStatus(nextDue: string | null): string {
-    if (!nextDue) return "none";
-    const today = labToday();
-    const days = Math.round((Date.parse(nextDue + "T00:00:00Z") - Date.parse(today + "T00:00:00Z")) / 86400000);
-    if (days < 0) return "overdue";
-    if (days <= 30) return "due_soon";
-    return "ok";
-  }
-  // "troubleshooting" (2026-10-14, St. Charles REQ-070): a problem / action / outcome record. It does not
-  // complete scheduled maintenance, so it never advances the PM next-due date.
-  // "solution_change" (2026-11-04, Q161; CAP ANP.21360): a stainer's solutions changed, filtered or added to, and by whom. It is
-  // not maintenance either, so it never moves the PM next-due date, even if a date is sent.
-  const EQUIP_EVENT_TYPES = ["calibration", "preventive_maintenance", "service", "repair", "function_check", "troubleshooting", "solution_change"];
-
-  app.get("/api/labs/:labId/equipment", authMiddleware, labScopeMiddleware, (req: any, res) => {
-    if (!hasEquipmentAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "Equipment maintenance requires a suite subscription" });
-    const sqlite = (db as any).$client;
-    const rows = sqlite.prepare("SELECT * FROM lab_equipment WHERE lab_id = ? AND status <> 'retired' ORDER BY instrument_name ASC").all(req.scope.labId) as any[];
-    res.json(rows.map(r => ({ ...r, maintenance_status: equipmentStatus(r.next_due_date) })));
-  });
-  app.post("/api/labs/:labId/equipment", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritamaintain'), (req: any, res) => {
-    if (!hasEquipmentAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "Equipment maintenance requires a suite subscription" });
-    const { instrument_name, manufacturer, model, serial_number, location, pm_interval_days, next_due_date, notes, map_instrument_id } = req.body || {};
-    if (!instrument_name || !String(instrument_name).trim()) return res.status(400).json({ error: "instrument_name required" });
-    const sqlite = (db as any).$client; const now = new Date().toISOString();
-    let linkId: number | null = null;
-    if (map_instrument_id !== undefined && map_instrument_id !== null && map_instrument_id !== "") {
-      const mi = resolveLabMapInstrument(sqlite, req.scope.labId, map_instrument_id);
-      if (!mi) return res.status(400).json({ error: "Analyzer not found on this lab's test menu" });
-      linkId = mi.id;
-    }
-    const ins = sqlite.prepare("INSERT INTO lab_equipment (lab_id, instrument_name, manufacturer, model, serial_number, location, pm_interval_days, next_due_date, status, notes, map_instrument_id, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,'active',?,?,?,?)")
-      .run(req.scope.labId, String(instrument_name).trim(), manufacturer || null, model || null, serial_number || null, location || null,
-           pm_interval_days != null && pm_interval_days !== "" ? Number(pm_interval_days) : null, next_due_date || null, notes || null, linkId, now, now);
-    const row = sqlite.prepare("SELECT * FROM lab_equipment WHERE id = ?").get(ins.lastInsertRowid) as any;
-    res.json({ ...row, maintenance_status: equipmentStatus(row.next_due_date) });
-  });
-  // MLC-1 Phase 2: equipment maintenance-due reminder config (lab-scoped). Drives
-  // the nightly engine in server/equipmentReminders.ts. Registered BEFORE
-  // /equipment/:id so the literal "reminder-config" segment is not captured by :id.
-  function readEquipmentReminderConfig(labId: number) {
-    const sqlite = (db as any).$client;
-    const row = sqlite.prepare("SELECT * FROM equipment_reminder_config WHERE lab_id = ?").get(labId) as any;
-    let recipients: any[] = [];
-    try { recipients = row ? JSON.parse(row.recipients_json || "[]") : []; } catch { recipients = []; }
-    return { lab_id: labId, enabled: row ? !!row.enabled : false, lead_days: row ? row.lead_days : 14, overdue_cadence_days: row ? row.overdue_cadence_days : 7, recipients, configured: !!row };
-  }
-  function writeEquipmentReminderConfig(labId: number, body: any) {
-    const sqlite = (db as any).$client;
-    const { enabled, lead_days, overdue_cadence_days, recipients } = body || {};
-    const enabledInt = enabled ? 1 : 0;
-    const lead = Math.max(1, Math.min(90, Number.isFinite(+lead_days) ? Math.round(+lead_days) : 14));
-    const cadence = Math.max(1, Math.min(30, Number.isFinite(+overdue_cadence_days) ? Math.round(+overdue_cadence_days) : 7));
-    let recips: { email: string; name?: string }[] = [];
-    if (Array.isArray(recipients)) {
-      recips = recipients
-        .map((r: any) => (typeof r === "string" ? { email: r } : { email: r?.email, name: r?.name }))
-        .filter((r: any) => r.email && typeof r.email === "string" && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(r.email))
-        .map((r: any) => ({ email: String(r.email).trim(), ...(r.name ? { name: String(r.name).trim() } : {}) }));
-    }
-    const now = new Date().toISOString();
-    const existing = sqlite.prepare("SELECT id FROM equipment_reminder_config WHERE lab_id = ?").get(labId) as any;
-    if (existing) {
-      sqlite.prepare("UPDATE equipment_reminder_config SET enabled=?, lead_days=?, overdue_cadence_days=?, recipients_json=?, updated_at=? WHERE lab_id=?").run(enabledInt, lead, cadence, JSON.stringify(recips), now, labId);
-    } else {
-      sqlite.prepare("INSERT INTO equipment_reminder_config (lab_id, enabled, lead_days, overdue_cadence_days, recipients_json, created_at, updated_at) VALUES (?,?,?,?,?,?,?)").run(labId, enabledInt, lead, cadence, JSON.stringify(recips), now, now);
-    }
-    return { lab_id: labId, enabled: !!enabledInt, lead_days: lead, overdue_cadence_days: cadence, recipients: recips, configured: true };
-  }
-  app.get("/api/labs/:labId/equipment/reminder-config", authMiddleware, labScopeMiddleware, (req: any, res) => {
-    if (!hasEquipmentAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "Equipment maintenance requires a suite subscription" });
-    res.json(readEquipmentReminderConfig(req.scope.labId));
-  });
-  app.put("/api/labs/:labId/equipment/reminder-config", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritamaintain'), (req: any, res) => {
-    if (!hasEquipmentAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "Equipment maintenance requires a suite subscription" });
-    res.json(writeEquipmentReminderConfig(req.scope.labId, req.body));
-  });
-  app.put("/api/labs/:labId/equipment/:id", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritamaintain'), (req: any, res) => {
-    if (!hasEquipmentAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "Equipment maintenance requires a suite subscription" });
-    const id = Number(req.params.id); const sqlite = (db as any).$client;
-    const ex = sqlite.prepare("SELECT * FROM lab_equipment WHERE id = ? AND lab_id = ?").get(id, req.scope.labId) as any;
-    if (!ex) return res.status(404).json({ error: "Equipment not found in this lab" });
-    const b = req.body || {}; const now = new Date().toISOString();
-    const keep = (v: any, cur: any) => (v !== undefined ? v : cur);
-    if (b.map_instrument_id !== undefined) {
-      let linkId: number | null = null;
-      if (b.map_instrument_id !== null && b.map_instrument_id !== "") {
-        const mi = resolveLabMapInstrument(sqlite, req.scope.labId, b.map_instrument_id);
-        if (!mi) return res.status(400).json({ error: "Analyzer not found on this lab's test menu" });
-        linkId = mi.id;
-      }
-      sqlite.prepare("UPDATE lab_equipment SET map_instrument_id = ? WHERE id = ?").run(linkId, id);
-    }
-    sqlite.prepare("UPDATE lab_equipment SET instrument_name=?, manufacturer=?, model=?, serial_number=?, location=?, pm_interval_days=?, next_due_date=?, status=?, notes=?, updated_at=? WHERE id=?")
-      .run(
-        b.instrument_name !== undefined ? String(b.instrument_name).trim() : ex.instrument_name,
-        keep(b.manufacturer, ex.manufacturer), keep(b.model, ex.model), keep(b.serial_number, ex.serial_number),
-        keep(b.location, ex.location),
-        b.pm_interval_days !== undefined ? (b.pm_interval_days !== "" ? Number(b.pm_interval_days) : null) : ex.pm_interval_days,
-        b.next_due_date !== undefined ? (b.next_due_date || null) : ex.next_due_date,
-        keep(b.status, ex.status), keep(b.notes, ex.notes), now, id,
-      );
-    const row = sqlite.prepare("SELECT * FROM lab_equipment WHERE id = ?").get(id) as any;
-    res.json({ ...row, maintenance_status: equipmentStatus(row.next_due_date) });
-  });
-  app.delete("/api/labs/:labId/equipment/:id", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritamaintain'), (req: any, res) => {
-    if (!hasEquipmentAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "Equipment maintenance requires a suite subscription" });
-    const id = Number(req.params.id); const sqlite = (db as any).$client;
-    const ex = sqlite.prepare("SELECT id FROM lab_equipment WHERE id = ? AND lab_id = ?").get(id, req.scope.labId);
-    if (!ex) return res.status(404).json({ error: "Equipment not found in this lab" });
-    // A stain log is a record the lab keeps (Q178 = 1): an instrument holding one is retired, not deleted. Rows nothing was recorded on go with it.
-    const stainEntries = (sqlite.prepare("SELECT COUNT(*) AS n FROM stain_log_entries WHERE equipment_id = ? AND lab_id = ?").get(id, req.scope.labId) as any).n;
-    if (stainEntries > 0) return res.status(409).json({ error: `This instrument holds ${stainEntries} stain log ${stainEntries === 1 ? "entry" : "entries"}, so it can't be deleted. Retire it instead.`, code: "HOLDS_STAIN_LOG", entry_count: stainEntries });
-    sqlite.prepare("DELETE FROM stain_log_rows WHERE equipment_id = ? AND lab_id = ?").run(id, req.scope.labId);
-    sqlite.prepare("DELETE FROM equipment_maintenance_events WHERE equipment_id = ?").run(id);
-    sqlite.prepare("DELETE FROM lab_equipment WHERE id = ?").run(id);
-    res.json({ ok: true });
-  });
-  app.get("/api/labs/:labId/equipment/:id/events", authMiddleware, labScopeMiddleware, (req: any, res) => {
-    if (!hasEquipmentAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "Equipment maintenance requires a suite subscription" });
-    const id = Number(req.params.id); const sqlite = (db as any).$client;
-    const ex = sqlite.prepare("SELECT id FROM lab_equipment WHERE id = ? AND lab_id = ?").get(id, req.scope.labId);
-    if (!ex) return res.status(404).json({ error: "Equipment not found in this lab" });
-    res.json(sqlite.prepare("SELECT * FROM equipment_maintenance_events WHERE equipment_id = ? ORDER BY event_date DESC, id DESC").all(id));
-  });
-  // Logging a maintenance EVENT is operational work a tech performs, so staff may do it:
-  // gated by lab membership + active subscription, NOT requireModuleEdit (which stays on
-  // add/edit/delete equipment and reminder-config, the setup actions). The equipment row
-  // is still confirmed to belong to this lab below.
-  app.post("/api/labs/:labId/equipment/:id/events", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
-    if (!hasEquipmentAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "Equipment maintenance requires a suite subscription" });
-    const id = Number(req.params.id); const sqlite = (db as any).$client;
-    const ex = sqlite.prepare("SELECT * FROM lab_equipment WHERE id = ? AND lab_id = ?").get(id, req.scope.labId) as any;
-    if (!ex) return res.status(404).json({ error: "Equipment not found in this lab" });
-    const { event_type, event_date, performed_by, next_due_date, notes } = req.body || {};
-    if (!EQUIP_EVENT_TYPES.includes(event_type)) return res.status(400).json({ error: "event_type must be one of " + EQUIP_EVENT_TYPES.join(", ") });
-    if (!event_date) return res.status(400).json({ error: "event_date required" });
-    if (event_type === "solution_change" && (!String(performed_by || "").trim() || !String(notes || "").trim())) {
-      return res.status(400).json({ error: "A solution change needs who did it and which solutions" });
-    }
-    const now = new Date().toISOString();
-    // next_due: explicit value wins; else event_date + the instrument's PM interval.
-    let nextDue: string | null = event_type === "solution_change" ? null : next_due_date || null;
-    if (!nextDue && ex.pm_interval_days && event_type !== "troubleshooting" && event_type !== "solution_change") {
-      const d = new Date(event_date + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + Number(ex.pm_interval_days));
-      nextDue = d.toISOString().slice(0, 10);
-    }
-    sqlite.prepare("INSERT INTO equipment_maintenance_events (equipment_id, lab_id, event_type, event_date, performed_by, next_due_date, notes, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)")
-      .run(id, req.scope.labId, event_type, event_date, performed_by || null, nextDue, notes || null, now, now);
-    if (nextDue) sqlite.prepare("UPDATE lab_equipment SET next_due_date = ?, updated_at = ? WHERE id = ?").run(nextDue, now, id);
-    const row = sqlite.prepare("SELECT * FROM lab_equipment WHERE id = ?").get(id) as any;
-    res.json({ ...row, maintenance_status: equipmentStatus(row.next_due_date) });
+  // ── MLC-1: Equipment / instrument maintenance (VeritaMaintain; server/equipment.ts) ──
+  const { registerEquipmentRoutes } = await import("./equipment");
+  registerEquipmentRoutes(app, {
+    authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit, hasModuleEditAccess, resolveLabMapInstrument,
+    // requireWriteAccess's rule for a lab the request isn't scoped to (the lab an instrument is moving to), trials included.
+    labAcceptsWrites: (labId: number, userId: number) => {
+      const sqlite = (db as any).$client;
+      const lab = sqlite.prepare("SELECT subscription_expires_at, is_trial FROM labs WHERE id = ?").get(labId) as any;
+      if (!lab) return false;
+      if (Number(lab.is_trial) === 1 && lab.subscription_expires_at && new Date() >= new Date(lab.subscription_expires_at)) return false;
+      const level = getAccessLevel(storage.getUserById(userId), { subscription_expires_at: laterExpiry(lab.subscription_expires_at, orgSubscriptionExpiryForLab(sqlite, labId)) });
+      return level !== "read_only" && level !== "locked";
+    },
   });
 
   // GET /api/labs/:labId/instruments/:mapInstrumentId/trail
@@ -22898,10 +22751,20 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     ).all(labId, inst.id, ...names) as any[];
     const eqIds = equipment.map((e) => e.id);
     const maintenance = eqIds.length ? sqlite.prepare(
-      `SELECT ev.id, ev.equipment_id, ev.event_type, ev.event_date, ev.performed_by, ev.next_due_date, ev.notes, e.instrument_name
+      `SELECT ev.id, ev.equipment_id, ev.event_type, ev.event_date, ev.performed_by, ev.next_due_date, ev.notes, e.instrument_name,
+              ev.by_vendor, ev.vendor_company, ev.vendor_technician, ev.completes_pm, ev.pm_complete, ev.corrected_at, ev.correction_reason, ev.carried_from_lab_name,
+              (SELECT COUNT(*) FROM equipment_files f WHERE f.lab_id = ev.lab_id AND f.event_id = COALESCE(ev.root_event_id, ev.id) AND f.removed_at IS NULL) AS file_count
        FROM equipment_maintenance_events ev JOIN lab_equipment e ON e.id = ev.equipment_id
-       WHERE ev.lab_id = ? AND ev.equipment_id IN (${eqIds.map(() => "?").join(",")}) AND ev.event_date >= ?
+       WHERE ev.lab_id = ? AND ev.equipment_id IN (${eqIds.map(() => "?").join(",")}) AND ev.event_date >= ? AND ${LIVE_EVENT("ev.")}
        ORDER BY ev.event_date DESC, ev.id DESC`
+    ).all(labId, ...eqIds, since) as any[] : [];
+
+    // Out of service periods that touch the window, on the same trail.
+    const downtime = eqIds.length ? sqlite.prepare(
+      `SELECT d.id, d.equipment_id, d.down_from, d.down_until, d.reason, d.return_note, e.instrument_name
+       FROM equipment_downtime d JOIN lab_equipment e ON e.id = d.equipment_id
+       WHERE d.lab_id = ? AND d.equipment_id IN (${eqIds.map(() => "?").join(",")}) AND (d.down_until IS NULL OR substr(d.down_until, 1, 10) >= ?)
+       ORDER BY d.down_from DESC`
     ).all(labId, ...eqIds, since) as any[] : [];
 
     const rejections = failures.filter((f) => f.has_rejection);
@@ -22922,6 +22785,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       failures,
       equipment,
       maintenance,
+      downtime,
     });
   });
 

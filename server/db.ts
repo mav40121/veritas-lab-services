@@ -5,6 +5,7 @@ import { OWNER_EMAIL, OWNER_CLIA } from "./constants";
 import { existsSync as _dbExistsSync } from "fs";
 import { classifyExistingNoPhiAcknowledgments } from "./noPhiAcknowledgment";
 import { seedLabsAlreadyWorkingTheOldWay } from "./policyReadSignSeed";
+import { backfillPrimarySchedules } from "./equipmentScheduleData";
 import { backfillApprovedVersions } from "./policyApprovedVersion";
 
 // Use /data volume if available (Railway persistent volume), otherwise local
@@ -4648,9 +4649,249 @@ sqlite.exec(`
     // 2026-10-08: link an equipment record to the analyzer on the VeritaMap test
     // menu, so its calibration and maintenance join that analyzer's QC trail.
     if (!eqCols.includes("map_instrument_id")) sqlite.exec("ALTER TABLE lab_equipment ADD COLUMN map_instrument_id INTEGER");
+    // B9 (2026-11-24): the equipment record. Dates in and out of service, who retired it and why, vendor and contract, the IFU,
+    // and, when an instrument moved between two labs of one organization, where it came from and where it went.
+    for (const [c, t] of [["placed_in_service_date", "TEXT"], ["removed_from_service_date", "TEXT"], ["removed_from_service_reason", "TEXT"],
+      ["retired_at", "TEXT"], ["retired_by_user_id", "INTEGER"], ["retired_by_name", "TEXT"],
+      ["vendor_name", "TEXT"], ["service_contract", "TEXT"], ["ifu_url", "TEXT"], ["ifu_document_id", "INTEGER"],
+      ["moved_from_lab_id", "INTEGER"], ["moved_from_lab_name", "TEXT"], ["moved_from_equipment_id", "INTEGER"], ["moved_in_at", "TEXT"],
+      ["moved_to_lab_id", "INTEGER"], ["moved_to_lab_name", "TEXT"], ["moved_to_equipment_id", "INTEGER"], ["moved_out_at", "TEXT"], ["move_note", "TEXT"]] as const) {
+      if (!eqCols.includes(c)) { try { sqlite.exec(`ALTER TABLE lab_equipment ADD COLUMN ${c} ${t}`); } catch {} }
+    }
     const evCols = (sqlite.prepare("PRAGMA table_info(equipment_maintenance_events)").all() as { name: string }[]).map(c => c.name);
-    void evCols; // Future ALTER TABLE equipment_maintenance_events ADD COLUMN ... blocks go here.
+    // B9: who was signed in, whether it completed PM and what that did to the due date, the vendor, the cost, and the append-only
+    // correction: a corrected event keeps its original row (superseded_by_event_id), a void keeps the row with its reason.
+    // completes_pm is empty on an entry from before this, when the type alone decided. carried_from_* marks a moved instrument's history.
+    for (const [c, t] of [["logged_by_user_id", "INTEGER"], ["logged_by_name", "TEXT"],
+      ["completes_pm", "INTEGER"], ["pm_complete", "INTEGER"], ["pm_completed_at", "TEXT"], ["due_before", "TEXT"], ["pm_typed_due", "TEXT"], ["pm_allow_earlier", "INTEGER"],
+      ["cost", "REAL"], ["by_vendor", "INTEGER"], ["vendor_company", "TEXT"], ["vendor_technician", "TEXT"], ["vendor_report_attached", "INTEGER"],
+      ["root_event_id", "INTEGER"], ["corrects_event_id", "INTEGER"], ["superseded_by_event_id", "INTEGER"],
+      ["correction_reason", "TEXT"], ["corrected_by_user_id", "INTEGER"], ["corrected_by_name", "TEXT"], ["corrected_at", "TEXT"],
+      ["voided_at", "TEXT"], ["voided_by_user_id", "INTEGER"], ["voided_by_name", "TEXT"], ["void_reason", "TEXT"],
+      ["carried_from_lab_id", "INTEGER"], ["carried_from_lab_name", "TEXT"], ["carried_from_event_id", "INTEGER"]] as const) {
+      if (!evCols.includes(c)) { try { sqlite.exec(`ALTER TABLE equipment_maintenance_events ADD COLUMN ${c} ${t}`); } catch {} }
+    }
   } catch {}
+}
+
+// B9 (2026-11-24; server/equipment.ts): files on an instrument or one of its events (bytes in the row, like VeritaLab's certificate
+// documents), the periods an instrument was out of service, and the lab's VeritaMaintain settings. A removed file keeps its row and
+// loses its bytes, so a file holding patient information can be taken out and the record still says it was there.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS equipment_files (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    equipment_id INTEGER NOT NULL,
+    event_id INTEGER,
+    kind TEXT NOT NULL DEFAULT 'other',
+    original_filename TEXT NOT NULL,
+    mime_type TEXT,
+    file_size INTEGER,
+    file_data BLOB,
+    uploaded_by_user_id INTEGER,
+    uploaded_by_name TEXT,
+    uploaded_at TEXT NOT NULL DEFAULT (datetime('now')),
+    removed_at TEXT,
+    removed_by_user_id INTEGER,
+    removed_by_name TEXT,
+    removal_reason TEXT,
+    carried_from_lab_id INTEGER,
+    carried_from_lab_name TEXT
+  );
+  CREATE TABLE IF NOT EXISTS equipment_downtime (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    equipment_id INTEGER NOT NULL,
+    down_from TEXT NOT NULL,
+    down_until TEXT,
+    reason TEXT NOT NULL,
+    return_note TEXT,
+    started_by_user_id INTEGER,
+    started_by_name TEXT,
+    ended_by_user_id INTEGER,
+    ended_by_name TEXT,
+    carried_from_lab_id INTEGER,
+    carried_from_lab_name TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE TABLE IF NOT EXISTS maintain_settings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL UNIQUE,
+    require_vendor_report INTEGER NOT NULL DEFAULT 0,
+    updated_by_user_id INTEGER,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_equipment_files_equip ON equipment_files(lab_id, equipment_id);
+  CREATE INDEX IF NOT EXISTS idx_equipment_files_event ON equipment_files(event_id);
+  CREATE INDEX IF NOT EXISTS idx_equipment_downtime_equip ON equipment_downtime(lab_id, equipment_id);
+`);
+{
+  // NEW DB TABLE RULE: an older live copy gets any missing columns.
+  const names = (rows: unknown[]) => (rows as { name: string }[]).map((c) => c.name);
+  try {
+    const fileCols = names(sqlite.prepare("PRAGMA table_info(equipment_files)").all());
+    for (const [c, t] of [["event_id", "INTEGER"], ["kind", "TEXT NOT NULL DEFAULT 'other'"], ["mime_type", "TEXT"], ["file_size", "INTEGER"], ["file_data", "BLOB"],
+      ["uploaded_by_user_id", "INTEGER"], ["uploaded_by_name", "TEXT"], ["removed_at", "TEXT"], ["removed_by_user_id", "INTEGER"], ["removed_by_name", "TEXT"], ["removal_reason", "TEXT"],
+      ["carried_from_lab_id", "INTEGER"], ["carried_from_lab_name", "TEXT"]] as const) {
+      if (!fileCols.includes(c)) { try { sqlite.exec(`ALTER TABLE equipment_files ADD COLUMN ${c} ${t}`); } catch {} }
+    }
+    const downCols = names(sqlite.prepare("PRAGMA table_info(equipment_downtime)").all());
+    for (const [c, t] of [["down_until", "TEXT"], ["return_note", "TEXT"], ["started_by_user_id", "INTEGER"], ["started_by_name", "TEXT"], ["ended_by_user_id", "INTEGER"],
+      ["ended_by_name", "TEXT"], ["carried_from_lab_id", "INTEGER"], ["carried_from_lab_name", "TEXT"]] as const) {
+      if (!downCols.includes(c)) { try { sqlite.exec(`ALTER TABLE equipment_downtime ADD COLUMN ${c} ${t}`); } catch {} }
+    }
+    const setCols = names(sqlite.prepare("PRAGMA table_info(maintain_settings)").all());
+    for (const [c, t] of [["require_vendor_report", "INTEGER NOT NULL DEFAULT 0"], ["updated_by_user_id", "INTEGER"]] as const) {
+      if (!setCols.includes(c)) { try { sqlite.exec(`ALTER TABLE maintain_settings ADD COLUMN ${c} ${t}`); } catch {} }
+    }
+  } catch {}
+}
+
+// B10 (2026-11-24; server/equipmentSchedules.ts, server/equipmentScheduleData.ts): an instrument's schedules, their checklists by version,
+// and each completion with its steps as they were. The first schedule (is_primary) is the single PM interval instruments had before;
+// lab_equipment keeps its columns as that schedule's mirror. Editing a checklist adds a version; a completion's rows are never rewritten.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS equipment_schedules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    equipment_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    schedule_type TEXT NOT NULL DEFAULT 'preventive_maintenance',
+    frequency TEXT NOT NULL DEFAULT 'manual',
+    interval_days INTEGER,
+    days_of_week TEXT,
+    days_history TEXT,
+    past_spans TEXT,
+    next_due_date TEXT,
+    recipients_json TEXT NOT NULL DEFAULT '[]',
+    sop_document_id INTEGER,
+    is_primary INTEGER NOT NULL DEFAULT 0,
+    active INTEGER NOT NULL DEFAULT 1,
+    starts_on TEXT,
+    ended_on TEXT,
+    ended_at TEXT,
+    ended_by_user_id INTEGER,
+    ended_by_name TEXT,
+    end_reason TEXT,
+    created_by_user_id INTEGER,
+    created_by_name TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE TABLE IF NOT EXISTS equipment_checklist_versions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    equipment_id INTEGER NOT NULL,
+    schedule_id INTEGER NOT NULL,
+    version_no INTEGER NOT NULL,
+    change_note TEXT,
+    created_by_user_id INTEGER,
+    created_by_name TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE TABLE IF NOT EXISTS equipment_checklist_steps (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    version_id INTEGER NOT NULL,
+    position INTEGER NOT NULL DEFAULT 0,
+    step_text TEXT NOT NULL,
+    kind TEXT NOT NULL DEFAULT 'check',
+    unit TEXT,
+    min_value REAL,
+    max_value REAL
+  );
+  CREATE TABLE IF NOT EXISTS equipment_schedule_completions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    equipment_id INTEGER NOT NULL,
+    schedule_id INTEGER NOT NULL,
+    event_id INTEGER NOT NULL,
+    checklist_version_id INTEGER,
+    checklist_version_no INTEGER,
+    done_on TEXT NOT NULL,
+    completed_by_user_id INTEGER,
+    completed_by_name TEXT,
+    step_count INTEGER NOT NULL DEFAULT 0,
+    failed_steps INTEGER NOT NULL DEFAULT 0,
+    counts INTEGER NOT NULL DEFAULT 1,
+    counted_at TEXT,
+    due_before TEXT,
+    due_set TEXT,
+    typed_due TEXT,
+    allow_earlier INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    voided_at TEXT,
+    voided_by_user_id INTEGER,
+    voided_by_name TEXT,
+    void_reason TEXT,
+    carried_from_lab_id INTEGER,
+    carried_from_lab_name TEXT
+  );
+  CREATE TABLE IF NOT EXISTS equipment_checklist_results (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    completion_id INTEGER NOT NULL,
+    step_id INTEGER,
+    position INTEGER NOT NULL DEFAULT 0,
+    step_text TEXT NOT NULL,
+    kind TEXT NOT NULL DEFAULT 'check',
+    unit TEXT,
+    min_value REAL,
+    max_value REAL,
+    result TEXT NOT NULL,
+    value REAL,
+    corrective_action TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_equip_schedules_equip ON equipment_schedules(lab_id, equipment_id);
+  CREATE INDEX IF NOT EXISTS idx_equip_checklist_versions ON equipment_checklist_versions(schedule_id, version_no);
+  CREATE INDEX IF NOT EXISTS idx_equip_checklist_steps ON equipment_checklist_steps(version_id, position);
+  CREATE INDEX IF NOT EXISTS idx_equip_completions_schedule ON equipment_schedule_completions(lab_id, schedule_id);
+  CREATE INDEX IF NOT EXISTS idx_equip_completions_event ON equipment_schedule_completions(event_id);
+  CREATE INDEX IF NOT EXISTS idx_equip_checklist_results ON equipment_checklist_results(completion_id, position);
+`);
+{
+  // NEW DB TABLE RULE: an older live copy gets any missing columns.
+  const names = (rows: unknown[]) => (rows as { name: string }[]).map((c) => c.name);
+  try {
+    const sc = names(sqlite.prepare("PRAGMA table_info(equipment_schedules)").all());
+    // days_of_week: the days a daily schedule is due, "1,2,3,4,5" (0 = Sunday); empty is every day. days_history: a small JSON list on the row,
+    // [{"from": day, "days": "..."}], written only when the days change, so the days before a change are judged by what was in force then. It
+    // is on the row rather than a table of its own because it belongs to one schedule, is read with it, and goes wherever the row goes.
+    for (const [c, t] of [["days_of_week", "TEXT"], ["days_history", "TEXT"], ["past_spans", "TEXT"], ["recipients_json", "TEXT NOT NULL DEFAULT '[]'"], ["sop_document_id", "INTEGER"], ["is_primary", "INTEGER NOT NULL DEFAULT 0"], ["active", "INTEGER NOT NULL DEFAULT 1"], ["starts_on", "TEXT"],
+      ["ended_on", "TEXT"], ["ended_at", "TEXT"], ["ended_by_user_id", "INTEGER"], ["ended_by_name", "TEXT"], ["end_reason", "TEXT"], ["created_by_user_id", "INTEGER"], ["created_by_name", "TEXT"]] as const) {
+      if (!sc.includes(c)) { try { sqlite.exec(`ALTER TABLE equipment_schedules ADD COLUMN ${c} ${t}`); } catch {} }
+    }
+    const cv = names(sqlite.prepare("PRAGMA table_info(equipment_checklist_versions)").all());
+    for (const [c, t] of [["change_note", "TEXT"], ["created_by_user_id", "INTEGER"], ["created_by_name", "TEXT"]] as const) {
+      if (!cv.includes(c)) { try { sqlite.exec(`ALTER TABLE equipment_checklist_versions ADD COLUMN ${c} ${t}`); } catch {} }
+    }
+    const cs = names(sqlite.prepare("PRAGMA table_info(equipment_checklist_steps)").all());
+    for (const [c, t] of [["kind", "TEXT NOT NULL DEFAULT 'check'"], ["unit", "TEXT"], ["min_value", "REAL"], ["max_value", "REAL"]] as const) {
+      if (!cs.includes(c)) { try { sqlite.exec(`ALTER TABLE equipment_checklist_steps ADD COLUMN ${c} ${t}`); } catch {} }
+    }
+    const cc = names(sqlite.prepare("PRAGMA table_info(equipment_schedule_completions)").all());
+    for (const [c, t] of [["checklist_version_id", "INTEGER"], ["checklist_version_no", "INTEGER"], ["step_count", "INTEGER NOT NULL DEFAULT 0"], ["failed_steps", "INTEGER NOT NULL DEFAULT 0"], ["counts", "INTEGER NOT NULL DEFAULT 1"],
+      ["counted_at", "TEXT"], ["due_before", "TEXT"], ["due_set", "TEXT"], ["typed_due", "TEXT"], ["allow_earlier", "INTEGER NOT NULL DEFAULT 0"], ["voided_at", "TEXT"], ["voided_by_user_id", "INTEGER"], ["voided_by_name", "TEXT"],
+      ["void_reason", "TEXT"], ["carried_from_lab_id", "INTEGER"], ["carried_from_lab_name", "TEXT"]] as const) {
+      if (!cc.includes(c)) { try { sqlite.exec(`ALTER TABLE equipment_schedule_completions ADD COLUMN ${c} ${t}`); } catch {} }
+    }
+    const cr = names(sqlite.prepare("PRAGMA table_info(equipment_checklist_results)").all());
+    for (const [c, t] of [["kind", "TEXT NOT NULL DEFAULT 'check'"], ["unit", "TEXT"], ["min_value", "REAL"], ["max_value", "REAL"], ["value", "REAL"], ["corrective_action", "TEXT"]] as const) {
+      if (!cr.includes(c)) { try { sqlite.exec(`ALTER TABLE equipment_checklist_results ADD COLUMN ${c} ${t}`); } catch {} }
+    }
+    // The email when last month's review isn't signed by the 5th (server/maintainReviewDue.ts): off until a lab turns it on.
+    const ms = names(sqlite.prepare("PRAGMA table_info(maintain_settings)").all());
+    for (const [c, t] of [["review_due_email", "INTEGER NOT NULL DEFAULT 0"], ["review_due_last_period", "TEXT"]] as const) {
+      if (!ms.includes(c)) { try { sqlite.exec(`ALTER TABLE maintain_settings ADD COLUMN ${c} ${t}`); } catch {} }
+    }
+    // Each instrument's single PM interval becomes its first schedule. No due date moves.
+    const made = backfillPrimarySchedules(sqlite);
+    if (made) console.log(`[equipment-schedules] gave ${made} instrument(s) their first schedule from the PM interval they had`);
+  } catch (err: any) {
+    console.error("[equipment-schedules] migration failed:", err?.message || err);
+  }
 }
 
 // 2026-10-14 VeritaMaintain temperature logs (St. Charles REQ-068; server/temperatureLogs.ts). Storage units
@@ -4998,7 +5239,8 @@ sqlite.exec(`
     const cfgCols = (sqlite.prepare("PRAGMA table_info(equipment_reminder_config)").all() as { name: string }[]).map(c => c.name);
     void cfgCols; // Future ALTER TABLE equipment_reminder_config ADD COLUMN ... blocks go here.
     const logCols = (sqlite.prepare("PRAGMA table_info(equipment_reminder_log)").all() as { name: string }[]).map(c => c.name);
-    void logCols; // Future ALTER TABLE equipment_reminder_log ADD COLUMN ... blocks go here.
+    // B10: which schedule a reminder was for. Rows from before are the instrument's first schedule.
+    if (!logCols.includes("schedule_id")) sqlite.exec("ALTER TABLE equipment_reminder_log ADD COLUMN schedule_id INTEGER");
   } catch {}
 }
 

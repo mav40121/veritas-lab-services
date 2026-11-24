@@ -21,7 +21,8 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { ArrowLeft, AlertTriangle, CheckCircle2, Clock, Wrench, Printer, ClipboardList } from "lucide-react";
-import { labStampLabel } from "@/lib/labDate";
+import { labDayOf, labStampLabel } from "@/lib/labDate";
+import { durationLabel, EQUIP_EVENT_LABEL, minutesBetween } from "@shared/equipmentPm";
 
 interface Violation { id: number; rule_code: string; severity: "warning" | "rejection"; detail: string | null }
 interface Finding { id: number; status?: string; signed_by?: string | null; signed_at?: string | null; completion_date?: string | null }
@@ -64,7 +65,16 @@ interface MaintEvent {
   next_due_date: string | null;
   notes: string | null;
   instrument_name: string;
+  vendor_company?: string | null;
+  vendor_technician?: string | null;
+  completes_pm?: number | null;
+  pm_complete?: number | null;
+  corrected_at?: string | null;
+  correction_reason?: string | null;
+  carried_from_lab_name?: string | null;
+  file_count?: number;
 }
+interface Downtime { id: number; instrument_name: string; down_from: string; down_until: string | null; reason: string; return_note: string | null }
 interface Trail {
   instrument: { id: number; instrument_name: string; nickname: string | null; serial_number: string | null; map_name: string | null };
   period: { since: string; days: number };
@@ -75,18 +85,10 @@ interface Trail {
   failures: Failure[];
   equipment: { id: number; instrument_name: string }[];
   maintenance: MaintEvent[];
+  downtime?: Downtime[];
 }
 
-const EVENT_LABEL: Record<string, string> = {
-  calibration: "Calibration",
-  preventive_maintenance: "Preventive maintenance",
-  pm: "Preventive maintenance",
-  service: "Service",
-  repair: "Repair",
-  function_check: "Function check",
-  troubleshooting: "Troubleshooting",
-  solution_change: "Solution change",
-};
+const EVENT_LABEL = EQUIP_EVENT_LABEL;
 
 function Tile({ label, value, tone }: { label: string; value: number; tone?: "bad" | "good" | "warn" }) {
   const color = tone === "bad" && value > 0 ? "text-red-700 dark:text-red-400"
@@ -126,11 +128,12 @@ export default function InstrumentTrailPage() {
   const title = inst ? (inst.nickname ? `${inst.nickname} (${inst.instrument_name})` : inst.instrument_name) : "Analyzer";
 
   // One timeline, newest first: QC failures and maintenance events interleaved by date.
-  type Item = { kind: "qc"; date: string; key: string; f: Failure } | { kind: "maint"; date: string; key: string; m: MaintEvent };
+  type Item = { kind: "qc"; date: string; key: string; f: Failure } | { kind: "maint"; date: string; key: string; m: MaintEvent } | { kind: "down"; date: string; key: string; d: Downtime };
   const items: Item[] = trail
     ? [
         ...trail.failures.map((f) => ({ kind: "qc" as const, date: `${f.result_date} ${f.run_time || ""}`, key: `qc-${f.id}`, f })),
         ...trail.maintenance.map((m) => ({ kind: "maint" as const, date: m.event_date, key: `m-${m.id}`, m })),
+        ...(trail.downtime ?? []).map((d) => ({ kind: "down" as const, date: d.down_from.replace("T", " "), key: `d-${d.id}`, d })),
       ].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
     : [];
 
@@ -252,7 +255,7 @@ export default function InstrumentTrailPage() {
                         </ul>
                       )}
                     </li>
-                  ) : (
+                  ) : it.kind === "maint" ? (
                     <li key={it.key} className="rounded-lg border border-border p-3" data-testid={`trail-maint-${it.m.id}`}>
                       <div className="flex flex-wrap items-center gap-2 text-sm">
                         <Wrench className="h-4 w-4 text-teal-700" />
@@ -260,8 +263,24 @@ export default function InstrumentTrailPage() {
                         <span>{EVENT_LABEL[it.m.event_type] || it.m.event_type}</span>
                         {it.m.performed_by && <span className="text-muted-foreground">by {it.m.performed_by}</span>}
                         {it.m.next_due_date && <span className="text-xs text-muted-foreground">next due {it.m.next_due_date}</span>}
+                        {(it.m.vendor_company || it.m.vendor_technician) && <span className="text-xs text-muted-foreground">{[it.m.vendor_company, it.m.vendor_technician].filter(Boolean).join(", ")}</span>}
+                        {it.m.file_count ? <Badge variant="outline" className="text-muted-foreground">{it.m.file_count} file{it.m.file_count === 1 ? "" : "s"} attached</Badge> : null}
+                        {it.m.completes_pm === 1 && it.m.pm_complete === 0 && <Badge variant="outline" className="bg-amber-500/10 text-amber-800 border-amber-500/30 dark:text-amber-300">Waiting for the vendor report</Badge>}
+                        {it.m.carried_from_lab_name && <span className="text-xs text-muted-foreground">recorded at {it.m.carried_from_lab_name}</span>}
                       </div>
                       {it.m.notes && <div className="text-sm mt-1 whitespace-pre-wrap">{it.m.notes}</div>}
+                      {it.m.corrected_at && <div className="text-xs text-muted-foreground mt-1">Corrected {labDayOf(it.m.corrected_at)}: {it.m.correction_reason}</div>}
+                    </li>
+                  ) : (
+                    <li key={it.key} className="rounded-lg border border-border p-3" data-testid={`trail-down-${it.d.id}`}>
+                      <div className="flex flex-wrap items-center gap-2 text-sm">
+                        <Clock className="h-4 w-4 text-amber-700 dark:text-amber-400" />
+                        <span className="font-medium">{it.d.down_from.replace("T", " ")}</span>
+                        <span>Out of service</span>
+                        <span className="text-xs text-muted-foreground">{it.d.down_until ? `until ${it.d.down_until.replace("T", " ")} (${durationLabel(minutesBetween(it.d.down_from, it.d.down_until))})` : "still out"}</span>
+                      </div>
+                      <div className="text-sm mt-1">{it.d.reason}</div>
+                      {it.d.return_note && <div className="text-xs text-muted-foreground mt-0.5">Back in service: {it.d.return_note}</div>}
                     </li>
                   ))}
                 </ol>
