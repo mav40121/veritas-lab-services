@@ -378,6 +378,17 @@ jobs:
         # Michael 2026-11-04 (Q161 = 1): the medical director or a named designee signs each record for a month; a problem needs a
         # corrective action; what was signed is kept, and a later entry shows as added after the review.
         run: npm run test:maintain-monthly-review
+      - name: Run VeritaMaintain equipment record integration test
+        # Only an entry that completes PM moves the PM due date, never earlier unless the person says so; corrections keep the original row;
+        # files, out of service time, retire and restore, a move between labs of one organization; export and purge of every new table.
+        run: npm run test:equipment-record
+      - name: Run VeritaMaintain schedules and checklists integration test
+        # Several schedules per instrument, the days a daily one is due, checklist versions, the digest per schedule, the review due email,
+        # days with no record on the monthly review, and who may change or complete one.
+        run: npm run test:equipment-schedules
+      - name: Run VeritaMaintain schedule migration integration test
+        # Booting on a database from before schedules moves no due date and gives each instrument its first schedule once.
+        run: npm run test:maintain-schedule-migration
       - name: Run VeritaMaintain stain log integration test
         # Michael 2026-11-06 (Q178 = 1): a month grid with the lab's own rows and codes, lot and expiration on a stain change, a manual
         # list with no specimen number, one review with the rest of VeritaMaintain, Staff record, and the ROSE blank form in VeritaDC.
