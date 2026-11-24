@@ -292,8 +292,8 @@ app.use((req, res, next) => {
 
   // Schedule daily VeritaPolicy review-reminder dispatch at midnight UTC.
   // Mirrors the finding-reminder scheduler. Idempotent via
-  // policy_review_reminders UNIQUE constraint on (document_id, version_id,
-  // reminder_type) at the application level; safe to re-run.
+  // policy_review_reminders UNIQUE constraint on (document_id, reminder_type,
+  // review date) at the application level; safe to re-run.
   try {
     // BUG-081 (2026-10-27): the nightly job also runs the auto-expire sweep (runNightlyPolicyJobs).
     const { runNightlyPolicyJobs } = await import("./veritapolicyReminders");
