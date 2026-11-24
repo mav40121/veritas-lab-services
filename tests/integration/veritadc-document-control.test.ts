@@ -208,14 +208,17 @@ async function main() {
     await staffReadsOnly("approved", v3, [v1, v2], "MARKER-THREE");
 
     // A view-only reviewer and a surveyor link see what they saw.
-    const reviewerSees = async (label: string, current: number, others: number[]) => {
+    const reviewerSees = async (label: string, current: number, approved: number, others: number[]) => {
       const d = await detail(reviewer.token);
-      check(`1. ${label}: a view-only reviewer's list is as it was, with nothing added`, d.versions?.length === others.length + 1 && d.versions.every((v: any) => keysOf(v) === MAIN_VERSION_KEYS.join(",")) && keysOf(d) === "carried,document,versions", `${keysOf(d)} / ${keysOf(d.versions?.[0])}`);
+      check(`1. ${label}: a view-only reviewer's list is as it was, with nothing added`, d.versions?.length === others.length + new Set([current, approved]).size && d.versions.every((v: any) => keysOf(v) === MAIN_VERSION_KEYS.join(",")) && keysOf(d) === "carried,document,versions", `${keysOf(d)} / ${keysOf(d.versions?.[0])}`);
       const opened = await openV(current, reviewer.token);
       const refused = await Promise.all(others.map((v) => openV(v, reviewer.token)));
-      check(`1. ${label}: they read the document's own version and open no other`, opened.status === 200 && keysOf(opened.body) === "format,html,messages,tampered" && refused.every((r) => r.status === 403 && !/MARKER/.test(r.text)), `${opened.status} ${refused.map((r) => r.status).join(",")}`);
+      // B8: the approved version is the procedure in use, so it opens for them while a newer revision is a draft or in review.
+      const inUse = await openV(approved, reviewer.token);
+      check(`1. ${label}: the approved version opens, unlabelled`, inUse.status === 200 && inUse.text.includes(MARKERS[approved]) && keysOf(inUse.body) === "format,html,messages,tampered", `HTTP ${inUse.status} ${keysOf(inUse.body)}`);
+      check(`1. ${label}: they read the document's own version and the approved one, and open no other`, opened.status === 200 && keysOf(opened.body) === "format,html,messages,tampered" && refused.every((r) => r.status === 403 && r.body.code === "EARLIER_VERSION" && !/MARKER/.test(r.text)), `${opened.status} ${refused.map((r) => r.status).join(",")}`);
     };
-    await reviewerSees("approved", v3, [v1, v2]);
+    await reviewerSees("approved", v3, v3, [v1, v2]);
     const surv = (await call("POST", `${A.P}/surveyor-links`, { label: "Made-up visit" }, A.token)).body.token as string;
     const surveyorSees = async (label: string) => {
       const listed = (await call("GET", `/api/surveyor/${surv}/policies`)).body.documents?.find((d: any) => d.id === D);
@@ -246,7 +249,7 @@ async function main() {
     check("1. a draft replaced before approval reads never approved", s[v4]?.standing === "not_approved", s[v4]?.standing);
     check("1. v1 still names v3 as the version in use", s[v1]?.in_use_label === s[v3]?.version_label);
     await staffReadsOnly("revision in progress", v3, [v1, v2, v4, v5], "MARKER-THREE");
-    await reviewerSees("revision in progress", v5, [v1, v2, v3, v4]);
+    await reviewerSees("revision in progress", v5, v3, [v1, v2, v4]);
     await surveyorSees("revision in progress");
     const neverApproved = await doc(A, "Made-up never approved", "MARKER-NEVER one");
     const na1 = row(neverApproved).current_version_id;

@@ -60,6 +60,7 @@ import { useMemberships } from "@/hooks/useMemberships";
 import { AssignPersonDialog } from "@/components/AssignPersonDialog";
 import { BulkSetDialog, CopyToLabDialog } from "@/components/ScanBulkDialogs";
 import { Checkbox } from "@/components/ui/checkbox";
+import { LinkedDocDialog, docFlag, docLabel, type LinkedDoc } from "@/components/LinkedDcDocument";
 import { labDayOf } from "@/lib/labDate";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -276,11 +277,16 @@ interface CoverageRow {
   linked_at: string;
 }
 
+// A VeritaDC document linked to an item (B8; server/inspectionLinks.ts), beside the web-address evidence.
+type DcLink = LinkedDoc & { link_id: number; checklist_item_id: number };
+
 interface EvidenceCtx {
   byItem: Record<number, CoverageRow[]>;
+  dcByItem: Record<number, DcLink[]>;
   labId: number | null;
   readOnly: boolean;
   invalidate: () => void;
+  openDoc: (d: LinkedDoc) => void;
 }
 
 const SCAN_DOC_TYPE_LABELS: Record<string, string> = {
@@ -302,18 +308,45 @@ function EvidencePicker({
   itemId,
   labId,
   alreadyLinkedDocIds,
+  alreadyLinkedDcIds,
   onClose,
   onLinked,
 }: {
   itemId: number;
   labId: number;
   alreadyLinkedDocIds: Set<number>;
+  alreadyLinkedDcIds: Set<number>;
   onClose: () => void;
   onLinked: () => void;
 }) {
   const { toast } = useToast();
   const labRoute = useLabRoute();
   const [search, setSearch] = useState("");
+  // Which evidence to pick from: the lab's VeritaDC documents, or the web addresses in the evidence library.
+  const [source, setSource] = useState<"veritadc" | "library">("veritadc");
+  const [term, setTerm] = useState("");
+  useEffect(() => { const t = setTimeout(() => setTerm(search.trim()), 250); return () => clearTimeout(t); }, [search]);
+  const dcQuery = useQuery<LinkedDoc[]>({
+    queryKey: [`/api/labs/${labId}/veritascan/policy-candidates`, term],
+    refetchOnMount: "always",
+    placeholderData: (prev) => prev,
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/api/labs/${labId}/veritascan/policy-candidates?q=${encodeURIComponent(term)}`, { headers: authHeaders() });
+      if (!res.ok) throw new Error(await responseErrorText(res, "Could not load your VeritaDC™ documents"));
+      return res.json();
+    },
+  });
+  const linkDc = useMutation({
+    mutationFn: async (documentId: number) => {
+      const res = await fetch(`${API_BASE}/api/labs/${labId}/veritascan/checklist/items/${itemId}/policy-links`, {
+        method: "POST", headers: { "Content-Type": "application/json", ...authHeaders() }, body: JSON.stringify({ document_id: documentId }),
+      });
+      if (!res.ok) throw new Error(await responseErrorText(res, "Could not link that document"));
+      return res.json();
+    },
+    onSuccess: () => { toast({ title: "Document linked" }); onLinked(); onClose(); },
+    onError: (err: Error) => toast({ title: "Could not link the document", description: err.message, variant: "destructive" }),
+  });
 
   const docsQuery = useQuery<any[]>({
     queryKey: [`/api/labs/${labId}/veritascan/documents`, "evidence-picker"],
@@ -361,20 +394,52 @@ function EvidencePicker({
           <DialogTitle>Link evidence to this item</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" size="sm" className="h-7 text-xs" variant={source === "veritadc" ? "default" : "outline"} onClick={() => setSource("veritadc")} data-testid="evidence-source-veritadc">VeritaDC™ document</Button>
+            <Button type="button" size="sm" className="h-7 text-xs" variant={source === "library" ? "default" : "outline"} onClick={() => setSource("library")} data-testid="evidence-source-library">Evidence library (web address)</Button>
+          </div>
           <p className="text-xs text-muted-foreground">
-            Attach a document from your VeritaScan&#174; evidence library. Links point to your file in
-            SharePoint, Drive, or OneDrive; VeritaAssure&#174; stores the pointer, never the file.
+            {source === "veritadc"
+              ? "Pick an approved document. The link opens its current approved version here in the app."
+              : <>Attach a document from your VeritaScan&#174; evidence library. Links point to your file in SharePoint, Drive, or OneDrive; VeritaAssure&#174; stores the pointer, never the file.</>}
           </p>
           <div className="relative">
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <Input
-              placeholder="Search the evidence library"
+              placeholder={source === "veritadc" ? "Search your documents" : "Search the evidence library"}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="h-9 pl-8"
               data-testid="input-evidence-search"
             />
           </div>
+          {source === "veritadc" ? (
+            <div className="max-h-[46vh] overflow-y-auto space-y-1">
+              {(dcQuery.data ?? []).filter((d) => !alreadyLinkedDcIds.has(d.document_id)).map((d) => (
+                <button
+                  key={d.document_id}
+                  type="button"
+                  onClick={() => linkDc.mutate(d.document_id)}
+                  disabled={linkDc.isPending}
+                  className="w-full text-left p-2 rounded border hover:bg-muted/50 transition-colors disabled:opacity-50"
+                  data-testid={`evidence-pick-dc-${d.document_id}`}
+                >
+                  <span className="flex items-center gap-1.5 text-xs font-medium">
+                    <FileText className="h-3.5 w-3.5 text-primary shrink-0" />
+                    <span className="truncate">{docLabel(d)}</span>
+                  </span>
+                  <span className="block text-[10px] text-muted-foreground mt-0.5">
+                    {docFlag(d) ?? (d.next_review_date ? `Review due ${d.next_review_date}` : "Approved")}{d.revision_in_progress ? ", a revision is in progress" : ""}
+                  </span>
+                </button>
+              ))}
+              {(dcQuery.data ?? []).filter((d) => !alreadyLinkedDcIds.has(d.document_id)).length === 0 && (
+                <p className="text-xs text-muted-foreground italic py-6 text-center">
+                  {dcQuery.isLoading ? "Loading your documents…" : dcQuery.error ? (dcQuery.error as Error).message : "No approved documents match."}
+                </p>
+              )}
+            </div>
+          ) : (
           <div className="max-h-[46vh] overflow-y-auto space-y-1">
             {filtered.map((d: any) => (
               <button
@@ -401,6 +466,7 @@ function EvidencePicker({
               </p>
             )}
           </div>
+          )}
         </div>
         <DialogFooter className="sm:justify-between gap-2">
           <Button asChild variant="ghost" size="sm">
@@ -423,7 +489,17 @@ function ItemEvidence({ itemId, ctx }: { itemId: number; ctx: EvidenceCtx }) {
   const { toast } = useToast();
   const [pickerOpen, setPickerOpen] = useState(false);
   const rows = ctx.byItem[itemId] || [];
+  const dcRows = ctx.dcByItem[itemId] || [];
   const canEdit = !ctx.readOnly && !!ctx.labId;
+  const unlinkDc = useMutation({
+    mutationFn: async (row: DcLink) => {
+      const res = await fetch(`${API_BASE}/api/labs/${ctx.labId}/veritascan/checklist/items/${itemId}/policy-links/${row.link_id}`, { method: "DELETE", headers: authHeaders() });
+      if (!res.ok) throw new Error(await responseErrorText(res, "Could not remove that link"));
+      return res.json();
+    },
+    onSuccess: () => ctx.invalidate(),
+    onError: (err: Error) => toast({ title: "Could not remove evidence", description: err.message, variant: "destructive" }),
+  });
 
   const unlinkMutation = useMutation({
     mutationFn: async (row: CoverageRow) => {
@@ -441,7 +517,7 @@ function ItemEvidence({ itemId, ctx }: { itemId: number; ctx: EvidenceCtx }) {
     onError: (err: Error) => toast({ title: "Could not remove evidence", description: err.message, variant: "destructive" }),
   });
 
-  if (rows.length === 0 && !canEdit) return null;
+  if (rows.length === 0 && dcRows.length === 0 && !canEdit) return null;
 
   return (
     <div className="mt-2 flex flex-wrap items-center gap-1.5">
@@ -449,6 +525,22 @@ function ItemEvidence({ itemId, ctx }: { itemId: number; ctx: EvidenceCtx }) {
         <Link2 className="h-3 w-3" />
         Evidence
       </span>
+      {dcRows.map((d) => (
+        <span
+          key={`dc${d.link_id}`}
+          className={`inline-flex items-center gap-1.5 max-w-full rounded-md border px-2 py-0.5 text-[11px] ${docFlag(d) ? "border-amber-400/60 bg-amber-50 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200" : "border-primary/20 bg-primary/10 text-primary"}`}
+          title={docFlag(d) ? `VeritaDC™: ${docLabel(d)}. ${docFlag(d)}` : `VeritaDC™: ${docLabel(d)}`}
+        >
+          <FileText className="h-3 w-3 shrink-0" />
+          <button type="button" className="truncate max-w-[220px] hover:underline" onClick={() => ctx.openDoc(d)} data-testid={`evidence-open-dc-${d.link_id}`}>{docLabel(d)}</button>
+          {docFlag(d) && <span className="shrink-0">({docFlag(d)})</span>}
+          {canEdit && (
+            <button type="button" onClick={() => unlinkDc.mutate(d)} disabled={unlinkDc.isPending} className="ml-0.5 opacity-70 hover:opacity-100" title="Remove this evidence link" data-testid={`evidence-unlink-dc-${d.link_id}`}>
+              <X className="h-3 w-3" />
+            </button>
+          )}
+        </span>
+      ))}
       {rows.map((row) => (
         <span
           key={row.link_id}
@@ -488,7 +580,7 @@ function ItemEvidence({ itemId, ctx }: { itemId: number; ctx: EvidenceCtx }) {
           data-testid={`evidence-add-${itemId}`}
         >
           <Plus className="h-3 w-3" />
-          {rows.length === 0 ? "Link evidence" : "Add"}
+          {rows.length === 0 && dcRows.length === 0 ? "Link evidence" : "Add"}
         </button>
       )}
       {pickerOpen && ctx.labId && (
@@ -496,6 +588,7 @@ function ItemEvidence({ itemId, ctx }: { itemId: number; ctx: EvidenceCtx }) {
           itemId={itemId}
           labId={ctx.labId}
           alreadyLinkedDocIds={new Set(rows.map((r) => r.document_id))}
+          alreadyLinkedDcIds={new Set(dcRows.map((r) => r.document_id))}
           onClose={() => setPickerOpen(false)}
           onLinked={ctx.invalidate}
         />
@@ -1261,11 +1354,31 @@ export default function VeritaScanScanPage() {
     }
     return map;
   }, [coverageQuery.data]);
+  // The VeritaDC documents linked to the checklist, once for the lab, as the web addresses above.
+  const dcLinksKey = [`/api/labs/${activeLabId}/veritascan/policy-links`];
+  const dcLinksQuery = useQuery<DcLink[]>({
+    queryKey: dcLinksKey,
+    enabled: !!activeLabId,
+    refetchOnMount: "always",
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/api/labs/${activeLabId}/veritascan/policy-links`, { headers: authHeaders() });
+      if (!res.ok) throw new Error(`Failed to load linked documents (${res.status})`);
+      return res.json();
+    },
+  });
+  const dcByItem = useMemo(() => {
+    const map: Record<number, DcLink[]> = {};
+    for (const d of dcLinksQuery.data || []) (map[d.checklist_item_id] ??= []).push(d);
+    return map;
+  }, [dcLinksQuery.data]);
+  const [openDoc, setOpenDoc] = useState<LinkedDoc | null>(null);
   const evidenceCtx: EvidenceCtx = {
     byItem: evidenceByItem,
+    dcByItem,
     labId: activeLabId ?? null,
     readOnly,
-    invalidate: () => qc.invalidateQueries({ queryKey: coverageKey }),
+    invalidate: () => { qc.invalidateQueries({ queryKey: coverageKey }); qc.invalidateQueries({ queryKey: dcLinksKey }); },
+    openDoc: setOpenDoc,
   };
 
   // ── Fetch scan items ────────────────────────────────────────────────────
@@ -1931,6 +2044,7 @@ export default function VeritaScanScanPage() {
           onClose={() => setBulkOpen(false)}
         />
       )}
+      {openDoc && activeLabId && <LinkedDocDialog labId={activeLabId} doc={openDoc} onClose={() => setOpenDoc(null)} />}
       {copyOpen && activeLabId && copyTargets && (
         <CopyToLabDialog labId={activeLabId} scanId={scanId} scanName={scanMeta?.name ?? "Scan"} labs={copyTargets.labs} onClose={() => setCopyOpen(false)} />
       )}

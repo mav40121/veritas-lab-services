@@ -499,6 +499,10 @@ jobs:
         # B7: a carried answer changes no percentage until reviewed, never an automatic mark or a teaching note; several items set with
         # one confirmed count and an audit row each; another lab of the same organization only for a system owner or admin, never across.
         run: npm run test:veritascan-carry
+      - name: Run inspection document links integration test
+        # B8: VeritaDC documents as evidence on a VeritaScan item and linked to a finding, opening the current approved version, flagged
+        # when past review or not approved; suggested SOPs with reasons, never linked by themselves; export-all and customer-purge.
+        run: npm run test:inspection-links
       - name: Run VeritaResponse legacy cleanup integration test
         # #109: dry run by default; voided-run findings close or flag (the #100 rule); old QC/AAA escalations move to
         # their entry types with due dates kept; idempotent.

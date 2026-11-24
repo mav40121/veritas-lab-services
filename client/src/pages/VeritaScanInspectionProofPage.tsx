@@ -17,6 +17,8 @@
 //   - Green: at least one active linked doc, all linked docs current
 //   - Amber: linked but at least one linked doc has an overdue review_due_date
 //   - Red: no linked docs in scope
+// The VeritaDC documents linked to an item count too (B8; server/inspectionLinks.ts): one past its review
+// date, not approved or archived makes the item amber and says so on its line.
 
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
@@ -36,6 +38,7 @@ import {
   type ScanDomain,
 } from "@/lib/veritaScanData";
 import { ArrowLeft, ExternalLink, FileText, Printer, Search } from "lucide-react";
+import { LinkedDocDialog, docFlag, docLabel, type LinkedDoc } from "@/components/LinkedDcDocument";
 
 const API_BASE = "";
 
@@ -64,6 +67,8 @@ interface CoverageLink {
   linked_at: string;
 }
 
+type DcLink = LinkedDoc & { link_id: number; checklist_item_id: number };
+
 type CoverageStatus = "green" | "amber" | "red";
 
 function isInScope(item: ScanItem, accreditor: Accreditor): boolean {
@@ -72,11 +77,12 @@ function isInScope(item: ScanItem, accreditor: Accreditor): boolean {
   return value.trim() !== "" && value.trim().toUpperCase() !== "N/A";
 }
 
-function statusOf(links: CoverageLink[] | undefined): CoverageStatus {
-  if (!links || links.length === 0) return "red";
+function statusOf(links: CoverageLink[] | undefined, dc: DcLink[] | undefined): CoverageStatus {
+  if (!links?.length && !dc?.length) return "red";
+  if (dc?.some((d) => d.state !== "current")) return "amber";
   // amber if any active linked doc has an overdue review_due_date
   const today = new Date(); today.setHours(0, 0, 0, 0);
-  for (const link of links) {
+  for (const link of links ?? []) {
     if (!link.review_due_date) continue;
     const due = new Date(link.review_due_date + "T00:00:00");
     if (due.getTime() < today.getTime()) return "amber";
@@ -84,9 +90,15 @@ function statusOf(links: CoverageLink[] | undefined): CoverageStatus {
   return "green";
 }
 
-function statusBadge(status: CoverageStatus) {
+// An item whose only trouble is a document that isn't approved (or is archived) doesn't read as a late review.
+function amberLabel(dc: DcLink[] | undefined, links: CoverageLink[] | undefined): string {
+  const late = dc?.some((d) => d.state === "past_review") || statusOf(links, undefined) === "amber";
+  return late || !dc?.some((d) => d.state !== "current") ? "Review Overdue" : "Not Approved";
+}
+
+function statusBadge(status: CoverageStatus, label?: string) {
   if (status === "green") return <Badge className="bg-green-500/10 text-green-400 border-green-500/30 border">Covered</Badge>;
-  if (status === "amber") return <Badge className="bg-amber-500/10 text-amber-400 border-amber-500/30 border">Review Overdue</Badge>;
+  if (status === "amber") return <Badge className="bg-amber-500/10 text-amber-400 border-amber-500/30 border">{label ?? "Review Overdue"}</Badge>;
   return <Badge variant="outline" className="text-red-400 border-red-500/30 bg-red-500/5">No Evidence Linked</Badge>;
 }
 
@@ -106,6 +118,24 @@ export default function VeritaScanInspectionProofPage() {
       return res.json();
     },
   });
+
+  // The VeritaDC documents linked to the checklist
+  const dcQuery = useQuery<DcLink[]>({
+    queryKey: [`/api/labs/${labId}/veritascan/policy-links`],
+    enabled: !!labId,
+    refetchOnMount: "always",
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/api/labs/${labId}/veritascan/policy-links`, { headers: authHeaders() });
+      if (!res.ok) throw new Error(`Failed to load linked documents (${res.status})`);
+      return res.json();
+    },
+  });
+  const dcByItem = useMemo(() => {
+    const map = new Map<number, DcLink[]>();
+    for (const d of dcQuery.data || []) map.set(d.checklist_item_id, [...(map.get(d.checklist_item_id) || []), d]);
+    return map;
+  }, [dcQuery.data]);
+  const [openDoc, setOpenDoc] = useState<LinkedDoc | null>(null);
 
   // Build the per-item link map once
   const linksByItem = useMemo(() => {
@@ -131,24 +161,24 @@ export default function VeritaScanInspectionProofPage() {
     };
     const matchStatus = (it: ScanItem) => {
       if (statusFilter === "all") return true;
-      const status = statusOf(linksByItem.get(it.id));
+      const status = statusOf(linksByItem.get(it.id), dcByItem.get(it.id));
       return status === statusFilter;
     };
     return filtered.filter(it => matchSearch(it) && matchStatus(it));
-  }, [accreditor, searchQ, statusFilter, linksByItem]);
+  }, [accreditor, searchQ, statusFilter, linksByItem, dcByItem]);
 
   // Per-status counts for the dashboard tiles
   const counts = useMemo(() => {
     const all = SCAN_ITEMS.filter(it => isInScope(it, accreditor));
     let green = 0, amber = 0, red = 0;
     for (const it of all) {
-      const s = statusOf(linksByItem.get(it.id));
+      const s = statusOf(linksByItem.get(it.id), dcByItem.get(it.id));
       if (s === "green") green++;
       else if (s === "amber") amber++;
       else red++;
     }
     return { total: all.length, green, amber, red };
-  }, [accreditor, linksByItem]);
+  }, [accreditor, linksByItem, dcByItem]);
 
   const accreditorMeta = ACCREDITORS.find(a => a.key === accreditor)!;
 
@@ -217,7 +247,7 @@ export default function VeritaScanInspectionProofPage() {
               </CardContent></Card>
               <Card><CardContent className="p-4">
                 <div className="text-2xl font-bold text-amber-400">{counts.amber}</div>
-                <div className="text-xs text-muted-foreground mt-0.5">Review Overdue</div>
+                <div className="text-xs text-muted-foreground mt-0.5">Review Overdue or Not Approved</div>
               </CardContent></Card>
               <Card><CardContent className="p-4">
                 <div className="text-2xl font-bold text-red-400">{counts.red}</div>
@@ -287,20 +317,31 @@ export default function VeritaScanInspectionProofPage() {
                           <tbody>
                             {items.map(it => {
                               const links = linksByItem.get(it.id);
-                              const status = statusOf(links);
+                              const dc = dcByItem.get(it.id);
+                              const status = statusOf(links, dc);
                               const citation = it[accreditorMeta.fieldName] as string;
                               return (
                                 <tr key={it.id} className="border-b border-border/40 align-top" data-testid={`row-item-${it.id}`}>
                                   <td className="py-2 pr-3 font-mono">{it.id}</td>
                                   <td className="py-2 pr-3">{it.question}</td>
                                   <td className="py-2 pr-3 text-muted-foreground">{citation}</td>
-                                  <td className="py-2 pr-3">{statusBadge(status)}</td>
+                                  <td className="py-2 pr-3">{statusBadge(status, status === "amber" ? amberLabel(dc, links) : undefined)}</td>
                                   <td className="py-2 pr-3">
-                                    {!links || links.length === 0 ? (
+                                    {!links?.length && !dc?.length ? (
                                       <span className="text-muted-foreground italic">No documents linked yet</span>
                                     ) : (
                                       <ul className="space-y-0.5">
-                                        {links.map(link => (
+                                        {(dc ?? []).map(d => (
+                                          <li key={`dc${d.link_id}`} className="flex items-start gap-2" data-testid={`proof-dc-${d.link_id}`}>
+                                            <FileText size={11} className="text-muted-foreground mt-0.5 shrink-0" />
+                                            <span>
+                                              <button type="button" className="text-primary hover:underline text-left" onClick={() => setOpenDoc(d)} data-testid={`proof-open-dc-${d.link_id}`}>{docLabel(d)}</button>
+                                              <span className="text-muted-foreground"> VeritaDC™</span>
+                                              {docFlag(d) && <span className="block font-medium text-amber-700 dark:text-amber-400" data-testid={`proof-flag-${d.link_id}`}>{docFlag(d)}</span>}
+                                            </span>
+                                          </li>
+                                        ))}
+                                        {(links ?? []).map(link => (
                                           <li key={link.link_id} className="flex items-center gap-2">
                                             <FileText size={11} className="text-muted-foreground" />
                                             <a
@@ -331,6 +372,7 @@ export default function VeritaScanInspectionProofPage() {
           </TabsContent>
         ))}
       </Tabs>
+      {openDoc && labId && <LinkedDocDialog labId={labId} doc={openDoc} onClose={() => setOpenDoc(null)} />}
     </div>
   );
 }

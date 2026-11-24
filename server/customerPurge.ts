@@ -66,6 +66,10 @@ export const PURGE_OVERRIDES: Record<string, PurgeRule> = {
   // VeritaDC email notices (server/policyNotices.ts) name the person mailed, so they go with the person too.
   policy_approval_notices: del(`lab_id ${IN("labs")} OR user_id ${IN("people")} OR for_user_id ${IN("people")}`),
   policy_sign_notices: del(`lab_id ${IN("labs")} OR user_id ${IN("people")}`),
+  // VeritaDC documents linked to a checklist item or a finding (server/inspectionLinks.ts) go with the lab, and a finding's
+  // links with the finding.
+  veritascan_item_policy_links: del(`lab_id ${IN("labs")}`),
+  finding_policy_links: del(`lab_id ${IN("labs")} OR finding_id IN (SELECT id FROM findings WHERE ${LAB_OR_OWNER("user_id")})`),
   // BUG-184: an attempt goes when its quiz, its record, its assignment or its person does (its quiz_id can't be cleared), and
   // a scan of an unknown barcode goes with the account it was made under.
   competency_quiz_results: del(`quiz_id IN (SELECT id FROM competency_quizzes WHERE ${LAB_OR_OWNER("user_id")})

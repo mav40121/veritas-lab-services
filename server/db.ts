@@ -8646,6 +8646,46 @@ sqlite.exec(`
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_surveyor_links_lab ON policy_surveyor_links(lab_id)`); } catch {}
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_surveyor_links_token ON policy_surveyor_links(token)`); } catch {}
 
+// VeritaDC documents linked to a VeritaScan checklist item and to a VeritaResponse finding (B8, 2026-11-24;
+// server/inspectionLinks.ts). A link names the document, never a version. document_id carries no declared reference, as
+// policy_share_links and the document's other children don't: deleting a document clears its links in the route, and every
+// read joins the document, so a link to one that is gone shows nothing.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS veritascan_item_policy_links (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    checklist_item_id INTEGER NOT NULL,
+    document_id INTEGER NOT NULL,
+    linked_by_user_id INTEGER,
+    linked_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(lab_id, checklist_item_id, document_id)
+  );
+  CREATE TABLE IF NOT EXISTS finding_policy_links (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    finding_id INTEGER NOT NULL,
+    document_id INTEGER NOT NULL,
+    linked_by_user_id INTEGER,
+    linked_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(finding_id, document_id),
+    FOREIGN KEY (finding_id) REFERENCES findings(id)
+  );
+`);
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(veritascan_item_policy_links)").all() as { name: string }[]).map((c) => c.name);
+  for (const [col, ddl] of [["lab_id", "INTEGER"], ["checklist_item_id", "INTEGER"], ["document_id", "INTEGER"], ["linked_by_user_id", "INTEGER"], ["linked_at", "TEXT"]] as const) {
+    if (!cols.includes(col)) sqlite.exec(`ALTER TABLE veritascan_item_policy_links ADD COLUMN ${col} ${ddl}`);
+  }
+  try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_veritascan_item_policy_links_document ON veritascan_item_policy_links(lab_id, document_id)"); } catch {}
+}
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(finding_policy_links)").all() as { name: string }[]).map((c) => c.name);
+  for (const [col, ddl] of [["lab_id", "INTEGER"], ["finding_id", "INTEGER"], ["document_id", "INTEGER"], ["linked_by_user_id", "INTEGER"], ["linked_at", "TEXT"]] as const) {
+    if (!cols.includes(col)) sqlite.exec(`ALTER TABLE finding_policy_links ADD COLUMN ${col} ${ddl}`);
+  }
+  try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_finding_policy_links_document ON finding_policy_links(lab_id, document_id)"); } catch {}
+}
+
 // VeritaDC share link for ONE document (Michael 2026-11-09; server/policyShareLinks.ts): anyone with the token reads that
 // document's current approved version without signing in, for example nursing reading the specimen collection manual.
 // The row never names a version: every read looks up the document's current version. Revoking keeps the row.

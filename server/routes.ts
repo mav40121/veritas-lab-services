@@ -899,6 +899,7 @@ export function recomputeAllStudyStatuses(): { fixed: number; skipped: number } 
 }
 import { saveScanItemRows, scanActor, scanExportNotes, scanItemRowsFromBody, SCAN_ITEM_READ_COLUMNS } from "./veritascanItems";
 import { registerVeritaScanCarryRoutes } from "./veritascanCarry";
+import { registerInspectionLinkRoutes } from "./inspectionLinks";
 import { findingStudy, registerInspectionAssignRoutes } from "./inspectionAssign";
 import { autoCompleteVeritaScanItems, autoCompleteCompetencyScanItems, auditScanAutoCompletions, linkVeritaCheckEvidence, syncCoverageScanMarks } from "./integrations";
 import { planMarkCorrection, applyMarkCorrection, CORRECTED_SOURCE, correctionKeepsLink } from "./veritascanMarkCorrection";
@@ -23422,6 +23423,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // PR #748; the duplicate handler is exactly what the fix-the-class rule
     // exists to catch. Found by scripts/audit-delete-cascades.mjs 2026-06-13.
     (db as any).$client.prepare("DELETE FROM finding_effectiveness_checks WHERE finding_id = ?").run(req.params.id);
+    (db as any).$client.prepare("DELETE FROM finding_policy_links WHERE finding_id = ?").run(req.params.id);
     (db as any).$client.prepare("DELETE FROM findings WHERE id = ?").run(req.params.id);
     res.json({ success: true });
   });
@@ -23450,6 +23452,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // checkpoints hits the FK constraint and 500s. Found in browser QA
     // 2026-06-13 when a seeded QA finding with checkpoints could not be deleted.
     sqlite.prepare("DELETE FROM finding_effectiveness_checks WHERE finding_id = ?").run(req.params.id);
+    sqlite.prepare("DELETE FROM finding_policy_links WHERE finding_id = ?").run(req.params.id);
     sqlite.prepare("DELETE FROM findings WHERE id = ?").run(req.params.id);
     res.json({ success: true });
   });
@@ -42317,6 +42320,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         "policy_approval_notices",
         "policy_signoffs",
         "policy_versions",
+        "veritascan_item_policy_links",
+        "finding_policy_links",
       ];
       const tx = sqlite.transaction(() => {
         // Surviving deletion record (document_id NULL is not matched by the
@@ -43420,9 +43425,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       if (!row) return res.status(404).json({ error: "Not found" });
       if (row.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
       // Any version but the document's own is for editors and the approvers on its route (B13). veritaDcStaffGuard has already held a
-      // limited Staff login to the approved version.
+      // limited Staff login to the approved version. The approved version, while a newer revision is a draft or in review, opens for
+      // anyone who reads the document: it is the procedure in use, and what a link to the document opens (B8).
       const opensEarlier = mayOpenEarlierVersions(sqlite, req.scope.labId, id, req.userId, hasModuleEditAccess);
-      if (!opensEarlier && !req.dcStaff && versionId !== row.current_version_id) {
+      if (!opensEarlier && !req.dcStaff && versionId !== row.current_version_id && versionId !== approvedReadVersionId(row)) {
         return res.status(403).json({ error: "Earlier versions open for VeritaDC™ editors and approvers.", code: "EARLIER_VERSION" });
       }
       let buffer: Buffer;
@@ -45093,6 +45099,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   });
   // VeritaDC read-and-sign by group (Step D; server/policyReadSign.ts).
   registerReadSignRoutes(app, { sqlite: () => (db as any).$client, authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit, hasModuleEditAccess });
+  // VeritaDC documents linked to VeritaScan items and findings, and suggested SOPs (B8, server/inspectionLinks.ts).
+  // After veritaDcStaffGuard, so the document's own "linked from" read is closed to a limited Staff login.
+  registerInspectionLinkRoutes(app, inspectionDeps);
 
   // VeritaTrack routes
   const { registerVeritaTrackRoutes } = await import('./veritatrack');
