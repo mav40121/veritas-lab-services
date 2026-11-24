@@ -50,6 +50,7 @@ import {
   Eye,
   EyeOff,
   UserRound,
+  Copy,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -57,6 +58,9 @@ import { useLabRoute } from "@/hooks/useLabRoute";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { useMemberships } from "@/hooks/useMemberships";
 import { AssignPersonDialog } from "@/components/AssignPersonDialog";
+import { BulkSetDialog, CopyToLabDialog } from "@/components/ScanBulkDialogs";
+import { Checkbox } from "@/components/ui/checkbox";
+import { labDayOf } from "@/lib/labDate";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -84,6 +88,13 @@ interface ItemState {
   // Instructional explanation shown in the Teaching View. Distinct from
   // `notes`, which is the assessment finding.
   teachingNote?: string;
+  // A carried answer nobody has reviewed (B7). `status` stays Not Assessed, so it counts nowhere, until
+  // someone gives the item a status or sets the carried answer aside (clearCarried, read by the save).
+  carriedPending?: boolean;
+  carriedStatus?: ScanStatus;
+  carriedFromName?: string;
+  carriedFromDate?: string;
+  clearCarried?: boolean;
 }
 
 // Global running-tally ordinal map. Iterates DOMAINS in display order,
@@ -500,6 +511,11 @@ interface AssignCtx {
   pick: (itemId: number) => void;
   clear: (itemId: number) => void;
   busy: boolean;
+  // Veritas support doesn't review a carried answer for the lab.
+  canReview: boolean;
+  // Selecting several items to set together; null when not selecting.
+  selected: Set<number> | null;
+  toggle: (itemIds: number[], on: boolean) => void;
 }
 
 // ─── Single checklist item row ────────────────────────────────────────────────
@@ -530,12 +546,22 @@ function ItemRow({
   const showDueDate =
     state.status === "Needs Attention" || state.status === "Immediate Action";
   const vcEvidence = isVeritaCheckEvidence(state.completionSource, state.completionLink);
+  const pending = !!state.carriedPending && state.status === "Not Assessed";
 
   return (
     <div
-      className={`px-3 py-2.5 rounded-lg mb-1 transition-colors ${rowBorderClass(state.status)}`}
+      className={`px-3 py-2.5 rounded-lg mb-1 transition-colors ${pending ? "border-l-2 border-l-sky-400 bg-sky-50/40 dark:bg-sky-950/20" : rowBorderClass(state.status)}`}
     >
       <div className="flex items-start gap-2.5">
+        {assign.selected && (
+          <Checkbox
+            className="mt-0.5 shrink-0"
+            checked={assign.selected.has(item.id)}
+            onCheckedChange={(v) => assign.toggle([item.id], v === true)}
+            aria-label={`Select item ${displayNumber}`}
+            data-testid={`select-item-${item.id}`}
+          />
+        )}
         {/* Item number (domain-relative ordinal; persistence still uses item.id) */}
         <span className="text-[11px] font-mono text-muted-foreground/60 mt-0.5 shrink-0 w-7 text-right">
           {displayNumber}
@@ -585,13 +611,38 @@ function ItemRow({
             </TooltipProvider>
           )}
 
+          {/* A carried answer: where it came from, and the two ways to deal with it. Picking any status reviews it too. */}
+          {pending && (
+            <div className="mt-1.5 rounded-md border border-dashed border-sky-400/70 px-2 py-1.5 text-xs text-sky-900 dark:text-sky-200" data-testid={`carried-${item.id}`}>
+              <span className="font-semibold">Carried from {state.carriedFromName || "an earlier scan"}{state.carriedFromDate ? `, ${labDayOf(state.carriedFromDate)}` : ""}, not yet reviewed.</span>{" "}
+              Answer there: {state.carriedStatus}{state.dueDate ? `, due ${state.dueDate}` : ""}.
+              {!rowReadOnly && assign.canReview && (
+                <span className="inline-flex flex-wrap gap-1.5 ml-1.5 align-middle">
+                  {state.carriedStatus && state.carriedStatus !== "Not Assessed" && (
+                    <button type="button" className="rounded border border-sky-500/60 px-1.5 py-0.5 hover:bg-sky-100 dark:hover:bg-sky-900/40" onClick={() => onChange({ status: state.carriedStatus as ScanStatus })} data-testid={`carried-confirm-${item.id}`}>
+                      Reviewed: {state.carriedStatus}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="rounded border border-border px-1.5 py-0.5 text-muted-foreground hover:text-foreground hover:bg-muted"
+                    onClick={() => onChange({ clearCarried: true, carriedPending: false, notes: "", owner: "", ownerUserId: null, dueDate: "" })}
+                    data-testid={`carried-clear-${item.id}`}
+                  >
+                    Set aside and start fresh
+                  </button>
+                </span>
+              )}
+            </div>
+          )}
+
           {/* Controls row */}
           <div className="flex flex-wrap items-start gap-2 mt-2">
             {/* Status */}
             <Select
               value={state.status}
               onValueChange={(v) => onChange({ status: v as ScanStatus })}
-              disabled={rowReadOnly}
+              disabled={rowReadOnly || (pending && !assign.canReview)}
             >
               <SelectTrigger
                 className={`h-7 text-xs w-40 border ${STATUS_COLORS[state.status]}`}
@@ -760,6 +811,16 @@ function DomainSection({
           <span className="text-xs text-amber-600 dark:text-amber-400">
             {stats.gap} gap{stats.gap !== 1 ? "s" : ""}
           </span>
+        )}
+        {assign.selected && listed.length > 0 && (
+          <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
+            <Checkbox
+              checked={listed.every((i) => assign.selected!.has(i.id))}
+              onCheckedChange={(v) => assign.toggle(listed.map((i) => i.id), v === true)}
+              data-testid={`select-domain-${domain}`}
+            />
+            Select these {listed.length}
+          </label>
         )}
       </div>
 
@@ -1095,8 +1156,16 @@ export default function VeritaScanScanPage() {
   // Veritas support sets a lab up but doesn't assign work in its name (server/vlsSupport.ts).
   const { data: memberships } = useMemberships();
   const viaSupport = !!memberships?.find((m) => m.labId === activeLabId)?.viaVlsSupport;
-  const [show, setShow] = useState<"all" | "mine">("all");
+  const [show, setShow] = useState<"all" | "mine" | "carried">("all");
   const [pickingFor, setPickingFor] = useState<number | null>(null);
+  // Several items set together, and this scan's answers copied to another lab (B7).
+  const [selected, setSelected] = useState<Set<number> | null>(null);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [copyOpen, setCopyOpen] = useState(false);
+  const { data: copyTargets } = useQuery<{ allowed: boolean; labs: Array<{ id: number; name: string }> }>({
+    queryKey: [`/api/labs/${activeLabId}/veritascan/copy-targets`],
+    enabled: !!activeLabId,
+  });
 
   // Local item state
   const [items, setItems] = useState<Record<number, ItemState>>(buildInitialItems);
@@ -1234,6 +1303,10 @@ export default function VeritaScanScanPage() {
           completionLink: (apiItem as any).completion_link || (apiItem as any).completionLink || undefined,
           completionNote: (apiItem as any).completion_note || (apiItem as any).completionNote || undefined,
           teachingNote: (apiItem as any).teaching_note || (apiItem as any).teachingNote || "",
+          carriedPending: !!(apiItem as any).carried_pending,
+          carriedStatus: (apiItem as any).carried_status || undefined,
+          carriedFromName: (apiItem as any).carried_from_name || undefined,
+          carriedFromDate: (apiItem as any).carried_from_date || undefined,
         };
       }
       return next;
@@ -1289,9 +1362,11 @@ export default function VeritaScanScanPage() {
     (id: number, patch: Partial<ItemState>) => {
       if (readOnly || !itemsReady) return;
       setItems((prev) => {
+        // Giving a carried item a status is its review (the server records who and when).
+        const reviewed = prev[id]?.carriedPending && patch.status && patch.status !== "Not Assessed" ? { carriedPending: false } : {};
         const next = {
           ...prev,
-          [id]: { ...prev[id], ...patch },
+          [id]: { ...prev[id], ...patch, ...reviewed },
         };
         dirtyRef.current = true;
         scheduleAutoSave(next);
@@ -1332,10 +1407,28 @@ export default function VeritaScanScanPage() {
     pick: (itemId) => setPickingFor(itemId),
     clear: (itemId) => assignMutation.mutate({ itemId, userId: null }),
     busy: assignMutation.isPending,
+    canReview: !viaSupport,
+    selected,
+    toggle: (ids, on) => setSelected((prev) => {
+      if (!prev) return prev;
+      const next = new Set(prev);
+      for (const id of ids) { if (on) next.add(id); else next.delete(id); }
+      return next;
+    }),
+  };
+  const isPending = (i: ItemState | undefined) => !!i?.carriedPending && i.status === "Not Assessed";
+  const carriedCount = SCAN_ITEMS.filter((i) => isPending(items[i.id])).length;
+  const canBulk = !readOnly && !!activeLabId && itemsReady;
+  // What the screen still holds goes first, so a save waiting on its timer can't land on top of a bulk change.
+  const flushSave = async () => {
+    if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null; }
+    if (dirtyRef.current) await saveMutation.mutateAsync(Object.values(items));
   };
   const mineCount = SCAN_ITEMS.filter((i) => items[i.id]?.ownerUserId && items[i.id].ownerUserId === assignCtx.userId).length;
   const itemVisible = useCallback(
-    (id: number) => show === "all" || (!!items[id]?.ownerUserId && items[id].ownerUserId === Number(user?.id)),
+    (id: number) => show === "all"
+      || (show === "mine" && !!items[id]?.ownerUserId && items[id].ownerUserId === Number(user?.id))
+      || (show === "carried" && !!items[id]?.carriedPending && items[id].status === "Not Assessed"),
     [show, items, user?.id],
   );
 
@@ -1594,6 +1687,13 @@ export default function VeritaScanScanPage() {
             )}
             Excel Export
           </Button>
+
+          {copyTargets?.allowed && !readOnly && (
+            <Button size="sm" variant="outline" className="w-full h-8 text-xs gap-1.5" onClick={async () => { await flushSave(); setCopyOpen(true); }} data-testid="copy-to-lab">
+              <Copy className="h-3.5 w-3.5" />
+              Copy to another lab
+            </Button>
+          )}
         </div>
       </aside>
 
@@ -1672,6 +1772,12 @@ export default function VeritaScanScanPage() {
             <FileSpreadsheet className="h-3.5 w-3.5" />
             Excel
           </Button>
+          {copyTargets?.allowed && !readOnly && (
+            <Button size="sm" variant="outline" className="flex-1 text-xs h-8 gap-1.5" onClick={async () => { await flushSave(); setCopyOpen(true); }}>
+              <Copy className="h-3.5 w-3.5" />
+              Copy to lab
+            </Button>
+          )}
         </div>
 
         {/* Desktop page title (visible in main content when sidebar present) */}
@@ -1682,6 +1788,7 @@ export default function VeritaScanScanPage() {
             </h1>
             <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
               <span>{totalAssessed}/{SCAN_ITEMS.length} assessed</span>
+              {carriedCount > 0 && <span className="text-sky-700 dark:text-sky-300" data-testid="carried-count">{carriedCount} carried, not reviewed</span>}
             </div>
             <div className="ml-auto flex items-center gap-2">
               {isTeaching && (
@@ -1739,13 +1846,24 @@ export default function VeritaScanScanPage() {
           />
         ) : (
           <>
-            {(mineCount > 0 || show !== "all") && (
+            {(mineCount > 0 || carriedCount > 0 || show !== "all" || canBulk) && (
               <div className="flex flex-wrap items-center gap-2 mb-4" data-testid="scan-show">
-                <span className="text-xs text-muted-foreground">Show</span>
-                <Button size="sm" className="h-7 text-xs" variant={show === "all" ? "default" : "outline"} onClick={() => setShow("all")} data-testid="scan-show-all">All items</Button>
-                <Button size="sm" className="h-7 text-xs" variant={show === "mine" ? "default" : "outline"} onClick={() => setShow("mine")} data-testid="scan-show-mine">Assigned to me ({mineCount})</Button>
+                {(mineCount > 0 || carriedCount > 0 || show !== "all") && (
+                  <>
+                    <span className="text-xs text-muted-foreground">Show</span>
+                    <Button size="sm" className="h-7 text-xs" variant={show === "all" ? "default" : "outline"} onClick={() => setShow("all")} data-testid="scan-show-all">All items</Button>
+                    {(mineCount > 0 || show === "mine") && <Button size="sm" className="h-7 text-xs" variant={show === "mine" ? "default" : "outline"} onClick={() => setShow("mine")} data-testid="scan-show-mine">Assigned to me ({mineCount})</Button>}
+                    {(carriedCount > 0 || show === "carried") && <Button size="sm" className="h-7 text-xs" variant={show === "carried" ? "default" : "outline"} onClick={() => setShow("carried")} data-testid="scan-show-carried">Carried, not reviewed ({carriedCount})</Button>}
+                  </>
+                )}
+                {canBulk && (
+                  <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setSelected((p) => (p ? null : new Set()))} data-testid="scan-select-toggle">
+                    {selected ? "Stop selecting" : "Select items"}
+                  </Button>
+                )}
               </div>
             )}
+            {show === "carried" && carriedCount === 0 && <p className="text-sm text-muted-foreground mb-6">Every carried answer has been reviewed.</p>}
             {/* Domain sections */}
             {DOMAINS.map((domain) => (
               <DomainSection
@@ -1781,6 +1899,41 @@ export default function VeritaScanScanPage() {
           </>
         )}
       </div>
+      {selected && !teachingViewOn && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 flex flex-wrap items-center justify-center gap-2 rounded-lg border border-border bg-background shadow-lg px-3 py-2 max-w-[calc(100vw-2rem)]" data-testid="bulk-bar">
+          <span className="text-sm font-medium" data-testid="bulk-count">{selected.size} selected</span>
+          <Button size="sm" className="h-8" disabled={selected.size === 0} onClick={() => setBulkOpen(true)} data-testid="bulk-open">Set answers</Button>
+          <Button size="sm" variant="ghost" className="h-8" disabled={selected.size === 0} onClick={() => setSelected(new Set())}>Clear</Button>
+        </div>
+      )}
+      {bulkOpen && selected && activeLabId && (
+        <BulkSetDialog
+          labId={activeLabId}
+          scanId={scanId}
+          itemIds={[...selected]}
+          pendingCount={[...selected].filter((id) => isPending(items[id])).length}
+          viaSupport={viaSupport}
+          beforeSave={flushSave}
+          onDone={(r) => {
+            setBulkOpen(false);
+            setSelected(null);
+            setItems((prev) => {
+              const next = { ...prev };
+              for (const i of r.items) {
+                next[i.item_id] = {
+                  ...next[i.item_id], status: i.status, owner: i.owner ?? "", ownerUserId: i.owner_user_id, dueDate: i.due_date ?? "",
+                  carriedPending: next[i.item_id]?.carriedPending && i.status === "Not Assessed",
+                };
+              }
+              return next;
+            });
+          }}
+          onClose={() => setBulkOpen(false)}
+        />
+      )}
+      {copyOpen && activeLabId && copyTargets && (
+        <CopyToLabDialog labId={activeLabId} scanId={scanId} scanName={scanMeta?.name ?? "Scan"} labs={copyTargets.labs} onClose={() => setCopyOpen(false)} />
+      )}
       {pickingFor != null && activeLabId && (
         <AssignPersonDialog
           labId={activeLabId}

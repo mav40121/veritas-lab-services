@@ -13,6 +13,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ScanCarryPicker } from "@/components/ScanCarryPicker";
+import { labDayOf } from "@/lib/labDate";
 import {
   Dialog,
   DialogContent,
@@ -54,6 +58,7 @@ interface AssignedItem {
   status: string;
   due_date: string | null;
   question: string;
+  carried_pending?: number;
 }
 
 function ComplianceMeter({ pct }: { pct: number | null }) {
@@ -154,6 +159,9 @@ export default function VeritaScanAppPage() {
   const lockTitle = readOnly ? (canRecord ? "Requires VeritaScan edit access" : "Resubscribe to add new records") : undefined;
 
   const [newScanName, setNewScanName] = useState("");
+  // Begin from an earlier scan (B7): the scan, and the items ticked to carry over.
+  const [startFrom, setStartFrom] = useState<number | null>(null);
+  const [carryIds, setCarryIds] = useState<Set<number>>(new Set());
   const [dialogOpen, setDialogOpen] = useState(false);
 
   // Access check
@@ -196,7 +204,7 @@ export default function VeritaScanAppPage() {
       const res = await fetch(`${API_BASE}${scansUrl}`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ name }),
+        body: JSON.stringify(startFrom && carryIds.size > 0 ? { name, carryFrom: { scanId: startFrom, itemIds: [...carryIds] } } : { name }),
       });
       if (!res.ok) {
         throw new Error(await responseErrorText(res, "Failed to create scan"));
@@ -207,6 +215,8 @@ export default function VeritaScanAppPage() {
       qc.invalidateQueries({ queryKey: [scansUrl] });
       setDialogOpen(false);
       setNewScanName("");
+      setStartFrom(null);
+      setCarryIds(new Set());
       navigate(activeLabId
         ? `/labs/${activeLabId}/veritascan-app/${newScan.id}`
         : `/veritascan-app/${newScan.id}`);
@@ -317,7 +327,7 @@ export default function VeritaScanAppPage() {
               New Scan
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-sm">
+          <DialogContent className={startFrom ? "max-w-2xl max-h-[90vh] overflow-y-auto" : "max-w-sm"}>
             <DialogHeader>
               <DialogTitle>Create New Scan</DialogTitle>
             </DialogHeader>
@@ -340,6 +350,26 @@ export default function VeritaScanAppPage() {
                 onChange={(e) => setNewScanName(e.target.value)}
                 maxLength={120}
               />
+              {activeLabId && (scans?.length ?? 0) > 0 && (
+                <div className="space-y-1">
+                  <Label className="text-xs">Start from</Label>
+                  <Select
+                    value={startFrom ? String(startFrom) : "blank"}
+                    onValueChange={(v) => { setCarryIds(new Set()); setStartFrom(v === "blank" ? null : Number(v)); }}
+                  >
+                    <SelectTrigger className="h-9 text-sm" data-testid="new-scan-from"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="blank">A blank scan</SelectItem>
+                      {scans!.map((s) => (
+                        <SelectItem key={s.id} value={String(s.id)}>{s.name} ({labDayOf(s.updatedAt || s.createdAt)})</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              {activeLabId && startFrom && (
+                <ScanCarryPicker key={startFrom} labId={activeLabId} scanId={startFrom} selected={carryIds} onChange={setCarryIds} />
+              )}
               <div className="flex justify-end gap-2">
                 <Button
                   type="button"
@@ -348,6 +378,8 @@ export default function VeritaScanAppPage() {
                   onClick={() => {
                     setDialogOpen(false);
                     setNewScanName("");
+                    setStartFrom(null);
+                    setCarryIds(new Set());
                   }}
                 >
                   Cancel
@@ -355,9 +387,10 @@ export default function VeritaScanAppPage() {
                 <Button
                   type="submit"
                   size="sm"
-                  disabled={!newScanName.trim() || createScan.isPending}
+                  disabled={!newScanName.trim() || createScan.isPending || (!!startFrom && carryIds.size === 0)}
+                  data-testid="new-scan-create"
                 >
-                  {createScan.isPending ? "Creating…" : "Create Scan"}
+                  {createScan.isPending ? "Creating…" : startFrom ? `Create Scan with ${carryIds.size} carried` : "Create Scan"}
                 </Button>
               </div>
               {createScan.isError && (
@@ -387,7 +420,7 @@ export default function VeritaScanAppPage() {
               >
                 <span className="block text-sm leading-snug">{i.question}</span>
                 <span className="block text-xs text-muted-foreground">
-                  {i.scan_name} · {i.status}{i.due_date ? ` · due ${i.due_date}` : ""}
+                  {i.scan_name} · {i.carried_pending ? "Carried, not yet reviewed" : i.status}{i.due_date ? ` · due ${i.due_date}` : ""}
                 </span>
               </Link>
             ))}

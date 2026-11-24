@@ -495,6 +495,10 @@ jobs:
         # B6: a finding or a VeritaScan item assigned to a person on the lab, one email each time, reminders to the assignee too, an
         # auto-save never undoes an assignment, a FAIL study opens one linked finding; Staff, view-only, another lab and support refused.
         run: npm run test:inspection-assign
+      - name: Run VeritaScan carried and bulk answers integration test
+        # B7: a carried answer changes no percentage until reviewed, never an automatic mark or a teaching note; several items set with
+        # one confirmed count and an audit row each; another lab of the same organization only for a system owner or admin, never across.
+        run: npm run test:veritascan-carry
       - name: Run VeritaResponse legacy cleanup integration test
         # #109: dry run by default; voided-run findings close or flag (the #100 rule); old QC/AAA escalations move to
         # their entry types with due dates kept; idempotent.

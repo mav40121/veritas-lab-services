@@ -897,7 +897,8 @@ export function recomputeAllStudyStatuses(): { fixed: number; skipped: number } 
   }
   return { fixed, skipped };
 }
-import { saveScanItemRows, scanItemRowsFromBody, SCAN_ITEM_READ_COLUMNS } from "./veritascanItems";
+import { saveScanItemRows, scanActor, scanExportNotes, scanItemRowsFromBody, SCAN_ITEM_READ_COLUMNS } from "./veritascanItems";
+import { registerVeritaScanCarryRoutes } from "./veritascanCarry";
 import { findingStudy, registerInspectionAssignRoutes } from "./inspectionAssign";
 import { autoCompleteVeritaScanItems, autoCompleteCompetencyScanItems, auditScanAutoCompletions, linkVeritaCheckEvidence, syncCoverageScanMarks } from "./integrations";
 import { planMarkCorrection, applyMarkCorrection, CORRECTED_SOURCE, correctionKeepsLink } from "./veritascanMarkCorrection";
@@ -18395,6 +18396,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     return ["annual", "professional", "lab", "complete", "veritascan", "clinic", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(plan);
   }
 
+  // Assigning findings and VeritaScan items to a person; a failed study opens a finding (B6,
+  // server/inspectionAssign.ts). A scan begun from an earlier one, and several items set at once (B7, server/veritascanCarry.ts).
+  const inspectionDeps = { sqlite: () => (db as any).$client, authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit, hasModuleEditAccess, hasScanAccess };
+  const { emailScanItems } = registerInspectionAssignRoutes(app, inspectionDeps);
+  const { createScanFrom } = registerVeritaScanCarryRoutes(app, { ...inspectionDeps, emailScanItems });
+
   // List scans for the user's ACTIVE lab.
   // Shape A broader sweep (2026-06-09): legacy WHERE user_id = ? leaked
   // cross-lab rows. resolveLegacyLabId threads the LabSwitcher's active lab
@@ -18518,6 +18525,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
   app.post("/api/labs/:labId/veritascan/scans", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritascan'), (req: any, res) => {
     if (!hasScanAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaScan\u00AE subscription required" });
+    if (req.body?.carryFrom) return createScanFrom(req, res); // begun from an earlier scan (server/veritascanCarry.ts)
     const { name } = req.body;
     if (!name?.trim()) return res.status(400).json({ error: "Scan name required" });
     const now = new Date().toISOString();
@@ -18589,8 +18597,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // an empty string explicitly clears it.
     const teachingNote = ('teaching_note' in req.body) ? (req.body.teaching_note ?? null) : null;
     const now = new Date().toISOString();
-    saveScanItemRows((db as any).$client, { scanId: req.params.id, now, rows: [{ itemId: req.params.itemId, status, notes, owner, dueDate: due_date || null, teachingNote }] }); // server/veritascanItems.ts
-    res.json({ ok: true });
+    const saved = saveScanItemRows((db as any).$client, { scanId: req.params.id, now, actor: scanActor(req), rows: [{ itemId: req.params.itemId, status, notes, owner, dueDate: due_date || null, teachingNote, clearCarried: req.body?.clearCarried === true }] }); // server/veritascanItems.ts
+    res.json({ ok: true, ...(saved.held.length ? { carriedHeld: saved.held } : {}) });
   });
 
   // ── VeritaScan custom questions on a scan (parking-lot #55, phase 3) ──────
@@ -18650,14 +18658,15 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const { items } = req.body;
     if (!Array.isArray(items)) return res.status(400).json({ error: "items array required" });
     const now = new Date().toISOString();
+    let held: number[] = [];
     try {
       // Accepts both camelCase (client sends itemId/dueDate) and snake_case, as the legacy twin below does. This route was
       // missed when that fix landed, so item_id arrived undefined -> NOT NULL 500 on every save (Sentry, 2026-07-03).
-      saveScanItemRows((db as any).$client, { scanId: req.params.id, now, rows: scanItemRowsFromBody(items) }); // server/veritascanItems.ts
+      held = saveScanItemRows((db as any).$client, { scanId: req.params.id, now, actor: scanActor(req), rows: scanItemRowsFromBody(items) }).held; // server/veritascanItems.ts
     } catch (e: any) {
       return res.status(400).json({ error: "Failed to save items", detail: String(e?.message ?? e) });
     }
-    res.json({ ok: true, count: items.length });
+    res.json({ ok: true, count: items.length, ...(held.length ? { carriedHeld: held } : {}) });
   });
 
   // VeritaScan teaching mode (Build #7): flag a scan as a guided teaching
@@ -18793,8 +18802,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const { status, notes, owner, due_date } = req.body;
     const teachingNote = ('teaching_note' in req.body) ? (req.body.teaching_note ?? null) : null;
     const now = new Date().toISOString();
-    saveScanItemRows((db as any).$client, { scanId: req.params.id, now, rows: [{ itemId: req.params.itemId, status, notes, owner, dueDate: due_date || null, teachingNote }] }); // server/veritascanItems.ts
-    res.json({ ok: true });
+    const saved = saveScanItemRows((db as any).$client, { scanId: req.params.id, now, actor: scanActor(req), rows: [{ itemId: req.params.itemId, status, notes, owner, dueDate: due_date || null, teachingNote, clearCarried: req.body?.clearCarried === true }] }); // server/veritascanItems.ts
+    res.json({ ok: true, ...(saved.held.length ? { carriedHeld: saved.held } : {}) });
   });
 
   // Bulk update items (for efficient auto-save)
@@ -18806,12 +18815,13 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const { items } = req.body; // Array of { item_id, status, notes, owner, due_date }
     if (!Array.isArray(items)) return res.status(400).json({ error: "items array required" });
     const now = new Date().toISOString();
+    let held: number[] = [];
     try {
-      saveScanItemRows((db as any).$client, { scanId: req.params.id, now, rows: scanItemRowsFromBody(items) }); // server/veritascanItems.ts
+      held = saveScanItemRows((db as any).$client, { scanId: req.params.id, now, actor: scanActor(req), rows: scanItemRowsFromBody(items) }).held; // server/veritascanItems.ts
     } catch (e: any) {
       return res.status(400).json({ error: "Failed to save items", detail: String(e?.message ?? e) });
     }
-    res.json({ ok: true, count: items.length });
+    res.json({ ok: true, count: items.length, ...(held.length ? { carriedHeld: held } : {}) });
   });
 
   // ── VERITASCAN EVIDENCE LIBRARY (Phase A, 2026-06-02) ────────────────────
@@ -19585,7 +19595,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
     // Get saved items from DB
     const dbItems = (db as any).$client.prepare(
-      "SELECT item_id, status, notes, owner, due_date FROM veritascan_items WHERE scan_id = ?"
+      `SELECT ${SCAN_ITEM_READ_COLUMNS} FROM veritascan_items WHERE scan_id = ?`
     ).all(scanId);
     const itemMap: Record<number, any> = {};
     for (const row of dbItems) {
@@ -19755,7 +19765,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           saved.status || "Not Assessed",
           saved.owner || "",
           saved.due_date || "",
-          saved.notes || "",
+          scanExportNotes(saved, (d) => labLocalDate(d)), // a carried answer says so (server/veritascanItems.ts)
         ];
       });
       for (const row of dataRows) {
@@ -19945,7 +19955,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
     // Get saved items from DB
     const dbItems = (db as any).$client.prepare(
-      "SELECT item_id, status, notes, owner, due_date FROM veritascan_items WHERE scan_id = ?"
+      `SELECT ${SCAN_ITEM_READ_COLUMNS} FROM veritascan_items WHERE scan_id = ?`
     ).all(scanId);
     const itemMap: Record<number, any> = {};
     for (const row of dbItems) {
@@ -19978,7 +19988,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         aabb: ref.aabb || authoritative.aabb || "",
         cola: ref.cola || authoritative.cola || "",
         status: saved.status || "Not Assessed",
-        notes: saved.notes || "",
+        notes: scanExportNotes(saved, (d) => labLocalDate(d)),
         owner: saved.owner || "",
         due_date: saved.due_date || "",
       };
@@ -45083,9 +45093,6 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   });
   // VeritaDC read-and-sign by group (Step D; server/policyReadSign.ts).
   registerReadSignRoutes(app, { sqlite: () => (db as any).$client, authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit, hasModuleEditAccess });
-
-  // Assigning findings and VeritaScan items to a person; a failed study opens a finding (B6).
-  registerInspectionAssignRoutes(app, { sqlite: () => (db as any).$client, authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit, hasModuleEditAccess, hasScanAccess });
 
   // VeritaTrack routes
   const { registerVeritaTrackRoutes } = await import('./veritatrack');

@@ -136,6 +136,8 @@ const WHEN_SIGNING: Record<string, { test: (b: any) => boolean; what: string }> 
   "PUT /api/labs/:labId/staff/employees/:id": { test: (b) => anyKey(b, QUAL_KEYS), what: "verify staff qualifications" },
   "POST /api/labs/:labId/studies/:id/points/:idx/exclude": { test: (b) => anyKey(b, ["justification"]), what: "override a study verdict" },
   "POST /api/labs/:labId/members": { test: (b) => b?.role === "medical_director", what: "invite a medical director" },
+  // Setting several VeritaScan items at once is setup; naming the person they belong to is the lab's (server/veritascanCarry.ts).
+  "POST /api/labs/:labId/veritascan/scans/:id/items/bulk-set": { test: (b) => b?.owner_user_id != null, what: "assign VeritaScan items to a person" },
   "POST /api/labs/:labId/staff-portal-invites": { test: (b) => b?.deliverEmail === false, what: "take a staff invitation link instead of emailing it" },
 };
 

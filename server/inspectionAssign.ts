@@ -25,6 +25,7 @@ import { logAudit } from "./audit";
 import { readSignMailer } from "./policyReadSign";
 import { exportAllPlanBypass } from "./exportAllContext";
 import { assignablePeople, assignablePerson, type AssignablePerson } from "./assignablePeople";
+import { carriedPendingSql, ensureScanRows } from "./veritascanItems";
 
 const SCAN_ITEM_BY_ID = new Map<number, { id: number; domain: string; question: string }>((SCAN_ITEMS as any[]).map((i) => [Number(i.id), i]));
 export const scanItem = (id: unknown) => SCAN_ITEM_BY_ID.get(Number(id)) ?? null;
@@ -225,7 +226,8 @@ export function registerInspectionAssignRoutes(app: Express, deps: Deps) {
   app.get("/api/labs/:labId/veritascan/assigned-to-me", ...read, (req: any, res: any) => {
     if (!scanPlan(req, res)) return;
     const rows = sqlite().prepare(
-      `SELECT s.id AS scan_id, s.name AS scan_name, i.item_id, i.status, i.due_date, i.owner_assigned_at
+      `SELECT s.id AS scan_id, s.name AS scan_name, i.item_id, i.status, i.due_date, i.owner_assigned_at,
+              CASE WHEN ${carriedPendingSql("i")} THEN 1 ELSE 0 END AS carried_pending, i.carried_status
          FROM veritascan_items i JOIN veritascan_scans s ON s.id = i.scan_id
         WHERE s.lab_id = ? AND i.owner_user_id = ?
         ORDER BY s.updated_at DESC, s.id DESC, i.item_id`
@@ -284,18 +286,17 @@ export function registerInspectionAssignRoutes(app: Express, deps: Deps) {
 }
 
 /**
- * Sets or clears the person on items of one scan and writes one audit row per item whose person changed. A row that doesn't
- * exist yet is made as Not Assessed. Returns the item ids whose person changed.
+ * Sets or clears the person on items of one scan and writes one audit row per item whose person changed. Returns the item ids
+ * whose person changed.
  */
 export function assignScanItems(db: any, o: { req: any; scan: { id: number; name: string }; itemIds: number[]; to: AssignablePerson | null }): number[] {
   const now = new Date().toISOString();
   const get = db.prepare("SELECT id, owner, owner_user_id FROM veritascan_items WHERE scan_id = ? AND item_id = ?");
-  const make = db.prepare("INSERT INTO veritascan_items (scan_id, item_id, status, updated_at) VALUES (?, ?, 'Not Assessed', ?) ON CONFLICT(scan_id, item_id) DO NOTHING");
   const set = db.prepare("UPDATE veritascan_items SET owner = ?, owner_user_id = ?, owner_assigned_at = ?, owner_assigned_by_user_id = ?, updated_at = ? WHERE id = ?");
   const changed: number[] = [];
   db.transaction(() => {
+    ensureScanRows(db, o.scan.id, now);
     for (const itemId of o.itemIds) {
-      make.run(o.scan.id, itemId, now);
       const row = get.get(o.scan.id, itemId) as any;
       const toId = o.to?.userId ?? null;
       if ((row.owner_user_id ?? null) === toId) continue;

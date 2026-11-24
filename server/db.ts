@@ -1297,6 +1297,14 @@ if (!scanColNames.includes("owner_user_id")) sqlite.exec("ALTER TABLE veritascan
 if (!scanColNames.includes("owner_assigned_at")) sqlite.exec("ALTER TABLE veritascan_items ADD COLUMN owner_assigned_at TEXT");
 if (!scanColNames.includes("owner_assigned_by_user_id")) sqlite.exec("ALTER TABLE veritascan_items ADD COLUMN owner_assigned_by_user_id INTEGER");
 try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_veritascan_items_owner ON veritascan_items(owner_user_id)"); } catch {}
+// A carried answer (B7, 2026-11-24; server/veritascanCarry.ts): the answer copied from an earlier scan waits in
+// carried_status while `status` stays Not Assessed, so nothing that reads `status` counts it, until someone reviews it.
+for (const [col, type] of [
+  ["carried_status", "TEXT"], ["carried_from_scan_id", "INTEGER"], ["carried_from_name", "TEXT"], ["carried_from_date", "TEXT"],
+  ["carried_at", "TEXT"], ["carried_by_user_id", "INTEGER"], ["carried_reviewed_at", "TEXT"], ["carried_reviewed_by_user_id", "INTEGER"],
+] as const) {
+  if (!scanColNames.includes(col)) sqlite.exec(`ALTER TABLE veritascan_items ADD COLUMN ${col} ${type}`);
+}
 
 // VeritaScan teaching mode (Build #7): scan-level flags. is_teaching marks a
 // scan as a guided teaching example (excluded from nothing; purely additive);
