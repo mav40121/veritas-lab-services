@@ -911,6 +911,7 @@ import { registerPtReviewRoutes } from "./ptReviews";
 import { registerPtBiasRoutes } from "./ptBiasRoutes";
 import { registerPtReportRoutes } from "./ptReport";
 import { ptTrendsForLab } from "./ptTrends";
+import { ptSamplePicks } from "./ptSamples";
 import { PT_AAA_METHODS } from "@shared/ptEvents";
 import { findingStudy, registerInspectionAssignRoutes } from "./inspectionAssign";
 import { autoCompleteVeritaScanItems, autoCompleteCompetencyScanItems, auditScanAutoCompletions, linkVeritaCheckEvidence, syncCoverageScanMarks } from "./integrations";
@@ -29309,64 +29310,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       } catch { /* swallow */ }
     }
 
-    // Pull this lab's recent PT events. 18 months is the practical
-    // surveyor-defensible window (CMS Subpart H allows the lab to use any
-    // event in the current calendar year; widening to 18 months lets the
-    // LD also reach a late-year event from the prior cycle).
-    const since = new Date();
-    since.setMonth(since.getMonth() - 18);
-    const sinceDate = since.toISOString().split("T")[0];
-    const events = (db as any).$client.prepare(
-      `SELECT e.id, e.event_id, e.event_name, e.event_date, e.analyte, e.your_result, e.your_method,
-              e.acceptable_low, e.acceptable_high, e.sdi, e.pass_fail, e.tested_by_employee_id,
-              (SELECT TRIM(COALESCE(se.last_name, '') || ', ' || COALESCE(se.first_name, '')) FROM staff_employees se
-                WHERE se.id = e.tested_by_employee_id AND se.tier2_lab_id = e.lab_id) AS tested_by_name
-       FROM pt_events e
-       WHERE e.lab_id = @lab AND date(e.event_date) >= date(@since)
-         AND (@mine = 0 OR e.tested_by_employee_id IS NULL OR e.tested_by_employee_id = @person)
-       ORDER BY date(e.event_date) DESC, e.id DESC
-       LIMIT 200`
-    ).all({ lab: req.scope.labId, since: sinceDate, mine: personId != null || staffOwn ? 1 : 0, person: personId }) as Array<{
-      id: number; event_id: string | null; event_name: string | null; event_date: string;
-      analyte: string; your_result: number | null; your_method: string | null;
-      acceptable_low: number | null; acceptable_high: number | null; sdi: number | null;
-      pass_fail: string; tested_by_employee_id: number | null; tested_by_name: string | null;
-    }>;
-
-    // Filter against program analytes when we have them; otherwise return
-    // all. The match is case-insensitive substring both ways so "ALT" in
-    // pt_events.analyte matches "ALT (SGPT)" in program analytes, and
-    // vice versa.
-    const filtered = programAnalytes.size === 0 ? events : events.filter(e => {
-      const a = (e.analyte || "").toLowerCase();
-      for (const pa of programAnalytes) {
-        if (a.includes(pa) || pa.includes(a)) return true;
-      }
-      return false;
-    });
-
-    res.json(filtered.slice(0, 25).map(e => ({
-      id: e.id,
-      eventId: e.event_id,
-      eventName: e.event_name,
-      eventDate: e.event_date,
-      analyte: e.analyte,
-      yourResult: e.your_result,
-      yourMethod: e.your_method,
-      acceptableLow: e.acceptable_low,
-      acceptableHigh: e.acceptable_high,
-      sdi: e.sdi,
-      passFail: e.pass_fail,
-      // Convenience pre-formatted fields the picker can drop straight
-      // into the Element 5 form state.
-      suggestedSampleType: "PT",
-      // The event id and the event name, whichever the lab entered; never a made-up number.
-      suggestedSampleId: [e.event_id, e.event_name].map((v) => String(v ?? "").trim()).filter((v, i, all) => v && all.indexOf(v) === i).join(", "),
-      testedByEmployeeId: staffOwn ? null : e.tested_by_employee_id,
-      testedByName: staffOwn ? null : e.tested_by_name,
-      testedByThisPerson: personId != null && e.tested_by_employee_id === personId,
-      suggestedAcceptable: e.pass_fail === "pass" ? 1 : (e.pass_fail === "fail" ? 0 : null),
-    })));
+    // A limited Staff login reads only its own and unrecorded events and nobody's name (server/ptSamples.ts).
+    res.json(ptSamplePicks((db as any).$client, { labId: req.scope.labId, analytes: programAnalytes, person: personId, leaveOutOthers: personId != null || !!staffOwn, hideTester: !!staffOwn }));
   });
 
   // GET /api/labs/:labId/competency/employees/:id/staff-instruments
@@ -30287,6 +30232,27 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     }
     return assessment;
   };
+
+  // GET /api/labs/:labId/competency/employee/:employeeId/test-system/:instrumentId/pt-samples
+  //
+  // VeritaPT events this person tested, for the analytes of this method (B11, server/ptSamples.ts): what "Fill from VeritaPT" on
+  // Element 5 offers the evaluator. It reads only; the evaluator marks the element, saves and signs.
+  app.get("/api/labs/:labId/competency/employee/:employeeId/test-system/:instrumentId/pt-samples", authMiddleware, labScopeMiddleware, notForStaffLogin, requireModuleEdit('veritacomp'), (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const labId = req.scope.labId, sqlite = (db as any).$client;
+    const empId = Number(req.params.employeeId), instrumentId = Number(req.params.instrumentId);
+    const emp = sqlite.prepare("SELECT id FROM staff_employees WHERE id = ? AND tier2_lab_id = ? AND status = 'active'").get(empId, labId) as any;
+    if (!emp) return res.status(404).json({ error: "Employee not found" });
+    const { memberIds } = methodOf(loadInstrumentGroups(sqlite, labId), instrumentId);
+    const marks = memberIds.map(() => "?").join(",");
+    const mine = sqlite.prepare(
+      `SELECT 1 FROM staff_employee_instruments j JOIN veritamap_instruments i ON i.id = j.instrument_id JOIN veritamap_maps m ON m.id = i.map_id
+        WHERE j.employee_id = ? AND i.id IN (${marks}) AND m.lab_id = ? LIMIT 1`
+    ).get(empId, ...memberIds, labId);
+    if (!mine) return res.status(404).json({ error: "Instrument not assigned to this employee" });
+    const analytes = (sqlite.prepare(`SELECT DISTINCT analyte FROM veritamap_instrument_tests WHERE instrument_id IN (${marks}) AND active = 1`).all(...memberIds) as any[]).map((t) => String(t.analyte || ""));
+    res.json(ptSamplePicks(sqlite, { labId, analytes, person: empId, onlyTheirs: true }));
+  });
 
   // PUT /api/labs/:labId/competency/employee/:employeeId/test-system/:instrumentId/my-data
   //

@@ -8,6 +8,7 @@
 //      review, and an event changed since.
 //   4. Bias and trend: the numbers worked out on the server, "no peer data" where there is none, and the two review flags.
 //   5. The period report: on screen, as Excel and as a PDF, with the compliance digest's numbers unchanged.
+//   6. Into the method-by-method competency record: events the person tested, for the method's analytes; it marks nothing.
 //
 // Boots the REAL routes against a throwaway SQLite DB (made-up people, programs and numbers only). Run: npm run test:pt-events
 import { inspectionWorld } from "./inspectionFixture";
@@ -333,7 +334,32 @@ async function main() {
     const r = await Promise.all(["report", "report/export.xlsx", "report/pdf"].flatMap((x) => [call(STAFF, "GET", `${P(x)}?period=2026`), call(OTHER, "GET", `${P(x)}?period=2026`), call(EDITOR, "GET", `${P(x, B)}?period=2026`)]));
     return r.every((x) => x.s === 403) && (await call(VIEWER, "GET", `${P("report")}?period=2026`)).s === 200;
   })());
-  void mo;
+
+  // ── 6. Into the method-by-method competency record ────────────────────────
+  seed("staff_employee_instruments", { employee_id: tess, instrument_id: chem });
+  const picks = (who: any, person = tess, instrument = chem, lab = A) => call(who, "GET", `/api/labs/${lab}/competency/employee/${person}/test-system/${instrument}/pt-samples`);
+  const day6 = new Date(Date.now() - 40 * 86400000).toISOString().slice(0, 10), old6 = new Date(Date.now() - 800 * 86400000).toISOString().slice(0, 10);
+  const c6 = async (analyte: string, x: any = {}) => Number((await rec(EDITOR, { enrollment_id: chemProg, event_id: "K-1", event_date: day6, analyte, pass_fail: "pass", your_result: 5, tested_by_employee_id: tess, ...x })).j.id);
+  const kG = await c6("Glucose"), kNa = await c6("Sodium", { pass_fail: "fail" }), kK = await c6("Potassium", { pass_fail: "ungraded", ungraded_reason: "not_scored" }), kAlt = await c6("ALT");
+  await c6("Hemoglobin"); await c6("Glucose", { event_id: "K-mo", tested_by_employee_id: mo }); await c6("Glucose", { event_id: "K-none", tested_by_employee_id: null }); await c6("Glucose", { event_id: "K-old", event_date: old6 });
+  seed("pt_events", { enrollment_id: bProg, user_id: OWNER.id, lab_id: B, event_id: "K-B", event_date: day6, analyte: "Glucose", pass_fail: "pass", tested_by_employee_id: tess });
+  const pk = (await picks(EDITOR)).j as any[];
+  const mine6 = pk.filter((x) => x.eventId.startsWith("K-"));
+  check("6a. only what this person tested, for this method's analytes, in this lab, in the last 18 months", mine6.map((x) => x.id).sort((a, b) => a - b).join() === [kG, kNa, kK, kAlt].sort((a, b) => a - b).join(), JSON.stringify(mine6.map((x) => [x.eventId, x.analyte])));
+  check("6b. acceptable and unacceptable fill Acceptable; an ungraded one fills none", pk.find((x) => x.id === kG).suggestedAcceptable === 1 && pk.find((x) => x.id === kNa).suggestedAcceptable === 0 && pk.find((x) => x.id === kK).suggestedAcceptable === null && pk.find((x) => x.id === kK).statusLabel === "Ungraded");
+  for (const [who, u6, want] of [["a Staff login", STAFF, 403], ["a view-only reviewer", VIEWER, 403], ["another customer", OTHER, 403]] as const) check(`6c. ${who}: refused`, (await picks(u6)).s === want);
+  check("6d. another lab's person or analyzer isn't found", (await picks(OWNER, tess, chem, B)).s === 404 && (await picks(EDITOR, mo)).s === 404 && (await picks(EDITOR, tess, heme)).s === 404);
+  // What the evaluator saves after a fill: a sample row, and nothing marked
+  const before6 = one("SELECT COUNT(*) AS n FROM competency_method_signoffs").n;
+  const sv = await call(EDITOR, "PUT", `/api/labs/${A}/competency/employee/${tess}/test-system/${chem}`, { elements: [{ num: 5, samples: [{ sampleType: "PT, from VeritaPT", sampleId: `K-1, Glucose, ${day6}`, acceptable: true }] }] });
+  const view6 = (await call(EDITOR, "GET", `/api/labs/${A}/competency/employee/${tess}`)).j.testSystems.find((t: any) => t.instrumentId === chem);
+  const el5 = view6.elements.find((e: any) => e.num === 5);
+  check("6e. saved, it shows where it came from, isn't passed and signs nothing", sv.s === 200 && el5.samples[0].sampleType === "PT, from VeritaPT" && el5.samples[0].sampleId.startsWith("K-1, Glucose") && el5.passed === false && view6.signedCurrent !== true && one("SELECT COUNT(*) AS n FROM competency_method_signoffs").n === before6, JSON.stringify(el5));
+  // The program record's picker: the same function, the same fields
+  const prog = Number((await call(EDITOR, "POST", `/api/labs/${A}/competency/programs`, { name: "Made-up chemistry", department: "Chemistry", type: "technical" })).j?.id ?? seed("competency_programs", { user_id: OWNER.id, lab_id: A, name: "Made-up chemistry", department: "Chemistry", type: "technical" }));
+  seed("competency_method_groups", { program_id: prog, name: "Chem", analytes: JSON.stringify(["Glucose"]) });
+  const pp = await call(EDITOR, "GET", `/api/labs/${A}/veritacomp/programs/${prog}/pt-samples`);
+  check("6f. the program record's picker answers as before, from its own lab only", pp.s === 200 && pp.j.some((x: any) => x.id === kG && x.suggestedSampleId === "K-1" && x.suggestedSampleType === "PT" && x.suggestedAcceptable === 1) && pp.j.some((x: any) => x.eventId === "K-mo") && !pp.j.some((x: any) => x.eventId === "K-B") && pp.j.every((x: any) => x.analyte === "Glucose"));
 
   w.finish();
 }

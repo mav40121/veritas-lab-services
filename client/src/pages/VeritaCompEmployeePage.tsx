@@ -30,6 +30,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader2, ChevronLeft, FlaskConical, FileDown, Plus, X } from "lucide-react";
 import type { El5Sample } from "@shared/competencyEl5Samples";
+import { PTSamplePickerDialog, type PTSample } from "@/components/PTSamplePickerDialog";
 import MethodSignOffPanel, { signoffSummary, type MethodSignState } from "@/components/MethodSignOffPanel";
 import { QuizScoresList } from "@/components/QuizScoresList";
 import { MILESTONE_LABEL } from "@shared/competencySignoff";
@@ -45,6 +46,8 @@ import { StaffOwnRefusal } from "@/components/StaffOwnCompetency";
 interface ElementData { num: number; status: string; passed?: boolean; na?: boolean; naJustification?: string; [k: string]: any; }
 // Element 5 can record more than one blind / PT sample for a test system (Michael Q71 = 1). The edit buffer keeps them
 // in `samples`; a record saved before the list existed seeds one row from its single fields.
+// Where a sample filled from VeritaPT came from; it stays on the record, the sign-off and the PDF.
+const PT_SAMPLE_TYPE = "PT, from VeritaPT";
 const BLANK_SAMPLE: El5Sample = { sampleType: "", sampleId: "", acceptable: null };
 const samplesOf = (f: any): El5Sample[] =>
   Array.isArray(f?.samples) && f.samples.length ? f.samples
@@ -107,6 +110,7 @@ export default function VeritaCompEmployeePage() {
   const [form, setForm] = useState<Record<number, any>>({});
   // Waived test system edit buffer: { [methodNum]: { evidence, date, initials, passed } }.
   const [wform, setWform] = useState<Record<number, any>>({});
+  const [ptPicker, setPtPicker] = useState(false);
 
   const url = activeLabId ? `/api/labs/${activeLabId}/competency/employee/${employeeId}` : null;
   const { data, isLoading, error } = useQuery<EmployeeView>({
@@ -164,6 +168,19 @@ export default function VeritaCompEmployeePage() {
       const list = fn(samplesOf(prev[5]));
       return { ...prev, 5: { ...(prev[5] || {}), samples: list.length ? list : [{ ...BLANK_SAMPLE }] } };
     });
+  };
+  // A VeritaPT result this person tested, put in the first empty sample row or a new one. Only Element 5's own fields: never Pass.
+  const fillFromPt = (s: PTSample) => {
+    const sample: El5Sample = {
+      sampleType: PT_SAMPLE_TYPE, sampleId: [s.suggestedSampleId, s.analyte, s.eventDate].filter(Boolean).join(", "),
+      acceptable: s.suggestedAcceptable == null ? null : s.suggestedAcceptable === 1,
+    };
+    if (samplesOf(form[5]).some((x) => x.sampleId === sample.sampleId)) { toast({ title: "Already on this record", description: sample.sampleId }); return; }
+    setSamples((list) => {
+      const empty = list.findIndex((x) => !x.sampleType && !x.sampleId && x.acceptable == null);
+      return empty >= 0 ? list.map((x, i) => (i === empty ? sample : x)) : [...list, sample];
+    });
+    toast({ title: "Filled from VeritaPT™", description: `${sample.sampleId}. Check it, mark the element and save. You still sign.` });
   };
   const setSample = (i: number, key: keyof El5Sample, value: any) => setSamples((list) => list.map((s, j) => (j === i ? { ...s, [key]: value } : s)));
   const setWField = (num: number, key: string, value: any) => {
@@ -403,6 +420,11 @@ export default function VeritaCompEmployeePage() {
                                 </>
                               ) : el.num === 5 ? (
                                 <div className="space-y-2" data-testid="element-5-samples">
+                                  {!evaluatorLocked && (
+                                    <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={() => setPtPicker(true)} data-testid="element-5-fill-pt">
+                                      Fill from VeritaPT&trade;
+                                    </Button>
+                                  )}
                                   {samplesOf(f).map((s, i, all) => (
                                     <div key={i} className="flex flex-wrap items-end gap-2" data-testid={`element-5-sample-${i}`}>
                                       <div className="flex-1 min-w-[120px]">
@@ -480,6 +502,11 @@ export default function VeritaCompEmployeePage() {
                 </CardContent>
               </Card>
             </div>
+          )}
+
+          {current && !current.waived && !evaluatorLocked && (
+            <PTSamplePickerDialog open={ptPicker} onOpenChange={setPtPicker} labId={activeLabId} onSelect={fillFromPt}
+              method={{ employeeId, instrumentId: current.instrumentId, personName: data.employee.name, methodName: current.instrumentName }} />
           )}
 
           {/* Michael 2026-11-17 (Q347 = 1): this person's quiz scores, every kind, in one place. Hidden for a reader the
