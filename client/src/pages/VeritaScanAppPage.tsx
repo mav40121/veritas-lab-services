@@ -47,6 +47,15 @@ interface ScanSummary {
   isTeaching?: boolean;     // Build #7: scan is a guided teaching example
 }
 
+interface AssignedItem {
+  scan_id: number;
+  scan_name: string;
+  item_id: number;
+  status: string;
+  due_date: string | null;
+  question: string;
+}
+
 function ComplianceMeter({ pct }: { pct: number | null }) {
   if (pct === null) return <span className="text-xs text-muted-foreground">-</span>;
   const color =
@@ -172,6 +181,14 @@ export default function VeritaScanAppPage() {
     queryKey: [scansUrl],
     enabled: isLoggedIn && hasPlanAccess,
   });
+
+  // Everything assigned to me, across this lab's scans (B6). Work still to do, so answered items drop off.
+  const { data: assignedToMe } = useQuery<AssignedItem[]>({
+    queryKey: [`/api/labs/${activeLabId}/veritascan/assigned-to-me`],
+    enabled: isLoggedIn && hasPlanAccess && !!activeLabId,
+    refetchOnMount: "always",
+  });
+  const myItems = (assignedToMe ?? []).filter((i) => i.status !== "Compliant" && i.status !== "N/A");
 
   // Create scan
   const createScan = useMutation({
@@ -353,6 +370,30 @@ export default function VeritaScanAppPage() {
         </Dialog>
         </div>
       </div>
+
+      {/* Assigned to me */}
+      {myItems.length > 0 && (
+        <Card className="mb-6" data-testid="scan-assigned-to-me">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Assigned to me ({myItems.length})</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1 max-h-72 overflow-y-auto">
+            {myItems.map((i) => (
+              <Link
+                key={`${i.scan_id}-${i.item_id}`}
+                href={activeLabId ? `/labs/${activeLabId}/veritascan-app/${i.scan_id}` : `/veritascan-app/${i.scan_id}`}
+                className="block rounded-md px-2 py-1.5 hover:bg-muted/60 transition-colors"
+                data-testid={`assigned-${i.scan_id}-${i.item_id}`}
+              >
+                <span className="block text-sm leading-snug">{i.question}</span>
+                <span className="block text-xs text-muted-foreground">
+                  {i.scan_name} · {i.status}{i.due_date ? ` · due ${i.due_date}` : ""}
+                </span>
+              </Link>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Loading */}
       {isLoading && (

@@ -49,11 +49,14 @@ import {
   GraduationCap,
   Eye,
   EyeOff,
+  UserRound,
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useLabRoute } from "@/hooks/useLabRoute";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
+import { useMemberships } from "@/hooks/useMemberships";
+import { AssignPersonDialog } from "@/components/AssignPersonDialog";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -72,6 +75,8 @@ interface ItemState {
   status: ScanStatus;
   notes: string;
   owner: string;
+  // The owner is a person on the lab (B6); `owner` is then their name, changed only by the picker.
+  ownerUserId?: number | null;
   dueDate: string;
   completionSource?: string;
   completionLink?: string;
@@ -488,6 +493,15 @@ function ItemEvidence({ itemId, ctx }: { itemId: number; ctx: EvidenceCtx }) {
   );
 }
 
+// Assigning an item to a person (B6): who is signed in, whether they may assign, and how to open the picker.
+interface AssignCtx {
+  userId: number | null;
+  canAssign: boolean;
+  pick: (itemId: number) => void;
+  clear: (itemId: number) => void;
+  busy: boolean;
+}
+
 // ─── Single checklist item row ────────────────────────────────────────────────
 function ItemRow({
   item,
@@ -496,11 +510,13 @@ function ItemRow({
   accreditationChoice,
   displayNumber,
   evidence,
+  assign,
 }: {
   item: ScanItem;
   state: ItemState;
   onChange: (patch: Partial<ItemState>) => void;
   accreditationChoice: string;
+  assign: AssignCtx;
   // Domain-relative ordinal (1, 2, 3...) for the visible row label.
   // Underlying item.id is still the persistence key; this is rendering only.
   displayNumber: number;
@@ -599,14 +615,45 @@ function ItemRow({
               </SelectContent>
             </Select>
 
-            {/* Owner */}
-            <Input
-              className="h-7 text-xs w-32 min-w-0"
-              placeholder="Owner"
-              value={state.owner}
-              disabled={rowReadOnly}
-              onChange={(e) => onChange({ owner: e.target.value })}
-            />
+            {/* Owner: a person on the lab, or a typed name */}
+            {state.ownerUserId ? (
+              <span
+                className="inline-flex items-center gap-1 h-7 rounded-md border border-primary/30 bg-primary/10 text-primary px-2 text-xs max-w-[14rem]"
+                title={`Assigned to ${state.owner}`}
+                data-testid={`item-owner-${item.id}`}
+              >
+                <UserRound className="h-3 w-3 shrink-0" />
+                <span className="truncate">{state.owner}{state.ownerUserId === assign.userId ? " (you)" : ""}</span>
+                {assign.canAssign && (
+                  <>
+                    <button type="button" className="hover:underline" onClick={() => assign.pick(item.id)} disabled={assign.busy} data-testid={`item-reassign-${item.id}`}>change</button>
+                    <button type="button" title="Clear the assignment" onClick={() => assign.clear(item.id)} disabled={assign.busy} data-testid={`item-unassign-${item.id}`}><X className="h-3 w-3" /></button>
+                  </>
+                )}
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1">
+                <Input
+                  className="h-7 text-xs w-32 min-w-0"
+                  placeholder="Owner"
+                  value={state.owner}
+                  disabled={rowReadOnly}
+                  onChange={(e) => onChange({ owner: e.target.value })}
+                />
+                {assign.canAssign && (
+                  <button
+                    type="button"
+                    className="h-7 w-7 inline-flex items-center justify-center rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                    title="Assign to a person on this lab"
+                    onClick={() => assign.pick(item.id)}
+                    disabled={assign.busy}
+                    data-testid={`item-assign-${item.id}`}
+                  >
+                    <UserRound className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </span>
+            )}
 
             {/* Due date — only for gap statuses */}
             {showDueDate && (
@@ -656,6 +703,8 @@ function DomainSection({
   sectionRef,
   accreditationChoice,
   evidence,
+  assign,
+  visible,
 }: {
   domain: ScanDomain;
   items: Record<number, ItemState>;
@@ -663,6 +712,9 @@ function DomainSection({
   sectionRef?: (el: HTMLDivElement | null) => void;
   accreditationChoice: string;
   evidence: EvidenceCtx;
+  assign: AssignCtx;
+  // The "Show" filter: which items to list. The domain's counts stay the whole domain's.
+  visible: (id: number) => boolean;
 }) {
   // Total items in this domain (used for stats); active items exclude N/A
   // because N/A items render in the parked section at the bottom of the
@@ -671,6 +723,7 @@ function DomainSection({
   const activeDomainItems = allDomainItems.filter(
     (i) => (items[i.id]?.status ?? "Not Assessed") !== "N/A",
   );
+  const listed = activeDomainItems.filter((i) => visible(i.id));
   const stats = domainStats(domain, items);
   const denom = stats.total - stats.na;
   const pct = denom > 0 && stats.compliant + stats.gap > 0
@@ -680,6 +733,7 @@ function DomainSection({
   const colorClass = DOMAIN_COLORS[domain];
   // Extract just the text color class for the badge
   const badgeClasses = colorClass;
+  if (listed.length === 0 && activeDomainItems.length > 0) return null; // nothing here under the filter
 
   return (
     <div ref={sectionRef} className="mb-10">
@@ -711,7 +765,7 @@ function DomainSection({
 
       {/* Item rows (N/A items omitted; they render in the Parked section) */}
       <div className="space-y-0.5">
-        {activeDomainItems.map((item) => (
+        {listed.map((item) => (
           <ItemRow
             key={item.id}
             item={item}
@@ -726,6 +780,7 @@ function DomainSection({
             onChange={(patch) => onChange(item.id, patch)}
             accreditationChoice={accreditationChoice}
             evidence={evidence}
+            assign={assign}
           />
         ))}
       </div>
@@ -745,16 +800,20 @@ function ParkedItemsSection({
   onChange,
   accreditationChoice,
   evidence,
+  assign,
+  visible,
 }: {
   items: Record<number, ItemState>;
   onChange: (id: number, patch: Partial<ItemState>) => void;
   accreditationChoice: string;
   evidence: EvidenceCtx;
+  assign: AssignCtx;
+  visible: (id: number) => boolean;
 }) {
   const naByDomain: Partial<Record<ScanDomain, ScanItem[]>> = {};
   for (const domain of DOMAINS) {
     naByDomain[domain] = SCAN_ITEMS.filter(
-      (i) => i.domain === domain && items[i.id]?.status === "N/A",
+      (i) => i.domain === domain && items[i.id]?.status === "N/A" && visible(i.id),
     );
   }
   const totalNa = Object.values(naByDomain).reduce(
@@ -811,6 +870,7 @@ function ParkedItemsSection({
                   onChange={(patch) => onChange(item.id, patch)}
                   accreditationChoice={accreditationChoice}
                   evidence={evidence}
+                  assign={assign}
                 />
               ))}
             </div>
@@ -1029,9 +1089,14 @@ export default function VeritaScanScanPage() {
   const activeLabId = useActiveLabId();
   const params = useParams<{ id: string }>();
   const scanId = Number(params.id);
-  useAuth();
+  const { user } = useAuth();
   const qc = useQueryClient();
   const readOnly = useIsReadOnly('veritascan');
+  // Veritas support sets a lab up but doesn't assign work in its name (server/vlsSupport.ts).
+  const { data: memberships } = useMemberships();
+  const viaSupport = !!memberships?.find((m) => m.labId === activeLabId)?.viaVlsSupport;
+  const [show, setShow] = useState<"all" | "mine">("all");
+  const [pickingFor, setPickingFor] = useState<number | null>(null);
 
   // Local item state
   const [items, setItems] = useState<Record<number, ItemState>>(buildInitialItems);
@@ -1163,6 +1228,7 @@ export default function VeritaScanScanPage() {
           status: (apiItem.status as ScanStatus) || "Not Assessed",
           notes: apiItem.notes || (apiItem as any).notes || "",
           owner: apiItem.owner || (apiItem as any).owner || "",
+          ownerUserId: (apiItem as any).owner_user_id ?? null,
           dueDate: apiItem.dueDate || (apiItem as any).due_date || "",
           completionSource: (apiItem as any).completion_source || (apiItem as any).completionSource || undefined,
           completionLink: (apiItem as any).completion_link || (apiItem as any).completionLink || undefined,
@@ -1233,6 +1299,44 @@ export default function VeritaScanScanPage() {
       });
     },
     [scheduleAutoSave, readOnly, itemsReady]
+  );
+
+  // Assign an item to a person, or clear it. Saved on its own: the auto-save never changes the owner of an assigned item.
+  const assignMutation = useMutation({
+    mutationFn: async ({ itemId, userId }: { itemId: number; userId: number | null }) => {
+      const res = await fetch(`${API_BASE}/api/labs/${activeLabId}/veritascan/scans/${scanId}/items/${itemId}/assignee`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ user_id: userId }),
+      });
+      if (!res.ok) throw new Error(await responseErrorText(res, "Could not save the assignment"));
+      return { itemId, ...(await res.json()) } as { itemId: number; owner: string | null; owner_user_id: number | null; email: string };
+    },
+    onSuccess: (r) => {
+      setPickingFor(null);
+      setItems((prev) => {
+        const next = { ...prev, [r.itemId]: { ...prev[r.itemId], owner: r.owner ?? "", ownerUserId: r.owner_user_id } };
+        // A save already waiting holds the owner as it was before; send this one instead.
+        if (dirtyRef.current) scheduleAutoSave(next);
+        return next;
+      });
+      toast(r.owner_user_id
+        ? { title: `Assigned to ${r.owner}`, description: r.email === "failed" ? "The email could not be sent. Let them know yourself." : r.email === "sent" ? "They have been emailed." : undefined }
+        : { title: "Assignment cleared" });
+    },
+    onError: (e: Error) => toast({ title: "Assignment not saved", description: e.message, variant: "destructive" }),
+  });
+  const assignCtx: AssignCtx = {
+    userId: user?.id != null ? Number(user.id) : null,
+    canAssign: !readOnly && !!activeLabId && !viaSupport && itemsReady,
+    pick: (itemId) => setPickingFor(itemId),
+    clear: (itemId) => assignMutation.mutate({ itemId, userId: null }),
+    busy: assignMutation.isPending,
+  };
+  const mineCount = SCAN_ITEMS.filter((i) => items[i.id]?.ownerUserId && items[i.id].ownerUserId === assignCtx.userId).length;
+  const itemVisible = useCallback(
+    (id: number) => show === "all" || (!!items[id]?.ownerUserId && items[id].ownerUserId === Number(user?.id)),
+    [show, items, user?.id],
   );
 
   // Manual save
@@ -1635,6 +1739,13 @@ export default function VeritaScanScanPage() {
           />
         ) : (
           <>
+            {(mineCount > 0 || show !== "all") && (
+              <div className="flex flex-wrap items-center gap-2 mb-4" data-testid="scan-show">
+                <span className="text-xs text-muted-foreground">Show</span>
+                <Button size="sm" className="h-7 text-xs" variant={show === "all" ? "default" : "outline"} onClick={() => setShow("all")} data-testid="scan-show-all">All items</Button>
+                <Button size="sm" className="h-7 text-xs" variant={show === "mine" ? "default" : "outline"} onClick={() => setShow("mine")} data-testid="scan-show-mine">Assigned to me ({mineCount})</Button>
+              </div>
+            )}
             {/* Domain sections */}
             {DOMAINS.map((domain) => (
               <DomainSection
@@ -1647,6 +1758,8 @@ export default function VeritaScanScanPage() {
                 }}
                 accreditationChoice={accreditationChoice}
                 evidence={evidenceCtx}
+                assign={assignCtx}
+                visible={itemVisible}
               />
             ))}
 
@@ -1658,6 +1771,8 @@ export default function VeritaScanScanPage() {
               onChange={handleItemChange}
               accreditationChoice={accreditationChoice}
               evidence={evidenceCtx}
+              assign={assignCtx}
+              visible={itemVisible}
             />
 
             {/* #55 phase 3: the lab's own custom questions, scored in their own
@@ -1666,6 +1781,17 @@ export default function VeritaScanScanPage() {
           </>
         )}
       </div>
+      {pickingFor != null && activeLabId && (
+        <AssignPersonDialog
+          labId={activeLabId}
+          module="veritascan"
+          title={`Assign item ${GLOBAL_ORDINALS[pickingFor]}`}
+          currentUserId={items[pickingFor]?.ownerUserId ?? null}
+          busy={assignMutation.isPending}
+          onPick={(p) => assignMutation.mutate({ itemId: pickingFor, userId: p.userId })}
+          onClose={() => setPickingFor(null)}
+        />
+      )}
     </div>
   );
 }

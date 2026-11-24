@@ -19,6 +19,7 @@ import { findingTemplate, parseTypeDetails, ptScorePercent, tjcEscElements, vali
 import { FindingTypeDetails } from "@/components/FindingTypeDetails";
 import { TjcSaferCard } from "@/components/TjcSaferCard";
 import { EffectivenessPanel } from "@/components/EffectivenessPanel";
+import { FindingAssigneeCard } from "@/components/FindingAssigneeCard";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import {
   Dialog,
@@ -162,10 +163,13 @@ interface FindingLinks {
     corrective_action_id: number; action_taken: string; taken_at: string;
     status: string; analyte: string; qc_level: string | null; lot_number: string | null;
   }>;
+  // The failed VeritaCheck study this finding was opened from (B6).
+  study?: { id: number; name: string; date: string | null; status: string | null } | null;
   counts: { evidence: number; qc_sources: number };
 }
 function LinkagePanel({ activeLabId, findingId }: { activeLabId: number; findingId: string }) {
   const [links, setLinks] = useState<FindingLinks | null>(null);
+  const labRoute = useLabRoute();
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -177,7 +181,7 @@ function LinkagePanel({ activeLabId, findingId }: { activeLabId: number; finding
     return () => { cancelled = true; };
   }, [activeLabId, findingId]);
 
-  const total = (links?.counts.evidence ?? 0) + (links?.counts.qc_sources ?? 0);
+  const total = (links?.counts.evidence ?? 0) + (links?.counts.qc_sources ?? 0) + (links?.study ? 1 : 0);
   return (
     <Card>
       <CardHeader className="py-3 px-4 border-b">
@@ -191,6 +195,15 @@ function LinkagePanel({ activeLabId, findingId }: { activeLabId: number; finding
           <p className="text-sm text-muted-foreground">No links yet.</p>
         ) : (
           <div className="space-y-3">
+            {links!.study && (
+              <div>
+                <div className="text-xs font-medium text-muted-foreground mb-1">VeritaCheck® study</div>
+                <div className="rounded-md border p-2.5 text-sm" data-testid="finding-study">
+                  <Link href={labRoute(`/study/${links!.study.id}/results`)} className="font-medium text-teal-700 dark:text-teal-400 hover:underline">{links!.study.name}</Link>
+                  <div className="text-xs text-muted-foreground">Study {links!.study.id}{links!.study.date ? `, ${links!.study.date}` : ""}{links!.study.status ? `, result now ${links!.study.status.toUpperCase()}` : ""}</div>
+                </div>
+              </div>
+            )}
             {links!.qc_sources.length > 0 && (
               <div>
                 <div className="text-xs font-medium text-muted-foreground mb-1">VeritaQC source</div>
@@ -300,7 +313,7 @@ const REPORT_NAMES: Record<string, string> = { cms_2567: "CMS-2567", internal_nc
 function findingHistoryText(h: { event: string; payload: any }): string {
   const p = h.payload || {};
   switch (h.event) {
-    case "created": return "Created";
+    case "created": return p.study ? `Created from VeritaCheck study ${p.study_id}: ${p.study}` : "Created";
     case "updated": {
       const keys = Array.isArray(p.changed) ? (p.changed as string[]).filter((k) => k !== "accreditor") : [];
       return keys.length ? `Edited: ${keys.map((k) => k.replace(/_/g, " ")).join(", ")}` : "Edited";
@@ -317,6 +330,9 @@ function findingHistoryText(h: { event: string; payload: any }): string {
     case "qc_run_voided": return "Linked QC run voided";
     case "closed_qc_run_voided": return "Linked QC run voided; finding closed";
     case "reclassified": return "Reclassified";
+    case "assigned": return `Assigned to ${p.after?.name || "someone"}`;
+    case "assignment_changed": return `Assignment changed from ${p.before?.name || "someone"} to ${p.after?.name || "someone"}`;
+    case "assignment_cleared": return `Assignment to ${p.before?.name || "someone"} cleared`;
     default: {
       const m = /^(.*)_rendered$/.exec(h.event);
       if (m) return `Downloaded the ${REPORT_NAMES[m[1]] || m[1].replace(/_/g, " ")}`;
@@ -838,6 +854,9 @@ export default function VeritaResponseFindingPage() {
           {badge.label}
         </Badge>
       </div>
+
+      {/* Who it is assigned to (B6); saved on its own, apart from Save. */}
+      {activeLabId && <FindingAssigneeCard labId={activeLabId} findingId={id!} readOnly={isReadOnly} onChanged={fetchHistory} />}
 
       {/* PT-failure context (source_type = 'pt_failure'). Read-only summary of the
           PT event; the corrective-action workflow below is shared with findings. */}

@@ -491,6 +491,10 @@ jobs:
         # Schedules and the monitoring plan; with a target, a checkpoint's counts decide effective or not (below reopens a
         # closed finding); without one, the sent status decides as before; plan edits keep recorded results (2026-11-19).
         run: npm run test:effectiveness-measured
+      - name: Run inspection assignment integration test
+        # B6: a finding or a VeritaScan item assigned to a person on the lab, one email each time, reminders to the assignee too, an
+        # auto-save never undoes an assignment, a FAIL study opens one linked finding; Staff, view-only, another lab and support refused.
+        run: npm run test:inspection-assign
       - name: Run VeritaResponse legacy cleanup integration test
         # #109: dry run by default; voided-run findings close or flag (the #100 rule); old QC/AAA escalations move to
         # their entry types with due dates kept; idempotent.

@@ -7,6 +7,7 @@ import { StudyFinalizeDialog } from "@/components/StudyFinalizeDialog";
 import { StudyCensoringPolicyDialog } from "@/components/StudyCensoringPolicyDialog";
 import { StudyArchiveDialog } from "@/components/StudyArchiveDialog";
 import { StudyNotes } from "@/components/StudyNotes";
+import { StudyFindingPanel } from "@/components/StudyFindingPanel";
 import { hasRunDetails, runDetailRows } from "@shared/studyRunDetails";
 import { studyLotRows } from "@shared/studyLotRows";
 import { generateNarrative, studyTeaDisplay as formatTeaDisplay, isUnitsCriterion } from "@/lib/studyNarrative";
@@ -2395,6 +2396,11 @@ function StudyResultsPage() {
     );
   }
 
+  // A FAIL can open a VeritaResponse finding, and the findings opened from the study show here (B6).
+  const findingPanel = labId && isLoggedIn
+    ? <StudyFindingPanel labId={labId} studyId={study.id} studyStatus={String(study.status ?? "")} archived={!!(study as any).archived_at} />
+    : null;
+
   // PT/Coag is now unlocked — Coming Soon gate removed (was previously behind
   // `if (false && ...)` after launch and has been verified live).
 
@@ -2445,6 +2451,7 @@ function StudyResultsPage() {
         </div>
         <StudySignPanel study={study} isReadOnly={isReadOnly} onEdit={() => navigate(labRoute(`/study/${study.id}/edit`))}
           onFinalized={() => refreshSavedStudy(queryClient, id)} />
+        {findingPanel}
         <div className="space-y-4">
           <div className={`rounded-md border p-3 text-sm font-semibold ${md.overallPass ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30" : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30"}`} data-testid="md-result-verdict">
             {md.overallPass ? "Every cell class is within the Rümke 95% confidence limits" : `Outside the Rümke 95% confidence limits: ${exceeded.join(", ")}`}
@@ -2550,6 +2557,7 @@ function StudyResultsPage() {
 
         <StudySignPanel study={study} isReadOnly={isReadOnly} onEdit={() => navigate(labRoute(`/study/${study.id}/edit`))}
           onFinalized={() => refreshSavedStudy(queryClient, id)} />
+        {findingPanel}
 
         <div className="space-y-4">
           <div className={`rounded-md border p-3 text-sm font-semibold ${res.meets ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30" : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30"}`} data-testid="hr-result-verdict">
@@ -3072,6 +3080,7 @@ function StudyResultsPage() {
             </Card>
           </div>
         ) : null}
+        {findingPanel}
         {labId && isLoggedIn && <StudyNotes labId={labId} studyId={study.id} readOnly={isReadOnly} />}
       </div>
     );
@@ -3269,6 +3278,7 @@ function StudyResultsPage() {
           </>
         )}
       </div>
+      {findingPanel}
       <StudyFinalizeDialog
         open={finalizeOpen}
         onOpenChange={setFinalizeOpen}

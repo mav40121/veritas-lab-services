@@ -1291,6 +1291,12 @@ if (!scanColNames.includes("completion_note")) sqlite.exec("ALTER TABLE veritasc
 // VeritaScan teaching mode (Build #7): per-item instructional note surfaced in
 // the read-only Teaching View. Distinct from `notes` (the assessment finding).
 if (!scanColNames.includes("teaching_note")) sqlite.exec("ALTER TABLE veritascan_items ADD COLUMN teaching_note TEXT");
+// An item assigned to a person on the lab (B6, 2026-11-24; server/inspectionAssign.ts). `owner` stays the
+// text every screen and export reads: the typed name on older rows, the person's name while owner_user_id is set.
+if (!scanColNames.includes("owner_user_id")) sqlite.exec("ALTER TABLE veritascan_items ADD COLUMN owner_user_id INTEGER");
+if (!scanColNames.includes("owner_assigned_at")) sqlite.exec("ALTER TABLE veritascan_items ADD COLUMN owner_assigned_at TEXT");
+if (!scanColNames.includes("owner_assigned_by_user_id")) sqlite.exec("ALTER TABLE veritascan_items ADD COLUMN owner_assigned_by_user_id INTEGER");
+try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_veritascan_items_owner ON veritascan_items(owner_user_id)"); } catch {}
 
 // VeritaScan teaching mode (Build #7): scan-level flags. is_teaching marks a
 // scan as a guided teaching example (excluded from nothing; purely additive);
@@ -7633,6 +7639,12 @@ sqlite.exec(`
       if (!have.has("monitor_measure")) sqlite.exec("ALTER TABLE findings ADD COLUMN monitor_measure TEXT");
       if (!have.has("monitor_target_pct")) sqlite.exec("ALTER TABLE findings ADD COLUMN monitor_target_pct INTEGER");
       if (!have.has("monitor_sample")) sqlite.exec("ALTER TABLE findings ADD COLUMN monitor_sample INTEGER");
+      // Assigned to a person on the lab, and the failed VeritaCheck study the finding was opened from (B6,
+      // 2026-11-24; server/inspectionAssign.ts). All nullable; a finding saved before has neither.
+      if (!have.has("assignee_user_id")) sqlite.exec("ALTER TABLE findings ADD COLUMN assignee_user_id INTEGER");
+      if (!have.has("assigned_at")) sqlite.exec("ALTER TABLE findings ADD COLUMN assigned_at TEXT");
+      if (!have.has("assigned_by_user_id")) sqlite.exec("ALTER TABLE findings ADD COLUMN assigned_by_user_id INTEGER");
+      if (!have.has("study_id")) sqlite.exec("ALTER TABLE findings ADD COLUMN study_id INTEGER");
     }
   } catch {
     // fresh DB: CREATE TABLE above handled it
@@ -7714,6 +7726,7 @@ sqlite.exec(`
 
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_findings_user ON findings(user_id, status)`); } catch {}
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_findings_due ON findings(user_id, due_date)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_findings_study ON findings(study_id)`); } catch {}
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_finding_attachments_finding ON finding_attachments(finding_id)`); } catch {}
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_finding_history_finding ON finding_history(finding_id, at)`); } catch {}
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_finding_extension_finding ON finding_extension_requests(finding_id, status)`); } catch {}

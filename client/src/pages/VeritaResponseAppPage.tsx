@@ -101,6 +101,8 @@ export default function VeritaResponseAppPage() {
   const [findings, setFindings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
+  // "Assigned to me" (B6): the reminder and assignment emails link to the finding itself.
+  const [mineOnly, setMineOnly] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
@@ -314,6 +316,10 @@ export default function VeritaResponseAppPage() {
   const anchorLabel = ACCREDITORS.find((a) => a.value === newAccreditor)?.anchorLabel ?? "Anchor date";
   const deadlineNote = ACCREDITORS.find((a) => a.value === newAccreditor)?.deadlineNote ?? "";
 
+  const isMine = (f: any) => !!f.assignee_user_id && Number(f.assignee_user_id) === Number(user?.id);
+  const mineCount = findings.filter((f) => isMine(f) && isFindingOpen(f)).length;
+  const shownFindings = mineOnly ? findings.filter(isMine) : findings;
+
   const openCount = findings.filter(isFindingOpen).length;
   const overdueCount = findings.filter((f) => {
     if (!f.due_date) return false;
@@ -410,17 +416,24 @@ export default function VeritaResponseAppPage() {
         </div>
       )}
 
+      {/* Assigned to me */}
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" variant={mineOnly ? "outline" : "default"} className={mineOnly ? "" : "bg-[#006064] hover:bg-[#004d50] text-white"} onClick={() => setMineOnly(false)} data-testid="findings-all">All findings</Button>
+        <Button size="sm" variant={mineOnly ? "default" : "outline"} className={mineOnly ? "bg-[#006064] hover:bg-[#004d50] text-white" : ""} onClick={() => setMineOnly(true)} data-testid="findings-mine">Assigned to me{mineCount > 0 ? ` (${mineCount} open)` : ""}</Button>
+      </div>
+
       {/* List */}
       <Card>
         <CardContent className="p-0">
           <div className="overflow-auto max-h-[70vh]">
-            <table className="w-full text-sm" style={{ minWidth: 700 }}>
+            <table className="w-full text-sm" style={{ minWidth: 780 }}>
               <thead className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-muted">
                 <tr className="text-muted-foreground border-b text-xs bg-muted/30">
                   <th className="text-left py-2.5 px-4">Accreditor</th>
                   <th className="text-left py-2.5 pr-4">Finding #</th>
                   <th className="text-left py-2.5 pr-4">Standard</th>
                   <th className="text-left py-2.5 pr-4">Due</th>
+                  <th className="text-left py-2.5 pr-4">Assigned to</th>
                   <th className="text-left py-2.5 pr-4">Status</th>
                   <th className="py-2.5 pr-4"></th>
                 </tr>
@@ -428,7 +441,7 @@ export default function VeritaResponseAppPage() {
               <tbody>
                 {loadError && findings.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="py-12 text-center">
+                    <td colSpan={7} className="py-12 text-center">
                       <AlertTriangle size={28} className="mx-auto text-destructive mb-2" />
                       <div className="font-semibold text-foreground mb-1">Couldn't load your findings</div>
                       <div className="text-sm text-muted-foreground mb-3 max-w-sm mx-auto">
@@ -442,12 +455,17 @@ export default function VeritaResponseAppPage() {
                 )}
                 {!loadError && findings.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="py-12 text-center text-muted-foreground text-sm">
+                    <td colSpan={7} className="py-12 text-center text-muted-foreground text-sm">
                       No findings yet. Click "New Finding" to record one.
                     </td>
                   </tr>
                 )}
-                {findings.map((f) => {
+                {findings.length > 0 && shownFindings.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="py-12 text-center text-muted-foreground text-sm">No findings are assigned to you.</td>
+                  </tr>
+                )}
+                {shownFindings.map((f) => {
                   const d = daysUntil(f.due_date);
                   // #11: soft-clock accreditors (COLA/AABB) read "target", not "overdue".
                   const hard = isHardDeadline(f.accreditor);
@@ -505,6 +523,7 @@ export default function VeritaResponseAppPage() {
                       <td className="py-3 pr-4 text-muted-foreground">{f.finding_number || "-"}</td>
                       <td className="py-3 pr-4 text-muted-foreground text-xs">{f.standard_ref || "-"}</td>
                       <td className={`py-3 pr-4 text-xs ${dueCls}`}>{dueLabel}</td>
+                      <td className="py-3 pr-4 text-xs" data-testid={`finding-assignee-${f.id}`}>{f.assignee_user_id ? (isMine(f) ? "You" : f.assignee_name || "Lab user") : <span className="text-muted-foreground">-</span>}</td>
                       <td className="py-3 pr-4">
                         <Badge className={`${badge.cls} text-xs whitespace-nowrap font-medium`}>
                           {status === "accepted" && <CheckCircle2 size={11} className="mr-1" />}
