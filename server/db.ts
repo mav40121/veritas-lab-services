@@ -2458,6 +2458,13 @@ try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_lab_members_token ON la
   // still counts after a MINOR revision of it (same major number), and staff are told of the change; NULL/0 = everyone
   // signs again on every new version (the behavior before this setting, and the default). Never across a major revision.
   ensure("dc_minor_revision_carry_forward", "ALTER TABLE labs ADD COLUMN dc_minor_revision_carry_forward INTEGER");
+  // VeritaDC email notices (B13; server/policyNotices.ts). NULL/0 = off, which is every lab until its owner or an admin turns one on:
+  // dc_notify_approvers mails an approval step's signers when a document reaches them, dc_notify_overdue_signs mails people whose
+  // read-and-sign is overdue. dc_overdue_sign_days is how long after someone first owes a document it counts as overdue when it
+  // carries no due date; NULL = the default there.
+  ensure("dc_notify_approvers", "ALTER TABLE labs ADD COLUMN dc_notify_approvers INTEGER");
+  ensure("dc_notify_overdue_signs", "ALTER TABLE labs ADD COLUMN dc_notify_overdue_signs INTEGER");
+  ensure("dc_overdue_sign_days", "ALTER TABLE labs ADD COLUMN dc_overdue_sign_days INTEGER");
   // VeritaComp non-technical competency frequency (Michael 2026-11-04, go Q216 = 1, 2026-11-06): the site's choice of how many
   // months a non-technical competency stays current (shared/competencyNontechnicalFrequency.ts). NULL = not set: non-technical
   // records have no due date, which is what every lab has today. Due dates are worked out when read, so no record is rewritten.
@@ -8655,6 +8662,59 @@ sqlite.exec(`
 }
 try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS uq_policy_share_links_token ON policy_share_links(token)`); } catch {}
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_share_links_doc ON policy_share_links(lab_id, document_id)`); } catch {}
+
+// VeritaDC email notices (B13; server/policyNotices.ts). policy_approval_notices: one row per person told that a document's
+// approval step is theirs, once per submission per step (submission_id is the submit's policy_audit_log id; for_user_id is the
+// reviewer a delegate stands in for). policy_sign_notices: one row per lab on each weekly read-and-sign email; a person's newest
+// row in any lab holds the 7 days. Both are written before the email goes, so a failed send never becomes a second email.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS policy_approval_notices (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    document_id INTEGER NOT NULL,
+    version_id INTEGER,
+    step_id INTEGER NOT NULL,
+    submission_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    for_user_id INTEGER,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    sent_at TEXT,
+    error TEXT
+  )
+`);
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS policy_sign_notices (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    owed_documents INTEGER NOT NULL DEFAULT 0,
+    owned_documents INTEGER NOT NULL DEFAULT 0,
+    claimed_at TEXT,
+    sent_at TEXT,
+    error TEXT
+  )
+`);
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(policy_approval_notices)").all() as { name: string }[]).map((c) => c.name);
+  for (const [col, ddl] of [
+    ["lab_id", "INTEGER"], ["document_id", "INTEGER"], ["version_id", "INTEGER"], ["step_id", "INTEGER"], ["submission_id", "INTEGER"],
+    ["user_id", "INTEGER"], ["for_user_id", "INTEGER"], ["created_at", "TEXT"], ["sent_at", "TEXT"], ["error", "TEXT"],
+  ] as const) {
+    if (!cols.includes(col)) sqlite.exec(`ALTER TABLE policy_approval_notices ADD COLUMN ${col} ${ddl}`);
+  }
+}
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(policy_sign_notices)").all() as { name: string }[]).map((c) => c.name);
+  for (const [col, ddl] of [
+    ["lab_id", "INTEGER"], ["user_id", "INTEGER"], ["owed_documents", "INTEGER NOT NULL DEFAULT 0"], ["owned_documents", "INTEGER NOT NULL DEFAULT 0"],
+    ["claimed_at", "TEXT"], ["sent_at", "TEXT"], ["error", "TEXT"],
+  ] as const) {
+    if (!cols.includes(col)) sqlite.exec(`ALTER TABLE policy_sign_notices ADD COLUMN ${col} ${ddl}`);
+  }
+}
+try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS uq_policy_approval_notices ON policy_approval_notices(document_id, submission_id, step_id, user_id)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_approval_notices_lab ON policy_approval_notices(lab_id)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_sign_notices_user ON policy_sign_notices(user_id, claimed_at)`); } catch {}
 
 // Migration sentinel block. Pure read of PRAGMA table_info so the next
 // ALTER TABLE for these tables lands without re-checking column presence.

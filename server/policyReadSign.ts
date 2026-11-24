@@ -11,7 +11,8 @@
 // Signatures stay where they always were (staff_portal_policy_signatures, policy_attestations), and a new version asks again by the
 // existing rule (server/policyMinorRevision.ts). Groups are lab_groups (server/labGroups.ts); there is no second group table.
 //
-// Assigning sends no email, at any scope. The only mail here is the notice an editor sends on purpose (noticePlan, sendNotice).
+// Assigning sends no email, at any scope. The only mail here is the notice an editor sends on purpose (noticePlan, sendNotice); the
+// weekly overdue email a lab can turn on is server/policyNotices.ts.
 //
 // A Staff login reaches documents through veritaDcStaffGuard, one guard in front of every /api/labs/:labId/veritapolicy route, so a
 // route added later is covered too. Who is limited is staffOwnScope (Q182, Q186): a Staff seat with edit on VeritaDC, the owner, an
@@ -56,6 +57,8 @@ export interface ReadSignContext {
   rosterIds: Set<number>;
   groupNames: Map<number, string>;
   groupPeople: Map<number, Set<number>>;
+  // When each person joined each group, for what counts as overdue (server/policyNotices.ts): "group:employee" to a stored time.
+  groupSince: Map<string, string>;
   parentOf: Map<number, number | null>;
   manuals: any[];
 }
@@ -95,12 +98,13 @@ export function loadReadSignContext(sqlite: any, labId: number): ReadSignContext
   const rosterIds = new Set<number>(roster.map((e) => e.id));
   const groupNames = new Map<number, string>();
   const groupPeople = new Map<number, Set<number>>();
+  const groupSince = new Map<string, string>();
   for (const g of sqlite.prepare("SELECT id, name FROM lab_groups WHERE lab_id = ? AND retired = 0").all(labId) as any[]) {
     groupNames.set(g.id, g.name);
     groupPeople.set(g.id, new Set());
   }
   const typed = new Map<string, number | null>();
-  for (const m of sqlite.prepare("SELECT group_id, employee_id, email FROM lab_group_members WHERE lab_id = ?").all(labId) as any[]) {
+  for (const m of sqlite.prepare("SELECT group_id, employee_id, email, created_at FROM lab_group_members WHERE lab_id = ?").all(labId) as any[]) {
     const people = groupPeople.get(m.group_id);
     if (!people) continue; // a retired group
     let emp: number | null = m.employee_id ?? null;
@@ -109,11 +113,16 @@ export function loadReadSignContext(sqlite: any, labId: number): ReadSignContext
       if (!typed.has(key)) typed.set(key, employeeForAddress(sqlite, labId, m.email));
       emp = typed.get(key) ?? null;
     }
-    if (emp != null && rosterIds.has(emp)) people.add(emp);
+    if (emp != null && rosterIds.has(emp)) {
+      people.add(emp);
+      const key = `${m.group_id}:${emp}`;
+      const first = groupSince.get(key);
+      if (m.created_at && (!first || String(m.created_at) < first)) groupSince.set(key, String(m.created_at));
+    }
   }
   const manuals = sqlite.prepare("SELECT id, parent_id, name, display_order, archived_at FROM policy_manuals WHERE lab_id = ?").all(labId) as any[];
   const parentOf = new Map<number, number | null>(manuals.map((m) => [m.id, m.parent_id ?? null]));
-  return { labId, rules, roster, rosterIds, groupNames, groupPeople, parentOf, manuals };
+  return { labId, rules, roster, rosterIds, groupNames, groupPeople, groupSince, parentOf, manuals };
 }
 
 /** A manual and every manual it sits inside. A stored loop stops instead of running forever. */

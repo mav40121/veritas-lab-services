@@ -163,6 +163,8 @@ export const EXPORT_TABLES: Record<string, ExportTable> = {
   policy_quiz_questions: lab("VeritaDC"),
   policy_surveyor_links: lab("VeritaDC"),
   policy_share_links: lab("VeritaDC"), // one document's share link (server/policyShareLinks.ts)
+  policy_approval_notices: lab("VeritaDC"), // who was emailed that an approval step is theirs (server/policyNotices.ts)
+  policy_sign_notices: lab("VeritaDC"), // the weekly read-and-sign emails (server/policyNotices.ts)
   veritapolicy_lab_policies: labOrOwner("VeritaDC"),
   veritapolicy_master_status: labOrOwner("VeritaDC"),
   veritapolicy_requirement_status: labOrOwner("VeritaDC"),
