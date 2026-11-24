@@ -1,6 +1,6 @@
 // server/labInvites.ts
 //
-// Joining a lab with an account you already have (B3, BUG-193, Sanford, 2026-11-24; every invite since Michael's decision the same day).
+// Joining a lab with an account you already have (B3, BUG-193, 2026-11-24; every invite since Michael's decision the same day).
 // A floating person works in several labs with one login, so an invite goes to an address that already has an account; and an account
 // joins a lab only when its own person accepts. Before, a Staff login invite refused such an address (409) and an admin, editor,
 // reviewer or medical director invite added the person at once.

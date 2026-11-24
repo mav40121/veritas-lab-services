@@ -1,6 +1,6 @@
 // tests/integration/staff-login-many-labs.test.ts
 //
-// B3 (BUG-193, Sanford, 2026-11-24): a floating person works in several labs with ONE read-and-sign login. The Staff login invite refused
+// B3 (BUG-193, 2026-11-24): a floating person works in several labs with ONE read-and-sign login. The Staff login invite refused
 // any address that already had an account. Boots the REAL routes on a scratch DB with made-up labs and people and proves:
 //   1. inviting an address that has an account answers exactly as for one that doesn't, emails that person, and grants nothing
 //   2. refused: another account (by link and by id), an expired invite, a cancelled one, a Staff login inviting, another lab's admin,
