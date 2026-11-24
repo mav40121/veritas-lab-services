@@ -15,6 +15,7 @@
 // are turning it on for your entire system. So all of your users will be required to have it." When an
 // owner turns two-factor on from Account settings, users.mfa_system_required covers every lab they own
 // and every lab in an organization they are billing owner of; turning their own off lifts it.
+import { accountChangeRefusal } from "./memberAccountControl";
 import bcrypt from "bcryptjs";
 import QRCode from "qrcode";
 import {
@@ -346,6 +347,9 @@ export function registerTwoFactorRoutes(app: any, deps: {
          OR u.id IN (SELECT seat_user_id FROM user_seats WHERE lab_id = ? AND status = 'active'))`
     ).get(target, labId, labId);
     if (!inLab) return res.status(404).json({ error: "That person is not in this lab." });
+    // BUG-194 (2026-11-24): their account works only where the caller manages (memberAccountControl.ts).
+    const notTheirs = accountChangeRefusal(sqlite, { actorUserId: Number(req.userId), targetUserId: target, change: "two_factor" });
+    if (notTheirs) return res.status(notTheirs.status).json(notTheirs.body);
     const person = storage.getUserById(target);
     resetTwoFactor(sqlite, target);
     const ended = endSessions(sqlite, target, { reason: "two_factor_reset" });
