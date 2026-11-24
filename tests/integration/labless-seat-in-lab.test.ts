@@ -158,10 +158,13 @@ async function main() {
     const r4 = await invite(OWNER.token, notOwned, { "X-Active-Lab-Id": String(labC) });
     check("4d. a lab named that the owner doesn't own isn't taken: no lab", r4.s === 200 && seatByEmail(OWNER.id, notOwned)?.lab_id == null, `${r4.s} ${JSON.stringify(seatByEmail(OWNER.id, notOwned))}`);
     const r5 = await invite(OWNER.token, EXIST.email, hB);
+    const waitingSeat = seatByEmail(OWNER.id, EXIST.email);
+    const waitingMember = sqlite.prepare("SELECT lab_id FROM lab_members WHERE user_id = ? AND status = 'active'").all(EXIST.id) as any[];
+    const a5 = await call("POST", `/api/me/lab-invites/${waitingSeat?.id}/accept`, {}, EXIST.token);
     const existSeat = seatByEmail(OWNER.id, EXIST.email);
     const existMember = sqlite.prepare("SELECT lab_id FROM lab_members WHERE user_id = ? AND status = 'active'").all(EXIST.id) as any[];
-    check("4e. an existing account invited while viewing lab B: an active seat in lab B, and the membership in lab B too",
-      r5.s === 200 && existSeat?.status === "active" && existSeat?.lab_id === labB && existMember.length === 1 && existMember[0].lab_id === labB, `${r5.s} ${JSON.stringify(existSeat)} ${JSON.stringify(existMember)}`);
+    check("4e. an existing account invited while viewing lab B: waiting in lab B with no membership, then on accept an active seat and the membership, both in lab B",
+      r5.s === 200 && waitingSeat?.status === "pending" && waitingSeat?.lab_id === labB && waitingMember.length === 0 && a5.s === 200 && existSeat?.status === "active" && existSeat?.lab_id === labB && existMember.length === 1 && existMember[0].lab_id === labB, `${r5.s} ${JSON.stringify(existSeat)} ${JSON.stringify(existMember)}`);
 
     // ── 5. The admin routes take an optional labId the owner owns ──
     const pend = (body: Record<string, unknown>) => call("POST", "/api/admin/create-pending-seat", { secret: ADMIN, ownerUserId: OWNER.id, ...body }, null);

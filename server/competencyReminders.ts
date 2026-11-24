@@ -435,7 +435,11 @@ export function planCompetencyReminders(sqlite: any, labId: number, cfg: Compete
   let supervisors = cfg.supervisor_recipients, supSource = "supervisor list";
   if (!supervisors.length) { supervisors = ownerList; supSource = "lab owner; no supervisor list set"; }
   let directors = cfg.escalation_recipients, dirSource = "escalation list";
-  if (!directors.length && lab?.medical_director_email && EMAIL_RE.test(lab.medical_director_email)) {
+  // Someone named by an invitation they haven't accepted isn't the director yet (2026-11-24, labInvites.ts), so it goes to the owner.
+  const directorWaiting = !!lab?.medical_director_email && !!sqlite.prepare(
+    "SELECT 1 FROM user_seats WHERE lab_id = ? AND status = 'pending' AND seat_user_id IS NULL AND lower(seat_email) = lower(trim(?)) LIMIT 1"
+  ).get(labId, lab.medical_director_email);
+  if (!directors.length && !directorWaiting && lab?.medical_director_email && EMAIL_RE.test(lab.medical_director_email)) {
     directors = [{ email: lab.medical_director_email }]; dirSource = "medical director on file; no escalation list set";
   }
   if (!directors.length) { directors = ownerList; dirSource = "lab owner; no escalation list or medical director set"; }

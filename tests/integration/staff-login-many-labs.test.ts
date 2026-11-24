@@ -88,9 +88,9 @@ async function main() {
       try { return await call("POST", `/api/labs/${lab}/staff-portal-invites`, { staff_employee_id: employeeId, email }, token); } finally { delete process.env.RESEND_API_KEY; }
     };
     const seatOf = (email: string, lab: number) => sqlite.prepare("SELECT * FROM user_seats WHERE seat_email = ? AND lab_id = ? ORDER BY id DESC LIMIT 1").get(email, lab) as any;
-    const waiting = async (who: { token: string }) => (await get("/api/me/staff-invites", who.token)).j as any[];
-    const accept = (who: { token: string }, id: number) => call("POST", `/api/me/staff-invites/${id}/accept`, {}, who.token);
-    const acceptLink = (who: { token: string }, token: string) => call("POST", "/api/me/staff-invites/accept", { token }, who.token);
+    const waiting = async (who: { token: string }) => (await get("/api/me/lab-invites", who.token)).j as any[];
+    const accept = (who: { token: string }, id: number) => call("POST", `/api/me/lab-invites/${id}/accept`, {}, who.token);
+    const acceptLink = (who: { token: string }, token: string) => call("POST", "/api/me/lab-invites/accept", { token }, who.token);
     const memberRow = (lab: number, id: number) => sqlite.prepare("SELECT * FROM lab_members WHERE lab_id = ? AND user_id = ?").get(lab, id) as any;
     const writer = async (tag: string, name: string, lab: number) => {
       const [first, last] = name.split(" ");
@@ -120,7 +120,7 @@ async function main() {
     const floMail = mails.find((m) => m.to === FLO.email && /Sister Lab/.test(m.html)), newMail = mails.find((m) => m.to === mail("nova"));
     check("1f. only the person's own email says they already have a login", !!floMail && /already have a VeritaAssure/.test(floMail.html) && !/Set a password/.test(floMail.html) && !!newMail && /Set a password/.test(newMail.html) && !/already have/.test(newMail.html));
     const link = (await get(`/api/seats/invite/${seatS.invite_token}`)).j, newLink = (await get(`/api/seats/invite/${seatOf(mail("nova"), S).invite_token}`)).j;
-    check("1g. the link's page says it is a staff login and nothing about an account", link.valid === true && link.staffLogin === true && Object.keys(link).sort().join() === Object.keys(newLink).sort().join() && !/account/i.test(JSON.stringify(link)), JSON.stringify(link));
+    check("1g. the link's page says what is offered and nothing about an account", link.valid === true && link.offer === "staff (read and sign)" && newLink.offer === link.offer && Object.keys(link).sort().join() === Object.keys(newLink).sort().join() && !/account/i.test(JSON.stringify(link)), JSON.stringify(link));
 
     // 2. Refusals.
     const STRANGER = await register("stranger", "Some Stranger");
@@ -128,7 +128,7 @@ async function main() {
     const otherById = await accept(STRANGER, seatS.id), otherByLink = await acceptLink(STRANGER, seatS.invite_token);
     check("2b. another account: by id there is nothing there, by link it's the wrong address", otherById.s === 404 && otherByLink.s === 403 && otherByLink.j.code === "INVITE_OTHER_ACCOUNT", `${otherById.s} ${otherByLink.s} ${otherByLink.j.code}`);
     check("2c. ... and nothing changed", seatOf(FLO.email, S).status === "pending" && !memberRow(S, STRANGER.id));
-    check("2d. another account can't decline it either", (await call("POST", `/api/me/staff-invites/${seatS.id}/decline`, {}, STRANGER.token)).s === 404 && seatOf(FLO.email, S).status === "pending");
+    check("2d. another account can't decline it either", (await call("POST", `/api/me/lab-invites/${seatS.id}/decline`, {}, STRANGER.token)).s === 404 && seatOf(FLO.email, S).status === "pending");
     const staffInvites = await call("POST", `/api/labs/${A}/staff-portal-invites`, { firstName: "Any", lastName: "Body", email: mail("anybody"), deliverEmail: false }, FLO.token);
     check("2e. a Staff login can't invite", staffInvites.s === 403, `${staffInvites.s}`);
     const outsider = await call("POST", `/api/labs/${B}/staff-portal-invites`, { staff_employee_id: floatB, email: FLO.email, deliverEmail: false }, OA.token);
@@ -151,13 +151,13 @@ async function main() {
     const OPER = Number(sqlite.prepare("INSERT INTO users (email, password_hash, name, plan, created_at) VALUES (?, 'x', 'Made Operator', 'free', ?)").run(OPERATOR, now).lastInsertRowid);
     const nope = roster("Sup", "Port", S);
     const inviteCode = async (email: string) => { const r = await invite(S, nope, email); return `${r.s} ${r.j.code}`; };
-    check("2k. a Veritas support account, the operator and a Veritas address can't be invited", [await inviteCode(SUPPORT.email), await inviteCode(OPERATOR), await inviteCode("someone@veritaslabservices.com")].every((c) => c === "409 STAFF_INVITE_NOT_ALLOWED") && !!OPER && !seatOf(SUPPORT.email, S));
+    check("2k. a Veritas support account, the operator and a Veritas address can't be invited", [await inviteCode(SUPPORT.email), await inviteCode(OPERATOR), await inviteCode("someone@veritaslabservices.com")].every((c) => c === "409 INVITE_NOT_ALLOWED") && !!OPER && !seatOf(SUPPORT.email, S));
     const planted = Number(sqlite.prepare("INSERT INTO user_seats (owner_user_id, seat_email, invited_at, status, permissions, invite_token, lab_id, seat_type, staff_employee_id) VALUES (?, ?, ?, 'pending', '{}', ?, ?, 'staff_portal', ?)").run(OA.id, SUPPORT.email, now, `planted-${stamp}`, S, nope).lastInsertRowid);
     const supportAccept = await accept(SUPPORT, planted);
     check("2l. a support account holding an older invite still can't accept it", supportAccept.s === 403 && (await waiting(SUPPORT)).length === 0 && !memberRow(S, SUPPORT.id), `${supportAccept.s} ${supportAccept.j.code}`);
     const script = jwt.sign({ svc: true, userId: FLO.id }, process.env.JWT_SECRET!, { expiresIn: "10m" });
     check("2m. a script's token can't accept for a person", (await accept({ token: script }, seatS.id)).s === 403 && (await acceptLink({ token: script }, seatS.invite_token)).s === 403);
-    check("2n. signed out, nobody accepts", (await call("POST", `/api/me/staff-invites/${seatS.id}/accept`, {})).s === 401);
+    check("2n. signed out, nobody accepts", (await call("POST", `/api/me/lab-invites/${seatS.id}/accept`, {})).s === 401);
     check("2o. the emailed link doesn't make a second account at the address", (await call("POST", "/api/auth/register", { email: FLO.email, password: "Testpass123", name: "Someone Else", hipaa_acknowledged: true, inviteToken: seatS.invite_token })).s === 409);
     const supportInvite = await call("POST", `/api/labs/${S}/staff-portal-invites`, { staff_employee_id: nope, email: mail("bysupport"), deliverEmail: false }, SUPPORT.token);
     check("2p. Veritas support can't take an invitation link", supportInvite.s === 403, `${supportInvite.s}`);
@@ -174,7 +174,7 @@ async function main() {
     const meAfter = (await get("/api/auth/me", FLO.token)).j;
     check("3e. and reads as it did at sign-in", JSON.stringify([meAfter.isSeatUser, meAfter.seatType, meAfter.ownerUserId, meAfter.plan]) === JSON.stringify([meBefore.isSeatUser, meBefore.seatType, meBefore.ownerUserId, meBefore.plan]));
     check("3f. a second accept is refused", (await accept(FLO, seatS.id)).j.code === "ALREADY_ACCEPTED");
-    const audit = sqlite.prepare("SELECT action, entity_label, before_json, after_json FROM audit_log WHERE entity_type = 'staff_invite' AND entity_id = ? ORDER BY id").all(String(seatS.id)) as any[];
+    const audit = sqlite.prepare("SELECT action, entity_label, before_json, after_json FROM audit_log WHERE entity_type = 'lab_invite' AND entity_id = ? ORDER BY id").all(String(seatS.id)) as any[];
     check("3g. the invite and the acceptance are in the audit log, with no address or link", audit.length === 2 && audit[0].action === "create" && /pending/.test(audit[1].before_json) && /active/.test(audit[1].after_json) && !JSON.stringify(audit).includes("@") && !JSON.stringify(audit).includes(seatS.invite_token), JSON.stringify(audit));
     await invite(B, floatB, FLO.email);
     const viaLink = await acceptLink(FLO, seatOf(FLO.email, B).invite_token);
@@ -269,6 +269,7 @@ async function main() {
     // Staff first, writer second: the Staff seat is the older one.
     const LATER = await (async () => { const i = await invite(S, roster("Lat", "Er", S), mail("later")); return register("later", "Lat Er", i.j.inviteToken); })();
     await call("POST", `/api/labs/${A}/members`, { email: mail("later"), role: "staff", firstName: "Lat", lastName: "Er", permissions: { mode: "edit_all" } }, OA.token);
+    await accept(LATER, seatOf(mail("later"), A).id);
     const lateA = await call("POST", "/api/veritapt/events", ev("later at A"), LATER.token, A), lateS = await call("POST", "/api/veritapt/events", ev("later at S"), LATER.token, S);
     check("5j. Staff first and a writer later: an editor in A, Staff in S, whichever seat is older", lateA.s === 200 && lateS.s === 403 && (await get("/api/veritatrack/tasks", LATER.token, A)).s === 200 && (await get("/api/veritatrack/tasks", LATER.token, S)).s === 403, `${lateA.s} ${lateS.s}`);
 
@@ -344,12 +345,12 @@ async function main() {
     // 9. A shared sign-in.
     const mid = (lab: number, id: number) => memberRow(lab, id).id;
     const em = await call("PATCH", `/api/labs/${B}/members/${mid(B, FLO.id)}/email`, { email: mail("hijack") }, OB.token), nm = await call("PATCH", `/api/labs/${B}/members/${mid(B, FLO.id)}/name`, { name: "Renamed Person" }, OB.token);
-    check("9a. one customer's lab can't change the shared sign-in's email or name", em.s === 409 && em.j.code === "LOGIN_SHARED" && nm.s === 409 && (sqlite.prepare("SELECT email FROM users WHERE id = ?").get(FLO.id) as any).email === FLO.email, `${em.s} ${nm.s}`);
+    check("9a. one customer's lab can't change the shared sign-in's email or name", em.s === 409 && em.j.code === "ACCOUNT_NOT_LABS" && nm.s === 409 && (sqlite.prepare("SELECT email FROM users WHERE id = ?").get(FLO.id) as any).email === FLO.email, `${em.s} ${nm.s}`);
     const ONLY = await (async () => { const i = await invite(B, roster("On", "Ly", B), mail("only")); return register("only", "On Ly", i.j.inviteToken); })();
     const em2 = await call("PATCH", `/api/labs/${B}/members/${mid(B, ONLY.id)}/email`, { email: mail("onlyfixed") }, OB.token);
     check("9b. a person in one lab is corrected as before", em2.s === 200, `${em2.s} ${em2.j.error ?? ""}`);
-    const tfa = await call("POST", `/api/labs/${B}/two-factor/reset/${ADM.id}`, {}, OB.token), tfaFlo = await call("POST", `/api/labs/${B}/two-factor/reset/${FLO.id}`, {}, OB.token);
-    check("9c. two-factor: refused for someone who runs another lab, allowed for someone who is only Staff elsewhere", tfa.s === 409 && tfa.j.code === "LOGIN_SHARED" && tfaFlo.s === 200, `${tfa.s} ${tfaFlo.s}`);
+    const tfa = await call("POST", `/api/labs/${B}/two-factor/reset/${ADM.id}`, {}, OB.token), tfaFlo = await call("POST", `/api/labs/${B}/two-factor/reset/${FLO.id}`, {}, OB.token), tfaOnly = await call("POST", `/api/labs/${B}/two-factor/reset/${ONLY.id}`, {}, OB.token);
+    check("9c. two-factor: refused for someone who also works in a lab this owner doesn't manage, allowed for the lab's own person", [tfa, tfaFlo].every((r) => r.s === 409 && r.j.code === "ACCOUNT_NOT_LABS") && tfaOnly.s === 200, `${tfa.s} ${tfaFlo.s} ${tfaOnly.s}`);
     const act = await call("GET", `/api/account/seats/${seatOf(ADM.email, B).id}/activity`, undefined, OB.token);
     check("9d. the owner's activity summary leaves out the other customer's lab", act.s === 200 && !/Adm prog"|Made-up Main/.test(act.text) && (act.j.recentActions || []).every((a: any) => a.entityLabel !== "Adm prog"), act.text.slice(0, 300));
 
@@ -357,7 +358,7 @@ async function main() {
     const FLO2 = await register("dec", "Dec Line");
     const decRow = roster("Dec", "Line", B);
     await invite(B, decRow, FLO2.email);
-    const dec = await call("POST", `/api/me/staff-invites/${seatOf(FLO2.email, B).id}/decline`, {}, FLO2.token);
+    const dec = await call("POST", `/api/me/lab-invites/${seatOf(FLO2.email, B).id}/decline`, {}, FLO2.token);
     check("10. declining ends the invitation, frees the seat and grants nothing", dec.s === 200 && seatOf(FLO2.email, B).status === "dismissed" && !memberRow(B, FLO2.id) && (await waiting(FLO2)).length === 0 && (await accept(FLO2, seatOf(FLO2.email, B).id)).s === 404, `${dec.s}`);
   } catch (e: any) {
     check("no unexpected error", false, e?.stack || String(e));

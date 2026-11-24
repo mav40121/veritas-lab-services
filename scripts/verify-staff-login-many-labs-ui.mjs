@@ -5,8 +5,9 @@
 //   B1. a person Staff in one lab sees the other lab's invitation, accepts it, and lands in that lab with both in the switcher
 //   S1. My sign-offs is the lab on screen; the switcher moves between the labs' sign-offs; the other lab's waiting items link there
 //   J1. the emailed link, signed out: the create form and "Sign in to accept"
-//   J2. the emailed link, signed in as someone else: which address it was sent to, and no Accept
+//   J2. the emailed link, signed in as someone else: which address it was sent to, no Accept, and the create form as before
 //   J3. the emailed link, signed in as the invited person: Accept lands in the lab
+//   A1. an admin invite to an existing account: the banner says so, and accepting makes them one
 //   W1. an editor in one lab who is Staff in the other: New Map on there, off here
 //   P1. VeritaComp's Import from VeritaPT picker lists this lab's events with who tested, and fills the event ID and name
 //   D1. the same in dark mode, and at phone width with no sideways scroll
@@ -80,10 +81,10 @@ for (const mode of ["light", "dark"]) {
   const tag = mode === "dark" ? "D1. dark: " : "";
   const { who } = people[mode];
   const p = await openAs(who, `/labs/${A}/dashboard`, { mode, lab: A });
-  const banner = p.getByTestId("staff-invite-banner");
+  const banner = p.getByTestId("lab-invite-banner");
   await banner.waitFor({ timeout: 25000 }).catch(() => {});
   if (mode === "dark") check(`${tag}the page follows the system setting`, await p.evaluate(() => document.documentElement.classList.contains("dark")));
-  check(`${tag}B1a. the invitation is on screen, naming the lab`, /Made-up Hillcrest Lab\s+invited you to a staff login/.test((await banner.innerText().catch(() => "")).replace(/\s+/g, " ")));
+  check(`${tag}B1a. the invitation is on screen, naming the lab`, /Made-up Hillcrest Lab\s+invited you to join as staff \(read and sign\)/.test((await banner.innerText().catch(() => "")).replace(/\s+/g, " ")));
   await p.screenshot({ path: `${OUT}/b3-invite-banner-${mode}.png` });
   await p.setViewportSize({ width: 390, height: 800 });
   await p.waitForTimeout(300);
@@ -135,7 +136,7 @@ for (const mode of ["light", "dark"]) {
   const other = await openAs(STRANGER, `/join?token=${link}`, { mode });
   await other.getByTestId("join-other-account").waitFor({ timeout: 20000 }).catch(() => {});
   const otherText = (await other.getByTestId("join-other-account").innerText().catch(() => "")).replace(/\s+/g, " ");
-  check(`${tag}J2. signed in as someone else: the address it was sent to, and no Accept`, otherText.includes(JO.email) && otherText.includes(STRANGER.email) && (await other.getByTestId("join-accept-btn").count()) === 0, otherText);
+  check(`${tag}J2. signed in as someone else: the address it was sent to, no Accept, and the create form as before`, otherText.includes(JO.email) && otherText.includes(STRANGER.email) && (await other.getByTestId("join-accept-btn").count()) === 0 && await other.getByRole("button", { name: /Create Account/ }).isVisible().catch(() => false), otherText);
   await other.screenshot({ path: `${OUT}/b3-join-other-account-${mode}.png` });
   await other.context().close();
   const mine = await openAs(JO, `/join?token=${link}`, { mode });
@@ -147,12 +148,42 @@ for (const mode of ["light", "dark"]) {
   await mine.context().close();
 }
 
+// A1. An admin invite to someone who already has an account.
+for (const mode of ["light", "dark"]) {
+  const AD = await register(`admin${mode}`, `Ad Min${mode}`); await acceptTerms(AD);
+  const r = await call("POST", `/api/labs/${S}/members`, { email: AD.email, role: "admin", firstName: "Ad", lastName: `Min${mode}` }, OWNER.token);
+  const p = await openAs(AD, "/veritaassure", { mode });
+  await p.goto(`${BASE}/account/settings`, { waitUntil: "networkidle" });
+  const banner = p.getByTestId("lab-invite-banner");
+  await banner.waitFor({ timeout: 20000 }).catch(() => {});
+  const text = (await banner.innerText().catch(() => "")).replace(/\s+/g, " ");
+  check(`A1a. ${mode}: the banner says an admin, and they aren't a member yet`, r.body.status === "pending" && /invited you to join as an admin/.test(text) && !sql("SELECT 1 AS x FROM lab_members WHERE lab_id = ? AND user_id = ?", S, AD.id), text);
+  await p.screenshot({ path: `${OUT}/b3-admin-invite-${mode}.png` });
+  await banner.getByRole("button", { name: "Accept" }).click();
+  await p.waitForURL(new RegExp(`/labs/${S}/dashboard`), { timeout: 20000 }).catch(() => {});
+  check(`A1b. ${mode}: accepting makes them an admin there`, p.url().includes(`/labs/${S}/dashboard`) && sql("SELECT role FROM lab_members WHERE lab_id = ? AND user_id = ?", S, AD.id)?.role === "admin", p.url());
+  await p.context().close();
+}
+// Declining: the banner goes, and nothing is left.
+{
+  const DE = await register("decline", "De Cline"); await acceptTerms(DE);
+  await call("POST", `/api/labs/${S}/members`, { email: DE.email, role: "staff", firstName: "De", lastName: "Cline" }, OWNER.token);
+  const p = await openAs(DE, "/account/settings");
+  p.on("dialog", (d) => d.accept());
+  const banner = p.getByTestId("lab-invite-banner");
+  await banner.waitFor({ timeout: 20000 }).catch(() => {});
+  await banner.getByRole("button", { name: "Decline" }).click().catch(() => {});
+  await banner.waitFor({ state: "detached", timeout: 15000 }).catch(() => {});
+  check("A1c. declining takes the banner away and leaves no membership", !(await banner.isVisible().catch(() => false)) && sql("SELECT status FROM user_seats WHERE seat_email = ? AND lab_id = ?", DE.email, S)?.status === "dismissed" && !sql("SELECT 1 AS x FROM lab_members WHERE lab_id = ? AND user_id = ?", S, DE.id));
+  await p.context().close();
+}
+
 // W1. An editor in Northgate, Staff in Hillcrest.
 const WRITER = await register("writer", "Made-up Writer Penrose"); await acceptTerms(WRITER);
 sql("INSERT INTO lab_members (lab_id, user_id, role, permissions_json, status, is_primary_lab, accepted_at, created_at, updated_at) VALUES (?, ?, 'staff', '{}', 'active', 1, ?, ?, ?)", A, WRITER.id, now, now, now);
 sql("INSERT INTO user_seats (owner_user_id, seat_email, seat_user_id, status, seat_type, lab_id, permissions, invited_at, accepted_at) VALUES (?, ?, ?, 'active', 'active', ?, '{\"mode\":\"edit_all\"}', ?, ?)", OWNER.id, WRITER.email, WRITER.id, A, now, now);
 await invite(S, roster("Wren", "Penrose", S), WRITER.email);
-await call("POST", `/api/me/staff-invites/${sql("SELECT id FROM user_seats WHERE seat_email = ? AND lab_id = ?", WRITER.email, S).id}/accept`, {}, WRITER.token);
+await call("POST", `/api/me/lab-invites/${sql("SELECT id FROM user_seats WHERE seat_email = ? AND lab_id = ?", WRITER.email, S).id}/accept`, {}, WRITER.token);
 for (const [l, on] of [[A, true], [S, false]]) {
   const p = await openAs(WRITER, `/labs/${l}/veritamap-app`, { lab: l });
   const btn = p.getByRole("button", { name: /New Map/ }).first();

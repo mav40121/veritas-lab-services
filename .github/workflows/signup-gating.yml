@@ -319,6 +319,10 @@ jobs:
         # B3 (BUG-193): a Staff login invite can go to an address with an account; nothing is granted until that person accepts,
         # Staff limits are judged per lab on every request, and no role in another lab is lowered or raised.
         run: npm run test:staff-login-many-labs
+      - name: Run invite accept first test
+        # Michael 2026-11-24: an account joins a lab only when its own person accepts, for every kind of invite; a medical director
+        # named by an invite acts from acceptance; an invitation that ends puts the designation back; a brand-new address is as before.
+        run: npm run test:invite-accept-first
       - name: Run quiz option letters test
         # Redington 2026-11-18: the answer key names an option by position (A = first); the quiz screens read the letter from
         # the option's text, so options typed without "A." graded every pick wrong. shared/quizOptions.ts and the admin count.

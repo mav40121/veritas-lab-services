@@ -70,7 +70,7 @@ import { buildMonthlyReviewPayload } from "./qcMonthlyReviewPayload";
 import { applyLicenseToExcelJS } from "./licenseStamp";
 import { resolveLegacyLabId as sharedResolveLegacyLabId, ownerMatchCounts, ownerRowInReach, isOlderSeatDate, staffOutsideRecordLab } from "./labAccessGuard";
 import { adminSeatLabId, editSeatInLab, labForNewAccountSeat, legacySeatForUser, seatForRequest, seatInLabOrderSql, seatInLabSql, seatTypeInLabSql, staffLabForRequest, staffOnlyInLab, stampLablessSeatLab } from "./seatContext";
-import { registerStaffInviteRoutes, rosterEntryTaken, staffInviteEmailForAccount, staffInviteRefusal, worksBeyond } from "./staffInvites";
+import { auditInvite, endInviteDesignation, inviteEmailForAccount, inviteLabId, inviteRoleLabel, memberInviteRefusal, recordInviteDesignation, registerLabInviteRoutes, rosterEntryTaken, staffInviteRefusal } from "./labInvites";
 import { effectiveSeatPermission, staffSeatEditRefusal } from "@shared/seatEditRule";
 import { staffSeatEditCounts } from "./staffSeatEditCounts";
 import { seatFactsForUser } from "./seatFacts";
@@ -1144,8 +1144,8 @@ function authMiddleware(req: any, res: any, next: any) {
       req.isSeatUser &&
       req.seatType === 'view_only' &&
       !['GET', 'HEAD', 'OPTIONS'].includes(req.method) &&
-      // B3: answering your own staff invitation is about your sign-in, not about the lab where you are a reviewer.
-      !String(req.path || "").startsWith("/api/me/staff-invites/")
+      // B3: answering your own invitation is about your sign-in, not about the lab where you are a reviewer.
+      !String(req.path || "").startsWith("/api/me/lab-invites/")
     ) {
       return res.status(403).json({
         error: 'view_only_seat',
@@ -7586,7 +7586,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   };
   const clearLoginRate = (key: string): void => { loginFailures.delete(key); };
 
-  registerStaffInviteRoutes(app, { sqlite: (db as any).$client, authMiddleware, getUserById: (id) => storage.getUserById(id), auditLabMembership });
+  registerLabInviteRoutes(app, { sqlite: (db as any).$client, authMiddleware, getUserById: (id) => storage.getUserById(id), auditLabMembership });
   registerEmailVerificationRoutes(app, { sqlite: (db as any).$client, storage, resend, frontendUrl: FRONTEND_URL, checkLoginRate, recordLoginFailure, clearLoginRate });
   app.post("/api/auth/login", async (req, res) => {
     const parsed = loginSchema.safeParse(req.body);
@@ -9662,6 +9662,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         if (owner != null && targetUserId === owner) {
           return res.status(400).json({ error: "The owner already has access to every location; manage other members here" });
         }
+        // 2026-11-24: this moves people who already work in the enterprise between its locations. An account joins by accepting an
+        // invitation (server/labInvites.ts), so someone in none of its locations can't be added here.
+        const inGroup = locations.some((l) => sqlite.prepare("SELECT 1 FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active'").get(l.id, targetUserId));
+        if (!inGroup) return res.status(404).json({ error: "That person isn't a member of any of these locations. Invite them first." });
         const def = body.defaultLocationId != null ? Number(body.defaultLocationId) : wanted[0];
         if (!wanted.includes(def)) return res.status(400).json({ error: "Default must be one of the selected locations" });
 
@@ -11519,14 +11523,17 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (seat.status === "active") return res.status(409).json({ error: "Seat is active; use deactivate, not dismiss" });
     if (seat.status === "dismissed") return res.json({ ok: true, dismissed_id: seatId, alreadyDismissed: true });
     sqlite.prepare("UPDATE user_seats SET status = 'dismissed' WHERE id = ?").run(seatId);
+    endInviteDesignation(sqlite, seatId, req.userId); // a medical director it named goes back to what it was (labInvites.ts)
     res.json({ ok: true, dismissed_id: seatId });
   });
 
   // POST /api/labs/:labId/members — invite a new user to the lab.
   // Body: { email, role?: 'staff'|'admin', permissions?: object }.
-  // Gated: admin or owner. Creates user_seats row under labs.owner_user_id
-  // (NOT the inviter), creates lab_members row with the chosen role, sends
-  // an invite email via Resend. Seat-count gate uses the LAB OWNER's
+  // Gated: admin or owner. Creates a PENDING user_seats row under
+  // labs.owner_user_id (NOT the inviter) and sends an invite email via Resend.
+  // 2026-11-24: an address that already has an account is invited like any
+  // other and joins when its person accepts (server/labInvites.ts); it used
+  // to be added at once. Seat-count gate uses the LAB OWNER's
   // user.plan and existing user_seats count, matching /api/account/seats POST.
   app.post("/api/labs/:labId/members", authMiddleware, labScopeMiddleware, async (req: any, res) => {
     if (!canManageLabMembers(req.scope)) return res.status(403).json({ error: "Owner or admin required" });
@@ -11624,12 +11631,13 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
     // Duplicate-member check.
     const existingUser = confirmedUserByEmail((db as any).$client, storage, normalizedEmail);
-    const seatUserId = existingUser ? existingUser.id : null;
-    if (seatUserId) {
+    if (existingUser) {
       const dupMember = sqlite.prepare(
         "SELECT id FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active'"
-      ).get(req.scope.labId, seatUserId) as any;
+      ).get(req.scope.labId, existingUser.id) as any;
       if (dupMember) return res.status(409).json({ error: "User is already a member of this lab" });
+      const refusal = memberInviteRefusal(sqlite, req.scope.labId, { id: existingUser.id, email: normalizedEmail });
+      if (refusal) return res.status(refusal.status).json({ error: refusal.error, code: refusal.code });
     }
     // Seat uniqueness is PER LAB: user_seats rows are lab-scoped (lab_id), so a
     // person who holds a seat on one of the owner's labs must still be invitable
@@ -11642,7 +11650,6 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (dupSeat) return res.status(409).json({ error: "This email already has a seat on this lab" });
 
     const now = new Date().toISOString();
-    const newStatus = seatUserId ? "active" : "pending";
     // Default permissions are derived from seat_type when the caller does not
     // supply them explicitly: an active (writer) seat gets edit_all so the
     // intuitive "I invited a staff member, they can do their job" workflow
@@ -11656,39 +11663,39 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const permJson = JSON.stringify(permissions || defaultPermissions);
     const inviteToken = crypto.randomUUID();
 
+    let inviteSeatId = 0;
     try {
       sqlite.exec("BEGIN");
       // Reactivate previously deactivated seat row if any.
       const deactivated = sqlite.prepare(
         "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND lab_id = ? AND " + SEAT_ROW_REUSABLE
       ).get(labOwnerId, normalizedEmail, req.scope.labId) as any;
+      // The seat waits for the person whether or not the address has an account: no account on it, no membership.
       if (deactivated) {
+        inviteSeatId = Number(deactivated.id);
         sqlite.prepare(
-          "UPDATE user_seats SET seat_user_id = ?, status = ?, invited_at = ?, accepted_at = ?, permissions = ?, invite_token = ?, lab_id = ?, seat_type = ?, invitee_name = ?, invite_role = ? WHERE id = ?"
-        ).run(seatUserId, newStatus, now, seatUserId ? now : null, permJson, inviteToken, req.scope.labId, seatType, inviteeName, role, deactivated.id);
+          "UPDATE user_seats SET seat_user_id = NULL, status = 'pending', invited_at = ?, accepted_at = NULL, permissions = ?, invite_token = ?, lab_id = ?, seat_type = ?, invitee_name = ?, invite_role = ? WHERE id = ?"
+        ).run(now, permJson, inviteToken, req.scope.labId, seatType, inviteeName, role, deactivated.id);
       } else {
-        // invite_role (2026-10-22): kept on the seat so sign-up grants the chosen role to a person who has no account yet.
-        sqlite.prepare(
-          "INSERT INTO user_seats (owner_user_id, seat_email, seat_user_id, invited_at, status, permissions, invite_token, lab_id, seat_type, invitee_name, invite_role) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-        ).run(labOwnerId, normalizedEmail, seatUserId, now, newStatus, permJson, inviteToken, req.scope.labId, seatType, inviteeName, role);
-      }
-      // Create lab_members row when the invited user already has an account.
-      if (seatUserId) {
-        sqlite.prepare(
-          `INSERT INTO lab_members (lab_id, user_id, role, permissions_json, status, is_primary_lab, accepted_at, created_at, updated_at)
-           VALUES (?, ?, ?, '{}', 'active', 0, ?, ?, ?)`
-        ).run(req.scope.labId, seatUserId, role, now, now, now);
+        // invite_role (2026-10-22): kept on the seat so accepting grants the chosen role.
+        inviteSeatId = Number(sqlite.prepare(
+          "INSERT INTO user_seats (owner_user_id, seat_email, seat_user_id, invited_at, status, permissions, invite_token, lab_id, seat_type, invitee_name, invite_role) VALUES (?, ?, NULL, ?, 'pending', ?, ?, ?, ?, ?, ?)"
+        ).run(labOwnerId, normalizedEmail, now, permJson, inviteToken, req.scope.labId, seatType, inviteeName, role).lastInsertRowid);
       }
       // Medical Director invite: designate this person as the lab's MD in the same
       // transaction. MD is identified by email (works while still a pending invite)
       // and is the one FREE seat, which is why the active-seat cap was skipped above.
       // Reassigns if the lab already had a different MD (the prior MD's seat then
       // re-counts as a normal active seat, since the free exclusion keys off this email).
+      // Nothing acts on the name until they are an active member, and an invite that ends
+      // unaccepted puts back what it replaced (labInvites.ts). The name is the one the
+      // inviter typed, the same whether or not the address has an account.
       if (isMd) {
-        const mdName = (existingUser && (existingUser as any).name) ? (existingUser as any).name : inviteeName;
+        const was = sqlite.prepare("SELECT medical_director_email AS email, medical_director_name AS name FROM labs WHERE id = ?").get(req.scope.labId) as any;
         sqlite.prepare(
           "UPDATE labs SET medical_director_email = ?, medical_director_name = ?, updated_at = ? WHERE id = ?"
-        ).run(normalizedEmail, mdName, now, req.scope.labId);
+        ).run(normalizedEmail, inviteeName, now, req.scope.labId);
+        recordInviteDesignation(sqlite, req.scope.labId, inviteSeatId, req.userId, { email: was?.email ?? null, name: was?.name ?? null }, { email: normalizedEmail, name: inviteeName });
         console.log(`[labs/${req.scope.labId}/members POST] designated Medical Director -> ${normalizedEmail} (role=medical_director invite)`);
       }
       sqlite.exec("COMMIT");
@@ -11697,25 +11704,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       console.error("[labs/:labId/members POST] DB insert failed:", err.message);
       return res.status(500).json({ error: err.message || "Failed to invite member" });
     }
-    // The lab's medical director is an admin (2026-10-23, Michael): an MD invite becomes an admin invite, and an MD
-    // who already has an account joins as admin.
+    // The lab's medical director is an admin (2026-10-23, Michael): an MD invite becomes an admin invite, granted when accepted.
     promoteMedicalDirectorToAdmin(sqlite, req.scope.labId);
-    if (seatUserId) {
-      const newMembership = sqlite.prepare(
-        "SELECT * FROM lab_members WHERE lab_id = ? AND user_id = ? ORDER BY id DESC LIMIT 1"
-      ).get(req.scope.labId, seatUserId);
-      auditLabMembership("create", newMembership, req.userId, (req.headers["x-forwarded-for"] as string) || null, "labs/:labId/members");
-      // BUG-183: someone who already has an account joins now, so their roster entry is tied now (rosterMembers.ts).
-      try {
-        const joined = sqlite.prepare(
-          "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_user_id = ? AND lab_id = ? AND status = 'active' AND invite_token = ?"
-        ).get(labOwnerId, seatUserId, req.scope.labId, inviteToken) as any;
-        const tied = joined ? linkInvitedMemberToRoster(sqlite, Number(joined.id)) : null;
-        if (tied) logAudit({ userId: req.userId, ownerUserId: Number(labOwnerId), module: "veritastaff", action: "update", entityType: "staff_employee.login_link", entityId: tied.employeeId, entityLabel: "linked on invite", after: { login_user_id: tied.userId, lab_id: tied.labId }, ipAddress: req.ip });
-      } catch (err: any) {
-        console.error("[labs/:labId/members POST] roster link failed (non-fatal):", err.message);
-      }
-    }
+    const offer = inviteRoleLabel(sqlite, sqlite.prepare("SELECT owner_user_id, lab_id, seat_email, seat_type, invite_role, permissions FROM user_seats WHERE id = ?").get(inviteSeatId) as any, req.scope.labId);
+    auditInvite({ userId: req.userId, ownerUserId: labOwnerId, seatId: inviteSeatId, labId: req.scope.labId, offer, ip: req.ip });
 
     // Best-effort invite email (matches /api/account/seats template).
     const labName = lab.lab_name || ownerRow.clia_lab_name || ownerRow.hospital_name || "the lab";
@@ -11735,7 +11727,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
             from: "VeritaAssure® <info@veritaslabservices.com>",
             to: normalizedEmail,
             subject: `You've been invited to join ${labName} on VeritaAssure®`,
-            html: `
+            html: existingUser ? inviteEmailForAccount({ inviterName, labName, offer, url: `${FRONTEND_URL}/join?token=${inviteToken}` }) : `
               <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px">
                 <h2 style="color:#01696F">VeritaAssure®</h2>
                 <p style="font-size:15px;color:#1B2B2B;line-height:1.6">${inviterName} has invited you to join <strong>${labName}</strong> on VeritaAssure® as a team member${role === "admin" ? " with admin rights" : ""}.</p>
@@ -11757,7 +11749,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       }
     }
 
-    res.json({ ok: true, status: newStatus, emailSent, role, inviteToken });
+    res.json({ ok: true, status: "pending", emailSent, role, inviteToken });
   });
 
   // GET /api/me/staff-portal-employee
@@ -11949,7 +11941,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   //   PIN + picker.
   //   B3 (BUG-193, 2026-11-24): the address may already have an account.
   //   The invite waits for that person to accept it signed in as
-  //   themselves (server/staffInvites.ts), and this answer is the same
+  //   themselves (server/labInvites.ts), and this answer is the same
   //   either way.
   app.post("/api/labs/:labId/staff-portal-invites", authMiddleware, labScopeMiddleware, async (req: any, res) => {
     if (!canManageLabMembers(req.scope)) return res.status(403).json({ error: "Owner or admin required" });
@@ -11979,7 +11971,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
     // B3: an address with an account is invited like any other, unless that account already has this lab or is a Veritas one.
     const existingUser = confirmedUserByEmail((db as any).$client, storage, normalizedEmail);
-    if (isVeritasLogin(normalizedEmail)) return res.status(409).json({ error: "This address can't be invited as a staff login. Use a different email.", code: "STAFF_INVITE_NOT_ALLOWED" });
+    if (isVeritasLogin(normalizedEmail)) return res.status(409).json({ error: "This address can't be invited to a lab. Use a different email.", code: "INVITE_NOT_ALLOWED" });
     const accountRefusal = existingUser ? staffInviteRefusal(sqlite, req.scope.labId, { id: existingUser.id, email: normalizedEmail }) : null;
     if (accountRefusal) return res.status(accountRefusal.status).json({ error: accountRefusal.error, code: accountRefusal.code });
 
@@ -12051,7 +12043,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     ).get(labOwnerId, normalizedEmail, req.scope.labId) as any;
     if (dupSeat) return res.status(409).json({ error: "This email already has a seat on this lab. Use the seat list to manage it." });
 
-    // seat_user_id stays empty whether or not the address has an account: nothing is granted until the person accepts (staffInvites.ts).
+    // seat_user_id stays empty whether or not the address has an account: nothing is granted until the person accepts (labInvites.ts).
     const now = new Date().toISOString();
     const inviteToken = crypto.randomUUID();
     // Staff Portal seats are read and sign: they don't author. They are stored
@@ -12083,7 +12075,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       console.error("[labs/:labId/staff-portal-invites POST] insert failed:", err.message);
       return res.status(500).json({ error: err.message || "Failed to create invite" });
     }
-    logAudit({ userId: req.userId, ownerUserId: labOwnerId, module: "account", action: "create", entityType: "staff_invite", entityId: inviteSeatId, entityLabel: `Staff login invited in lab ${req.scope.labId}`, after: { status: "pending", lab_id: req.scope.labId, staff_employee_id: staffEmpId }, ipAddress: req.ip });
+    auditInvite({ userId: req.userId, ownerUserId: labOwnerId, seatId: inviteSeatId, labId: req.scope.labId, offer: "staff (read and sign)", employeeId: staffEmpId, ip: req.ip });
 
     const labName = lab.lab_name || ownerRow.clia_lab_name || ownerRow.hospital_name || "the lab";
     const inviterName = req.scope.role === "owner"
@@ -12102,8 +12094,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           body: JSON.stringify({
             from: "VeritaAssure® <info@veritaslabservices.com>",
             to: normalizedEmail,
-            subject: existingUser ? `${labName} has invited you to a VeritaAssure® staff login` : `Set up your VeritaAssure staff login for ${labName}`,
-            html: existingUser ? staffInviteEmailForAccount({ inviterName, labName, personName: techName, url: `${FRONTEND_URL}/join?token=${inviteToken}` }) : `
+            subject: existingUser ? `You've been invited to join ${labName} on VeritaAssure®` : `Set up your VeritaAssure staff login for ${labName}`,
+            html: existingUser ? inviteEmailForAccount({ inviterName, labName, offer: "staff (read and sign)", url: `${FRONTEND_URL}/join?token=${inviteToken}` }) : `
               <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px">
                 <h2 style="color:#01696F">VeritaAssure® staff login</h2>
                 <p style="font-size:15px;color:#1B2B2B;line-height:1.6">${inviterName} at <strong>${labName}</strong> has set up a VeritaAssure staff login for ${techName}.</p>
@@ -12231,8 +12223,6 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     }
     const userRow = sqlite.prepare("SELECT id, email FROM users WHERE id = ?").get(member.user_id) as any;
     if (!userRow) return res.status(404).json({ error: "Member account not found" });
-    // B3: one sign-in can work in several labs, and its email is how the person signs in to all of them.
-    if (worksBeyond(sqlite, Number(member.user_id), req.userId)) return res.status(409).json({ error: "This person also signs in at another lab, so their email can't be changed here. Ask Veritas Lab Services.", code: "LOGIN_SHARED" });
     const oldEmail = String(userRow.email || "").toLowerCase();
     if (oldEmail === newEmail) return res.json({ ok: true, email: newEmail, unchanged: true });
     // BUG-194 (2026-11-24): only an account this lab made, used nowhere the caller doesn't manage (memberAccountControl.ts).
@@ -12299,7 +12289,6 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     }
     const userRow = sqlite.prepare("SELECT id, name FROM users WHERE id = ?").get(member.user_id) as any;
     if (!userRow) return res.status(404).json({ error: "Member account not found" });
-    if (worksBeyond(sqlite, Number(member.user_id), req.userId)) return res.status(409).json({ error: "This person also signs in at another lab, so their name can't be changed here. Ask Veritas Lab Services.", code: "LOGIN_SHARED" });
     if (String(userRow.name || "") === newName) return res.json({ ok: true, name: newName, unchanged: true });
     const notTheirs = accountChangeRefusal(sqlite, { actorUserId: Number(req.userId), targetUserId: Number(userRow.id), change: "name" });
     if (notTheirs) return res.status(notTheirs.status).json(notTheirs.body);
@@ -32804,10 +32793,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     ).get(req.userId, email.toLowerCase());
     if (existingActive) return res.status(409).json({ error: "This email already has a seat assigned" });
 
-    // Check if invited user already has an account
+    // 2026-11-24: an address that already has an account joins when its person accepts (server/labInvites.ts). Someone who is
+    // already an active member of the lab this seat is for has joined, so their seat is given back at once, as before; that is
+    // worked out below, once the seat's lab is known.
     const existingUser = confirmedUserByEmail((db as any).$client, storage, email.toLowerCase());
-    const seatUserId = existingUser ? existingUser.id : null;
-    const newStatus = seatUserId ? "active" : "pending";
 
     // Server-side default for invites that arrive without permissions (old
     // client tab, scripted invite). The new client requires the owner to
@@ -32835,6 +32824,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // their one lab when they own exactly one; otherwise it stays without a lab as before (labForNewAccountSeat). A
     // reactivated row keeps a lab it already has.
     const stampLabId = labForNewAccountSeat((db as any).$client, req.userId, req.headers["x-active-lab-id"]);
+    const seatLab = inviteLabId((db as any).$client, { lab_id: deactivated ? (((db as any).$client.prepare("SELECT lab_id FROM user_seats WHERE id = ?").get(deactivated.id) as any)?.lab_id ?? stampLabId) : stampLabId, owner_user_id: req.userId, seat_type: deactivated?.seat_type ?? null });
+    const refusal = existingUser && seatLab ? memberInviteRefusal((db as any).$client, seatLab, { id: existingUser.id, email: email.toLowerCase() }) : null;
+    if (refusal && refusal.code === "INVITE_NOT_ALLOWED") return res.status(refusal.status).json({ error: refusal.error, code: refusal.code });
+    const joined = !!existingUser && !!seatLab && !!(db as any).$client.prepare("SELECT 1 FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active'").get(seatLab, existingUser.id);
+    const seatUserId = joined ? existingUser!.id : null;
+    const newStatus = joined ? "active" : "pending";
     let seatRowId: number;
     if (deactivated) {
       (db as any).$client.prepare(
@@ -32846,43 +32841,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         "INSERT INTO user_seats (owner_user_id, seat_email, seat_user_id, invited_at, status, permissions, invite_token, lab_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
       ).run(req.userId, email.toLowerCase(), seatUserId, now, newStatus, permJson, inviteToken, stampLabId).lastInsertRowid);
     }
-    const seatLabId: number | null = ((db as any).$client.prepare("SELECT lab_id FROM user_seats WHERE id = ?").get(seatRowId) as any)?.lab_id ?? null;
-
-    // If the seat user already exists and is active, inherit the owner's lab_id
-    if (seatUserId && newStatus === "active") {
-      const ownerLabRow = (db as any).$client.prepare("SELECT lab_id FROM users WHERE id = ?").get(req.userId) as any;
-      if (ownerLabRow?.lab_id) {
-        (db as any).$client.prepare("UPDATE users SET lab_id = ? WHERE id = ?").run(ownerLabRow.lab_id, seatUserId);
-      }
-      // Replaces the now-disabled boot lab_members backfill: a legacy seat
-      // invite to an already-registered user must also grant lab membership
-      // on the inviter's primary lab, otherwise the lab switcher and per-
-      // lab data gates won't see them (the original Bug 2 from 2026-05-24).
-      // Target lab = the seat's own lab when it has one (Q287 = 1, so the membership and the seat name the same lab), else
-      // the inviter's primary lab_members row (is_primary_lab=1) as before.
-      const inviterPrimary = seatLabId ? { lab_id: seatLabId } : (db as any).$client.prepare(
-        "SELECT lab_id FROM lab_members WHERE user_id = ? AND is_primary_lab = 1 AND status = 'active' LIMIT 1"
-      ).get(req.userId) as any;
-      if (inviterPrimary?.lab_id) {
-        const dupMember = (db as any).$client.prepare(
-          "SELECT id FROM lab_members WHERE lab_id = ? AND user_id = ?"
-        ).get(inviterPrimary.lab_id, seatUserId) as any;
-        if (!dupMember) {
-          (db as any).$client.prepare(
-            `INSERT INTO lab_members (lab_id, user_id, role, permissions_json, status, is_primary_lab, accepted_at, created_at, updated_at)
-             VALUES (?, ?, 'staff', ?, 'active', 0, ?, ?, ?)`
-          ).run(inviterPrimary.lab_id, seatUserId, permJson, now, now, now);
-          promoteMedicalDirectorToAdmin((db as any).$client, inviterPrimary.lab_id); // the medical director is an admin (2026-10-23)
-          const newMembership = (db as any).$client.prepare(
-            "SELECT * FROM lab_members WHERE lab_id = ? AND user_id = ?"
-          ).get(inviterPrimary.lab_id, seatUserId);
-          auditLabMembership("create", newMembership, req.userId, (req.headers["x-forwarded-for"] as string) || null, "account/seats:legacy-invite");
-        }
-      }
-      // An existing account takes the seat at once, which is its acceptance: a seat still without a lab takes the lab when
-      // the person is now a member of exactly one of the owner's labs (Q287 = 1, as the invite link's acceptance does).
-      stampLablessSeatLab((db as any).$client, seatRowId);
-    }
+    // A seat still without a lab takes the lab when its holder is a member of exactly one of the owner's labs (Q287 = 1).
+    if (joined) stampLablessSeatLab((db as any).$client, seatRowId);
+    const seatOffer = inviteRoleLabel((db as any).$client, (db as any).$client.prepare("SELECT owner_user_id, lab_id, seat_email, seat_type, invite_role, permissions FROM user_seats WHERE id = ?").get(seatRowId) as any, seatLab);
+    auditInvite({ userId: req.userId, ownerUserId: req.userId, seatId: seatRowId, labId: seatLab, offer: seatOffer, ip: req.ip });
 
     // Send invite email via Resend
     const owner = storage.getUserById(req.userId);
@@ -32904,7 +32866,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           from: "VeritaAssure\u00AE <info@veritaslabservices.com>",
           to: email.toLowerCase(),
           subject: `You've been invited to join ${labName} on VeritaAssure\u00AE`,
-          html: `
+          html: existingUser ? inviteEmailForAccount({ inviterName, labName, offer: seatOffer, url: `${FRONTEND_URL}/join?token=${inviteToken}` }) : `
             <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px">
               <h2 style="color:#01696F">VeritaAssure\u00AE</h2>
               <p style="font-size:15px;color:#1B2B2B;line-height:1.6">${inviterName} has invited you to join <strong>${labName}</strong> on VeritaAssure\u00AE as a team member.</p>
@@ -32934,7 +32896,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     }
     }
 
-    res.json({ ok: true, status: seatUserId ? "active" : "pending", emailSent });
+    res.json({ ok: true, status: newStatus, emailSent });
   });
 
   // Look up a seat invitation by token (no auth required - user is not yet logged in)
@@ -32975,8 +32937,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       inviterName: seat.owner_name || "Your lab administrator",
       seatEmail: seat.seat_email,
       inviteeName: seat.invitee_name || null,
-      // B3: a Staff login invite can be accepted by signing in. Says nothing about whether the address has an account.
-      staffLogin: seat.seat_type === "staff_portal",
+      // B3: any invite can be accepted by signing in. Says nothing about whether the address has an account.
+      offer: inviteRoleLabel((db as any).$client, seat, inviteLabId((db as any).$client, seat)),
     });
   });
 
@@ -33106,8 +33068,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     ).get(seatUserId) as any;
 
     // Study count
-    // B3: for someone who also works in labs this owner doesn't run, only what they did in this owner's labs.
-    const elsewhere = worksBeyond((db as any).$client, seatUserId, req.userId) ? 1 : 0;
+    // B3: for an account that isn't this owner's alone (memberAccountControl.ts), only what they did in this owner's labs.
+    const elsewhere = accountChangeRefusal((db as any).$client, { actorUserId: Number(req.userId), targetUserId: Number(seatUserId), change: "two_factor" }) ? 1 : 0;
     const studyRow = (db as any).$client.prepare(
       "SELECT COUNT(*) as cnt FROM studies WHERE user_id = @user AND (@elsewhere = 0 OR lab_id IN (SELECT id FROM labs WHERE owner_user_id = @owner))"
     ).get({ user: seatUserId, elsewhere, owner: req.userId }) as any;
