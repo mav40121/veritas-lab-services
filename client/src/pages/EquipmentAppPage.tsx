@@ -13,7 +13,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { DecimalInput } from "@/components/ui/decimal-input";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
@@ -26,21 +25,10 @@ import { useToast } from "@/hooks/use-toast";
 import { TemperatureLogsPanel } from "@/components/TemperatureLogsPanel";
 import { MonthlyRecordReviewPanel } from "@/components/MonthlyRecordReviewPanel";
 import { StainLogPanel } from "@/components/StainLogPanel";
-
-interface Equipment {
-  id: number;
-  instrument_name: string;
-  manufacturer: string | null;
-  model: string | null;
-  serial_number: string | null;
-  location: string | null;
-  pm_interval_days: number | null;
-  next_due_date: string | null;
-  status: string;
-  notes: string | null;
-  map_instrument_id?: number | null;
-  maintenance_status: "overdue" | "due_soon" | "ok" | "none";
-}
+import { DocumentPicker, equipmentApi, sendJson, type Equipment } from "@/components/equipment/equipmentShared";
+import { LogMaintenanceDialog } from "@/components/equipment/LogMaintenanceDialog";
+import { EquipmentHistoryDialog } from "@/components/equipment/EquipmentHistoryDialog";
+import { ContractFields, EquipmentRecordDialog, RetiredList, RetireDialog } from "@/components/equipment/EquipmentRecordDialog";
 
 // An analyzer on the lab's VeritaMap test menu (GET /veritacheck/lab-instruments).
 interface MenuInstrument {
@@ -49,28 +37,6 @@ interface MenuInstrument {
   nickname: string | null;
   serial_number: string | null;
 }
-
-interface MaintEvent {
-  id: number;
-  event_type: string;
-  event_date: string;
-  performed_by: string | null;
-  next_due_date: string | null;
-  notes: string | null;
-}
-
-const EVENT_TYPES: { value: string; label: string }[] = [
-  { value: "calibration", label: "Calibration" },
-  { value: "preventive_maintenance", label: "Preventive maintenance" },
-  { value: "function_check", label: "Function check" },
-  { value: "service", label: "Service" },
-  { value: "repair", label: "Repair" },
-  { value: "troubleshooting", label: "Troubleshooting" },
-  { value: "solution_change", label: "Solution change" },
-];
-// 2026-11-04 (Q161): what a stainer's solution record has to say was done to the solution.
-const SOLUTION_ACTIONS = ["Changed", "Filtered", "Added to"];
-const TYPE_LABEL: Record<string, string> = Object.fromEntries(EVENT_TYPES.map(t => [t.value, t.label]));
 
 function todayIso() { return labTodayIso(); }
 
@@ -142,6 +108,29 @@ function EquipmentRemindersPanel({ apiBase }: { apiBase: string }) {
   );
 }
 
+// The lab's VeritaMaintain settings (B9): whether a vendor PM needs its report attached before it counts as complete.
+function MaintainSettingsPanel({ labId, settings, readOnly, onChanged }: { labId: number; settings: { require_vendor_report: boolean }; readOnly: boolean; onChanged: () => void }) {
+  const { toast } = useToast();
+  const [saving, setSaving] = useState(false);
+  async function set(v: boolean) {
+    setSaving(true);
+    try {
+      const r = await sendJson(`${API_BASE}/api/labs/${labId}/equipment-settings`, "PUT", { require_vendor_report: v });
+      if (!r.ok) { toast({ title: r.data.error || "Could not save", variant: "destructive" }); return; }
+      toast({ title: v ? "A vendor PM now needs its report attached" : "A vendor PM no longer needs its report attached" });
+      onChanged();
+    } finally { setSaving(false); }
+  }
+  return (
+    <div className="rounded-xl border border-dashed p-4 mb-4" data-testid="maintain-settings">
+      <label className="flex items-start gap-2 text-sm">
+        <input type="checkbox" className="mt-1" checked={settings.require_vendor_report} disabled={saving || readOnly} onChange={(e) => set(e.target.checked)} data-testid="require-vendor-report" />
+        <span><span className="font-semibold">Require an attached vendor report</span><span className="block text-xs text-muted-foreground">A PM done by a vendor counts as complete, and moves its due date, only once the vendor report is attached to it. Entries already complete stay as they are.</span></span>
+      </label>
+    </div>
+  );
+}
+
 export default function EquipmentAppPage() {
   const { user, isLoggedIn } = useAuth();
   const isReadOnly = useIsReadOnly("veritamaintain");
@@ -177,36 +166,39 @@ export default function EquipmentAppPage() {
   const [menuInstruments, setMenuInstruments] = useState<MenuInstrument[]>([]);
   const [eqSaving, setEqSaving] = useState(false);
 
-  // Log maintenance event dialog
-  const [evOpen, setEvOpen] = useState(false);
-  const [evForId, setEvForId] = useState<number | null>(null);
-  const [evType, setEvType] = useState("calibration");
-  const [evDate, setEvDate] = useState(todayIso());
-  const [evBy, setEvBy] = useState("");
-  const [evNextDue, setEvNextDue] = useState("");
-  const [evNotes, setEvNotes] = useState("");
-  // Troubleshooting entries record the problem, the action taken and the outcome (St. Charles REQ-070).
-  const [tsProblem, setTsProblem] = useState("");
-  const [tsAction, setTsAction] = useState("");
-  const [tsOutcome, setTsOutcome] = useState("");
-  const [solAction, setSolAction] = useState(SOLUTION_ACTIONS[0]);
-  const [solNames, setSolNames] = useState("");
-  const [evSaving, setEvSaving] = useState(false);
+  // B9: the rest of the equipment record.
+  const [placed, setPlaced] = useState("");
+  const [vendor, setVendor] = useState("");
+  const [contract, setContract] = useState("");
+  const [ifuUrl, setIfuUrl] = useState("");
+  const [ifuDoc, setIfuDoc] = useState<number | null>(null);
+  const [ifuDocName, setIfuDocName] = useState<string | null>(null);
+  const [logFor, setLogFor] = useState<Equipment | null>(null);
+  const [historyFor, setHistoryFor] = useState<Equipment | null>(null);
+  const [recordFor, setRecordFor] = useState<number | null>(null);
+  const [retiring, setRetiring] = useState<Equipment | null>(null);
+  const [retired, setRetired] = useState<Equipment[]>([]);
+  const [showRetired, setShowRetired] = useState(false);
+  const [settings, setSettings] = useState({ require_vendor_report: false });
 
-  // History dialog
-  const [histOpen, setHistOpen] = useState(false);
-  const [histName, setHistName] = useState("");
-  const [histEvents, setHistEvents] = useState<MaintEvent[]>([]);
-  const [histLoading, setHistLoading] = useState(false);
-
+  async function loadSettings() {
+    if (!activeLabId) return;
+    const r = await fetch(`${API_BASE}/api/labs/${activeLabId}/equipment-settings`, { headers: authHeaders() });
+    if (r.ok) setSettings(await r.json());
+  }
   async function load() {
     if (!activeLabId) return;
     setLoading(true);
     try {
       const res = await fetch(`${API_BASE}/api/labs/${activeLabId}/equipment`, { headers: authHeaders() });
       if (!res.ok) throw new Error(`equipment ${res.status}`);
-      setItems(await res.json());
+      const rows: Equipment[] = await res.json();
+      setItems(rows);
       setLoadError(false);
+      // An open dialog shows the row as it stands now (its due date may just have moved).
+      setHistoryFor(h => (h ? rows.find(r => r.id === h.id) ?? h : h));
+      const gone = await fetch(`${API_BASE}/api/labs/${activeLabId}/equipment?retired=1`, { headers: authHeaders() });
+      if (gone.ok) setRetired(await gone.json());
     } catch (err) {
       console.error("Failed to load equipment:", err);
       setLoadError(true);
@@ -216,7 +208,7 @@ export default function EquipmentAppPage() {
   }
 
   useEffect(() => {
-    if (isLoggedIn && hasPlanAccess && activeLabId) load();
+    if (isLoggedIn && hasPlanAccess && activeLabId) { load(); loadSettings(); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoggedIn, hasPlanAccess, activeLabId]);
 
@@ -230,6 +222,7 @@ export default function EquipmentAppPage() {
 
   function resetEqForm() {
     setEditingId(null); setName(""); setMfr(""); setModel(""); setSerial(""); setLocation(""); setInterval_(""); setNextDue(""); setLinkId("");
+    setPlaced(""); setVendor(""); setContract(""); setIfuUrl(""); setIfuDoc(null); setIfuDocName(null);
   }
   function openAdd() { resetEqForm(); setEqOpen(true); }
   function openEdit(e: Equipment) {
@@ -237,6 +230,12 @@ export default function EquipmentAppPage() {
     setSerial(e.serial_number || ""); setLocation(e.location || "");
     setInterval_(e.pm_interval_days != null ? String(e.pm_interval_days) : ""); setNextDue(e.next_due_date || "");
     setLinkId(e.map_instrument_id ? String(e.map_instrument_id) : "");
+    setPlaced(e.placed_in_service_date || ""); setVendor(e.vendor_name || ""); setContract(e.service_contract || "");
+    setIfuUrl(e.ifu_url || ""); setIfuDoc(e.ifu_document_id ?? null); setIfuDocName(null);
+    if (e.ifu_document_id && activeLabId) {
+      fetch(`${equipmentApi(activeLabId)}/${e.id}/record`, { headers: authHeaders() }).then(r => (r.ok ? r.json() : null))
+        .then(j => setIfuDocName(j?.ifu_document ? [j.ifu_document.doc_number, j.ifu_document.title].filter(Boolean).join(" ") : null)).catch(() => {});
+    }
     setEqOpen(true);
   }
 
@@ -248,6 +247,8 @@ export default function EquipmentAppPage() {
       serial_number: serial || null, location: location || null,
       pm_interval_days: interval || null, next_due_date: nextDue || null,
       map_instrument_id: linkId ? Number(linkId) : null,
+      placed_in_service_date: placed || null, vendor_name: vendor || null, service_contract: contract || null,
+      ifu_url: ifuUrl.trim() || null, ifu_document_id: ifuDoc,
     };
     try {
       const url = editingId
@@ -260,51 +261,12 @@ export default function EquipmentAppPage() {
     } finally { setEqSaving(false); }
   }
 
-  async function retire(e: Equipment) {
+  async function restore(e: Equipment) {
     if (!activeLabId) return;
-    const res = await fetch(`${API_BASE}/api/labs/${activeLabId}/equipment/${e.id}`, {
-      method: "PUT", headers: { ...authHeaders(), "Content-Type": "application/json" }, body: JSON.stringify({ status: "retired" }),
-    });
-    if (res.ok) { toast({ title: `Retired ${e.instrument_name}` }); await load(); }
-  }
-
-  function openLogEvent(e: Equipment) {
-    setSolAction(SOLUTION_ACTIONS[0]); setSolNames("");
-    setEvForId(e.id); setEvType("calibration"); setEvDate(todayIso()); setEvBy(""); setEvNextDue(""); setEvNotes(""); setTsProblem(""); setTsAction(""); setTsOutcome(""); setEvOpen(true);
-  }
-  async function saveEvent() {
-    if (!activeLabId || !evForId || !evDate) return;
-    const isTs = evType === "troubleshooting";
-    const isSol = evType === "solution_change";
-    if (isTs && (!tsProblem.trim() || !tsAction.trim() || !tsOutcome.trim())) {
-      toast({ title: "Enter the problem, the action taken and the outcome", variant: "destructive" }); return;
-    }
-    if (isSol && (!evBy.trim() || !solNames.trim())) {
-      toast({ title: "Enter who did it and which solutions", variant: "destructive" }); return;
-    }
-    const notes = isSol
-      ? [`${solAction}: ${solNames.trim()}`, evNotes.trim() ? `Notes: ${evNotes.trim()}` : ""].filter(Boolean).join("\n")
-      : isTs
-      ? [`Problem: ${tsProblem.trim()}`, `Action taken: ${tsAction.trim()}`, `Outcome: ${tsOutcome.trim()}`, evNotes.trim() ? `Notes: ${evNotes.trim()}` : ""].filter(Boolean).join("\n")
-      : (evNotes || null);
-    setEvSaving(true);
-    try {
-      const res = await fetch(`${API_BASE}/api/labs/${activeLabId}/equipment/${evForId}/events`, {
-        method: "POST", headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ event_type: evType, event_date: evDate, performed_by: evBy || null, next_due_date: evNextDue || null, notes }),
-      });
-      if (!res.ok) { const e = await res.json().catch(() => ({})); toast({ title: e.error || "Could not log event", variant: "destructive" }); return; }
-      toast({ title: isSol ? "Solution change logged" : isTs ? "Troubleshooting logged" : "Maintenance logged", description: isTs || isSol ?"Recorded on this instrument's history. The maintenance due date is unchanged." : "Next-due updated from the entry or the PM interval." });
-      setEvOpen(false); await load();
-    } finally { setEvSaving(false); }
-  }
-
-  async function openHistory(e: Equipment) {
-    setHistName(e.instrument_name); setHistEvents([]); setHistOpen(true); setHistLoading(true);
-    try {
-      const res = await fetch(`${API_BASE}/api/labs/${activeLabId}/equipment/${e.id}/events`, { headers: authHeaders() });
-      setHistEvents(res.ok ? await res.json() : []);
-    } finally { setHistLoading(false); }
+    const r = await sendJson(`${equipmentApi(activeLabId)}/${e.id}/restore`, "POST", {});
+    if (!r.ok) { toast({ title: r.data.error || "Could not restore it", variant: "destructive" }); return; }
+    toast({ title: `Restored ${e.instrument_name}` });
+    await load();
   }
 
   if (!isLoggedIn) {
@@ -362,9 +324,13 @@ export default function EquipmentAppPage() {
       )}
 
       <EquipmentRemindersPanel apiBase={`${API_BASE}/api/labs/${activeLabId}/equipment`} />
+      <MaintainSettingsPanel labId={Number(activeLabId)} settings={settings} readOnly={isReadOnly} onChanged={loadSettings} />
 
       <Card>
-        <CardHeader><CardTitle className="text-base">Instruments</CardTitle></CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
+          <CardTitle className="text-base">Instruments</CardTitle>
+          <Button size="sm" variant="outline" onClick={() => setShowRetired(v => !v)} data-testid="toggle-retired">{showRetired ? "Hide retired" : `Retired (${retired.length})`}</Button>
+        </CardHeader>
         <CardContent>
           {loading ? (
             <p className="text-sm text-muted-foreground">Loading...</p>
@@ -394,6 +360,8 @@ export default function EquipmentAppPage() {
                       <td className="py-2 pr-2">
                         <div className="font-medium">{e.instrument_name}</div>
                         <div className="text-xs text-muted-foreground">{[e.manufacturer, e.model, e.serial_number ? `SN ${e.serial_number}` : ""].filter(Boolean).join(" · ") || "-"}</div>
+                        {e.out_of_service && <div className="text-xs font-medium text-amber-800 dark:text-amber-300" data-testid={`equip-out-${e.id}`}>Out of service since {e.out_of_service.down_from.replace("T", " ")}</div>}
+                        {e.awaiting_vendor_report ? <div className="text-xs font-medium text-amber-800 dark:text-amber-300" data-testid={`equip-waiting-${e.id}`}>{e.awaiting_vendor_report === 1 ? "A vendor PM is" : `${e.awaiting_vendor_report} vendor PMs are`} waiting for the vendor report</div> : null}
                       </td>
                       <td className="py-2 pr-2 text-muted-foreground">{e.location || "-"}</td>
                       <td className="py-2 pr-2 text-muted-foreground">{e.pm_interval_days ? `${e.pm_interval_days} d` : "-"}</td>
@@ -401,16 +369,17 @@ export default function EquipmentAppPage() {
                       <td className="py-2 pr-2">{statusBadge(e.maintenance_status)}</td>
                       <td className="py-2 pr-2">
                         <div className="flex flex-wrap gap-1.5">
-                          <Button size="sm" variant="outline" onClick={() => openLogEvent(e)} disabled={!canRecord}>Log maintenance</Button>
-                          <Button size="sm" variant="ghost" onClick={() => openHistory(e)}>History</Button>
+                          <Button size="sm" variant="outline" onClick={() => setLogFor(e)} disabled={!canRecord} data-testid={`equip-log-${e.id}`}>Log maintenance</Button>
+                          <Button size="sm" variant="ghost" onClick={() => setHistoryFor(e)} data-testid={`equip-history-${e.id}`}>History</Button>
+                          <Button size="sm" variant="ghost" onClick={() => setRecordFor(e.id)} data-testid={`equip-record-${e.id}`}>Record</Button>
                           {e.map_instrument_id ? (
                             <Button size="sm" variant="ghost" asChild>
                               <Link href={labRoute(`/instruments/${e.map_instrument_id}/trail`)} data-testid={`equip-trail-${e.id}`}>QC trail</Link>
                             </Button>
                           ) : null}
                           {e.map_instrument_id ? <AssignStaffButton instrument={{ id: e.map_instrument_id, name: e.instrument_name }} testId={`equip-assign-staff-${e.id}`} /> : null}
-                          <Button size="sm" variant="ghost" onClick={() => openEdit(e)} disabled={isReadOnly}>Edit</Button>
-                          <Button size="sm" variant="ghost" className="text-muted-foreground" onClick={() => retire(e)} disabled={isReadOnly}>Retire</Button>
+                          <Button size="sm" variant="ghost" onClick={() => openEdit(e)} disabled={isReadOnly} data-testid={`equip-edit-${e.id}`}>Edit</Button>
+                          <Button size="sm" variant="ghost" className="text-muted-foreground" onClick={() => setRetiring(e)} disabled={isReadOnly} data-testid={`equip-retire-${e.id}`}>Retire</Button>
                         </div>
                       </td>
                     </tr>
@@ -422,6 +391,13 @@ export default function EquipmentAppPage() {
         </CardContent>
       </Card>
 
+      {showRetired && (
+        <Card className="mt-4" data-testid="retired-card">
+          <CardHeader><CardTitle className="text-base">Retired instruments</CardTitle></CardHeader>
+          <CardContent><RetiredList items={retired} canEdit={!isReadOnly} onRestore={restore} onHistory={setHistoryFor} onRecord={e => setRecordFor(e.id)} /></CardContent>
+        </Card>
+      )}
+
       {/* Temperature logs (St. Charles REQ-068): storage units, readings, out-of-range corrective action. */}
       <TemperatureLogsPanel labId={Number(activeLabId)} />
       <StainLogPanel labId={Number(activeLabId)} />
@@ -429,7 +405,7 @@ export default function EquipmentAppPage() {
 
       {/* Add / edit equipment */}
       <Dialog open={eqOpen} onOpenChange={(o) => { if (!o) resetEqForm(); setEqOpen(o); }}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingId ? "Edit instrument" : "Add instrument"}</DialogTitle>
             <DialogDescription>Track this instrument's calibration and preventive maintenance. Use the same name as your VeritaMap instrument menu so it stays one source of truth.</DialogDescription>
@@ -445,6 +421,13 @@ export default function EquipmentAppPage() {
             <div><Label htmlFor="eq-loc">Location</Label><Input id="eq-loc" value={location} onChange={e => setLocation(e.target.value)} placeholder="e.g. Main lab bench 2" /></div>
             <div><Label htmlFor="eq-int">PM interval (days)</Label><Input id="eq-int" type="text" inputMode="decimal" min={1} value={interval} onChange={e => setInterval_(e.target.value)} placeholder="e.g. 365" /></div>
             <div><Label htmlFor="eq-due">Next due date</Label><Input id="eq-due" type="date" value={nextDue} onChange={e => setNextDue(e.target.value)} /></div>
+            <ContractFields vendor={vendor} setVendor={setVendor} contract={contract} setContract={setContract} placed={placed} setPlaced={setPlaced} />
+            <div className="sm:col-span-2"><Label htmlFor="eq-ifu">IFU web address</Label><Input id="eq-ifu" value={ifuUrl} onChange={e => setIfuUrl(e.target.value)} placeholder="https://" /></div>
+            <div className="sm:col-span-2">
+              <Label>IFU document in VeritaDC&#8482;</Label>
+              <DocumentPicker labId={Number(activeLabId)} value={ifuDoc} valueLabel={ifuDocName} onChange={(id) => setIfuDoc(id)} testId="eq-ifu-doc" />
+              <p className="text-[11px] text-muted-foreground mt-1">Opens the document's current approved version from the instrument's record.</p>
+            </div>
             {menuInstruments.length > 0 && (
               <div className="sm:col-span-2">
                 <Label htmlFor="eq-link">Analyzer on your test menu</Label>
@@ -470,79 +453,10 @@ export default function EquipmentAppPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Log maintenance event */}
-      <Dialog open={evOpen} onOpenChange={setEvOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Log maintenance</DialogTitle>
-            <DialogDescription>Record a completed maintenance activity or a troubleshooting event. If you leave "next due" blank and the instrument has a PM interval, the next-due date is computed for you (troubleshooting and solution changes never change it).</DialogDescription>
-          </DialogHeader>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <Label htmlFor="ev-type">Type <span className="text-red-600">*</span></Label>
-              <Select value={evType} onValueChange={setEvType}>
-                <SelectTrigger id="ev-type"><SelectValue /></SelectTrigger>
-                <SelectContent>{EVENT_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div><Label htmlFor="ev-date">Date <span className="text-red-600">*</span></Label><Input id="ev-date" type="date" value={evDate} onChange={e => setEvDate(e.target.value)} /></div>
-            <div><Label htmlFor="ev-by">Performed by{evType === "solution_change" && <span className="text-red-600"> *</span>}</Label><Input id="ev-by" value={evBy} onChange={e => setEvBy(e.target.value)} placeholder="Tech or vendor" /></div>
-            {evType !== "solution_change" && <div><Label htmlFor="ev-next">Next due (optional)</Label><Input id="ev-next" type="date" value={evNextDue} onChange={e => setEvNextDue(e.target.value)} /></div>}
-            {evType === "solution_change" && (<>
-              <div>
-                <Label htmlFor="sol-action">What was done <span className="text-red-600">*</span></Label>
-                <select id="sol-action" className="h-9 w-full rounded-md border border-border bg-background px-2 text-sm" value={solAction} onChange={e => setSolAction(e.target.value)} data-testid="sol-action">
-                  {SOLUTION_ACTIONS.map(a => <option key={a} value={a}>{a}</option>)}
-                </select>
-              </div>
-              <div className="sm:col-span-2"><Label htmlFor="sol-names">Which solutions <span className="text-red-600">*</span></Label><Input id="sol-names" value={solNames} onChange={e => setSolNames(e.target.value)} placeholder="e.g. Hematoxylin, eosin, clarifier" data-testid="sol-names" /></div>
-              <p className="sm:col-span-2 text-[11px] text-muted-foreground" data-testid="sol-stain-log-hint">Keeping a <Link href={labRoute(`/equipment-app/stain-log?instrument=${evForId}`)} className="underline">stain log</Link> on this instrument? Record changes there, so the lot and expiration are kept.</p>
-            </>)}
-            {evType === "troubleshooting" && (<>
-              <div className="sm:col-span-2"><Label htmlFor="ts-problem">Problem <span className="text-red-600">*</span></Label><Textarea id="ts-problem" rows={2} value={tsProblem} onChange={e => setTsProblem(e.target.value)} placeholder="What happened (error code, symptom, QC shift)" /></div>
-              <div className="sm:col-span-2"><Label htmlFor="ts-action">Action taken <span className="text-red-600">*</span></Label><Textarea id="ts-action" rows={2} value={tsAction} onChange={e => setTsAction(e.target.value)} placeholder="Steps taken, parts replaced, vendor contacted" /></div>
-              <div className="sm:col-span-2"><Label htmlFor="ts-outcome">Outcome <span className="text-red-600">*</span></Label><Textarea id="ts-outcome" rows={2} value={tsOutcome} onChange={e => setTsOutcome(e.target.value)} placeholder="Resolved and returned to service, or still open" /></div>
-            </>)}
-            <div className="sm:col-span-2"><Label htmlFor="ev-notes">{evType === "troubleshooting" ? "Additional notes" : "Notes"}</Label><Textarea id="ev-notes" rows={2} value={evNotes} onChange={e => setEvNotes(e.target.value)} placeholder="Work performed, parts, results" /></div>
-          </div>
-          <div className="flex justify-end gap-2 mt-2">
-            <Button variant="outline" onClick={() => setEvOpen(false)} disabled={evSaving}>Cancel</Button>
-            <Button onClick={saveEvent} disabled={evSaving || !evDate}>{evSaving ? "Saving..." : "Log maintenance"}</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* History */}
-      <Dialog open={histOpen} onOpenChange={setHistOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Maintenance history: {histName}</DialogTitle>
-            <DialogDescription>Every calibration, preventive maintenance, service, repair and troubleshooting event, newest first.</DialogDescription>
-          </DialogHeader>
-          {histLoading ? (
-            <p className="text-sm text-muted-foreground py-4">Loading...</p>
-          ) : histEvents.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-4">No maintenance events logged yet.</p>
-          ) : (
-            <div className="overflow-x-auto max-h-96">
-              <table className="w-full text-sm">
-                <thead className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-muted text-left text-xs text-muted-foreground border-b"><tr><th className="py-2 pr-2">Date</th><th className="py-2 pr-2">Type</th><th className="py-2 pr-2">By</th><th className="py-2 pr-2">Next due</th><th className="py-2 pr-2">Notes</th></tr></thead>
-                <tbody>
-                  {histEvents.map(ev => (
-                    <tr key={ev.id} className="border-b last:border-b-0 align-top">
-                      <td className="py-2 pr-2 whitespace-nowrap">{ev.event_date}</td>
-                      <td className="py-2 pr-2">{TYPE_LABEL[ev.event_type] || ev.event_type}</td>
-                      <td className="py-2 pr-2 text-muted-foreground">{ev.performed_by || "-"}</td>
-                      <td className="py-2 pr-2 whitespace-nowrap">{ev.next_due_date || "-"}</td>
-                      <td className="py-2 pr-2 text-muted-foreground whitespace-pre-wrap">{ev.notes || "-"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      <LogMaintenanceDialog labId={Number(activeLabId)} equipment={logFor} requireVendorReport={settings.require_vendor_report} onClose={() => setLogFor(null)} onSaved={load} />
+      <EquipmentHistoryDialog labId={Number(activeLabId)} equipment={historyFor} canEdit={!isReadOnly} canRecord={canRecord} onClose={() => setHistoryFor(null)} onChanged={load} />
+      <EquipmentRecordDialog labId={Number(activeLabId)} equipmentId={recordFor} canSetup={!isReadOnly} onClose={() => setRecordFor(null)} onChanged={load} />
+      <RetireDialog labId={Number(activeLabId)} equipment={retiring} today={todayIso()} onClose={() => setRetiring(null)} onDone={load} />
     </div>
   );
 }

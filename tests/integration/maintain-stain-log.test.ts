@@ -164,7 +164,7 @@ async function main() {
     // A second instrument with no stain log stays out of it; a retired instrument takes no entries
     const retired = (await call("POST", `${L}/equipment`, { instrument_name: "Made-up old stainer" }, A.token)).body.id as number;
     const retiredRow = (await addRow({ name: "Old eosin", row_kind: "solution" }, A.token, `${S}/${retired}/rows`)).body.id as number;
-    await call("PUT", `${L}/equipment/${retired}`, { status: "retired" }, A.token);
+    await call("POST", `${L}/equipment/${retired}/retire`, { reason: "Replaced" }, A.token);
     check("3. a retired instrument takes no entries", (await call("POST", `${S}/${retired}/entries`, { log_date: "2026-09-04", initials: "MU", items: [{ row_id: retiredRow, codes: ["C"] }] }, A.token)).status === 400);
     check("3. and no new rows", (await addRow({ name: "Nope", row_kind: "solution" }, A.token, `${S}/${retired}/rows`)).status === 400);
 

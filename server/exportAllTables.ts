@@ -231,6 +231,9 @@ export const EXPORT_TABLES: Record<string, ExportTable> = {
   equipment_maintenance_events: lab("VeritaMaintain"),
   equipment_reminder_config: lab("VeritaMaintain"),
   equipment_reminder_log: lab("VeritaMaintain"),
+  equipment_files: lab("VeritaMaintain"), // service reports, certificates and checklists, bytes in the row (server/equipment.ts)
+  equipment_downtime: lab("VeritaMaintain"),
+  maintain_settings: lab("VeritaMaintain"),
   temp_log_units: lab("VeritaMaintain"),
   temp_log_readings: lab("VeritaMaintain"),
   maintain_record_reviews: lab("VeritaMaintain"),

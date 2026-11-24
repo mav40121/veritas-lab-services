@@ -107,6 +107,17 @@ const ALWAYS: Record<string, string> = {
   "DELETE /api/labs/:labId/veritapolicy/documents/:id/attestations/:assignmentId": "delete a policy attestation",
   // VeritaMaintain, VeritaResponse
   "POST /api/labs/:labId/equipment/:id/events": "log maintenance as performed",
+  "POST /api/labs/:labId/equipment/:id/events/:eventId/correct": "correct a maintenance entry",
+  "POST /api/labs/:labId/equipment/:id/events/:eventId/void": "void a maintenance entry",
+  // Attaching a vendor report can be what makes a vendor PM count as complete.
+  "POST /api/labs/:labId/equipment/:id/events/:eventId/files": "attach a file to a maintenance entry",
+  "POST /api/labs/:labId/equipment/:id/files/:fileId/remove": "remove a maintenance file",
+  "POST /api/labs/:labId/equipment/:id/retire": "retire an instrument",
+  "POST /api/labs/:labId/equipment/:id/restore": "restore a retired instrument",
+  "POST /api/labs/:labId/equipment/:id/move": "move an instrument to another lab",
+  "POST /api/labs/:labId/equipment/:id/downtime": "take an instrument out of service",
+  "POST /api/labs/:labId/equipment/:id/downtime/:downtimeId/end": "put an instrument back in service",
+  "PUT /api/labs/:labId/equipment/:id/downtime/:downtimeId": "correct an out of service period",
   "POST /api/labs/:labId/findings/:id/signoff": "sign off a finding",
   "PUT /api/labs/:labId/findings/:id/effectiveness-checks/:checkId": "verify a corrective action",
   // Assigning work emails a person in the lab's name; who does what is the lab's own decision (server/inspectionAssign.ts).

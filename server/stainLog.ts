@@ -235,7 +235,7 @@ export function registerStainLogRoutes(
     const lab = db0.prepare("SELECT lab_name, clia_number FROM labs WHERE id = ?").get(labId) as any;
     const r = db0.prepare("SELECT typed_signature, capacity_label, signed_at, corrective_action FROM maintain_record_reviews WHERE lab_id = ? AND period = ? AND item_type = 'equipment' AND item_id = ?").get(labId, month, eq.id) as any;
     // Solution changes logged on the instrument's history before it had a stain log, or since: shown read-only so nothing is hidden.
-    const history = db0.prepare("SELECT event_date, performed_by, notes FROM equipment_maintenance_events WHERE lab_id = ? AND equipment_id = ? AND event_type = 'solution_change' AND substr(event_date, 1, 7) = ? ORDER BY event_date, id").all(labId, eq.id, month);
+    const history = db0.prepare("SELECT event_date, performed_by, notes FROM equipment_maintenance_events WHERE lab_id = ? AND equipment_id = ? AND event_type = 'solution_change' AND substr(event_date, 1, 7) = ? AND superseded_by_event_id IS NULL AND voided_at IS NULL ORDER BY event_date, id").all(labId, eq.id, month);
     const lots = db0.prepare(
       `SELECT e.row_id, e.lot_number, e.expiration_date, e.log_date FROM stain_log_entries e
         WHERE e.lab_id = ? AND e.equipment_id = ? AND e.code = 'C' AND e.voided_at IS NULL AND e.lot_number IS NOT NULL AND e.log_date <= ?

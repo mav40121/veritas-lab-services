@@ -37,7 +37,7 @@ import {
   Info,
   FileText,
 } from "lucide-react";
-import { ifuSearchUrl } from "@shared/ifu";
+import { ifuSearchUrl, isValidIfuUrl } from "@shared/ifu";
 import { useToast } from "@/hooks/use-toast";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { useMemberships } from "@/hooks/useMemberships";
@@ -380,7 +380,7 @@ const ROLE_STYLES: Record<Role, string> = {
   POC: "bg-green-100 text-green-700 dark:bg-green-950/50 dark:text-green-300",
 };
 
-function InstrumentBadge({ instr, analyte }: { instr: InstrumentOnTest; analyte?: string }) {
+function InstrumentBadge({ instr, analyte, onIfu }: { instr: InstrumentOnTest; analyte?: string; onIfu?: () => void }) {
   const roleStyle = ROLE_STYLES[instr.role] ?? "bg-muted text-muted-foreground";
   // IFU: link the lab's stored exact package insert if present; otherwise a
   // manufacturer + analyte scoped search ("easy pull"). Never a fabricated deep link.
@@ -407,6 +407,17 @@ function InstrumentBadge({ instr, analyte }: { instr: InstrumentOnTest; analyte?
         >
           <FileText size={9} />{exact ? "IFU" : "Find IFU"}
         </a>
+        {onIfu && instr.instrument_test_id ? (
+          <button
+            type="button"
+            onClick={onIfu}
+            title={exact ? "Change the stored IFU link" : "Store this test's IFU link"}
+            className="text-[9px] text-muted-foreground hover:text-primary hover:underline"
+            data-testid={`ifu-set-${instr.instrument_test_id}`}
+          >
+            {exact ? "Change" : "Set link"}
+          </button>
+        ) : null}
       </span>
     </span>
   );
@@ -853,6 +864,8 @@ interface TestRowProps {
   onEditCorrelation?: (test: TestRecord, corr: CorrelationRecord | null) => void;
   // #93: opens the link-a-policy dialog for this test (lab-scoped, editable maps only).
   onSopLink?: (test: TestRecord) => void;
+  // B9 (2026-11-24): store the IFU link of one analyzer's test. Only for someone who can edit the map.
+  onIfuLink?: (test: TestRecord, instr: InstrumentOnTest) => void;
   readOnly?: boolean;
   colCount: number;
   // Wave A4 provenance actions (lab-scoped routes only; undefined on the
@@ -1400,7 +1413,52 @@ function SopLinkDialog({ test, tests, labId, mapApiBase, onClose, onSaved }: {
   );
 }
 
-function TestRow({ test, onChange, onChangeMany, onRowMount, analyteBands, amrValues, onSaveAnalyteValues, onDeleteAnalyteBand, onSaveAmrValues, onEditCorrelation, onSopLink, readOnly, colCount, onProvenance, canUnlock }: TestRowProps) {
+// The IFU (package insert) link of one analyzer's test (B9). A blank link clears it, and the row goes back to Find IFU.
+function IfuLinkDialog({ analyte, instr, mapApiBase, onClose, onSaved }: {
+  analyte: string; instr: InstrumentOnTest; mapApiBase: string; onClose: () => void; onSaved: () => void;
+}) {
+  const { toast } = useToast();
+  const [url, setUrl] = useState(instr.ifu_url || "");
+  const [saving, setSaving] = useState(false);
+  const bad = url.trim() !== "" && !isValidIfuUrl(url);
+  const save = async (value: string) => {
+    setSaving(true);
+    try {
+      const r = await fetch(`${API_BASE}${mapApiBase}/tests/${instr.instrument_test_id}/ifu`, {
+        method: "PUT", headers: { ...authHeaders(), "Content-Type": "application/json" }, body: JSON.stringify({ ifuUrl: value.trim() }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || "Could not save the link");
+      toast({ title: j.ifu_url ? "IFU link saved" : "IFU link cleared" });
+      onSaved();
+    } catch (e: any) {
+      toast({ title: "Not saved", description: e.message, variant: "destructive" });
+    } finally { setSaving(false); }
+  };
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-lg" data-testid="ifu-link-dialog">
+        <DialogHeader>
+          <DialogTitle className="text-base">IFU link: {analyte} on {instr.nickname || instr.instrument_name}</DialogTitle>
+          <DialogDescription className="text-xs">
+            The web address of the manufacturer's instructions for use for this test. The row's IFU link opens it.
+          </DialogDescription>
+        </DialogHeader>
+        <div>
+          <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://" className="text-sm" autoFocus data-testid="ifu-link-url" />
+          {bad && <p className="text-xs text-red-700 dark:text-red-400 mt-1">Enter a web address starting with http or https.</p>}
+        </div>
+        <DialogFooter className="gap-2">
+          {instr.ifu_url && <Button variant="outline" size="sm" disabled={saving} onClick={() => save("")} data-testid="ifu-link-clear">Clear</Button>}
+          <Button variant="outline" size="sm" onClick={onClose}>Cancel</Button>
+          <Button size="sm" disabled={saving || bad || !url.trim()} onClick={() => save(url)} data-testid="ifu-link-save">{saving ? "Saving..." : "Save link"}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function TestRow({ test, onChange, onChangeMany, onRowMount, analyteBands, amrValues, onSaveAnalyteValues, onDeleteAnalyteBand, onSaveAmrValues, onEditCorrelation, onSopLink, onIfuLink, readOnly, colCount, onProvenance, canUnlock }: TestRowProps) {
   // #84 Phase 3: the Run links start a VeritaCheck study, which is setup.
   const checkReadOnly = useIsReadOnly("veritacheck");
   const [expanded, setExpanded] = React.useState(false);
@@ -1688,7 +1746,7 @@ function TestRow({ test, onChange, onChangeMany, onRowMount, analyteBands, amrVa
         <div className="flex flex-wrap">
           {instruments.length > 0 ? (
             instruments.map((instr, i) => (
-              <InstrumentBadge key={i} instr={instr} analyte={test.analyte} />
+              <InstrumentBadge key={i} instr={instr} analyte={test.analyte} onIfu={!readOnly && onIfuLink ? () => onIfuLink(test, instr) : undefined} />
             ))
           ) : (
             <span className="text-muted-foreground text-[10px] italic">
@@ -2556,6 +2614,8 @@ export default function VeritaMapMapPage() {
   // Fetch map detail
   // #93: the test whose SOP link dialog is open.
   const [sopLinkFor, setSopLinkFor] = useState<TestRecord | null>(null);
+  // B9: the analyzer test whose IFU link dialog is open.
+  const [ifuFor, setIfuFor] = useState<{ test: TestRecord; instr: InstrumentOnTest } | null>(null);
   const { data: mapDetail, isLoading } = useQuery<MapDetail>({
     queryKey: [mapDetailUrl],
     enabled: !!mapId,
@@ -3470,6 +3530,7 @@ export default function VeritaMapMapPage() {
                     canUnlock={canUnlockProvenance}
                     onEditCorrelation={openCorrModal}
                     onSopLink={activeLabId && !readOnly ? setSopLinkFor : undefined}
+                    onIfuLink={activeLabId && !readOnly ? (test, instr) => setIfuFor({ test, instr }) : undefined}
                     readOnly={readOnly}
                     colCount={12}
                   />
@@ -3519,6 +3580,15 @@ export default function VeritaMapMapPage() {
           mapApiBase={mapApiBase}
           onClose={() => setSopLinkFor(null)}
           onSaved={() => { setSopLinkFor(null); qc.invalidateQueries({ queryKey: [mapDetailUrl] }); }}
+        />
+      )}
+      {ifuFor && activeLabId && (
+        <IfuLinkDialog
+          analyte={ifuFor.test.analyte}
+          instr={ifuFor.instr}
+          mapApiBase={mapApiBase}
+          onClose={() => setIfuFor(null)}
+          onSaved={() => { setIfuFor(null); qc.invalidateQueries({ queryKey: [mapDetailUrl] }); }}
         />
       )}
     </div>

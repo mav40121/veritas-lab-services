@@ -118,7 +118,7 @@ function planLab(sqlite: any, labId: number, today: string): DatePlanRow[] {
     const k = cyclesToCurrent(due, today, step, 0);
     if (!k) continue;
     add("equipment", "lab_equipment", e.id, { next_due_date: [e.next_due_date, moved(e.next_due_date, step * k, 0)] });
-    const last = get("SELECT id, event_date, next_due_date FROM equipment_maintenance_events WHERE equipment_id = ? AND lab_id = ? ORDER BY event_date DESC, id DESC LIMIT 1", e.id, labId);
+    const last = get("SELECT id, event_date, next_due_date FROM equipment_maintenance_events WHERE equipment_id = ? AND lab_id = ? AND superseded_by_event_id IS NULL AND voided_at IS NULL ORDER BY event_date DESC, id DESC LIMIT 1", e.id, labId);
     if (last && dayOf(last.event_date)) {
       const to = moved(last.event_date, step * k, 0);
       if (to.slice(0, 10) <= today) {

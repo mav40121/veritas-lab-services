@@ -4648,8 +4648,103 @@ sqlite.exec(`
     // 2026-10-08: link an equipment record to the analyzer on the VeritaMap test
     // menu, so its calibration and maintenance join that analyzer's QC trail.
     if (!eqCols.includes("map_instrument_id")) sqlite.exec("ALTER TABLE lab_equipment ADD COLUMN map_instrument_id INTEGER");
+    // B9 (2026-11-24): the equipment record. Dates in and out of service, who retired it and why, vendor and contract, the IFU,
+    // and, when an instrument moved between two labs of one organization, where it came from and where it went.
+    for (const [c, t] of [["placed_in_service_date", "TEXT"], ["removed_from_service_date", "TEXT"], ["removed_from_service_reason", "TEXT"],
+      ["retired_at", "TEXT"], ["retired_by_user_id", "INTEGER"], ["retired_by_name", "TEXT"],
+      ["vendor_name", "TEXT"], ["service_contract", "TEXT"], ["ifu_url", "TEXT"], ["ifu_document_id", "INTEGER"],
+      ["moved_from_lab_id", "INTEGER"], ["moved_from_lab_name", "TEXT"], ["moved_from_equipment_id", "INTEGER"], ["moved_in_at", "TEXT"],
+      ["moved_to_lab_id", "INTEGER"], ["moved_to_lab_name", "TEXT"], ["moved_to_equipment_id", "INTEGER"], ["moved_out_at", "TEXT"], ["move_note", "TEXT"]] as const) {
+      if (!eqCols.includes(c)) { try { sqlite.exec(`ALTER TABLE lab_equipment ADD COLUMN ${c} ${t}`); } catch {} }
+    }
     const evCols = (sqlite.prepare("PRAGMA table_info(equipment_maintenance_events)").all() as { name: string }[]).map(c => c.name);
-    void evCols; // Future ALTER TABLE equipment_maintenance_events ADD COLUMN ... blocks go here.
+    // B9: who was signed in, whether it completed PM and what that did to the due date, the vendor, the cost, and the append-only
+    // correction: a corrected event keeps its original row (superseded_by_event_id), a void keeps the row with its reason.
+    // completes_pm is empty on an entry from before this, when the type alone decided. carried_from_* marks a moved instrument's history.
+    for (const [c, t] of [["logged_by_user_id", "INTEGER"], ["logged_by_name", "TEXT"],
+      ["completes_pm", "INTEGER"], ["pm_complete", "INTEGER"], ["pm_completed_at", "TEXT"], ["due_before", "TEXT"], ["pm_typed_due", "TEXT"], ["pm_allow_earlier", "INTEGER"],
+      ["cost", "REAL"], ["by_vendor", "INTEGER"], ["vendor_company", "TEXT"], ["vendor_technician", "TEXT"], ["vendor_report_attached", "INTEGER"],
+      ["root_event_id", "INTEGER"], ["corrects_event_id", "INTEGER"], ["superseded_by_event_id", "INTEGER"],
+      ["correction_reason", "TEXT"], ["corrected_by_user_id", "INTEGER"], ["corrected_by_name", "TEXT"], ["corrected_at", "TEXT"],
+      ["voided_at", "TEXT"], ["voided_by_user_id", "INTEGER"], ["voided_by_name", "TEXT"], ["void_reason", "TEXT"],
+      ["carried_from_lab_id", "INTEGER"], ["carried_from_lab_name", "TEXT"], ["carried_from_event_id", "INTEGER"]] as const) {
+      if (!evCols.includes(c)) { try { sqlite.exec(`ALTER TABLE equipment_maintenance_events ADD COLUMN ${c} ${t}`); } catch {} }
+    }
+  } catch {}
+}
+
+// B9 (2026-11-24; server/equipment.ts): files on an instrument or one of its events (bytes in the row, like VeritaLab's certificate
+// documents), the periods an instrument was out of service, and the lab's VeritaMaintain settings. A removed file keeps its row and
+// loses its bytes, so a file holding patient information can be taken out and the record still says it was there.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS equipment_files (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    equipment_id INTEGER NOT NULL,
+    event_id INTEGER,
+    kind TEXT NOT NULL DEFAULT 'other',
+    original_filename TEXT NOT NULL,
+    mime_type TEXT,
+    file_size INTEGER,
+    file_data BLOB,
+    uploaded_by_user_id INTEGER,
+    uploaded_by_name TEXT,
+    uploaded_at TEXT NOT NULL DEFAULT (datetime('now')),
+    removed_at TEXT,
+    removed_by_user_id INTEGER,
+    removed_by_name TEXT,
+    removal_reason TEXT,
+    carried_from_lab_id INTEGER,
+    carried_from_lab_name TEXT
+  );
+  CREATE TABLE IF NOT EXISTS equipment_downtime (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    equipment_id INTEGER NOT NULL,
+    down_from TEXT NOT NULL,
+    down_until TEXT,
+    reason TEXT NOT NULL,
+    return_note TEXT,
+    started_by_user_id INTEGER,
+    started_by_name TEXT,
+    ended_by_user_id INTEGER,
+    ended_by_name TEXT,
+    carried_from_lab_id INTEGER,
+    carried_from_lab_name TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE TABLE IF NOT EXISTS maintain_settings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL UNIQUE,
+    require_vendor_report INTEGER NOT NULL DEFAULT 0,
+    updated_by_user_id INTEGER,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_equipment_files_equip ON equipment_files(lab_id, equipment_id);
+  CREATE INDEX IF NOT EXISTS idx_equipment_files_event ON equipment_files(event_id);
+  CREATE INDEX IF NOT EXISTS idx_equipment_downtime_equip ON equipment_downtime(lab_id, equipment_id);
+`);
+{
+  // NEW DB TABLE RULE: an older live copy gets any missing columns.
+  const names = (rows: unknown[]) => (rows as { name: string }[]).map((c) => c.name);
+  try {
+    const fileCols = names(sqlite.prepare("PRAGMA table_info(equipment_files)").all());
+    for (const [c, t] of [["event_id", "INTEGER"], ["kind", "TEXT NOT NULL DEFAULT 'other'"], ["mime_type", "TEXT"], ["file_size", "INTEGER"], ["file_data", "BLOB"],
+      ["uploaded_by_user_id", "INTEGER"], ["uploaded_by_name", "TEXT"], ["removed_at", "TEXT"], ["removed_by_user_id", "INTEGER"], ["removed_by_name", "TEXT"], ["removal_reason", "TEXT"],
+      ["carried_from_lab_id", "INTEGER"], ["carried_from_lab_name", "TEXT"]] as const) {
+      if (!fileCols.includes(c)) { try { sqlite.exec(`ALTER TABLE equipment_files ADD COLUMN ${c} ${t}`); } catch {} }
+    }
+    const downCols = names(sqlite.prepare("PRAGMA table_info(equipment_downtime)").all());
+    for (const [c, t] of [["down_until", "TEXT"], ["return_note", "TEXT"], ["started_by_user_id", "INTEGER"], ["started_by_name", "TEXT"], ["ended_by_user_id", "INTEGER"],
+      ["ended_by_name", "TEXT"], ["carried_from_lab_id", "INTEGER"], ["carried_from_lab_name", "TEXT"]] as const) {
+      if (!downCols.includes(c)) { try { sqlite.exec(`ALTER TABLE equipment_downtime ADD COLUMN ${c} ${t}`); } catch {} }
+    }
+    const setCols = names(sqlite.prepare("PRAGMA table_info(maintain_settings)").all());
+    for (const [c, t] of [["require_vendor_report", "INTEGER NOT NULL DEFAULT 0"], ["updated_by_user_id", "INTEGER"]] as const) {
+      if (!setCols.includes(c)) { try { sqlite.exec(`ALTER TABLE maintain_settings ADD COLUMN ${c} ${t}`); } catch {} }
+    }
   } catch {}
 }
 

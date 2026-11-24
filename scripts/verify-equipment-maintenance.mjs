@@ -2,14 +2,15 @@
 //
 // Receipt for MLC-1 (equipment / instrument maintenance). Exercises the two
 // pieces of branching logic in the module: the next-due status classifier and
-// the next-due auto-computation from a PM interval. Mirrors server/routes.ts.
+// the next-due auto-computation from a PM interval. Mirrors server/equipment.ts
+// (what an event does to the due date is scripts/verify-equipment-pm-rules.mts).
 //
 //   node scripts/verify-equipment-maintenance.mjs
 let fails = 0;
 const ok = (label, cond, detail = "") => { console.log(`${cond ? "PASS" : "FAIL"}: ${label}${cond ? "" : "  -- " + detail}`); if (!cond) fails++; };
 
 const TODAY = "2026-08-11";
-// Mirror of equipmentStatus() in routes.ts (today pinned for determinism).
+// Mirror of equipmentStatus() in server/equipment.ts (today pinned for determinism).
 function equipmentStatus(nextDue, today = TODAY) {
   if (!nextDue) return "none";
   const days = Math.round((Date.parse(nextDue + "T00:00:00Z") - Date.parse(today + "T00:00:00Z")) / 86400000);
