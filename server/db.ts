@@ -4569,6 +4569,15 @@ for (const t of ["staff_employees", "staff_roles"]) {
   }
 }
 
+// B11 (2026-11-24): the day results went to the program, so an event can read on time or late (server/ptEvents.ts). Blank on
+// every row from before; a blank is never read as late.
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(pt_events)").all() as any[]).map(c => c.name);
+  if (!cols.includes("submitted_date")) {
+    try { sqlite.exec("ALTER TABLE pt_events ADD COLUMN submitted_date TEXT"); } catch {}
+  }
+}
+
 // MLC-2b (2026-08-11): VeritaPT submission-deadline reminders. Per-lab config +
 // a dedup/audit send-log, mirroring veritatrack_reminder_config / _log. Both are
 // CREATE TABLE IF NOT EXISTS (idempotent, safe on every boot).

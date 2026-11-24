@@ -1,5 +1,10 @@
 import { useState, useEffect } from "react";
 import { labTodayIso } from "@/lib/labDate";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PtEventsTab } from "@/components/veritapt/PtEventsTab";
+import { PtEventDialog } from "@/components/veritapt/PtEventDialog";
+import { PtResultDialog } from "@/components/veritapt/PtResultDialog";
+import type { PtResult } from "@shared/ptEvents";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { useAuth } from "@/components/AuthContext";
 import { ModuleHowToCard } from "@/components/ModuleHowToCard";
@@ -152,21 +157,15 @@ export default function VeritaPTAppPage() {
     framing?: Record<string, string>;
   } | null>(null);
   const [showAaaModal, setShowAaaModal] = useState(false);
-  // A5-ext (per Q1.a): PT event entry dialog state. The per-tech dropdown
-  // is populated from the lab's staff_employees roster so the director
+  // A5-ext (per Q1.a): PT event entry (client/src/components/veritapt/PtResultDialog.tsx).
+  // The per-tech dropdown is populated from the lab's staff_employees roster so the director
   // attributes each PT event to the tech who ran it. tested_by_employee_id
   // writes to pt_events for downstream competency reporting.
   const [showEventModal, setShowEventModal] = useState(false);
-  const [newEventEnrollmentId, setNewEventEnrollmentId] = useState<string>("");
-  const [newEventDate, setNewEventDate] = useState(labTodayIso());
-  const [newEventAnalyte, setNewEventAnalyte] = useState("");
-  const [newEventYourResult, setNewEventYourResult] = useState("");
-  const [newEventPeerMean, setNewEventPeerMean] = useState("");
-  const [newEventPeerSd, setNewEventPeerSd] = useState("");
-  const [newEventPassFail, setNewEventPassFail] = useState<"pending" | "pass" | "fail">("pending");
-  const [newEventTestedBy, setNewEventTestedBy] = useState<string>("");
-  const [newEventNotes, setNewEventNotes] = useState("");
-  const [newEventDueDate, setNewEventDueDate] = useState(""); // MLC-2 submission deadline
+  // B11: an event's screen, and the form for one of its results.
+  const [openEvent, setOpenEvent] = useState<number | null>(null);
+  const [resultForm, setResultForm] = useState<{ result?: PtResult; like?: PtResult } | null>(null);
+  const [tab, setTab] = useState("coverage");
   const [ptEvents, setPtEvents] = useState<any[]>([]); // MLC-2: events, for deadline surfacing
   const [staffRoster, setStaffRoster] = useState<Array<{ id: number; first_name: string; last_name: string; middle_initial: string | null; title: string | null }>>([]);
   const [saving, setSaving] = useState(false);
@@ -181,8 +180,9 @@ export default function VeritaPTAppPage() {
 
   const hasPlanAccess = !!user?.plan && ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "clinic", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(user.plan);
 
-  const fetchData = async () => {
-    setLoading(true);
+  // quiet: after a save on this page, read again without clearing the screen (an open event stays open).
+  const fetchData = async (quiet = false) => {
+    if (!quiet) setLoading(true);
     try {
       const [covRes, enrollRes, aaaRes] = await Promise.all([
         fetch(`${ptApi}/coverage`, { headers: authHeaders() }),
@@ -242,9 +242,8 @@ export default function VeritaPTAppPage() {
     } else {
       setLoading(false);
     }
-    // Multi-lab: the create-event enrollment selection points at the prior
-    // lab's enrollment list, so clear it whenever the active lab changes.
-    setNewEventEnrollmentId("");
+    // Multi-lab: an open event and its form belong to the prior lab, so close them whenever the active lab changes.
+    setOpenEvent(null); setResultForm(null); setShowEventModal(false);
     // fetchData is redefined each render and closes over the current ptApi;
     // keying on activeLabId re-runs it so a lab switch reloads the new lab's
     // coverage/enrollments/AA-records instead of leaving the prior lab's data.
@@ -342,7 +341,7 @@ export default function VeritaPTAppPage() {
   }
 
   // No test menu state
-  if (!loading && coverage.length === 0) {
+  if (!loading && coverage.length === 0 && ptEvents.length === 0) {
     return (
       <div className="max-w-2xl mx-auto px-4 py-16 text-center">
         <FlaskConical size={48} className="mx-auto mb-4 text-[#006064]" />
@@ -369,7 +368,7 @@ export default function VeritaPTAppPage() {
           <Button
             variant="outline"
             size="sm"
-            onClick={fetchData}
+            onClick={() => fetchData()}
             disabled={loading}
           >
             <RefreshCw size={14} className={`mr-1.5 ${loading ? "animate-spin" : ""}`} />
@@ -401,6 +400,7 @@ export default function VeritaPTAppPage() {
           <Button
             size="sm"
             variant="outline"
+            hidden={!activeLabId}
             onClick={() => setShowEventModal(true)}
           >
             <Plus size={14} className="mr-1.5" />
@@ -495,6 +495,17 @@ export default function VeritaPTAppPage() {
         </div>
       )}
 
+      <Tabs value={tab} onValueChange={setTab} className="space-y-6">
+      <TabsList className="h-auto flex-wrap justify-start" data-testid="pt-tabs">
+        <TabsTrigger value="coverage">Coverage</TabsTrigger>
+        {activeLabId && <TabsTrigger value="events" data-testid="pt-tab-events">Events</TabsTrigger>}
+      </TabsList>
+      {activeLabId && (
+        <TabsContent value="events" className="mt-0">
+          <PtEventsTab labId={activeLabId} onOpen={setOpenEvent} />
+        </TabsContent>
+      )}
+      <TabsContent value="coverage" className="mt-0 space-y-6">
       {/* Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
         <Card>
@@ -694,6 +705,8 @@ export default function VeritaPTAppPage() {
           Unregulated nonwaived tests are not required to have PT under CLIA Subpart I, but enrolling in a PT program is strongly recommended as standard practice and may be required by your accreditation organization.
         </p>
       </div>
+      </TabsContent>
+      </Tabs>
 
       {/* Manage AAA Records Modal */}
       <Dialog open={showAaaModal} onOpenChange={setShowAaaModal}>
@@ -870,193 +883,15 @@ export default function VeritaPTAppPage() {
         </DialogContent>
       </Dialog>
 
-      {/* A5-ext (per Q1.a): Record PT Event dialog. Captures the event
-          details + analyte attribution to a specific tech via
-          tested_by_employee_id. Auto-calculated SDI happens server-side
-          when result + peer_mean + peer_sd are provided. */}
-      <Dialog open={showEventModal} onOpenChange={setShowEventModal}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Record PT Event</DialogTitle>
-          </DialogHeader>
-
-          <div className="flex items-start gap-3 rounded-lg border border-teal-200 bg-teal-50 dark:bg-teal-900/10 dark:border-teal-800 p-3 text-sm text-teal-900 dark:text-teal-200">
-            <Info size={16} className="mt-0.5 shrink-0" />
-            <div>
-              Record the per-event result for the lab. CMS advises rotating PT samples among testing personnel, and 42 CFR §493.801(b)(1) requires testing by personnel who routinely perform the test. Capturing tested_by here builds the record.
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <div>
-              <label className="block text-xs font-medium mb-1">Enrollment</label>
-              <select
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                value={newEventEnrollmentId}
-                onChange={e => setNewEventEnrollmentId(e.target.value)}
-              >
-                <option value="">Select enrollment...</option>
-                {enrollments.map((en: any) => (
-                  <option key={en.id} value={en.id}>
-                    {en.vendor} {en.program_name} {en.year}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium mb-1">Event date</label>
-                <input
-                  type="date"
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  value={newEventDate}
-                  onChange={e => setNewEventDate(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium mb-1">Analyte</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Glucose"
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  value={newEventAnalyte}
-                  onChange={e => setNewEventAnalyte(e.target.value)}
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <label className="block text-xs font-medium mb-1">Your result</label>
-                <input
-                  type="text" inputMode="decimal"
-                  step="any"
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  value={newEventYourResult}
-                  onChange={e => setNewEventYourResult(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium mb-1">Peer mean</label>
-                <input
-                  type="text" inputMode="decimal"
-                  step="any"
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  value={newEventPeerMean}
-                  onChange={e => setNewEventPeerMean(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium mb-1">Peer SD</label>
-                <input
-                  type="text" inputMode="decimal"
-                  step="any"
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  value={newEventPeerSd}
-                  onChange={e => setNewEventPeerSd(e.target.value)}
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium mb-1">Pass / Fail</label>
-                <select
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  value={newEventPassFail}
-                  onChange={e => setNewEventPassFail(e.target.value as any)}
-                >
-                  <option value="pending">Pending</option>
-                  <option value="pass">Pass</option>
-                  <option value="fail">Fail</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium mb-1">
-                  Tested by {staffRoster.length === 0 && <span className="text-muted-foreground">(no staff roster)</span>}
-                </label>
-                <select
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  value={newEventTestedBy}
-                  onChange={e => setNewEventTestedBy(e.target.value)}
-                  disabled={staffRoster.length === 0}
-                >
-                  <option value="">Not specified</option>
-                  {staffRoster.map(emp => (
-                    <option key={emp.id} value={emp.id}>
-                      {emp.last_name}, {emp.first_name}{emp.middle_initial ? ` ${emp.middle_initial}.` : ""}
-                      {emp.title ? ` (${emp.title})` : ""}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            <div>
-              <label className="block text-xs font-medium mb-1">Submission due date</label>
-              <input
-                type="date"
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                value={newEventDueDate}
-                onChange={e => setNewEventDueDate(e.target.value)}
-              />
-              <p className="text-[11px] text-muted-foreground mt-1">Date results are due to the PT program. Drives the overdue/upcoming deadline banner. Optional.</p>
-            </div>
-            <div>
-              <label className="block text-xs font-medium mb-1">Notes</label>
-              <textarea
-                rows={2}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                value={newEventNotes}
-                onChange={e => setNewEventNotes(e.target.value)}
-              />
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowEventModal(false)}>Cancel</Button>
-            <Button
-              className="bg-[#006064] hover:bg-[#004d50] text-white"
-              disabled={saving || !newEventEnrollmentId || !newEventDate || !newEventAnalyte.trim()}
-              onClick={async () => {
-                setSaving(true);
-                try {
-                  const r = await fetch(`${API_BASE}/api/veritapt/events`, {
-                    method: "POST",
-                    headers: { ...authHeaders(), "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      enrollment_id: Number(newEventEnrollmentId),
-                      event_date: newEventDate,
-                      analyte: newEventAnalyte.trim(),
-                      your_result: newEventYourResult ? Number(newEventYourResult) : null,
-                      peer_mean: newEventPeerMean ? Number(newEventPeerMean) : null,
-                      peer_sd: newEventPeerSd ? Number(newEventPeerSd) : null,
-                      pass_fail: newEventPassFail,
-                      tested_by_employee_id: newEventTestedBy ? Number(newEventTestedBy) : null,
-                      notes: newEventNotes || null,
-                      submission_due_date: newEventDueDate || null,
-                    }),
-                  });
-                  if (r.ok) {
-                    setShowEventModal(false);
-                    setNewEventEnrollmentId("");
-                    setNewEventAnalyte("");
-                    setNewEventYourResult("");
-                    setNewEventPeerMean("");
-                    setNewEventPeerSd("");
-                    setNewEventPassFail("pending");
-                    setNewEventTestedBy("");
-                    setNewEventNotes("");
-                    setNewEventDueDate("");
-                    fetchData();
-                  }
-                } finally {
-                  setSaving(false);
-                }
-              }}
-            >
-              {saving ? "Saving..." : "Save Event"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {showEventModal && activeLabId && (
+        <PtResultDialog labId={activeLabId} enrollments={enrollments} staffRoster={staffRoster} onClose={() => setShowEventModal(false)} onSaved={() => fetchData(true)} />
+      )}
+      {openEvent != null && activeLabId && (
+        <PtEventDialog labId={activeLabId} resultId={openEvent} onClose={() => setOpenEvent(null)} onEdit={(r) => setResultForm({ result: r })} onAdd={(r) => setResultForm({ like: r })} />
+      )}
+      {resultForm && activeLabId && (
+        <PtResultDialog labId={activeLabId} enrollments={enrollments} staffRoster={staffRoster} result={resultForm.result} like={resultForm.like} onClose={() => setResultForm(null)} onSaved={() => fetchData(true)} />
+      )}
     </div>
   );
 }

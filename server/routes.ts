@@ -904,6 +904,7 @@ export function recomputeAllStudyStatuses(): { fixed: number; skipped: number } 
 import { saveScanItemRows, scanActor, scanExportNotes, scanItemRowsFromBody, SCAN_ITEM_READ_COLUMNS } from "./veritascanItems";
 import { registerVeritaScanCarryRoutes } from "./veritascanCarry";
 import { registerInspectionLinkRoutes } from "./inspectionLinks";
+import { registerPtEventRoutes } from "./ptEvents";
 import { findingStudy, registerInspectionAssignRoutes } from "./inspectionAssign";
 import { autoCompleteVeritaScanItems, autoCompleteCompetencyScanItems, auditScanAutoCompletions, linkVeritaCheckEvidence, syncCoverageScanMarks } from "./integrations";
 import { planMarkCorrection, applyMarkCorrection, CORRECTED_SOURCE, correctionKeepsLink } from "./veritascanMarkCorrection";
@@ -45027,6 +45028,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // VeritaDC documents linked to VeritaScan items and findings, and suggested SOPs (B8, server/inspectionLinks.ts).
   // After veritaDcStaffGuard, so the document's own "linked from" read is closed to a limited Staff login.
   registerInspectionLinkRoutes(app, inspectionDeps);
+
+  // VeritaPT events: the list, its export and the result form (B11, server/ptEvents.ts).
+  const ptDeps = { sqlite: () => (db as any).$client, authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit, hasModuleEditAccess, hasPTAccess, licenseCtxFromReq };
+  registerPtEventRoutes(app, ptDeps);
 
   // VeritaTrack routes
   const { registerVeritaTrackRoutes } = await import('./veritatrack');
