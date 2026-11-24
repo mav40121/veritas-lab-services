@@ -276,6 +276,7 @@ import {
   readCompetencyReminderConfig, writeCompetencyReminderConfig, planCompetencyReminders, runCompetencyReminders,
 } from "./competencyReminders";
 import { readNontechnicalFrequency, nontechnicalDueForLab } from "./competencyNontechnicalDue";
+import { accountChangeRefusal, emailChangedNotice } from "./memberAccountControl";
 import { computeLabReadiness } from "./labReadiness";
 import { openFindingsAcrossLabs } from "./systemFindings";
 import { ptSummaryForLab } from "./ptSummary";
@@ -12195,6 +12196,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (!userRow) return res.status(404).json({ error: "Member account not found" });
     const oldEmail = String(userRow.email || "").toLowerCase();
     if (oldEmail === newEmail) return res.json({ ok: true, email: newEmail, unchanged: true });
+    // BUG-194 (2026-11-24): only an account this lab made, used nowhere the caller doesn't manage (memberAccountControl.ts).
+    const notTheirs = accountChangeRefusal(sqlite, { actorUserId: Number(req.userId), targetUserId: Number(userRow.id), change: "email" });
+    if (notTheirs) return res.status(notTheirs.status).json(notTheirs.body);
     const clash = sqlite.prepare("SELECT id FROM users WHERE lower(email) = ? AND id != ?").get(newEmail, userRow.id) as any;
     if (clash) return res.status(409).json({ error: "That email is already in use by another account" });
 
@@ -12216,7 +12220,20 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       console.error("[labs/:labId/members/:memberId/email PATCH] failed:", err.message);
       return res.status(500).json({ error: err.message || "Failed to update email" });
     }
-    console.log(`[labs/${req.scope.labId}/members/${memberId}/email PATCH] user_id=${userRow.id} ${oldEmail} -> ${newEmail} (by user_id=${req.userId})`);
+    const ended = endSessions(sqlite, Number(userRow.id), { reason: "login_email_changed" });
+    logAudit({ userId: req.userId, module: "account", action: "update", entityType: "account.login_email", entityId: Number(userRow.id), entityLabel: `Corrected a member's sign-in email; ${ended} sign-in(s) ended`, before: { email: oldEmail }, after: { email: newEmail }, ipAddress: (req.headers["x-forwarded-for"] as string) || undefined });
+    console.log(`[labs/${req.scope.labId}/members/${memberId}/email PATCH] user_id=${userRow.id} email corrected (by user_id=${req.userId})`);
+    if (process.env.RESEND_API_KEY) {
+      const person = sqlite.prepare("SELECT name FROM users WHERE id = ?").get(userRow.id) as any;
+      const named = sqlite.prepare("SELECT lab_name FROM labs WHERE id = ?").get(req.scope.labId) as any;
+      const mail = emailChangedNotice({ name: person?.name ?? null, oldEmail, newEmail, labName: named?.lab_name || "Your lab" });
+      fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ from: "VeritaAssure® <info@veritaslabservices.com>", to: oldEmail, subject: mail.subject, html: mail.html }),
+      }).then((r) => { if (!r.ok) console.error(`[members/email PATCH] notice to the old address refused: ${r.status}`); })
+        .catch((e) => console.error("[members/email PATCH] notice to the old address failed:", e?.message));
+    }
     res.json({ ok: true, email: newEmail });
   });
 
@@ -12244,6 +12261,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const userRow = sqlite.prepare("SELECT id, name FROM users WHERE id = ?").get(member.user_id) as any;
     if (!userRow) return res.status(404).json({ error: "Member account not found" });
     if (String(userRow.name || "") === newName) return res.json({ ok: true, name: newName, unchanged: true });
+    const notTheirs = accountChangeRefusal(sqlite, { actorUserId: Number(req.userId), targetUserId: Number(userRow.id), change: "name" });
+    if (notTheirs) return res.status(notTheirs.status).json(notTheirs.body);
     sqlite.prepare("UPDATE users SET name = ? WHERE id = ?").run(newName, userRow.id);
     console.log(`[labs/${req.scope.labId}/members/${memberId}/name PATCH] user_id=${userRow.id} "${userRow.name}" -> "${newName}" (by user_id=${req.userId})`);
     res.json({ ok: true, name: newName });
