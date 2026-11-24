@@ -907,6 +907,7 @@ import { registerInspectionLinkRoutes } from "./inspectionLinks";
 import { registerPtEventRoutes } from "./ptEvents";
 import { ptUngradedColumns, registerPtEvaluationRoutes } from "./ptEvaluations";
 import { ptResultsHoldRecords } from "./ptRecords";
+import { registerPtReviewRoutes } from "./ptReviews";
 import { ptTrendsForLab } from "./ptTrends";
 import { PT_AAA_METHODS } from "@shared/ptEvents";
 import { findingStudy, registerInspectionAssignRoutes } from "./inspectionAssign";
@@ -44998,6 +44999,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   registerPtEventRoutes(app, ptDeps);
   // An ungraded result's own evaluation (B11, server/ptEvaluations.ts).
   registerPtEvaluationRoutes(app, ptDeps);
+  // The review of a whole event (B11, server/ptReviews.ts).
+  registerPtReviewRoutes(app, ptDeps);
 
   // VeritaTrack routes
   const { registerVeritaTrackRoutes } = await import('./veritatrack');

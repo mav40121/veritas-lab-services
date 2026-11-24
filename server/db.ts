@@ -4611,6 +4611,36 @@ sqlite.exec(`
   try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_pt_event_evaluations_event ON pt_event_evaluations(lab_id, event_id)"); } catch {}
 }
 
+// B11 (2026-11-24): the laboratory's review of a whole VeritaPT event (server/ptReviews.ts). An event is worked out from its
+// results, so a review keeps the ids and what it saw of them. director_reviewed_at and director_id are the alternative assessment
+// record's columns for the laboratory director or designee review.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS pt_event_reviews (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    result_ids_json TEXT NOT NULL DEFAULT '[]',
+    results_json TEXT NOT NULL DEFAULT '[]',
+    event_label TEXT,
+    program_label TEXT,
+    notes TEXT,
+    corrective_action_ids_json TEXT NOT NULL DEFAULT '[]',
+    finding_ids_json TEXT NOT NULL DEFAULT '[]',
+    reviewed_by_user_id INTEGER NOT NULL,
+    reviewed_by_name TEXT,
+    reviewed_at TEXT NOT NULL DEFAULT (datetime('now')),
+    director_reviewed_at TEXT,
+    director_id INTEGER,
+    director_name TEXT
+  );
+`);
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(pt_event_reviews)").all() as { name: string }[]).map((c) => c.name);
+  for (const [col, ddl] of [["lab_id", "INTEGER"], ["result_ids_json", "TEXT"], ["results_json", "TEXT"], ["event_label", "TEXT"], ["program_label", "TEXT"], ["notes", "TEXT"], ["corrective_action_ids_json", "TEXT"], ["finding_ids_json", "TEXT"], ["reviewed_by_user_id", "INTEGER"], ["reviewed_by_name", "TEXT"], ["reviewed_at", "TEXT"], ["director_reviewed_at", "TEXT"], ["director_id", "INTEGER"], ["director_name", "TEXT"]] as const) {
+    if (!cols.includes(col)) sqlite.exec(`ALTER TABLE pt_event_reviews ADD COLUMN ${col} ${ddl}`);
+  }
+  try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_pt_event_reviews_lab ON pt_event_reviews(lab_id)"); } catch {}
+}
+
 // MLC-2b (2026-08-11): VeritaPT submission-deadline reminders. Per-lab config +
 // a dedup/audit send-log, mirroring veritatrack_reminder_config / _log. Both are
 // CREATE TABLE IF NOT EXISTS (idempotent, safe on every boot).

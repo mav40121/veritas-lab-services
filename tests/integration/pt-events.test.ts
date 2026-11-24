@@ -4,6 +4,8 @@
 //   1. The event list: grouping, program, department, dates, filters, sort, the Excel export, recording and editing a result.
 //   2. Result status: ungraded and its reason, the laboratory's own evaluation, and the two-of-three flags with their full history,
 //      which an ungraded result never moves.
+//   3. The review of a whole event: what it saw, what it links to (never opened by itself), the laboratory director or designee
+//      review, and an event changed since.
 //
 // Boots the REAL routes against a throwaway SQLite DB (made-up people, programs and numbers only). Run: npm run test:pt-events
 import { inspectionWorld } from "./inspectionFixture";
@@ -172,6 +174,84 @@ async function main() {
   const xr = await book((await call(EDITOR, "GET", `${P("events/export.xlsx")}?status=ungraded`)).buf);
   check("2q. the export says why and what the laboratory concluded, or that it is open", rowsOf(xr.getWorksheet("Results")).some((r) => r.includes("Lack of consensus") && r.some((c) => String(c).startsWith("Unacceptable on 2026-06-20. Split sample"))) && rowsOf(xr.getWorksheet("Results")).some((r) => r.includes("Open")));
   check("2r. the reminders still read only pending results", one("SELECT COUNT(*) AS n FROM pt_events WHERE lab_id = ? AND pass_fail = 'pending' AND id = ?", A, u).n === 0);
+
+  // ── 3. The review of an event ─────────────────────────────────────────────
+  const detail = async (id: number, who: any = EDITOR) => (await call(who, "GET", P(`events/${id}`))).j;
+  const review = (who: any, d: any, body: any = {}, lab = A) => call(who, "POST", P("event-reviews", lab), { result_id: d.event.id, review_token: d.review_token, notes: "", corrective_action_ids: [], finding_ids: [], ...body });
+  const okRow = (await rec(EDITOR, { enrollment_id: hemeProg, event_id: "H-1", analyte: "Hemoglobin", pass_fail: "pass", your_result: 13.9 })).j.id;
+  const okRow2 = (await rec(EDITOR, { enrollment_id: hemeProg, event_id: "H-1", analyte: "Platelets" })).j.id;
+  let d = await detail(okRow);
+  check("3a. a new event reads not reviewed, and waits while a result is not yet graded", d.event.review.state === "not_reviewed" && d.event.counts.not_graded === 1 && (await review(EDITOR, d)).j?.code === "NOT_GRADED");
+  await call(EDITOR, "PUT", P(`results/${okRow2}`), { pass_fail: "pass" });
+  d = await detail(okRow);
+  check("3b. it needs no link when everything is acceptable", d.needs_link === false && d.options.corrective_actions.length === 0);
+  for (const [who, u2] of [["a Staff login", STAFF], ["a view-only reviewer", VIEWER], ["an editor of another module", SCAN_ONLY], ["another customer", OTHER], ["Veritas support", SUPPORT]] as const) {
+    const r = await review(u2, d);
+    check(`3c. ${who} can't record a review`, r.s === 403 && (u2 !== SUPPORT || r.j?.code === "VLS_SUPPORT_CANNOT_SIGN"), `${r.s} ${r.text.slice(0, 100)}`);
+  }
+  check("3d. another lab can't review it", (await review(OTHER, d, {}, X)).s === 404 && one("SELECT COUNT(*) AS n FROM pt_event_reviews").n === 0);
+  const rv = await review(EDITOR, d, { notes: "Made-up notes" });
+  d = await detail(okRow);
+  check("3e. recorded: notes, who and when; the event and the list read reviewed", rv.s === 201 && d.event.review.state === "reviewed" && d.reviews[0].notes === "Made-up notes" && d.reviews[0].reviewed_by_name === "Ed Editor" && !!d.reviews[0].reviewed_at && (await eventNamed("H-1")).review.state === "reviewed");
+  const ra = w.audits("pt_event_review", rv.j.id);
+  check("3f. one audit row holding what the review saw", ra.length === 1 && ra[0].user_id === EDITOR.id && JSON.parse(JSON.parse(ra[0].after_json).results_json).length === 2);
+  check("3g. it opened nothing", one("SELECT COUNT(*) AS n FROM findings WHERE lab_id = ?", A).n === 0 && one("SELECT COUNT(*) AS n FROM pt_corrective_actions WHERE lab_id = ?", A).n === 0);
+
+  // Director or designee
+  const dir = (who: any, id: number, lab = A) => call(who, "POST", P(`event-reviews/${id}/director-review`, lab), {});
+  for (const [who, u3] of [["a Staff login", STAFF], ["a view-only reviewer", VIEWER], ["an editor of another module", SCAN_ONLY], ["another customer", OTHER], ["Veritas support", SUPPORT]] as const) {
+    const r = await dir(u3, rv.j.id);
+    check(`3h. ${who} can't record the laboratory director or designee review`, r.s === 403 && (u3 !== SUPPORT || r.j?.code === "VLS_SUPPORT_CANNOT_SIGN"));
+  }
+  check("3i. nor another lab", (await dir(OTHER, rv.j.id, X)).s === 404 && one("SELECT director_reviewed_at FROM pt_event_reviews WHERE id = ?", rv.j.id).director_reviewed_at === null);
+  const dr = await call(OWNER, "POST", P(`event-reviews/${rv.j.id}/director-review`), { director_id: 1, director_reviewed_at: "2020-01-01", director_name: "Someone Else" });
+  const drow = one("SELECT * FROM pt_event_reviews WHERE id = ?", rv.j.id);
+  check("3j. recorded for the person signed in at the server's time, whatever is sent", dr.s === 200 && drow.director_id === OWNER.id && drow.director_name === "Avery Owner" && drow.director_reviewed_at.slice(0, 4) !== "2020");
+  check("3k. once only, with its audit row", (await dir(OWNER, rv.j.id)).j?.code === "ALREADY_REVIEWED" && w.audits("pt_event_review", rv.j.id).length === 2 && JSON.parse(w.audits("pt_event_review", rv.j.id)[1].after_json).director_id === OWNER.id);
+
+  // Changed since
+  await call(EDITOR, "PUT", P(`results/${okRow}`), { your_result: 14.2 });
+  d = await detail(okRow);
+  check("3l. a result changed afterwards shows on the event, and the review is kept", d.event.review.state === "changed" && d.reviews.length === 1 && (await eventNamed("H-1")).review.state === "changed");
+  const second = await review(EDITOR, d, { notes: "Again" });
+  check("3m. a second review goes in front; the director or designee review is not carried to it", second.s === 201 && (await detail(okRow)).reviews.map((r: any) => r.notes).join() === "Again,Made-up notes" && (await detail(okRow)).event.review.director_reviewed_at === null);
+  await call(EDITOR, "PUT", P(`results/${okRow}`), { notes: "only a note" });
+  await call(EDITOR, "PATCH", P(`events/${okRow}/dates`), { submitted_date: "2026-03-09" });
+  check("3n. a note or a date doesn't reopen it", (await detail(okRow)).event.review.state === "reviewed");
+  const stale = await detail(okRow);
+  await rec(EDITOR, { enrollment_id: hemeProg, event_id: "H-1", analyte: "Hematocrit", pass_fail: "pass" });
+  check("3o. a review of an event that changed under it is refused; a result added later reads as changed", (await review(EDITOR, stale)).j?.code === "EVENT_CHANGED" && (await eventNamed("H-1")).review.state === "changed" && (await dir(OWNER, second.j.id)).j?.code === "EVENT_CHANGED");
+
+  // Links
+  const bad = (await rec(EDITOR, { enrollment_id: chemProg, event_id: "L-1", analyte: "Glucose", pass_fail: "fail" })).j.id;
+  const badU = (await rec(EDITOR, { enrollment_id: chemProg, event_id: "L-1", analyte: "Sodium", pass_fail: "ungraded", ungraded_reason: "educational" })).j.id;
+  d = await detail(bad);
+  check("3p. an unacceptable or ungraded result needs its corrective action or investigation", d.needs_link === true && (await review(EDITOR, d)).j?.code === "LINK_REQUIRED");
+  const ca = Number((await call(EDITOR, "POST", "/api/veritapt/corrective-actions", { event_id: bad, corrective_action: "Made-up action", date_initiated: "2026-03-20" }, A)).j.id);
+  const caOther = Number((await call(EDITOR, "POST", "/api/veritapt/corrective-actions", { event_id: okRow, corrective_action: "Another event's action", date_initiated: "2026-03-20" }, A)).j.id);
+  const f1 = Number((await call(EDITOR, "POST", `/api/labs/${A}/findings`, { accreditor: "CMS", anchor_date: "2026-11-01", standard_ref: "42 CFR 493.1253" })).j.id);
+  const f2 = seed("findings", { user_id: OWNER.id, lab_id: A, accreditor: "Other", source_type: "pt_failure", pt_analyte: "Glucose", status: "open" });
+  const fX = Number((await call(OTHER, "POST", `/api/labs/${X}/findings`, { accreditor: "CMS", anchor_date: "2026-11-01", standard_ref: "42 CFR 493.1253" })).j.id);
+  d = await detail(bad);
+  check("3q. what can be linked: this event's corrective actions, and the lab's findings with the proficiency testing one first", d.options.corrective_actions.map((c: any) => c.id).join() === String(ca) && d.options.findings.map((x: any) => x.id).join() === `${f2},${f1}`, JSON.stringify(d.options));
+  check("3r. another event's action or another lab's finding is refused", (await review(EDITOR, d, { corrective_action_ids: [caOther] })).s === 400 && (await review(EDITOR, d, { finding_ids: [fX] })).s === 400);
+  const before3 = one("SELECT * FROM findings WHERE id = ?", f2), n3 = one("SELECT COUNT(*) AS n FROM findings").n;
+  const linked = await review(EDITOR, d, { corrective_action_ids: [ca], finding_ids: [f2] });
+  d = await detail(bad);
+  check("3s. a review with its links", linked.s === 201 && d.reviews[0].corrective_actions[0].corrective_action === "Made-up action" && d.reviews[0].findings[0].id === f2);
+  check("3t. linking opens, changes and closes nothing", one("SELECT COUNT(*) AS n FROM findings").n === n3 && JSON.stringify(one("SELECT * FROM findings WHERE id = ?", f2)) === JSON.stringify(before3) && one("SELECT status FROM pt_corrective_actions WHERE id = ?", ca).status === "open");
+  await call(EDITOR, "POST", P(`results/${badU}/evaluations`), EV);
+  check("3u. with the ungraded one evaluated acceptable and no unacceptable result, no link is needed", await (async () => { await call(EDITOR, "PUT", P(`results/${bad}`), { pass_fail: "pass" }); const x = await detail(bad); return x.needs_link === false && (await review(EDITOR, x)).s === 201; })());
+  await call(EDITOR, "POST", P(`results/${badU}/evaluations`), { ...EV, conclusion: "fail" });
+  check("3v. an evaluation that found it unacceptable needs one again, and shows the event as changed", (await detail(bad)).needs_link === true && (await detail(bad)).event.review.state === "changed");
+  sqlite.prepare("DELETE FROM findings WHERE id = ?").run(f2);
+  check("3w. a linked record no longer on file stays named on the review", (await detail(bad)).reviews[1].findings[0].id === f2 && (await detail(bad)).reviews[1].findings[0].status === null);
+  check("3x. a view-only reviewer reads the review and gets nothing to link", (await detail(bad, VIEWER)).reviews.length === 2 && (await detail(bad, VIEWER)).options === null);
+  check("3y. a limited Staff login's list carries no review", (await list(STAFF)).events.every((e: any) => e.review === null) && !JSON.stringify(await list(STAFF)).includes("Ed Editor"));
+  check("3z. a reviewed result can't be deleted", (await call(EDITOR, "DELETE", `/api/veritapt/events/${okRow}`, undefined, A)).j?.code === "HOLDS_RECORDS");
+  await review(EDITOR, await detail(bad), { corrective_action_ids: [ca] });
+  const xv = rowsOf((await book((await call(EDITOR, "GET", P("events/export.xlsx"))).buf)).getWorksheet("Events"));
+  check("3aa. the export carries the review", xv.some((r) => r.includes("Reviewed") && r.includes("Ed Editor")) && xv.some((r) => r.includes("Changed since review")) && xv.some((r) => r.includes("Not reviewed")));
   void mo;
 
   w.finish();

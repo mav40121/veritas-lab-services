@@ -7,7 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ArrowDown, ArrowUp, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { labTodayIso } from "@/lib/labDate";
+import { labDayOf, labTodayIso } from "@/lib/labDate";
+import { PtReviewChip } from "./PtReviewSection";
 import { PT_STATUSES, PT_STATUS_LABEL, PT_SUBMISSION_LABEL, filterPtEvents, sortPtEvents, type PtEvent, type PtEventFilters } from "@shared/ptEvents";
 import { PtStatusBadges, ptDownload, ptRequest, ptSelectClass } from "./ptUi";
 
@@ -26,7 +27,7 @@ export function usePtEvents(labId: number | null) {
   return useQuery<PtEventList>({ queryKey: [url], queryFn: () => ptRequest(url), enabled: !!labId, refetchOnMount: "always", retry: false });
 }
 
-const COLUMNS: Array<[string, string | null]> = [["Event", "event"], ["Program", "program"], ["Analytes", null], ["Event date", "date"], ["Due", "due"], ["Submitted", null], ["Status", "status"]];
+const COLUMNS: Array<[string, string | null]> = [["Event", "event"], ["Program", "program"], ["Analytes", null], ["Event date", "date"], ["Due", "due"], ["Submitted", null], ["Status", "status"], ["Review", null]];
 
 export function PtEventsTab({ labId, onOpen }: { labId: number; onOpen: (resultId: number) => void }) {
   const { toast } = useToast();
@@ -91,7 +92,7 @@ export function PtEventsTab({ labId, onOpen }: { labId: number; onOpen: (resultI
       </CardHeader>
       <CardContent className="p-0">
         <div className="overflow-auto max-h-[70vh]">
-          <table className="w-full text-sm" style={{ minWidth: 820 }}>
+          <table className="w-full text-sm" style={{ minWidth: 900 }}>
             <thead className="[&_th]:sticky [&_th]:top-0 [&_th]:z-20 [&_th]:bg-muted">
               <tr className="text-muted-foreground border-b text-xs">
                 {COLUMNS.map(([label, key]) => (
@@ -123,6 +124,7 @@ export function PtEventsTab({ labId, onOpen }: { labId: number; onOpen: (resultI
                     {(e.submission === "late" || e.submission === "not_recorded") && <div className={e.submission === "late" ? "text-red-700 dark:text-red-400" : "text-amber-700 dark:text-amber-400"}>{PT_SUBMISSION_LABEL[e.submission]}</div>}
                   </td>
                   <td className="py-2.5 px-3"><PtStatusBadges counts={e.counts} />{e.open_evaluations > 0 && !data?.own_only && <div className="text-[11px] mt-1 text-amber-700 dark:text-amber-400" data-testid="pt-open-evaluations">{e.open_evaluations} {e.open_evaluations === 1 ? "evaluation" : "evaluations"} open</div>}</td>
+                  <td className="py-2.5 px-3">{e.review && <PtReviewChip state={e.review.state} />}{e.review?.director_reviewed_at && <div className="text-[11px] text-muted-foreground">Director or designee {labDayOf(e.review.director_reviewed_at)}</div>}</td>
                 </tr>
               ))}
               {shown.length === 0 && (

@@ -107,6 +107,37 @@ export const PT_SUBMISSION_LABEL: Record<PtSubmission, string> = {
   no_due_date: "No due date on file",
 };
 
+/** Where an event's newest review stands against its results now (server/ptReviews.ts). */
+export type PtReviewState = "not_reviewed" | "changed" | "reviewed";
+export const PT_REVIEW_LABEL: Record<PtReviewState, string> = { not_reviewed: "Not reviewed", changed: "Changed since review", reviewed: "Reviewed" };
+export interface PtReviewStanding {
+  id: number | null;
+  state: PtReviewState;
+  reviewed_by_name: string | null;
+  reviewed_at: string | null;
+  director_reviewed_at: string | null;
+  director_name: string | null;
+}
+export const PT_REVIEW_NONE: PtReviewStanding = { id: null, state: "not_reviewed", reviewed_by_name: null, reviewed_at: null, director_reviewed_at: null, director_name: null };
+
+/** What a review links to. Every field but the id is null when the record is no longer on file. */
+export interface PtLinkedAction { id: number; analyte: string | null; corrective_action: string | null; status: string | null; date_initiated: string | null }
+export interface PtLinkedFinding { id: number; finding_number: string | null; accreditor: string | null; source_type: string | null; standard_ref: string | null; description: string | null; status: string | null; pt_analyte: string | null; pt_event: string | null }
+export interface PtEventReview {
+  id: number;
+  notes: string | null;
+  reviewed_by_name: string | null;
+  reviewed_at: string;
+  director_reviewed_at: string | null;
+  director_name: string | null;
+  corrective_actions: PtLinkedAction[];
+  findings: PtLinkedFinding[];
+}
+
+/** An event with a status back from its program and no review of what it holds now. */
+export const ptReviewOpen = (e: Pick<PtEvent, "counts" | "review">): boolean =>
+  e.counts.acceptable + e.counts.unacceptable + e.counts.ungraded > 0 && e.review.state !== "reviewed";
+
 export interface PtEvent {
   key: string;
   /** The newest result of the event: what its screen and its routes open by. */
@@ -123,6 +154,7 @@ export interface PtEvent {
   counts: Record<PtStatus, number>;
   /** Ungraded results still waiting for the laboratory's own evaluation. */
   open_evaluations: number;
+  review: PtReviewStanding;
   results: PtResult[];
 }
 
@@ -169,7 +201,7 @@ export function groupPtEvents(results: PtResult[], today: string): PtEvent[] {
       submitted_date: submitted.length === rows.length ? submitted[submitted.length - 1] : null,
       submission: ptSubmissionOf(rows, today),
       analytes: uniq(rows.map((r) => r.analyte)), departments: uniq(rows.map((r) => r.department)), counts,
-      open_evaluations: rows.filter((r) => r.evaluation_open).length, results: rows,
+      open_evaluations: rows.filter((r) => r.evaluation_open).length, review: PT_REVIEW_NONE, results: rows,
     };
   }).sort((a, b) => b.event_date.localeCompare(a.event_date) || b.id - a.id);
 }

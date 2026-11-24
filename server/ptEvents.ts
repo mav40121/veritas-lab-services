@@ -23,6 +23,7 @@ import {
   type PtEvent, type PtEventFilters, type PtResult,
 } from "@shared/ptEvents";
 import { ptEvaluationOpen, ptEvaluations, ptUngradedColumns } from "./ptEvaluations";
+import { ptReviewDetail, withPtReviews } from "./ptReviews";
 
 export const NO_DEPARTMENT = "No department on VeritaMap";
 export const NO_PROGRAM = "Program not on file";
@@ -104,7 +105,7 @@ export function ptResults(sqlite: any, labId: number): PtResult[] {
 }
 
 export const ptToday = (sqlite: any, labId: number): string => labToday(labTimeZoneById(sqlite, labId));
-export const ptEventsOfLab = (sqlite: any, labId: number): PtEvent[] => groupPtEvents(ptResults(sqlite, labId), ptToday(sqlite, labId));
+export const ptEventsOfLab = (sqlite: any, labId: number): PtEvent[] => withPtReviews(sqlite, labId, groupPtEvents(ptResults(sqlite, labId), ptToday(sqlite, labId)));
 
 /** The event holding a result of this lab, or null (another lab's result, or none). */
 export function ptEventOfResult(sqlite: any, labId: number, resultId: unknown): PtEvent | null {
@@ -174,7 +175,7 @@ export function registerPtEventRoutes(app: Express, deps: PtDeps) {
     const labId = req.scope.labId, own = ptStaffOwn(sqlite(), req);
     const events = ptEventsOfLab(sqlite(), labId);
     res.json({
-      events: own ? events.map((e) => ({ ...e, open_evaluations: 0, results: e.results.map((r) => ({ ...r, evaluations: [], evaluation_open: false, tested_by: r.tested_by_employee_id != null && r.tested_by_employee_id === own.employeeId ? r.tested_by : null })) })) : events,
+      events: own ? events.map((e) => ({ ...e, open_evaluations: 0, review: null, results: e.results.map((r) => ({ ...r, evaluations: [], evaluation_open: false, tested_by: r.tested_by_employee_id != null && r.tested_by_employee_id === own.employeeId ? r.tested_by : null })) })) : events,
       programs: ptPrograms(sqlite(), labId).list, ...ptEventChoices(events),
       can_edit: !own && hasModuleEditAccess(labId, req.userId, "veritapt"), own_only: !!own, today: ptToday(sqlite(), labId),
     });
@@ -205,7 +206,8 @@ export function registerPtEventRoutes(app: Express, deps: PtDeps) {
     if (ptStaffOwn(sqlite(), req)) return res.status(403).json({ error: "A staff login can't open an event's record.", code: "STAFF_OWN_ONLY" });
     const event = ptEventOfResult(sqlite(), req.scope.labId, req.params.resultId);
     if (!event) return res.status(404).json({ error: "Event not found" });
-    res.json({ event, can_edit: hasModuleEditAccess(req.scope.labId, req.userId, "veritapt"), today: ptToday(sqlite(), req.scope.labId) });
+    const canEdit = hasModuleEditAccess(req.scope.labId, req.userId, "veritapt");
+    res.json({ event, ...ptReviewDetail(sqlite(), req.scope.labId, event, canEdit), can_edit: canEdit, today: ptToday(sqlite(), req.scope.labId) });
   });
 
   // A program of this lab, or null: an enrollment id of another lab is never recorded against.

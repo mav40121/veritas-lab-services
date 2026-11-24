@@ -3,7 +3,8 @@
 // The VeritaPT event list as a workbook (server/ptEvents.ts), and the workbook frame the period report uses too
 // (server/ptReportExport.ts). CLAUDE.md section 6, customer-facing: About first and active, the lab's name and CLIA on About
 // and in every header and footer, every sheet protected, brand colors, blank cells for nothing, no em dashes.
-import { PT_CONCLUSION_LABEL, PT_STATUS_LABEL, PT_SUBMISSION_LABEL, ptMethodLabel, ptStatusText, ptUngradedReasonText, type PtEvent, type PtEventFilters, type PtResult } from "@shared/ptEvents";
+import { labLocalDate } from "./dateLocal";
+import { PT_CONCLUSION_LABEL, PT_REVIEW_LABEL, PT_STATUS_LABEL, PT_SUBMISSION_LABEL, ptMethodLabel, ptStatusText, ptUngradedReasonText, type PtEvent, type PtEventFilters, type PtResult } from "@shared/ptEvents";
 
 const TEAL = "FF01696F", TINT = "FFE6F2F2", ALT = "FFEBF3F8", TEXT = "FF28251D", DARK = "FF0A3A3D";
 export const PT_XLSX_COLORS = { green: "FF437A22", red: "FFA12C7B", amber: "FF964219", gray: "FF7A7974" } as const;
@@ -11,6 +12,7 @@ export const PT_XLSX_COLORS = { green: "FF437A22", red: "FFA12C7B", amber: "FF96
 export const ptCellColor = (v: unknown): string | undefined => ({
   [PT_STATUS_LABEL.acceptable]: PT_XLSX_COLORS.green, [PT_STATUS_LABEL.unacceptable]: PT_XLSX_COLORS.red,
   [PT_STATUS_LABEL.ungraded]: PT_XLSX_COLORS.amber, [PT_STATUS_LABEL.not_graded]: PT_XLSX_COLORS.gray,
+  [PT_REVIEW_LABEL.reviewed]: PT_XLSX_COLORS.green, [PT_REVIEW_LABEL.changed]: PT_XLSX_COLORS.amber, [PT_REVIEW_LABEL.not_reviewed]: PT_XLSX_COLORS.amber,
   [PT_SUBMISSION_LABEL.on_time]: PT_XLSX_COLORS.green, [PT_SUBMISSION_LABEL.late]: PT_XLSX_COLORS.red, [PT_SUBMISSION_LABEL.not_recorded]: PT_XLSX_COLORS.amber,
 } as Record<string, string>)[String(v)];
 
@@ -126,8 +128,9 @@ export function buildPtEventsWorkbook(
     sheets: [
       {
         name: "Events",
-        columns: [["Event", 26], ["Program", 34], ["Analytes", 40], ["Department", 20], ["Event Date", 13], ["Due Date", 13], ["Submitted Date", 14], ["Submission", 20], ["Results", 9], ["Status", 34]],
-        rows: input.events.map((e) => [e.name, e.program, e.analytes.join(", "), e.departments.join(", "), e.event_date, e.due_date, e.submitted_date, PT_SUBMISSION_LABEL[e.submission], e.results.length, ptStatusText(e.counts)]),
+        columns: [["Event", 26], ["Program", 34], ["Analytes", 40], ["Department", 20], ["Event Date", 13], ["Due Date", 13], ["Submitted Date", 14], ["Submission", 20], ["Results", 9], ["Status", 34], ["Review", 18], ["Reviewed By", 22], ["Reviewed On", 13], ["Laboratory Director or Designee Review", 26]],
+        rows: input.events.map((e) => [e.name, e.program, e.analytes.join(", "), e.departments.join(", "), e.event_date, e.due_date, e.submitted_date, PT_SUBMISSION_LABEL[e.submission], e.results.length, ptStatusText(e.counts),
+          PT_REVIEW_LABEL[e.review.state], e.review.reviewed_by_name, e.review.reviewed_at ? labLocalDate(e.review.reviewed_at) : "", e.review.director_reviewed_at ? `${e.review.director_name ?? "Name not on file"}, ${labLocalDate(e.review.director_reviewed_at)}` : ""]),
       },
       {
         name: "Results",

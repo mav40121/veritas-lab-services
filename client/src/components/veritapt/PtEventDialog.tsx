@@ -7,9 +7,10 @@ import { Pencil, Plus } from "lucide-react";
 import { useFreshRecord } from "@/lib/freshRecord";
 import { PT_SUBMISSION_LABEL, type PtEvent, type PtResult } from "@shared/ptEvents";
 import { PtUngradedResults } from "./PtEvaluationForm";
+import { PtReviewSection, type PtReviewData } from "./PtReviewSection";
 import { PtError, PtField, PtStatusBadge, ptInputClass, ptNum, ptRange, ptRequest, usePtChanged } from "./ptUi";
 
-export interface PtEventDetail { event: PtEvent; can_edit: boolean; today: string }
+export interface PtEventDetail extends PtReviewData { event: PtEvent; can_edit: boolean; today: string }
 
 function EventDates({ labId, event, canEdit }: { labId: number; event: PtEvent; canEdit: boolean }) {
   const [due, setDue] = useState(event.due_date ?? "");
@@ -87,6 +88,7 @@ export function PtEventDialog({ labId, resultId, onClose, onEdit, onAdd }: {
               </div>
             </section>
             <PtUngradedResults labId={labId} results={e.results} today={data.today} canEdit={data.can_edit} />
+            <PtReviewSection labId={labId} event={e} data={data} canEdit={data.can_edit} />
           </div>
         )}
         <DialogFooter><Button variant="outline" onClick={onClose}>Close</Button></DialogFooter>
