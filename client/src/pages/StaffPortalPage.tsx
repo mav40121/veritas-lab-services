@@ -35,6 +35,11 @@ import { isChoiceOf, unansweredMessage } from "@shared/quizGrading";
 import { clearAuth } from "@/lib/auth";
 import { useAuth } from "@/components/AuthContext";
 import { useLabRoute } from "@/hooks/useLabRoute";
+import { useActiveLabId } from "@/hooks/useActiveLabId";
+import { useMemberships } from "@/hooks/useMemberships";
+import { pickCurrentMembership } from "@/lib/currentLab";
+import { authHeaders } from "@/lib/auth";
+import { setStaffPortalLab, staffPortalHeaders } from "@/lib/staffPortalHeaders";
 
 // 2026-06-09 PR2: shared DOMPurify config (mirrors VeritaCompAppPage).
 // Lets quiz prompts marked question_format='html' render inline tables,
@@ -90,8 +95,21 @@ export default function StaffPortalPage() {
   const [bootstrapState, setBootstrapState] = useState<"loading" | "no-roster" | "no-auth" | "ready">("loading");
   const { user: signedInUser } = useAuth();
   const labRoute = useLabRoute();
+  // B3: a floating person is on several labs' rosters. The lab on screen decides whose entry this is: the URL's lab, else the lab
+  // the switcher has. Switching labs loads that lab's sign-offs from the top.
+  const urlLabId = useActiveLabId();
+  const { data: memberships, isLoading: labsLoading } = useMemberships();
+  const wantLab = urlLabId ?? pickCurrentMembership(memberships, null)?.labId ?? null;
+  const waitForLab = labsLoading && !urlLabId;
 
   useEffect(() => {
+    if (waitForLab) return;
+    let cancelled = false;
+    setBootstrapState("loading");
+    setActiveModule(null);
+    setSession(null);
+    setActiveEmployee(null);
+    setStaffPortalLab(wantLab);
     // 2026-06-09 followup fix: the real localStorage key set by the
     // main /login flow is "veritas_token", NOT "auth_token". The earlier
     // wrong-key guess sent every authenticated visitor to /login on
@@ -105,8 +123,9 @@ export default function StaffPortalPage() {
       setBootstrapState("no-auth");
       return;
     }
-    fetch("/api/me/staff-portal-employee", { headers: { Authorization: `Bearer ${realToken}` } })
+    fetch("/api/me/staff-portal-employee", { headers: staffPortalHeaders(realToken) })
       .then(async (r) => {
+        if (cancelled) return null;
         if (r.status === 401) {
           setBootstrapState("no-auth");
           return null;
@@ -118,7 +137,8 @@ export default function StaffPortalPage() {
         return r.json();
       })
       .then((data) => {
-        if (!data || !data.employee || !data.lab) return;
+        if (cancelled || !data || !data.employee || !data.lab) return;
+        setStaffPortalLab(data.lab.id);
         setSession({
           token: realToken,
           lab: { id: data.lab.id, name: data.lab.name, clia_number: data.lab.clia_number || "" },
@@ -136,8 +156,9 @@ export default function StaffPortalPage() {
         });
         setBootstrapState("ready");
       })
-      .catch(() => setBootstrapState("no-roster"));
-  }, []);
+      .catch(() => { if (!cancelled) setBootstrapState("no-roster"); });
+    return () => { cancelled = true; };
+  }, [wantLab, waitForLab]);
 
   function signOut() {
     // The portal auth-unified onto the regular localStorage token ("veritas_token",
@@ -287,11 +308,33 @@ function TileScreenWithPendingCounts({
   onSignOut: () => void;
 }) {
   const [, navigate] = useLocation();
+  const urlLabId = useActiveLabId();
+  const { data: memberships } = useMemberships();
   const [pending, setPending] = useState<{ quizzes: number; policies: number; competencies: number; approvals: number; canApprove: boolean } | null>(null);
+  // B3: what is waiting for this person in their other labs, so nobody has to switch to find out.
+  const [elsewhere, setElsewhere] = useState<Array<{ labId: number; count: number }>>([]);
+  useEffect(() => {
+    let cancelled = false;
+    setElsewhere([]);
+    if ((memberships || []).length < 2) return;
+    fetch("/api/me/pending-staff-portal-items", { headers: authHeaders() })
+      .then(async (r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (cancelled || !d) return;
+        const counts = new Map<number, number>();
+        for (const it of [...(d.quizzes || []), ...(d.policies || []), ...(d.competencies || []), ...(d.approvals || [])]) {
+          if (it.lab_id && it.lab_id !== session.lab.id) counts.set(it.lab_id, (counts.get(it.lab_id) || 0) + 1);
+        }
+        setElsewhere(Array.from(counts, ([labId, count]) => ({ labId, count })));
+      })
+      .catch(() => { /* the other labs' counts are a convenience */ });
+    return () => { cancelled = true; };
+  }, [session.lab.id, memberships]);
+  const askedFor = urlLabId && urlLabId !== session.lab.id ? memberships?.find((m) => m.labId === urlLabId) : undefined;
 
   useEffect(() => {
     let cancelled = false;
-    const h = { Authorization: `Bearer ${session.token}` };
+    const h = staffPortalHeaders(session.token);
     Promise.all([
       fetch(`/api/staff-portal-session/quizzes?employee_id=${employee.id}`, { headers: h })
         .then(async (r) => r.ok ? r.json() : { quizzes: [] }).catch(() => ({ quizzes: [] })),
@@ -365,6 +408,24 @@ function TileScreenWithPendingCounts({
             <div className="text-[11px] text-amber-800 dark:text-amber-300">Tap a tile below to start.</div>
           </div>
         )}
+
+        {askedFor && (
+          <div className="mb-4 rounded-lg border border-border bg-muted/40 p-3 text-sm" data-testid="sp-other-lab-note">
+            You aren't on the roster at {askedFor.labName || "that lab"}. These are your sign-offs at {session.lab.name}.
+          </div>
+        )}
+        {elsewhere.map((e) => (
+          <button
+            key={e.labId}
+            type="button"
+            onClick={() => navigate(`/labs/${e.labId}/my-signoffs`)}
+            className="mb-4 w-full rounded-lg border border-border bg-card hover:bg-muted p-3 text-left text-sm flex items-center justify-between gap-3"
+            data-testid={`sp-elsewhere-${e.labId}`}
+          >
+            <span className="min-w-0 break-words">{e.count} item{e.count === 1 ? "" : "s"} waiting at {memberships?.find((m) => m.labId === e.labId)?.labName || "another lab"}</span>
+            <span className="text-xs font-semibold text-primary shrink-0">Open</span>
+          </button>
+        ))}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" data-testid="sp-tiles">
           {tiles.map((t) => {
@@ -513,7 +574,7 @@ function StaffPortalPoliciesView({
     if (term.length < 2) { setLookup(null); return; }
     let cancelled = false;
     const t = setTimeout(() => {
-      fetch(`/api/staff-portal-session/policies/lookup?q=${encodeURIComponent(term)}`, { headers: { Authorization: `Bearer ${token}` } })
+      fetch(`/api/staff-portal-session/policies/lookup?q=${encodeURIComponent(term)}`, { headers: { ...staffPortalHeaders(token) } })
         .then(async (r) => (r.ok ? r.json() : { results: [] }))
         .then((d) => { if (!cancelled) setLookup(d.results || []); })
         .catch(() => { if (!cancelled) setLookup([]); });
@@ -535,7 +596,7 @@ function StaffPortalPoliciesView({
     setPolicies(null);
     setListError(null);
     fetch(`/api/staff-portal-session/policies?employee_id=${employee.id}`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { ...staffPortalHeaders(token) },
     })
       .then(async (r) => {
         if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
@@ -566,7 +627,7 @@ function StaffPortalPoliciesView({
 
     // Fetch metadata first (so we know file_format for routing)
     fetch(`/api/staff-portal-session/policies/${p.document_id}`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { ...staffPortalHeaders(token) },
     })
       .then(async (r) => {
         if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
@@ -577,7 +638,7 @@ function StaffPortalPoliciesView({
         // Now fetch the render. For pdf the server sends the binary;
         // for docx/html the server returns { format: "html", html }.
         return fetch(`/api/staff-portal-session/policies/${p.document_id}/render`, {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: { ...staffPortalHeaders(token) },
         });
       })
       .then(async (r) => {
@@ -618,7 +679,7 @@ function StaffPortalPoliciesView({
     try {
       const r = await fetch(`/api/staff-portal-session/policies/${active.document_id}/sign`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: { "Content-Type": "application/json", ...staffPortalHeaders(token) },
         body: JSON.stringify({
           employee_id: employee.id,
           version_id: meta.version_id,
@@ -960,7 +1021,7 @@ function StaffPortalActivityView({
     setEvents(null);
     setListError(null);
     fetch(`/api/staff-portal-session/my-activity?employee_id=${employee.id}`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { ...staffPortalHeaders(token) },
     })
       .then(async (r) => {
         if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
@@ -1196,7 +1257,7 @@ function StaffPortalCompetenciesView({
       });
       const r = await fetch(`/api/staff-portal-session/competencies/${active.assessment_id}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: { "Content-Type": "application/json", ...staffPortalHeaders(token) },
         body: JSON.stringify({ employee_id: employee.id, items, waived_items }),
       });
       const data = await r.json().catch(() => ({}));
@@ -1213,7 +1274,7 @@ function StaffPortalCompetenciesView({
     setList(null);
     setListError(null);
     fetch(`/api/staff-portal-session/competencies?employee_id=${employee.id}`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { ...staffPortalHeaders(token) },
     })
       .then(async (r) => {
         if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
@@ -1235,7 +1296,7 @@ function StaffPortalCompetenciesView({
     setDetailError(null);
     setSignError(null);
     fetch(`/api/staff-portal-session/competencies/${c.assessment_id}?employee_id=${employee.id}`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { ...staffPortalHeaders(token) },
     })
       .then(async (r) => {
         if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
@@ -1288,7 +1349,7 @@ function StaffPortalCompetenciesView({
     try {
       const r = await fetch(`/api/staff-portal-session/competencies/${active.assessment_id}/sign`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: { "Content-Type": "application/json", ...staffPortalHeaders(token) },
         body: JSON.stringify({
           employee_id: employee.id,
           content_hash: detail.content_hash,
@@ -1699,7 +1760,7 @@ function StaffPortalQuizzesView({
     setQuizzes(null);
     setListError(null);
     fetch(`/api/staff-portal-session/quizzes?employee_id=${employee.id}`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { ...staffPortalHeaders(token) },
     })
       .then(async (r) => {
         if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
@@ -1718,7 +1779,7 @@ function StaffPortalQuizzesView({
     setSignature(`${employee.first_name}${employee.middle_initial ? ` ${employee.middle_initial}.` : ""} ${employee.last_name}`.trim());
     setSubmitError(null);
     fetch(`/api/staff-portal-session/quizzes/${q.assignment_id}?employee_id=${employee.id}`, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { ...staffPortalHeaders(token) },
     })
       .then(async (r) => {
         if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
@@ -1743,7 +1804,7 @@ function StaffPortalQuizzesView({
     try {
       const r = await fetch(`/api/staff-portal-session/quizzes/${taking.assignment_id}/attempt`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: { "Content-Type": "application/json", ...staffPortalHeaders(token) },
         body: JSON.stringify({
           employee_id: employee.id,
           answers: taking.questions.map(q => ({ question_id: q.id, selected_answer: answers[q.id] })),

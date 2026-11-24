@@ -35,14 +35,15 @@ export function ownRosterRows(sqlite: any, userId: number, labId?: number | null
   return [...byLab.values()];
 }
 
-// The one roster row a My sign-offs session acts as: the lab asked for (the active lab), else a Staff login's seat (as
-// before), else the person's primary lab, else the lowest lab id.
+// The one roster row a My sign-offs session acts as: the lab asked for (the active lab), else a Staff login's seat (the primary
+// lab's when they are Staff in several labs, B3), else the person's primary lab, else the lowest lab id.
 export function ownRosterRowForSession(sqlite: any, userId: number, preferLabId?: number | null): { lab_id: number; staff_employee_id: number; via: OwnRosterRow["via"] } | null {
   const rows = ownRosterRows(sqlite, userId);
   if (!rows.length) return null;
   const want = preferLabId != null && Number.isFinite(preferLabId) && preferLabId > 0 ? Number(preferLabId) : null;
   const primary = (sqlite.prepare("SELECT lab_id FROM lab_members WHERE user_id = ? AND status = 'active' AND is_primary_lab = 1 LIMIT 1").get(userId) as any)?.lab_id ?? null;
   const pick = (want != null && rows.find((r) => r.tier2_lab_id === want))
+    || (primary != null && rows.find((r) => r.via === "staff_seat" && r.tier2_lab_id === Number(primary)))
     || rows.find((r) => r.via === "staff_seat")
     || (primary != null && rows.find((r) => r.tier2_lab_id === Number(primary)))
     || [...rows].sort((a, b) => a.tier2_lab_id - b.tier2_lab_id)[0];

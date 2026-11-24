@@ -55,7 +55,7 @@ import { auditVeritamapConsistency } from "./veritamapConsistency";
 import { auditSystemOwnership } from "./systemOwnershipAudit";
 import { computeBackfillCandidates } from "./organizationBackfill";
 import { orgSeatCapForOwner } from "./organizationSeats";
-import { labSeatSummary, seatCountGaps, SEAT_HOLDS_PLACE, SEAT_ROW_REUSABLE } from "./labSeats";
+import { isVeritasLogin, labSeatSummary, seatCountGaps, SEAT_HOLDS_PLACE, SEAT_ROW_REUSABLE } from "./labSeats";
 import { promoteMedicalDirectorToAdmin, medicalDirectorPromotionPreview } from "./medicalDirectorRole";
 import { EMPLOYEE_HIRE_DATE_SQL, withStaffHireDates } from "./competencyHireDate";
 import { orgRoleForUserOnLab, labRoleFromOrgRole, transferBlockedOutOfOrg, isActiveOrgMember, resolveOwnerOrgId } from "./organizationRoles";
@@ -68,8 +68,9 @@ import { normalizeLineItems, computeOrgInvoice, laterExpiry, orgSubscriptionExpi
 import { renderMonthlyReviewPDF, type MonthlyReviewPayload, type MonthlyReviewResult } from "./pdfQCMonthly";
 import { buildMonthlyReviewPayload } from "./qcMonthlyReviewPayload";
 import { applyLicenseToExcelJS } from "./licenseStamp";
-import { resolveLegacyLabId as sharedResolveLegacyLabId, ownerMatchCounts, ownerRowInReach, isOlderSeatDate } from "./labAccessGuard";
-import { adminSeatLabId, editSeatInLab, labForNewAccountSeat, legacySeatForUser, seatForRequest, seatInLabOrderSql, seatInLabSql, seatTypeInLabSql, stampLablessSeatLab } from "./seatContext";
+import { resolveLegacyLabId as sharedResolveLegacyLabId, ownerMatchCounts, ownerRowInReach, isOlderSeatDate, staffOutsideRecordLab } from "./labAccessGuard";
+import { adminSeatLabId, editSeatInLab, labForNewAccountSeat, legacySeatForUser, seatForRequest, seatInLabOrderSql, seatInLabSql, seatTypeInLabSql, staffLabForRequest, staffOnlyInLab, stampLablessSeatLab } from "./seatContext";
+import { auditInvite, endInviteDesignation, inviteEmailForAccount, inviteLabId, inviteRoleLabel, memberInviteRefusal, recordInviteDesignation, registerLabInviteRoutes, rosterEntryTaken, staffInviteRefusal } from "./labInvites";
 import { effectiveSeatPermission, staffSeatEditRefusal } from "@shared/seatEditRule";
 import { staffSeatEditCounts } from "./staffSeatEditCounts";
 import { seatFactsForUser } from "./seatFacts";
@@ -1087,12 +1088,15 @@ function authMiddleware(req: any, res: any, next: any) {
     // (2026-10-08): an OWNER is only a seat user inside a lab where they hold
     // that seat; the old first-seat-anywhere lookup made Michael a seat of
     // St. Charles (user 81) on every request. Non-owners are unchanged.
-    // See server/seatContext.ts.
+    // See server/seatContext.ts. B3: a request that can land in a lab where this person is only Staff acts under that Staff
+    // seat, whatever they hold in another lab (staffLabForRequest; null for everyone without a Staff seat).
+    const staffLabId = staffLabForRequest((db as any).$client, req.userId, req);
+    req.staffOnlyLabId = staffLabId;
     const ctxLabId = (() => {
       const n = Number(req.params?.labId);
       return Number.isFinite(n) && n > 0 ? n : activeLabIdFromContext(req);
     })();
-    const seatRow = seatForRequest((db as any).$client, req.userId, ctxLabId, "owner_user_id, permissions, seat_type") as any;
+    const seatRow = seatForRequest((db as any).$client, req.userId, ctxLabId, "owner_user_id, permissions, seat_type", staffLabId) as any;
 
     if (seatRow) {
       req.isSeatUser = true;
@@ -1139,7 +1143,9 @@ function authMiddleware(req: any, res: any, next: any) {
     if (
       req.isSeatUser &&
       req.seatType === 'view_only' &&
-      !['GET', 'HEAD', 'OPTIONS'].includes(req.method)
+      !['GET', 'HEAD', 'OPTIONS'].includes(req.method) &&
+      // B3: answering your own invitation is about your sign-in, not about the lab where you are a reviewer.
+      !String(req.path || "").startsWith("/api/me/lab-invites/")
     ) {
       return res.status(403).json({
         error: 'view_only_seat',
@@ -1263,6 +1269,13 @@ function activeLabIdFromContext(req: any): number | null {
 // effectiveSeatPermission (shared/seatEditRule.ts), as useIsReadOnly does.
 function requireModuleEdit(module: string) {
   return (req: any, res: any, next: any) => {
+    // B3: an older route with no lab in its URL can write to another lab than the one judged below (the default lab, when no
+    // header names one). If any lab it could land in is one where this person is only Staff, it's refused.
+    if (req.staffOnlyLabId && !req.params?.labId) {
+      return res.status(403).json({
+        error: `You have view-only access to ${seatModuleLabel(module)}. Ask the account owner to grant edit access.`
+      });
+    }
     // 2026-06-01 lab-scoped seat check (mirrors PR #479's account-settings
     // pattern). The req.isSeatUser flag is set globally by authMiddleware
     // by matching user_seats with no lab scope, which mis-flags an owner
@@ -7573,6 +7586,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   };
   const clearLoginRate = (key: string): void => { loginFailures.delete(key); };
 
+  registerLabInviteRoutes(app, { sqlite: (db as any).$client, authMiddleware, getUserById: (id) => storage.getUserById(id), auditLabMembership });
   registerEmailVerificationRoutes(app, { sqlite: (db as any).$client, storage, resend, frontendUrl: FRONTEND_URL, checkLoginRate, recordLoginFailure, clearLoginRate });
   app.post("/api/auth/login", async (req, res) => {
     const parsed = loginSchema.safeParse(req.body);
@@ -9648,6 +9662,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         if (owner != null && targetUserId === owner) {
           return res.status(400).json({ error: "The owner already has access to every location; manage other members here" });
         }
+        // 2026-11-24: this moves people who already work in the enterprise between its locations. An account joins by accepting an
+        // invitation (server/labInvites.ts), so someone in none of its locations can't be added here.
+        const inGroup = locations.some((l) => sqlite.prepare("SELECT 1 FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active'").get(l.id, targetUserId));
+        if (!inGroup) return res.status(404).json({ error: "That person isn't a member of any of these locations. Invite them first." });
         const def = body.defaultLocationId != null ? Number(body.defaultLocationId) : wanted[0];
         if (!wanted.includes(def)) return res.status(400).json({ error: "Default must be one of the selected locations" });
 
@@ -11471,9 +11489,11 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const sqlite = (db as any).$client;
     const lab = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(req.scope.labId) as any;
     if (!lab) return res.status(404).json({ error: "Lab not found" });
-    const seat = sqlite.prepare("SELECT id, owner_user_id, seat_email, status FROM user_seats WHERE id = ?").get(seatId) as any;
+    const seat = sqlite.prepare("SELECT id, owner_user_id, seat_email, status, lab_id FROM user_seats WHERE id = ?").get(seatId) as any;
     if (!seat) return res.status(404).json({ error: "Seat not found" });
     if (seat.owner_user_id !== lab.owner_user_id) return res.status(403).json({ error: "Seat does not belong to this lab's owner" });
+    // B3: an owner's other lab runs its own invitations (an older one with no lab shows in each of the owner's labs).
+    if (seat.lab_id != null && Number(seat.lab_id) !== Number(req.scope.labId)) return res.status(404).json({ error: "Seat not found" });
     if (seat.status === "active") return res.status(409).json({ error: "Seat already accepted; cannot reissue" });
     if (seat.status === "deactivated") return res.status(409).json({ error: "Seat is deactivated; cannot reissue" });
     if (seat.status === "dismissed") return res.status(409).json({ error: "Seat was dismissed; create a new invite instead" });
@@ -11496,20 +11516,24 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const sqlite = (db as any).$client;
     const lab = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(req.scope.labId) as any;
     if (!lab) return res.status(404).json({ error: "Lab not found" });
-    const seat = sqlite.prepare("SELECT id, owner_user_id, status FROM user_seats WHERE id = ?").get(seatId) as any;
+    const seat = sqlite.prepare("SELECT id, owner_user_id, status, lab_id FROM user_seats WHERE id = ?").get(seatId) as any;
     if (!seat) return res.status(404).json({ error: "Seat not found" });
     if (seat.owner_user_id !== lab.owner_user_id) return res.status(403).json({ error: "Seat does not belong to this lab's owner" });
+    if (seat.lab_id != null && Number(seat.lab_id) !== Number(req.scope.labId)) return res.status(404).json({ error: "Seat not found" });
     if (seat.status === "active") return res.status(409).json({ error: "Seat is active; use deactivate, not dismiss" });
     if (seat.status === "dismissed") return res.json({ ok: true, dismissed_id: seatId, alreadyDismissed: true });
     sqlite.prepare("UPDATE user_seats SET status = 'dismissed' WHERE id = ?").run(seatId);
+    endInviteDesignation(sqlite, seatId, req.userId); // a medical director it named goes back to what it was (labInvites.ts)
     res.json({ ok: true, dismissed_id: seatId });
   });
 
   // POST /api/labs/:labId/members — invite a new user to the lab.
   // Body: { email, role?: 'staff'|'admin', permissions?: object }.
-  // Gated: admin or owner. Creates user_seats row under labs.owner_user_id
-  // (NOT the inviter), creates lab_members row with the chosen role, sends
-  // an invite email via Resend. Seat-count gate uses the LAB OWNER's
+  // Gated: admin or owner. Creates a PENDING user_seats row under
+  // labs.owner_user_id (NOT the inviter) and sends an invite email via Resend.
+  // 2026-11-24: an address that already has an account is invited like any
+  // other and joins when its person accepts (server/labInvites.ts); it used
+  // to be added at once. Seat-count gate uses the LAB OWNER's
   // user.plan and existing user_seats count, matching /api/account/seats POST.
   app.post("/api/labs/:labId/members", authMiddleware, labScopeMiddleware, async (req: any, res) => {
     if (!canManageLabMembers(req.scope)) return res.status(403).json({ error: "Owner or admin required" });
@@ -11607,12 +11631,13 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
     // Duplicate-member check.
     const existingUser = confirmedUserByEmail((db as any).$client, storage, normalizedEmail);
-    const seatUserId = existingUser ? existingUser.id : null;
-    if (seatUserId) {
+    if (existingUser) {
       const dupMember = sqlite.prepare(
         "SELECT id FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active'"
-      ).get(req.scope.labId, seatUserId) as any;
+      ).get(req.scope.labId, existingUser.id) as any;
       if (dupMember) return res.status(409).json({ error: "User is already a member of this lab" });
+      const refusal = memberInviteRefusal(sqlite, req.scope.labId, { id: existingUser.id, email: normalizedEmail });
+      if (refusal) return res.status(refusal.status).json({ error: refusal.error, code: refusal.code });
     }
     // Seat uniqueness is PER LAB: user_seats rows are lab-scoped (lab_id), so a
     // person who holds a seat on one of the owner's labs must still be invitable
@@ -11625,7 +11650,6 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (dupSeat) return res.status(409).json({ error: "This email already has a seat on this lab" });
 
     const now = new Date().toISOString();
-    const newStatus = seatUserId ? "active" : "pending";
     // Default permissions are derived from seat_type when the caller does not
     // supply them explicitly: an active (writer) seat gets edit_all so the
     // intuitive "I invited a staff member, they can do their job" workflow
@@ -11639,39 +11663,39 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const permJson = JSON.stringify(permissions || defaultPermissions);
     const inviteToken = crypto.randomUUID();
 
+    let inviteSeatId = 0;
     try {
       sqlite.exec("BEGIN");
       // Reactivate previously deactivated seat row if any.
       const deactivated = sqlite.prepare(
         "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND lab_id = ? AND " + SEAT_ROW_REUSABLE
       ).get(labOwnerId, normalizedEmail, req.scope.labId) as any;
+      // The seat waits for the person whether or not the address has an account: no account on it, no membership.
       if (deactivated) {
+        inviteSeatId = Number(deactivated.id);
         sqlite.prepare(
-          "UPDATE user_seats SET seat_user_id = ?, status = ?, invited_at = ?, accepted_at = ?, permissions = ?, invite_token = ?, lab_id = ?, seat_type = ?, invitee_name = ?, invite_role = ? WHERE id = ?"
-        ).run(seatUserId, newStatus, now, seatUserId ? now : null, permJson, inviteToken, req.scope.labId, seatType, inviteeName, role, deactivated.id);
+          "UPDATE user_seats SET seat_user_id = NULL, status = 'pending', invited_at = ?, accepted_at = NULL, permissions = ?, invite_token = ?, lab_id = ?, seat_type = ?, invitee_name = ?, invite_role = ? WHERE id = ?"
+        ).run(now, permJson, inviteToken, req.scope.labId, seatType, inviteeName, role, deactivated.id);
       } else {
-        // invite_role (2026-10-22): kept on the seat so sign-up grants the chosen role to a person who has no account yet.
-        sqlite.prepare(
-          "INSERT INTO user_seats (owner_user_id, seat_email, seat_user_id, invited_at, status, permissions, invite_token, lab_id, seat_type, invitee_name, invite_role) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-        ).run(labOwnerId, normalizedEmail, seatUserId, now, newStatus, permJson, inviteToken, req.scope.labId, seatType, inviteeName, role);
-      }
-      // Create lab_members row when the invited user already has an account.
-      if (seatUserId) {
-        sqlite.prepare(
-          `INSERT INTO lab_members (lab_id, user_id, role, permissions_json, status, is_primary_lab, accepted_at, created_at, updated_at)
-           VALUES (?, ?, ?, '{}', 'active', 0, ?, ?, ?)`
-        ).run(req.scope.labId, seatUserId, role, now, now, now);
+        // invite_role (2026-10-22): kept on the seat so accepting grants the chosen role.
+        inviteSeatId = Number(sqlite.prepare(
+          "INSERT INTO user_seats (owner_user_id, seat_email, seat_user_id, invited_at, status, permissions, invite_token, lab_id, seat_type, invitee_name, invite_role) VALUES (?, ?, NULL, ?, 'pending', ?, ?, ?, ?, ?, ?)"
+        ).run(labOwnerId, normalizedEmail, now, permJson, inviteToken, req.scope.labId, seatType, inviteeName, role).lastInsertRowid);
       }
       // Medical Director invite: designate this person as the lab's MD in the same
       // transaction. MD is identified by email (works while still a pending invite)
       // and is the one FREE seat, which is why the active-seat cap was skipped above.
       // Reassigns if the lab already had a different MD (the prior MD's seat then
       // re-counts as a normal active seat, since the free exclusion keys off this email).
+      // Nothing acts on the name until they are an active member, and an invite that ends
+      // unaccepted puts back what it replaced (labInvites.ts). The name is the one the
+      // inviter typed, the same whether or not the address has an account.
       if (isMd) {
-        const mdName = (existingUser && (existingUser as any).name) ? (existingUser as any).name : inviteeName;
+        const was = sqlite.prepare("SELECT medical_director_email AS email, medical_director_name AS name FROM labs WHERE id = ?").get(req.scope.labId) as any;
         sqlite.prepare(
           "UPDATE labs SET medical_director_email = ?, medical_director_name = ?, updated_at = ? WHERE id = ?"
-        ).run(normalizedEmail, mdName, now, req.scope.labId);
+        ).run(normalizedEmail, inviteeName, now, req.scope.labId);
+        recordInviteDesignation(sqlite, req.scope.labId, inviteSeatId, req.userId, { email: was?.email ?? null, name: was?.name ?? null }, { email: normalizedEmail, name: inviteeName });
         console.log(`[labs/${req.scope.labId}/members POST] designated Medical Director -> ${normalizedEmail} (role=medical_director invite)`);
       }
       sqlite.exec("COMMIT");
@@ -11680,25 +11704,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       console.error("[labs/:labId/members POST] DB insert failed:", err.message);
       return res.status(500).json({ error: err.message || "Failed to invite member" });
     }
-    // The lab's medical director is an admin (2026-10-23, Michael): an MD invite becomes an admin invite, and an MD
-    // who already has an account joins as admin.
+    // The lab's medical director is an admin (2026-10-23, Michael): an MD invite becomes an admin invite, granted when accepted.
     promoteMedicalDirectorToAdmin(sqlite, req.scope.labId);
-    if (seatUserId) {
-      const newMembership = sqlite.prepare(
-        "SELECT * FROM lab_members WHERE lab_id = ? AND user_id = ? ORDER BY id DESC LIMIT 1"
-      ).get(req.scope.labId, seatUserId);
-      auditLabMembership("create", newMembership, req.userId, (req.headers["x-forwarded-for"] as string) || null, "labs/:labId/members");
-      // BUG-183: someone who already has an account joins now, so their roster entry is tied now (rosterMembers.ts).
-      try {
-        const joined = sqlite.prepare(
-          "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_user_id = ? AND lab_id = ? AND status = 'active' AND invite_token = ?"
-        ).get(labOwnerId, seatUserId, req.scope.labId, inviteToken) as any;
-        const tied = joined ? linkInvitedMemberToRoster(sqlite, Number(joined.id)) : null;
-        if (tied) logAudit({ userId: req.userId, ownerUserId: Number(labOwnerId), module: "veritastaff", action: "update", entityType: "staff_employee.login_link", entityId: tied.employeeId, entityLabel: "linked on invite", after: { login_user_id: tied.userId, lab_id: tied.labId }, ipAddress: req.ip });
-      } catch (err: any) {
-        console.error("[labs/:labId/members POST] roster link failed (non-fatal):", err.message);
-      }
-    }
+    const offer = inviteRoleLabel(sqlite, sqlite.prepare("SELECT owner_user_id, lab_id, seat_email, seat_type, invite_role, permissions FROM user_seats WHERE id = ?").get(inviteSeatId) as any, req.scope.labId);
+    auditInvite({ userId: req.userId, ownerUserId: labOwnerId, seatId: inviteSeatId, labId: req.scope.labId, offer, ip: req.ip });
 
     // Best-effort invite email (matches /api/account/seats template).
     const labName = lab.lab_name || ownerRow.clia_lab_name || ownerRow.hospital_name || "the lab";
@@ -11718,7 +11727,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
             from: "VeritaAssure® <info@veritaslabservices.com>",
             to: normalizedEmail,
             subject: `You've been invited to join ${labName} on VeritaAssure®`,
-            html: `
+            html: existingUser ? inviteEmailForAccount({ inviterName, labName, offer, url: `${FRONTEND_URL}/join?token=${inviteToken}` }) : `
               <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px">
                 <h2 style="color:#01696F">VeritaAssure®</h2>
                 <p style="font-size:15px;color:#1B2B2B;line-height:1.6">${inviterName} has invited you to join <strong>${labName}</strong> on VeritaAssure® as a team member${role === "admin" ? " with admin rights" : ""}.</p>
@@ -11740,7 +11749,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       }
     }
 
-    res.json({ ok: true, status: newStatus, emailSent, role, inviteToken });
+    res.json({ ok: true, status: "pending", emailSent, role, inviteToken });
   });
 
   // GET /api/me/staff-portal-employee
@@ -11814,7 +11823,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const approvals: any[] = [];
     for (const labId of labsForApprovals(sqlite, req.userId, wantLabId)) {
       for (const a of approvalQueueFor(sqlite, labId, req.userId, labLocalDate(new Date().toISOString()))) {
-        approvals.push({ document_id: a.document_id, title: a.title, step_name: a.step_name });
+        approvals.push({ document_id: a.document_id, title: a.title, step_name: a.step_name, lab_id: labId });
       }
     }
 
@@ -11825,9 +11834,11 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // Pending quizzes: competency_quiz_assignments with status='assigned'.
     const empIds = empRows.map((r) => r.id);
     const labIds = empRows.map((r) => r.tier2_lab_id);
+    // B3: which lab each item is in, so the bell opens My sign-offs there.
+    const labOfEmp = new Map<number, number>(empRows.map((r) => [Number(r.id), Number(r.tier2_lab_id)]));
     const placeholders = empIds.map(() => "?").join(",");
     const quizRows = sqlite.prepare(
-      `SELECT qa.id AS assignment_id, qa.quiz_id, qa.due_date, qa.assigned_at,
+      `SELECT qa.id AS assignment_id, qa.quiz_id, qa.due_date, qa.assigned_at, qa.staff_employee_id,
               q.title, q.method_group_name
        FROM competency_quiz_assignments qa
        JOIN competency_quizzes q ON q.id = qa.quiz_id
@@ -11837,21 +11848,22 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
     // Pending policies: the same list and rules as the person's My sign-offs tile (2026-11-04, Q161). This read an older table
     // and a column that doesn't exist, so the bell never listed a document to sign.
-    const policies: any[] = empRows.flatMap((r) => unsignedDocumentsForStaff(sqlite, r.tier2_lab_id, r.id, req.userId));
+    const policies: any[] = empRows.flatMap((r) => unsignedDocumentsForStaff(sqlite, r.tier2_lab_id, r.id, req.userId).map((d: any) => ({ ...d, lab_id: r.tier2_lab_id })));
 
     // Pending competencies: assessments where employee_acknowledged = 0
     // for this staff member's competency_employees bridge.
     let competencies: any[] = [];
     try {
       const bridges = sqlite.prepare(
-        `SELECT ce.id FROM competency_employees ce
+        `SELECT ce.id, ce.staff_employee_id FROM competency_employees ce
          WHERE ce.staff_employee_id IN (${placeholders})`
       ).all(...empIds) as any[];
+      const labOfBridge = new Map<number, number | undefined>(bridges.map((b) => [Number(b.id), labOfEmp.get(Number(b.staff_employee_id))]));
       const bridgeIds = bridges.map((b) => b.id);
       if (bridgeIds.length) {
         const bridgePlaceholders = bridgeIds.map(() => "?").join(",");
         competencies = sqlite.prepare(
-          `SELECT ca.id AS assessment_id, ca.assessment_date, ca.assessment_type,
+          `SELECT ca.id AS assessment_id, ca.assessment_date, ca.assessment_type, ca.employee_id,
                   cp.name AS program_name
            FROM competency_assessments ca
            JOIN competency_programs cp ON cp.id = ca.program_id
@@ -11862,6 +11874,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
            ORDER BY ca.assessment_date DESC
            LIMIT 50`
         ).all(...bridgeIds) as any[];
+        competencies = competencies.map((c) => ({ ...c, lab_id: labOfBridge.get(Number(c.employee_id)) ?? null }));
       }
     } catch { /* table shape may differ on older deploys */ }
 
@@ -11880,6 +11893,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         quiz_id: r.quiz_id,
         title: r.title || r.method_group_name || `Quiz ${r.quiz_id}`,
         due_date: r.due_date,
+        lab_id: labOfEmp.get(Number(r.staff_employee_id)) ?? null,
       });
     }
     // Same dedupe pattern for policies (document_id) and competencies
@@ -11904,12 +11918,14 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         document_id: p.document_id,
         title: p.title,
         effective_date: p.effective_date,
+        lab_id: p.lab_id ?? null,
       })),
       competencies: dedupedCompetencies.map((c: any) => ({
         assessment_id: c.assessment_id,
         program_name: c.program_name,
         assessment_date: c.assessment_date,
         assessment_type: c.assessment_type,
+        lab_id: c.lab_id ?? null,
       })),
     });
   });
@@ -11923,6 +11939,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   //   staff_employees.user_id so the tech's Staff Portal session is
   //   pinned to a real authenticated identity instead of CLIA + shared
   //   PIN + picker.
+  //   B3 (BUG-193, 2026-11-24): the address may already have an account.
+  //   The invite waits for that person to accept it signed in as
+  //   themselves (server/labInvites.ts), and this answer is the same
+  //   either way.
   app.post("/api/labs/:labId/staff-portal-invites", authMiddleware, labScopeMiddleware, async (req: any, res) => {
     if (!canManageLabMembers(req.scope)) return res.status(403).json({ error: "Owner or admin required" });
     // deliverEmail defaults to true (unchanged behavior: the invite is emailed
@@ -11948,6 +11968,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const labOwnerId = lab.owner_user_id;
     const ownerRow = sqlite.prepare("SELECT id, name, email, clia_lab_name, hospital_name FROM users WHERE id = ?").get(labOwnerId) as any;
     if (!ownerRow) return res.status(500).json({ error: "Lab owner user not found" });
+
+    // B3: an address with an account is invited like any other, unless that account already has this lab or is a Veritas one.
+    const existingUser = confirmedUserByEmail((db as any).$client, storage, normalizedEmail);
+    if (isVeritasLogin(normalizedEmail)) return res.status(409).json({ error: "This address can't be invited to a lab. Use a different email.", code: "INVITE_NOT_ALLOWED" });
+    const accountRefusal = existingUser ? staffInviteRefusal(sqlite, req.scope.labId, { id: existingUser.id, email: normalizedEmail }) : null;
+    if (accountRefusal) return res.status(accountRefusal.status).json({ error: accountRefusal.error, code: accountRefusal.code });
 
     let staffEmpId = parseInt(String(staff_employee_id ?? ""), 10);
     if (!Number.isFinite(staffEmpId) || staffEmpId <= 0) {
@@ -12001,6 +12027,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (acceptedSeat) {
       return res.status(409).json({ error: "This employee already has a staff login" });
     }
+    if (rosterEntryTaken(sqlite, req.scope.labId, staffEmpId, existingUser?.id ?? null)) {
+      return res.status(409).json({ error: "This employee's roster entry is already linked to someone's sign-in in VeritaStaff™.", code: "ROSTER_ENTRY_TAKEN" });
+    }
     const pendingSeat = sqlite.prepare(
       "SELECT seat_email FROM user_seats WHERE staff_employee_id = ? AND seat_type = 'staff_portal' AND status = 'pending' LIMIT 1"
     ).get(staffEmpId) as any;
@@ -12014,17 +12043,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     ).get(labOwnerId, normalizedEmail, req.scope.labId) as any;
     if (dupSeat) return res.status(409).json({ error: "This email already has a seat on this lab. Use the seat list to manage it." });
 
-    const existingUser = confirmedUserByEmail((db as any).$client, storage, normalizedEmail);
-    const seatUserId = existingUser ? existingUser.id : null;
-    if (seatUserId) {
-      // If the email maps to an existing main-site account, we don't
-      // auto-link here — that would silently grant Staff Portal access
-      // to an account whose owner may not know. Return 409 with a
-      // clear message; the director can advise the tech to use a
-      // different email or contact support.
-      return res.status(409).json({ error: "This email is already a VeritaAssure account. Use a different email for the staff login, or contact support to merge." });
-    }
-
+    // seat_user_id stays empty whether or not the address has an account: nothing is granted until the person accepts (labInvites.ts).
     const now = new Date().toISOString();
     const inviteToken = crypto.randomUUID();
     // Staff Portal seats are read and sign: they don't author. They are stored
@@ -12034,19 +12053,21 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // edit on one (shared/seatEditRule.ts). The view_all value only keeps
     // permission-mode readers from meeting a null.
     const permJson = JSON.stringify({ mode: "view_all" });
+    let inviteSeatId = 0;
     try {
       sqlite.exec("BEGIN");
       const deactivated = sqlite.prepare(
         "SELECT id FROM user_seats WHERE owner_user_id = ? AND seat_email = ? AND lab_id = ? AND " + SEAT_ROW_REUSABLE
       ).get(labOwnerId, normalizedEmail, req.scope.labId) as any;
       if (deactivated) {
+        inviteSeatId = Number(deactivated.id);
         sqlite.prepare(
           "UPDATE user_seats SET seat_user_id = NULL, status = 'pending', invited_at = ?, accepted_at = NULL, permissions = ?, invite_token = ?, lab_id = ?, seat_type = 'staff_portal', staff_employee_id = ? WHERE id = ?"
         ).run(now, permJson, inviteToken, req.scope.labId, staffEmpId, deactivated.id);
       } else {
-        sqlite.prepare(
+        inviteSeatId = Number(sqlite.prepare(
           "INSERT INTO user_seats (owner_user_id, seat_email, seat_user_id, invited_at, status, permissions, invite_token, lab_id, seat_type, staff_employee_id, invitee_name) VALUES (?, ?, NULL, ?, 'pending', ?, ?, ?, 'staff_portal', ?, ?)"
-        ).run(labOwnerId, normalizedEmail, now, permJson, inviteToken, req.scope.labId, staffEmpId, `${String(firstName ?? "").trim()} ${String(lastName ?? "").trim()}`.trim().slice(0, 120) || null);
+        ).run(labOwnerId, normalizedEmail, now, permJson, inviteToken, req.scope.labId, staffEmpId, `${String(firstName ?? "").trim()} ${String(lastName ?? "").trim()}`.trim().slice(0, 120) || null).lastInsertRowid);
       }
       sqlite.exec("COMMIT");
     } catch (err: any) {
@@ -12054,6 +12075,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       console.error("[labs/:labId/staff-portal-invites POST] insert failed:", err.message);
       return res.status(500).json({ error: err.message || "Failed to create invite" });
     }
+    auditInvite({ userId: req.userId, ownerUserId: labOwnerId, seatId: inviteSeatId, labId: req.scope.labId, offer: "staff (read and sign)", employeeId: staffEmpId, ip: req.ip });
 
     const labName = lab.lab_name || ownerRow.clia_lab_name || ownerRow.hospital_name || "the lab";
     const inviterName = req.scope.role === "owner"
@@ -12072,8 +12094,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           body: JSON.stringify({
             from: "VeritaAssure® <info@veritaslabservices.com>",
             to: normalizedEmail,
-            subject: `Set up your VeritaAssure staff login for ${labName}`,
-            html: `
+            subject: existingUser ? `You've been invited to join ${labName} on VeritaAssure®` : `Set up your VeritaAssure staff login for ${labName}`,
+            html: existingUser ? inviteEmailForAccount({ inviterName, labName, offer: "staff (read and sign)", url: `${FRONTEND_URL}/join?token=${inviteToken}` }) : `
               <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px">
                 <h2 style="color:#01696F">VeritaAssure® staff login</h2>
                 <p style="font-size:15px;color:#1B2B2B;line-height:1.6">${inviterName} at <strong>${labName}</strong> has set up a VeritaAssure staff login for ${techName}.</p>
@@ -12343,6 +12365,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     try {
       sqlite.exec("BEGIN");
       sqlite.prepare("DELETE FROM lab_members WHERE id = ?").run(memberId);
+      // B3: someone who still works in another lab keeps their sign-in, and the older routes fall back to the default lab.
+      sqlite.prepare("UPDATE users SET default_lab_id = NULL WHERE id = ? AND default_lab_id = ?").run(member.user_id, req.scope.labId);
       // Also deactivate the matching user_seats row (matches the lab owner's seat pool).
       const userRow = sqlite.prepare("SELECT email FROM users WHERE id = ?").get(member.user_id) as any;
       // Deactivate ONLY this lab's seat. Without the lab_id scope, removing a
@@ -12909,8 +12933,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         if (seatRow) effectiveUserId = seatRow.owner_user_id;
       }
     } else {
-      // Legacy fallback: no active-lab context (#82: owners act as themselves).
-      const seatRow = legacySeatForUser((db as any).$client, sessionUserId) as any;
+      // Legacy fallback: no active-lab context (#82: owners act as themselves; B3: Staff in the lab they'd land in).
+      const seatRow = seatForRequest((db as any).$client, sessionUserId, null, "owner_user_id", staffLabForRequest((db as any).$client, sessionUserId, req)) as any;
       if (seatRow) effectiveUserId = seatRow.owner_user_id;
     }
     if (effectiveUserId !== study.userId) {
@@ -13015,6 +13039,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // the Referer URL. Owners of the active lab pass through. If no
     // active lab can be resolved, fall back to the legacy global
     // seat check.
+    // B3: only Staff in a lab this could land in, whatever seat they hold in another lab.
+    const studyViewOnly = () => res.status(403).json({ error: "You have view-only access to VeritaCheck®. Ask the account owner to grant edit access." });
+    if (staffLabForRequest((db as any).$client, payload.userId, req)) return studyViewOnly();
     const postActiveLabId: number | null = activeLabIdFromContext(req);
     let seatRow: any = null;
     if (postActiveLabId) {
@@ -13047,6 +13074,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       }
     }
     const userId: number = seatRow ? seatRow.owner_user_id : payload.userId;
+    // B3: the study is stamped with the account's primary lab below, which can be one where this person is only Staff.
+    const landingLabId = ((db as any).$client.prepare("SELECT COALESCE((SELECT lab_id FROM lab_members WHERE user_id = ? AND status = 'active' ORDER BY is_primary_lab DESC, id ASC LIMIT 1), (SELECT lab_id FROM users WHERE id = ?)) AS id").get(userId, userId) as any)?.id;
+    if (landingLabId && staffOnlyInLab((db as any).$client, payload.userId, landingLabId)) return studyViewOnly();
     // Track who actually ran the study so the Admin Report attributes
     // credit to the seat user (not just the primary seat holder).
     const createdByUserId = payload.userId;
@@ -13292,7 +13322,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // Tenant ownership check: caller (or their seat owner) must own this study.
     // Legacy guest studies (user_id IS NULL) are not deletable via this route.
     const callerOwnerId = req.ownerUserId ?? req.userId;
-    if (delStudy.user_id == null || delStudy.user_id !== callerOwnerId || !ownerRowInReach((db as any).$client, req.userId, callerOwnerId, delStudy.lab_id)) {
+    if (delStudy.user_id == null || delStudy.user_id !== callerOwnerId || !ownerRowInReach((db as any).$client, req.userId, callerOwnerId, delStudy.lab_id, req)) {
       return res.status(403).json({ error: "Access denied" });
     }
     logAudit({ userId: req.userId, ownerUserId: callerOwnerId, module: "veritacheck", action: "delete", entityType: "study", entityId: req.params.id, entityLabel: delStudy ? `${delStudy.test_name} - ${delStudy.study_type} (${delStudy.date})` : undefined, before: delStudy, ipAddress: req.ip });
@@ -14608,11 +14638,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
   // Lab-wide pool usage: sum instruments + active analytes across the entire
   // owner graph (the owner plus every active seat user attached to them).
+  // A Staff seat never builds maps, and since B3 its holder can have maps in another customer's lab, so Staff seats are left out.
   // For owners, ownerUserId === their own user id, so this naturally covers
   // the owner-only case too. Used for the freemium 4/10 cap.
   function getLabPoolUsage(ownerId: number) {
     const seatUserIds = ((db as any).$client.prepare(
-      "SELECT seat_user_id FROM user_seats WHERE owner_user_id = ? AND status = 'active' AND seat_user_id IS NOT NULL"
+      "SELECT seat_user_id FROM user_seats WHERE owner_user_id = ? AND status = 'active' AND seat_user_id IS NOT NULL AND COALESCE(seat_type, 'active') <> 'staff_portal'"
     ).all(ownerId) as any[]).map((r: any) => Number(r.seat_user_id));
     const allUserIds = Array.from(new Set([Number(ownerId), ...seatUserIds]));
     const placeholders = allUserIds.map(() => '?').join(',');
@@ -14656,14 +14687,17 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const row = (db as any).$client.prepare(
       "SELECT p.lab_id FROM competency_assessments a JOIN competency_programs p ON p.id = a.program_id WHERE a.id = ?"
     ).get(assessmentId) as any;
-    return ownerRowInReach((db as any).$client, req.userId ?? req.user?.userId, req.ownerUserId ?? req.user?.userId, row?.lab_id);
+    return ownerRowInReach((db as any).$client, req.userId ?? req.user?.userId, req.ownerUserId ?? req.user?.userId, row?.lab_id, req);
   }
 
+  // B3 (server/labAccessGuard.ts staffOutsideRecordLab): each helper below first refuses a change to a record in a lab where this
+  // person is only Staff, made while working in another lab.
   function userCanAccessMap(mapId: number | string, req: any): any | null {
     const map = (db as any).$client.prepare(
       "SELECT * FROM veritamap_maps WHERE id = ?"
     ).get(mapId) as any;
     if (!map) return null;
+    if (staffOutsideRecordLab((db as any).$client, req, map.lab_id)) return null;
     if (ownerMatch(req, map.user_id, map.lab_id)) return map;
     if (map.lab_id) {
       const member = (db as any).$client.prepare(
@@ -14681,6 +14715,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   function userCanAccessFinding(id: number | string, req: any): any | null {
     const row = (db as any).$client.prepare("SELECT * FROM findings WHERE id = ?").get(id) as any;
     if (!row) return null;
+    if (staffOutsideRecordLab((db as any).$client, req, row.lab_id)) return null;
     if (ownerMatch(req, row.user_id, row.lab_id)) return row;
     if (row.lab_id) {
       const member = (db as any).$client.prepare(
@@ -14695,6 +14730,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   function userCanAccessScan(id: number | string, req: any): any | null {
     const row = (db as any).$client.prepare("SELECT * FROM veritascan_scans WHERE id = ?").get(id) as any;
     if (!row) return null;
+    if (staffOutsideRecordLab((db as any).$client, req, row.lab_id)) return null;
     if (ownerMatch(req, row.user_id, row.lab_id)) return row;
     if (row.lab_id) {
       const member = (db as any).$client.prepare(
@@ -14709,6 +14745,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   function userCanAccessPolicy(id: number | string, req: any): any | null {
     const row = (db as any).$client.prepare("SELECT * FROM veritapolicy_lab_policies WHERE id = ?").get(id) as any;
     if (!row) return null;
+    if (staffOutsideRecordLab((db as any).$client, req, row.lab_id)) return null;
     if (ownerMatch(req, row.user_id, row.lab_id)) return row;
     if (row.lab_id) {
       const member = (db as any).$client.prepare(
@@ -14723,6 +14760,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   function userCanAccessStudy(id: number | string, req: any): any | null {
     const row = (db as any).$client.prepare("SELECT * FROM studies WHERE id = ?").get(id) as any;
     if (!row) return null;
+    if (staffOutsideRecordLab((db as any).$client, req, row.lab_id)) return null;
     if (ownerMatch(req, row.user_id, row.lab_id)) return row;
     if (row.lab_id) {
       const member = (db as any).$client.prepare(
@@ -14742,6 +14780,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   function userCanAccessLabRow(table: string, id: number | string, req: any): any | null {
     const row = (db as any).$client.prepare(`SELECT * FROM ${table} WHERE id = ?`).get(id) as any;
     if (!row) return null;
+    if (staffOutsideRecordLab((db as any).$client, req, row.lab_id)) return null;
     if (ownerMatch(req, row.user_id, row.lab_id)) return row;
     if (row.lab_id) {
       const member = (db as any).$client.prepare(
@@ -14761,6 +14800,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       "SELECT * FROM lab_certificates WHERE id = ? AND is_active = 1"
     ).get(id) as any;
     if (!row) return null;
+    if (staffOutsideRecordLab((db as any).$client, req, row.lab_id)) return null;
     if (ownerMatch(req, row.user_id, row.lab_id)) return row;
     if (row.lab_id) {
       const member = (db as any).$client.prepare(
@@ -15911,7 +15951,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       if (!scopedInst) return res.status(404).json({ error: "Instrument not found on this map" });
       const ownerId = labOwnerUserId(req);
       if (!hasMapAccess(req.user, req.scope?.lab)) {
-        const seatUserIds = ((db as any).$client.prepare("SELECT seat_user_id FROM user_seats WHERE owner_user_id = ? AND status = 'active' AND seat_user_id IS NOT NULL").all(ownerId) as any[]).map((r: any) => Number(r.seat_user_id));
+        const seatUserIds = ((db as any).$client.prepare("SELECT seat_user_id FROM user_seats WHERE owner_user_id = ? AND status = 'active' AND seat_user_id IS NOT NULL AND COALESCE(seat_type, 'active') <> 'staff_portal'").all(ownerId) as any[]).map((r: any) => Number(r.seat_user_id));
         const allUserIds = Array.from(new Set([Number(ownerId), ...seatUserIds]));
         const placeholders = allUserIds.map(() => '?').join(',');
         const otherCount = ((db as any).$client.prepare(`SELECT COUNT(*) AS cnt FROM veritamap_instrument_tests WHERE map_id IN (SELECT id FROM veritamap_maps WHERE user_id IN (${placeholders})) AND instrument_id != ? AND active = 1`).get(...allUserIds, req.params.instId) as any).cnt as number;
@@ -16947,7 +16987,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       // pool count, then check pool + newActive against the cap.
       if (!hasMapAccess(req.user, req.scope?.lab)) {
         const seatUserIds = ((db as any).$client.prepare(
-          "SELECT seat_user_id FROM user_seats WHERE owner_user_id = ? AND status = 'active' AND seat_user_id IS NOT NULL"
+          "SELECT seat_user_id FROM user_seats WHERE owner_user_id = ? AND status = 'active' AND seat_user_id IS NOT NULL AND COALESCE(seat_type, 'active') <> 'staff_portal'"
         ).all(dataUserId) as any[]).map((r: any) => Number(r.seat_user_id));
         const allUserIds = Array.from(new Set([Number(dataUserId), ...seatUserIds]));
         const placeholders = allUserIds.map(() => '?').join(',');
@@ -29339,18 +29379,22 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // GET /api/labs/:labId/veritacomp/programs/:programId/pt-samples
   //
   // Wave I PR I3 (2026-06-06). Cross-module bridge from VeritaPT into
-  // the VeritaComp New Assessment dialog's Element 5 row. Returns the
-  // lab owner's recent pt_events filtered loosely by analytes appearing
-  // in the program's method groups, capped at 25 most recent (event_date
-  // DESC). Lets the lab director pick a real recorded PT event instead
-  // of typing the sample id, date, and acceptable status by hand.
+  // the VeritaComp New Assessment dialog's Element 5 row. Returns this
+  // LAB's recent pt_events filtered loosely by analytes appearing in the
+  // program's method groups, capped at 25 most recent (event_date DESC).
+  // Lets the lab director pick a real recorded PT event instead of typing
+  // the sample id, date, and acceptable status by hand.
   //
-  // Schema reality: pt_events.user_id is the LAB OWNER, not an employee
-  // (PT events are not attributed per testing personnel in our schema).
-  // The original I3 framing ("the employee's PT samples") was rescoped
-  // to "the lab's recent PT events" because the data model doesn't
-  // support per-employee attribution. The lab director picks which event
-  // was run by the employee being assessed.
+  // BUG-189 part 1 (2026-11-24): it listed events by the lab OWNER's user
+  // id, so an owner with several labs saw other labs' events, and an event
+  // with neither an id nor a name imported as "PT event #N". It now reads
+  // the lab's own events (pt_events.lab_id, as VeritaPT's list does), and
+  // the sample id is the event id and name that exist, else blank.
+  // ?employeeId= (a competency employee of this lab) matches the tester
+  // VeritaPT recorded (pt_events.tested_by_employee_id): an event recorded
+  // as tested by someone else is left out; one with no tester recorded
+  // stays, for the evaluator to judge. A limited Staff login reads only
+  // its own and unrecorded events and nobody's name.
   //
   // Filtering: program.method_groups[].analytes is a JSON array of
   // analyte names. We pull recent pt_events for the lab and keep only
@@ -29359,11 +29403,27 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // analytes recorded, we return all recent events as a fallback.
   app.get("/api/labs/:labId/veritacomp/programs/:programId/pt-samples", authMiddleware, labScopeMiddleware, (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
-    const ownerUserId = labOwnerUserId(req);
     const program = (db as any).$client.prepare(
       `SELECT id, name FROM competency_programs WHERE id = ? AND lab_id = ?`
     ).get(req.params.programId, req.scope.labId) as any;
     if (!program) return res.status(404).json({ error: "Program not found in this lab" });
+
+    // Whose record this is, when the dialog names the person: their roster row in this lab, by the link, else by name as
+    // suggested-method-groups does. Null when there is none, and then no event is left out.
+    const staffOwn = staffOwnIn(req);
+    let personId: number | null = null;
+    if (req.query.employeeId != null && req.query.employeeId !== "") {
+      const compEmp = (db as any).$client.prepare(
+        "SELECT id, staff_employee_id, name FROM competency_employees WHERE id = ? AND lab_id = ?"
+      ).get(Number(req.query.employeeId), req.scope.labId) as { id: number; staff_employee_id: number | null; name: string } | undefined;
+      if (!compEmp) return res.status(404).json({ error: "Employee not found" });
+      personId = compEmp.staff_employee_id ?? ((db as any).$client.prepare(
+        `SELECT id FROM staff_employees WHERE tier2_lab_id = ?
+          AND (LOWER(TRIM(first_name || ' ' || last_name)) = LOWER(TRIM(?)) OR LOWER(TRIM(last_name || ', ' || first_name)) = LOWER(TRIM(?)))
+          LIMIT 1`
+      ).get(req.scope.labId, compEmp.name, compEmp.name) as any)?.id ?? null;
+    }
+    if (staffOwn) personId = staffOwn.employeeId;
 
     // Collect the program's analytes from its method groups. analytes is
     // a JSON-encoded text array; tolerate parse failure by ignoring.
@@ -29383,7 +29443,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       } catch { /* swallow */ }
     }
 
-    // Pull recent PT events for the lab owner. 18 months is the practical
+    // Pull this lab's recent PT events. 18 months is the practical
     // surveyor-defensible window (CMS Subpart H allows the lab to use any
     // event in the current calendar year; widening to 18 months lets the
     // LD also reach a late-year event from the prior cycle).
@@ -29391,17 +29451,20 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     since.setMonth(since.getMonth() - 18);
     const sinceDate = since.toISOString().split("T")[0];
     const events = (db as any).$client.prepare(
-      `SELECT id, event_id, event_name, event_date, analyte, your_result, your_method,
-              acceptable_low, acceptable_high, sdi, pass_fail
-       FROM pt_events
-       WHERE user_id = ? AND date(event_date) >= date(?)
-       ORDER BY date(event_date) DESC, id DESC
+      `SELECT e.id, e.event_id, e.event_name, e.event_date, e.analyte, e.your_result, e.your_method,
+              e.acceptable_low, e.acceptable_high, e.sdi, e.pass_fail, e.tested_by_employee_id,
+              (SELECT TRIM(COALESCE(se.last_name, '') || ', ' || COALESCE(se.first_name, '')) FROM staff_employees se
+                WHERE se.id = e.tested_by_employee_id AND se.tier2_lab_id = e.lab_id) AS tested_by_name
+       FROM pt_events e
+       WHERE e.lab_id = @lab AND date(e.event_date) >= date(@since)
+         AND (@mine = 0 OR e.tested_by_employee_id IS NULL OR e.tested_by_employee_id = @person)
+       ORDER BY date(e.event_date) DESC, e.id DESC
        LIMIT 200`
-    ).all(ownerUserId, sinceDate) as Array<{
+    ).all({ lab: req.scope.labId, since: sinceDate, mine: personId != null || staffOwn ? 1 : 0, person: personId }) as Array<{
       id: number; event_id: string | null; event_name: string | null; event_date: string;
       analyte: string; your_result: number | null; your_method: string | null;
       acceptable_low: number | null; acceptable_high: number | null; sdi: number | null;
-      pass_fail: string;
+      pass_fail: string; tested_by_employee_id: number | null; tested_by_name: string | null;
     }>;
 
     // Filter against program analytes when we have them; otherwise return
@@ -29431,7 +29494,11 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       // Convenience pre-formatted fields the picker can drop straight
       // into the Element 5 form state.
       suggestedSampleType: "PT",
-      suggestedSampleId: e.event_id || e.event_name || `PT event #${e.id}`,
+      // The event id and the event name, whichever the lab entered; never a made-up number.
+      suggestedSampleId: [e.event_id, e.event_name].map((v) => String(v ?? "").trim()).filter((v, i, all) => v && all.indexOf(v) === i).join(", "),
+      testedByEmployeeId: staffOwn ? null : e.tested_by_employee_id,
+      testedByName: staffOwn ? null : e.tested_by_name,
+      testedByThisPerson: personId != null && e.tested_by_employee_id === personId,
       suggestedAcceptable: e.pass_fail === "pass" ? 1 : (e.pass_fail === "fail" ? 0 : null),
     })));
   });
@@ -32726,10 +32793,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     ).get(req.userId, email.toLowerCase());
     if (existingActive) return res.status(409).json({ error: "This email already has a seat assigned" });
 
-    // Check if invited user already has an account
+    // 2026-11-24: an address that already has an account joins when its person accepts (server/labInvites.ts). Someone who is
+    // already an active member of the lab this seat is for has joined, so their seat is given back at once, as before; that is
+    // worked out below, once the seat's lab is known.
     const existingUser = confirmedUserByEmail((db as any).$client, storage, email.toLowerCase());
-    const seatUserId = existingUser ? existingUser.id : null;
-    const newStatus = seatUserId ? "active" : "pending";
 
     // Server-side default for invites that arrive without permissions (old
     // client tab, scripted invite). The new client requires the owner to
@@ -32757,6 +32824,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // their one lab when they own exactly one; otherwise it stays without a lab as before (labForNewAccountSeat). A
     // reactivated row keeps a lab it already has.
     const stampLabId = labForNewAccountSeat((db as any).$client, req.userId, req.headers["x-active-lab-id"]);
+    const seatLab = inviteLabId((db as any).$client, { lab_id: deactivated ? (((db as any).$client.prepare("SELECT lab_id FROM user_seats WHERE id = ?").get(deactivated.id) as any)?.lab_id ?? stampLabId) : stampLabId, owner_user_id: req.userId, seat_type: deactivated?.seat_type ?? null });
+    const refusal = existingUser && seatLab ? memberInviteRefusal((db as any).$client, seatLab, { id: existingUser.id, email: email.toLowerCase() }) : null;
+    if (refusal && refusal.code === "INVITE_NOT_ALLOWED") return res.status(refusal.status).json({ error: refusal.error, code: refusal.code });
+    const joined = !!existingUser && !!seatLab && !!(db as any).$client.prepare("SELECT 1 FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active'").get(seatLab, existingUser.id);
+    const seatUserId = joined ? existingUser!.id : null;
+    const newStatus = joined ? "active" : "pending";
     let seatRowId: number;
     if (deactivated) {
       (db as any).$client.prepare(
@@ -32768,43 +32841,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         "INSERT INTO user_seats (owner_user_id, seat_email, seat_user_id, invited_at, status, permissions, invite_token, lab_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
       ).run(req.userId, email.toLowerCase(), seatUserId, now, newStatus, permJson, inviteToken, stampLabId).lastInsertRowid);
     }
-    const seatLabId: number | null = ((db as any).$client.prepare("SELECT lab_id FROM user_seats WHERE id = ?").get(seatRowId) as any)?.lab_id ?? null;
-
-    // If the seat user already exists and is active, inherit the owner's lab_id
-    if (seatUserId && newStatus === "active") {
-      const ownerLabRow = (db as any).$client.prepare("SELECT lab_id FROM users WHERE id = ?").get(req.userId) as any;
-      if (ownerLabRow?.lab_id) {
-        (db as any).$client.prepare("UPDATE users SET lab_id = ? WHERE id = ?").run(ownerLabRow.lab_id, seatUserId);
-      }
-      // Replaces the now-disabled boot lab_members backfill: a legacy seat
-      // invite to an already-registered user must also grant lab membership
-      // on the inviter's primary lab, otherwise the lab switcher and per-
-      // lab data gates won't see them (the original Bug 2 from 2026-05-24).
-      // Target lab = the seat's own lab when it has one (Q287 = 1, so the membership and the seat name the same lab), else
-      // the inviter's primary lab_members row (is_primary_lab=1) as before.
-      const inviterPrimary = seatLabId ? { lab_id: seatLabId } : (db as any).$client.prepare(
-        "SELECT lab_id FROM lab_members WHERE user_id = ? AND is_primary_lab = 1 AND status = 'active' LIMIT 1"
-      ).get(req.userId) as any;
-      if (inviterPrimary?.lab_id) {
-        const dupMember = (db as any).$client.prepare(
-          "SELECT id FROM lab_members WHERE lab_id = ? AND user_id = ?"
-        ).get(inviterPrimary.lab_id, seatUserId) as any;
-        if (!dupMember) {
-          (db as any).$client.prepare(
-            `INSERT INTO lab_members (lab_id, user_id, role, permissions_json, status, is_primary_lab, accepted_at, created_at, updated_at)
-             VALUES (?, ?, 'staff', ?, 'active', 0, ?, ?, ?)`
-          ).run(inviterPrimary.lab_id, seatUserId, permJson, now, now, now);
-          promoteMedicalDirectorToAdmin((db as any).$client, inviterPrimary.lab_id); // the medical director is an admin (2026-10-23)
-          const newMembership = (db as any).$client.prepare(
-            "SELECT * FROM lab_members WHERE lab_id = ? AND user_id = ?"
-          ).get(inviterPrimary.lab_id, seatUserId);
-          auditLabMembership("create", newMembership, req.userId, (req.headers["x-forwarded-for"] as string) || null, "account/seats:legacy-invite");
-        }
-      }
-      // An existing account takes the seat at once, which is its acceptance: a seat still without a lab takes the lab when
-      // the person is now a member of exactly one of the owner's labs (Q287 = 1, as the invite link's acceptance does).
-      stampLablessSeatLab((db as any).$client, seatRowId);
-    }
+    // A seat still without a lab takes the lab when its holder is a member of exactly one of the owner's labs (Q287 = 1).
+    if (joined) stampLablessSeatLab((db as any).$client, seatRowId);
+    const seatOffer = inviteRoleLabel((db as any).$client, (db as any).$client.prepare("SELECT owner_user_id, lab_id, seat_email, seat_type, invite_role, permissions FROM user_seats WHERE id = ?").get(seatRowId) as any, seatLab);
+    auditInvite({ userId: req.userId, ownerUserId: req.userId, seatId: seatRowId, labId: seatLab, offer: seatOffer, ip: req.ip });
 
     // Send invite email via Resend
     const owner = storage.getUserById(req.userId);
@@ -32826,7 +32866,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           from: "VeritaAssure\u00AE <info@veritaslabservices.com>",
           to: email.toLowerCase(),
           subject: `You've been invited to join ${labName} on VeritaAssure\u00AE`,
-          html: `
+          html: existingUser ? inviteEmailForAccount({ inviterName, labName, offer: seatOffer, url: `${FRONTEND_URL}/join?token=${inviteToken}` }) : `
             <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:24px">
               <h2 style="color:#01696F">VeritaAssure\u00AE</h2>
               <p style="font-size:15px;color:#1B2B2B;line-height:1.6">${inviterName} has invited you to join <strong>${labName}</strong> on VeritaAssure\u00AE as a team member.</p>
@@ -32856,7 +32896,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     }
     }
 
-    res.json({ ok: true, status: seatUserId ? "active" : "pending", emailSent });
+    res.json({ ok: true, status: newStatus, emailSent });
   });
 
   // Look up a seat invitation by token (no auth required - user is not yet logged in)
@@ -32870,7 +32910,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
     if (!seat) return res.json({ valid: false, reason: "not_found" });
     if (seat.status === "active") return res.json({ valid: false, reason: "already_accepted" });
-    if (seat.status === "deactivated") return res.json({ valid: false, reason: "not_found" });
+    if (seat.status !== "pending") return res.json({ valid: false, reason: "not_found" }); // cancelled, declined or ended
 
     // Check 30-day expiration (extended from 7d on 2026-05-24; 7d was too
     // aggressive for B2B where recipients often need a week to read email).
@@ -32897,6 +32937,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       inviterName: seat.owner_name || "Your lab administrator",
       seatEmail: seat.seat_email,
       inviteeName: seat.invitee_name || null,
+      // B3: any invite can be accepted by signing in. Says nothing about whether the address has an account.
+      offer: inviteRoleLabel((db as any).$client, seat, inviteLabId((db as any).$client, seat)),
     });
   });
 
@@ -33026,14 +33068,16 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     ).get(seatUserId) as any;
 
     // Study count
+    // B3: for an account that isn't this owner's alone (memberAccountControl.ts), only what they did in this owner's labs.
+    const elsewhere = accountChangeRefusal((db as any).$client, { actorUserId: Number(req.userId), targetUserId: Number(seatUserId), change: "two_factor" }) ? 1 : 0;
     const studyRow = (db as any).$client.prepare(
-      "SELECT COUNT(*) as cnt FROM studies WHERE user_id = ?"
-    ).get(seatUserId) as any;
+      "SELECT COUNT(*) as cnt FROM studies WHERE user_id = @user AND (@elsewhere = 0 OR lab_id IN (SELECT id FROM labs WHERE owner_user_id = @owner))"
+    ).get({ user: seatUserId, elsewhere, owner: req.userId }) as any;
 
     // Last 10 audit log entries
     const recentActions = (db as any).$client.prepare(
-      "SELECT module, action, entity_type, entity_label, created_at FROM audit_log WHERE user_id = ? ORDER BY created_at DESC LIMIT 10"
-    ).all(seatUserId) as any[];
+      "SELECT module, action, entity_type, entity_label, created_at FROM audit_log WHERE user_id = @user AND (@elsewhere = 0 OR owner_user_id = @owner) ORDER BY created_at DESC LIMIT 10"
+    ).all({ user: seatUserId, elsewhere, owner: req.userId }) as any[];
 
     res.json({
       lastLogin: lastSession?.last_active || null,

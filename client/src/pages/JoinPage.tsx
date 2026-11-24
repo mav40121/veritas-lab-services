@@ -12,6 +12,7 @@ import { trackEvent } from "@/lib/analytics";
 import { useLabRoute } from "@/hooks/useLabRoute";
 import { passwordProblem, PASSWORD_RULE_TEXT } from "@shared/passwordRule";
 import { TwoFactorSetup } from "@/components/TwoFactorStep";
+import { openAcceptedLab } from "@/components/LabInviteBanner";
 
 interface InviteInfo {
   valid: boolean;
@@ -19,12 +20,14 @@ interface InviteInfo {
   inviterName?: string;
   seatEmail?: string;
   inviteeName?: string | null;
+  // What they are invited as ("an admin"). An existing account accepts by signing in. Optional for deploy skew.
+  offer?: string;
   reason?: "expired" | "not_found" | "already_accepted";
 }
 
 export default function JoinPage() {
   const labRoute = useLabRoute();
-  const { login } = useAuth();
+  const { login, logout, isLoggedIn, user } = useAuth();
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
@@ -160,6 +163,40 @@ export default function JoinPage() {
     );
   }
 
+  // B3: signed in already as the invited address: accept here, as at the banner.
+  const mine = isLoggedIn && !!user && String(user.email || "").toLowerCase() === String(invite.seatEmail || "").toLowerCase();
+  async function acceptSignedIn() {
+    setLoading(true);
+    try {
+      const r = await (await apiRequest("POST", "/api/me/lab-invites/accept", { token })).json();
+      toast({ title: `You've joined ${invite?.labName}`, description: "Switch labs from the lab menu at the top." });
+      await openAcceptedLab(Number(r.labId), navigate);
+    } catch (err) {
+      toast({ title: apiErrorMessage(err, "That didn't work. Try again."), variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  }
+  if (invite.offer && mine && !mfaStep) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center px-4 py-12">
+        <Card className="w-full max-w-md" data-testid="join-accept">
+          <CardContent className="pt-8 pb-8 text-center space-y-4">
+            <FlaskConical className="h-10 w-10 text-primary mx-auto" />
+            <h2 className="text-xl font-semibold break-words">{invite.labName} invited you to join as {invite.offer}</h2>
+            <p className="text-sm text-muted-foreground break-words">
+              You're signed in as {user?.email}. Accept to work in this lab with the same login. Your access in other labs stays as it is.
+            </p>
+            <Button className="w-full" disabled={loading} onClick={acceptSignedIn} data-testid="join-accept-btn">
+              {loading ? "Working..." : "Accept"}
+            </Button>
+            <Button variant="outline" className="w-full" disabled={loading} onClick={() => navigate(labRoute("/dashboard"))}>Not now</Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   if (mfaStep) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center px-4 py-12">
@@ -196,6 +233,18 @@ export default function JoinPage() {
               Create your account to get started. Your lab is already set up - you just need to sign in.
             </p>
           </div>
+
+          {invite.offer && (isLoggedIn ? (
+            <div className="rounded-md border border-border bg-muted/40 p-3 space-y-2 text-center" data-testid="join-other-account">
+              <p className="text-sm break-words">This invitation was sent to {invite.seatEmail}. You're signed in as {user?.email}. If {invite.seatEmail} already has a login, sign out and sign in with it to accept.</p>
+              <Button variant="outline" size="sm" onClick={() => logout()} data-testid="join-sign-out">Sign out</Button>
+            </div>
+          ) : (
+            <div className="rounded-md border border-border bg-muted/40 p-3 space-y-2 text-center" data-testid="join-have-account">
+              <p className="text-sm break-words">Already have a VeritaAssure&#174; login at {invite.seatEmail}? Sign in with it and accept there.</p>
+              <Button variant="outline" size="sm" onClick={() => navigate("/login")} data-testid="join-sign-in-to-accept">Sign in to accept</Button>
+            </div>
+          ))}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1.5">

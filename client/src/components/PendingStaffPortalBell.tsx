@@ -36,10 +36,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 interface PendingItems {
-  quizzes: Array<{ assignment_id: number; quiz_id: number; title: string; due_date: string | null }>;
-  policies: Array<{ document_id: number; title: string; effective_date: string | null }>;
-  competencies: Array<{ assessment_id: number; program_name: string; assessment_date: string | null; assessment_type: string | null }>;
-  approvals: Array<{ document_id: number; title: string; step_name: string | null }>;
+  // lab_id: the lab the item is in (B3; optional for deploy skew).
+  quizzes: Array<{ assignment_id: number; quiz_id: number; title: string; due_date: string | null; lab_id?: number | null }>;
+  policies: Array<{ document_id: number; title: string; effective_date: string | null; lab_id?: number | null }>;
+  competencies: Array<{ assessment_id: number; program_name: string; assessment_date: string | null; assessment_type: string | null; lab_id?: number | null }>;
+  approvals: Array<{ document_id: number; title: string; step_name: string | null; lab_id?: number | null }>;
 }
 
 const POLL_INTERVAL_MS = 60 * 1000;
@@ -90,6 +91,9 @@ export function PendingStaffPortalBell() {
     };
   }, [fetchItems, isLoggedIn]);
 
+  // Someone Staff in several labs: the item's own lab, not the one last looked at.
+  const openFor = (labId?: number | null) => navigate(labId ? `/labs/${labId}/my-signoffs` : "/staff-access");
+
   if (!isLoggedIn || !items) return null;
   const total = items.quizzes.length + items.policies.length + items.competencies.length + items.approvals.length;
   if (total === 0) return null;
@@ -125,7 +129,7 @@ export function PendingStaffPortalBell() {
             {items.quizzes.slice(0, 5).map((q) => (
               <DropdownMenuItem
                 key={q.assignment_id}
-                onClick={() => navigate("/staff-access")}
+                onClick={() => openFor(q.lab_id)}
                 className="cursor-pointer flex-col items-start"
                 data-testid={`pending-quiz-${q.assignment_id}`}
               >
@@ -151,7 +155,7 @@ export function PendingStaffPortalBell() {
             {items.policies.slice(0, 5).map((p) => (
               <DropdownMenuItem
                 key={p.document_id}
-                onClick={() => navigate("/staff-access")}
+                onClick={() => openFor(p.lab_id)}
                 className="cursor-pointer flex-col items-start"
                 data-testid={`pending-policy-${p.document_id}`}
               >
@@ -169,7 +173,7 @@ export function PendingStaffPortalBell() {
             {items.competencies.slice(0, 5).map((c) => (
               <DropdownMenuItem
                 key={c.assessment_id}
-                onClick={() => navigate("/staff-access")}
+                onClick={() => openFor(c.lab_id)}
                 className="cursor-pointer flex-col items-start"
                 data-testid={`pending-competency-${c.assessment_id}`}
               >
@@ -190,7 +194,7 @@ export function PendingStaffPortalBell() {
             {items.approvals.slice(0, 5).map((a) => (
               <DropdownMenuItem
                 key={a.document_id}
-                onClick={() => navigate("/staff-access")}
+                onClick={() => openFor(a.lab_id)}
                 className="cursor-pointer flex-col items-start"
                 data-testid={`pending-approval-${a.document_id}`}
               >

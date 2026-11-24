@@ -1,6 +1,7 @@
 // The staff login's approvals screen (Michael 2026-11-04, Q155 = 1). A staff login named on an approval step, or in a group a step
 // goes to, reads the document and approves or rejects it here with password and typed name. No editing seat is used, and nothing
 // here uploads or edits.
+import { staffPortalHeaders } from "@/lib/staffPortalHeaders";
 import { useEffect, useState } from "react";
 
 interface ApprovalRow {
@@ -41,7 +42,7 @@ export function StaffApprovalsView({ token, employee, labName, onBack, onSignOut
   const [comment, setComment] = useState("");
   const [busy, setBusy] = useState(false);
   const [signError, setSignError] = useState<string | null>(null);
-  const headers = { Authorization: `Bearer ${token}` };
+  const headers = staffPortalHeaders(token);
 
   function fetchList() {
     setRows(null);

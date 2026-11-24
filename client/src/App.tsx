@@ -168,6 +168,7 @@ const StaffOwnGatedCompByInstrument = staffOwnGate(VeritaCompByInstrumentPage);
 const StaffOwnGatedCompMethodGroups = staffOwnGate(VeritaCompMethodGroupsPage);
 const RequestInvoicePage = lazy(() => import("@/pages/RequestInvoicePage"));
 import { OnboardingBanner } from "@/components/OnboardingBanner";
+import { LabInviteBanner } from "@/components/LabInviteBanner";
 import { analyticsAllowed, ensureAnalyticsLoaded, syncAnalyticsOptOut } from "@/lib/analytics";
 
 function BackToTop() {
@@ -417,6 +418,7 @@ function AppContent() {
       {!isStockHost() && !onPublicMarketingPath && <DemoLabBanner />}
       {!isStockHost() && !onPublicMarketingPath && <SubscriptionBanner />}
       {!isStockHost() && !onPublicMarketingPath && <OnboardingBanner />}
+      {!onPublicMarketingPath && <LabInviteBanner />}
       {!isStockHost() && !onPublicMarketingPath && <OnboardingGuard />}
       <main className="flex-1">
         <Suspense fallback={<PageFallback />}>

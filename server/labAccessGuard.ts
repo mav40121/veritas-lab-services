@@ -46,7 +46,7 @@
 // inventory mutation endpoints. Same shape sweep landed on veritatrack and
 // veritacheck_verifications in the same PR.
 
-import { legacySeatForUser } from "./seatContext";
+import { legacySeatForUser, staffOnlyInLab } from "./seatContext";
 
 // Loose any to avoid coupling to better-sqlite3's exported type shape; the
 // caller passes the live `$client` instance which has `.prepare(...).get/run/all`.
@@ -108,8 +108,22 @@ export function ownerMatchCounts(sqlite: SqliteLike, userId: unknown, ownerId: u
   return !sqlite.prepare("SELECT 1 FROM lab_members WHERE user_id = ? AND status = 'active' LIMIT 1").get(uid);
 }
 
+/**
+ * B3 (BUG-193, 2026-11-24): one login can be Staff in lab B and a writer in lab A. A by-id route checks edit in the lab the request
+ * is working in (req.scope.labId) and then finds the record by membership in the record's own lab, so naming lab A would have let
+ * them change lab B's records. True when the request is a change, the record is in another lab than the one being worked in, and
+ * the person is only Staff in the record's lab. In the record's own lab the usual checks decide.
+ */
+export function staffOutsideRecordLab(sqlite: SqliteLike, req: any, rowLabId: unknown): boolean {
+  const lab = Number(rowLabId);
+  if (!(lab > 0) || ["GET", "HEAD", "OPTIONS"].includes(String(req?.method || "GET").toUpperCase())) return false;
+  if (Number(req?.scope?.labId) === lab) return false;
+  return staffOnlyInLab(sqlite, Number(req?.userId ?? req?.user?.userId), lab);
+}
+
 /** For a route that has already matched the record's owner in its own query: the rule above, or an active membership in the record's lab. */
-export function ownerRowInReach(sqlite: SqliteLike, userId: unknown, ownerId: unknown, rowLabId: unknown): boolean {
+export function ownerRowInReach(sqlite: SqliteLike, userId: unknown, ownerId: unknown, rowLabId: unknown, req?: any): boolean {
+  if (req && staffOutsideRecordLab(sqlite, req, rowLabId)) return false;
   if (ownerMatchCounts(sqlite, userId, ownerId, rowLabId)) return true;
   return !!sqlite.prepare("SELECT 1 FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active' LIMIT 1").get(rowLabId, userId);
 }
@@ -131,6 +145,12 @@ export function resolveRowForMutation<T = any>(
   const userId = req.user?.userId ?? req.userId;
   const ownerId = req.ownerUserId ?? userId;
   if (userId == null) return { row: null, status: 403 };
+
+  // B3: only Staff in the record's lab, and the request is working in another one. A read too: these rows sit behind
+  // blockNonOperatorSeat, which judges the lab being worked in.
+  if (row.lab_id != null && Number((req as any).scope?.labId) !== Number(row.lab_id) && staffOnlyInLab(sqlite, Number(userId), Number(row.lab_id))) {
+    return { row: null, status: 403 };
+  }
 
   // Legacy direct ownership: row[ownerColumn] matches the requester, and the owner match counts for this row's lab
   if (row[ownerCol] != null && row[ownerCol] === ownerId && ownerMatchCounts(sqlite, userId, ownerId, row.lab_id)) {

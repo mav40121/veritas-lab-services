@@ -19,6 +19,7 @@
 //   - No mailer (RESEND_API_KEY unset: local and CI) ends nothing.
 //   - dryRun returns the plan (counts and ids only) and writes and sends nothing.
 import { db } from "./db";
+import { endInviteDesignation } from "./labInvites";
 
 export const UNCLAIMED_INVITE_DAYS = 30;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -158,6 +159,7 @@ export async function runUnclaimedSeatInvites(opts: { now?: Date; dryRun?: boole
     sqlite.transaction(() => {
       for (const i of list) {
         if (end.run(i.seatId).changes !== 1) continue; // accepted or changed since it was read
+        endInviteDesignation(sqlite, i.seatId, ownerUserId); // a medical director it named goes back to what it was
         result.ended++;
         audit.run(ownerUserId, String(i.seatId), `lab ${i.labId ?? "none"}`,
           JSON.stringify({ status: "pending", days_since_invited: i.daysAgo }),

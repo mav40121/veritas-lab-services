@@ -4,7 +4,7 @@
 // admin or editor invite never tied the person's sign-in to the entry they already had. Boots the REAL routes on a scratch DB with
 // made-up people and proves:
 //   1. an admin invited by name who signs up is tied to their one roster entry, and their bell lists the quiz assigned to it
-//   2. an editor who already has an account is tied the moment they are invited
+//   2. an editor who already has an account is tied when they accept the invite, not before
 //   3. the name that counts is the one the director typed: a person who signs up under someone else's name gets nobody's entry
 //   4. left alone, for the VeritaStaff prompt: two entries with the same name, an entry someone else's sign-in or Staff invite is on,
 //      a different first name with the same first word, no name on the invite, an entry in another lab, a person who left
@@ -67,6 +67,10 @@ async function main() {
       const token = (sqlite.prepare("SELECT invite_token FROM user_seats WHERE seat_email = ? AND lab_id = ?").get(mail(tag), labId) as any)?.invite_token as string;
       return { s: r.s, token, j: r.j };
     };
+    const accept = (tag: string, token: string) => {
+      const seat = sqlite.prepare("SELECT id FROM user_seats WHERE seat_email = ? AND lab_id = ?").get(mail(tag), labId) as any;
+      return call("POST", `/api/me/lab-invites/${seat?.id}/accept`, {}, token);
+    };
 
     // 1. The report: an admin with a roster entry, a quiz assigned to it, then the invite accepted.
     const adminRow = row("Robin", "Micro");
@@ -84,11 +88,13 @@ async function main() {
     const me = await call("GET", "/api/me/staff-portal-employee", undefined, ROBIN.token);
     check("1c. My sign-offs knows them", me.s === 200 && me.j.employee?.id === adminRow && me.j.lab?.id === labId, JSON.stringify(me.j));
 
-    // 2. An editor who already has an account is a member at once.
+    // 2. An editor who already has an account is a member once they accept.
     const editorRow = row("Cal R.", "Tester");
     const CAL = await register("cal", "Cal Tester");
     const i2 = await invite("cal", "Cal", "Tester", { role: "staff" });
-    check("2. an editor with an account is tied when invited (a middle initial in the entry still matches)", i2.s === 200 && linkOf(editorRow) === CAL.id, JSON.stringify({ s: i2.s, e: i2.j.error, st: i2.j.status, link: linkOf(editorRow) }));
+    const beforeAccept = linkOf(editorRow);
+    const a2 = await accept("cal", CAL.token);
+    check("2. an editor with an account is tied when they accept, not when invited (a middle initial in the entry still matches)", i2.s === 200 && beforeAccept === null && a2.s === 200 && linkOf(editorRow) === CAL.id, JSON.stringify({ s: i2.s, e: i2.j.error, st: i2.j.status, beforeAccept, a: a2.s, link: linkOf(editorRow) }));
 
     // 3. The director's typed name counts, not the one typed at sign-up.
     const bossRow = row("Dana", "Director");
@@ -127,7 +133,8 @@ async function main() {
     const HAL = await register("hal", "Hal Hidden");
     sqlite.prepare("INSERT INTO staff_roster_prompt_hidden (lab_id, user_id, hidden_by_user_id, hidden_at) VALUES (?, ?, ?, ?)").run(labId, HAL.id, OWNER.id, now);
     await invite("hal", "Hal", "Hidden");
-    check("5a. someone marked not lab personnel is left", linkOf(hiddenRow) === null, `${linkOf(hiddenRow)}`);
+    const a5 = await accept("hal", HAL.token);
+    check("5a. someone marked not lab personnel is left", a5.s === 200 && linkOf(hiddenRow) === null, `${a5.s} ${linkOf(hiddenRow)}`);
     const portalRow = row("Stan", "Portal");
     const spi = await call("POST", `${L}/staff-portal-invites`, { staff_employee_id: portalRow, email: mail("stan"), deliverEmail: false }, OWNER.token);
     const spToken = (sqlite.prepare("SELECT invite_token FROM user_seats WHERE seat_email = ?").get(mail("stan")) as any)?.invite_token;
