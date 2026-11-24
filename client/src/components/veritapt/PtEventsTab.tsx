@@ -98,7 +98,7 @@ export function PtEventsTab({ labId, onOpen }: { labId: number; onOpen: (resultI
                 {COLUMNS.map(([label, key]) => (
                   <th key={label} className="text-left py-2.5 px-3 font-medium" aria-sort={key === sort ? (dir === "asc" ? "ascending" : "descending") : undefined}>
                     {key ? (
-                      <button type="button" className="inline-flex items-center gap-1 hover:text-foreground" onClick={() => sortBy(key)} data-testid={`pt-sort-${key}`}>
+                      <button type="button" className="inline-flex items-center gap-1 whitespace-nowrap hover:text-foreground" onClick={() => sortBy(key)} data-testid={`pt-sort-${key}`}>
                         {label}{key === sort && (dir === "asc" ? <ArrowUp size={11} /> : <ArrowDown size={11} />)}
                       </button>
                     ) : label}

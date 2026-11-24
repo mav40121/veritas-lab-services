@@ -7,7 +7,6 @@
 // that a PDF or an image isn't read for it.
 // An event is worked out from its results, so a report keeps their ids and shows on the event that holds most of them.
 import type { Express } from "express";
-import { createRequire } from "node:module";
 import { checkUploadedFileForPhi } from "./phiUploadCheck";
 import { ptAudit, ptEventOfResult, ptEventsOfLab, ptStaffOwn, type PtDeps } from "./ptEvents";
 import { ptEventHolding } from "./ptReviews";
@@ -31,7 +30,7 @@ export function ptEventDocuments(sqlite: any, labId: number, event: PtEvent, eve
 
 export function registerPtDocumentRoutes(app: Express, deps: PtDeps) {
   const { sqlite, authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit, hasPTAccess } = deps;
-  const multer = createRequire(import.meta.url)("multer");
+  const multer = require("multer"); // same CJS load as the VeritaLab upload route
   const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_BYTES, files: 1 } });
   const edit = [authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritapt")];
   const ROUTE = "/api/labs/:labId/pt/events/:resultId/documents";

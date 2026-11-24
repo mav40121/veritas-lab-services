@@ -47,7 +47,7 @@ interface ElementData { num: number; status: string; passed?: boolean; na?: bool
 // Element 5 can record more than one blind / PT sample for a test system (Michael Q71 = 1). The edit buffer keeps them
 // in `samples`; a record saved before the list existed seeds one row from its single fields.
 // Where a sample filled from VeritaPT came from; it stays on the record, the sign-off and the PDF.
-const PT_SAMPLE_TYPE = "PT, from VeritaPT";
+const PT_SAMPLE_TYPE = "PT, from VeritaPT™";
 const BLANK_SAMPLE: El5Sample = { sampleType: "", sampleId: "", acceptable: null };
 const samplesOf = (f: any): El5Sample[] =>
   Array.isArray(f?.samples) && f.samples.length ? f.samples

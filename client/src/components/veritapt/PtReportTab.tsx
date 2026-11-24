@@ -74,7 +74,7 @@ export function PtReportTab({ labId }: { labId: number }) {
               ))}
             </div>
             <p className="text-xs text-muted-foreground" data-testid="pt-report-rate-words">{ptRateWords(r.results)}</p>
-            <Section testid="pt-report-due" title={`Events due: ${(["on_time", "late", "not_recorded", "not_due"] as PtSubmission[]).map((k) => `${r.due.counts[k]} ${PT_SUBMISSION_LABEL[k].toLowerCase()}`).join(", ")}`} heads={["Event", "Program", "Due", "Submitted", "Submission"]} rows={r.due.events.map((e) => [e.event, e.program, e.due_date, e.submitted_date ?? "", PT_SUBMISSION_LABEL[e.submission]])} none="No event has a due date in this period." />
+            <Section testid="pt-report-due" title={`Events due: ${(["on_time", "late", "not_recorded", "not_due"] as PtSubmission[]).map((k) => `${r.due.counts[k]} ${PT_SUBMISSION_LABEL[k].toLowerCase()}`).join("; ")}`} heads={["Event", "Program", "Due", "Submitted", "Submission"]} rows={r.due.events.map((e) => [e.event, e.program, e.due_date, e.submitted_date ?? "", PT_SUBMISSION_LABEL[e.submission]])} none="No event has a due date in this period." />
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <Section testid="pt-report-analyte" title="Unacceptable and ungraded, by analyte" heads={["Analyte", "Unacceptable", "Ungraded"]} rows={r.by_analyte.map((a) => [a.name, a.unacceptable, a.ungraded])} none="None." />
               <Section testid="pt-report-department" title="Unacceptable and ungraded, by department" heads={["Department", "Unacceptable", "Ungraded"]} rows={r.by_department.map((a) => [a.name, a.unacceptable, a.ungraded])} none="None." />

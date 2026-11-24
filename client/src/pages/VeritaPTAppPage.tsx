@@ -358,7 +358,7 @@ export default function VeritaPTAppPage() {
           <h1 className="text-2xl font-bold">VeritaPT™</h1>
           <p className="text-sm text-muted-foreground mt-0.5">Proficiency Testing Coverage Analysis</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button
             variant="outline"
             size="sm"
@@ -491,7 +491,7 @@ export default function VeritaPTAppPage() {
           <PtEventsTab labId={activeLabId} onOpen={setOpenEvent} />
         </TabsContent>
       )}
-      {activeLabId && !ownOnly && <TabsContent value="bias" className="mt-0"><PtBiasTab labId={activeLabId} /></TabsContent>}
+      {activeLabId && !ownOnly && <TabsContent value="bias" className="mt-0"><PtBiasTab labId={activeLabId} trends={trends?.trends ?? []} /></TabsContent>}
       {activeLabId && !ownOnly && <TabsContent value="report" className="mt-0"><PtReportTab labId={activeLabId} /></TabsContent>}
       <TabsContent value="coverage" className="mt-0 space-y-6">
       {/* Summary Cards */}

@@ -54,7 +54,7 @@ export function PtTrendList({ trends }: { trends: PtTrendView[] }) {
       {rest.length > 0 && (
         <>
           <button type="button" className="text-xs text-muted-foreground underline hover:no-underline" onClick={() => setAll(!all)} data-testid="pt-trend-all">
-            {all ? "Hide the other analytes" : `Show the ${rest.length} other ${rest.length === 1 ? "analyte" : "analytes"}, all OK`}
+            {all ? "Hide them" : `Show the ${rest.length}${flagged.length ? " other" : ""} ${rest.length === 1 ? "analyte" : "analytes"}, all OK`}
           </button>
           {all && <ul className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 items-start">{rest.map((t) => <TrendRow key={t.analyte} t={t} />)}</ul>}
         </>

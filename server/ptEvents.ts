@@ -26,7 +26,7 @@ import { ptEvaluationOpen, ptEvaluations, ptUngradedColumns } from "./ptEvaluati
 import { ptReviewDetail, withPtReviews } from "./ptReviews";
 import { ptEventDocuments } from "./ptDocuments";
 
-export const NO_DEPARTMENT = "No department on VeritaMap";
+export const NO_DEPARTMENT = "No department on VeritaMap®";
 export const NO_PROGRAM = "Program not on file";
 
 export interface PtDeps {

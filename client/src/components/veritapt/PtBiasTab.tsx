@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Flag } from "lucide-react";
 import type { PtBias } from "@shared/ptBias";
 import type { PtStatus } from "@shared/ptEvents";
-import { PtTrendHistoryTable, type PtTrendView } from "./PtTrendList";
+import { PtTrendHistoryTable, PtTrendList, type PtTrendView } from "./PtTrendList";
 import { PtStatusBadge, ptNum, ptRange, ptRequest, ptSelectClass } from "./ptUi";
 
 type Point = PtBias & {
@@ -23,6 +23,15 @@ const MEASURE: Record<Measure, { label: string; unit: string }> = { percent: { l
 const signed = (v: number | null, places = 2): string => (v == null ? "" : `${v > 0 ? "+" : ""}${v.toFixed(places)}`);
 const NO_PEER = <span className="text-muted-foreground">no peer data</span>;
 
+/** Round axis values that hold 0 and everything plotted. */
+function axisTicks(values: number[]): number[] {
+  const lo = Math.min(0, ...values), hi = Math.max(0, ...values), span = hi - lo || 1;
+  const rough = span / 4, mag = 10 ** Math.floor(Math.log10(rough)), n = rough / mag;
+  const step = (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * mag;
+  const from = Math.floor(lo / step + 1e-9), to = Math.ceil(hi / step - 1e-9);
+  return Array.from({ length: Math.max(to - from, 1) + 1 }, (_, i) => Number(((from + i) * step).toFixed(6)));
+}
+
 function FlagLine({ text }: { text: string }) {
   return <p className="flex items-start gap-2 text-sm text-amber-800 dark:text-amber-300" data-testid="pt-bias-flag"><Flag size={14} className="mt-0.5 shrink-0" />{text}</p>;
 }
@@ -34,13 +43,14 @@ function Chart({ points, measure }: { points: Point[]; measure: Measure }) {
   });
   if (!rows.some((r) => r.value != null)) return <p className="py-10 text-center text-sm text-muted-foreground" data-testid="pt-bias-nothing">{points.some((p) => p.peer_mean != null) ? "No result here has what this measure needs." : "No peer data entered for this analyte."}</p>;
   const u = MEASURE[measure].unit;
+  const ticks = axisTicks(rows.flatMap((r) => [r.value, ...(r.range ?? [])]).filter((v): v is number => v != null));
   return (
     <div className="h-64 text-[#01696F] dark:text-teal-400" data-testid="pt-bias-chart">
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart data={rows} margin={{ top: 8, right: 12, bottom: 4, left: 0 }}>
           <CartesianGrid vertical={false} stroke="currentColor" strokeOpacity={0.12} />
           <XAxis dataKey="i" tickFormatter={(i) => rows[Number(i)]?.date ?? ""} tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={{ stroke: "hsl(var(--border))" }} minTickGap={24} />
-          <YAxis width={48} tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}${u}`} domain={([lo, hi]: readonly [number, number]) => [Math.min(0, lo), Math.max(0, hi)] as [number, number]} />
+          <YAxis width={48} tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}${u}`} ticks={ticks} domain={[ticks[0], ticks[ticks.length - 1]]} interval={0} />
           <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" />
           <Bar dataKey="range" barSize={22} radius={4} fill="hsl(var(--muted-foreground))" fillOpacity={0.22} isAnimationActive={false} activeBar={false} />
           <Line dataKey="value" type="linear" stroke="currentColor" strokeWidth={2} connectNulls={false} isAnimationActive={false} dot={{ r: 4, fill: "currentColor", stroke: "hsl(var(--card))", strokeWidth: 2 }} activeDot={{ r: 6, fill: "currentColor", stroke: "hsl(var(--card))", strokeWidth: 2 }} />
@@ -65,7 +75,18 @@ function Chart({ points, measure }: { points: Point[]; measure: Measure }) {
   );
 }
 
-export function PtBiasTab({ labId }: { labId: number }) {
+/** Every analyte's flag and its full history, numeric results or not, whether or not anything is flagged. */
+function TrendCard({ trends }: { trends: PtTrendView[] }) {
+  if (!trends.length) return null;
+  return (
+    <Card data-testid="pt-bias-trends">
+      <CardHeader className="py-4 px-4 border-b"><CardTitle className="text-base font-semibold">Trend status by analyte, with its full history</CardTitle></CardHeader>
+      <CardContent className="p-4 pt-1"><PtTrendList trends={trends} /></CardContent>
+    </Card>
+  );
+}
+
+export function PtBiasTab({ labId, trends }: { labId: number; trends: PtTrendView[] }) {
   const url = `/api/labs/${labId}/pt/bias`;
   const { data, isLoading, error } = useQuery<BiasData>({ queryKey: [url], queryFn: () => ptRequest(url), refetchOnMount: "always", retry: false });
   const [picked, setPicked] = useState("");
@@ -74,7 +95,12 @@ export function PtBiasTab({ labId }: { labId: number }) {
   const flagged = useMemo(() => analytes.filter((a) => a.flags.length > 0), [analytes]);
   const current = analytes.find((a) => a.analyte === picked) ?? flagged[0] ?? analytes[0];
   if (!data || !current) {
-    return <Card><CardContent className="py-10 text-center text-sm text-muted-foreground" data-testid="pt-bias-empty">{isLoading ? "Loading..." : error ? (error as Error).message : "No numeric results recorded yet."}</CardContent></Card>;
+    return (
+      <div className="space-y-6">
+        <Card><CardContent className="py-10 text-center text-sm text-muted-foreground" data-testid="pt-bias-empty">{isLoading ? "Loading..." : error ? (error as Error).message : "No numeric results recorded yet."}</CardContent></Card>
+        <TrendCard trends={trends} />
+      </div>
+    );
   }
   const range = current.points.some((p) => (measure === "percent" ? p.range_percent : p.range_sdi).every((v) => v != null));
   return (
@@ -141,6 +167,7 @@ export function PtBiasTab({ labId }: { labId: number }) {
           )}
         </CardContent>
       </Card>
+      <TrendCard trends={trends} />
     </div>
   );
 }

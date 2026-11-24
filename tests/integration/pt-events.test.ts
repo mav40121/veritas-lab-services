@@ -209,7 +209,7 @@ async function main() {
     check(`3h. ${who} can't record the laboratory director or designee review`, r.s === 403 && (u3 !== SUPPORT || r.j?.code === "VLS_SUPPORT_CANNOT_SIGN"));
   }
   check("3i. nor another lab", (await dir(OTHER, rv.j.id, X)).s === 404 && one("SELECT director_reviewed_at FROM pt_event_reviews WHERE id = ?", rv.j.id).director_reviewed_at === null);
-  const dr = await call(OWNER, "POST", P(`event-reviews/${rv.j.id}/director-review`), { director_id: 1, director_reviewed_at: "2020-01-01", director_name: "Someone Else" });
+  const dr = await call(OWNER, "POST", P(`event-reviews/${rv.j.id}/director-review`), { director_id: OTHER.id, director_reviewed_at: "2020-01-01", director_name: "Someone Else" });
   const drow = one("SELECT * FROM pt_event_reviews WHERE id = ?", rv.j.id);
   check("3j. recorded for the person signed in at the server's time, whatever is sent", dr.s === 200 && drow.director_id === OWNER.id && drow.director_name === "Avery Owner" && drow.director_reviewed_at.slice(0, 4) !== "2020");
   check("3k. once only, with its audit row", (await dir(OWNER, rv.j.id)).j?.code === "ALREADY_REVIEWED" && w.audits("pt_event_review", rv.j.id).length === 2 && JSON.parse(w.audits("pt_event_review", rv.j.id)[1].after_json).director_id === OWNER.id);
@@ -302,7 +302,7 @@ async function main() {
   check("5b. results by status, by event date, both ends in", R5.results.acceptable === 3 && R5.results.unacceptable === 1 && R5.results.ungraded === 1 && R5.results.not_graded === 1 && R5.results.graded === 4, JSON.stringify(R5.results));
   check("5c. the rate is acceptable over graded; ungraded and not yet graded are never in it", R5.results.acceptable_rate === 75 && (await report("2026-01")).results.acceptable_rate === 100 && (await report("2026-06")).results.acceptable_rate === null);
   check("5d. events due: on time, late, and past due with no submitted date on file", R5.due.total === 3 && R5.due.counts.on_time === 1 && R5.due.counts.late === 1 && R5.due.counts.not_recorded === 1 && R5.due.events.map((e: any) => e.event).join() === "R-1,R-2,R-3");
-  check("5e. unacceptable and ungraded by analyte and by department, and they add up", R5.by_analyte.map((a: any) => `${a.name}:${a.unacceptable}:${a.ungraded}`).join() === "Glucose:1:0,Sodium:0:1" && R5.by_department.length === 1 && R5.by_department[0].name === "No department on VeritaMap" && R5.by_department[0].unacceptable === R5.results.unacceptable && R5.by_department[0].ungraded === R5.results.ungraded);
+  check("5e. unacceptable and ungraded by analyte and by department, and they add up", R5.by_analyte.map((a: any) => `${a.name}:${a.unacceptable}:${a.ungraded}`).join() === "Glucose:1:0,Sodium:0:1" && R5.by_department.length === 1 && R5.by_department[0].name === "No department on VeritaMap®" && R5.by_department[0].unacceptable === R5.results.unacceptable && R5.by_department[0].ungraded === R5.results.ungraded);
   check("5f. open reviews: an event with a status back and no review, and one with only pending results isn't one", R5.open_reviews.map((e: any) => e.event).join() === "R-1,R-2,R-3" && R5.open_evaluations === 1 && (await report("2026-01")).open_reviews.length === 1);
   const dB = (await call(OWNER, "GET", P(`events/${r1Id}`, B))).j;
   await call(OWNER, "POST", P("event-reviews", B), { result_id: r1Id, review_token: dB.review_token, corrective_action_ids: [], finding_ids: [] });
@@ -353,10 +353,10 @@ async function main() {
   check("6d. another lab's person or analyzer isn't found", (await picks(OWNER, tess, chem, B)).s === 404 && (await picks(EDITOR, mo)).s === 404 && (await picks(EDITOR, tess, heme)).s === 404);
   // What the evaluator saves after a fill: a sample row, and nothing marked
   const before6 = one("SELECT COUNT(*) AS n FROM competency_method_signoffs").n;
-  const sv = await call(EDITOR, "PUT", `/api/labs/${A}/competency/employee/${tess}/test-system/${chem}`, { elements: [{ num: 5, samples: [{ sampleType: "PT, from VeritaPT", sampleId: `K-1, Glucose, ${day6}`, acceptable: true }] }] });
+  const sv = await call(EDITOR, "PUT", `/api/labs/${A}/competency/employee/${tess}/test-system/${chem}`, { elements: [{ num: 5, samples: [{ sampleType: "PT, from VeritaPT™", sampleId: `K-1, Glucose, ${day6}`, acceptable: true }] }] });
   const view6 = (await call(EDITOR, "GET", `/api/labs/${A}/competency/employee/${tess}`)).j.testSystems.find((t: any) => t.instrumentId === chem);
   const el5 = view6.elements.find((e: any) => e.num === 5);
-  check("6e. saved, it shows where it came from, isn't passed and signs nothing", sv.s === 200 && el5.samples[0].sampleType === "PT, from VeritaPT" && el5.samples[0].sampleId.startsWith("K-1, Glucose") && el5.passed === false && view6.signedCurrent !== true && one("SELECT COUNT(*) AS n FROM competency_method_signoffs").n === before6, JSON.stringify(el5));
+  check("6e. saved, it shows where it came from, isn't passed and signs nothing", sv.s === 200 && el5.samples[0].sampleType === "PT, from VeritaPT™" && el5.samples[0].sampleId.startsWith("K-1, Glucose") && el5.passed === false && view6.signedCurrent !== true && one("SELECT COUNT(*) AS n FROM competency_method_signoffs").n === before6, JSON.stringify(el5));
   // The program record's picker: the same function, the same fields
   const prog = Number((await call(EDITOR, "POST", `/api/labs/${A}/competency/programs`, { name: "Made-up chemistry", department: "Chemistry", type: "technical" })).j?.id ?? seed("competency_programs", { user_id: OWNER.id, lab_id: A, name: "Made-up chemistry", department: "Chemistry", type: "technical" }));
   seed("competency_method_groups", { program_id: prog, name: "Chem", analytes: JSON.stringify(["Glucose"]) });

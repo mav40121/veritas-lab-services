@@ -30,7 +30,7 @@ const table = (heads: string[], rows: unknown[][], none: string): string => rows
 export function buildPtReportHTML(r: PtReport, lab: { labName: string | null; clia: string | null }): string {
   const card = (value: unknown, label: string) => `<div class="kpi"><div class="v">${esc(value)}</div><div class="l">${esc(label)}</div></div>`;
   const submission = (k: PtSubmission) => `${r.due.counts[k]} ${PT_SUBMISSION_LABEL[k].toLowerCase()}`;
-  return `<!doctype html><html><head><meta charset="utf-8"><title>VeritaPT Report ${esc(r.period.label)}</title><style>
+  return `<!doctype html><html><head><meta charset="utf-8"><title>VeritaPT™ Report ${esc(r.period.label)}</title><style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; font-size: 9.5pt; color: #1a1a1a; background: white; }
     .head { border-bottom: 3px solid ${TEAL}; padding-bottom: 8px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; }
@@ -67,7 +67,7 @@ export function buildPtReportHTML(r: PtReport, lab: { labName: string | null; cl
     </div>
     <p class="words">${esc(ptRateWords(r.results))}</p>
     <h2>Events due and their submission</h2>
-    <p class="words">${esc(`${submission("on_time")}, ${submission("late")}, ${submission("not_recorded")}, ${submission("not_due")}.`)}</p>
+    <p class="words">${esc(`${submission("on_time")}; ${submission("late")}; ${submission("not_recorded")}; ${submission("not_due")}.`)}</p>
     ${table(["Event", "Program", "Due", "Submitted", "Submission"], r.due.events.map((e) => [e.event, e.program, e.due_date, e.submitted_date ?? "", PT_SUBMISSION_LABEL[e.submission]]), "No event has a due date in this period.")}
     <h2>Unacceptable and ungraded, by analyte</h2>
     ${table(["Analyte", "Unacceptable", "Ungraded"], r.by_analyte.map((a) => [a.name, a.unacceptable, a.ungraded]), "None.")}
