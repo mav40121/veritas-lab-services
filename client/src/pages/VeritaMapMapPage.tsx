@@ -2193,7 +2193,7 @@ function TestRow({ test, onChange, onChangeMany, onRowMount, analyteBands, amrVa
                     <label className="text-[10px] text-muted-foreground block">Recorded by</label>
                     <Input className="h-7 text-xs w-36" placeholder="Name or initials" value={mecBy} onChange={e => setMecBy(e.target.value)} />
                   </div>
-                  <Button size="sm" className="h-7 text-xs" disabled={provBusy || !mecDate || !mecBy.trim()}
+                  <Button size="sm" className="h-7 text-xs" disabled={provBusy || !mecDate || !mecBy.trim()} aria-describedby="mec-review-hint"
                     onClick={async () => {
                       setProvBusy(true);
                       try { await onProvenance("mec-review", test.analyte, { reviewed_at: mecDate, recorded_by: mecBy.trim(), ...bandFields }); setMecOpen(false); }
@@ -2201,7 +2201,10 @@ function TestRow({ test, onChange, onChangeMany, onRowMount, analyteBands, amrVa
                     }}>
                     Record review
                   </Button>
-                  <span className="text-[10px] text-muted-foreground">Requires the MEC-adopted critical values entered above.</span>
+                  <span id="mec-review-hint" className="text-[10px] text-muted-foreground">
+                    {(!mecDate || !mecBy.trim()) && <strong className="block font-semibold text-foreground">Fill in the date and Recorded by to turn on Record review.</strong>}
+                    Requires the MEC-adopted critical values entered above.
+                  </span>
                 </div>
               )}
               {attestFor !== null && !readOnly && (
@@ -2214,7 +2217,7 @@ function TestRow({ test, onChange, onChangeMany, onRowMount, analyteBands, amrVa
                     <label className="text-[10px] text-muted-foreground block">Title</label>
                     <Input className="h-7 text-xs w-44" placeholder="Medical director or designee" value={attestTitle} onChange={e => setAttestTitle(e.target.value)} />
                   </div>
-                  <Button size="sm" className="h-7 text-xs" disabled={provBusy || !attestBy.trim() || !attestTitle.trim()}
+                  <Button size="sm" className="h-7 text-xs" disabled={provBusy || !attestBy.trim() || !attestTitle.trim()} aria-describedby="attest-hint"
                     onClick={async () => {
                       setProvBusy(true);
                       try {
@@ -2225,7 +2228,11 @@ function TestRow({ test, onChange, onChangeMany, onRowMount, analyteBands, amrVa
                     }}>
                     Attest and lock
                   </Button>
-                  <span className="text-[10px] text-muted-foreground">Verified per 42 CFR 493.1253. Locks the value; owner or admin can unlock.</span>
+                  {/* Heywood 2026-11-23: the button stays off until both boxes are filled, and nothing said so. */}
+                  <span id="attest-hint" className="text-[10px] text-muted-foreground">
+                    {(!attestBy.trim() || !attestTitle.trim()) && <strong className="block font-semibold text-foreground">Fill in the name and title to turn on Attest and lock.</strong>}
+                    Verified per 42 CFR 493.1253. Locks the value; owner or admin can unlock.
+                  </span>
                 </div>
               )}
             </div>
