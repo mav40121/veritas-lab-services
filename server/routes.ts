@@ -31,7 +31,7 @@ import crypto from "crypto";
 import { Resend } from "resend";
 import { generatePDFBuffer, generateCumsumPDF, generateVeritaScanPDF, generateCompetencyPDF, generateEmployeeCompetencyRecordPDF, generateCMS209PDF, generateVeritaPTPDF, generateCms2567PDF, validateCms2567POC, generateCapResponsePDF, validateCapResponse, generateTjcEscPDF, validateTjcEsc, generateColaResponsePDF, validateColaResponse, generateAabbNerPDF, validateAabbNer, generateInternalNcePDF, validateInternalNce, generateCeuTranscriptPDF, generateTypeReportPDF, validateTypeReport, TYPE_REPORT_KINDS } from "./pdfReport";
 import { storePdfToken, claimPdfToken } from "./pdfTokens";
-import { labLocalDate, labToday, addLabDays, labClockMiddleware, setRequestLabTz, labTimeZoneOf, labTimeZoneById } from "./dateLocal";
+import { labLocalDate, labToday, addLabDays, labClockMiddleware, setRequestLabTz, withLabClock, labTimeZoneOf, labTimeZoneById } from "./dateLocal";
 import { labTimeZoneInfo, isValidLabTimeZone, TIME_ZONE_CHOICES } from "@shared/labTimeZone";
 import { parseRunDetails, serializeRunDetails } from "@shared/studyRunDetails";
 import { CLIA_PRESETS } from "@shared/cliaPresets";
@@ -59,7 +59,7 @@ import { labSeatSummary, seatCountGaps, SEAT_HOLDS_PLACE, SEAT_ROW_REUSABLE } fr
 import { promoteMedicalDirectorToAdmin, medicalDirectorPromotionPreview } from "./medicalDirectorRole";
 import { EMPLOYEE_HIRE_DATE_SQL, withStaffHireDates } from "./competencyHireDate";
 import { orgRoleForUserOnLab, labRoleFromOrgRole, transferBlockedOutOfOrg, isActiveOrgMember, resolveOwnerOrgId } from "./organizationRoles";
-import { RollupGroupError, rollupGroupsFor, createRollupGroup, updateRollupGroup, setRollupGroupLabs, deleteRollupGroup, adminListRollupGroups, adminCreateRollupGroup, adminDeleteRollupGroup } from "./rollupGroups";
+import { RollupGroupError, rollupGroupsFor, rollupLabsFor, rollupLabsOnOrganizationPlan, managedOrganizations, type RollupLabRow, createRollupGroup, updateRollupGroup, setRollupGroupLabs, deleteRollupGroup, adminListRollupGroups, adminCreateRollupGroup, adminDeleteRollupGroup } from "./rollupGroups";
 import { planProvisionLabs, accreditationFlagsFor, operatorOverviewGrant } from "./organizationProvision";
 import { validateSystemDocument } from "./systemRepository";
 import { computeDeletionScope, applyDeletion, transferOwnership, orphanScan, manifest, PRESERVE } from "./labReset";
@@ -277,8 +277,9 @@ import {
 } from "./competencyReminders";
 import { readNontechnicalFrequency, nontechnicalDueForLab } from "./competencyNontechnicalDue";
 import { computeLabReadiness } from "./labReadiness";
+import { openFindingsAcrossLabs } from "./systemFindings";
 import { ptSummaryForLab } from "./ptSummary";
-import { policyComplianceHeadline, policyOverdueDocuments } from "./policyComplianceCounts";
+import { policyComplianceHeadline, policyOverdueDocuments, policyDueSoonDocuments } from "./policyComplianceCounts";
 import { scanStatusCounts } from "./veritascanCounts";
 import { deleteMapCascade, mapDeleteBlockers } from "./veritamapDelete";
 import { computeGettingStarted, setGettingStartedCheck, isManualKey } from "./gettingStarted";
@@ -31140,48 +31141,74 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // try/caught so one query failing never blanks the whole pane.
   function hasReadinessAccess(user: any, lab?: any) {
     if (exportAllPlanBypass(lab)) return true; // export-all job (server/exportAllContext.ts)
-    const plan = lab?.plan ?? user?.plan;
-    return ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "clinic", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(plan);
+    return readinessPlanOk(lab?.plan ?? user?.plan);
+  }
+  function readinessPlanOk(plan: string | null | undefined) {
+    return ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "clinic", "waived", "community", "hospital", "large_hospital", "enterprise"].includes(String(plan ?? ""));
+  }
+  // The labs of the multi-lab roll-up for this person, or null when neither their plan nor their organization's includes
+  // readiness. An active org_owner or org_admin whose own account is free reads their organization's labs on the
+  // organization's plan (Sanford program B2, 2026-11-24): they used to get a 403, because with no membership of their own
+  // there is no active lab to take a plan from. Nobody gains a lab: it is the same list, cut to that organization.
+  function rollupLabsForRequest(client: any, req: any): RollupLabRow[] | null {
+    if (hasReadinessAccess(req.user, req.scope?.lab)) return rollupLabsFor(client, req.userId);
+    const labs = rollupLabsOnOrganizationPlan(client, req.userId, readinessPlanOk);
+    return labs.length ? labs : null;
   }
   // computeLabReadiness (the per-module counts) lives in server/labReadiness.ts, shared with the compliance digest.
   app.get("/api/labs/:labId/readiness", authMiddleware, labScopeMiddleware, (req: any, res) => {
-    if (!hasReadinessAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "A VeritaAssure subscription is required" });
     const client = (db as any).$client;
+    const onOrganizationPlan = () => labRoleFromOrgRole(req.scope?.orgRole) === "admin"
+      && readinessPlanOk((client.prepare("SELECT o.plan FROM labs l JOIN organizations o ON o.id = l.organization_id WHERE l.id = ?").get(req.scope.labId) as any)?.plan);
+    if (!hasReadinessAccess(req.user, req.scope?.lab) && !onOrganizationPlan()) return res.status(403).json({ error: "A VeritaAssure subscription is required" });
     const lab = client.prepare("SELECT id, lab_name, clia_number FROM labs WHERE id = ?").get(req.scope.labId) as any;
     res.json({ lab_id: req.scope.labId, lab_name: lab?.lab_name, clia_number: lab?.clia_number, ...computeLabReadiness(client, req.scope.labId) });
   });
   // System-tier multi-lab rollup: the same readiness across every lab the user
   // can access, from one login.
-  app.get("/api/readiness/rollup", authMiddleware, (req: any, res) => {
-    if (!hasReadinessAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "A VeritaAssure subscription is required" });
+  app.get("/api/readiness/rollup", authMiddleware, async (req: any, res) => {
+    try {
+      const client = (db as any).$client;
+      // Phase 2d: a lab shows in the roll-up when the user is an active lab member
+      // OR an active org_owner/org_admin of the lab's organization (so a system
+      // governance user sees the whole network). Repository labs stay excluded.
+      // The query is rollupLabsFor (server/rollupGroups.ts).
+      const labs = rollupLabsForRequest(client, req);
+      if (!labs) return res.status(403).json({ error: "A VeritaAssure subscription is required" });
+      const out: any[] = [];
+      let turn = performance.now();
+      for (const l of labs) {
+        // Each lab on its own calendar day, the one its own readiness page uses.
+        out.push({ lab_id: l.id, lab_name: l.lab_name, clia_number: l.clia_number, organization_id: l.organization_id ?? null, organization_name: l.organization_name ?? null, ...withLabClock(labTimeZoneOf(l), () => computeLabReadiness(client, l.id)) });
+        // The first read after a restart works every lab's coverage out (server/coverageCounts.ts): let other requests in.
+        if (performance.now() - turn > 50) { await new Promise((r) => setImmediate(r)); turn = performance.now(); }
+      }
+      res.json(out);
+    } catch (err: any) {
+      console.error("[readiness/rollup] failed:", err?.message || err);
+      if (!res.headersSent) res.status(500).json({ error: "Readiness roll-up failed" });
+    }
+  });
+  // The cross-lab list of open findings, for a system leader only (an active org_owner or org_admin): every open finding in
+  // exactly the labs the roll-up above gives this person (server/systemFindings.ts). Sanford program B2, 2026-11-24.
+  app.get("/api/readiness/rollup/findings", authMiddleware, (req: any, res) => {
     const client = (db as any).$client;
-    const userId = req.user?.userId;
-    // Phase 2d: a lab shows in the roll-up when the user is an active lab member
-    // OR an active org_owner/org_admin of the lab's organization (so a system
-    // governance user sees the whole network). Repository labs stay excluded.
-    const labs = client.prepare(
-      `SELECT DISTINCT l.id, l.lab_name, l.clia_number, l.organization_id,
-              (SELECT o.name FROM organizations o WHERE o.id = l.organization_id) AS organization_name
-         FROM labs l
-         LEFT JOIN lab_members m ON m.lab_id = l.id AND m.user_id = ? AND m.status = 'active'
-        WHERE (l.is_repository IS NULL OR l.is_repository = 0)
-          AND (
-            m.id IS NOT NULL
-            OR l.organization_id IN (
-              SELECT om.organization_id FROM organization_members om
-              WHERE om.user_id = ? AND om.status = 'active' AND om.org_role IN ('org_owner', 'org_admin')
-            )
-          )
-        ORDER BY l.lab_name ASC`
-    ).all(userId, userId) as any[];
-    res.json(labs.map(l => ({ lab_id: l.id, lab_name: l.lab_name, clia_number: l.clia_number, organization_id: l.organization_id ?? null, organization_name: l.organization_name ?? null, ...computeLabReadiness(client, l.id) })));
+    const organizations = managedOrganizations(client, req.userId);
+    if (!organizations.length) return res.status(403).json({ error: "This list is for the owner or an admin of a system of laboratories.", code: "SYSTEM_LEADER_ONLY" });
+    const labs = rollupLabsForRequest(client, req);
+    if (!labs) return res.status(403).json({ error: "A VeritaAssure subscription is required", code: "PLAN_REQUIRED" });
+    res.json({
+      labs: labs.map((l) => ({ lab_id: l.id, lab_name: l.lab_name, clia_number: l.clia_number, organization_id: l.organization_id ?? null, organization_name: l.organization_name ?? null })),
+      findings: openFindingsAcrossLabs(client, labs),
+    });
   });
 
   // Roll-up groups, Phase 1 (Michael 2026-11-16; server/rollupGroups.ts): named groups of labs the command center above is
   // broken out by (a region, a consultant's labs). Presentation only: a group never opens a lab to anyone, and every read is
-  // cut to the labs /api/readiness/rollup gives the reader. Same plan allowlist as the roll-up (hasReadinessAccess).
+  // cut to the labs /api/readiness/rollup gives the reader. Same plan allowlist as the roll-up (hasReadinessAccess),
+  // and the same organization's plan for its org_owner or org_admin.
   const rollupGroupRoute = (fn: (sqlite: any, req: any) => any, status = 200) => (req: any, res: any) => {
-    if (!hasReadinessAccess(req.user)) return res.status(403).json({ error: "A VeritaAssure subscription is required", code: "PLAN_REQUIRED" });
+    if (!hasReadinessAccess(req.user) && !rollupLabsOnOrganizationPlan((db as any).$client, req.userId, readinessPlanOk).length) return res.status(403).json({ error: "A VeritaAssure subscription is required", code: "PLAN_REQUIRED" });
     try {
       res.status(status).json(fn((db as any).$client, req));
     } catch (err: any) {
@@ -43817,21 +43844,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       // Overdue list: every approved doc past next_review_date (server/policyComplianceCounts.ts).
       const overdueList = policyOverdueDocuments(sqlite, labId, labToday());
 
-      // Due-soon list: approved doc with next_review_date in next 30 days.
-      const dueSoonList = sqlite
-        .prepare(
-          `SELECT d.id, d.title, d.next_review_date, d.manual_id,
-                  m.name AS manual_name
-             FROM policy_documents d
-             LEFT JOIN policy_manuals m ON m.id = d.manual_id
-            WHERE d.lab_id = ? AND d.archived_at IS NULL
-              AND d.status = 'approved'
-              AND d.next_review_date IS NOT NULL
-              AND date(d.next_review_date) >= date(@today)
-              AND date(d.next_review_date) <= date(@today, '+30 days')
-            ORDER BY d.next_review_date ASC`
-        )
-        .all(labId, { today: labToday() });
+      // Due-soon list: approved doc with next_review_date in next 30 days (server/policyComplianceCounts.ts; readiness counts it).
+      const dueSoonList = policyDueSoonDocuments(sqlite, labId, labToday());
 
       // Per-user attestation rate: how many open attestations vs how many
       // they've completed (all-time), on THIS lab's current policies (the same

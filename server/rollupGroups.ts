@@ -41,17 +41,44 @@ export class RollupGroupError extends Error {
 
 const ORG_ADMIN_ROLES = "('org_owner', 'org_admin')";
 
+export type RollupLabRow = {
+  id: number; lab_name: string | null; clia_number: string | null; time_zone: string | null; plan: string | null;
+  organization_id: number | null; organization_name: string | null; organization_plan: string | null;
+  is_trial: number | null; subscription_expires_at: string | null;
+};
+
+/**
+ * The labs the command center shows this person, by name: every lab they are an active member of, plus every lab of an
+ * organization where they are an active org_owner or org_admin (labVisibleToUser). Repository labs are left out. The one
+ * query behind /api/readiness/rollup, its findings list and the groups' reads, so they can't show different labs.
+ */
+export function rollupLabsFor(sqlite: any, userId: number): RollupLabRow[] {
+  return sqlite.prepare(
+    `SELECT l.id, l.lab_name, l.clia_number, l.time_zone, l.plan, l.organization_id, o.name AS organization_name, o.plan AS organization_plan,
+            l.is_trial, l.subscription_expires_at
+       FROM labs l LEFT JOIN organizations o ON o.id = l.organization_id
+      WHERE (l.is_repository IS NULL OR l.is_repository = 0)
+        AND (EXISTS (SELECT 1 FROM lab_members m WHERE m.lab_id = l.id AND m.user_id = ? AND m.status = 'active')
+             OR l.organization_id IN (SELECT om.organization_id FROM organization_members om
+                                       WHERE om.user_id = ? AND om.status = 'active' AND om.org_role IN ${ORG_ADMIN_ROLES}))
+      ORDER BY l.lab_name ASC, l.id ASC`
+  ).all(userId, userId) as RollupLabRow[];
+}
+
 /** The labs the command center shows this person (the same rule as /api/readiness/rollup). */
 export function rollupVisibleLabIds(sqlite: any, userId: number): Set<number> {
-  const rows = sqlite.prepare(
-    `SELECT DISTINCT l.id FROM labs l
-       LEFT JOIN lab_members m ON m.lab_id = l.id AND m.user_id = ? AND m.status = 'active'
-      WHERE (l.is_repository IS NULL OR l.is_repository = 0)
-        AND (m.id IS NOT NULL
-             OR l.organization_id IN (SELECT om.organization_id FROM organization_members om
-                                       WHERE om.user_id = ? AND om.status = 'active' AND om.org_role IN ${ORG_ADMIN_ROLES}))`
-  ).all(userId, userId) as { id: number }[];
-  return new Set(rows.map((r) => r.id));
+  return new Set(rollupLabsFor(sqlite, userId).map((l) => l.id));
+}
+
+/**
+ * The part of that list an organization's plan pays for: labs of an organization this person runs, when the
+ * organization's plan or the lab's own is one readiness is included in (planOk is the routes' own allowlist). Used only
+ * for someone whose own plan doesn't include readiness, so a lab of theirs outside those organizations stays out.
+ */
+export function rollupLabsOnOrganizationPlan(sqlite: any, userId: number, planOk: (plan: string | null) => boolean): RollupLabRow[] {
+  const run = new Set(managedOrganizations(sqlite, userId).map((o) => o.id));
+  if (!run.size) return [];
+  return rollupLabsFor(sqlite, userId).filter((l) => l.organization_id != null && run.has(l.organization_id) && (planOk(l.organization_plan) || planOk(l.plan)));
 }
 
 /** Organizations this person runs (active org_owner or org_admin), with names. */

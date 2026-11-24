@@ -5126,6 +5126,8 @@ sqlite.exec(`
     try { sqlite.exec("ALTER TABLE veritamap_maps ADD COLUMN lab_id INTEGER REFERENCES labs(id)"); } catch {}
   }
   try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_veritamap_maps_lab ON veritamap_maps(lab_id, id DESC)"); } catch {}
+  // Coverage reads one lab's test rows by map; without this it scanned every lab's rows for each lab of the readiness roll-up (B2, 2026-11-24).
+  try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_veritamap_instrument_tests_map ON veritamap_instrument_tests(map_id)"); } catch {}
   const backfilled = sqlite.prepare(`
     UPDATE veritamap_maps
     SET lab_id = (SELECT u.lab_id FROM users u WHERE u.id = veritamap_maps.user_id)

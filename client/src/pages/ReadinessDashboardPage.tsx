@@ -4,22 +4,24 @@ import { useAuth } from "@/components/AuthContext";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
+import { useMemberships } from "@/hooks/useMemberships";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Gauge, Lock, CheckCircle2, AlertTriangle, XCircle, Newspaper } from "lucide-react";
-import { summarizeRollup, badModules, groupsInRollup, filterRollupByGroup, groupSections, ROLLUP_GROUP_KIND_LABEL } from "@/lib/readinessRollup";
+import { Gauge, Lock, CheckCircle2, AlertTriangle, XCircle, Newspaper, CircleDashed, ListChecks } from "lucide-react";
+import { summarizeRollup, badModules, groupsInRollup, filterRollupByGroup, groupSections, moduleWork, moduleCount, onlyUndated, ROLLUP_GROUP_KIND_LABEL, type RollupStatus } from "@/lib/readinessRollup";
 import { RollupGroupsDialog, type RollupGroupsData } from "@/components/RollupGroupsDialog";
 
 interface ModuleReadiness {
-  key: string; label: string; status: "ok" | "attention" | "overdue"; overdue: number; due_soon: number; total: number; headline: string;
+  key: string; label: string; status: RollupStatus; overdue: number; due_soon: number; other?: number; other_label?: string | null; total: number; headline: string;
+  counts?: Record<string, number>;
 }
 interface Readiness {
   lab_id: number; lab_name: string | null; clia_number: string | null;
   // System/Organization entity (Phase 1): set when the lab belongs to an org.
   organization_id?: number | null; organization_name?: string | null;
   modules: ModuleReadiness[];
-  overall: { modules_total: number; modules_ok: number; attention_items: number; overdue_items: number; status: "ok" | "attention" | "overdue" };
+  overall: { modules_total: number; modules_ok: number; modules_not_set_up?: number; attention_items: number; overdue_items: number; other_items?: number; status: RollupStatus };
 }
 
 const SUITE_PLANS = ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "clinic", "waived", "community", "hospital", "large_hospital", "enterprise"];
@@ -27,19 +29,29 @@ const SUITE_PLANS = ["annual", "professional", "lab", "complete", "veritamap", "
 function statusColor(s: string) {
   if (s === "overdue") return "text-red-700 dark:text-red-300";
   if (s === "attention") return "text-amber-700 dark:text-amber-300";
+  if (s === "not_set_up") return "text-muted-foreground";
   return "text-emerald-700 dark:text-emerald-300";
 }
 function StatusIcon({ s, className = "h-4 w-4" }: { s: string; className?: string }) {
   if (s === "overdue") return <XCircle className={`${className} text-red-600`} />;
   if (s === "attention") return <AlertTriangle className={`${className} text-amber-600`} />;
+  if (s === "not_set_up") return <CircleDashed className={`${className} text-muted-foreground`} />;
   return <CheckCircle2 className={`${className} text-emerald-600`} />;
 }
-function statusLabel(s: string) { return s === "overdue" ? "Action needed" : s === "attention" ? "Due soon" : "On track"; }
+// undated: everything amber here has no date (a study missing, a document waiting for approval), so "due soon" would be wrong.
+function statusLabel(s: string, undated = false) { return s === "overdue" ? "Action needed" : s === "attention" ? (undated ? "Needs attention" : "Due soon") : s === "not_set_up" ? "Not set up" : "On track"; }
+const dueSoonItems = (o: Readiness["overall"]) => Math.max(0, o.attention_items - o.overdue_items - (o.other_items || 0));
+const labUndated = (o: Readiness["overall"]) => o.overdue_items === 0 && dueSoonItems(o) === 0 && (o.other_items || 0) > 0;
 
 export default function ReadinessDashboardPage() {
   const { user, isLoggedIn } = useAuth();
   const activeLabId = useActiveLabId();
   const hasPlanAccess = !!user && SUITE_PLANS.includes(user.plan);
+  // A lab of a system may be covered by the system's plan for its owner or admin (server/routes.ts rollupLabsForRequest): the
+  // server decides, and its refusal shows the subscription notice.
+  const { data: memberships, isLoading: membershipsLoading } = useMemberships();
+  const [planRefused, setPlanRefused] = useState(false);
+  const mayAsk = hasPlanAccess || !!memberships?.some(m => m.labId === activeLabId && m.organizationId != null);
   // Per-system overview: the lab switcher links each org's "Network overview"
   // entry in with ?org=<id>, so the command center can scope to that one system.
   const search = useSearch();
@@ -75,6 +87,9 @@ export default function ReadinessDashboardPage() {
         fetch(`${API_BASE}/api/readiness/rollup`, { headers: authHeaders() }),
         loadGroups(),
       ]);
+      const refused = rRes.status === 403 && !hasPlanAccess;
+      setPlanRefused(refused);
+      if (refused) return;
       if (!rRes.ok) throw new Error(`readiness ${rRes.status}`);
       setData(await rRes.json());
       setRollup(rollRes.ok ? await rollRes.json() : []);
@@ -88,14 +103,17 @@ export default function ReadinessDashboardPage() {
   }
 
   useEffect(() => {
-    if (isLoggedIn && hasPlanAccess && activeLabId) load();
+    if (isLoggedIn && mayAsk && activeLabId) load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoggedIn, hasPlanAccess, activeLabId]);
+  }, [isLoggedIn, mayAsk, activeLabId]);
 
   if (!isLoggedIn) {
     return <div className="container max-w-2xl mx-auto py-12 px-4"><Card><CardContent className="py-10 text-center"><Lock className="mx-auto h-10 w-10 text-muted-foreground mb-3" /><h2 className="text-lg font-semibold mb-1">Sign in to view Readiness</h2><Button asChild className="mt-3"><Link href="/login">Sign in</Link></Button></CardContent></Card></div>;
   }
-  if (!hasPlanAccess) {
+  if (!hasPlanAccess && membershipsLoading) {
+    return <div className="container max-w-2xl mx-auto py-12 px-4"><Card><CardContent className="py-8 text-center text-sm text-muted-foreground">Loading readiness...</CardContent></Card></div>;
+  }
+  if (!mayAsk || planRefused) {
     return <div className="container max-w-2xl mx-auto py-12 px-4"><Card><CardContent className="py-10 text-center"><Lock className="mx-auto h-10 w-10 text-muted-foreground mb-3" /><h2 className="text-lg font-semibold mb-1">Readiness requires a subscription</h2><p className="text-sm text-muted-foreground mb-4">A single inspection-readiness view across your compliance modules.</p><Button asChild><Link href="/pricing">See plans</Link></Button></CardContent></Card></div>;
   }
   if (!activeLabId) {
@@ -150,36 +168,40 @@ export default function ReadinessDashboardPage() {
         const cellBg = (st: string) =>
           st === "overdue" ? "bg-red-500/15 text-red-700 dark:text-red-300"
           : st === "attention" ? "bg-amber-500/15 text-amber-700 dark:text-amber-300"
+          : st === "not_set_up" ? "bg-muted text-muted-foreground"
           : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300";
 
         // Active-lab detail: overall banner + per-module cards for the lab
         // selected in the switcher.
         const activeLabDetail = (
           <>
-            <div className={`rounded-xl border p-4 mb-4 ${overallStatus === "overdue" ? "border-red-300/60 bg-red-50 dark:bg-red-950/30 dark:border-red-900/40" : overallStatus === "attention" ? "border-amber-300/60 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-900/40" : "border-emerald-300/60 bg-emerald-50 dark:bg-emerald-950/30 dark:border-emerald-900/40"}`}>
+            <div className={`rounded-xl border p-4 mb-4 ${overallStatus === "overdue" ? "border-red-300/60 bg-red-50 dark:bg-red-950/30 dark:border-red-900/40" : overallStatus === "attention" ? "border-amber-300/60 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-900/40" : overallStatus === "not_set_up" ? "border-border bg-muted/40" : "border-emerald-300/60 bg-emerald-50 dark:bg-emerald-950/30 dark:border-emerald-900/40"}`}>
               <div className="flex items-center gap-3 flex-wrap">
                 <StatusIcon s={overallStatus} className="h-6 w-6" />
                 <div>
                   <div className={`text-base font-semibold ${statusColor(overallStatus)}`}>
-                    {overallStatus === "overdue" ? "Action needed" : overallStatus === "attention" ? "Items due soon" : "Inspection-ready"}
+                    {overallStatus === "overdue" ? "Action needed" : overallStatus === "attention" ? (overall && labUndated(overall) ? "Needs attention" : "Items due soon") : overallStatus === "not_set_up" ? "Not set up" : overall?.modules_not_set_up ? "On track" : "Inspection-ready"}
                     {data.lab_name ? `: ${data.lab_name}` : ""}
                   </div>
-                  <div className="text-xs text-muted-foreground mt-0.5">
-                    {overall?.modules_ok}/{overall?.modules_total} modules on track · {overall?.overdue_items} overdue · {(overall?.attention_items ?? 0) - (overall?.overdue_items ?? 0)} due soon
+                  <div className="text-xs text-muted-foreground mt-0.5" data-testid="readiness-banner-counts">
+                    {overall && (overallStatus === "not_set_up" ? "Nothing is entered in these modules yet, so there is nothing to call ready." : <>
+                      {overall.modules_ok}/{overall.modules_total} modules on track · {overall.overdue_items} overdue · {dueSoonItems(overall)} due soon
+                      {overall.other_items ? ` · ${overall.other_items} missing or waiting` : ""}{overall.modules_not_set_up ? ` · ${overall.modules_not_set_up} not set up` : ""}
+                    </>)}
                   </div>
                 </div>
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
               {data.modules.map(m => (
-                <Card key={m.key}>
+                <Card key={m.key} data-testid={`readiness-module-${m.key}`}>
                   <CardContent className="py-4">
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-2">
                         <StatusIcon s={m.status} />
                         <span className="font-medium text-sm">{m.label}</span>
                       </div>
-                      <Badge variant="outline" className={m.status === "overdue" ? "bg-red-500/10 text-red-700 border-red-500/20" : m.status === "attention" ? "bg-amber-500/10 text-amber-700 border-amber-500/20" : "bg-emerald-500/10 text-emerald-700 border-emerald-500/20"}>{statusLabel(m.status)}</Badge>
+                      <Badge variant="outline" className={m.status === "overdue" ? "bg-red-500/10 text-red-700 dark:text-red-300 border-red-500/20" : m.status === "attention" ? "bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20" : m.status === "not_set_up" ? "bg-muted text-muted-foreground" : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/20"}>{statusLabel(m.status, onlyUndated(m))}</Badge>
                     </div>
                     <div className="text-xs text-muted-foreground mt-2">{m.headline}</div>
                   </CardContent>
@@ -197,17 +219,16 @@ export default function ReadinessDashboardPage() {
           const byKey = new Map(((l.modules || []) as any[]).map(m => [m.key, m]));
           return (
             <tr key={`${keyPrefix}${l.lab_id}`} className="border-b last:border-b-0">
-              <td className="py-2 pr-2 font-medium sticky left-0 bg-card">
+              <td className="py-2 pr-2 font-medium sticky left-0 bg-card min-w-[110px]">
                 <Link href={`/labs/${l.lab_id}/readiness`} className="hover:underline">{l.lab_name || l.clia_number || `Lab ${l.lab_id}`}</Link>
               </td>
-              <td className="py-2 px-2"><span className="inline-flex items-center gap-1.5"><StatusIcon s={l.overall.status} /> <span className={statusColor(l.overall.status)}>{statusLabel(l.overall.status)}</span></span></td>
+              <td className="py-2 px-2"><span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs"><StatusIcon s={l.overall.status} className="h-4 w-4 shrink-0" /> <span className={statusColor(l.overall.status)}>{statusLabel(l.overall.status, labUndated(l.overall))}</span></span></td>
               {(s?.cols || []).map(c => {
                 const m = byKey.get(c.key) as any;
                 if (!m) return <td key={c.key} className="py-1.5 px-1.5 text-center text-muted-foreground">-</td>;
-                const n = m.overdue || m.due_soon || 0;
                 return (
-                  <td key={c.key} className="py-1.5 px-1.5">
-                    <div className={`text-center rounded px-1.5 py-1 text-xs font-medium ${cellBg(m.status)}`} title={`${m.label}: ${statusLabel(m.status)}`}>{m.status === "ok" ? "OK" : n}</div>
+                  <td key={c.key} className="py-1.5 px-1">
+                    <div className={`text-center rounded px-1 py-1 text-xs font-medium whitespace-nowrap ${cellBg(m.status)}`} title={`${m.label}: ${m.headline || statusLabel(m.status)}`}>{m.status === "ok" ? "OK" : m.status === "not_set_up" ? "Not set up" : moduleCount(m)}</div>
                   </td>
                 );
               })}
@@ -243,18 +264,31 @@ export default function ReadinessDashboardPage() {
           </div>
         );
 
+        // A system's owner or admin reads the open findings of every lab above as one list (the server gives it to nobody else).
+        const systemLeader = groupsData.can_build.organizations.length > 0;
+        const openFindings = viewRollup.reduce((n, l) => n + ((l.modules || []).find(m => m.key === "findings")?.counts?.open || 0), 0);
+        const findingsQuery = [orgFilter != null ? `org=${orgFilter}` : "", effectiveFilter !== "all" ? `group=${effectiveFilter}` : ""].filter(Boolean).join("&");
+
         const networkView = s && (
           <div className="space-y-4">
             {groupBar}
             <Card>
-              <CardHeader className="pb-2"><CardTitle className="text-base">{networkTitle}</CardTitle></CardHeader>
+              <CardHeader className="pb-2 flex-row flex-wrap items-center justify-between gap-2 space-y-0">
+                <CardTitle className="text-base">{networkTitle}</CardTitle>
+                {systemLeader && (
+                  <Button asChild size="sm" variant="outline" data-testid="open-findings-link">
+                    <Link href={`/labs/${activeLabId}/readiness/findings${findingsQuery ? `?${findingsQuery}` : ""}`}><ListChecks className="h-4 w-4 mr-1.5" />Open findings ({openFindings})</Link>
+                  </Button>
+                )}
+              </CardHeader>
               <CardContent>
                 <div className="flex flex-wrap items-end gap-x-8 gap-y-3">
                   <div><div className="text-2xl font-bold">{s.ready}/{s.sites}</div><div className="text-xs text-muted-foreground">sites ready</div></div>
                   <div><div className={`text-2xl font-bold ${s.attention ? statusColor("attention") : ""}`}>{s.attention}</div><div className="text-xs text-muted-foreground">need attention</div></div>
                   <div><div className={`text-2xl font-bold ${s.overdueSites ? statusColor("overdue") : ""}`}>{s.overdueSites}</div><div className="text-xs text-muted-foreground">action needed</div></div>
                   <div><div className={`text-2xl font-bold ${s.totalOverdue ? statusColor("overdue") : ""}`}>{s.totalOverdue}</div><div className="text-xs text-muted-foreground">overdue items</div></div>
-                  <div className="ml-auto text-right"><div className="text-2xl font-bold">{s.readinessPct}%</div><div className="text-xs text-muted-foreground">network readiness</div></div>
+                  {s.notSetUp > 0 && <div data-testid="rollup-not-set-up"><div className="text-2xl font-bold text-muted-foreground">{s.notSetUp}</div><div className="text-xs text-muted-foreground">not set up</div></div>}
+                  <div className="ml-auto text-right"><div className="text-2xl font-bold">{s.readinessPct == null ? "Not set up" : `${s.readinessPct}%`}</div><div className="text-xs text-muted-foreground">network readiness</div></div>
                 </div>
               </CardContent>
             </Card>
@@ -270,7 +304,7 @@ export default function ReadinessDashboardPage() {
                       <span className="flex flex-wrap justify-end gap-1 ml-auto">
                         {badModules(l as any).map(m => (
                           <span key={m.key} className={`text-xs px-1.5 py-0.5 rounded ${cellBg(m.status)}`}>
-                            {m.label}{m.overdue ? ` · ${m.overdue} overdue` : m.due_soon ? ` · ${m.due_soon} due soon` : ""}
+                            {m.label}{moduleWork(m) ? ` · ${moduleWork(m)}` : ""}
                           </span>
                         ))}
                       </span>
@@ -289,7 +323,7 @@ export default function ReadinessDashboardPage() {
                       <tr>
                         <th className="py-2 pr-2 sticky left-0 z-30 bg-muted">Lab</th>
                         <th className="py-2 px-2 whitespace-nowrap">Status</th>
-                        {s.cols.map(c => (<th key={c.key} className="py-2 px-2 whitespace-nowrap">{c.label}</th>))}
+                        {s.cols.map(c => (<th key={c.key} className="py-2 px-1 leading-tight align-bottom text-center min-w-[74px]">{c.label}</th>))}
                       </tr>
                     </thead>
                     {sections.length ? sections.map(sec => (
@@ -299,7 +333,7 @@ export default function ReadinessDashboardPage() {
                             <span className="font-semibold text-sm">{sec.group ? sec.group.name : "Not in a group"}</span>
                             {sec.group && <span className="ml-2 text-xs rounded border bg-background px-1.5 py-0.5">{ROLLUP_GROUP_KIND_LABEL[sec.group.kind] || "Group"}</span>}
                             <span className="ml-3 text-xs text-muted-foreground" data-testid="rollup-group-subtotal">
-                              {sec.summary.ready}/{sec.summary.sites} ready · {sec.summary.overdueSites} action needed · {sec.summary.totalOverdue} overdue {sec.summary.totalOverdue === 1 ? "item" : "items"} · {sec.summary.readinessPct}% readiness
+                              {sec.summary.ready}/{sec.summary.sites} ready · {sec.summary.overdueSites} action needed · {sec.summary.totalOverdue} overdue {sec.summary.totalOverdue === 1 ? "item" : "items"}{sec.summary.notSetUp > 0 ? ` · ${sec.summary.notSetUp} not set up` : ""} · {sec.summary.readinessPct == null ? "readiness not set up" : `${sec.summary.readinessPct}% readiness`}
                             </span>
                           </td>
                         </tr>
@@ -311,7 +345,7 @@ export default function ReadinessDashboardPage() {
                   </table>
                 </div>
                 <p className="text-xs text-muted-foreground mt-3">
-                  One login, every site. Click any lab to open it. Each lab's readiness is computed from its own module data.
+                  One login, every site. Click any lab to open it. Each lab's readiness is computed from its own module data. A module with nothing entered reads Not set up and stays out of the percent.
                   {sections.length ? " A lab in two groups shows in both." : ""}
                 </p>
               </CardContent>
