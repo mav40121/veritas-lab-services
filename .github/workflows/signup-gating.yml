@@ -333,6 +333,9 @@ jobs:
         # Site review 2026-11-05: the PDF reads what the tracker screen saves and lists the screen's rows, so its score and counts are the screen's;
         # the old requirement table never reaches it, and one lab's entries never reach another's report.
         run: npm run test:veritadc-readiness-report
+      - name: Run contact form integration test
+        # BUG-185, 2026-11-24: a message from the contact form is stored and emailed to info@ (it was stored and nobody was told).
+        run: npm run test:contact-form
       - name: Run signup-bot-guard integration test
         # Michael 2026-11-23: a script's public sign-up (its browser string is in quote marks) makes no account and sends no email; a
         # person's sign-up and an invitation's link work as before.
