@@ -22,6 +22,7 @@ import {
 import { AlertTriangle, CheckCircle2, Lock, FlaskConical, LineChart, ClipboardCheck } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { ModuleHowToCard } from "@/components/ModuleHowToCard";
+import { RunOrigin } from "@/components/qcimport/importShared";
 
 interface ControlLot {
   id: number;
@@ -133,6 +134,12 @@ interface ResultRow {
   violations: ViolationRow[];
   corrective_actions: CorrectiveActionRow[];
   notes: QcNoteRow[];
+  // A run read from a file (server/qcFileImport.ts), and one stored after its month's review was signed.
+  imported?: { id: number; file_name: string; imported_by_name: string; imported_at: string } | null;
+  import_row?: number | null;
+  import_column?: string | null;
+  import_operator?: string | null;
+  added_after_review?: string | null;
 }
 
 // Append-only investigation note on a saved QC point (2026-08-25, MedStar). The
@@ -1051,11 +1058,21 @@ export default function VeritaQCAppPage() {
 
   return (
     <div className="container max-w-5xl mx-auto py-8 px-4">
-      <div className="mb-6 flex items-center gap-2">
+      <div className="mb-6 flex flex-wrap items-center gap-2">
         <FlaskConical className="h-6 w-6 text-primary" />
         <h1 className="text-2xl font-bold">VeritaQC&#8482;</h1>
         <Badge variant="outline" className="ml-2 text-xs">Phase 1 preview</Badge>
-        <div className="ml-auto">
+        <div className="ml-auto flex flex-wrap gap-2">
+          {!isReadOnly && (
+            <>
+              <Button asChild variant="outline" size="sm" data-testid="veritaqc-import-link">
+                <Link href={`/labs/${activeLabId}/veritaqc-app/import`}>Import results</Link>
+              </Button>
+              <Button asChild variant="outline" size="sm" data-testid="veritaqc-sigma-link">
+                <Link href={`/labs/${activeLabId}/veritaqc-app/sigma`}>Sigma metric</Link>
+              </Button>
+            </>
+          )}
           <Button asChild variant="outline" size="sm">
             <Link href={`/labs/${activeLabId}/veritaqc-app/review`}>Review &amp; Sign-off</Link>
           </Button>
@@ -1543,7 +1560,7 @@ export default function VeritaQCAppPage() {
                               </Link>
                             ) : (r.instrument || "-")}
                           </td>
-                          <td className="py-2 pr-2 text-xs text-muted-foreground max-w-[16rem] truncate" title={r.comment || undefined}>{r.comment || "-"}</td>
+                          <td className="py-2 pr-2 text-xs text-muted-foreground max-w-[16rem] truncate" title={r.comment || undefined}>{r.comment || "-"}{(r.imported || r.added_after_review) && <div className="whitespace-normal"><RunOrigin run={r} /></div>}</td>
                           <td className="py-2 pr-2">
                             {r.violations.length === 0 ? (
                               <span className="text-xs text-muted-foreground">none</span>

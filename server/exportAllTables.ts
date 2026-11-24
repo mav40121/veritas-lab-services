@@ -187,6 +187,11 @@ export const EXPORT_TABLES: Record<string, ExportTable> = {
   qc_period_reviews: lab("VeritaQC"),
   qc_rule_settings: lab("VeritaQC"),
   veritaqc_import_mappings: lab("VeritaQC"),
+  qc_file_imports: lab("VeritaQC"), // runs read from a file: the file's name, hash and row numbers, never the file (server/qcFileImport.ts)
+  qc_import_mappings: lab("VeritaQC"),
+  qc_import_names: lab("VeritaQC"),
+  qc_allowable_errors: lab("VeritaQC"), // the sigma metric's inputs (server/qcSigma.ts)
+  qc_peer_means: lab("VeritaQC"),
   iqcp_plans: lab("VeritaQC"),
   iqcp_qa_items: child("VeritaQC", "plan_id", "iqcp_plans"),
   iqcp_qcp_items: child("VeritaQC", "plan_id", "iqcp_plans"),

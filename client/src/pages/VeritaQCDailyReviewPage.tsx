@@ -17,6 +17,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { RunOrigin } from "@/components/qcimport/importShared";
 import {
   AlertTriangle, CheckCircle2, Lock, ClipboardList, ChevronRight, FileDown, RefreshCw,
 } from "lucide-react";
@@ -53,6 +54,11 @@ interface RecentResult {
   run_time: string | null;
   accepted_for_reporting: number;
   operator_name?: string | null;
+  imported?: { id: number; file_name: string; imported_by_name: string; imported_at: string } | null;
+  import_row?: number | null;
+  import_column?: string | null;
+  import_operator?: string | null;
+  added_after_review?: string | null;
   violations: ViolationRow[];
   corrective_actions: CARow[];
 }
@@ -639,6 +645,7 @@ export default function VeritaQCDailyReviewPage() {
                           <td className="py-2 pr-2">
                             {r.result_date}
                             {r.operator_name && <div className="text-[11px] text-muted-foreground">by {r.operator_name}</div>}
+                            <div className="max-w-[16rem]"><RunOrigin run={r} /></div>
                           </td>
                           <td className="py-2 pr-2 font-mono">{r.result_value}</td>
                           <td className="py-2 pr-2 text-muted-foreground">

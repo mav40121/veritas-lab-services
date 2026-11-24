@@ -68,6 +68,11 @@ const ALWAYS: Record<string, string> = {
   "POST /api/labs/:labId/qc/period-reviews/md-cosign": "co-sign the monthly QC review",
   "POST /api/labs/:labId/qc/md-cosign-setting": "change the QC co-sign requirement",
   "POST /api/labs/:labId/qc/corrective-actions/:id/resolve": "close out a QC corrective action",
+  // Support sets up an import's mapping and names; the laboratory puts the runs on its record, takes them back, and chooses its allowable errors.
+  "POST /api/labs/:labId/qc/file-imports": "import QC results",
+  "POST /api/labs/:labId/qc/file-imports/:id/undo": "take back a QC import",
+  "PUT /api/labs/:labId/qc/sigma/allowable-error": "set an allowable error",
+  "PUT /api/labs/:labId/qc/sigma/peer-mean": "record a peer mean",
   // VeritaComp
   "POST /api/labs/:labId/competency/assessments": "create a competency assessment",
   "PUT /api/labs/:labId/competency/assessments/:id": "edit a competency assessment",

@@ -8447,6 +8447,14 @@ try { (sqlite.prepare(`PRAGMA table_info(founding_lab_applications)`).all() as a
   // competency and verification already use); qc_results.instrument stays as
   // the display snapshot and the fallback for runs recorded before this.
   ensure("qc_results", "map_instrument_id", "ALTER TABLE qc_results ADD COLUMN map_instrument_id INTEGER");
+  // Runs read from a file (B12, 2026-11-24; server/qcFileImport.ts): which import, the file's row (and, in a wide file,
+  // its column), and the operator the file names, as text. operator_user_id stays empty: whoever imported didn't run it.
+  ensure("qc_results", "import_id",       "ALTER TABLE qc_results ADD COLUMN import_id INTEGER");
+  ensure("qc_results", "import_row",      "ALTER TABLE qc_results ADD COLUMN import_row INTEGER");
+  ensure("qc_results", "import_column",   "ALTER TABLE qc_results ADD COLUMN import_column TEXT");
+  ensure("qc_results", "import_operator", "ALTER TABLE qc_results ADD COLUMN import_operator TEXT");
+  // 'import_undo' when the run was voided by taking its import back; empty when a person voided this run.
+  ensure("qc_results", "void_source",     "ALTER TABLE qc_results ADD COLUMN void_source TEXT");
   // Close-out of a corrective action: what fixed it, who closed it, when.
   // Recorded once and never edited (it is part of the QC record).
   ensure("qc_corrective_actions", "resolution_notes",    "ALTER TABLE qc_corrective_actions ADD COLUMN resolution_notes TEXT");
@@ -8454,6 +8462,104 @@ try { (sqlite.prepare(`PRAGMA table_info(founding_lab_applications)`).all() as a
   ensure("qc_corrective_actions", "resolved_by_name",    "ALTER TABLE qc_corrective_actions ADD COLUMN resolved_by_name TEXT");
   ensure("qc_corrective_actions", "resolved_at",         "ALTER TABLE qc_corrective_actions ADD COLUMN resolved_at TEXT");
 }
+
+// VeritaQC file import and sigma metric (B12, 2026-11-24; server/qcFileImport.ts, server/qcSigma.ts). The file itself is never
+// kept: an import row holds its name, its SHA-256 and the row numbers that were left out.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS qc_file_imports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    file_name TEXT NOT NULL,
+    file_sha256 TEXT NOT NULL,
+    mapping_name TEXT,
+    mapping_json TEXT NOT NULL,
+    imported_by_user_id INTEGER NOT NULL,
+    imported_by_name TEXT NOT NULL,
+    imported_at TEXT NOT NULL,
+    run_count INTEGER NOT NULL DEFAULT 0,
+    duplicate_count INTEGER NOT NULL DEFAULT 0,
+    unplaced_count INTEGER NOT NULL DEFAULT 0,
+    duplicate_rows_json TEXT,
+    unplaced_rows_json TEXT,
+    undone_at TEXT,
+    undone_by_user_id INTEGER,
+    undone_by_name TEXT,
+    undo_reason TEXT,
+    undone_count INTEGER,
+    FOREIGN KEY (lab_id) REFERENCES labs(id)
+  );
+  CREATE TABLE IF NOT EXISTS qc_import_mappings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    config_json TEXT NOT NULL,
+    created_by_user_id INTEGER,
+    updated_by_user_id INTEGER,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (lab_id) REFERENCES labs(id)
+  );
+  CREATE TABLE IF NOT EXISTS qc_import_names (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    kind TEXT NOT NULL,
+    file_text TEXT NOT NULL,
+    file_key TEXT NOT NULL,
+    context_key TEXT NOT NULL DEFAULT '',
+    context_label TEXT,
+    target TEXT NOT NULL,
+    map_instrument_id INTEGER,
+    chosen_by_user_id INTEGER,
+    chosen_by_name TEXT,
+    chosen_at TEXT NOT NULL,
+    FOREIGN KEY (lab_id) REFERENCES labs(id),
+    UNIQUE(lab_id, kind, file_key, context_key)
+  );
+  CREATE TABLE IF NOT EXISTS qc_allowable_errors (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    analyte TEXT NOT NULL,
+    preset_label TEXT,
+    percent REAL,
+    units_value REAL,
+    unit TEXT,
+    set_by_user_id INTEGER,
+    set_by_name TEXT,
+    set_at TEXT NOT NULL,
+    FOREIGN KEY (lab_id) REFERENCES labs(id),
+    UNIQUE(lab_id, analyte)
+  );
+  CREATE TABLE IF NOT EXISTS qc_peer_means (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    control_lot_id INTEGER NOT NULL,
+    peer_mean REAL NOT NULL,
+    source_note TEXT,
+    set_by_user_id INTEGER,
+    set_by_name TEXT,
+    set_at TEXT NOT NULL,
+    FOREIGN KEY (lab_id) REFERENCES labs(id),
+    FOREIGN KEY (control_lot_id) REFERENCES qc_control_lots(id),
+    UNIQUE(lab_id, control_lot_id)
+  );
+`);
+{
+  const ensure = (table: string, have: any[], cols: ReadonlyArray<readonly [string, string]>) => {
+    for (const [col, type] of cols) { try { if (!have.some((c) => c.name === col)) sqlite.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${type}`); } catch {} }
+  };
+  ensure("qc_file_imports", sqlite.prepare("PRAGMA table_info(qc_file_imports)").all() as any[], [["mapping_name", "TEXT"], ["duplicate_count", "INTEGER NOT NULL DEFAULT 0"],
+    ["unplaced_count", "INTEGER NOT NULL DEFAULT 0"], ["duplicate_rows_json", "TEXT"], ["unplaced_rows_json", "TEXT"], ["undone_at", "TEXT"], ["undone_by_user_id", "INTEGER"],
+    ["undone_by_name", "TEXT"], ["undo_reason", "TEXT"], ["undone_count", "INTEGER"]]);
+  ensure("qc_import_mappings", sqlite.prepare("PRAGMA table_info(qc_import_mappings)").all() as any[], [["created_by_user_id", "INTEGER"], ["updated_by_user_id", "INTEGER"]]);
+  ensure("qc_import_names", sqlite.prepare("PRAGMA table_info(qc_import_names)").all() as any[], [["context_key", "TEXT NOT NULL DEFAULT ''"], ["context_label", "TEXT"],
+    ["map_instrument_id", "INTEGER"], ["chosen_by_user_id", "INTEGER"], ["chosen_by_name", "TEXT"]]);
+  ensure("qc_allowable_errors", sqlite.prepare("PRAGMA table_info(qc_allowable_errors)").all() as any[], [["preset_label", "TEXT"], ["percent", "REAL"], ["units_value", "REAL"],
+    ["unit", "TEXT"], ["set_by_user_id", "INTEGER"], ["set_by_name", "TEXT"]]);
+  ensure("qc_peer_means", sqlite.prepare("PRAGMA table_info(qc_peer_means)").all() as any[], [["source_note", "TEXT"], ["set_by_user_id", "INTEGER"], ["set_by_name", "TEXT"]]);
+}
+try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_qc_import_mappings_name ON qc_import_mappings(lab_id, name COLLATE NOCASE)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_qc_file_imports_lab ON qc_file_imports(lab_id, id)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_qc_results_import ON qc_results(import_id)`); } catch {}
 
 // VeritaQC indexes for the read paths Phase 1 will hit hardest.
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_qc_control_lots_lab ON qc_control_lots(lab_id, status)`); } catch {}

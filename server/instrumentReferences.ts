@@ -22,6 +22,7 @@ export const INSTRUMENT_REFERENCES: Array<{ table: string; column: string; what:
   { table: "veritacheck_verifications", column: "map_instrument_id", what: "VeritaCheck instrument verifications" },
   { table: "lab_equipment", column: "map_instrument_id", what: "VeritaMaintain equipment linked to the map" },
   { table: "qc_results", column: "map_instrument_id", what: "VeritaQC runs" },
+  { table: "qc_import_names", column: "map_instrument_id", what: "VeritaQC file import names" },
 ];
 
 export interface InstrumentReferences {
