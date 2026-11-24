@@ -5,7 +5,7 @@
 // instrument was out of service the whole day. Which days it was due is what was in force on that day, so a change to the days never
 // rewrites the days before it, and a record on a day it wasn't due counts as done and is never a problem. Any other schedule is a problem when its due date has passed and nothing is recorded. The first schedule's own
 // "PM was due" line stays where it was, in the review.
-import { daysInForce, dueOnDay, frequencyLabel, missedDays } from "../shared/equipmentSchedules";
+import { daysInForce, dueOnDay, frequencyLabel, missedDays, parsePastSpans, type DailySpan } from "../shared/equipmentSchedules";
 import { addDays } from "../shared/equipmentPm";
 import { completionsBetween, type ScheduleRow } from "./equipmentScheduleData";
 
@@ -26,20 +26,22 @@ export function scheduleMonth(sqlite: Sqlite, labId: number, eq: any, o: { first
   const out: ScheduleMonth = { lines: [], problems: [], notes: [], summary: [] };
   for (const s of rows) {
     if (!s.active && (!s.ended_on || s.ended_on < o.first)) continue;
-    const done = completionsBetween(sqlite, labId, s.id, o.first, o.last).filter((c) => !c.carried_from_lab_id || s.frequency === "daily");
+    // Each stretch it owed a daily record in this month: the ones before it was resumed or changed frequency, and the one it is in.
+    const spans: DailySpan[] = parsePastSpans(s.past_spans).filter((x) => x.to >= o.first && x.from <= o.last);
+    if (s.frequency === "daily") spans.push({ from: s.starts_on || String(s.created_at || "").slice(0, 10), to: s.ended_on || "9999-12-31", days_of_week: s.days_of_week, days_history: s.days_history });
+    const done = completionsBetween(sqlite, labId, s.id, o.first, o.last).filter((c) => !c.carried_from_lab_id || spans.length > 0);
     const done_days = [...new Set(done.map((c) => c.done_day as string))];
     const failed = done.reduce((n, c) => n + Number(c.failed_steps || 0), 0);
     let expected: number | null = null, missed: string[] = [];
-    if (s.frequency === "daily") {
-      const starts = s.starts_on || String(s.created_at || "").slice(0, 10);
-      const from = starts > o.first ? starts : o.first;
+    for (const span of spans) {
+      const from = span.from > o.first ? span.from : o.first;
       // Today isn't over. An ended schedule stops owing the day it ended, and a retired instrument the day it left service.
       let to = o.asOf === o.today ? addDays(o.today, -1) : o.asOf;
-      if (s.ended_on && s.ended_on < to) to = s.ended_on;
+      if (span.to < to) to = span.to;
       const left = retired ? eq.removed_from_service_date || String(eq.retired_at || eq.updated_at || "").slice(0, 10) : "";
       if (left && left < to) to = left;
-      const w = from <= to ? missedDays({ from, to, done: done_days, downtime: o.periods, dueOn: (day) => dueOnDay(daysInForce(s, day), day) }) : { expected: 0, missed: [] };
-      expected = w.expected; missed = w.missed;
+      const w = from <= to ? missedDays({ from, to, done: done_days, downtime: o.periods, dueOn: (day) => dueOnDay(daysInForce(span, day), day) }) : { expected: 0, missed: [] };
+      expected = (expected ?? 0) + w.expected; missed = [...missed, ...w.missed];
     }
     const overdue = s.frequency !== "daily" && !s.is_primary && s.active && !retired && s.next_due_date && s.next_due_date < o.asOf ? s.next_due_date : null;
     if (missed.length) out.problems.push(`${s.name}: ${plural(missed.length, "day")} with no record: ${dayList(missed)}`);

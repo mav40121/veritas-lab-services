@@ -4763,6 +4763,7 @@ sqlite.exec(`
     interval_days INTEGER,
     days_of_week TEXT,
     days_history TEXT,
+    past_spans TEXT,
     next_due_date TEXT,
     recipients_json TEXT NOT NULL DEFAULT '[]',
     sop_document_id INTEGER,
@@ -4858,7 +4859,7 @@ sqlite.exec(`
     // days_of_week: the days a daily schedule is due, "1,2,3,4,5" (0 = Sunday); empty is every day. days_history: a small JSON list on the row,
     // [{"from": day, "days": "..."}], written only when the days change, so the days before a change are judged by what was in force then. It
     // is on the row rather than a table of its own because it belongs to one schedule, is read with it, and goes wherever the row goes.
-    for (const [c, t] of [["days_of_week", "TEXT"], ["days_history", "TEXT"], ["recipients_json", "TEXT NOT NULL DEFAULT '[]'"], ["sop_document_id", "INTEGER"], ["is_primary", "INTEGER NOT NULL DEFAULT 0"], ["active", "INTEGER NOT NULL DEFAULT 1"], ["starts_on", "TEXT"],
+    for (const [c, t] of [["days_of_week", "TEXT"], ["days_history", "TEXT"], ["past_spans", "TEXT"], ["recipients_json", "TEXT NOT NULL DEFAULT '[]'"], ["sop_document_id", "INTEGER"], ["is_primary", "INTEGER NOT NULL DEFAULT 0"], ["active", "INTEGER NOT NULL DEFAULT 1"], ["starts_on", "TEXT"],
       ["ended_on", "TEXT"], ["ended_at", "TEXT"], ["ended_by_user_id", "INTEGER"], ["ended_by_name", "TEXT"], ["end_reason", "TEXT"], ["created_by_user_id", "INTEGER"], ["created_by_name", "TEXT"]] as const) {
       if (!sc.includes(c)) { try { sqlite.exec(`ALTER TABLE equipment_schedules ADD COLUMN ${c} ${t}`); } catch {} }
     }

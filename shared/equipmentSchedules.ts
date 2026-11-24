@@ -117,6 +117,22 @@ export function withDaysChange(s: { days_of_week?: string | null; days_history?:
   return list.length > 1 ? JSON.stringify(list) : null;
 }
 
+/** A stretch of days a schedule owed a daily record before it was ended and resumed, or moved to another frequency. */
+export interface DailySpan { from: string; to: string; days_of_week: string | null; days_history: string | null }
+export function parsePastSpans(stored: string | null | undefined): DailySpan[] {
+  try {
+    const list = JSON.parse(stored || "[]");
+    return Array.isArray(list) ? list.filter((x) => x && typeof x.from === "string" && typeof x.to === "string").map((x) => ({ from: x.from, to: x.to, days_of_week: x.days_of_week ?? null, days_history: x.days_history ?? null })) : [];
+  } catch { return []; }
+}
+
+/** The earlier stretches once a daily schedule stops owing records after `to`, so its missed days stay on an unsigned review. */
+export function withPastSpan(s: { frequency: string; starts_on?: string | null; created_at?: string | null; days_of_week?: string | null; days_history?: string | null; past_spans?: string | null }, to: string): string | null {
+  const from = s.starts_on || String(s.created_at || "").slice(0, 10);
+  if (s.frequency !== "daily" || !from || to < from) return s.past_spans ?? null;
+  return JSON.stringify([...parsePastSpans(s.past_spans), { from, to, days_of_week: s.days_of_week ?? null, days_history: s.days_history ?? null }]);
+}
+
 /** "Every 90 days", "Monthly", "Daily, Monday to Friday". */
 export function frequencyLabel(frequency: string, intervalDays?: number | null, daysOfWeek?: string | null): string {
   if (frequency === "daily" && parseDays(daysOfWeek)) return `Daily, ${daysLabel(daysOfWeek)}`;

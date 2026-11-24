@@ -937,7 +937,7 @@ export function registerEquipmentRoutes(app: Express, deps: {
       counts.events = events.length;
       // Its schedules and checklists go on there, starting that day, reminding that lab's list; what was completed here goes along read-only.
       const schedules = sqlite().prepare("SELECT * FROM equipment_schedules WHERE equipment_id = ? AND lab_id = ? ORDER BY id").all(eq.id, eq.lab_id) as any[];
-      const scheduleIds = copyRows(sqlite(), "equipment_schedules", schedules, (r) => ({ lab_id: target.id, equipment_id: newId, recipients_json: "[]", sop_document_id: null, starts_on: labToday(labTimeZoneById(sqlite(), target.id)), days_history: null }));
+      const scheduleIds = copyRows(sqlite(), "equipment_schedules", schedules, (r) => ({ lab_id: target.id, equipment_id: newId, recipients_json: "[]", sop_document_id: null, starts_on: labToday(labTimeZoneById(sqlite(), target.id)), days_history: null, past_spans: null }));
       const versions = sqlite().prepare("SELECT * FROM equipment_checklist_versions WHERE equipment_id = ? AND lab_id = ? ORDER BY id").all(eq.id, eq.lab_id) as any[];
       const versionIds = copyRows(sqlite(), "equipment_checklist_versions", versions, (r) => ({ lab_id: target.id, equipment_id: newId, schedule_id: scheduleIds.get(r.schedule_id) ?? null }));
       const steps = sqlite().prepare("SELECT s.* FROM equipment_checklist_steps s JOIN equipment_checklist_versions v ON v.id = s.version_id WHERE v.equipment_id = ? AND v.lab_id = ? ORDER BY s.id").all(eq.id, eq.lab_id) as any[];

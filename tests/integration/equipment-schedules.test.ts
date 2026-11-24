@@ -440,6 +440,16 @@ async function main() {
     await kPut(wk.id, { days_of_week: [2] });
     check("7b. a later change rewrites no day before it", (await kItem()).summary.schedules.find((x: any) => x.name === "Changed part way")?.missed_days === 26 && (await kItem()).summary.schedules.find((x: any) => x.name === "Weekday check")?.missed_days === 1);
     check("7b. and the signed month is exactly as it was signed", JSON.stringify((await kItem()).review) === kSigned);
+    // Ending it and starting it again, or moving it to another frequency, keeps the days it owed before
+    const midMissed = async () => (await kItem()).summary.schedules.find((x: any) => x.name === "Changed part way")?.missed_days;
+    const midProblem = async () => (await kItem()).problems.some((p: string) => p.startsWith("Changed part way: 26 days with no record"));
+    await call("POST", `${KS}/${mid.id}/end`, { reason: "Trial" }, K.token);
+    check("7c. ended, the month still shows the days it owed", (await midMissed()) === 26 && (await midProblem()));
+    const midBack = await call("POST", `${KS}/${mid.id}/resume`, {}, K.token);
+    check("7c. started again, the month still shows them, and it owes from today", midBack.status === 200 && (await midMissed()) === 26 && (await midProblem()) && sRow(mid.id).starts_on === kToday, JSON.stringify([await midMissed(), sRow(mid.id).past_spans]));
+    await call("POST", `${KS}/${mid.id}/end`, { reason: "Trial" }, K.token);
+    await call("POST", `${KS}/${mid.id}/resume`, {}, K.token);
+    check("7c. twice in a day counts nothing twice", (await midMissed()) === 26 && JSON.parse(sRow(mid.id).past_spans).length === 1, sRow(mid.id).past_spans);
     // The due date goes with the days
     await kDone(every.id, kToday);
     const shrunk = await kPut(every.id, { days_of_week: allBut(wd(kd(1))) });
@@ -467,6 +477,9 @@ async function main() {
       return rows;
     })();
     check("7b. the workbook says the days", kBook.some((r) => /\|Changed part way\|Function check\|Daily, Mon\|/.test(r)), kBook.join("\n"));
+    await kPut(mid.id, { frequency: "weekly" });
+    check("7c. moved to weekly, the month still shows them", sRow(mid.id).frequency === "weekly" && (await midMissed()) === 26 && (await midProblem()));
+    check("7c. and the signed month is exactly as it was signed", JSON.stringify((await kItem()).review) === kSigned);
     // No reminder on a day it isn't due
     const kMail: any[] = [];
     equipmentMailer.ready = () => true; equipmentMailer.send = async (m) => { kMail.push(m); };
@@ -520,7 +533,7 @@ async function main() {
     check("9. its schedules go along with their due dates, starting that day, reminding that lab's list, with no SOP link", mv.status === 200 && there.length === (sqlite.prepare("SELECT COUNT(*) AS n FROM equipment_schedules WHERE equipment_id = ?").get(an) as any).n && there.every((x) => x.sop === null && x.recipients.length === 0 && x.starts_on === bToday)
       && there.find((x) => x.is_primary)?.next_due_date === eqRow(an).next_due_date, JSON.stringify(there.map((x) => [x.name, x.starts_on, x.sop])));
     const bDaily = there.find((x) => x.name === "Daily maintenance");
-    check("9. the days it is due go along", bDaily.days_of_week === "1,2,3,4,5" && bDaily.days_history === null && bDaily.frequency_label === "Daily, Monday to Friday", JSON.stringify([bDaily.days_of_week, bDaily.days_history]));
+    check("9. the days it is due go along", bDaily.days_of_week === "1,2,3,4,5" && bDaily.days_history === null && bDaily.past_spans === null && bDaily.frequency_label === "Daily, Monday to Friday", JSON.stringify([bDaily.days_of_week, bDaily.days_history]));
     check("9. the current checklist goes along", bDaily.checklist?.version_no === 2 && bDaily.checklist.steps.length === 2);
     const carried = (await call("GET", `${LB}/equipment/${mv.body.equipment_id}/schedules/${bDaily.id}/completions`, undefined, B.token)).body;
     check("9. what was completed goes along, marked, with its answers", carried.length === 1 && carried[0].carried_from_lab_id === A.labId && carried[0].results.length === 3 && carried[0].checklist_version_no === 1);

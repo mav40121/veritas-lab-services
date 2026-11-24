@@ -21,7 +21,8 @@ import { approvedReadVersionId } from "./policyApprovedVersion";
 import { sendApprovedDocument } from "./approvedDocumentView";
 import { EMAIL_RE } from "./labGroups";
 import { isYmd } from "../shared/stainLogRules";
-import { alignDue, cleanDays, cleanSteps, dueWithDays, firstDue, frequencyLabel, isFrequency, isScheduleType, judgeStep, sameSteps, scheduleStatus, withDaysChange, type StepOutcome } from "../shared/equipmentSchedules";
+import { alignDue, cleanDays, cleanSteps, dueWithDays, firstDue, frequencyLabel, isFrequency, isScheduleType, judgeStep, sameSteps, scheduleStatus, withDaysChange, withPastSpan, type StepOutcome } from "../shared/equipmentSchedules";
+import { addDays } from "../shared/equipmentPm";
 import { COMPLETION_JOIN, completionsBetween, currentChecklist, mirrorPrimary, primaryOf, STANDING_COMPLETION, type ScheduleRow } from "./equipmentScheduleData";
 
 type Sqlite = any;
@@ -192,9 +193,11 @@ export function registerEquipmentScheduleRoutes(app: Express, ctx: ScheduleRoute
     const starts = v.frequency === "daily" && s.frequency !== "daily" ? startsOn(v) : s.starts_on;
     // A change to its days takes effect today; the history keeps what was in force before, for the review of those days.
     const days_history = v.frequency !== "daily" || s.frequency !== "daily" ? null : v.days_of_week !== s.days_of_week ? withDaysChange(s, v.days_of_week, labToday()) : s.days_history;
+    // One that stops being daily keeps the days it owed, through yesterday.
+    const past_spans = s.frequency === "daily" && v.frequency !== "daily" ? withPastSpan(s, addDays(labToday(), -1)) : s.past_spans ?? null;
     sqlite().transaction(() => {
-      sqlite().prepare("UPDATE equipment_schedules SET name=?, schedule_type=?, frequency=?, interval_days=?, days_of_week=?, days_history=?, next_due_date=?, recipients_json=?, sop_document_id=?, starts_on=?, updated_at=? WHERE id=?")
-        .run(v.name, v.schedule_type, v.frequency, v.interval_days, v.days_of_week, days_history, v.next_due_date, v.recipients_json, v.sop_document_id, starts, now, s.id);
+      sqlite().prepare("UPDATE equipment_schedules SET name=?, schedule_type=?, frequency=?, interval_days=?, days_of_week=?, days_history=?, past_spans=?, next_due_date=?, recipients_json=?, sop_document_id=?, starts_on=?, updated_at=? WHERE id=?")
+        .run(v.name, v.schedule_type, v.frequency, v.interval_days, v.days_of_week, days_history, past_spans, v.next_due_date, v.recipients_json, v.sop_document_id, starts, now, s.id);
       const row = sqlite().prepare("SELECT * FROM equipment_schedules WHERE id = ?").get(s.id) as ScheduleRow;
       if (row.is_primary) mirrorPrimary(sqlite(), row, now);
     })();
@@ -231,10 +234,13 @@ export function registerEquipmentScheduleRoutes(app: Express, ctx: ScheduleRoute
     if (!s) return noSchedule(res);
     if (s.active) return res.status(409).json({ error: "This schedule hasn't ended", code: "NOT_ENDED" });
     const now = new Date().toISOString();
+    // What it owed before it ended stays owed on that month's review; the time between isn't.
+    const yesterday = addDays(labToday(), -1);
+    const past_spans = withPastSpan(s, s.ended_on && s.ended_on < yesterday ? s.ended_on : yesterday);
     sqlite().transaction(() => {
       const other = primaryOf(sqlite(), eq.lab_id, eq.id);
-      sqlite().prepare("UPDATE equipment_schedules SET active = 1, ended_on = NULL, ended_at = NULL, ended_by_user_id = NULL, ended_by_name = NULL, end_reason = NULL, starts_on = ?, days_history = NULL, is_primary = ?, updated_at = ? WHERE id = ?")
-        .run(labToday(), s.is_primary && !other ? 1 : 0, now, s.id);
+      sqlite().prepare("UPDATE equipment_schedules SET active = 1, ended_on = NULL, ended_at = NULL, ended_by_user_id = NULL, ended_by_name = NULL, end_reason = NULL, starts_on = ?, days_history = NULL, past_spans = ?, is_primary = ?, updated_at = ? WHERE id = ?")
+        .run(labToday(), past_spans, s.is_primary && !other ? 1 : 0, now, s.id);
       const row = sqlite().prepare("SELECT * FROM equipment_schedules WHERE id = ?").get(s.id) as ScheduleRow;
       if (row.is_primary) mirrorPrimary(sqlite(), row, now);
     })();
