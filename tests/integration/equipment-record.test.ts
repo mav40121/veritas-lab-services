@@ -308,6 +308,14 @@ async function main() {
     sqlite.prepare(`INSERT INTO user_seats (owner_user_id, seat_email, seat_user_id, invited_at, accepted_at, status, permissions, invite_token, lab_id, seat_type) VALUES (?, ?, ?, ?, ?, 'active', '{"mode":"edit_all"}', ?, ?, 'active')`).run(B.userId, editor.email, editor.userId, now, now, `equip-both-${Date.now()}`, B.labId);
     const targets = await call("GET", `${L}/equipment/${E2}/move-targets`, undefined, editor.token);
     check("8. someone who can edit both sees that lab and no other", targets.body.length === 1 && targets.body[0].id === B.labId, JSON.stringify(targets.body));
+    // Someone who can edit in a lab of no organization, and in one of another: neither is a place to move it.
+    const solo = await mkLab("solo"), other = await mkLab("other");
+    const org2 = Number(sqlite.prepare("INSERT INTO organizations (name, billing_owner_user_id) VALUES ('Another System', ?)").run(other.userId).lastInsertRowid);
+    sqlite.prepare("UPDATE labs SET organization_id = ?, is_demo = 0 WHERE id = ?").run(org2, other.labId);
+    for (const l of [solo, other]) sqlite.prepare("INSERT INTO lab_members (lab_id, user_id, role, status, is_primary_lab, accepted_at, created_at, updated_at) VALUES (?, ?, 'admin', 'active', 0, ?, ?, ?)").run(l.labId, A.userId, now, now, now);
+    const ownerTargets = (await call("GET", `${L}/equipment/${E2}/move-targets`, undefined, A.token)).body as any[];
+    check("8. editing in a lab outside the organization doesn't make it a place to move to", !ownerTargets.some((t) => t.id === solo.labId || t.id === other.labId)
+      && (await call("POST", M, { to_lab_id: solo.labId, reason: "x" }, A.token)).body.code === "MOVE_NOT_ALLOWED" && (await call("POST", M, { to_lab_id: other.labId, reason: "x" }, A.token)).body.code === "MOVE_NOT_ALLOWED", JSON.stringify(ownerTargets));
     check("8. a lab outside the organization is refused", (await call("POST", M, { to_lab_id: X.labId, reason: "x" }, editor.token)).body.code === "MOVE_NOT_ALLOWED" && (await call("POST", M, { to_lab_id: A.labId, reason: "x" }, editor.token)).body.code === "MOVE_NOT_ALLOWED");
     sqlite.prepare("UPDATE labs SET subscription_expires_at = '2026-01-01T00:00:00.000Z' WHERE id = ?").run(B.labId);
     const orgExp = (sqlite.prepare("SELECT * FROM organizations WHERE id = ?").get(org) as any);

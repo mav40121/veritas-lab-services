@@ -20,6 +20,7 @@
 // The instrument's own record (B9, 2026-11-24; server/equipment.ts): standing entries only (a corrected or voided one is replaced by what
 // stands, and a correction or void made after signing shows as added after the review), the files on them, and time out of service. A
 // moved instrument's history stays with the lab that made it, so those months are reviewed there and not again in the new lab.
+// Its schedules (B10; server/equipmentScheduleReview.ts): a day a daily schedule has no record, and any other schedule past due, are problems.
 import type { Express } from "express";
 import bcrypt from "bcryptjs";
 import { db } from "./db";
@@ -31,6 +32,7 @@ import { staffOwnScope } from "./competencySelfEntry";
 import { positionLabel, type DelegationPosition } from "./directorDelegation";
 import { MANUAL_ITEM_TYPE, instrumentStainMonth, manualStainMonth } from "./stainLog";
 import { durationLabel, minutesInMonth } from "../shared/equipmentPm";
+import { scheduleMonth, scheduleReportRows } from "./equipmentScheduleReview";
 
 const GATE = "equipment_record_review" as const;
 const isMonth = (v: any): v is string => typeof v === "string" && /^\d{4}-(0[1-9]|1[0-2])$/.test(v);
@@ -118,7 +120,10 @@ export function monthReviewItems(sqlite: any, labId: number, month: string) {
     const createdDay = String(e.created_at || "").slice(0, 10);
     const stain = instrumentStainMonth(sqlite, labId, e.id, month, today);
     const stainHeld = stain.entries.length + stain.voided.length;
-    if (!reviewOf("equipment", e.id) && !events.length && !stainHeld && (retired || createdDay > last)) continue;
+    const scheduled = scheduleMonth(sqlite, labId, e, { first, last, asOf, today, periods });
+    // An instrument retired during the month still answers for a daily record it owed before it left.
+    const leftOwing = retired && String(e.removed_from_service_date || "").slice(0, 7) === month && scheduled.problems.length > 0;
+    if (!reviewOf("equipment", e.id) && !events.length && !stainHeld && ((retired && !leftOwing) || createdDay > last)) continue;
     // A correction is made later than the entry it corrects, so it isn't itself a late entry.
     const late = events.filter((v) => !v.corrects_event_id && String(v.created_at || "").slice(0, 10) > addDays(v.event_date, 2)).length;
     const corrected = events.filter((v) => v.corrects_event_id).length;
@@ -126,8 +131,10 @@ export function monthReviewItems(sqlite: any, labId: number, month: string) {
     const waiting = events.filter((v) => v.completes_pm === 1 && v.pm_complete === 0).length;
     const troubleshooting = events.filter((v) => v.event_type === "troubleshooting").length;
     const solutions = events.filter((v) => v.event_type === "solution_change").length;
-    const overdue = e.next_due_date && e.next_due_date < asOf && !retired ? e.next_due_date : null;
-    const problems = [...(overdue ? [`PM was due ${overdue} and is not recorded as done`] : []), ...stain.findings.problems];
+    // A first schedule that is daily is judged by its days, below, not by its due date.
+    const dailyPm = scheduled.lines.some((l) => l.schedule.is_primary && l.schedule.active && l.schedule.frequency === "daily");
+    const overdue = e.next_due_date && e.next_due_date < asOf && !retired && !dailyPm ? e.next_due_date : null;
+    const problems = [...(overdue ? [`PM was due ${overdue} and is not recorded as done`] : []), ...scheduled.problems, ...stain.findings.problems];
     const notes = [
       events.length ? plural(events.length, "entry", "entries") : stainHeld ? "" : "No entries this month",
       solutions ? plural(solutions, "solution change") : "",
@@ -138,12 +145,14 @@ export function monthReviewItems(sqlite: any, labId: number, month: string) {
       attached ? `${plural(attached, "file")} attached` : "",
       waiting ? `${plural(waiting, "vendor PM", "vendor PMs")} waiting for the vendor report` : "",
       downMinutes ? `Out of service ${durationLabel(downMinutes)}` : "",
+      ...scheduled.notes,
       ...stain.findings.notes,
     ].filter(Boolean);
     const summary = {
       entries: events.length, solution_changes: solutions, troubleshooting, entered_late: late, pm_overdue: overdue,
       ...(corrected ? { corrected } : {}), ...(voidedEvents ? { voided_entries: voidedEvents } : {}), ...(attached ? { files_attached: attached } : {}),
-      ...(waiting ? { vendor_reports_waiting: waiting } : {}), ...(downMinutes ? { out_of_service_minutes: downMinutes } : {}), ...(stain.has_log ? stain.findings.summary : {}),
+      ...(waiting ? { vendor_reports_waiting: waiting } : {}), ...(downMinutes ? { out_of_service_minutes: downMinutes } : {}),
+      ...(scheduled.summary.length ? { schedules: scheduled.summary } : {}), ...(stain.has_log ? stain.findings.summary : {}),
     };
     finish("equipment", e.id, e.instrument_name, e.location || null, !!retired, summary, problems, notes,
       [...events.map((v) => v.created_at), ...monthEvents.filter((v) => v.voided_at).map((v) => v.voided_at), ...files.map((f) => f.uploaded_at), ...files.filter((f) => f.removed_at).map((f) => f.removed_at), ...stain.entry_times]);
@@ -309,7 +318,11 @@ export function registerMaintainRecordReviewRoutes(app: Express, authMiddleware:
         WHERE v.lab_id = ? AND substr(v.event_date, 1, 7) = ? AND v.superseded_by_event_id IS NULL AND v.carried_from_lab_id IS NULL ORDER BY e.instrument_name, v.event_date, v.id`
     ).all(labId, month) as any[];
     // A limited Staff login reads what was typed, as on paper, but not a coworker's sign-in name (server/equipment.ts).
-    if (staffOwnScope(db0, req.userId, labId, "veritamaintain")) for (const e of events) { e.logged_by_name = null; e.corrected_by_name = null; }
+    const limited = !!staffOwnScope(db0, req.userId, labId, "veritamaintain");
+    if (limited) for (const e of events) { e.logged_by_name = null; e.corrected_by_name = null; }
+    const last = lastOfMonth(month);
+    const scheduled = scheduleReportRows(db0, labId, { first: `${month}-01`, last, asOf: last < today ? last : today, today });
+    if (limited) for (const a of scheduled.answers) if (a.completed_by_user_id !== req.userId) a.completed_by_name = null;
     const nowLocal = labLocalDate(new Date().toISOString(), true).replace(" ", "T");
     const downtime = (db0.prepare(
       `SELECT e.instrument_name, d.down_from, d.down_until, d.reason, d.return_note FROM equipment_downtime d JOIN lab_equipment e ON e.id = d.equipment_id
@@ -322,7 +335,7 @@ export function registerMaintainRecordReviewRoutes(app: Express, authMiddleware:
     ).all(labId, month) as any[];
     const manualEntries = db0.prepare("SELECT log_date, specimen_type, result, test_slide, initials, comments, voided_at, void_reason FROM stain_manual_entries WHERE lab_id = ? AND substr(log_date, 1, 7) = ? ORDER BY log_date, id").all(labId, month) as any[];
     const { generateMaintainReviewReport } = await import("./maintainReviewReport");
-    const buf = await generateMaintainReviewReport({ month, items, readings, events, stainEntries, manualEntries, downtime }, { labName: labRow?.lab_name || "Laboratory", cliaNumber: labRow?.clia_number || "Not on file" });
+    const buf = await generateMaintainReviewReport({ month, items, readings, events, stainEntries, manualEntries, downtime, schedules: scheduled.schedules, answers: scheduled.answers }, { labName: labRow?.lab_name || "Laboratory", cliaNumber: labRow?.clia_number || "Not on file" });
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.setHeader("Content-Disposition", `attachment; filename="VeritaMaintain_Monthly_Review_${month}.xlsx"`);
     res.send(buf);

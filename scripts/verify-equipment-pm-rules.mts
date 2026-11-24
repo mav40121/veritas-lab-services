@@ -3,8 +3,13 @@
 // Receipt for shared/equipmentPm.ts (B9, 2026-11-24): what an event does to the PM due date, and the out of service arithmetic.
 // Imports the real functions. Run: npx tsx scripts/verify-equipment-pm-rules.mts
 import {
-  addDays, canCompletePm, completesPmByDefault, durationLabel, isLocalMinute, minutesBetween, minutesInMonth, outAllDay, planPmDue,
+  addDays, canCompletePm, completesPmByDefault, durationLabel, isLocalMinute, minutesBetween, minutesInMonth, outAllDay,
 } from "../shared/equipmentPm";
+import { planScheduleDue } from "../shared/equipmentSchedules";
+
+// The PM is the instrument's first schedule (B10); a plain interval is "every N days".
+const planPmDue = (o: { currentDue: string | null; eventDate: string; intervalDays: number | null; typedDue?: string | null; allowEarlier?: boolean }) =>
+  planScheduleDue({ currentDue: o.currentDue, frequency: "every_n_days", intervalDays: o.intervalDays, doneOn: o.eventDate, typedDue: o.typedDue, allowEarlier: o.allowEarlier });
 
 let fails = 0;
 const ok = (label: string, cond: boolean, detail = "") => { console.log(`${cond ? "PASS" : "FAIL"}  ${label}${cond ? "" : "  :: " + detail}`); if (!cond) fails++; };

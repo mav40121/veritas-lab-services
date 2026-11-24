@@ -107,6 +107,7 @@ const ALWAYS: Record<string, string> = {
   "DELETE /api/labs/:labId/veritapolicy/documents/:id/attestations/:assignmentId": "delete a policy attestation",
   // VeritaMaintain, VeritaResponse
   "POST /api/labs/:labId/equipment/:id/events": "log maintenance as performed",
+  "POST /api/labs/:labId/equipment/:id/schedules/:scheduleId/complete": "complete a maintenance schedule",
   "POST /api/labs/:labId/equipment/:id/events/:eventId/correct": "correct a maintenance entry",
   "POST /api/labs/:labId/equipment/:id/events/:eventId/void": "void a maintenance entry",
   // Attaching a vendor report can be what makes a vendor PM count as complete.
@@ -137,6 +138,8 @@ const IQCP_KEYS = ["approvedByName", "approved_by_name", "approved_by_user_id"];
 // Routes that both set things up AND sign: refused only when the request
 // carries a signature field.
 const WHEN_SIGNING: Record<string, { test: (b: any) => boolean; what: string }> = {
+  // The monthly review email goes out in the lab's name to its own medical director or designee.
+  "PUT /api/labs/:labId/equipment-settings": { test: (b) => !!b && b.review_due_email !== undefined, what: "turn the lab's review emails on or off" },
   "PUT /api/labs/:labId/staff/competency/:employeeId": { test: (b) => JSON.stringify(b || {}).includes("\"signed_by"), what: "sign a staff competency record" },
   "POST /api/labs/:labId/pt/aa-records": { test: (b) => anyKey(b, ["director_id", "director_reviewed_at"]), what: "record a director PT review" },
   "PUT /api/labs/:labId/pt/aa-records/:id": { test: (b) => anyKey(b, ["director_id", "director_reviewed_at"]), what: "record a director PT review" },

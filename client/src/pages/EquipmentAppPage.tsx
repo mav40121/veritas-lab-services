@@ -10,7 +10,6 @@ import { AssignStaffButton } from "@/components/InstrumentStaffAssignDialog";
 import { useLabRoute } from "@/hooks/useLabRoute";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { DecimalInput } from "@/components/ui/decimal-input";
 import { Label } from "@/components/ui/label";
@@ -25,9 +24,11 @@ import { useToast } from "@/hooks/use-toast";
 import { TemperatureLogsPanel } from "@/components/TemperatureLogsPanel";
 import { MonthlyRecordReviewPanel } from "@/components/MonthlyRecordReviewPanel";
 import { StainLogPanel } from "@/components/StainLogPanel";
-import { DocumentPicker, equipmentApi, sendJson, type Equipment } from "@/components/equipment/equipmentShared";
+import { DocumentPicker, DueBadge, equipmentApi, sendJson, type Equipment } from "@/components/equipment/equipmentShared";
 import { LogMaintenanceDialog } from "@/components/equipment/LogMaintenanceDialog";
 import { EquipmentHistoryDialog } from "@/components/equipment/EquipmentHistoryDialog";
+import { DueNowCard, EquipmentSchedulesDialog } from "@/components/equipment/EquipmentSchedulesDialog";
+import { frequencyLabel } from "@shared/equipmentSchedules";
 import { ContractFields, EquipmentRecordDialog, RetiredList, RetireDialog } from "@/components/equipment/EquipmentRecordDialog";
 
 // An analyzer on the lab's VeritaMap test menu (GET /veritacheck/lab-instruments).
@@ -39,13 +40,6 @@ interface MenuInstrument {
 }
 
 function todayIso() { return labTodayIso(); }
-
-function statusBadge(s: string) {
-  if (s === "overdue") return <Badge variant="outline" className="bg-red-500/10 text-red-700 border-red-500/20">Overdue</Badge>;
-  if (s === "due_soon") return <Badge variant="outline" className="bg-amber-500/10 text-amber-700 border-amber-500/20">Due soon</Badge>;
-  if (s === "ok") return <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 border-emerald-500/20">On schedule</Badge>;
-  return <Badge variant="outline" className="text-muted-foreground">No schedule</Badge>;
-}
 
 // MLC-1 Phase 2: equipment maintenance-due email-reminder settings. The nightly
 // engine (server/equipmentReminders.ts) reads this per lab.
@@ -92,7 +86,7 @@ function EquipmentRemindersPanel({ apiBase }: { apiBase: string }) {
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <div className="text-sm font-semibold">Maintenance-due email reminders</div>
-          <div className="text-xs text-muted-foreground mt-0.5">Email a digest of instruments approaching or overdue their next-due date. Overdue items repeat weekly until the maintenance is logged. Sent to the lab owner if no recipients are set.</div>
+          <div className="text-xs text-muted-foreground mt-0.5">Email a digest of every schedule approaching or past its due date. Overdue items repeat weekly until the maintenance is logged. Sent to the lab owner if no recipients are set; a schedule with its own list goes to that list.</div>
         </div>
         <label className="flex items-center gap-2 text-sm shrink-0"><input type="checkbox" checked={enabled} onChange={e => { setEnabled(e.target.checked); setSaved(false); }} /> Enabled</label>
       </div>
@@ -108,24 +102,35 @@ function EquipmentRemindersPanel({ apiBase }: { apiBase: string }) {
   );
 }
 
-// The lab's VeritaMaintain settings (B9): whether a vendor PM needs its report attached before it counts as complete.
-function MaintainSettingsPanel({ labId, settings, readOnly, onChanged }: { labId: number; settings: { require_vendor_report: boolean }; readOnly: boolean; onChanged: () => void }) {
+interface MaintainSettings { require_vendor_report: boolean; review_due_email: boolean; review_due_recipients?: number }
+
+// The lab's VeritaMaintain settings: whether a vendor PM needs its report attached before it counts as complete (B9), and the email when last
+// month's record review isn't signed by the 5th (B10). Both off until turned on.
+function MaintainSettingsPanel({ labId, settings, readOnly, onChanged }: { labId: number; settings: MaintainSettings; readOnly: boolean; onChanged: () => void }) {
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
-  async function set(v: boolean) {
+  const people = settings.review_due_recipients ?? 0;
+  async function set(body: Partial<MaintainSettings>, said: string) {
     setSaving(true);
     try {
-      const r = await sendJson(`${API_BASE}/api/labs/${labId}/equipment-settings`, "PUT", { require_vendor_report: v });
+      const r = await sendJson(`${API_BASE}/api/labs/${labId}/equipment-settings`, "PUT", body);
       if (!r.ok) { toast({ title: r.data.error || "Could not save", variant: "destructive" }); return; }
-      toast({ title: v ? "A vendor PM now needs its report attached" : "A vendor PM no longer needs its report attached" });
+      toast({ title: said });
       onChanged();
     } finally { setSaving(false); }
   }
   return (
     <div className="rounded-xl border border-dashed p-4 mb-4" data-testid="maintain-settings">
       <label className="flex items-start gap-2 text-sm">
-        <input type="checkbox" className="mt-1" checked={settings.require_vendor_report} disabled={saving || readOnly} onChange={(e) => set(e.target.checked)} data-testid="require-vendor-report" />
+        <input type="checkbox" className="mt-1" checked={settings.require_vendor_report} disabled={saving || readOnly} onChange={(e) => set({ require_vendor_report: e.target.checked }, e.target.checked ? "A vendor PM now needs its report attached" : "A vendor PM no longer needs its report attached")} data-testid="require-vendor-report" />
         <span><span className="font-semibold">Require an attached vendor report</span><span className="block text-xs text-muted-foreground">A PM done by a vendor counts as complete, and moves its due date, only once the vendor report is attached to it. Entries already complete stay as they are.</span></span>
+      </label>
+      <label className="flex items-start gap-2 text-sm mt-3">
+        <input type="checkbox" className="mt-1" checked={settings.review_due_email} disabled={saving || readOnly} onChange={(e) => set({ review_due_email: e.target.checked }, e.target.checked ? "Review emails are on" : "Review emails are off")} data-testid="review-due-email" />
+        <span>
+          <span className="font-semibold">Email when the monthly review is due</span>
+          <span className="block text-xs text-muted-foreground">Sent on the 5th, once, when last month still has a record nobody signed, to the medical director and to each designee named in a signed Letter of Delegation for this review. <span data-testid="review-due-recipients">{people === 0 ? "Nobody on file can be emailed yet." : people === 1 ? "1 person would be emailed." : `${people} people would be emailed.`}</span></span>
+        </span>
       </label>
     </div>
   );
@@ -179,7 +184,8 @@ export default function EquipmentAppPage() {
   const [retiring, setRetiring] = useState<Equipment | null>(null);
   const [retired, setRetired] = useState<Equipment[]>([]);
   const [showRetired, setShowRetired] = useState(false);
-  const [settings, setSettings] = useState({ require_vendor_report: false });
+  const [settings, setSettings] = useState<MaintainSettings>({ require_vendor_report: false, review_due_email: false });
+  const [schedulesFor, setSchedulesFor] = useState<Equipment | null>(null);
 
   async function loadSettings() {
     if (!activeLabId) return;
@@ -197,6 +203,7 @@ export default function EquipmentAppPage() {
       setLoadError(false);
       // An open dialog shows the row as it stands now (its due date may just have moved).
       setHistoryFor(h => (h ? rows.find(r => r.id === h.id) ?? h : h));
+      setSchedulesFor(h => (h ? rows.find(r => r.id === h.id) ?? h : h));
       const gone = await fetch(`${API_BASE}/api/labs/${activeLabId}/equipment?retired=1`, { headers: authHeaders() });
       if (gone.ok) setRetired(await gone.json());
     } catch (err) {
@@ -323,6 +330,8 @@ export default function EquipmentAppPage() {
         </div>
       )}
 
+      <DueNowCard labId={Number(activeLabId)} items={items} canRecord={canRecord} requireVendorReport={settings.require_vendor_report} onChanged={load} />
+
       <EquipmentRemindersPanel apiBase={`${API_BASE}/api/labs/${activeLabId}/equipment`} />
       <MaintainSettingsPanel labId={Number(activeLabId)} settings={settings} readOnly={isReadOnly} onChanged={loadSettings} />
 
@@ -364,12 +373,23 @@ export default function EquipmentAppPage() {
                         {e.awaiting_vendor_report ? <div className="text-xs font-medium text-amber-800 dark:text-amber-300" data-testid={`equip-waiting-${e.id}`}>{e.awaiting_vendor_report === 1 ? "A vendor PM is" : `${e.awaiting_vendor_report} vendor PMs are`} waiting for the vendor report</div> : null}
                       </td>
                       <td className="py-2 pr-2 text-muted-foreground">{e.location || "-"}</td>
-                      <td className="py-2 pr-2 text-muted-foreground">{e.pm_interval_days ? `${e.pm_interval_days} d` : "-"}</td>
-                      <td className="py-2 pr-2">{e.next_due_date || <span className="text-muted-foreground">-</span>}</td>
-                      <td className="py-2 pr-2">{statusBadge(e.maintenance_status)}</td>
+                      <td className="py-2 pr-2 text-muted-foreground">{(() => { const first = e.schedules?.find(x => x.is_primary); return first && first.frequency !== "manual" ? (first.frequency === "every_n_days" ? `${first.interval_days} d` : frequencyLabel(first.frequency)) : e.pm_interval_days ? `${e.pm_interval_days} d` : "-"; })()}</td>
+                      <td className="py-2 pr-2">
+                        {e.next_due_date ? <span className="whitespace-nowrap">{e.next_due_date}</span> : <span className="text-muted-foreground">-</span>}
+                        {(e.schedules ?? []).filter(x => !x.is_primary).length > 0 && (
+                          <div className="text-xs text-muted-foreground mt-0.5" data-testid={`equip-schedules-${e.id}`}>
+                            {(e.schedules ?? []).filter(x => !x.is_primary).slice(0, 4).map(x => (
+                              <div key={x.id} className={x.status === "overdue" ? "text-red-700 dark:text-red-400" : undefined}>{x.name}: {x.next_due_date || "no date"}</div>
+                            ))}
+                            {(e.schedules ?? []).filter(x => !x.is_primary).length > 4 && <div>and {(e.schedules ?? []).filter(x => !x.is_primary).length - 4} more</div>}
+                          </div>
+                        )}
+                      </td>
+                      <td className="py-2 pr-2"><DueBadge status={e.maintenance_status} /></td>
                       <td className="py-2 pr-2">
                         <div className="flex flex-wrap gap-1.5">
                           <Button size="sm" variant="outline" onClick={() => setLogFor(e)} disabled={!canRecord} data-testid={`equip-log-${e.id}`}>Log maintenance</Button>
+                          <Button size="sm" variant="ghost" onClick={() => setSchedulesFor(e)} data-testid={`equip-schedules-open-${e.id}`}>Schedules</Button>
                           <Button size="sm" variant="ghost" onClick={() => setHistoryFor(e)} data-testid={`equip-history-${e.id}`}>History</Button>
                           <Button size="sm" variant="ghost" onClick={() => setRecordFor(e.id)} data-testid={`equip-record-${e.id}`}>Record</Button>
                           {e.map_instrument_id ? (
@@ -420,7 +440,7 @@ export default function EquipmentAppPage() {
             <div><Label htmlFor="eq-serial">Serial number</Label><Input id="eq-serial" value={serial} onChange={e => setSerial(e.target.value)} /></div>
             <div><Label htmlFor="eq-loc">Location</Label><Input id="eq-loc" value={location} onChange={e => setLocation(e.target.value)} placeholder="e.g. Main lab bench 2" /></div>
             <div><Label htmlFor="eq-int">PM interval (days)</Label><Input id="eq-int" type="text" inputMode="decimal" min={1} value={interval} onChange={e => setInterval_(e.target.value)} placeholder="e.g. 365" /></div>
-            <div><Label htmlFor="eq-due">Next due date</Label><Input id="eq-due" type="date" value={nextDue} onChange={e => setNextDue(e.target.value)} /></div>
+            <div><Label htmlFor="eq-due">Next PM due date</Label><Input id="eq-due" type="date" value={nextDue} onChange={e => setNextDue(e.target.value)} /></div>
             <ContractFields vendor={vendor} setVendor={setVendor} contract={contract} setContract={setContract} placed={placed} setPlaced={setPlaced} />
             <div className="sm:col-span-2"><Label htmlFor="eq-ifu">IFU web address</Label><Input id="eq-ifu" value={ifuUrl} onChange={e => setIfuUrl(e.target.value)} placeholder="https://" /></div>
             <div className="sm:col-span-2">
@@ -455,6 +475,7 @@ export default function EquipmentAppPage() {
 
       <LogMaintenanceDialog labId={Number(activeLabId)} equipment={logFor} requireVendorReport={settings.require_vendor_report} onClose={() => setLogFor(null)} onSaved={load} />
       <EquipmentHistoryDialog labId={Number(activeLabId)} equipment={historyFor} canEdit={!isReadOnly} canRecord={canRecord} onClose={() => setHistoryFor(null)} onChanged={load} />
+      <EquipmentSchedulesDialog labId={Number(activeLabId)} equipment={schedulesFor} canSetup={!isReadOnly} canRecord={canRecord} requireVendorReport={settings.require_vendor_report} onClose={() => setSchedulesFor(null)} onChanged={load} />
       <EquipmentRecordDialog labId={Number(activeLabId)} equipmentId={recordFor} canSetup={!isReadOnly} onClose={() => setRecordFor(null)} onChanged={load} />
       <RetireDialog labId={Number(activeLabId)} equipment={retiring} today={todayIso()} onClose={() => setRetiring(null)} onDone={load} />
     </div>

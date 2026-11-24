@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { labDayOf } from "@/lib/labDate";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -41,7 +42,25 @@ export interface Equipment {
   move_note?: string | null;
   out_of_service?: { id: number; down_from: string; reason: string } | null;
   awaiting_vendor_report?: number;
+  schedules?: ScheduleSummary[];
 }
+
+/** A schedule as the instrument list carries it. */
+export interface ScheduleSummary {
+  id: number; name: string; schedule_type: string; frequency: string; interval_days: number | null; next_due_date: string | null; is_primary: number; has_checklist: boolean;
+  status: "overdue" | "due_soon" | "ok" | "none";
+}
+
+/** A schedule as its own screen reads it (server/equipmentSchedules.ts view). */
+export interface Schedule extends Omit<ScheduleSummary, "has_checklist"> {
+  active: number; frequency_label: string; recipients: { email: string }[]; has_own_recipients: boolean; ended_on: string | null; end_reason: string | null;
+  sop: { id: number; title: string | null; doc_number: string | null; readable: boolean } | null;
+  checklist: { version_id: number; version_no: number; steps: { id: number; position: number; step_text: string; kind: "check" | "value"; unit: string | null; min_value: number | null; max_value: number | null }[] } | null;
+  last_completed: { done_day: string; completed_by_name: string | null; failed_steps: number } | null;
+}
+
+/** What an entry completed, with the checklist as it was answered. */
+export interface Completion { id: number; schedule_id: number; schedule_name: string | null; checklist_version_no: number | null; failed_steps: number; counts: number; results: any[] }
 
 export interface EquipFile {
   id: number; event_id: number | null; kind: string; original_filename: string; file_size: number | null;
@@ -55,7 +74,14 @@ export interface MaintEvent {
   cost?: number | null; by_vendor?: number | null; vendor_company?: string | null; vendor_technician?: string | null; vendor_report_attached?: number | null;
   correction_reason?: string | null; corrected_by_name?: string | null; corrected_at?: string | null;
   voided_at?: string | null; voided_by_name?: string | null; void_reason?: string | null; carried_from_lab_name?: string | null;
-  files: EquipFile[]; earlier_versions: MaintEvent[];
+  files: EquipFile[]; earlier_versions: MaintEvent[]; completions?: Completion[];
+}
+
+export function DueBadge({ status }: { status: string }) {
+  if (status === "overdue") return <Badge variant="outline" className="bg-red-500/10 text-red-700 border-red-500/20 dark:text-red-400">Overdue</Badge>;
+  if (status === "due_soon") return <Badge variant="outline" className="bg-amber-500/10 text-amber-700 border-amber-500/20 dark:text-amber-300">Due soon</Badge>;
+  if (status === "ok") return <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 border-emerald-500/20 dark:text-emerald-400">On schedule</Badge>;
+  return <Badge variant="outline" className="text-muted-foreground">No schedule</Badge>;
 }
 
 export const equipmentApi = (labId: number | string) => `${API_BASE}/api/labs/${labId}/equipment`;

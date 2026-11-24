@@ -480,6 +480,10 @@ app.use((req, res, next) => {
   // idempotent via equipment_reminder_log dedup; no-op when RESEND_API_KEY unset.
   try {
     const { runEquipmentReminders } = await import("./equipmentReminders");
+    // B10: the email when last month's record review isn't signed by the 5th (server/maintainReviewDue.ts; per-lab opt-in, once a month).
+    const { runMaintainReviewDueEmails } = await import("./maintainReviewDue");
+    const { db: reviewDueDb } = await import("./db");
+    const runReviewDue = () => runMaintainReviewDueEmails((reviewDueDb as any).$client).catch((err: any) => console.error("[maintain-review-due] Run failed:", err?.message || err));
     const scheduleEquipmentReminders = () => {
       const now = new Date();
       const midnight = new Date(now);
@@ -489,12 +493,12 @@ app.use((req, res, next) => {
         console.log("[equipment-reminders] Running maintenance-due reminder dispatch...");
         runEquipmentReminders().catch((err) =>
           console.error("[equipment-reminders] Run failed:", err?.message || err)
-        );
+        ).finally(runReviewDue);
         setInterval(() => {
           console.log("[equipment-reminders] Running maintenance-due reminder dispatch...");
           runEquipmentReminders().catch((err) =>
             console.error("[equipment-reminders] Run failed:", err?.message || err)
-          );
+          ).finally(runReviewDue);
         }, 24 * 60 * 60 * 1000);
       }, msUntilMidnight);
       console.log(

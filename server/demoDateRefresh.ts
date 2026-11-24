@@ -15,6 +15,7 @@
 import { addLabDays, labToday, labTimeZoneById, withLabClock } from "./dateLocal";
 import { deriveCompetencyStatus, labMethodClocks } from "./competencyReminders";
 import { computeLabReadiness } from "./labReadiness";
+import { rollForward } from "./equipmentScheduleData";
 
 export const DEMO_DATES_CONFIRM = "Refresh demo dates";
 // "Veritas QA System": Michael's own test system (labs 1, 3, 24, 37, 48, 49, 50 on 2026-11-16).
@@ -118,6 +119,9 @@ function planLab(sqlite: any, labId: number, today: string): DatePlanRow[] {
     const k = cyclesToCurrent(due, today, step, 0);
     if (!k) continue;
     add("equipment", "lab_equipment", e.id, { next_due_date: [e.next_due_date, moved(e.next_due_date, step * k, 0)] });
+    // The instrument's first schedule mirrors its PM date (server/equipmentScheduleData.ts).
+    const first = get("SELECT id, next_due_date FROM equipment_schedules WHERE equipment_id = ? AND lab_id = ? AND is_primary = 1 AND active = 1", e.id, labId);
+    if (first) add("equipment", "equipment_schedules", first.id, { next_due_date: [first.next_due_date, moved(e.next_due_date, step * k, 0)] });
     const last = get("SELECT id, event_date, next_due_date FROM equipment_maintenance_events WHERE equipment_id = ? AND lab_id = ? AND superseded_by_event_id IS NULL AND voided_at IS NULL ORDER BY event_date DESC, id DESC LIMIT 1", e.id, labId);
     if (last && dayOf(last.event_date)) {
       const to = moved(last.event_date, step * k, 0);
@@ -127,6 +131,13 @@ function planLab(sqlite: any, labId: number, today: string): DatePlanRow[] {
         add("equipment", "equipment_maintenance_events", last.id, changes);
       }
     }
+  }
+
+  // The instrument's other schedules, by whole cycles of their own frequency.
+  for (const sc of all("SELECT s.id, s.frequency, s.interval_days, s.next_due_date FROM equipment_schedules s JOIN lab_equipment e ON e.id = s.equipment_id WHERE s.lab_id = ? AND s.is_primary = 0 AND s.active = 1 AND e.status <> 'retired'", labId)) {
+    const due = dayOf(sc.next_due_date);
+    if (!due || due >= today) continue;
+    add("equipment", "equipment_schedules", sc.id, { next_due_date: [sc.next_due_date, rollForward(sc.frequency, sc.interval_days, due, today)] });
   }
 
   // PT: a pending event (not yet graded) past its submission deadline becomes next year's event. Graded events are history.
@@ -327,6 +338,7 @@ const WRITABLE: Record<string, string[]> = {
   clia_fee_payments: ["due_date", "invoice_date"],
   lab_equipment: ["next_due_date"],
   equipment_maintenance_events: ["event_date", "next_due_date"],
+  equipment_schedules: ["next_due_date"],
   pt_events: ["submission_due_date", "event_date"],
   aa_records: ["next_due_date", "last_performed_date"],
   qc_control_lots: ["expiration_date"],

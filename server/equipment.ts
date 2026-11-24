@@ -8,7 +8,7 @@
 //   - The record: dates in and out of service, who retired it and why, vendor and service contract, the IFU (a web address and/or one of
 //     the lab's VeritaDC documents, opened at its current approved version), and the periods it was out of service.
 //   - Events: who was signed in, cost, the vendor's person and company, files. An event that completes PM is the only thing that moves the
-//     PM due date, and never earlier unless the person says so (shared/equipmentPm.ts planPmDue). A lab can require an attached vendor
+//     PM due date, and never earlier unless the person says so (shared/equipmentSchedules.ts planScheduleDue). A lab can require an attached vendor
 //     report before a vendor PM counts as complete: until one is attached the due date stays.
 //   - Append-only: an editor corrects an event with a reason, which writes a new row and leaves the original as it was
 //     (superseded_by_event_id), or voids it with a reason, which keeps the row. Readers take LIVE_EVENT. Nothing here edits or deletes one.
@@ -16,6 +16,9 @@
 //     bytes, so a file holding patient information can be taken out.
 //   - Retire asks for a reason and keeps the record; the Retired list restores it. Move copies the record and its history, read-only, to
 //     another lab of the same organization for someone who can edit VeritaMaintain in both, and retires the one here.
+//
+// B10, schedules and checklists, is server/equipmentSchedules.ts; this file's events are how a schedule gets completed. A completion belongs
+// to an event by its root id, so a correction keeps it, and each schedule's due date moves by the same rule as the PM's.
 //
 // Access is the module's split: setup and corrections need VeritaMaintain edit; logging an event is recording work open to every active
 // member, Staff logins included. A limited Staff login reads what was typed, as on paper, but not a coworker's sign-in name (stainLog.ts).
@@ -30,11 +33,15 @@ import { canonicalFormatFromMimeAndName, DOC_MIME } from "./veritapolicyApproval
 import { approvedReadVersionId } from "./policyApprovedVersion";
 import { sendApprovedDocument } from "./approvedDocumentView";
 import { vlsContext } from "./vlsSupport";
+import { reviewDueRecipients } from "./maintainReviewDue";
 import { isValidIfuUrl } from "../shared/ifu";
 import { isYmd } from "../shared/stainLogRules";
 import {
-  canCompletePm, completesPmByDefault, EQUIP_EVENT_LABEL, EQUIP_EVENT_TYPES, EQUIP_FILE_KIND_LABEL, EQUIP_FILE_MAX_MB, EQUIP_FILE_TYPES, isLocalMinute, minutesBetween, planPmDue,
+  canCompletePm, completesPmByDefault, EQUIP_EVENT_LABEL, EQUIP_EVENT_TYPES, EQUIP_FILE_KIND_LABEL, EQUIP_FILE_MAX_MB, EQUIP_FILE_TYPES, isLocalMinute, minutesBetween,
 } from "../shared/equipmentPm";
+import { planScheduleDue, scheduleStatus, type StepOutcome } from "../shared/equipmentSchedules";
+import { activeSchedules, currentChecklist, ensurePrimary, primaryOf, setScheduleDue, syncPrimaryFromEquipment, type ChecklistVersion, type ScheduleRow } from "./equipmentScheduleData";
+import { registerEquipmentScheduleRoutes } from "./equipmentSchedules";
 
 type Sqlite = any;
 
@@ -56,10 +63,10 @@ export function equipmentStatus(nextDue: string | null): string {
   return "ok";
 }
 
-export interface MaintainSettings { require_vendor_report: boolean }
+export interface MaintainSettings { require_vendor_report: boolean; review_due_email: boolean }
 export function readMaintainSettings(sqlite: Sqlite, labId: number): MaintainSettings {
-  const row = sqlite.prepare("SELECT require_vendor_report FROM maintain_settings WHERE lab_id = ?").get(labId) as any;
-  return { require_vendor_report: row?.require_vendor_report === 1 };
+  const row = sqlite.prepare("SELECT require_vendor_report, review_due_email FROM maintain_settings WHERE lab_id = ?").get(labId) as any;
+  return { require_vendor_report: row?.require_vendor_report === 1, review_due_email: row?.review_due_email === 1 };
 }
 
 const nowLocal = () => labLocalDate(new Date().toISOString(), true).replace(" ", "T");
@@ -96,7 +103,6 @@ export function registerEquipmentRoutes(app: Express, deps: {
 }) {
   const { authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit, hasModuleEditAccess, resolveLabMapInstrument } = deps;
   const sqlite = (): Sqlite => (db as any).$client;
-  const E = "/api/labs/:labId/equipment";
   const multer = require("multer"); // same CJS load as the VeritaLab upload route
   const uploadOne = multer({ storage: multer.memoryStorage(), limits: { fileSize: EQUIP_FILE_MAX_MB * 1024 * 1024, files: 1 } }).single("file");
   // The upload finishes outside the context labScopeMiddleware opened, so a Veritas support upload re-enters it (BUG-014).
@@ -133,8 +139,8 @@ export function registerEquipmentRoutes(app: Express, deps: {
   const namesFor = (req: any) => {
     const limited = !!staffOwnScope(sqlite(), req.userId, req.scope.labId, "veritamaintain");
     const pairs: [string, string][] = [["logged_by_user_id", "logged_by_name"], ["corrected_by_user_id", "corrected_by_name"], ["voided_by_user_id", "voided_by_name"],
-      ["uploaded_by_user_id", "uploaded_by_name"], ["removed_by_user_id", "removed_by_name"], ["started_by_user_id", "started_by_name"], ["ended_by_user_id", "ended_by_name"],
-      ["retired_by_user_id", "retired_by_name"]];
+      ["uploaded_by_user_id", "uploaded_by_name"], ["removed_by_user_id", "removed_by_name"], ["started_by_user_id", "started_by_name"],
+      ["retired_by_user_id", "retired_by_name"], ["completed_by_user_id", "completed_by_name"], ["ended_by_user_id", "ended_by_name"], ["created_by_user_id", "created_by_name"]];
     return <T extends Record<string, any>>(row: T): T => {
       if (!limited) return row;
       const out: any = { ...row };
@@ -146,11 +152,16 @@ export function registerEquipmentRoutes(app: Express, deps: {
   const FILE_COLS = "id, lab_id, equipment_id, event_id, kind, original_filename, mime_type, file_size, uploaded_by_user_id, uploaded_by_name, uploaded_at, removed_at, removed_by_user_id, removed_by_name, removal_reason, carried_from_lab_id, carried_from_lab_name";
   const openDowntime = (labId: number, equipmentId: number): any =>
     sqlite().prepare("SELECT id, down_from, reason FROM equipment_downtime WHERE lab_id = ? AND equipment_id = ? AND down_until IS NULL ORDER BY id DESC LIMIT 1").get(labId, equipmentId) ?? null;
-  const decorate = (row: any) => ({ ...row, maintenance_status: equipmentStatus(row.next_due_date), out_of_service: openDowntime(row.lab_id, row.id) });
+  // The instrument's schedules, as the list shows them: the first one's status is the instrument's own.
+  const schedulesFor = (row: any) => activeSchedules(sqlite(), row.lab_id, row.id).map((x) => ({
+    id: x.id, name: x.name, schedule_type: x.schedule_type, frequency: x.frequency, interval_days: x.interval_days, next_due_date: x.next_due_date, is_primary: x.is_primary,
+    has_checklist: !!currentChecklist(sqlite(), x.lab_id, x.id), status: x.is_primary ? equipmentStatus(x.next_due_date) : scheduleStatus(x, labToday()),
+  }));
+  const decorate = (row: any) => ({ ...row, maintenance_status: equipmentStatus(row.next_due_date), out_of_service: openDowntime(row.lab_id, row.id), schedules: schedulesFor(row) });
 
   // ── List, add ───────────────────────────────────────────────────────────────────────────────────────
 
-  app.get(E, ...read, (req: any, res: any) => {
+  app.get("/api/labs/:labId/equipment", ...read, (req: any, res: any) => {
     const retired = String(req.query?.retired || "") === "1";
     const rows = sqlite().prepare(
       `SELECT * FROM lab_equipment WHERE lab_id = ? AND status ${retired ? "=" : "<>"} 'retired' ORDER BY ${retired ? "COALESCE(retired_at, updated_at) DESC, " : ""}instrument_name ASC`
@@ -189,7 +200,7 @@ export function registerEquipmentRoutes(app: Express, deps: {
     return { values };
   };
 
-  app.post(E, ...setup, (req: any, res: any) => {
+  app.post("/api/labs/:labId/equipment", ...setup, (req: any, res: any) => {
     const b = req.body || {};
     if (!b.instrument_name || !String(b.instrument_name).trim()) return res.status(400).json({ error: "instrument_name required" });
     const now = new Date().toISOString();
@@ -210,6 +221,7 @@ export function registerEquipmentRoutes(app: Express, deps: {
       b.pm_interval_days != null && b.pm_interval_days !== "" ? Number(b.pm_interval_days) : null, b.next_due_date || null, b.notes || null, linkId,
       v.placed_in_service_date ?? null, v.vendor_name ?? null, v.service_contract ?? null, v.ifu_url ?? null, v.ifu_document_id ?? null, now, now);
     const row = sqlite().prepare("SELECT * FROM lab_equipment WHERE id = ?").get(ins.lastInsertRowid) as any;
+    syncPrimaryFromEquipment(sqlite(), null, row, now, { id: req.userId, name: userName(req.userId) });
     audit(req, "create", "equipment", row.id, row.instrument_name, null, row);
     res.json(decorate(row));
   });
@@ -242,33 +254,39 @@ export function registerEquipmentRoutes(app: Express, deps: {
     }
     return { lab_id: labId, enabled: !!enabledInt, lead_days: lead, overdue_cadence_days: cadence, recipients: recips, configured: true };
   }
-  app.get(`${E}/reminder-config`, ...read, (req: any, res: any) => {
+  app.get("/api/labs/:labId/equipment/reminder-config", ...read, (req: any, res: any) => {
     res.json(readEquipmentReminderConfig(req.scope.labId));
   });
-  app.put(`${E}/reminder-config`, ...setup, (req: any, res: any) => {
+  app.put("/api/labs/:labId/equipment/reminder-config", ...setup, (req: any, res: any) => {
     res.json(writeEquipmentReminderConfig(req.scope.labId, req.body));
   });
 
   // ── The lab's VeritaMaintain settings ───────────────────────────────────────────────────────────────
 
   app.get("/api/labs/:labId/equipment-settings", ...read, (req: any, res: any) => {
-    res.json({ ...readMaintainSettings(sqlite(), req.scope.labId), can_edit: hasModuleEditAccess(req.scope.labId, req.userId, "veritamaintain") });
+    res.json({
+      ...readMaintainSettings(sqlite(), req.scope.labId), can_edit: hasModuleEditAccess(req.scope.labId, req.userId, "veritamaintain"),
+      review_due_recipients: reviewDueRecipients(sqlite(), req.scope.labId).length,
+    });
   });
   app.put("/api/labs/:labId/equipment-settings", ...setup, (req: any, res: any) => {
     const before = readMaintainSettings(sqlite(), req.scope.labId);
-    const next = { require_vendor_report: req.body?.require_vendor_report !== undefined ? truthy(req.body.require_vendor_report) : before.require_vendor_report };
+    const next = {
+      require_vendor_report: req.body?.require_vendor_report !== undefined ? truthy(req.body.require_vendor_report) : before.require_vendor_report,
+      review_due_email: req.body?.review_due_email !== undefined ? truthy(req.body.review_due_email) : before.review_due_email,
+    };
     const now = new Date().toISOString();
     sqlite().prepare(
-      `INSERT INTO maintain_settings (lab_id, require_vendor_report, updated_by_user_id, created_at, updated_at) VALUES (?,?,?,?,?)
-       ON CONFLICT(lab_id) DO UPDATE SET require_vendor_report = excluded.require_vendor_report, updated_by_user_id = excluded.updated_by_user_id, updated_at = excluded.updated_at`
-    ).run(req.scope.labId, next.require_vendor_report ? 1 : 0, req.userId, now, now);
-    if (before.require_vendor_report !== next.require_vendor_report) audit(req, "update", "maintain_settings", req.scope.labId, "VeritaMaintain settings", before, next);
+      `INSERT INTO maintain_settings (lab_id, require_vendor_report, review_due_email, updated_by_user_id, created_at, updated_at) VALUES (?,?,?,?,?,?)
+       ON CONFLICT(lab_id) DO UPDATE SET require_vendor_report = excluded.require_vendor_report, review_due_email = excluded.review_due_email, updated_by_user_id = excluded.updated_by_user_id, updated_at = excluded.updated_at`
+    ).run(req.scope.labId, next.require_vendor_report ? 1 : 0, next.review_due_email ? 1 : 0, req.userId, now, now);
+    if (JSON.stringify(before) !== JSON.stringify(next)) audit(req, "update", "maintain_settings", req.scope.labId, "VeritaMaintain settings", before, next);
     res.json(next);
   });
 
   // ── One record ──────────────────────────────────────────────────────────────────────────────────────
 
-  app.get(`${E}/:id/record`, ...read, (req: any, res: any) => {
+  app.get("/api/labs/:labId/equipment/:id/record", ...read, (req: any, res: any) => {
     const eq = equipmentIn(req);
     if (!eq) return notFound(res);
     const names = namesFor(req);
@@ -293,14 +311,14 @@ export function registerEquipmentRoutes(app: Express, deps: {
   });
 
   // The linked VeritaDC document at its current approved version, for anyone who reads this record.
-  app.get(`${E}/:id/ifu-document`, ...read, async (req: any, res: any) => {
+  app.get("/api/labs/:labId/equipment/:id/ifu-document", ...read, async (req: any, res: any) => {
     const eq = equipmentIn(req);
     if (!eq) return notFound(res);
     if (!eq.ifu_document_id) return res.status(404).json({ error: "No IFU document is linked to this instrument" });
     await sendApprovedDocument(sqlite(), req, res, { labId: eq.lab_id, documentId: eq.ifu_document_id, surface: "equipment_ifu" });
   });
 
-  app.put(`${E}/:id`, ...setup, (req: any, res: any) => {
+  app.put("/api/labs/:labId/equipment/:id", ...setup, (req: any, res: any) => {
     const ex = equipmentIn(req);
     if (!ex) return notFound(res);
     if (ex.moved_to_lab_id) return movedAway(res, ex);
@@ -335,13 +353,14 @@ export function registerEquipmentRoutes(app: Express, deps: {
       keep(v.ifu_url, ex.ifu_url), keep(v.ifu_document_id, ex.ifu_document_id), now, ex.id,
     );
     const row = sqlite().prepare("SELECT * FROM lab_equipment WHERE id = ?").get(ex.id) as any;
+    syncPrimaryFromEquipment(sqlite(), ex, row, now, { id: req.userId, name: userName(req.userId) });
     const changed = Object.keys(row).filter((k) => k !== "updated_at" && row[k] !== ex[k]);
     if (changed.length) audit(req, "update", "equipment", ex.id, row.instrument_name, Object.fromEntries(changed.map((k) => [k, ex[k]])), Object.fromEntries(changed.map((k) => [k, row[k]])));
     res.json(decorate(row));
   });
 
   // An instrument that holds records is retired, not deleted. One added by mistake, holding nothing, can go.
-  app.delete(`${E}/:id`, ...setup, (req: any, res: any) => {
+  app.delete("/api/labs/:labId/equipment/:id", ...setup, (req: any, res: any) => {
     const ex = equipmentIn(req);
     if (!ex) return notFound(res);
     const count = (sql: string, ...a: any[]) => Number((sqlite().prepare(sql).get(...a) as any).n);
@@ -351,18 +370,25 @@ export function registerEquipmentRoutes(app: Express, deps: {
     const held = count("SELECT COUNT(*) AS n FROM equipment_maintenance_events WHERE equipment_id = ?", ex.id)
       + count("SELECT COUNT(*) AS n FROM equipment_files WHERE equipment_id = ?", ex.id)
       + count("SELECT COUNT(*) AS n FROM equipment_downtime WHERE equipment_id = ?", ex.id)
+      + count("SELECT COUNT(*) AS n FROM equipment_schedule_completions WHERE equipment_id = ?", ex.id)
       + count("SELECT COUNT(*) AS n FROM maintain_record_reviews WHERE lab_id = ? AND item_type = 'equipment' AND item_id = ?", req.scope.labId, ex.id)
       + (ex.moved_to_lab_id || ex.moved_from_lab_id ? 1 : 0);
     if (held > 0) return res.status(409).json({ error: "This instrument holds records, so it can't be deleted. Retire it instead.", code: "HOLDS_RECORDS" });
     audit(req, "delete", "equipment", ex.id, ex.instrument_name, ex, {});
-    sqlite().prepare("DELETE FROM stain_log_rows WHERE equipment_id = ? AND lab_id = ?").run(ex.id, req.scope.labId);
-    sqlite().prepare("DELETE FROM lab_equipment WHERE id = ?").run(ex.id);
+    sqlite().transaction(() => {
+      sqlite().prepare("DELETE FROM stain_log_rows WHERE equipment_id = ? AND lab_id = ?").run(ex.id, req.scope.labId);
+      // Schedules nothing was done on are setup, and go with it.
+      sqlite().prepare("DELETE FROM equipment_checklist_steps WHERE lab_id = ? AND version_id IN (SELECT id FROM equipment_checklist_versions WHERE lab_id = ? AND equipment_id = ?)").run(req.scope.labId, req.scope.labId, ex.id);
+      sqlite().prepare("DELETE FROM equipment_checklist_versions WHERE lab_id = ? AND equipment_id = ?").run(req.scope.labId, ex.id);
+      sqlite().prepare("DELETE FROM equipment_schedules WHERE lab_id = ? AND equipment_id = ?").run(req.scope.labId, ex.id);
+      sqlite().prepare("DELETE FROM lab_equipment WHERE id = ?").run(ex.id);
+    })();
     res.json({ ok: true });
   });
 
   // ── Retire and restore ──────────────────────────────────────────────────────────────────────────────
 
-  app.post(`${E}/:id/retire`, ...setup, (req: any, res: any) => {
+  app.post("/api/labs/:labId/equipment/:id/retire", ...setup, (req: any, res: any) => {
     const ex = equipmentIn(req);
     if (!ex) return notFound(res);
     if (ex.status === "retired") return res.status(409).json({ error: "This instrument is already retired", code: "ALREADY_RETIRED" });
@@ -383,7 +409,7 @@ export function registerEquipmentRoutes(app: Express, deps: {
     res.json(decorate(sqlite().prepare("SELECT * FROM lab_equipment WHERE id = ?").get(ex.id)));
   });
 
-  app.post(`${E}/:id/restore`, ...setup, (req: any, res: any) => {
+  app.post("/api/labs/:labId/equipment/:id/restore", ...setup, (req: any, res: any) => {
     const ex = equipmentIn(req);
     if (!ex) return notFound(res);
     if (ex.moved_to_lab_id) return movedAway(res, ex);
@@ -410,7 +436,7 @@ export function registerEquipmentRoutes(app: Express, deps: {
     (sqlite().prepare("SELECT id, down_from, down_until FROM equipment_downtime WHERE lab_id = ? AND equipment_id = ? AND id <> ?").all(eq.lab_id, eq.id, exceptId) as any[])
       .some((d) => from < (d.down_until || "9999-12-31T23:59") && d.down_from < (until || "9999-12-31T23:59"));
 
-  app.post(`${E}/:id/downtime`, ...setup, (req: any, res: any) => {
+  app.post("/api/labs/:labId/equipment/:id/downtime", ...setup, (req: any, res: any) => {
     const eq = equipmentIn(req);
     if (!eq) return notFound(res);
     if (eq.status === "retired") return res.status(409).json({ error: "This instrument is retired", code: "RETIRED" });
@@ -428,7 +454,7 @@ export function registerEquipmentRoutes(app: Express, deps: {
     res.status(201).json(sqlite().prepare("SELECT * FROM equipment_downtime WHERE id = ?").get(r.lastInsertRowid));
   });
 
-  app.post(`${E}/:id/downtime/:downtimeId/end`, ...setup, (req: any, res: any) => {
+  app.post("/api/labs/:labId/equipment/:id/downtime/:downtimeId/end", ...setup, (req: any, res: any) => {
     const eq = equipmentIn(req);
     if (!eq) return notFound(res);
     const d = downtimeIn(req, eq);
@@ -447,7 +473,7 @@ export function registerEquipmentRoutes(app: Express, deps: {
   });
 
   // A correction to a period: the values before are in the audit row, with the reason.
-  app.put(`${E}/:id/downtime/:downtimeId`, ...setup, (req: any, res: any) => {
+  app.put("/api/labs/:labId/equipment/:id/downtime/:downtimeId", ...setup, (req: any, res: any) => {
     const eq = equipmentIn(req);
     if (!eq) return notFound(res);
     if (eq.moved_to_lab_id) return movedAway(res, eq);
@@ -474,17 +500,67 @@ export function registerEquipmentRoutes(app: Express, deps: {
 
   const eventIn = (req: any, eq: any): any => sqlite().prepare("SELECT * FROM equipment_maintenance_events WHERE id = ? AND equipment_id = ? AND lab_id = ?").get(Number(req.params.eventId), eq.id, eq.lab_id) ?? null;
   const rootOf = (ev: any): number => ev.root_event_id ?? ev.id;
-  const setDue = (equipmentId: number, due: string | null, now: string) => sqlite().prepare("UPDATE lab_equipment SET next_due_date = ?, updated_at = ? WHERE id = ?").run(due, now, equipmentId);
+
+  type Held = { keeps: string | null; works_out_to: string | null };
+  interface Done { schedule_id: number; name: string; is_primary: boolean; due_set: string | null; held: Held | null }
+  const scheduleRow = (id: number, labId: number): ScheduleRow | null => (sqlite().prepare("SELECT * FROM equipment_schedules WHERE id = ? AND lab_id = ?").get(id, labId) as ScheduleRow) ?? null;
+
+  /** One schedule completed by an event: the completion, its checklist as it was answered, and the due date (unless it waits for a report). */
+  function completeSchedule(o: {
+    eq: any; schedule: ScheduleRow; eventId: number; doneOn: string; typed: string | null; allowEarlier: boolean; waits: boolean; now: string; user: { id: number; name: string | null };
+    version?: ChecklistVersion | null; outcomes?: StepOutcome[];
+  }): Done {
+    const plan = planScheduleDue({ currentDue: o.schedule.next_due_date, frequency: o.schedule.frequency, intervalDays: o.schedule.interval_days, doneOn: o.doneOn, typedDue: o.typed, allowEarlier: o.allowEarlier });
+    const dueSet = !o.waits && plan.computed && !plan.held ? plan.computed : null;
+    const steps = o.version?.steps ?? [];
+    const completionId = Number(sqlite().prepare(
+      `INSERT INTO equipment_schedule_completions (lab_id, equipment_id, schedule_id, event_id, checklist_version_id, checklist_version_no, done_on, completed_by_user_id, completed_by_name, step_count, failed_steps, counts, counted_at,
+         due_before, due_set, typed_due, allow_earlier, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+    ).run(o.eq.lab_id, o.eq.id, o.schedule.id, o.eventId, o.version?.id ?? null, o.version?.version_no ?? null, o.doneOn, o.user.id, o.user.name, steps.length, (o.outcomes ?? []).filter((r) => r.result === "fail").length,
+      o.waits ? 0 : 1, o.waits ? null : o.now, o.schedule.next_due_date ?? null, dueSet, o.typed, o.allowEarlier ? 1 : 0, o.now).lastInsertRowid);
+    // The steps are copied with their answers, so a later edit of the checklist can't change what was recorded.
+    const ins = sqlite().prepare("INSERT INTO equipment_checklist_results (lab_id, completion_id, step_id, position, step_text, kind, unit, min_value, max_value, result, value, corrective_action) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)");
+    steps.forEach((st: any, i: number) => {
+      const r = o.outcomes![i];
+      ins.run(o.eq.lab_id, completionId, st.id, st.position, st.step_text, st.kind, st.unit, st.min_value, st.max_value, r.result, r.value, r.corrective_action);
+    });
+    if (dueSet) setScheduleDue(sqlite(), o.schedule, dueSet, o.now);
+    return { schedule_id: o.schedule.id, name: o.schedule.name, is_primary: o.schedule.is_primary === 1, due_set: dueSet, held: o.waits ? null : plan.held };
+  }
+
+  const standingOf = (labId: number, rootEventId: number): any[] =>
+    sqlite().prepare("SELECT * FROM equipment_schedule_completions WHERE lab_id = ? AND event_id = ? AND voided_at IS NULL ORDER BY id").all(labId, rootEventId) as any[];
+
+  /** The due date of a schedule an event completed, worked out again: its report came, or its date was corrected. */
+  function replan(c: any, doneOn: string, o: { typed?: string | null; allowEarlier: boolean; now: string }): Done | null {
+    const sc = scheduleRow(c.schedule_id, c.lab_id);
+    if (!sc) return null;
+    const plan = planScheduleDue({ currentDue: sc.next_due_date, frequency: sc.frequency, intervalDays: sc.interval_days, doneOn, typedDue: o.typed ?? null, allowEarlier: o.allowEarlier });
+    const dueSet = plan.computed && !plan.held ? plan.computed : null;
+    const inForce = !!c.due_set && c.due_set === sc.next_due_date;
+    sqlite().prepare("UPDATE equipment_schedule_completions SET counts = 1, counted_at = COALESCE(counted_at, ?), due_before = ?, due_set = ? WHERE id = ?")
+      .run(o.now, inForce ? c.due_before : sc.next_due_date ?? null, dueSet ?? (plan.computed ? c.due_set : null), c.id);
+    if (dueSet && sc.active) setScheduleDue(sqlite(), sc, dueSet, o.now);
+    return { schedule_id: sc.id, name: sc.name, is_primary: sc.is_primary === 1, due_set: dueSet, held: plan.held };
+  }
+  const primaryHeld = (done: Done[]): Held | null => (done.find((d) => d.is_primary) ?? done[0])?.held ?? null;
 
   // Each standing entry, newest first, with its files and the versions a correction replaced.
-  app.get(`${E}/:id/events`, ...read, (req: any, res: any) => {
+  app.get("/api/labs/:labId/equipment/:id/events", ...read, (req: any, res: any) => {
     const eq = equipmentIn(req);
     if (!eq) return notFound(res);
     const names = namesFor(req);
     const all = (sqlite().prepare("SELECT * FROM equipment_maintenance_events WHERE equipment_id = ? AND lab_id = ? ORDER BY event_date DESC, id DESC").all(eq.id, eq.lab_id) as any[]).map(names);
     const files = (sqlite().prepare(`SELECT ${FILE_COLS} FROM equipment_files WHERE lab_id = ? AND equipment_id = ? AND event_id IS NOT NULL ORDER BY id`).all(eq.lab_id, eq.id) as any[]).map(names);
+    const done = (sqlite().prepare(
+      `SELECT c.*, s.name AS schedule_name FROM equipment_schedule_completions c LEFT JOIN equipment_schedules s ON s.id = c.schedule_id AND s.lab_id = c.lab_id WHERE c.lab_id = ? AND c.equipment_id = ? ORDER BY c.id`
+    ).all(eq.lab_id, eq.id) as any[]).map(names);
+    const results = sqlite().prepare(
+      "SELECT r.* FROM equipment_checklist_results r JOIN equipment_schedule_completions c ON c.id = r.completion_id AND c.lab_id = r.lab_id WHERE c.lab_id = ? AND c.equipment_id = ? ORDER BY r.completion_id, r.position, r.id"
+    ).all(eq.lab_id, eq.id) as any[];
     res.json(all.filter((e) => !e.superseded_by_event_id).map((e) => ({
       ...e,
+      completions: done.filter((c) => c.event_id === rootOf(e) && !c.voided_at).map((c) => ({ ...c, results: results.filter((r) => r.completion_id === c.id) })),
       files: files.filter((f) => f.event_id === rootOf(e)),
       earlier_versions: all.filter((x) => x.id !== e.id && x.superseded_by_event_id && rootOf(x) === rootOf(e)).sort((a, b) => b.id - a.id),
     })));
@@ -524,44 +600,78 @@ export function registerEquipmentRoutes(app: Express, deps: {
     return Number(sqlite().prepare(`INSERT INTO equipment_maintenance_events (${keys.join(", ")}) VALUES (${keys.map((k) => `@${k}`).join(", ")})`).run(row).lastInsertRowid);
   };
 
+  // Which schedules an entry completes. The first one by "completes PM" (preventive maintenance does unless the person says not), any other by
+  // its id. One with a checklist is completed by answering the checklist, never by an entry alone.
+  const targetsFor = (eq: any, b: any, v: any): { error?: string; code?: string; status?: number; primary?: boolean; others?: ScheduleRow[] } => {
+    const first = primaryOf(sqlite(), eq.lab_id, eq.id);
+    const ids = Array.isArray(b.schedule_ids) ? [...new Set(b.schedule_ids.map(Number))] as number[] : null;
+    if (!canCompletePm(v.event_type)) return { primary: false, others: [] };
+    const others: ScheduleRow[] = [];
+    for (const id of ids ?? []) {
+      if (first && id === first.id) continue;
+      const sc = activeSchedules(sqlite(), eq.lab_id, eq.id).find((x) => x.id === id);
+      if (!sc) return { status: 400, error: "That schedule isn't on this instrument", code: "BAD_SCHEDULE" };
+      others.push(sc);
+    }
+    const firstHasList = !!first && !!currentChecklist(sqlite(), eq.lab_id, first.id);
+    const primary = b.completes_pm !== undefined ? v.completes_pm === 1 : ids ? !!first && ids.includes(first.id) : v.completes_pm === 1 && !firstHasList;
+    const listed = [...(primary && first && firstHasList ? [first] : []), ...others.filter((x) => currentChecklist(sqlite(), eq.lab_id, x.id))];
+    if (listed.length) return { status: 409, error: `${listed[0].name} has a checklist. Complete it from Schedules.`, code: "CHECKLIST_REQUIRED" };
+    return { primary, others };
+  };
+  const isPm = (sc: ScheduleRow) => sc.schedule_type === "preventive_maintenance";
+
   // Logging a maintenance EVENT is operational work a tech performs, so staff may do it: gated by lab membership and an active
   // subscription, NOT requireModuleEdit (which stays on setup and corrections).
-  app.post(`${E}/:id/events`, ...record, (req: any, res: any) => {
+  app.post("/api/labs/:labId/equipment/:id/events", ...record, (req: any, res: any) => {
     const eq = equipmentIn(req);
     if (!eq) return notFound(res);
     if (eq.status === "retired") return res.status(409).json({ error: "This instrument is retired. Restore it to log maintenance.", code: "RETIRED" });
     const c = cleanEvent(req.body || {});
     if (c.error) return res.status(400).json({ error: c.error, ...(c.code ? { code: c.code } : {}) });
     const v = c.v;
-    const now = new Date().toISOString();
-    const allowEarlier = truthy(req.body?.allow_earlier_due);
-    const waits = v.completes_pm === 1 && v.by_vendor === 1 && readMaintainSettings(sqlite(), eq.lab_id).require_vendor_report;
-    let held: any = null;
-    let eventId = 0;
-    sqlite().transaction(() => {
-      let nextDue: string | null = null;
-      if (v.completes_pm && !waits) {
-        const plan = planPmDue({ currentDue: eq.next_due_date, eventDate: v.event_date, intervalDays: eq.pm_interval_days, typedDue: v.typed, allowEarlier });
-        held = plan.held;
-        if (plan.computed && !plan.held) nextDue = plan.computed;
-      }
-      eventId = insertEvent({
-        equipment_id: eq.id, lab_id: eq.lab_id, event_type: v.event_type, event_date: v.event_date, performed_by: v.performed_by, next_due_date: nextDue, notes: v.notes,
-        created_at: now, updated_at: now, logged_by_user_id: req.userId, logged_by_name: userName(req.userId),
-        completes_pm: v.completes_pm, pm_complete: v.completes_pm ? (waits ? 0 : 1) : null, pm_completed_at: v.completes_pm && !waits ? now : null,
-        due_before: eq.next_due_date ?? null, pm_typed_due: v.completes_pm ? v.typed : null, pm_allow_earlier: allowEarlier ? 1 : 0,
-        cost: v.cost, by_vendor: v.by_vendor, vendor_company: v.vendor_company, vendor_technician: v.vendor_technician, vendor_report_attached: 0,
-      });
-      if (nextDue) setDue(eq.id, nextDue, now);
-    })();
-    const ev = sqlite().prepare("SELECT * FROM equipment_maintenance_events WHERE id = ?").get(eventId) as any;
-    audit(req, "create", "equipment_event", eventId, `${eq.instrument_name}: ${eventName(ev)}`, { next_due_date: eq.next_due_date }, { ...ev, due_date_held: held });
+    const t = targetsFor(eq, req.body || {}, v);
+    if (t.error) return res.status(t.status!).json({ error: t.error, code: t.code });
+    const r = logEvent(req, eq, v, { primary: t.primary!, others: t.others!, allowEarlier: truthy(req.body?.allow_earlier_due) });
     const row = sqlite().prepare("SELECT * FROM lab_equipment WHERE id = ?").get(eq.id) as any;
-    res.json({ ...decorate(row), event_id: eventId, due_date_held: held, awaiting_vendor_report_event: waits });
+    res.json({ ...decorate(row), event_id: r.eventId, due_date_held: primaryHeld(r.done), completed_schedules: r.done, awaiting_vendor_report_event: r.waits });
   });
 
+  /** The entry and everything it completes, in one transaction, with its audit row. A schedule with a checklist arrives with its answers. */
+  function logEvent(req: any, eq: any, v: any, o: { primary: boolean; others: ScheduleRow[]; allowEarlier: boolean; typedAll?: boolean; checklist?: { schedule: ScheduleRow; version: ChecklistVersion; outcomes: StepOutcome[] } }) {
+    const now = new Date().toISOString();
+    const user = { id: req.userId as number, name: userName(req.userId) };
+    const completesPm = o.primary || o.others.some(isPm);
+    const completesAny = o.primary || o.others.length > 0;
+    const waits = completesPm && v.by_vendor === 1 && readMaintainSettings(sqlite(), eq.lab_id).require_vendor_report;
+    const done: Done[] = [];
+    let eventId = 0;
+    sqlite().transaction(() => {
+      eventId = insertEvent({
+        equipment_id: eq.id, lab_id: eq.lab_id, event_type: v.event_type, event_date: v.event_date, performed_by: v.performed_by, next_due_date: null, notes: v.notes,
+        created_at: now, updated_at: now, logged_by_user_id: user.id, logged_by_name: user.name,
+        completes_pm: completesPm ? 1 : 0, pm_complete: completesAny ? (waits ? 0 : 1) : null, pm_completed_at: completesAny && !waits ? now : null,
+        due_before: eq.next_due_date ?? null, pm_typed_due: o.primary ? v.typed : null, pm_allow_earlier: o.allowEarlier ? 1 : 0,
+        cost: v.cost, by_vendor: v.by_vendor, vendor_company: v.vendor_company, vendor_technician: v.vendor_technician, vendor_report_attached: 0,
+      });
+      const args = { eq, eventId, doneOn: v.event_date, allowEarlier: o.allowEarlier, waits, now, user };
+      const answered = (sc: ScheduleRow) => (o.checklist?.schedule.id === sc.id ? { version: o.checklist.version, outcomes: o.checklist.outcomes } : {});
+      if (o.primary) {
+        // An instrument with no PM schedule yet gets one when the person says when the next PM is due.
+        const first = ensurePrimary(sqlite(), eq, now, user) ?? (v.typed ? ensurePrimary(sqlite(), { ...eq, next_due_date: v.typed }, now, user) : null);
+        if (first) done.push(completeSchedule({ ...args, ...answered(first), schedule: v.typed && !eq.next_due_date ? { ...first, next_due_date: null } : first, typed: v.typed }));
+      }
+      for (const sc of o.others) done.push(completeSchedule({ ...args, ...answered(sc), schedule: sc, typed: o.typedAll ? v.typed : null }));
+      const set = done.find((d) => d.is_primary)?.due_set ?? null;
+      if (set) sqlite().prepare("UPDATE equipment_maintenance_events SET next_due_date = ? WHERE id = ?").run(set, eventId);
+    })();
+    const ev = sqlite().prepare("SELECT * FROM equipment_maintenance_events WHERE id = ?").get(eventId) as any;
+    audit(req, "create", "equipment_event", eventId, `${eq.instrument_name}: ${eventName(ev)}`, { next_due_date: eq.next_due_date }, { ...ev, completed_schedules: done });
+    return { eventId, done, waits };
+  }
+
   // Correct an entry: a new row with the corrected values; the original stays as it was and is shown under it.
-  app.post(`${E}/:id/events/:eventId/correct`, ...setup, (req: any, res: any) => {
+  app.post("/api/labs/:labId/equipment/:id/events/:eventId/correct", ...setup, (req: any, res: any) => {
     const eq = equipmentIn(req);
     if (!eq) return notFound(res);
     if (eq.moved_to_lab_id) return movedAway(res, eq);
@@ -577,42 +687,68 @@ export function registerEquipmentRoutes(app: Express, deps: {
     const v = c.v;
     const now = new Date().toISOString();
     const allowEarlier = truthy(req.body?.allow_earlier_due);
-    const inForce = !!old.next_due_date && old.next_due_date === eq.next_due_date;
-    const hasReport = hasVendorReport(eq.lab_id, rootOf(old));
-    const waits = v.completes_pm === 1 && v.by_vendor === 1 && !hasReport && readMaintainSettings(sqlite(), eq.lab_id).require_vendor_report && old.pm_complete !== 1;
-    let held: any = null;
+    const root = rootOf(old);
+    const standing = standingOf(eq.lab_id, root);
+    const first = primaryOf(sqlite(), eq.lab_id, eq.id);
+    const firstDone = first ? standing.find((x) => x.schedule_id === first.id) : undefined;
+    const others = standing.filter((x) => x !== firstDone);
+    const othersPm = others.some((x) => { const sc = scheduleRow(x.schedule_id, eq.lab_id); return !!sc && isPm(sc); });
+    // "Completes PM" in the body is about the first schedule; the others an entry completed stay completed unless it is voided.
+    const keepsFirst = req.body?.completes_pm === undefined && othersPm && !firstDone ? false : v.completes_pm === 1;
+    const wasPm = (old.completes_pm ?? (completesPmByDefault(old.event_type) ? 1 : 0)) === 1;
+    // Saying now that it completed PM adds the first schedule's completion; an entry that already said so isn't completed a second time.
+    const addsFirst = keepsFirst && !firstDone && !wasPm;
+    if (others.length && !canCompletePm(v.event_type)) return res.status(409).json({ error: "This entry completed a schedule, so it can't become that type. Void it and log it again.", code: "COMPLETED_SCHEDULE" });
+    if (addsFirst && first && currentChecklist(sqlite(), eq.lab_id, first.id)) return res.status(409).json({ error: `${first.name} has a checklist. Complete it from Schedules.`, code: "CHECKLIST_REQUIRED" });
+    const completesPm = keepsFirst || othersPm;
+    const completesAny = keepsFirst || others.length > 0;
+    const hasReport = hasVendorReport(eq.lab_id, root);
+    const waits = completesPm && v.by_vendor === 1 && !hasReport && readMaintainSettings(sqlite(), eq.lab_id).require_vendor_report && old.pm_complete !== 1;
+    const wasWaiting = old.pm_complete === 0;
+    const user = { id: req.userId as number, name: userName(req.userId) };
+    const done: Done[] = [];
+    let held: Held | null = null;
     let newId = 0;
     sqlite().transaction(() => {
-      let nextDue: string | null = old.next_due_date ?? null;
-      // Only what the due date is worked out from can move it; a corrected note or name leaves it alone.
-      const dueInputs = v.event_date !== old.event_date || !!v.typed || v.completes_pm !== (old.completes_pm ?? (completesPmByDefault(old.event_type) ? 1 : 0)) || (old.pm_complete === 0 && !waits);
-      if (dueInputs && v.completes_pm && !waits) {
-        const plan = planPmDue({ currentDue: eq.next_due_date, eventDate: v.event_date, intervalDays: eq.pm_interval_days, typedDue: v.typed, allowEarlier });
-        held = plan.held;
-        if (plan.computed && !plan.held) nextDue = plan.computed; else if (!plan.computed) nextDue = null;
-      } else if (dueInputs && !v.completes_pm && inForce) {
-        // It never completed PM after all. The date it set goes back only when the person says so.
-        if (allowEarlier) { nextDue = null; setDue(eq.id, old.due_before ?? null, now); } else held = { keeps: eq.next_due_date, works_out_to: old.due_before ?? null };
-      } else if (dueInputs && !v.completes_pm) nextDue = null;
       newId = insertEvent({
-        equipment_id: eq.id, lab_id: eq.lab_id, event_type: v.event_type, event_date: v.event_date, performed_by: v.performed_by, next_due_date: nextDue, notes: v.notes,
+        equipment_id: eq.id, lab_id: eq.lab_id, event_type: v.event_type, event_date: v.event_date, performed_by: v.performed_by, next_due_date: keepsFirst ? old.next_due_date ?? null : null, notes: v.notes,
         created_at: now, updated_at: now, logged_by_user_id: old.logged_by_user_id, logged_by_name: old.logged_by_name,
-        completes_pm: v.completes_pm, pm_complete: v.completes_pm ? (waits ? 0 : 1) : null, pm_completed_at: v.completes_pm && !waits ? (old.pm_completed_at ?? now) : null,
-        due_before: inForce ? old.due_before : (eq.next_due_date ?? null), pm_typed_due: v.completes_pm ? (v.typed ?? old.pm_typed_due ?? null) : null, pm_allow_earlier: allowEarlier ? 1 : 0,
+        completes_pm: completesPm ? 1 : 0, pm_complete: completesAny ? (waits ? 0 : 1) : null, pm_completed_at: completesAny && !waits ? (old.pm_completed_at ?? now) : null,
+        due_before: old.due_before ?? null, pm_typed_due: keepsFirst ? (v.typed ?? old.pm_typed_due ?? null) : null, pm_allow_earlier: allowEarlier ? 1 : 0,
         cost: v.cost, by_vendor: v.by_vendor, vendor_company: v.vendor_company, vendor_technician: v.vendor_technician, vendor_report_attached: hasReport ? 1 : 0,
-        root_event_id: rootOf(old), corrects_event_id: old.id, correction_reason: reason, corrected_by_user_id: req.userId, corrected_by_name: userName(req.userId), corrected_at: now,
+        root_event_id: root, corrects_event_id: old.id, correction_reason: reason, corrected_by_user_id: req.userId, corrected_by_name: user.name, corrected_at: now,
       });
       sqlite().prepare("UPDATE equipment_maintenance_events SET superseded_by_event_id = ? WHERE id = ?").run(newId, old.id);
-      if (dueInputs && v.completes_pm && nextDue && !held && !waits) setDue(eq.id, nextDue, now);
+      if (firstDone && !keepsFirst) {
+        // It never completed the first schedule after all. The date it set goes back only when the person says so.
+        sqlite().prepare("UPDATE equipment_schedule_completions SET voided_at = ?, voided_by_user_id = ?, voided_by_name = ?, void_reason = ? WHERE id = ?").run(now, user.id, user.name, reason, firstDone.id);
+        if (firstDone.due_set && first && first.next_due_date === firstDone.due_set) {
+          if (allowEarlier) setScheduleDue(sqlite(), first, firstDone.due_before ?? null, now); else held = { keeps: first.next_due_date, works_out_to: firstDone.due_before ?? null };
+        }
+      }
+      if (addsFirst) {
+        const sc = ensurePrimary(sqlite(), eq, now, user) ?? (v.typed ? ensurePrimary(sqlite(), { ...eq, next_due_date: v.typed }, now, user) : null);
+        if (sc) done.push(completeSchedule({ eq, schedule: sc, eventId: root, doneOn: v.event_date, typed: v.typed, allowEarlier, waits, now, user }));
+      }
+      // Only what a due date is worked out from can move it; a corrected note or name leaves it alone.
+      const dated = v.event_date !== old.event_date || (wasWaiting && !waits);
+      if (!waits) for (const x of [...(firstDone && keepsFirst ? [firstDone] : []), ...others]) {
+        if (!dated && !(x === firstDone && v.typed)) continue;
+        const r = replan(x, v.event_date, { typed: x === firstDone ? v.typed ?? (dated && wasWaiting ? x.typed_due : null) : wasWaiting ? x.typed_due : null, allowEarlier, now });
+        if (r) done.push(r);
+      }
+      const firstResult = done.find((d) => d.is_primary);
+      if (firstResult && firstResult.due_set) sqlite().prepare("UPDATE equipment_maintenance_events SET next_due_date = ? WHERE id = ?").run(firstResult.due_set, newId);
+      held = held ?? primaryHeld(done);
     })();
     const ev = sqlite().prepare("SELECT * FROM equipment_maintenance_events WHERE id = ?").get(newId) as any;
-    audit(req, "update", "equipment_event", newId, `${eq.instrument_name}: ${eventName(ev)} corrected`, old, { ...ev, reason, due_date_held: held });
+    audit(req, "update", "equipment_event", newId, `${eq.instrument_name}: ${eventName(ev)} corrected`, old, { ...ev, reason, due_date_held: held, completed_schedules: done });
     const row = sqlite().prepare("SELECT * FROM lab_equipment WHERE id = ?").get(eq.id) as any;
     res.json({ ...decorate(row), event_id: newId, due_date_held: held });
   });
 
   // Void an entry made by mistake (the wrong instrument, twice). The row stays, with who and why.
-  app.post(`${E}/:id/events/:eventId/void`, ...setup, (req: any, res: any) => {
+  app.post("/api/labs/:labId/equipment/:id/events/:eventId/void", ...setup, (req: any, res: any) => {
     const eq = equipmentIn(req);
     if (!eq) return notFound(res);
     if (eq.moved_to_lab_id) return movedAway(res, eq);
@@ -624,15 +760,20 @@ export function registerEquipmentRoutes(app: Express, deps: {
     const reason = text(req.body?.reason, 1000);
     if (!reason) return res.status(400).json({ error: "Enter why this entry is being voided", code: "REASON_REQUIRED" });
     const now = new Date().toISOString();
-    const inForce = !!ev.next_due_date && ev.next_due_date === eq.next_due_date;
-    const putBack = inForce && truthy(req.body?.allow_earlier_due);
+    const putBack = truthy(req.body?.allow_earlier_due);
+    const left: Done[] = [];
     sqlite().transaction(() => {
       sqlite().prepare("UPDATE equipment_maintenance_events SET voided_at = ?, voided_by_user_id = ?, voided_by_name = ?, void_reason = ?, updated_at = ? WHERE id = ?").run(now, req.userId, userName(req.userId), reason, now, ev.id);
-      if (putBack) setDue(eq.id, ev.due_before ?? null, now);
+      for (const x of standingOf(eq.lab_id, rootOf(ev))) {
+        const sc = scheduleRow(x.schedule_id, eq.lab_id);
+        if (!sc || !x.due_set || sc.next_due_date !== x.due_set) continue;
+        if (putBack) setScheduleDue(sqlite(), sc, x.due_before ?? null, now);
+        else left.push({ schedule_id: sc.id, name: sc.name, is_primary: sc.is_primary === 1, due_set: null, held: { keeps: sc.next_due_date, works_out_to: x.due_before ?? null } });
+      }
     })();
-    audit(req, "update", "equipment_event", ev.id, `${eq.instrument_name}: ${eventName(ev)} voided`, ev, { voided: true, reason, next_due_date: putBack ? ev.due_before : eq.next_due_date });
     const row = sqlite().prepare("SELECT * FROM lab_equipment WHERE id = ?").get(eq.id) as any;
-    res.json({ ...decorate(row), due_date_held: inForce && !putBack ? { keeps: eq.next_due_date, works_out_to: ev.due_before ?? null } : null });
+    audit(req, "update", "equipment_event", ev.id, `${eq.instrument_name}: ${eventName(ev)} voided`, ev, { voided: true, reason, next_due_date: row.next_due_date, due_dates_kept: left });
+    res.json({ ...decorate(row), due_date_held: primaryHeld(left) });
   });
 
   // ── Files ───────────────────────────────────────────────────────────────────────────────────────────
@@ -660,12 +801,12 @@ export function registerEquipmentRoutes(app: Express, deps: {
         const live = liveOf(eq.lab_id, root!);
         sqlite().prepare("UPDATE equipment_maintenance_events SET vendor_report_attached = 1 WHERE id = ?").run(live.id);
         // The report is what a vendor PM was waiting for: it counts as complete now, and the due date moves by the same rule.
-        if (live.completes_pm === 1 && live.pm_complete === 0 && !live.voided_at) {
-          const plan = planPmDue({ currentDue: eq.next_due_date, eventDate: live.event_date, intervalDays: eq.pm_interval_days, typedDue: live.pm_typed_due, allowEarlier: live.pm_allow_earlier === 1 });
-          const next = plan.computed && !plan.held ? plan.computed : null;
-          sqlite().prepare("UPDATE equipment_maintenance_events SET pm_complete = 1, pm_completed_at = ?, due_before = ?, next_due_date = ? WHERE id = ?").run(now, eq.next_due_date ?? null, next, live.id);
-          if (next) setDue(eq.id, next, now);
-          completed = { event_id: live.id, next_due_date: next ?? eq.next_due_date, due_date_held: plan.held };
+        if (live.pm_complete === 0 && !live.voided_at) {
+          const done = standingOf(eq.lab_id, root!).filter((x) => !x.counts).map((x) => replan(x, live.event_date, { typed: x.typed_due, allowEarlier: x.allow_earlier === 1, now })).filter(Boolean) as Done[];
+          const set = done.find((d) => d.is_primary)?.due_set ?? null;
+          sqlite().prepare("UPDATE equipment_maintenance_events SET pm_complete = 1, pm_completed_at = ?, next_due_date = ? WHERE id = ?").run(now, set, live.id);
+          const due = (sqlite().prepare("SELECT next_due_date FROM lab_equipment WHERE id = ?").get(eq.id) as any).next_due_date;
+          completed = { event_id: live.id, next_due_date: due, due_date_held: primaryHeld(done), completed_schedules: done };
         }
       }
     })();
@@ -677,7 +818,7 @@ export function registerEquipmentRoutes(app: Express, deps: {
   };
 
   // A file on the record: setup.
-  app.post(`${E}/:id/files`, ...setup, upload, async (req: any, res: any) => {
+  app.post("/api/labs/:labId/equipment/:id/files", ...setup, upload, async (req: any, res: any) => {
     const eq = equipmentIn(req);
     if (!eq) return notFound(res);
     if (eq.moved_to_lab_id) return movedAway(res, eq);
@@ -685,7 +826,7 @@ export function registerEquipmentRoutes(app: Express, deps: {
   });
 
   // A file on an event: the person who logged it, or an editor.
-  app.post(`${E}/:id/events/:eventId/files`, ...record, upload, async (req: any, res: any) => {
+  app.post("/api/labs/:labId/equipment/:id/events/:eventId/files", ...record, upload, async (req: any, res: any) => {
     const eq = equipmentIn(req);
     if (!eq) return notFound(res);
     if (eq.moved_to_lab_id) return movedAway(res, eq);
@@ -701,7 +842,7 @@ export function registerEquipmentRoutes(app: Express, deps: {
 
   const fileIn = (req: any, eq: any): any => sqlite().prepare("SELECT * FROM equipment_files WHERE id = ? AND equipment_id = ? AND lab_id = ?").get(Number(req.params.fileId), eq.id, eq.lab_id) ?? null;
 
-  app.get(`${E}/:id/files/:fileId`, ...read, (req: any, res: any) => {
+  app.get("/api/labs/:labId/equipment/:id/files/:fileId", ...read, (req: any, res: any) => {
     const eq = equipmentIn(req);
     if (!eq) return notFound(res);
     const f = fileIn(req, eq);
@@ -713,7 +854,7 @@ export function registerEquipmentRoutes(app: Express, deps: {
     res.send(Buffer.from(f.file_data));
   });
 
-  app.post(`${E}/:id/files/:fileId/remove`, ...setup, (req: any, res: any) => {
+  app.post("/api/labs/:labId/equipment/:id/files/:fileId/remove", ...setup, (req: any, res: any) => {
     const eq = equipmentIn(req);
     if (!eq) return notFound(res);
     if (eq.moved_to_lab_id) return movedAway(res, eq);
@@ -751,13 +892,13 @@ export function registerEquipmentRoutes(app: Express, deps: {
       .filter((l) => hasEquipmentAccess(null, l) && hasModuleEditAccess(l.id, req.userId, "veritamaintain") && deps.labAcceptsWrites(l.id, req.userId));
   };
 
-  app.get(`${E}/:id/move-targets`, ...read, requireModuleEdit("veritamaintain"), (req: any, res: any) => {
+  app.get("/api/labs/:labId/equipment/:id/move-targets", ...read, requireModuleEdit("veritamaintain"), (req: any, res: any) => {
     const eq = equipmentIn(req);
     if (!eq) return notFound(res);
     res.json(moveTargets(req).map((l) => ({ id: l.id, lab_name: l.lab_name, clia_number: l.clia_number })));
   });
 
-  app.post(`${E}/:id/move`, ...setup, (req: any, res: any) => {
+  app.post("/api/labs/:labId/equipment/:id/move", ...setup, (req: any, res: any) => {
     const eq = equipmentIn(req);
     if (!eq) return notFound(res);
     if (eq.moved_to_lab_id) return movedAway(res, eq);
@@ -774,8 +915,10 @@ export function registerEquipmentRoutes(app: Express, deps: {
     const dropped = [
       eq.map_instrument_id ? `its VeritaMap® analyzer link (${menu ? menu.nickname || menu.instrument_name : "analyzer"})` : "",
       eq.ifu_document_id ? "its IFU document link, which is a document of that lab" : "",
+      activeSchedules(sqlite(), eq.lab_id, eq.id).some((x) => x.sop_document_id) ? "its schedules' SOP links, which are documents of that lab" : "",
+      activeSchedules(sqlite(), eq.lab_id, eq.id).some((x) => (x.recipients_json || "[]") !== "[]") ? "its schedules' own reminder recipients" : "",
     ].filter(Boolean);
-    const moveNote = `Moved from ${fromName} on ${today}: ${reason}${dropped.length ? ` Dropped on the move: ${dropped.join(" and ")}. Link it again here.` : ""}`;
+    const moveNote = `Moved from ${fromName} on ${today}: ${reason}${/[.!?]$/.test(reason) ? "" : "."}${dropped.length ? ` Dropped on the move: ${dropped.join(" and ")}. Set them again here.` : ""}`;
     let newId = 0;
     const counts: Record<string, number> = {};
     sqlite().transaction(() => {
@@ -792,6 +935,21 @@ export function registerEquipmentRoutes(app: Express, deps: {
       const to = (id: number | null) => (id == null ? null : eventIds.get(id) ?? null);
       for (const r of events) link.run(to(r.root_event_id), to(r.corrects_event_id), to(r.superseded_by_event_id), eventIds.get(r.id));
       counts.events = events.length;
+      // Its schedules and checklists go on there, starting that day, reminding that lab's list; what was completed here goes along read-only.
+      const schedules = sqlite().prepare("SELECT * FROM equipment_schedules WHERE equipment_id = ? AND lab_id = ? ORDER BY id").all(eq.id, eq.lab_id) as any[];
+      const scheduleIds = copyRows(sqlite(), "equipment_schedules", schedules, (r) => ({ lab_id: target.id, equipment_id: newId, recipients_json: "[]", sop_document_id: null, starts_on: labToday(labTimeZoneById(sqlite(), target.id)) }));
+      const versions = sqlite().prepare("SELECT * FROM equipment_checklist_versions WHERE equipment_id = ? AND lab_id = ? ORDER BY id").all(eq.id, eq.lab_id) as any[];
+      const versionIds = copyRows(sqlite(), "equipment_checklist_versions", versions, (r) => ({ lab_id: target.id, equipment_id: newId, schedule_id: scheduleIds.get(r.schedule_id) ?? null }));
+      const steps = sqlite().prepare("SELECT s.* FROM equipment_checklist_steps s JOIN equipment_checklist_versions v ON v.id = s.version_id WHERE v.equipment_id = ? AND v.lab_id = ? ORDER BY s.id").all(eq.id, eq.lab_id) as any[];
+      const stepIds = copyRows(sqlite(), "equipment_checklist_steps", steps, (r) => ({ lab_id: target.id, version_id: versionIds.get(r.version_id) }));
+      const completions = (sqlite().prepare("SELECT * FROM equipment_schedule_completions WHERE equipment_id = ? AND lab_id = ? ORDER BY id").all(eq.id, eq.lab_id) as any[]).filter((r) => scheduleIds.has(r.schedule_id) && eventIds.has(r.event_id));
+      const completionIds = copyRows(sqlite(), "equipment_schedule_completions", completions, (r) => ({
+        ...from(r), schedule_id: scheduleIds.get(r.schedule_id), event_id: eventIds.get(r.event_id), checklist_version_id: r.checklist_version_id == null ? null : versionIds.get(r.checklist_version_id) ?? null,
+      }));
+      const answers = sqlite().prepare("SELECT r.* FROM equipment_checklist_results r JOIN equipment_schedule_completions c ON c.id = r.completion_id WHERE c.equipment_id = ? AND c.lab_id = ? ORDER BY r.id").all(eq.id, eq.lab_id) as any[];
+      copyRows(sqlite(), "equipment_checklist_results", answers.filter((r) => completionIds.has(r.completion_id)), (r) => ({ lab_id: target.id, completion_id: completionIds.get(r.completion_id), step_id: r.step_id == null ? null : stepIds.get(r.step_id) ?? null }));
+      counts.schedules = schedules.filter((r) => r.active).length;
+      counts.completions = completions.length;
       const files = sqlite().prepare("SELECT * FROM equipment_files WHERE equipment_id = ? AND lab_id = ? ORDER BY id").all(eq.id, eq.lab_id) as any[];
       copyRows(sqlite(), "equipment_files", files, (r) => ({ ...from(r), event_id: to(r.event_id) }));
       counts.files = files.length;
@@ -834,4 +992,7 @@ export function registerEquipmentRoutes(app: Express, deps: {
     });
     res.json({ ok: true, to_lab_id: target.id, to_lab_name: target.lab_name, equipment_id: newId, note: moveNote, carried: counts });
   });
+
+  // ── Schedules and checklists ────────────────────────────────────────────────────────────────────────
+  registerEquipmentScheduleRoutes(app, { read, record, setup, sqlite, equipmentIn, notFound, movedAway, audit, namesFor, userName, text, truthy, cleanEvent, logEvent, hasModuleEditAccess });
 }

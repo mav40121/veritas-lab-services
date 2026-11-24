@@ -11,7 +11,8 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { canCompletePm, completesPmByDefault, EQUIP_EVENT_LABEL, EQUIP_FILE_ACCEPT, EQUIP_FILE_KINDS, EQUIP_FILE_MAX_MB, planPmDue } from "@shared/equipmentPm";
+import { canCompletePm, completesPmByDefault, EQUIP_EVENT_LABEL, EQUIP_FILE_ACCEPT, EQUIP_FILE_KINDS, EQUIP_FILE_MAX_MB, } from "@shared/equipmentPm";
+import { planScheduleDue } from "@shared/equipmentSchedules";
 import { equipmentApi, sendJson, uploadFile, type Equipment } from "./equipmentShared";
 
 const TYPE_ORDER = ["calibration", "preventive_maintenance", "function_check", "service", "repair", "troubleshooting", "solution_change"] as const;
@@ -43,6 +44,7 @@ export function LogMaintenanceDialog({ labId, equipment, requireVendorReport, on
   const [outcome, setOutcome] = useState("");
   const [solAction, setSolAction] = useState(SOLUTION_ACTIONS[0]);
   const [solNames, setSolNames] = useState("");
+  const [others, setOthers] = useState<Set<number>>(new Set());
   const [saving, setSaving] = useState(false);
   const reportRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -51,6 +53,7 @@ export function LogMaintenanceDialog({ labId, equipment, requireVendorReport, on
     if (!equipment) return;
     setType("calibration"); setDate(labTodayIso()); setBy(""); setNextDue(""); setNotes(""); setCompletesPm(false); setAllowEarlier(false); setCost("");
     setVendor(false); setCompany(""); setTechnician(""); setReport(null); setFile(null); setFileKind("service_report");
+    setOthers(new Set());
     setProblem(""); setAction(""); setOutcome(""); setSolAction(SOLUTION_ACTIONS[0]); setSolNames("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [equipment?.id]);
@@ -58,11 +61,17 @@ export function LogMaintenanceDialog({ labId, equipment, requireVendorReport, on
   if (!equipment) return null;
   const isTs = type === "troubleshooting";
   const isSol = type === "solution_change";
-  const pm = completesPm && canCompletePm(type);
+  const schedules = equipment.schedules ?? [];
+  const first = schedules.find((x) => x.is_primary) ?? null;
+  // A schedule with a checklist is completed by answering it (Schedules), never by an entry alone.
+  const firstHasList = !!first?.has_checklist;
+  const rest = schedules.filter((x) => !x.is_primary);
+  const pm = completesPm && canCompletePm(type) && !firstHasList;
   const pickType = (t: string) => { setType(t); setCompletesPm(completesPmByDefault(t)); setAllowEarlier(false); if (!canCompletePm(t)) setNextDue(""); };
   // What the server will do with the due date, worked out by the same rule, before the person says anything about moving it back.
-  const plan = pm && date ? planPmDue({ currentDue: equipment.next_due_date, eventDate: date, intervalDays: equipment.pm_interval_days, typedDue: nextDue || null }) : null;
-  const waits = pm && vendor && requireVendorReport && !report;
+  const plan = pm && date ? planScheduleDue({ currentDue: equipment.next_due_date, frequency: first?.frequency ?? "manual", intervalDays: first?.interval_days ?? null, doneOn: date, typedDue: nextDue || null }) : null;
+  const otherPm = canCompletePm(type) && rest.some((x) => others.has(x.id) && x.schedule_type === "preventive_maintenance");
+  const waits = (pm || otherPm) && vendor && requireVendorReport && !report;
 
   async function save() {
     if (!date) return;
@@ -79,7 +88,7 @@ export function LogMaintenanceDialog({ labId, equipment, requireVendorReport, on
       const base = `${equipmentApi(labId)}/${equipment!.id}/events`;
       const r = await sendJson(base, "POST", {
         event_type: type, event_date: date, performed_by: by || null, notes: text, next_due_date: pm ? nextDue || null : null,
-        completes_pm: pm, allow_earlier_due: allowEarlier, cost: cost.trim() || null,
+        completes_pm: pm, ...(canCompletePm(type) && others.size ? { schedule_ids: [...others] } : {}), allow_earlier_due: allowEarlier, cost: cost.trim() || null,
         by_vendor: vendor, vendor_company: vendor ? company || null : null, vendor_technician: vendor ? technician || null : null,
       });
       if (!r.ok) { toast({ title: r.data.error || "Could not log event", variant: "destructive" }); return; }
@@ -125,8 +134,9 @@ export function LogMaintenanceDialog({ labId, equipment, requireVendorReport, on
           <div><Label htmlFor="ev-cost">Cost (optional)</Label><Input id="ev-cost" inputMode="decimal" value={cost} onChange={(e) => setCost(e.target.value)} placeholder="e.g. 1250.00" /></div>
           {canCompletePm(type) && (
             <div className="sm:col-span-2 rounded-md border p-2 space-y-2">
-              <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={completesPm} onChange={(e) => { setCompletesPm(e.target.checked); setAllowEarlier(false); }} data-testid="ev-completes-pm" /> This completes the scheduled PM</label>
-              {completesPm && (
+              <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={pm} disabled={firstHasList} onChange={(e) => { setCompletesPm(e.target.checked); setAllowEarlier(false); }} data-testid="ev-completes-pm" /> This completes the scheduled PM</label>
+              {firstHasList && <p className="text-xs text-muted-foreground">{first!.name} has a checklist. Complete it from Schedules.</p>}
+              {pm && (
                 <>
                   <div className="max-w-[14rem]"><Label htmlFor="ev-next">Next due (optional)</Label><Input id="ev-next" type="date" value={nextDue} onChange={(e) => { setNextDue(e.target.value); setAllowEarlier(false); }} /></div>
                   {plan?.held ? (
@@ -142,6 +152,17 @@ export function LogMaintenanceDialog({ labId, equipment, requireVendorReport, on
                     </p>
                   ) : <p className="text-xs text-muted-foreground">No PM interval on this instrument: enter the next due date, or it stays as it is.</p>}
                 </>
+              )}
+              {rest.length > 0 && (
+                <div data-testid="ev-schedules">
+                  <div className="text-xs font-medium">It also completes</div>
+                  {rest.map((x) => (
+                    <label key={x.id} className="flex items-center gap-2 text-sm">
+                      <input type="checkbox" checked={others.has(x.id)} disabled={x.has_checklist} onChange={() => setOthers((p) => { const n = new Set(p); if (n.has(x.id)) n.delete(x.id); else n.add(x.id); return n; })} data-testid={`ev-schedule-${x.id}`} />
+                      <span>{x.name}{x.has_checklist ? <span className="text-xs text-muted-foreground"> (has a checklist: complete it from Schedules)</span> : null}</span>
+                    </label>
+                  ))}
+                </div>
               )}
             </div>
           )}

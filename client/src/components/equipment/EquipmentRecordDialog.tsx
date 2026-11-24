@@ -30,9 +30,8 @@ function Fact({ label, children }: { label: string; children: React.ReactNode })
   return <div><div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div><div className="text-sm break-words whitespace-pre-wrap">{children}</div></div>;
 }
 
-export function EquipmentRecordDialog({ labId, equipmentId, canSetup, onClose, onChanged, schedules }: {
+export function EquipmentRecordDialog({ labId, equipmentId, canSetup, onClose, onChanged }: {
   labId: number; equipmentId: number | null; canSetup: boolean; onClose: () => void; onChanged: () => void;
-  schedules?: (record: RecordData, reload: () => void) => React.ReactNode;
 }) {
   const { toast } = useToast();
   const [data, setData] = useState<RecordData | null>(null);
@@ -116,8 +115,6 @@ export function EquipmentRecordDialog({ labId, equipmentId, canSetup, onClose, o
                 </div>
               </section>
 
-              {schedules?.(data, load)}
-
               <section data-testid="record-downtime">
                 <h3 className="text-sm font-semibold mb-1">Out of service</h3>
                 {data.downtime.length === 0 ? <p className="text-xs text-muted-foreground">No time out of service on file.</p> : (
@@ -161,7 +158,7 @@ export function EquipmentRecordDialog({ labId, equipmentId, canSetup, onClose, o
               {edit && active && targets.length > 0 && (
                 <section data-testid="record-move">
                   <h3 className="text-sm font-semibold mb-1">Move to another lab</h3>
-                  <p className="text-xs text-muted-foreground mb-2">Its history goes along, read-only, and this lab keeps its own record. A VeritaMap® link and a VeritaDC™ document link don't go along.</p>
+                  <p className="text-xs text-muted-foreground mb-2">Its history goes along, read-only, and this lab keeps its own record. Its schedules go on there. A VeritaMap® link, a VeritaDC™ document link and a schedule's own reminder list don't go along.</p>
                   <div className="flex flex-wrap items-center gap-2">
                     <select className="h-9 rounded-md border border-border bg-background px-2 text-sm max-w-full" value={toLab} onChange={(e) => setToLab(e.target.value)} data-testid="move-lab">
                       <option value="">Choose a lab</option>

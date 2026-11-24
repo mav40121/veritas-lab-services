@@ -11,7 +11,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/components/AuthContext";
-import { canCompletePm, EQUIP_EVENT_LABEL, EQUIP_EVENT_TYPES, planPmDue } from "@shared/equipmentPm";
+import { canCompletePm, EQUIP_EVENT_LABEL, EQUIP_EVENT_TYPES } from "@shared/equipmentPm";
+import { planScheduleDue } from "@shared/equipmentSchedules";
+import { ResultList } from "./EquipmentSchedulesDialog";
 import { AttachFile, equipmentApi, FileList, ReasonDialog, sendJson, type Equipment, type MaintEvent } from "./equipmentShared";
 
 const money = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -42,15 +44,19 @@ function CorrectDialog({ labId, equipment, ev, onClose, onSaved }: { labId: numb
   const [company, setCompany] = useState(ev.vendor_company || "");
   const [technician, setTechnician] = useState(ev.vendor_technician || "");
   const [vendor, setVendor] = useState(ev.by_vendor === 1);
-  const [completesPm, setCompletesPm] = useState((ev.completes_pm ?? (ev.event_type === "preventive_maintenance" ? 1 : 0)) === 1);
+  // The first schedule is the PM: an entry that only completed another schedule keeps it, and this box starts off.
+  const first = equipment.schedules?.find((x) => x.is_primary) ?? null;
+  const done = ev.completions ?? [];
+  const wasPm = done.length ? done.some((c) => c.schedule_id === first?.id) : (ev.completes_pm ?? (ev.event_type === "preventive_maintenance" ? 1 : 0)) === 1;
+  const others = done.filter((c) => c.schedule_id !== first?.id);
+  const [completesPm, setCompletesPm] = useState(wasPm);
   const [notes, setNotes] = useState(ev.notes || "");
   const [reason, setReason] = useState("");
   const [allowEarlier, setAllowEarlier] = useState(false);
   const [busy, setBusy] = useState(false);
   const pm = completesPm && canCompletePm(type);
-  const wasPm = (ev.completes_pm ?? (ev.event_type === "preventive_maintenance" ? 1 : 0)) === 1;
   const moves = date !== ev.event_date || pm !== wasPm;
-  const plan = moves && pm && date ? planPmDue({ currentDue: equipment.next_due_date, eventDate: date, intervalDays: equipment.pm_interval_days }) : null;
+  const plan = moves && pm && date ? planScheduleDue({ currentDue: equipment.next_due_date, frequency: first?.frequency ?? "manual", intervalDays: first?.interval_days ?? null, doneOn: date }) : null;
   const undoes = moves && !pm && wasPm && !!ev.next_due_date && ev.next_due_date === equipment.next_due_date;
 
   async function save() {
@@ -59,7 +65,7 @@ function CorrectDialog({ labId, equipment, ev, onClose, onSaved }: { labId: numb
     try {
       const r = await sendJson(`${equipmentApi(labId)}/${equipment.id}/events/${ev.id}/correct`, "POST", {
         reason: reason.trim(), event_type: type, event_date: date, performed_by: by, notes, cost: cost.trim() || null,
-        by_vendor: vendor, vendor_company: vendor ? company : "", vendor_technician: vendor ? technician : "", completes_pm: pm, allow_earlier_due: allowEarlier,
+        by_vendor: vendor, vendor_company: vendor ? company : "", vendor_technician: vendor ? technician : "", ...(pm !== wasPm ? { completes_pm: pm } : {}), allow_earlier_due: allowEarlier,
       });
       if (!r.ok) { toast({ title: r.data.error || "Could not save the correction", variant: "destructive" }); return; }
       toast({ title: "Entry corrected", description: r.data.due_date_held ? `The PM due date stays ${r.data.due_date_held.keeps}.` : "The original stays under it." });
@@ -89,6 +95,7 @@ function CorrectDialog({ labId, equipment, ev, onClose, onSaved }: { labId: numb
             <div><Label htmlFor="co-tech">Technician</Label><Input id="co-tech" value={technician} onChange={(e) => setTechnician(e.target.value)} /></div>
           </>)}
           {canCompletePm(type) && <label className="sm:col-span-2 flex items-center gap-2 text-sm"><input type="checkbox" checked={completesPm} onChange={(e) => { setCompletesPm(e.target.checked); setAllowEarlier(false); }} /> This completed the scheduled PM</label>}
+          {others.length > 0 && <p className="sm:col-span-2 text-xs text-muted-foreground">It also completed {others.map((c) => c.schedule_name).join(", ")}. A corrected date carries to that; to take it back, void the entry.</p>}
           {(plan?.held || plan?.move || undoes) && (
             <div className="sm:col-span-2 text-xs text-amber-800 dark:text-amber-300" data-testid="correct-due">
               {plan?.held ? (allowEarlier ? `The PM due date moves back from ${plan.held.keeps} to ${plan.held.works_out_to}.` : `With this date the next PM works out to ${plan.held.works_out_to}, earlier than ${plan.held.keeps}, which stays.`)
@@ -167,7 +174,7 @@ export function EquipmentHistoryDialog({ labId, equipment, canEdit, canRecord, o
                       <span className="font-medium">{ev.event_date}</span>
                       <span>{EQUIP_EVENT_LABEL[ev.event_type] || ev.event_type}</span>
                       {ev.completes_pm === 1 && ev.pm_complete !== 0 && !ev.voided_at && <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 border-emerald-500/20 dark:text-emerald-400">Completes PM</Badge>}
-                      {ev.completes_pm === 1 && ev.pm_complete === 0 && !ev.voided_at && <Badge variant="outline" className="bg-amber-500/10 text-amber-800 border-amber-500/30 dark:text-amber-300" data-testid={`history-waiting-${ev.id}`}>Waiting for the vendor report</Badge>}
+                      {ev.pm_complete === 0 && !ev.voided_at && <Badge variant="outline" className="bg-amber-500/10 text-amber-800 border-amber-500/30 dark:text-amber-300" data-testid={`history-waiting-${ev.id}`}>Waiting for the vendor report</Badge>}
                       {ev.vendor_report_attached === 1 && <Badge variant="outline" data-testid={`history-report-${ev.id}`}>Vendor report attached</Badge>}
                       {ev.carried_from_lab_name && <Badge variant="outline" className="text-muted-foreground">Recorded at {ev.carried_from_lab_name}, read-only</Badge>}
                       {ev.voided_at && <Badge variant="outline" className="bg-red-500/10 text-red-700 border-red-500/20 dark:text-red-400">Voided</Badge>}
@@ -175,6 +182,12 @@ export function EquipmentHistoryDialog({ labId, equipment, canEdit, canRecord, o
                     <Facts ev={ev} />
                     {ev.voided_at && <div className="text-xs text-red-700 dark:text-red-400 mt-1">Voided {labDayOf(ev.voided_at)}{ev.voided_by_name ? ` by ${ev.voided_by_name}` : ""}: {ev.void_reason}</div>}
                     {ev.corrected_at && <div className="text-xs text-muted-foreground mt-1" data-testid={`history-corrected-${ev.id}`}>Corrected {labDayOf(ev.corrected_at)}{ev.corrected_by_name ? ` by ${ev.corrected_by_name}` : ""}: {ev.correction_reason}</div>}
+                    {(ev.completions ?? []).map((c) => (
+                      <div key={c.id} className="mt-1" data-testid={`history-completion-${c.id}`}>
+                        <div className="text-xs font-medium">Completed: {c.schedule_name}{c.checklist_version_no ? `, checklist version ${c.checklist_version_no}` : ""}</div>
+                        <ResultList results={c.results} />
+                      </div>
+                    ))}
                     <FileList files={ev.files} base={`${equipmentApi(labId)}/${equipment.id}/files`} canRemove={canEdit && live} onChanged={changed} />
                     {attachTo === ev.id && <div className="mt-2"><AttachFile url={`${equipmentApi(labId)}/${equipment.id}/events/${ev.id}/files`} defaultKind={ev.by_vendor ? "vendor_report" : "service_report"} onSent={() => { setAttachTo(null); changed(); }} testId={`attach-${ev.id}`} /></div>}
                     <div className="flex flex-wrap gap-1.5 mt-2">

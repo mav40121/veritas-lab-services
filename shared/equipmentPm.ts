@@ -31,6 +31,7 @@ export const completesPmByDefault = (eventType: string): boolean => eventType ==
 
 export const addDays = (day: string, n: number): string => new Date(Date.parse(`${day}T00:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
 
+// What a completed schedule, the PM included, does to its due date (shared/equipmentSchedules.ts planScheduleDue works it out).
 export interface PmDuePlan {
   /** The date this event works out to, or null when there is nothing to work it out from. */
   computed: string | null;
@@ -38,21 +39,6 @@ export interface PmDuePlan {
   move: boolean;
   /** Set when `computed` is earlier than the due date on file and the person didn't say to move it back. */
   held: { keeps: string; works_out_to: string } | null;
-}
-
-/** What one completed PM does to the due date. A typed date wins over the interval. */
-export function planPmDue(o: {
-  currentDue: string | null | undefined;
-  eventDate: string;
-  intervalDays: number | null | undefined;
-  typedDue?: string | null;
-  allowEarlier?: boolean;
-}): PmDuePlan {
-  const interval = Number(o.intervalDays);
-  const computed = o.typedDue ? o.typedDue : interval > 0 ? addDays(o.eventDate, interval) : null;
-  if (!computed) return { computed: null, move: false, held: null };
-  if (o.currentDue && computed < o.currentDue && !o.allowEarlier) return { computed, move: false, held: { keeps: o.currentDue, works_out_to: computed } };
-  return { computed, move: computed !== o.currentDue, held: null };
 }
 
 // ── Files ──────────────────────────────────────────────────────────────────────────────────────────────

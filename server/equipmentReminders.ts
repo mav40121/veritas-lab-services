@@ -13,6 +13,19 @@ import { db } from "./db";
 import { decideTaskReminder } from "./veritatrackReminders";
 import { daysUntilDateOnly } from "./veritatrack";
 import { labToday, labTimeZoneById } from "./dateLocal";
+import { reminderLeadDays } from "../shared/equipmentSchedules";
+import { PRIMARY_NAME } from "./equipmentScheduleData";
+
+// B10 (2026-11-24): the digest covers every schedule on an instrument, not only its PM date. A schedule with its own recipients goes to them;
+// the rest go to the lab's list (or its owner), as before, so someone on both gets one email per list.
+export const equipmentMailer = {
+  ready: (): boolean => !!process.env.RESEND_API_KEY,
+  send: async (message: { to: string[]; subject: string; text: string }): Promise<void> => {
+    const { Resend } = await import("resend");
+    const out: any = await new Resend(process.env.RESEND_API_KEY).emails.send({ from: "VeritaAssure <info@veritaslabservices.com>", ...message });
+    if (out?.error) throw new Error(out.error.message || "Resend refused the message");
+  },
+};
 
 export interface EquipmentReminderSummary {
   labs: number; equipmentChecked: number; notifiable: number; emailsSent: number; skipped: number; errors: number;
@@ -22,16 +35,6 @@ export async function runEquipmentReminders(): Promise<EquipmentReminderSummary>
   const summary: EquipmentReminderSummary = { labs: 0, equipmentChecked: 0, notifiable: 0, emailsSent: 0, skipped: 0, errors: 0 };
   const sqlite = (db as any).$client;
   // "today" is per lab, set at the top of the lab loop below.
-
-  let resend: any = null;
-  try {
-    if (process.env.RESEND_API_KEY) {
-      const { Resend } = await import("resend");
-      resend = new Resend(process.env.RESEND_API_KEY);
-    }
-  } catch (err: any) {
-    console.error("[equipment-reminder] Resend init failed:", err?.message || err);
-  }
 
   let configs: any[] = [];
   try {
@@ -55,82 +58,113 @@ export async function runEquipmentReminders(): Promise<EquipmentReminderSummary>
       ).get(cfg.lab_id) as any;
       if (owner?.email) recipients = [{ email: owner.email, name: owner.name }];
     }
-    if (recipients.length === 0) { summary.skipped++; continue; }
-
     const lab = sqlite.prepare("SELECT lab_name, clia_number FROM labs WHERE id = ?").get(cfg.lab_id) as any;
     const labLabel = lab?.lab_name || lab?.clia_number || "your lab";
 
-    // Active instruments with a next-due date are the reminder candidates.
+    // Every schedule with a due date on an active instrument. An instrument with no schedule row yet is reminded by its own PM date.
     const equipment = sqlite.prepare(
-      "SELECT * FROM lab_equipment WHERE lab_id = ? AND status <> 'retired' AND next_due_date IS NOT NULL AND TRIM(next_due_date) <> ''"
+      "SELECT * FROM lab_equipment WHERE lab_id = ? AND status <> 'retired'"
     ).all(cfg.lab_id) as any[];
-    const notifiable: { eq: any; kind: string; dueDate: string; days: number }[] = [];
-
+    const schedules = sqlite.prepare("SELECT * FROM equipment_schedules WHERE lab_id = ? AND active = 1").all(cfg.lab_id) as any[];
+    interface Due { eq: any; scheduleId: number | null; name: string; frequency: string; intervalDays: number | null; primary: boolean; due: string; to: { email: string }[] }
+    const dues: Due[] = [];
     for (const eq of equipment) {
-      summary.equipmentChecked++;
-      const due = eq.next_due_date;
-      const days = daysUntilDateOnly(due, today);
+      const own = schedules.filter((x) => x.equipment_id === eq.id);
+      const rows = own.some((x) => x.is_primary)
+        ? own
+        : [{ id: null, name: PRIMARY_NAME, frequency: "every_n_days", interval_days: eq.pm_interval_days, is_primary: 1, next_due_date: eq.next_due_date, recipients_json: "[]" }, ...own];
+      for (const x of rows) {
+        const due = String(x.next_due_date || "").trim();
+        if (!due) continue;
+        let to: any[] = [];
+        try { to = JSON.parse(x.recipients_json || "[]"); } catch { to = []; }
+        to = Array.isArray(to) ? to.filter((r) => r && typeof r.email === "string" && r.email.includes("@")) : [];
+        dues.push({ eq, scheduleId: x.id, name: x.name, frequency: x.frequency, intervalDays: x.interval_days, primary: !!x.is_primary, due, to });
+      }
+    }
+    interface Notice extends Due { kind: string; days: number }
+    const notifiable: Notice[] = [];
 
+    for (const d of dues) {
+      summary.equipmentChecked++;
+      const days = daysUntilDateOnly(d.due, today);
+      // A reminder sent before schedules existed has no schedule on it: it was for the instrument's first one.
+      const mine = d.primary ? "(schedule_id IS NULL OR schedule_id IS ?)" : "schedule_id IS ?";
       const approachingKindsSent = new Set<string>(
         (sqlite.prepare(
-          "SELECT DISTINCT reminder_kind FROM equipment_reminder_log WHERE equipment_id = ? AND reminder_kind LIKE 'approaching-%' AND due_date IS ?"
-        ).all(eq.id, due) as any[]).map(r => r.reminder_kind)
+          `SELECT DISTINCT reminder_kind FROM equipment_reminder_log WHERE equipment_id = ? AND ${mine} AND reminder_kind LIKE 'approaching-%' AND due_date IS ?`
+        ).all(d.eq.id, d.scheduleId, d.due) as any[]).map(r => r.reminder_kind)
       );
       const lastOverdueRow = sqlite.prepare(
-        "SELECT MAX(sent_on) AS s FROM equipment_reminder_log WHERE equipment_id = ? AND reminder_kind = 'overdue'"
-      ).get(eq.id) as any;
+        `SELECT MAX(sent_on) AS s FROM equipment_reminder_log WHERE equipment_id = ? AND ${mine} AND reminder_kind = 'overdue'`
+      ).get(d.eq.id, d.scheduleId) as any;
       const daysSinceLastOverdue = lastOverdueRow?.s
         ? Math.round((Date.parse(today + "T00:00:00Z") - Date.parse(String(lastOverdueRow.s).slice(0, 10) + "T00:00:00Z")) / 86400000)
         : null;
 
       const decision = decideTaskReminder({
         daysUntilDue: days,
-        leadDays: cfg.lead_days,
+        leadDays: reminderLeadDays(d.frequency, d.intervalDays, d.primary, cfg.lead_days),
         overdueCadenceDays: cfg.overdue_cadence_days,
         approachingKindsSent,
         daysSinceLastOverdue,
       });
-      if (decision.notify && decision.kind) notifiable.push({ eq, kind: decision.kind, dueDate: due, days });
+      if (decision.notify && decision.kind) notifiable.push({ ...d, kind: decision.kind, days });
     }
 
     if (notifiable.length === 0) continue;
-    summary.notifiable += notifiable.length;
-    if (!resend) { summary.skipped++; continue; }
 
-    const lines = notifiable.map(n => {
-      const when = n.days <= 0
-        ? `overdue by ${Math.abs(n.days)} day${Math.abs(n.days) === 1 ? "" : "s"} (due ${n.dueDate})`
-        : `due in ${n.days} day${n.days === 1 ? "" : "s"} (${n.dueDate})`;
-      const loc = n.eq.location ? ` [${n.eq.location}]` : "";
-      return `- ${n.eq.instrument_name}${loc}: ${when}`;
-    });
-    const overdueN = notifiable.filter(n => n.days <= 0).length;
-    const subject = `Equipment maintenance reminder: ${notifiable.length} instrument${notifiable.length === 1 ? "" : "s"} due or overdue at ${labLabel}`;
-    const text = [
-      `Hello,`,
-      ``,
-      `This is an automated equipment maintenance reminder for ${labLabel}.`,
-      ``,
-      `${notifiable.length} instrument${notifiable.length === 1 ? "" : "s"} need attention (${overdueN} overdue):`,
-      ``,
-      ...lines,
-      ``,
-      `Instrument calibration and preventive maintenance support CLIA 42 CFR 493.1254 and competency Element 4. Complete the maintenance, then log it in VeritaAssure to clear these reminders.`,
-      ``,
-      `Sent automatically from VeritaAssure. To change who receives these or turn them off, update the reminder settings on the VeritaMaintain™ page.`,
-    ].join("\n");
+    // One email per list of people: the lab's own, and each different list a schedule names.
+    const groups = new Map<string, { to: string[]; items: Notice[] }>();
+    for (const n of notifiable) {
+      const to = (n.to.length ? n.to : recipients).map((r) => r.email);
+      if (!to.length) { summary.skipped++; continue; }
+      const key = [...to].map((e) => e.toLowerCase()).sort().join(",");
+      if (!groups.has(key)) groups.set(key, { to, items: [] });
+      groups.get(key)!.items.push(n);
+    }
+    for (const { to, items } of groups.values()) {
+      summary.notifiable += items.length;
+      if (!equipmentMailer.ready()) { summary.skipped++; continue; }
 
-    try {
-      await resend.emails.send({ from: "VeritaAssure <info@veritaslabservices.com>", to: recipients.map(r => r.email), subject, text });
-      summary.emailsSent++;
-      const recipientList = recipients.map(r => r.email).join(",");
-      const insert = sqlite.prepare(
-        "INSERT INTO equipment_reminder_log (equipment_id, lab_id, reminder_kind, due_date, sent_on, recipient_email) VALUES (?,?,?,?,?,?)"
-      );
-      for (const n of notifiable) insert.run(n.eq.id, cfg.lab_id, n.kind, n.dueDate, today, recipientList);
-    } catch (err: any) {
-      summary.errors++;
-      console.error(`[equipment-reminder] send failed for lab ${cfg.lab_id}:`, err?.message || err);
+      const lines = items.map(n => {
+        const when = n.days === 0
+          ? `due today (${n.due})`
+          : n.days < 0
+          ? `overdue by ${Math.abs(n.days)} day${Math.abs(n.days) === 1 ? "" : "s"} (due ${n.due})`
+          : `due in ${n.days} day${n.days === 1 ? "" : "s"} (${n.due})`;
+        const loc = n.eq.location ? ` [${n.eq.location}]` : "";
+        return `- ${n.eq.instrument_name}${loc}, ${n.name}: ${when}`;
+      });
+      const overdueN = items.filter(n => n.days <= 0).length;
+      const instruments = new Set(items.map(n => n.eq.id)).size;
+      const subject = `Equipment maintenance reminder: ${instruments} instrument${instruments === 1 ? "" : "s"} due or overdue at ${labLabel}`;
+      const text = [
+        `Hello,`,
+        ``,
+        `This is an automated equipment maintenance reminder for ${labLabel}.`,
+        ``,
+        `${items.length} schedule${items.length === 1 ? "" : "s"} on ${instruments} instrument${instruments === 1 ? "" : "s"} need attention (${overdueN} due today or overdue):`,
+        ``,
+        ...lines,
+        ``,
+        `Instrument calibration and preventive maintenance support CLIA 42 CFR 493.1254 and competency Element 4. Complete the maintenance, then log it in VeritaAssure to clear these reminders.`,
+        ``,
+        `Sent automatically from VeritaAssure. To change who receives these or turn them off, update the reminder settings on the VeritaMaintain™ page.`,
+      ].join("\n");
+
+      try {
+        await equipmentMailer.send({ to, subject, text });
+        summary.emailsSent++;
+        const recipientList = to.join(",");
+        const insert = sqlite.prepare(
+          "INSERT INTO equipment_reminder_log (equipment_id, lab_id, reminder_kind, due_date, sent_on, recipient_email, schedule_id) VALUES (?,?,?,?,?,?,?)"
+        );
+        for (const n of items) insert.run(n.eq.id, cfg.lab_id, n.kind, n.due, today, recipientList, n.scheduleId);
+      } catch (err: any) {
+        summary.errors++;
+        console.error(`[equipment-reminder] send failed for lab ${cfg.lab_id}:`, err?.message || err);
+      }
     }
   }
 
