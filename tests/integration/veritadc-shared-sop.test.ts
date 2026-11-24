@@ -17,11 +17,18 @@
 //      a plan without VeritaDC; a closed or read-only lab.
 //   9. The organization's view: counts only, only labs the reader's roll-up shows, group filter, Excel.
 //  10. A lab that receives nothing answers exactly as before, the System Repository's loose files included.
+//  11. The addenda in the other readers (VeritaScan, a finding, VeritaMaintain, the staff approval screen), in read-and-sign, and on
+//      paper: Word, PDF, picture, landscape and turned pages, and a part that can't go in. The PDF's words are read with PyMuPDF.
 //
 // Boots the REAL routes against a throwaway SQLite DB (made-up rows only); no email leaves (readSignMailer is swapped out).
 // Run: npm run test:veritadc-shared-sop
 
+import { execFileSync } from "node:child_process";
+import fs from "node:fs";
 import http from "node:http";
+import os from "node:os";
+import path from "node:path";
+import { deflateSync } from "node:zlib";
 import express from "express";
 import { createRequire } from "node:module";
 import { registerRoutes } from "../../server/routes";
@@ -41,6 +48,8 @@ function check(name: string, cond: boolean, detail = "") {
   if (cond) passes++; else failures++;
 }
 const EM_DASH = String.fromCharCode(0x2014);
+const CRC = Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
+const crc32 = (b: Buffer) => { let c = 0xffffffff; for (const x of b) c = CRC[(c ^ x) & 0xff] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
 const keysOf = (o: any) => Object.keys(o || {}).sort().join(",");
 
 async function main() {
@@ -590,6 +599,261 @@ async function main() {
     const differs = Object.keys(quietBefore).filter((k) => quietBefore[k] !== quietAfter[k]);
     check("10. a lab of the same organization that received nothing answers exactly as before, the loose files included", differs.length === 0, differs.map((k) => `${k}: ${quietBefore[k].slice(0, 160)} >> ${quietAfter[k].slice(0, 160)}`).join(" | "));
     check("10. and holds no row of this feature", mine.every((t) => all(`SELECT 1 FROM ${t} WHERE lab_id = ?`, Z.labId).length === 0));
+
+    // ── 11. Addenda in the other readers, in read-and-sign, and on paper ──
+    const D = await mkLab("d", "Made-up Harbor Laboratory");
+    run("UPDATE labs SET organization_id = ?, is_demo = 0, clia_number = '22D9990011' WHERE id = ?", ORG, D.labId);
+    await call("GET", `${D.P}/manuals`, undefined, D.token);
+    const dSigner = await person(D, "dsigner", "Dee Signer", "active");
+    const dEditor = await person(D, "deditor", "Dov Editor", "active");
+    const dViewer = await person(D, "dviewer", "Dru Viewer", "view_only");
+    const dStaff = await person(D, "dstaff", "Remy Quillby", "staff_portal");
+    const dApprover = await person(D, "dapprover", "Reese Quillby", "staff_portal");
+    const dWf = await route(D, "Harbor approval", dSigner.userId);
+    const M6 = await doc(R, "Cold chain", "COLD made up", { doc_number: "SYS 30" }, writer.token);
+    await approve(R, M6, rWf, rSigner);
+    await send({ labIds: [D.labId] }, writer.token, M6);
+    const dDoc = copyOf(M6, D).document_id as number;
+    await approve(D, dDoc, dWf, dSigner);
+    const addendum = async (title: string, text: string, parent = dDoc) => Number((await call("POST", `${D.P}/documents/${parent}/addenda`, { title, text }, dEditor.token)).body.id);
+    const ad1 = await addendum("Harbor freezer list", "HARBOR-ONE made up");
+    await approve(D, ad1, dWf, dSigner);
+    await newVersion(D, ad1, "HARBOR-TWO made up", {}, dEditor.token);
+    await addendum("Never approved", "HARBOR-DRAFT made up");
+    const plain = await doc(D, "Plain procedure", "PLAIN made up");
+    await approve(D, plain, dWf, dSigner);
+    const dShown = (r: { status: number; text: string }) => r.status === 200 && r.text.includes("HARBOR-ONE") && !r.text.includes("HARBOR-TWO");
+    const NUMBERS = ["0", "2", "-1", "x", "1.5", String(ad1)];
+    const LAB = `/api/labs/${D.labId}`;
+
+    // VeritaScan and a finding: the list names them, and each opens through VeritaDC's own routes.
+    await call("POST", `${LAB}/veritascan/checklist/items/12/policy-links`, { document_id: dDoc }, D.token);
+    await call("POST", `${LAB}/veritascan/checklist/items/12/policy-links`, { document_id: plain }, D.token);
+    const finding = Number((await call("POST", `${LAB}/findings`, { accreditor: "CMS", anchor_date: "2026-11-01" }, D.token)).body.id);
+    const linkedNow = await call("POST", `${LAB}/findings/${finding}/documents`, { document_id: dDoc }, D.token);
+    await call("POST", `${LAB}/findings/${finding}/documents`, { document_id: plain }, D.token);
+    const scanLinks = async (token: string) => (await call("GET", `${LAB}/veritascan/policy-links`, undefined, token)).body as any[];
+    const findingLinks = async (token: string) => (await call("GET", `${LAB}/findings/${finding}/documents`, undefined, token)).body.documents as any[];
+    for (const [where, get] of [["VeritaScan", scanLinks], ["a finding", findingLinks]] as const) {
+      for (const [who, p] of [["the owner", D], ["an editor", dEditor], ["a view-only seat", dViewer], ["a Staff login", dStaff]] as const) {
+        const rows = await get(p.token);
+        const l = rows?.find?.((x: any) => x.document_id === dDoc);
+        const a = l?.addenda?.[0];
+        const opened = a && await call("GET", `${D.P}/documents/${a.document_id}/${p === dStaff ? "render" : `versions/${a.open_version_id}/render`}`, undefined, p.token);
+        check(`11. ${where}, ${who}: the approved addendum is named with the document and opens at its approved version`, l?.addenda?.length === 1 && a.document_id === ad1 && a.title === "Harbor freezer list" && a.version_label === "1.0" && a.open_version_id === row(ad1).approved_version_id && keysOf(a) === "document_id,open_version_id,title,version_label" && dShown(opened), JSON.stringify(l));
+        check(`11. ${where}, ${who}: a document with none carries no list`, rows?.some?.((x: any) => x.document_id === plain && !("addenda" in x)) === true);
+      }
+      check(`11. ${where}: another laboratory reads nothing of it`, !(JSON.stringify(await get(B.token)) ?? "").includes("Harbor"));
+    }
+    check("11. a link just made carries it too", linkedNow.body.addenda?.[0]?.document_id === ad1);
+    check("11. a Staff login can't open the addendum's draft through the link's route", (await call("GET", `${D.P}/documents/${ad1}/versions/${row(ad1).current_version_id}/render`, undefined, dStaff.token)).status === 403);
+
+    // VeritaMaintain: the instrument's IFU and a schedule's SOP, through the link only.
+    const eq = Number((await call("POST", `${LAB}/equipment`, { instrument_name: "Made-up freezer", pm_interval_days: 90, next_due_date: "2099-01-01" }, D.token)).body.id);
+    await call("PUT", `${LAB}/equipment/${eq}`, { ifu_document_id: dDoc }, D.token);
+    const sch = Number((await call("GET", `${LAB}/equipment/${eq}/schedules`, undefined, D.token)).body.schedules[0].id);
+    await call("PUT", `${LAB}/equipment/${eq}/schedules/${sch}`, { sop_document_id: dDoc }, D.token);
+    for (const [where, url, surface] of [["the IFU", `${LAB}/equipment/${eq}/ifu-document`, "equipment_ifu"], ["a schedule's SOP", `${LAB}/equipment/${eq}/schedules/${sch}/sop`, "equipment_schedule_sop"]] as const) {
+      for (const [who, p] of [["a view-only seat", dViewer], ["a Staff login", dStaff]] as const) {
+        const main = await call("GET", url, undefined, p.token);
+        const list = await call("GET", `${url}?addenda=1`, undefined, p.token);
+        check(`11. ${where}, ${who}: it says how many, lists them by place and not by id, and opens the approved version`, main.body.addenda_count === 1 && main.text.includes("COLD made up") && JSON.stringify(list.body) === JSON.stringify({ addenda: [{ title: "Harbor freezer list", version: "1.0" }] }) && dShown(await call("GET", `${url}?addendum=1`, undefined, p.token)), main.text.slice(0, 200) + list.text.slice(0, 200));
+      }
+      check(`11. ${where}: and no other document by any number`, (await Promise.all(NUMBERS.map((n) => call("GET", `${url}?addendum=${n}`, undefined, dViewer.token)))).every((r) => r.status === 404));
+      check(`11. ${where}: another laboratory, and nobody signed in, get nothing`, (await Promise.all(["", "?addenda=1", "?addendum=1"].flatMap((q) => [call("GET", url + q, undefined, B.token), call("GET", url + q)]))).every((r) => r.status >= 400 && !r.text.includes("HARBOR") && !r.text.includes("Harbor freezer")));
+      check(`11. ${where}: reading one is on the addendum's own trail, saying which document it came with`, audits(ad1, "viewed").some((x) => { const t = JSON.parse(x.details || "{}"); return t.surface === surface && t.addendum_to_document_id === dDoc && t.version_id === row(ad1).approved_version_id; }));
+    }
+    await call("PUT", `${LAB}/equipment/${eq}`, { ifu_document_id: plain }, D.token);
+    check("11. a document with none is sent as before", await (async () => { const r = await call("GET", `${LAB}/equipment/${eq}/ifu-document`, undefined, dStaff.token); return r.status === 200 && keysOf(r.body) === "doc_number,format,html,revision_in_progress,tampered,title,version" && keysOf(JSON.parse(decodeURIComponent(r.headers.get("X-Document")!))) === "doc_number,revision_in_progress,title,version"; })());
+
+    // The approval screen: someone asked to sign a document nobody else may read yet opens it and its addenda there, and nowhere else.
+    const M7 = await doc(R, "Cold chain, part two", "COLD-TWO made up", {}, writer.token);
+    await approve(R, M7, rWf, rSigner);
+    await send({ labIds: [D.labId] }, writer.token, M7);
+    const dWait = copyOf(M7, D).document_id as number;
+    const ad2 = await addendum("Harbor pickup times", "HARBOR-ONE pickup made up", dWait);
+    await approve(D, ad2, dWf, dSigner);
+    await newVersion(D, ad2, "HARBOR-TWO pickup made up", {}, dEditor.token);
+    await addendum("Not approved here either", "HARBOR-DRAFT made up", dWait);
+    const apWf = await route(D, "Reese approves", dApprover.userId, false);
+    await submit(D, dWait, apWf);
+    const AP = `/api/staff-portal-session/approvals/${dWait}`;
+    const item = await call("GET", AP, undefined, dApprover.token);
+    check("11. the approval screen: its approver reads the document and its approved addendum, at its approved version", item.status === 200 && JSON.stringify(item.body.addenda) === JSON.stringify([{ title: "Harbor pickup times", version: "1.0" }]) && (await call("GET", `${AP}/render`, undefined, dApprover.token)).text.includes("COLD-TWO") && dShown(await call("GET", `${AP}/addenda/1/render`, undefined, dApprover.token)), item.text.slice(0, 300));
+    check("11. the approval screen: and no other document by any number", (await Promise.all([...NUMBERS, String(ad2)].map((n) => call("GET", `${AP}/addenda/${n}/render`, undefined, dApprover.token)))).every((r) => r.status === 404));
+    check("11. the approver may not open the document anywhere else", (await Promise.all([`${D.P}/documents/${dWait}`, `${D.P}/documents/${dWait}/render`, `${D.P}/documents/${dWait}/print.pdf`, `/api/staff-portal-session/policies/${dWait}`, `/api/staff-portal-session/policies/${dWait}/render`].map((u) => call("GET", u, undefined, dApprover.token)))).every((r) => r.status === 404));
+    check("11. someone who isn't asked opens neither there", (await call("GET", AP, undefined, dStaff.token)).status === 404 && (await call("GET", `${AP}/addenda/1/render`, undefined, dStaff.token)).status === 404 && (await call("GET", `${AP}/addenda/1/render`, undefined, bStaff.token)).status === 404 && (await call("GET", `${AP}/addenda/1/render`)).status === 401);
+    check("11. a document with no addendum says nothing there", await (async () => { const p = await doc(D, "Plain waiting", "PLAIN made up"); await submit(D, p, apWf); const r = await call("GET", `/api/staff-portal-session/approvals/${p}`, undefined, dApprover.token); return r.status === 200 && !("addenda" in r.body); })());
+    await call("POST", `${AP}/approve`, { typed_signature: dApprover.name, password: PW, version_id: item.body.version_id }, dApprover.token);
+    check("11. once it is signed, that way in closes", row(dWait).status === "approved" && (await call("GET", `${AP}/addenda/1/render`, undefined, dApprover.token)).status === 404);
+
+    // Read-and-sign.
+    const RS = `${D.P}/read-sign`;
+    const dana = roster(D, "Dana", "Reader");
+    const rsRows = (id: number) => all("SELECT * FROM policy_read_sign_assignments WHERE lab_id = ? AND document_id = ?", D.labId, id);
+    const ad3 = await addendum("Harbor courier sheet", "HARBOR courier made up");
+    await approve(D, ad3, dWf, dSigner);
+    const offer = async (token: string, q = `scope=document&id=${dDoc}`) => (await call("GET", `${RS}?${q}`, undefined, token)).body;
+    const offered = (await offer(dEditor.token)).addenda;
+    check("11. read-and-sign: whoever assigns is told its addenda; nobody else, and no other scope, is", offered?.length === 3 && keysOf(offered[0]) === "document_id,in_force,title" && offered.find((a: any) => a.document_id === ad3).in_force === true && !("addenda" in (await offer(dViewer.token))) && !("addenda" in (await offer(dEditor.token, `scope=document&id=${plain}`))) && !("addenda" in (await offer(dEditor.token, "scope=lab"))), JSON.stringify(offered));
+    await taken();
+    const alone = await call("POST", RS, { scope: "document", id: dDoc, employee_ids: [dana] }, dEditor.token);
+    check("11. read-and-sign: off leaves them out", alone.status === 201 && alone.body.added === 1 && !("addenda_assigned" in alone.body) && rsRows(dDoc).length === 1 && rsRows(ad1).length === 0 && rsRows(ad3).length === 0);
+    for (const [what, ids] of [["another document of the laboratory", [plain]], ["the document itself", [dDoc]], ["another laboratory's", [adId]], ["one that isn't there", [999999]], ["one of them wrong", [ad3, plain]], ["not numbers", ["x"]]] as const) {
+      const r = await call("POST", RS, { scope: "document", id: dDoc, employee_ids: [dStaff.emp], addendum_ids: ids }, dEditor.token);
+      check(`11. read-and-sign: ${what}: refused, and nothing is assigned`, r.status === 409 && r.body.code === "ADDENDA_CHANGED" && rsRows(dDoc).length === 1 && rsRows(plain).length === 0 && rsRows(ad3).length === 0, r.text.slice(0, 120));
+    }
+    check("11. read-and-sign: a manual takes none", (await call("POST", RS, { scope: "manual", id: one("SELECT id FROM policy_manuals WHERE lab_id = ? AND archived_at IS NULL LIMIT 1", D.labId).id, employee_ids: [dana], addendum_ids: [ad3] }, dEditor.token)).body.code === "ADDENDA_CHANGED");
+    const withThem = await call("POST", RS, { scope: "document", id: dDoc, employee_ids: [dana, dStaff.emp], addendum_ids: offered.map((a: any) => a.document_id) }, dEditor.token);
+    const shape = (r: any) => JSON.stringify({ ...r, id: 0, document_id: 0, assigned_at: 0 });
+    check("11. read-and-sign: on gives each the ordinary rows the document gets, and nothing else", withThem.status === 201 && withThem.body.added === 1 && withThem.body.addenda_assigned === 3 && rsRows(dDoc).length === 2 && offered.every((a: any) => JSON.stringify(rsRows(a.document_id).map(shape)) === JSON.stringify(rsRows(dDoc).map(shape))), withThem.text.slice(0, 160));
+    check("11. read-and-sign: each is on its own document's trail, and no email goes out", offered.every((a: any) => audits(a.document_id, "read_sign_assigned").length === 1) && (await taken()).length === 0);
+    const owes = (await call("GET", `/api/staff-portal-session/policies?employee_id=${dStaff.emp}`, undefined, dStaff.token)).body.policies.map((p: any) => p.document_id);
+    check("11. read-and-sign: they owe the approved one; one whose new version isn't approved waits", owes.includes(ad3) && owes.includes(dDoc), owes.join());
+    const ad4 = await addendum("Added later", "HARBOR later made up");
+    await approve(D, ad4, dWf, dSigner);
+    check("11. read-and-sign: one added later isn't assigned by itself", rsRows(ad4).length === 0 && !(await call("GET", `/api/staff-portal-session/policies?employee_id=${dStaff.emp}`, undefined, dStaff.token)).body.policies.some((p: any) => p.document_id === ad4));
+    check("11. read-and-sign: one of a type nobody signs isn't offered", await (async () => {
+      run("UPDATE policy_documents SET doc_type = 'form' WHERE id = ?", ad4);
+      run("INSERT OR REPLACE INTO policy_doc_type_settings (lab_id, doc_type, requires_read_and_sign) VALUES (?, 'form', 0)", D.labId);
+      const left = !(await offer(dEditor.token)).addenda.some((a: any) => a.document_id === ad4);
+      const refused = (await call("POST", RS, { scope: "document", id: dDoc, employee_ids: [dana], addendum_ids: [ad4] }, dEditor.token)).body.code === "ADDENDA_CHANGED";
+      run("DELETE FROM policy_doc_type_settings WHERE lab_id = ? AND doc_type = 'form'", D.labId);
+      return left && refused;
+    })());
+    check("11. read-and-sign: a Staff login and a view-only seat still assign nothing", (await Promise.all([dStaff, dViewer].map((p) => call("POST", RS, { scope: "document", id: dDoc, everyone: true, addendum_ids: [ad3] }, p.token)))).every((r) => r.status === 403) && rsRows(ad3).length === 2);
+
+    // On paper: a Word part, a PDF with a landscape page and turned pages, a picture, and one that can't go in.
+    const upload = async (title: string, buf: Buffer, name: string, type: string, approveIt = true) => {
+      const fd = new FormData();
+      fd.append("file", new Blob([new Uint8Array(buf)], { type }), name);
+      fd.append("title", title);
+      const r = await fetch(`${base}${D.P}/documents/${dPrint}/addenda`, { method: "POST", headers: { Authorization: `Bearer ${dEditor.token}` }, body: fd });
+      const id = Number(((await r.json()) as any).id);
+      if (approveIt) await approve(D, id, dWf, dSigner);
+      return id;
+    };
+    const { Document, HeadingLevel, Packer, Paragraph, Table, TableCell, TableRow } = await import("docx");
+    const wordFile = async (words: string, lines: number) => Buffer.from(await Packer.toBuffer(new Document({ sections: [{ children: [
+      new Paragraph({ text: words, heading: HeadingLevel.HEADING_1 }),
+      ...Array.from({ length: lines }, (_, i) => new Paragraph(`Made-up step ${i + 1}: check the storage unit, write the reading on the log and tell the supervisor when it is out of range.`)),
+      new Table({ rows: [new TableRow({ children: ["CELL-A", "CELL-B"].map((t) => new TableCell({ children: [new Paragraph(t)] })) })] }),
+    ] }] })));
+    const { StandardFonts, degrees, rgb, PDFName } = await import("pdf-lib");
+    const pages = await PDFDocument.create();
+    const helv = await pages.embedFont(StandardFonts.Helvetica);
+    const addPage = (w: number, h: number, words: string, turn = 0) => {
+      const p = pages.addPage([w, h]);
+      p.drawRectangle({ x: 2, y: 2, width: w - 4, height: h - 4, borderColor: rgb(0.8, 0, 0), borderWidth: 2 });
+      p.drawText(`${words} TOP`, { x: 30, y: h - 14, size: 9, font: helv });
+      p.drawText(`${words} BOTTOM`, { x: 30, y: 6, size: 9, font: helv });
+      if (turn) p.setRotation(degrees(turn));
+      return p;
+    };
+    addPage(612, 792, "PORTRAIT");
+    addPage(792, 612, "LANDSCAPE");
+    addPage(792, 612, "TURNED", 90);
+    const cut = addPage(612, 792, "CUT");
+    cut.drawText("OUTSIDE THE CUT", { x: 30, y: 780, size: 9, font: helv });
+    cut.setCropBox(0, 0, 612, 776);
+    const filled = addPage(612, 792, "FORM");
+    const field = pages.getForm().createTextField("made.up");
+    field.setText("FILLED IN");
+    field.addToPage(filled, { x: 60, y: 400, width: 160, height: 20 });
+    addPage(612, 792, "UPSIDE", 180);
+    addPage(792, 612, "OTHERWAY", 270);
+    const stamp = (text: string, flags: number) => {
+      const look = pages.context.register(pages.context.flateStream(`0 g BT /F1 12 Tf 4 8 Td (${text}) Tj ET`, { Type: "XObject", Subtype: "Form", BBox: [0, 0, 140, 24], Resources: { Font: { F1: helv.ref } } }));
+      return pages.context.register(pages.context.obj({ Type: "Annot", Subtype: "Stamp", Rect: [60, 300, 200, 324], F: flags, AP: { N: look } }));
+    };
+    cut.node.set(PDFName.of("Annots"), pages.context.obj([stamp("STAMPED ON", 4), stamp("HIDDEN STAMP", 2)]));
+    // A plain gray PNG, wider than tall.
+    const chunk = (type: string, data: Buffer) => {
+      const body = Buffer.concat([Buffer.from(type, "latin1"), data]);
+      const len = Buffer.alloc(4), crc = Buffer.alloc(4);
+      len.writeUInt32BE(data.length);
+      crc.writeUInt32BE(crc32(body) >>> 0);
+      return Buffer.concat([len, body, crc]);
+    };
+    const head = Buffer.alloc(13);
+    head.writeUInt32BE(900, 0); head.writeUInt32BE(500, 4); head[8] = 8; head[9] = 0;
+    const rowsOfGray = Buffer.alloc(500 * 901, 200);
+    for (let y = 0; y < 500; y++) rowsOfGray[y * 901] = 0;
+    const picture = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk("IHDR", head), chunk("IDAT", deflateSync(rowsOfGray)), chunk("IEND", Buffer.alloc(0))]);
+    const M8 = await doc(R, "Print sample", "replaced below", { doc_number: "SYS 40" }, writer.token);
+    const masterFile = new FormData();
+    masterFile.append("file", new Blob([new Uint8Array(await wordFile("WORD-MASTER made up", 60))], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" }), "master.docx");
+    await fetch(`${base}${R.P}/documents/${M8}/versions`, { method: "POST", headers: { Authorization: `Bearer ${writer.token}` }, body: masterFile });
+    await approve(R, M8, rWf, rSigner);
+    await send({ labIds: [D.labId] }, writer.token, M8);
+    const dPrint = copyOf(M8, D).document_id as number;
+    const work = fs.mkdtempSync(path.join(os.tmpdir(), "ssop-print-"));
+    const read = (buf: Buffer): { size: [number, number]; text: string; words: [number, number, number, number, string][] }[] => {
+      const f = path.join(work, "p.pdf");
+      fs.writeFileSync(f, buf);
+      return JSON.parse(execFileSync("python", ["-E", "-c", "import sys, json, fitz\nsys.stdout.reconfigure(encoding='utf-8')\nprint(json.dumps([{'size': [p.rect.width, p.rect.height], 'text': p.get_text(), 'words': [w[:5] for w in p.get_text('words')]} for p in fitz.open(sys.argv[1])]))", f], { maxBuffer: 64 * 1024 * 1024 }).toString("utf-8"));
+    };
+    const print = async (token = D.token, id = dPrint) => call("GET", `${D.P}/documents/${id}/print.pdf`, undefined, token);
+    const flat = (t: string) => t.replace(/\s+/g, " ");
+    const draftCover = flat(read((await print()).buf)[0].text);
+    check("11. paper: a document not approved here says so, with no approver, and its dates are set when it is approved", /Status Draft, not in force/.test(draftCover) && !/Approved by/.test(draftCover) && /Effective Set when approved Next review Set when approved/.test(draftCover), draftCover);
+    await approve(D, dPrint, dWf, dSigner);
+    const pdfAddendum = await upload("Harbor map", Buffer.from(await pages.save()), "map.pdf", "application/pdf");
+    const picAddendum = await upload("Harbor picture", picture, "shelf.png", "image/png");
+    const wordAddendum = await upload("Harbor notes", await wordFile("WORD-ADDENDUM made up", 4), "notes.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", false);
+    const us = (d: string) => { const [y, m, dd] = d.split("-").map(Number); return `${m}/${dd}/${y}`; };
+    const paper = await print();
+    const pp = read(paper.buf);
+    const cover = flat(pp[0].text);
+    const eff = us(row(dPrint).effective_date), next = us(row(dPrint).next_review_date);
+    check("11. paper: page 1 names the laboratory and its CLIA", paper.status === 200 && cover.includes("Made-up Harbor Laboratory CLIA: 22D9990011"), cover);
+    check("11. paper: page 1 lists every part in order with its pages", /System document pages 2 to \d+ SYS 40 Print sample .*Site addendum 1 pages \d+ to \d+ Harbor map .*Site addendum 2 page \d+ Harbor picture .*Site addendum 3 page \d+ Harbor notes/.test(cover), cover);
+    check("11. paper: a part in force says so, with its version, dates, and who approved it and when", cover.includes(`Version 1.1 (the system's version 1.1) Status In force Effective ${eff} Next review ${next} Approved by Dee Signer, ${eff} (Made-up approval)`), cover);
+    check("11. paper: the one that isn't approved says Draft, not in force and names no approver", /Harbor notes Version 1\.0 Status Draft, not in force Effective Set when approved Next review Set when approved Printed/.test(cover), cover);
+    const wordPages = pp.findIndex((p) => p.text.includes("PORTRAIT TOP")) - 1;
+    check("11. paper: the Word part prints as its words, over its own pages", wordPages >= 2 && pp.slice(1, 1 + wordPages).map((p) => p.text).join("").includes("WORD-MASTER") && pp.slice(1, 1 + wordPages).map((p) => p.text).join("").includes("CELL-B"), String(wordPages));
+    check("11. paper: every page after the first carries its part's title and version, and Draft where it is one", pp.slice(1).every((p, i) => {
+      const t = flat(p.text);
+      const n = i + 1;
+      return n <= wordPages ? /SYS 40 Print sample Version 1\.\d/.test(t) && !/not in force/.test(t)
+        : n <= wordPages + 7 ? t.includes("Site addendum 1: Harbor map Version 1.0") && !/not in force/.test(t)
+        : n === wordPages + 8 ? t.includes("Site addendum 2: Harbor picture Version 1.0") : t.includes("Site addendum 3: Harbor notes Version 1.0") && t.includes("Draft, not in force");
+    }), pp.map((p) => flat(p.text).slice(-160)).join(" | "));
+    check("11. paper: page X of Y and the footer on every page", pp.every((p, i) => flat(p.text).includes(`VeritaAssure® | VeritaDC™ | Confidential, For Internal Lab Use Only | Page ${i + 1} of ${pp.length}`)));
+    check("11. paper: every page is Letter, a landscape page and a page turned on its side the right way round", pp.every((p) => p.size.join() === "612,792" || p.size.join() === "792,612") && JSON.stringify(pp.slice(1 + wordPages, 8 + wordPages).map((p) => p.size.join())) === JSON.stringify(["612,792", "792,612", "612,792", "612,792", "612,792", "612,792", "612,792"]) && pp[8 + wordPages].size.join() === "792,612");
+    const at = (words: string, which: string) => { const p = pp.find((x) => x.words.some((w) => w[4] === words))!; return { p, w: p.words.filter((w) => w[4] === which).map((w) => [w[0] / p.size[0], w[1] / p.size[1], w[2] - w[0] > w[3] - w[1]] as const)[0] }; };
+    check("11. paper: a turned page prints the way its own viewer shows it", (() => {
+      const t = at("TURNED", "TOP").w, tb = at("TURNED", "BOTTOM").w, u = at("UPSIDE", "TOP").w, ub = at("UPSIDE", "BOTTOM").w, o = at("OTHERWAY", "TOP").w, ob = at("OTHERWAY", "BOTTOM").w;
+      return t[0] > 0.8 && tb[0] < 0.2 && !tb[2] && u[1] > 0.8 && ub[1] < 0.2 && ub[2] && o[0] < 0.2 && ob[0] > 0.8 && !ob[2];
+    })(), JSON.stringify(["TURNED", "UPSIDE", "OTHERWAY"].map((x) => [at(x, "TOP").w, at(x, "BOTTOM").w])));
+    const inside = (p: (typeof pp)[number], words: string) => p.words.filter((w) => words.split(" ").includes(w[4])).every((w) => w[1] >= 37 && w[3] <= p.size[1] - 29 && w[0] >= 20 && w[2] <= p.size[0] - 20);
+    check("11. paper: nothing in a part reaches the header line or the footer, however close to the edge it was", ["PORTRAIT", "LANDSCAPE", "TURNED", "CUT", "FORM", "UPSIDE", "OTHERWAY"].every((w, i) => { const p = pp[1 + wordPages + i]; return p.text.includes(`${w} BOTTOM`) && inside(p, `${w} TOP BOTTOM`); }));
+    check("11. paper: what was filled in or stamped on a page prints; what was hidden or cut off doesn't", pp.some((p) => p.text.includes("FILLED IN")) && pp.some((p) => p.text.includes("STAMPED ON")) && !pp.some((p) => p.text.includes("HIDDEN STAMP")) && !read(paper.buf)[1 + wordPages + 3].words.some((w) => w[4] === "OUTSIDE" && w[1] > 37));
+    check("11. paper: the fitted PDF opens cleanly and says who made it", (await PDFDocument.load(paper.buf)).getAuthor() === "Perplexity Computer" && (await PDFDocument.load(paper.buf)).getTitle() === "Print sample");
+    const staffPaper = flat(read((await print(dStaff.token)).buf)[0].text);
+    check("11. paper: a Staff login's copy holds the approved parts only", staffPaper.includes("Harbor picture") && !staffPaper.includes("Harbor notes") && !staffPaper.includes("Draft"), staffPaper);
+    run("UPDATE labs SET clia_number = NULL WHERE id = ?", D.labId);
+    run("UPDATE policy_documents SET next_review_date = '2020-02-03' WHERE id = ?", pdfAddendum);
+    const blank = flat(read((await print()).buf)[0].text);
+    check("11. paper: with no CLIA on file it says so", blank.includes("CLIA: Not on file. Enter it in account settings."));
+    check("11. paper: a part past its review date is still in force and says the review is overdue", /Harbor map Version 1\.0 Status In force Effective \S+ Next review 2\/3\/2020 Review overdue/.test(blank), blank);
+    await newVersion(D, picAddendum, "a new one, typed", {}, dEditor.token);
+    check("11. paper: a new version waiting over an approved one names the version in force", /Harbor picture Version 1\.1 Status Draft, not in force\. Version 1\.0 is in force\./.test(flat(read((await print()).buf)[0].text)));
+    run("INSERT INTO policy_carried_records (lab_id, document_id, version_id, source_system, source_number, last_approval_or_review, loaded_at) VALUES (?, ?, ?, 'Made-up old system', 'X 1', '2025-05-06', ?)", D.labId, wordAddendum, row(wordAddendum).current_version_id, now);
+    run("UPDATE policy_documents SET status = 'approved', approved_version_id = current_version_id WHERE id = ?", wordAddendum);
+    const carriedCover = flat(read((await print()).buf)[0].text);
+    check("11. paper: one approved in a prior system says so and sends the reader to its signature face page", carriedCover.includes("Approved in Made-up old system, last approval or review 5/6/2025. The signature face page on this document's VeritaDC™ record shows who signed and when."), carriedCover);
+    const many: number[] = [];
+    for (let i = 0; i < 5; i++) many.push(await (async () => { const id = Number((await call("POST", `${D.P}/documents/${dPrint}/addenda`, { title: `Extra ${i + 1}`, text: `EXTRA-${i + 1} made up` }, dEditor.token)).body.id); return id; })());
+    const long = read((await print()).buf);
+    const listed = flat(long[0].text + long[1].text);
+    check("11. paper: a list that runs to a second page still gives each part's own page", long[1].text.includes("In this copy, in order (continued)") && many.every((_, i) => { const m = listed.match(new RegExp(`Site addendum ${i + 4} page (\\d+) Extra ${i + 1}`)); return !!m && long[Number(m[1]) - 1].text.includes(`EXTRA-${i + 1}`); }), listed);
+    const sealed = Buffer.from(await pages.save());
+    const broken = await upload("Harbor sealed file", Buffer.concat([sealed.subarray(0, 400), Buffer.from("made up and cut short")]), "sealed.pdf", "application/pdf", false);
+    const cannotPrint = await print();
+    check("11. paper: a part that can't be combined is named, and nothing is printed", cannotPrint.status === 409 && cannotPrint.body.code === "CANNOT_COMBINE" && cannotPrint.body.error.startsWith("Harbor sealed file couldn't be put into one print copy."), cannotPrint.text.slice(0, 200));
+    check("11. paper: a Staff login, who doesn't get that part, still prints", (await print(dStaff.token)).status === 200 && row(broken).status === "draft");
+    fs.rmSync(work, { recursive: true, force: true });
   } finally {
     server.close();
   }

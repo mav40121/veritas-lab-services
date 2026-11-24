@@ -30,6 +30,7 @@ import { staffOwnScope } from "./competencySelfEntry";
 import { employeeLoginAddress } from "./labGroups";
 import { labCarriesMinorRevisions } from "./policyMinorRevision";
 import { writeAuditLog } from "./veritapolicyApproval";
+import { addendaToAssign } from "./policyAddenda";
 import { approvedReadVersionId, approvedReadVersionSql, revisionInProgress, revisionInProgressSql } from "./policyApprovedVersion";
 
 export type ReadSignScopeType = "document" | "manual" | "lab";
@@ -439,6 +440,7 @@ export function readSignPayload(sqlite: any, labId: number, scope: ReadSignScope
   const ctx = loadReadSignContext(sqlite, labId);
   const doc = scope.type === "document" ? sqlite.prepare("SELECT id, manual_id FROM policy_documents WHERE id = ?").get(scope.id) : null;
   const { direct, inherited, elsewhere } = scopeRules(ctx, scope, doc);
+  const addenda = doc ? addendaToAssign(sqlite, labId, doc.id) : [];
   const paths = manualPaths(ctx);
   const tracker = readSignTracker(sqlite, labId, scope, ctx);
   const withLogin = new Set<number>((sqlite.prepare(
@@ -449,6 +451,8 @@ export function readSignPayload(sqlite: any, labId: number, scope: ReadSignScope
     can_edit: canEdit,
     rows: [...direct.map((r) => ruleView(sqlite, ctx, r, paths, true)), ...inherited.map((r) => ruleView(sqlite, ctx, r, paths, false))],
     elsewhere: elsewhere.map((r) => ruleView(sqlite, ctx, r, paths, true)),
+    // A document's site addenda, which the editor may assign with it. Absent when there are none.
+    ...(canEdit && addenda.length ? { addenda } : {}),
     documents: tracker.documents,
     unassigned_documents: tracker.unassigned_documents,
     groups: [...ctx.groupNames.entries()].map(([id, name]) => ({ id, name, people: ctx.groupPeople.get(id)?.size ?? 0 })).sort((a, b) => a.name.localeCompare(b.name)),
@@ -651,7 +655,9 @@ export function registerReadSignRoutes(app: any, deps: {
     res.json({ scope: { ...s.scope, name: s.name }, ...readSignTracker(sqlite(), req.scope.labId, s.scope) });
   });
 
-  // Assign. Body: { scope, id, group_ids?: number[], employee_ids?: number[], everyone?: boolean }. Sends no email, ever.
+  // Assign. Body: { scope, id, group_ids?: number[], employee_ids?: number[], everyone?: boolean, addendum_ids?: number[] }. Sends no
+  // email, ever. addendum_ids are the document's site addenda the editor saw and kept: each gets the same ordinary rows as its own
+  // document. An addendum added later isn't assigned by this.
   app.post(R, ...edit, (req: any, res: any) => {
     const labId = req.scope.labId;
     const db = sqlite();
@@ -669,6 +675,10 @@ export function registerReadSignRoutes(app: any, deps: {
       ).get(s.scope.id) as any;
       if (type) return res.status(409).json({ error: "This document type doesn't need read-and-sign in this lab.", code: "TYPE_NO_READ_AND_SIGN" });
     }
+    const addendumIds = [...new Set(toInts(req.body?.addendum_ids))];
+    const offered = new Map<number, string>();
+    if (addendumIds.length && s.scope.type === "document" && s.scope.id != null) for (const a of addendaToAssign(db, labId, s.scope.id)) offered.set(a.document_id, a.title);
+    if (addendumIds.some((a) => !offered.has(a))) return res.status(409).json({ error: "This document's site addenda changed. Please reload and try again.", code: "ADDENDA_CHANGED" });
     const ctx = loadReadSignContext(db, labId);
     for (const g of groupIds) if (!ctx.groupNames.has(g)) return res.status(400).json({ error: "That group isn't available in this lab.", code: "BAD_GROUP" });
     for (const e of employeeIds) if (!ctx.rosterIds.has(e)) return res.status(400).json({ error: "That person isn't on this lab's active roster.", code: "BAD_PERSON" });
@@ -678,20 +688,32 @@ export function registerReadSignRoutes(app: any, deps: {
     );
     const docId = s.scope.type === "document" ? s.scope.id : null;
     const manualId = s.scope.type === "manual" ? s.scope.id : null;
+    const assign = (scope: ReadSignScope, document: number | null): number => {
+      let n = 0;
+      if (everyone) n += Number(insert.run(labId, scope.type, document, manualId, "everyone", null, null, req.userId).changes);
+      for (const g of groupIds) n += Number(insert.run(labId, scope.type, document, manualId, "group", g, null, req.userId).changes);
+      for (const e of employeeIds) n += Number(insert.run(labId, scope.type, document, manualId, "person", null, e, req.userId).changes);
+      return n;
+    };
     let added = 0;
+    const done: Array<{ scope: ReadSignScope; name: string; document: number | null; added: number }> = [];
     db.transaction(() => {
-      if (everyone) added += Number(insert.run(labId, s.scope.type, docId, manualId, "everyone", null, null, req.userId).changes);
-      for (const g of groupIds) added += Number(insert.run(labId, s.scope.type, docId, manualId, "group", g, null, req.userId).changes);
-      for (const e of employeeIds) added += Number(insert.run(labId, s.scope.type, docId, manualId, "person", null, e, req.userId).changes);
+      added = assign(s.scope, docId);
+      done.push({ scope: s.scope, name: s.name, document: docId, added });
+      for (const id of addendumIds) {
+        const scope: ReadSignScope = { type: "document", id };
+        done.push({ scope, name: offered.get(id) ?? "", document: id, added: assign(scope, id) });
+      }
     })();
-    if (added) {
+    for (const d of done) {
+      if (!d.added) continue;
       writeAuditLog(db, {
-        labId, documentId: docId, userId: req.userId, action: "read_sign_assigned",
-        details: { scope: scopeKey(s.scope), scope_name: s.name, everyone, group_ids: groupIds, employee_ids: employeeIds, added, emails_sent: 0 },
+        labId, documentId: d.document, userId: req.userId, action: "read_sign_assigned",
+        details: { scope: scopeKey(d.scope), scope_name: d.name, everyone, group_ids: groupIds, employee_ids: employeeIds, added: d.added, emails_sent: 0 },
         ipAddress: req.ip, userAgent: req.headers["user-agent"] as string | undefined,
       });
     }
-    res.status(201).json({ added, emails_sent: 0, ...readSignPayload(db, labId, s.scope, s.name, true) });
+    res.status(201).json({ added, ...(addendumIds.length ? { addenda_assigned: done.slice(1).filter((d) => d.added).length } : {}), emails_sent: 0, ...readSignPayload(db, labId, s.scope, s.name, true) });
   });
 
   // Take an assignment off. Nobody's signature changes; people stop owing what it gave them.

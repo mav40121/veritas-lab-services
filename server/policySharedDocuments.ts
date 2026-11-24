@@ -24,6 +24,7 @@ import {
 import { docNumberKey, nextVersionParts, versionLabel, versionParts } from "../shared/policyVersion";
 import { docTypeLabel } from "../shared/policyDocTypes";
 import { approvedReadVersionId, revisionInProgress } from "./policyApprovedVersion";
+import { addendaOf } from "./policyAddenda";
 import {
   ACCEPTED_DOC_DESCRIPTION, buildVersionRelativePath, canonicalFormatFromMimeAndName, hashBuffer, readVersionBuffer, writeAuditLog, writeVersionBuffer,
 } from "./veritapolicyApproval";
@@ -34,7 +35,8 @@ import { notifyDraftReceived } from "./policyNotices";
 import { managedOrganizations, rollupGroupsFor, type RollupLabRow } from "./rollupGroups";
 import { staffOwnScope } from "./competencySelfEntry";
 import { isVlsSupportUser } from "./vlsSupport";
-import { documentPrintPdf, CannotCombine } from "./policyDocumentPrint";
+import { documentPrintPdf, usDate, CannotCombine, type PrintStatus } from "./policyDocumentPrint";
+import { labLocalDate, labTimeZoneById } from "./dateLocal";
 
 // The audit trail's "nobody pressed anything": a version that arrived because the master's was approved.
 const SYSTEM_USER_ID = -1;
@@ -362,32 +364,6 @@ export function forgetDeletedDocument(sqlite: any, documentId: number): void {
 }
 
 // ── What a laboratory's screens read ─────────────────────────────────────────
-
-export interface AddendumRow {
-  addendum_id: number; document_id: number; title: string; doc_number: string | null; status: string;
-  version_id: number | null; version_label: string | null; file_format: string | null; in_force: boolean; revision_in_progress: boolean;
-}
-
-/** A document's addenda in reading and print order. `approvedOnly` is what a Staff login, an inspector or a share link reads. */
-export function addendaOf(sqlite: any, labId: number, documentId: number, approvedOnly: boolean): AddendumRow[] {
-  const rows = sqlite.prepare(
-    `SELECT a.id AS addendum_id, d.id AS document_id, d.title, d.doc_number, d.status, d.archived_at, d.current_version_id, d.approved_version_id
-       FROM policy_addenda a JOIN policy_documents d ON d.id = a.addendum_document_id AND d.lab_id = a.lab_id
-      WHERE a.lab_id = ? AND a.document_id = ? AND a.removed_at IS NULL AND d.archived_at IS NULL
-      ORDER BY a.id`
-  ).all(labId, documentId) as any[];
-  return rows.flatMap((r) => {
-    const inForce = approvedReadVersionId(r);
-    const versionId = approvedOnly ? inForce : r.current_version_id ?? null;
-    if (approvedOnly && versionId == null) return [];
-    const v = versionId == null ? null : (sqlite.prepare("SELECT version_number, version_major, version_minor, file_format FROM policy_versions WHERE id = ? AND document_id = ?").get(versionId, r.document_id) as any);
-    const revising = revisionInProgress(r);
-    return [{
-      addendum_id: r.addendum_id, document_id: r.document_id, title: r.title, doc_number: r.doc_number ?? null, status: approvedOnly && revising ? "approved" : r.status,
-      version_id: versionId, version_label: versionLabel(v), file_format: v?.file_format ?? null, in_force: versionId != null && versionId === inForce, revision_in_progress: approvedOnly && revising,
-    }];
-  });
-}
 
 /** What the document list adds to a row that came from the system, or is an addendum. Null when this lab has neither. */
 export function sharedMarks(sqlite: any, labId: number): ((row: any) => Record<string, unknown>) | null {
@@ -974,6 +950,30 @@ export function registerPolicySharedDocumentRoutes(app: any, deps: {
     res.json({ ok: true });
   });
 
+  // Who approved a version and when, as its signatures in VeritaDC say. A document brought over from a prior system has that system's
+  // own record, and a completed IQCP its approver's.
+  const approvedByOf = (db: any, labId: number, documentId: number, versionId: number): string[] => {
+    const tz = labTimeZoneById(db, labId);
+    const day = (at: string | null) => (at ? usDate(labLocalDate(/[TZ]/.test(at) ? at : `${at.replace(" ", "T")}Z`, false, tz)) : "");
+    const signed = db.prepare(
+      `SELECT s.typed_signature, s.signed_at, s.comment, st.step_name FROM policy_signoffs s LEFT JOIN policy_approval_steps st ON st.id = s.workflow_step_id
+        WHERE s.document_id = ? AND s.version_id = ? AND s.action = 'approved' ORDER BY s.signed_at, s.id`
+    ).all(documentId, versionId) as any[];
+    if (signed.length) {
+      return signed.map((s) => {
+        const delegate = String(s.comment ?? "").match(/[Signed as delegate for (.+?) (user #d+)]/);
+        return `${s.typed_signature}${delegate ? `, as delegate for ${delegate[1]}` : ""}, ${day(s.signed_at)}${s.step_name ? ` (${s.step_name})` : ""}`;
+      });
+    }
+    const carried = db.prepare("SELECT source_system, last_approval_or_review FROM policy_carried_records WHERE document_id = ? AND version_id = ?").get(documentId, versionId) as any;
+    if (carried) {
+      const last = usDate(carried.last_approval_or_review);
+      return [`Approved in ${carried.source_system}${last ? `, last approval or review ${last}` : ""}. The signature face page on this document's VeritaDC™ record shows who signed and when.`];
+    }
+    const iqcp = db.prepare("SELECT approved_by_name, approved_at FROM iqcp_plans WHERE document_id = ? AND lab_id = ?").get(documentId, labId) as any;
+    return iqcp?.approved_by_name ? [[iqcp.approved_by_name, day(iqcp.approved_at ?? null)].filter(Boolean).join(", ")] : [];
+  };
+
   // One print order: the document, then its addenda, as one PDF. A Staff login gets the approved versions.
   app.get(`${R}/documents/:id/print.pdf`, authMiddleware, labScopeMiddleware, async (req: any, res: any) => {
     const db = sqlite();
@@ -987,20 +987,32 @@ export function registerPolicySharedDocumentRoutes(app: any, deps: {
     if (!v) return res.status(404).json({ error: "Not found" });
     const lab = db.prepare("SELECT lab_name, clia_number FROM labs WHERE id = ?").get(labId) as any;
     const c = copyOfDocument(db, doc.id);
-    const inForce = (d: any, vid: number) => approvedReadVersionId(d) === vid;
+    const today = deps.today();
+    // What page 1 says of a part: how it stands, its dates, and who approved it.
+    const standing = (d: any, vid: number) => {
+      const live = approvedReadVersionId(d);
+      const status: PrintStatus = d.archived_at ? "archived" : live === vid ? "in_force" : "draft";
+      const other = status === "draft" && live != null ? (db.prepare("SELECT version_number, version_major, version_minor FROM policy_versions WHERE id = ?").get(live) as any) : null;
+      return {
+        status, inForceVersion: versionLabel(other), effective: d.effective_date ?? null, nextReview: d.next_review_date ?? null,
+        reviewOverdue: status === "in_force" && (d.status === "expired" || (!!d.next_review_date && String(d.next_review_date).slice(0, 10) < today)),
+        approvedBy: status === "in_force" ? approvedByOf(db, labId, d.id, vid) : [],
+      };
+    };
     const fillOf = (documentId: number, effective: string | null): Record<string, string> => ({
       LAB_NAME: lab?.lab_name || "", CLIA_NUMBER: lab?.clia_number || "Not on file", EFFECTIVE_DATE: effective || "Upon approval",
       DIRECTOR_NAME: (db.prepare("SELECT typed_signature FROM policy_signoffs WHERE document_id = ? AND action = 'approved' ORDER BY signed_at DESC LIMIT 1").get(documentId) as any)?.typed_signature || "Medical Director or Designee",
     });
     const parts = [
-      { fill: fillOf(doc.id, doc.effective_date ?? null), heading: c ? "System document" : "Document", title: doc.title, number: doc.doc_number ?? null, version: versionLabel(v), systemVersion: labelOf(db, v.id), approved: inForce(doc, v.id), format: v.file_format, file: v.file_path, hash: v.file_hash_sha256 },
-      ...addendaOf(db, labId, doc.id, limited).filter((x) => x.version_id != null).map((x) => {
+      { fill: fillOf(doc.id, doc.effective_date ?? null), heading: c ? "System document" : "Document", title: doc.title, number: doc.doc_number ?? null, version: versionLabel(v), systemVersion: labelOf(db, v.id), ...standing(doc, v.id), format: v.file_format, file: v.file_path, hash: v.file_hash_sha256 },
+      ...addendaOf(db, labId, doc.id, limited).filter((x) => x.version_id != null).map((x, i) => {
         const av = db.prepare("SELECT * FROM policy_versions WHERE id = ?").get(x.version_id) as any;
-        return { fill: fillOf(x.document_id, (db.prepare("SELECT effective_date FROM policy_documents WHERE id = ?").get(x.document_id) as any)?.effective_date ?? null), heading: "Site addendum", title: x.title, number: x.doc_number, version: x.version_label, systemVersion: null, approved: x.in_force, format: av.file_format, file: av.file_path, hash: av.file_hash_sha256 };
+        const ad = db.prepare("SELECT * FROM policy_documents WHERE id = ?").get(x.document_id) as any;
+        return { fill: fillOf(x.document_id, ad.effective_date ?? null), heading: `Site addendum ${i + 1}`, title: x.title, number: x.doc_number, version: x.version_label, systemVersion: null, ...standing(ad, av.id), format: av.file_format, file: av.file_path, hash: av.file_hash_sha256 };
       }),
     ];
     try {
-      const pdf = await documentPrintPdf(parts.map((p) => ({ ...p, buffer: readVersionBuffer(p.file) })), { labName: lab?.lab_name ?? null, clia: lab?.clia_number ?? null, effective: doc.effective_date ?? null, nextReview: doc.next_review_date ?? null, from: c?.organization_name ?? null, printedOn: deps.today() });
+      const pdf = await documentPrintPdf(parts.map((p) => ({ ...p, buffer: readVersionBuffer(p.file) })), { labName: lab?.lab_name ?? null, clia: lab?.clia_number ?? null, from: c?.organization_name ?? null, printedOn: today });
       audit(req, { labId, documentId: doc.id, action: "printed", details: { version_id: v.id, parts: parts.length } });
       res.setHeader("Content-Type", "application/pdf");
       res.setHeader("Content-Disposition", `inline; filename="${String(doc.title).replace(/[^A-Za-z0-9_-]+/g, "_").slice(0, 80)}.pdf"`);

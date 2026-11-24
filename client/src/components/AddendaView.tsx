@@ -3,9 +3,12 @@
 // A laboratory's own addenda to a system document, shown under it in the same view and in print order (B1;
 // server/policySharedDocuments.ts). Each is a VeritaDC document of its own, read through the same route as any other, so the
 // server decides which version this reader gets. Used on My Documents, My sign-offs, the inspector's link and a share link.
+// AddendaNotice is the shorter form where the document opens from another module or an approval: it says how many there are, and
+// each opens in place at its approved version.
 
 import { useEffect, useState } from "react";
 import { Loader2, Paperclip } from "lucide-react";
+import { addendaSentence } from "@shared/systemDocuments";
 
 export interface AddendumView {
   key: string | number;
@@ -73,6 +76,36 @@ function Addendum({ a, n, headers }: { a: AddendumView; n: number; headers?: Rec
         <iframe sandbox="allow-popups allow-popups-to-escape-sandbox" srcDoc={frameDoc(shown.html)} title={a.title} className="w-full h-64 resize-y bg-white" data-testid={`addendum-html-${a.key}`} />
       )}
     </section>
+  );
+}
+
+export function AddendaNotice({ addenda, headers }: { addenda: AddendumView[]; headers?: Record<string, string> }) {
+  const [open, setOpen] = useState<Array<string | number>>([]);
+  if (addenda.length === 0) return null;
+  return (
+    <div className="rounded-md border px-3 py-2 space-y-2 min-w-0" data-testid="addenda-notice">
+      <p className="text-sm flex items-center gap-2"><Paperclip size={13} className="shrink-0 text-muted-foreground" /> {addendaSentence(addenda.length)}</p>
+      <ul className="space-y-2 min-w-0">
+        {addenda.map((a, i) => {
+          const shown = open.includes(a.key);
+          return (
+            <li key={a.key} className="min-w-0 space-y-2">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
+                <span className="min-w-0 [overflow-wrap:anywhere]">{a.title}</span>
+                {a.version && <span className="text-xs text-muted-foreground">version {a.version}</span>}
+                <button
+                  type="button" aria-expanded={shown} className="text-xs font-medium text-primary hover:underline"
+                  onClick={() => setOpen(shown ? open.filter((k) => k !== a.key) : [...open, a.key])} data-testid={`addendum-open-${a.key}`}
+                >
+                  {shown ? "Close" : "Open"}
+                </button>
+              </div>
+              {shown && <Addendum a={a} n={i + 1} headers={headers} />}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }
 

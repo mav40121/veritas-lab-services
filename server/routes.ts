@@ -270,7 +270,8 @@ import { priorCountsByPerson, priorHow, priorSignatureStillCurrent, priorSignatu
 import { assignedDocumentIds, loadReadSignContext, logStaffDocumentView, lookupDocuments, registerReadSignRoutes, rulesForDocument, targetLabels, veritaDcStaffGuard } from "./policyReadSign";
 import { versionStandings } from "./policyVersionStanding";
 import { archivedDocumentGuard, mayOpenEarlierVersions, registerPolicyDocumentControlRoutes, type ApprovalDecision, type ApprovalDecisionInput } from "./policyDocumentControl";
-import { addendaOf, afterDocumentApproved, followedUploadProblem, forgetDeletedDocument, masterDeleteProblem, noteMasterArchived, registerPolicySharedDocumentRoutes, sharedDetail, sharedMarks, type SharedDeps } from "./policySharedDocuments";
+import { addendaOf, approvedAddendumAt } from "./policyAddenda";
+import { afterDocumentApproved, followedUploadProblem, forgetDeletedDocument, masterDeleteProblem, noteMasterArchived, registerPolicySharedDocumentRoutes, sharedDetail, sharedMarks, type SharedDeps } from "./policySharedDocuments";
 import { notifyStepSigners } from "./policyNotices";
 import { LIVE_EVENT } from "./equipment";
 import { approvedReadVersionId, approvedReadVersionSql, revisionInProgress, revisionInProgressSql, reviewOverdueSql, surveyorReadVersionId, surveyorReadVersionSql, surveyorReads, surveyorReadsSql } from "./policyApprovedVersion";
@@ -42472,7 +42473,25 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     ).get(item.version_id) as any;
     if (!version) return res.status(404).json({ error: "Document version not found" });
     const doc = sqlite.prepare("SELECT description FROM policy_documents WHERE id = ?").get(item.document_id) as any;
-    res.json({ ...item, description: doc?.description ?? null, version_label: versionLabel(version), file_format: version.file_format, file_hash: version.file_hash_sha256 });
+    // Its site addenda at their approved versions, each opened by its place below. Absent when there are none.
+    const addenda = addendaOf(sqlite, req.staffPortalLabId, item.document_id, true).map((a) => ({ title: a.title, version: a.version_label }));
+    res.json({ ...item, description: doc?.description ?? null, version_label: versionLabel(version), file_format: version.file_format, file_hash: version.file_hash_sha256, ...(addenda.length ? { addenda } : {}) });
+  });
+
+  app.get("/api/staff-portal-session/approvals/:documentId/addenda/:n/render", staffPortalAuthMiddleware, staffApprovalItem, async (req: any, res) => {
+    try {
+      const sqlite = (db as any).$client;
+      const addendum = approvedAddendumAt(sqlite, req.staffPortalLabId, req.approvalItem.document_id, req.params.n);
+      const row = addendum && (sqlite.prepare(
+        "SELECT id AS version_id, file_path, file_format, file_hash_sha256 AS expected_hash FROM policy_versions WHERE id = ? AND document_id = ?"
+      ).get(addendum.version_id, addendum.document_id) as any);
+      if (!row) return res.status(404).json({ error: "Not found" });
+      logStaffDocumentView(sqlite, req.staffPortalLabId, addendum!.document_id, req.staffPortalUserId, req);
+      return await sendStaffVersion(res, row);
+    } catch (err: any) {
+      console.error("[STAFF-APPROVALS] addendum render failed:", err?.message);
+      return res.status(500).json({ error: "Could not open this document" });
+    }
   });
 
   app.get("/api/staff-portal-session/approvals/:documentId/render", staffPortalAuthMiddleware, staffApprovalItem, async (req: any, res) => {

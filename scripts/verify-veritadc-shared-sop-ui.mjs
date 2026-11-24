@@ -9,6 +9,8 @@
 //   P1. Print in order opens one PDF.
 //   V1. The organization's view: filters, counts, the Excel file. A laboratory's owner sees only its own laboratory.
 //   I1. The inspector's link and a share link show the addendum with the document.
+//   R1. The other readers (VeritaScan, a finding, VeritaMaintain, the staff approval screen) say how many addenda it has and open each.
+//   R2. Read-and-sign offers its addenda, on by default.
 //   D1. Light, dark and phone width for each; nothing wider than the screen; no page errors; no em dash.
 // Run: start dist/index.cjs on a scratch DB, then PW_BASE=http://localhost:<port> SCRATCH_DB=<db> OUT=<dir> node scripts/verify-veritadc-shared-sop-ui.mjs
 import fs from "node:fs";
@@ -326,6 +328,125 @@ await approve(C, sql("SELECT document_id AS d FROM policy_shared_copies WHERE ma
   await s.page.getByTestId("addenda-view").waitFor({ timeout: 15000 });
   check("I1. a share link shows it too, and fits a phone", (await s.page.getByTestId("addenda-view").innerText()).includes("North site addendum") && await fits(s.page));
   await s.ctx.close();
+}
+
+// ── R1. The other readers ──
+const addendumId = sql("SELECT addendum_document_id AS id FROM policy_addenda WHERE document_id = ?", aDoc).id;
+await upload(A, `/documents/${addendumId}/versions`, "MADEUPADDENDUMDRAFT, not approved", { change_summary: "Made-up change" });
+const approver = await seat(A, "approver", "Reese Quillby", "staff_portal");
+{
+  const T = (id) => `[data-testid="${id}"]`;
+  const opensIt = async (page, box, key, name) => {
+    await box.locator(T("addenda-notice")).waitFor({ timeout: 15000 });
+    const said = await keep(box.locator(T("addenda-notice")));
+    check(`R1. ${name}: it says how many site addenda the document has`, said.includes("This document has 1 site addendum") && said.includes("North site addendum") && said.includes("version 1.0"), said);
+    await box.locator(T(`addendum-open-${key}`)).click();
+    const body = page.frameLocator('[data-testid^="addendum-html-"]').locator("body");
+    await body.waitFor({ timeout: 15000 });
+    await page.waitForTimeout(400);
+    const words = await body.innerText();
+    check(`R1. ${name}: it opens at its approved version`, words.includes("MADEUPADDENDUM.") && !words.includes("MADEUPADDENDUMDRAFT"), words);
+  };
+  const link = (await call("POST", `/api/labs/${A.labId}/veritascan/checklist/items/12/policy-links`, { document_id: aDoc }, A.token)).body.link_id;
+  const proof = async (who, opts) => {
+    const o = await open(who, A.labId, `/labs/${A.labId}/veritascan/inspection-proof`, opts);
+    await o.page.waitForSelector(T(`proof-open-dc-${link}`), { timeout: 20000 });
+    await o.page.click(T(`proof-open-dc-${link}`));
+    return o;
+  };
+  for (const [who, name] of [[A, "VeritaScan, the owner"], [reviewer, "VeritaScan, a view-only seat"]]) {
+    const { page, ctx } = await proof(who, { dark: who !== A });
+    await opensIt(page, page.getByTestId("linked-doc-dialog"), addendumId, name);
+    await shot(page, who === A ? "b1_reader_scan_light" : "b1_reader_scan_dark");
+    await ctx.close();
+  }
+  const ph = await proof(A, { viewport: PHONE });
+  await ph.page.getByTestId("addenda-notice").waitFor({ timeout: 15000 });
+  await ph.page.getByTestId(`addendum-open-${addendumId}`).click();
+  await ph.page.waitForTimeout(700);
+  check("D1. the document opened from VeritaScan fits a phone with its addendum", await dialogFits(ph.page));
+  await ph.ctx.close();
+  const finding = (await call("POST", `/api/labs/${A.labId}/findings`, { accreditor: "CMS", anchor_date: "2026-11-01", description: "Made-up finding" }, A.token)).body.id;
+  await call("POST", `/api/labs/${A.labId}/findings/${finding}/documents`, { document_id: aDoc }, A.token);
+  {
+    const { page, ctx } = await open(A, A.labId, `/labs/${A.labId}/veritaresponse/${finding}`);
+    await page.locator(T(`finding-doc-open-${aDoc}`)).click();
+    await opensIt(page, page.getByTestId("linked-doc-dialog"), addendumId, "a finding");
+    await ctx.close();
+  }
+  const eq = (await call("POST", `/api/labs/${A.labId}/equipment`, { instrument_name: "Made-up label printer", pm_interval_days: 90, next_due_date: "2099-01-01" }, A.token)).body.id;
+  await call("PUT", `/api/labs/${A.labId}/equipment/${eq}`, { ifu_document_id: aDoc }, A.token);
+  for (const [who, dark] of [[staff, false], [A, true]]) {
+    const { page, ctx } = await open(who, A.labId, `/labs/${A.labId}/equipment-app`, { dark });
+    await page.getByTestId(`equip-record-${eq}`).click();
+    await page.getByTestId("record-ifu-document").click();
+    await opensIt(page, page.getByTestId("approved-document-dialog"), 1, dark ? "VeritaMaintain, the owner" : "VeritaMaintain, a Staff login");
+    await shot(page, dark ? "b1_reader_equipment_dark" : "b1_reader_equipment_light");
+    check("D1. the document opened from VeritaMaintain fits its dialog", await dialogFits(page));
+    await ctx.close();
+  }
+  // Asked to approve the next version, on a staff login.
+  const wf = (await call("POST", `${A.P}/workflows`, { name: "Made-up staff route" }, A.token)).body.id;
+  await call("POST", `${A.P}/workflows/${wf}/steps`, { stepName: "Made-up staff approval", requiredRole: "specific_user", specificUserId: approver.id }, A.token);
+  await upload(R, `/documents/${master}/versions`, text("MADEUPTHREE"), { change_summary: "Made-up third version" });
+  await approve(R, master);
+  await call("POST", `${A.P}/documents/${aDoc}/submit`, { workflowId: wf }, A.token);
+  for (const dark of [false, true]) {
+    const { page, ctx } = await open(approver, A.labId, `/labs/${A.labId}/my-signoffs`, { dark, viewport: dark ? undefined : PHONE });
+    await page.getByText("Approve Documents").first().click();
+    await page.getByTestId("sp-approvals-row").first().click();
+    await page.getByTestId("sp-approvals-detail-html").waitFor({ timeout: 15000 });
+    if (dark) {
+      await opensIt(page, page.getByTestId("sp-approvals-detail"), 1, "the staff approval screen");
+      check("R1. the staff approval screen shows the version to approve, with it", (await page.getByTestId("sp-approvals-detail-html").innerText()).includes("MADEUPTHREE"));
+      await shot(page, "b1_reader_approval_dark");
+    } else {
+      await page.getByTestId("addendum-open-1").click();
+      await page.waitForTimeout(700);
+      check("D1. the staff approval screen fits a phone with the addendum open", await fits(page));
+      await shot(page, "b1_reader_approval_phone");
+    }
+    await ctx.close();
+  }
+  await call("POST", `/api/staff-portal-session/approvals/${aDoc}/approve`, { typed_signature: approver.name, password: pw }, approver.token);
+}
+
+// ── R2. Read-and-sign ──
+{
+  const later = (await call("POST", `${A.P}/documents/${aDoc}/addenda`, { title: "Courier sheet", text: "MADEUPCOURIER" }, A.token)).body.id;
+  await approve(A, later);
+  const rows = (id) => sql("SELECT COUNT(*) AS n FROM policy_read_sign_assignments WHERE document_id = ?", id).n;
+  const before = rows(addendumId);
+  const { page, ctx } = await open(A, A.labId, docs(A));
+  await rowOf(page).getByTestId("doc-readsign-button").click();
+  await page.getByTestId("readsign-addenda").waitFor({ timeout: 15000 });
+  const t = await keep(page.getByTestId("readsign-addenda"));
+  check("R2. it offers the document's site addenda, on, and names them", t.includes("Include its 2 site addenda") && t.includes("North site addendum") && t.includes("Courier sheet") && await page.getByTestId("readsign-with-addenda").isChecked(), t);
+  await page.getByTestId(`readsign-pick-person-${approver.emp}`).check();
+  await page.getByTestId("readsign-addenda").scrollIntoViewIfNeeded();
+  await shot(page, "b1_readsign_light");
+  check("D1. the dialog fits", await dialogFits(page));
+  await page.getByTestId("readsign-assign").click();
+  await page.getByTestId("readsign-message").waitFor({ timeout: 15000 });
+  const m = await keep(page.getByTestId("readsign-message"));
+  check("R2. assigning gives each its ordinary row, says so, and sends no email", m.includes("2 site addenda were included. No email was sent.") && rows(addendumId) === before + 1 && rows(later) === 1, m);
+  await page.getByTestId("readsign-with-addenda").uncheck();
+  await page.getByTestId(`readsign-pick-person-${staff.emp}`).check();
+  await page.getByTestId("readsign-assign").click();
+  await page.waitForTimeout(1500);
+  check("R2. off leaves them out", rows(later) === 1 && rows(addendumId) === before + 1 && sql("SELECT COUNT(*) AS n FROM policy_read_sign_assignments WHERE document_id = ? AND employee_id = ?", aDoc, staff.emp).n === 1);
+  await ctx.close();
+  const dark = await open(A, A.labId, docs(A), { dark: true });
+  await rowOf(dark.page).getByTestId("doc-readsign-button").click();
+  await dark.page.getByTestId("readsign-addenda").waitFor({ timeout: 15000 });
+  await dark.page.getByTestId("readsign-addenda").scrollIntoViewIfNeeded();
+  await shot(dark.page, "b1_readsign_dark");
+  await dark.ctx.close();
+  const plain = await open(A, A.labId, docs(A));
+  await plain.page.locator("tr").filter({ hasText: "Courier sheet" }).first().getByTestId("doc-readsign-button").click();
+  await plain.page.getByTestId("readsign-assign").waitFor({ timeout: 15000 });
+  check("R2. a document with no addenda offers nothing", (await plain.page.getByTestId("readsign-addenda").count()) === 0);
+  await plain.ctx.close();
 }
 
 await browser.close();

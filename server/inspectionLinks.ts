@@ -15,9 +15,12 @@
 // have one, as everywhere else. A document past its review date, not approved, or archived is flagged, on Inspection Proof too.
 // An archived document reads as not found to anyone who can't edit VeritaDC (server/policyDocumentControl.ts), so its link
 // carries no title or number for them.
+// A system document's site addenda are named with it, each at its own approved version (server/policyAddenda.ts), and open through
+// the same VeritaDC routes. A link whose document has none, or opens nothing for this reader, carries no list.
 import type { Express } from "express";
 import { logAudit } from "./audit";
 import { exportAllPlanBypass } from "./exportAllContext";
+import { addendaOf } from "./policyAddenda";
 import { findingStudy, scanItem } from "./inspectionAssign";
 import { approvedReadVersionId, approvedReadVersionSql, revisionInProgress } from "./policyApprovedVersion";
 import { labTimeZoneById, labToday } from "./dateLocal";
@@ -94,6 +97,12 @@ export function registerInspectionLinkRoutes(app: Express, deps: Deps) {
         ORDER BY d.title COLLATE NOCASE, d.id LIMIT 100`
     ).all(term ? { lab: labId, like } : { lab: labId }) as any[];
   };
+  // A linked document as the screens get it, with its addenda.
+  const linkView = (labId: number, d: any, day: string, named = true) => {
+    const view = docView(d, day, named);
+    const addenda = view.open_version_id == null ? [] : addendaOf(sqlite(), labId, view.document_id, true);
+    return addenda.length ? { ...view, addenda: addenda.map((a) => ({ document_id: a.document_id, title: a.title, version_label: a.version_label, open_version_id: a.version_id })) } : view;
+  };
   const NO_DOC = { error: "That document isn't available in this lab." };
   const duplicate = (err: any) => String(err?.message || "").includes("UNIQUE");
 
@@ -108,7 +117,7 @@ export function registerInspectionLinkRoutes(app: Express, deps: Deps) {
         WHERE l.lab_id = ? ORDER BY l.checklist_item_id, d.title COLLATE NOCASE`
     ).all(req.scope.labId) as any[]);
     const day = today(req.scope.labId), named = namesArchived(req);
-    res.json(rows.map((r) => ({ link_id: r.link_id, checklist_item_id: r.checklist_item_id, linked_at: r.linked_at, ...docView(r, day, named) })));
+    res.json(rows.map((r) => ({ link_id: r.link_id, checklist_item_id: r.checklist_item_id, linked_at: r.linked_at, ...linkView(req.scope.labId, r, day, named) })));
   });
 
   // What an editor can pick: documents with an approved version.
@@ -132,7 +141,7 @@ export function registerInspectionLinkRoutes(app: Express, deps: Deps) {
         userId: req.userId, ownerUserId: ownerOf(req), module: "veritascan", action: "create", entityType: "policy_link", entityId: id,
         entityLabel: `VeritaDC document ${doc.document_id} (${doc.title}) -> item ${item.id}`, after: { checklist_item_id: item.id, document_id: doc.document_id, lab_id: req.scope.labId }, ipAddress: req.ip,
       });
-      res.status(201).json({ link_id: id, checklist_item_id: item.id, ...docView(doc, today(req.scope.labId)) });
+      res.status(201).json({ link_id: id, checklist_item_id: item.id, ...linkView(req.scope.labId, doc, today(req.scope.labId)) });
     } catch (err: any) {
       if (duplicate(err)) return res.status(409).json({ error: "That document is already linked to this item.", code: "ALREADY_LINKED" });
       throw err;
@@ -167,7 +176,7 @@ export function registerInspectionLinkRoutes(app: Express, deps: Deps) {
     const f = findingInLab(req);
     if (!f) return res.status(404).json({ error: "Finding not found" });
     const day = today(req.scope.labId), named = namesArchived(req);
-    res.json({ documents: readable(req, findingLinks(req.scope.labId, f.id)).map((r) => ({ link_id: r.link_id, linked_at: r.linked_at, ...docView(r, day, named) })) });
+    res.json({ documents: readable(req, findingLinks(req.scope.labId, f.id)).map((r) => ({ link_id: r.link_id, linked_at: r.linked_at, ...linkView(req.scope.labId, r, day, named) })) });
   });
 
   // For someone who can edit the finding: suggested SOPs with their reasons, and a search of the lab's documents.
@@ -204,7 +213,7 @@ export function registerInspectionLinkRoutes(app: Express, deps: Deps) {
         history(f.id, "document_linked", req.userId, { document_id: doc.document_id, title: doc.title });
         return n;
       })();
-      res.status(201).json({ link_id: id, ...docView(doc, today(req.scope.labId)) });
+      res.status(201).json({ link_id: id, ...linkView(req.scope.labId, doc, today(req.scope.labId)) });
     } catch (err: any) {
       if (duplicate(err)) return res.status(409).json({ error: "That document is already linked to this finding.", code: "ALREADY_LINKED" });
       throw err;

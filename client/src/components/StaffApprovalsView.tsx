@@ -3,6 +3,7 @@
 // here uploads or edits.
 import { staffPortalHeaders } from "@/lib/staffPortalHeaders";
 import { useEffect, useState } from "react";
+import { AddendaNotice } from "@/components/AddendaView";
 
 interface ApprovalRow {
   document_id: number;
@@ -18,6 +19,8 @@ interface ApprovalMeta extends ApprovalRow {
   version_id: number;
   version_label: string;
   file_format: string;
+  // The lab's addenda to a system document, at their approved versions. Absent when there are none.
+  addenda?: { title: string; version: string | null }[];
 }
 
 export function StaffApprovalsView({ token, employee, labName, onBack, onSignOut }: {
@@ -145,6 +148,14 @@ export function StaffApprovalsView({ token, employee, labName, onBack, onSignOut
               {active.doc_number && <> &middot; {active.doc_number}</>}
             </div>
           </div>
+
+          {!!meta?.addenda?.length && (
+            <div className="mb-4">
+              <AddendaNotice headers={headers} addenda={meta.addenda.map((a, i) => ({
+                key: i + 1, title: a.title, version: a.version, url: `/api/staff-portal-session/approvals/${active.document_id}/addenda/${i + 1}/render`,
+              }))} />
+            </div>
+          )}
 
           <div className="border border-border rounded-lg bg-card p-4 mb-4 min-h-[240px]">
             {renderError && (

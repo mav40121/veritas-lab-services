@@ -4,8 +4,9 @@ import { useEffect, useState } from "react";
 import { authHeaders } from "@/lib/auth";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { REVISION_IN_PROGRESS_NOTE } from "@shared/policyApprovedVersion";
+import { AddendaNotice, type AddendumView } from "@/components/AddendaView";
 
-type About = { title?: string; doc_number?: string | null; version?: string | null; revision_in_progress?: boolean };
+type About = { title?: string; doc_number?: string | null; version?: string | null; revision_in_progress?: boolean; addenda_count?: number };
 type View = { kind: "loading" } | { kind: "pdf" | "image"; url: string } | { kind: "html"; html: string } | { kind: "error"; message: string };
 
 const frameDoc = (html: string) =>
@@ -14,6 +15,7 @@ const frameDoc = (html: string) =>
 export function ApprovedDocumentDialog({ url, label, onClose }: { url: string | null; label: string; onClose: () => void }) {
   const [view, setView] = useState<View>({ kind: "loading" });
   const [about, setAbout] = useState<About>({});
+  const [addenda, setAddenda] = useState<AddendumView[]>([]);
 
   useEffect(() => {
     if (!url) return;
@@ -46,9 +48,21 @@ export function ApprovedDocumentDialog({ url, label, onClose }: { url: string | 
     return () => { live = false; if (objectUrl) URL.revokeObjectURL(objectUrl); };
   }, [url]);
 
+  // A system document's site addenda, read through this same link.
+  useEffect(() => {
+    setAddenda([]);
+    if (!url || !about.addenda_count) return;
+    let live = true;
+    fetch(`${url}?addenda=1`, { headers: authHeaders(), cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : { addenda: [] }))
+      .then((j) => { if (live) setAddenda((j.addenda || []).map((a: any, i: number) => ({ key: i + 1, title: a.title, version: a.version, url: `${url}?addendum=${i + 1}` }))); })
+      .catch(() => { /* the document still shows */ });
+    return () => { live = false; };
+  }, [url, about.addenda_count]);
+
   return (
     <Dialog open={!!url} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="max-w-4xl" data-testid="approved-document-dialog">
+      <DialogContent className="max-w-4xl max-h-[92vh] overflow-y-auto" data-testid="approved-document-dialog">
         <DialogHeader>
           <DialogTitle>{about.title || label}</DialogTitle>
           <DialogDescription>
@@ -56,6 +70,7 @@ export function ApprovedDocumentDialog({ url, label, onClose }: { url: string | 
           </DialogDescription>
         </DialogHeader>
         {about.revision_in_progress && <p className="text-xs text-amber-800 dark:text-amber-300" data-testid="approved-document-revision">{REVISION_IN_PROGRESS_NOTE}</p>}
+        <AddendaNotice addenda={addenda} headers={authHeaders()} />
         {view.kind === "loading" && <p className="text-sm text-muted-foreground py-6">Loading...</p>}
         {view.kind === "error" && <p className="text-sm text-red-700 dark:text-red-400 py-6" data-testid="approved-document-error">{view.message}</p>}
         {view.kind === "pdf" && <iframe src={view.url} title={about.title || label} className="w-full h-[65vh] rounded border bg-white" />}

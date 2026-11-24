@@ -20,6 +20,12 @@ export const SYSTEM_LAB_STATE_LABEL: Record<SystemLabState, string> = {
   removed: "Deleted by the laboratory",
 };
 
+const siteAddenda = (n: number) => `${n} site ${n === 1 ? "addendum" : "addenda"}`;
+/** Said wherever a document with a laboratory's addenda opens from another module. */
+export const addendaSentence = (n: number): string => `This document has ${siteAddenda(n)}`;
+/** The read-and-sign choice. */
+export const includeAddendaLabel = (n: number): string => `Include its ${siteAddenda(n)}`;
+
 export const DECLINE_REASON_MAX = 500;
 export const SEND_LABS_MAX = 500;
 

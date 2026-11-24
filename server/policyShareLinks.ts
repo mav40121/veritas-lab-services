@@ -32,7 +32,7 @@ import {
   writeAuditLog,
 } from "./veritapolicyApproval";
 import { approvedReadVersionSql, revisionInProgressSql } from "./policyApprovedVersion";
-import { addendaOf } from "./policySharedDocuments";
+import { addendaOf, approvedAddendumAt } from "./policyAddenda";
 
 export const SHARE_LINK_NOT_ACTIVE = "This link is not active. Contact the laboratory.";
 const LABEL_MAX = 120;
@@ -256,8 +256,7 @@ export function registerPolicyShareLinkRoutes(app: any, deps: {
     if (!r) return notActive(res);
     let v = r.version;
     if (req.query?.addendum !== undefined) {
-      const n = Number(req.query.addendum);
-      const addendum = Number.isInteger(n) && n > 0 ? addendaOf(sqlite(), v.lab_id, v.document_id, true)[n - 1] : undefined;
+      const addendum = approvedAddendumAt(sqlite(), v.lab_id, v.document_id, req.query.addendum);
       const file = addendum ? sharedVersionFor(sqlite(), addendum.document_id, v.lab_id) : null;
       if (!file) return notActive(res);
       v = file;

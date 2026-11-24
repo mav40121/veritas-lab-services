@@ -13,6 +13,7 @@ import { authHeaders } from "@/lib/auth";
 import { useStaffDocScope } from "@/hooks/useStaffLogin";
 import { REVISION_IN_PROGRESS_NOTE } from "@shared/policyApprovedVersion";
 import { labLocaleDate } from "@/lib/labDate";
+import { AddendaNotice } from "@/components/AddendaView";
 
 export interface LinkedDoc {
   document_id: number;
@@ -23,6 +24,8 @@ export interface LinkedDoc {
   revision_in_progress: boolean;
   open_version_id: number | null;
   current_version_id: number | null;
+  // The laboratory's addenda to a system document, each at its approved version. Absent when there are none.
+  addenda?: { document_id: number; title: string; version_label: string | null; open_version_id: number }[];
 }
 
 export const docLabel = (d: LinkedDoc) => (d.doc_number ? `${d.doc_number} ${d.title}` : d.title);
@@ -82,6 +85,10 @@ export function LinkedDocDialog({ labId, doc, onClose }: { labId: number; doc: L
         {flag && <div className="rounded-md border border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-200 px-3 py-2 text-sm" data-testid="linked-doc-flag">{flag}</div>}
         {doc.revision_in_progress && <div className="rounded-md border border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-200 px-3 py-2 text-sm">{REVISION_IN_PROGRESS_NOTE}</div>}
         {tampered && <div className="rounded-md border border-red-300 bg-red-50 text-red-900 dark:border-red-700 dark:bg-red-950/30 dark:text-red-200 px-3 py-2 text-sm">The file on disk does not match the copy that was uploaded. Do not rely on it.</div>}
+        {openable && <AddendaNotice headers={authHeaders()} addenda={(doc.addenda ?? []).map((a) => ({
+          key: a.document_id, title: a.title, version: a.version_label,
+          url: `${API_BASE}/api/labs/${labId}/veritapolicy/documents/${a.document_id}/${ownOnly ? "render" : `versions/${a.open_version_id}/render`}`,
+        }))} />}
         {!openable ? (
           <p className="text-sm text-muted-foreground py-6 text-center">This document has no approved version to open. Open it in VeritaDC™ to see where it stands.</p>
         ) : viewer.kind === "loading" ? (
