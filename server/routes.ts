@@ -292,6 +292,7 @@ import { createAnalyteMatcher, nzKey, specialtyCategory } from "./ptAnalyteMatch
 import { validateVendorPrograms, PT_VENDORS } from "./ptVendorCatalog";
 import { DEMO_USER_EMAIL, SIGNUP_ALERT_TO, BUSINESS_NOTICE_TO } from "./constants";
 import { isQuotedUserAgent } from "./signupGuards";
+import { emailContactMessage, listContactMessages } from "./contactForm";
 
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
@@ -14278,11 +14279,21 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   });
 
   // ── CONTACT ───────────────────────────────────────────────────────────────
-  app.post("/api/contact", (req, res) => {
+  // BUG-185 (2026-11-24): the message was stored and nobody was told. It is stored first, then emailed to info@ (a fixed
+  // recipient, so this can't send mail to anyone else); a failed email still answers success, because the message is kept.
+  app.post("/api/contact", async (req: any, res) => {
     const parsed = insertContactSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
     storage.createContactMessage(parsed.data);
+    if (!isQuotedUserAgent(req.headers["user-agent"])) await emailContactMessage(parsed.data);
     res.json({ success: true });
+  });
+
+  // GET /api/admin/contact-messages: the stored contact and live demo messages, newest first (header x-admin-secret only,
+  // read-only). ?counts=1 gives counts with no names or text.
+  app.get("/api/admin/contact-messages", (req: any, res) => {
+    if (req.headers["x-admin-secret"] !== ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+    res.json(listContactMessages((db as any).$client, String(req.query.counts || "") === "1"));
   });
 
   // POST /api/request-demo — public "Request a live demo" form on /demo. Emails
