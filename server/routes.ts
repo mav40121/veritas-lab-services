@@ -11205,32 +11205,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const now = new Date().toISOString();
       const dateTaken = labToday();
 
-      // Resolve / auto-bridge competency_employees for this staff member
-      // so the legacy employee_id NOT NULL constraint can be satisfied.
-      // If the bridge doesn't exist yet, create a stub row from the staff
-      // employee's identity columns. This matches the pattern other
-      // Staff Portal modules use.
-      let compEmp = sqlite.prepare(
+      // The person's VeritaComp employee in this lab, if there is one; 0 otherwise (employee_id can't be NULL). The attempt
+      // belongs to staff_employee_id, which every reader uses. None is created here: an employee row makes programs apply to
+      // the person (BUG-181; the insert that used to be here always failed on a column that doesn't exist).
+      const compEmpId = Number((sqlite.prepare(
         "SELECT id FROM competency_employees WHERE staff_employee_id = ? AND lab_id = ?"
-      ).get(employeeId, labId) as any;
-      if (!compEmp) {
-        const se = sqlite.prepare(
-          "SELECT first_name, last_name, title FROM staff_employees WHERE id = ?"
-        ).get(employeeId) as any;
-        if (se) {
-          const fullName = `${se.first_name || ''} ${se.last_name || ''}`.trim() || `Employee ${employeeId}`;
-          try {
-            const r = sqlite.prepare(
-              `INSERT INTO competency_employees (name, role, lab_id, staff_employee_id, created_at)
-               VALUES (?, ?, ?, ?, ?)`
-            ).run(fullName, se.title || null, labId, employeeId, now);
-            compEmp = { id: Number(r.lastInsertRowid) };
-          } catch (e: any) {
-            console.warn("[staff-portal quiz attempt] bridge stub insert failed:", e.message);
-          }
-        }
-      }
-      const compEmpId = compEmp?.id || 0;
+      ).get(employeeId, labId) as any)?.id || 0);
 
       const tx = sqlite.transaction(() => {
         const result = sqlite.prepare(

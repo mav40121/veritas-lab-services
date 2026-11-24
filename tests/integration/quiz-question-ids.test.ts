@@ -6,6 +6,7 @@
 // keys, and the Take a Quiz screen kept one answer for both. Boots the REAL routes on a scratch DB with made-up people and proves:
 //   1. a quiz stored with repeated ids (as one was before) grades each question against its own key
 //   2. the same answer sent twice counts once (it can't pass a quiz by repetition)
+//   1c. an attempt by a person with no VeritaComp employee saves, adds no employee row and prints no warning (BUG-181)
 //   3. a staff attempt with a question unanswered, or answered with a letter that isn't one of its choices, is refused with
 //      400 QUIZ_UNANSWERED naming the question, and nothing is stored
 //   4. the evaluator's quiz on a record is graded the same way (each question against its own key)
@@ -108,8 +109,15 @@ async function main() {
     const retake = await call("POST", `/api/veritacomp/quizzes/${quizId}/retake`, { staff_employee_id: samId }, EDITOR.token, labA);
     check("2b. (setup) the retake opens", retake.s === 200 || retake.s === 201, `${retake.s} ${JSON.stringify(retake.j).slice(0, 120)}`);
 
+    const employees = () => Number((sqlite.prepare("SELECT COUNT(*) AS n FROM competency_employees WHERE lab_id = ?").get(labA) as any).n);
+    const employeesBefore = employees(), warned: string[] = [], warn = console.warn;
+    console.warn = (...a: any[]) => { warned.push(a.map(String).join(" ")); warn(...a); };
     const right = await submit(REPEATED.map((q) => ({ question_id: q.id, selected_answer: q.correct_answer })));
-    const stored = sqlite.prepare("SELECT answers, score, passed FROM competency_quiz_results WHERE id = ?").get(right.j.id) as any;
+    console.warn = warn;
+    const stored = sqlite.prepare("SELECT answers, score, passed, employee_id, staff_employee_id FROM competency_quiz_results WHERE id = ?").get(right.j.id) as any;
+    check("1c. the attempt is stored under the roster person, with no VeritaComp employee made and no warning",
+      Number(stored?.staff_employee_id) === samId && Number(stored?.employee_id) === 0 && employees() === employeesBefore && !warned.some((w) => /staff-portal quiz attempt/.test(w)),
+      `${JSON.stringify({ e: stored?.employee_id, s: stored?.staff_employee_id })} employees ${employeesBefore} -> ${employees()} warned ${warned.join(" | ").slice(0, 160)}`);
     const marks = JSON.parse(stored?.answers || "[]").map((a: any) => a.correct);
     check("1a. every key chosen on a quiz with repeated ids: 100%, Pass, each answer stored right (the 5th and 6th were Wrong before)",
       right.s === 200 && right.j.score === 100 && right.j.passed === true && stored?.score === 100 && marks.length === 6 && marks.every((m: boolean) => m === true),
