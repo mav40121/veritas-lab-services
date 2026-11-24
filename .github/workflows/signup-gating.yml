@@ -440,6 +440,11 @@ jobs:
         # back as they were; a bulk approval signs each document as a single one does and refuses what moved; both email notices are off
         # until the lab's owner or an admin turns one on, once per submission per step and once per person in 7 days.
         run: npm run test:veritadc-document-control
+      - name: Run VeritaDC system documents integration test
+        # B1: a system document is sent as a draft into each chosen laboratory of the organization and takes effect only when that laboratory
+        # approves it; no signature is carried, an open draft is never overwritten, nothing crosses to a lab outside the organization, and
+        # the organization's view is counts only. A lab that receives nothing answers exactly as before.
+        run: npm run test:veritadc-shared-sop
       - name: Run structure-only database copy integration test
         # GET /api/admin/schema-db (Lifepoint questionnaire: customer data is not used for testing): secret-gated, every
         # table, index, view and trigger rebuilt with the same columns, no rows, nothing from the source in the file, audited.

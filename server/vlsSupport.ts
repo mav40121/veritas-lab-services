@@ -98,6 +98,16 @@ const ALWAYS: Record<string, string> = {
   // Restoring puts an approved procedure back in use; turning the emails on sends them in the lab's name to its own people.
   "POST /api/labs/:labId/veritapolicy/documents/:id/restore": "restore an archived policy",
   "PUT /api/labs/:labId/veritapolicy/settings/email-notices": "turn the lab's email notices on or off",
+  // System documents (server/policySharedDocuments.ts): sending one into laboratories, and each laboratory's own answer to it.
+  "POST /api/labs/:labId/veritapolicy/shared/masters/:id/send": "send a system document to laboratories",
+  "POST /api/labs/:labId/veritapolicy/shared/received/:copyId/decline": "decline a system document",
+  "POST /api/labs/:labId/veritapolicy/shared/received/:copyId/resume": "follow a system document again",
+  "POST /api/labs/:labId/veritapolicy/shared/received/:copyId/own-copy": "stop following a system document",
+  "POST /api/labs/:labId/veritapolicy/shared/received/:copyId/use-existing": "use the lab's own document for a system document",
+  "POST /api/labs/:labId/veritapolicy/shared/received/:copyId/take": "take a newer version of a system document",
+  "PUT /api/labs/:labId/veritapolicy/shared/received/:copyId/owner": "choose who owns a document",
+  "POST /api/labs/:labId/veritapolicy/documents/:id/addenda": "write a lab's addendum",
+  "DELETE /api/labs/:labId/veritapolicy/documents/:id/addenda/:addendumId": "take a lab's addendum off",
   "POST /api/labs/:labId/veritapolicy/documents/:id/recertify": "recertify a policy",
   "POST /api/labs/:labId/veritapolicy/attestations/:id/complete": "attest a policy",
   "POST /api/labs/:labId/veritapolicy/attestations/:id/score-quiz": "score a policy attestation quiz",

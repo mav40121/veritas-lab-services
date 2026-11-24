@@ -8,7 +8,7 @@ import { useMemberships } from "@/hooks/useMemberships";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Gauge, Lock, CheckCircle2, AlertTriangle, XCircle, Newspaper, CircleDashed, ListChecks, BarChart3 } from "lucide-react";
+import { Building2, Gauge, Lock, CheckCircle2, AlertTriangle, XCircle, Newspaper, CircleDashed, ListChecks, BarChart3 } from "lucide-react";
 import { summarizeRollup, badModules, groupsInRollup, filterRollupByGroup, groupSections, moduleWork, moduleCount, onlyUndated, ROLLUP_GROUP_KIND_LABEL, type RollupStatus } from "@/lib/readinessRollup";
 import { RollupGroupsDialog, type RollupGroupsData } from "@/components/RollupGroupsDialog";
 
@@ -275,16 +275,23 @@ export default function ReadinessDashboardPage() {
             <Card>
               <CardHeader className="pb-2 flex-row flex-wrap items-center justify-between gap-2 space-y-0">
                 <CardTitle className="text-base">{networkTitle}</CardTitle>
-                {systemLeader && (
-                  <div className="flex flex-wrap gap-2">
-                    <Button asChild size="sm" variant="outline" data-testid="open-findings-link">
-                      <Link href={`/labs/${activeLabId}/readiness/findings${findingsQuery ? `?${findingsQuery}` : ""}`}><ListChecks className="h-4 w-4 mr-1.5" />Open findings ({openFindings})</Link>
+                <div className="flex flex-wrap gap-2">
+                  {scopedRollup.some((l) => l.organization_id != null) && (
+                    <Button asChild size="sm" variant="outline" data-testid="system-documents-link">
+                      <Link href={`/labs/${activeLabId}/readiness/system-documents${findingsQuery ? `?${findingsQuery}` : ""}`}><Building2 className="h-4 w-4 mr-1.5" />System documents</Link>
                     </Button>
-                    <Button asChild size="sm" variant="outline" data-testid="system-quality-link">
-                      <Link href={`/labs/${activeLabId}/readiness/quality${findingsQuery ? `?${findingsQuery}` : ""}`}><BarChart3 className="h-4 w-4 mr-1.5" />Quality indicators</Link>
-                    </Button>
-                  </div>
-                )}
+                  )}
+                  {systemLeader && (
+                    <>
+                      <Button asChild size="sm" variant="outline" data-testid="open-findings-link">
+                        <Link href={`/labs/${activeLabId}/readiness/findings${findingsQuery ? `?${findingsQuery}` : ""}`}><ListChecks className="h-4 w-4 mr-1.5" />Open findings ({openFindings})</Link>
+                      </Button>
+                      <Button asChild size="sm" variant="outline" data-testid="system-quality-link">
+                        <Link href={`/labs/${activeLabId}/readiness/quality${findingsQuery ? `?${findingsQuery}` : ""}`}><BarChart3 className="h-4 w-4 mr-1.5" />Quality indicators</Link>
+                      </Button>
+                    </>
+                  )}
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="flex flex-wrap items-end gap-x-8 gap-y-3">

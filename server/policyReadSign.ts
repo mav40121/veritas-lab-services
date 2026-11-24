@@ -333,6 +333,44 @@ export function readSignTracker(sqlite: any, labId: number, scope: ReadSignScope
   };
 }
 
+/**
+ * How many people owe each of these documents and how many have signed, by the tracker's own rule, as counts alone: for the
+ * organization's view of its system documents (server/policySharedDocuments.ts), which never names anyone. `current_version_id` is
+ * the version in force. The same numbers as readSignTracker's totals for a document that is approved now.
+ */
+export function documentSignCounts(
+  sqlite: any, labId: number, docs: Array<{ id: number; manual_id: number | null; current_version_id: number | null; doc_type: string | null }>,
+): Map<number, { signed: number; owed: number }> {
+  const out = new Map<number, { signed: number; owed: number }>();
+  if (!docs.length) return out;
+  const ctx = loadReadSignContext(sqlite, labId);
+  const isSigned = signedLookup(sqlite, ctx);
+  const noSign = new Set((sqlite.prepare("SELECT doc_type FROM policy_doc_type_settings WHERE lab_id = ? AND requires_read_and_sign = 0").all(labId) as any[]).map((r) => r.doc_type));
+  const seated = new Map<number, number>((sqlite.prepare(
+    "SELECT staff_employee_id, seat_user_id FROM user_seats WHERE lab_id = ? AND seat_type = 'staff_portal' AND status = 'active' AND staff_employee_id IS NOT NULL AND seat_user_id IS NOT NULL"
+  ).all(labId) as any[]).map((s) => [s.seat_user_id, s.staff_employee_id]));
+  const login = new Map<number, number>(ctx.roster.filter((e) => e.login_user_id).map((e) => [e.login_user_id, e.id]));
+  const personal = new Map<number, any[]>();
+  for (const a of sqlite.prepare(
+    `SELECT a.document_id, a.assigned_to_user_id, a.version_id, a.completed_at FROM policy_attestations a JOIN policy_documents d ON d.id = a.document_id WHERE d.lab_id = ?`
+  ).all(labId) as any[]) personal.set(a.document_id, [...(personal.get(a.document_id) ?? []), a]);
+  for (const d of docs) {
+    const audience = new Set<number>();
+    if (d.current_version_id != null && !(d.doc_type && noSign.has(d.doc_type))) {
+      for (const r of rulesForDocument(ctx, d)) for (const p of peopleOfRule(ctx, r)) audience.add(p);
+      for (const a of personal.get(d.id) ?? []) {
+        if (a.completed_at != null && a.version_id !== d.current_version_id) continue;
+        const emp = login.get(a.assigned_to_user_id) ?? seated.get(a.assigned_to_user_id);
+        if (emp != null && ctx.rosterIds.has(emp)) audience.add(emp);
+      }
+    }
+    let signed = 0;
+    for (const p of audience) if (isSigned(d, p)) signed += 1;
+    out.set(d.id, { signed, owed: audience.size - signed });
+  }
+  return out;
+}
+
 /** One document's assignment, for its signature list: who it goes to and how each group stands. */
 export function documentAudience(sqlite: any, labId: number, doc: { id: number; manual_id?: number | null; current_version_id: number | null }, isSignedPerson: (employeeId: number) => boolean) {
   const ctx = loadReadSignContext(sqlite, labId);
@@ -522,7 +560,7 @@ export function logStaffDocumentView(sqlite: any, labId: number, documentId: num
 
 // What a limited Staff login may read on a document it can open. Anything else under /documents/:id answers 403, so a route added
 // later is closed until someone decides otherwise.
-const DOCUMENT_READS_ALLOWED = new Set(["", "/render", "/download", "/notes", "/links", "/quiz", "/quiz-config", "/carried/face-page", "/carried/original"]);
+const DOCUMENT_READS_ALLOWED = new Set(["", "/render", "/download", "/notes", "/links", "/quiz", "/quiz-config", "/carried/face-page", "/carried/original", "/print.pdf"]);
 // Lab-wide reads that name other people, and the assigning screens.
 const NEVER_FOR_STAFF = [/^\/compliance(\/|$)/, /^\/manuals\/[^/]+\/approvers(\/|$)/, /^\/delegations(\/|$)/, /^\/read-sign(\/|$)/, /^\/surveyor-links(\/|$)/];
 const STAFF_OWN_REFUSAL = { error: "A staff login sees only its own sign-off status.", code: "STAFF_OWN_ONLY" };

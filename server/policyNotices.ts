@@ -23,7 +23,7 @@ import { attestationStillCurrent, closeAttestationsCoveredByStaffSignatures } fr
 import { loadReadSignContext, peopleOfRule, readSignMailer, rulesForDocument, signedLookup, staffLabIdFor } from "./policyReadSign";
 import {
   canUserApproveStep, canUserApproveStepDelegated, eligibleReviewerIdsForStep, getCurrentPendingStep, isVersionMajorRevision,
-  manualApproverUserIds, resolveActiveMedicalDirectorUserId, writeAuditLog,
+  manualApproverUserIds, resolveActiveMedicalDirectorUserId, versionAuthorId, writeAuditLog,
 } from "./veritapolicyApproval";
 import { versionLabel } from "../shared/policyVersion";
 import { DEFAULT_OVERDUE_SIGN_DAYS } from "../shared/policyNotices";
@@ -82,13 +82,17 @@ export interface StepRecipient { userId: number; email: string; name: string | n
  * sign on (VeritaDC edit, or a Staff login), with a live login. A medical director step goes to the designated director when the
  * lab has one who can sign; the owner and admins, who may sign as designee, are emailed only when there's no director to email.
  */
-export function stepNoticeRecipients(sqlite: any, labId: number, documentId: number, canEdit: (labId: number, userId: number) => boolean): StepRecipient[] {
+export function stepNoticeRecipients(
+  sqlite: any, labId: number, documentId: number, canEdit: (labId: number, userId: number) => boolean,
+  // The step to ask about, for a draft that isn't in review yet (notifyDraftReceived). Otherwise the document's pending step.
+  draftStep?: ReturnType<typeof getCurrentPendingStep>["step"],
+): StepRecipient[] {
   const doc = sqlite.prepare("SELECT id, owner_user_id, manual_id, current_version_id, archived_at FROM policy_documents WHERE id = ? AND lab_id = ?").get(documentId, labId) as any;
-  const step = doc && !doc.archived_at ? getCurrentPendingStep(sqlite, documentId).step : null;
+  const step = doc && !doc.archived_at ? draftStep ?? getCurrentPendingStep(sqlite, documentId).step : null;
   if (!step) return [];
   const today = labToday(labTimeZoneById(sqlite, labId));
   const rule = {
-    labId, documentOwnerId: doc.owner_user_id, stepRow: step,
+    labId, documentOwnerId: versionAuthorId(sqlite, doc), stepRow: step,
     isMajorRevision: isVersionMajorRevision(sqlite, doc.current_version_id), manualId: doc.manual_id ?? null,
   };
   const direct = step.required_role === "specific_user" ? (step.specific_user_id != null ? [step.specific_user_id] : [])
@@ -199,6 +203,70 @@ export function notifyStepSigners(
     return { people: byPerson.size, done };
   } catch (err: any) {
     console.error("[dc approval notice]", err?.message || err);
+    return { people: 0, done: Promise.resolve() };
+  }
+}
+
+// One system document can arrive in many labs at once: their emails go out one after another, at the mailer's pace.
+let receivedMail: Promise<void> = Promise.resolve();
+
+/**
+ * A version of a system document arrived in this lab as a draft (server/policySharedDocuments.ts). In a lab with the approval
+ * notice on, the people who can sign the first step of the route it sits on are told once; nothing is submitted and nobody is
+ * asked to sign yet. With no route set there is nobody to tell. Never throws.
+ */
+export function notifyDraftReceived(
+  sqlite: any,
+  o: { labId: number; documentId: number; receivedAuditId: number; from: string; systemVersion: string | null; actorUserId: number; canEdit: (labId: number, userId: number) => boolean }
+): { people: number; done: Promise<void> } {
+  try {
+    if (!labNoticeSettings(sqlite, o.labId).approvalEmails) return { people: 0, done: Promise.resolve() };
+    const lab = sqlite.prepare("SELECT lab_name, retired_at FROM labs WHERE id = ?").get(o.labId) as any;
+    const doc = sqlite.prepare("SELECT title, doc_number, current_version_id, workflow_id, status FROM policy_documents WHERE id = ? AND lab_id = ?").get(o.documentId, o.labId) as any;
+    if (!lab || lab.retired_at || !doc?.workflow_id || doc.status !== "draft") return { people: 0, done: Promise.resolve() };
+    const step = sqlite.prepare(
+      `SELECT s.id, s.workflow_id, s.step_order, s.step_name, s.required_role, s.specific_user_id, s.approver_group_id, s.allow_self_approval
+         FROM policy_approval_steps s JOIN policy_approval_workflows w ON w.id = s.workflow_id
+        WHERE s.workflow_id = ? AND w.lab_id = ? AND s.archived_at IS NULL AND w.archived_at IS NULL ORDER BY s.step_order ASC LIMIT 1`
+    ).get(doc.workflow_id, o.labId) as any;
+    if (!step) return { people: 0, done: Promise.resolve() };
+    const claim = sqlite.prepare(
+      `INSERT OR IGNORE INTO policy_approval_notices (lab_id, document_id, version_id, step_id, submission_id, user_id, for_user_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    );
+    const told = stepNoticeRecipients(sqlite, o.labId, o.documentId, o.canEdit, step).flatMap((r) => {
+      const made = claim.run(o.labId, o.documentId, doc.current_version_id, step.id, o.receivedAuditId, r.userId, r.forUserId);
+      return made.changes ? [{ ...r, noticeId: Number(made.lastInsertRowid) }] : [];
+    });
+    if (!told.length) return { people: 0, done: Promise.resolve() };
+    const done = receivedMail = receivedMail.then(async () => {
+      let sent = 0, failed = 0;
+      for (const r of told) {
+        if (readSignMailer.pauseMs) await new Promise((res) => setTimeout(res, readSignMailer.pauseMs));
+        const screen = o.canEdit(o.labId, r.userId) ? "veritapolicy-app/my-policies" : "my-signoffs";
+        let error: string | null = null;
+        try {
+          await readSignMailer.send({
+            to: r.email,
+            subject: oneLine(`System document received: ${doc.title}`),
+            html: `<div>${esc(lab.lab_name || "Your lab")} received ${named(doc)}${o.systemVersion ? `, version ${esc(o.systemVersion)}` : ""} from ${esc(o.from)} in VeritaDC&trade;.</div><div><br></div>`
+              + "<div>It is a draft. Nothing changes in your lab until your lab submits and approves it, and staff keep reading the version your lab approved before.</div><div><br></div>"
+              + `<div><a href="${baseUrl()}/labs/${o.labId}/${screen}">Sign in to VeritaDC&trade;</a></div><div><br></div>`
+              + "<div>Your lab turned on approval notices in VeritaDC&trade;. You get this one once for each version it receives.</div>",
+          });
+          sent += 1;
+        } catch (err: any) {
+          failed += 1;
+          error = oneLine(err?.message || err, 300);
+          console.error("[dc received notice] send failed:", error);
+        }
+        sqlite.prepare("UPDATE policy_approval_notices SET sent_at = CASE WHEN ? IS NULL THEN datetime('now') END, error = ? WHERE id = ?").run(error, error, r.noticeId);
+      }
+      writeAuditLog(sqlite, { labId: o.labId, documentId: o.documentId, userId: o.actorUserId, action: "approval_notice_sent", details: { sent, failed, system_document_received: true } });
+    }).catch((err) => console.error("[dc received notice]", err?.message || err));
+    return { people: told.length, done };
+  } catch (err: any) {
+    console.error("[dc received notice]", err?.message || err);
     return { people: 0, done: Promise.resolve() };
   }
 }

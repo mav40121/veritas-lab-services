@@ -14,10 +14,11 @@
 
 import { checkAuthToken } from "./sessionAuth";
 import { isVlsSupportUser, labAllowsVlsSupport } from "./vlsSupport";
-import { canUserApproveStepDelegated, isVersionMajorRevision, writeAuditLog } from "./veritapolicyApproval";
+import { canUserApproveStepDelegated, isVersionMajorRevision, versionAuthorId, writeAuditLog } from "./veritapolicyApproval";
 import { staffOwnScope, staffSelfSeat } from "./competencySelfEntry";
 import { labTimeZoneById, labToday } from "./dateLocal";
 import { labNoticeSettings, notifyStepSigners } from "./policyNotices";
+import { noteMasterArchived } from "./policySharedDocuments";
 import { orderManualTree } from "@shared/manualTree";
 import { docNumberKey, versionLabel } from "../shared/policyVersion";
 import { BULK_APPROVE_MAX, OVERDUE_SIGN_DAYS } from "../shared/policyNotices";
@@ -64,7 +65,7 @@ export function mayOpenEarlierVersions(sqlite: any, labId: number, documentId: n
   return (sqlite.prepare(
     "SELECT required_role, specific_user_id, approver_group_id, allow_self_approval FROM policy_approval_steps WHERE workflow_id = ? AND archived_at IS NULL"
   ).all(doc.workflow_id) as any[]).some((stepRow) => canUserApproveStepDelegated(sqlite, {
-    userId, labId, documentOwnerId: doc.owner_user_id, stepRow, isMajorRevision: isVersionMajorRevision(sqlite, doc.current_version_id), manualId: doc.manual_id ?? null,
+    userId, labId, documentOwnerId: versionAuthorId(sqlite, doc), stepRow, isMajorRevision: isVersionMajorRevision(sqlite, doc.current_version_id), manualId: doc.manual_id ?? null,
   }, today).ok);
 }
 
@@ -158,6 +159,7 @@ export function registerPolicyDocumentControlRoutes(app: any, deps: {
       details: { title: doc.title, from: { archived_at: doc.archived_at }, to: { archived_at: null }, status: doc.status, version_id: doc.current_version_id, approved_version_id: doc.approved_version_id },
       ipAddress: req.ip, userAgent: agent(req),
     });
+    noteMasterArchived(db, id, true);
     res.json({ ok: true, restored: id, status: doc.status, next_review_date: doc.next_review_date });
   });
 

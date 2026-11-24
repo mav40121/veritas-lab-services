@@ -16,7 +16,8 @@
 //   - Unknown, revoked, or a document with no approved version right now: one identical 404 body, so a token can't be
 //     probed. The public routes take only the token: no document id, version id or lab id is read from the request.
 //   - The public answers carry the lab's name and CLIA, the document's number, title, version, effective date and approval
-//     date, and the file. Never signatures, the sign-off list, the audit trail, other documents or anyone's name.
+//     date, and the file, with the lab's own approved addenda to it when it is a system document (server/policySharedDocuments.ts;
+//     the procedure isn't whole without them), named by their place in the list, never by an id. Never signatures, the sign-off list, the audit trail, other documents or anyone's name.
 //   - Revoking keeps the row (revoked_at, revoked_by). Create and revoke write policy_audit_log rows.
 
 import crypto from "crypto";
@@ -31,6 +32,7 @@ import {
   writeAuditLog,
 } from "./veritapolicyApproval";
 import { approvedReadVersionSql, revisionInProgressSql } from "./policyApprovedVersion";
+import { addendaOf } from "./policySharedDocuments";
 
 export const SHARE_LINK_NOT_ACTIVE = "This link is not active. Contact the laboratory.";
 const LABEL_MAX = 120;
@@ -242,16 +244,24 @@ export function registerPolicyShareLinkRoutes(app: any, deps: {
       approved_date: approvedDateFor(db, v),
       // The page then says a revision is in progress and this is the approved version.
       revision_in_progress: v.revision_in_progress,
+      ...(() => { const addenda = addendaOf(db, v.lab_id, v.document_id, true); return addenda.length ? { addenda: addenda.map((a) => ({ title: a.title, version: a.version_label })) } : {}; })(),
     });
   });
 
   // GET /file — the version's file, the way the surveyor view serves it: PDF and images as the file, inline; Word and the
-  // other formats as JSON holding HTML. ?download=1 sends the original file as an attachment.
+  // other formats as JSON holding HTML. ?download=1 sends the original file as an attachment. ?addendum=N is the Nth addendum.
   app.get("/api/public/policy-share/:token/file", async (req: any, res: any) => {
     publicHeaders(res);
     const r = resolveShareToken(sqlite(), String(req.params.token || ""));
     if (!r) return notActive(res);
-    const v = r.version;
+    let v = r.version;
+    if (req.query?.addendum !== undefined) {
+      const n = Number(req.query.addendum);
+      const addendum = Number.isInteger(n) && n > 0 ? addendaOf(sqlite(), v.lab_id, v.document_id, true)[n - 1] : undefined;
+      const file = addendum ? sharedVersionFor(sqlite(), addendum.document_id, v.lab_id) : null;
+      if (!file) return notActive(res);
+      v = file;
+    }
     let buffer: Buffer;
     try {
       buffer = readVersionBuffer(v.file_path);

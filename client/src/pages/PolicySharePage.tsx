@@ -15,6 +15,7 @@ import { Download, Loader2, XCircle } from "lucide-react";
 import { labLocaleDate } from "@/lib/labDate";
 import { useSEO } from "@/hooks/useSEO";
 import { REVISION_IN_PROGRESS_NOTE } from "@shared/policyApprovedVersion";
+import { AddendaView } from "@/components/AddendaView";
 
 export const SHARE_LINK_NOT_ACTIVE = "This link is not active. Contact the laboratory.";
 
@@ -28,6 +29,8 @@ interface ShareMeta {
   approved_date: string | null;
   // True while a newer revision is a draft or in review; the link shows the approved version (BUG-151).
   revision_in_progress?: boolean;
+  // The laboratory's own approved addenda to a system document, in order (server/policySharedDocuments.ts).
+  addenda?: Array<{ title: string; version: string | null }>;
 }
 
 type Viewer =
@@ -192,6 +195,7 @@ export default function PolicySharePage() {
             data-testid="share-viewer-html"
           />
         ) : null}
+        {!!data.addenda?.length && <AddendaView addenda={data.addenda.map((a, i) => ({ key: i + 1, title: a.title, version: a.version, url: `${api}/file?addendum=${i + 1}` }))} />}
       </div>
     );
   }

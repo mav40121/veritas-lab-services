@@ -25,6 +25,7 @@ import { useLocation } from "wouter";
 import DOMPurify from "dompurify";
 import { QuizQuestionImage } from "@/components/QuizQuestionImage";
 import { StaffApprovalsView } from "@/components/StaffApprovalsView";
+import { AddendaView } from "@/components/AddendaView";
 import { WaivedSpecimenRows } from "@/components/WaivedSpecimenRows";
 import type { WaivedSpecimen } from "@shared/competencyWaivedSpecimens";
 import { REVISION_IN_PROGRESS_NOTE } from "@shared/policyApprovedVersion";
@@ -542,6 +543,8 @@ interface PortalPolicyRender {
   file_format: "docx" | "pdf" | "html" | "xlsx" | "xls" | "png" | "jpg" | "txt";
   file_hash: string;
   revision_in_progress?: boolean;
+  // The lab's own approved addenda to a system document, read after it (server/policySharedDocuments.ts).
+  addenda?: Array<{ document_id: number; title: string; version_label: string | null }>;
 }
 
 function StaffPortalPoliciesView({
@@ -773,6 +776,11 @@ function StaffPortalPoliciesView({
               </object>
             )}
           </div>
+          {!!meta?.addenda?.length && (
+            <div className="mb-4" data-testid="sp-policies-addenda">
+              <AddendaView headers={staffPortalHeaders(token) as Record<string, string>} addenda={meta.addenda.map((a) => ({ key: a.document_id, title: a.title, version: a.version_label, url: `/api/staff-portal-session/policies/${a.document_id}/render` }))} />
+            </div>
+          )}
 
           {active.read_only ? (
             <div className="border border-border rounded-lg bg-card p-4 text-sm text-muted-foreground" data-testid="sp-policies-read-only">
