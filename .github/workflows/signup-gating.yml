@@ -311,6 +311,10 @@ jobs:
         # BUG-183 (Redington 2026-11-23): an admin or editor invite ties the person to the one roster entry with the name the
         # director typed, so a quiz assigned to that entry reaches their bell; anything unclear stays on the VeritaStaff prompt.
         run: npm run test:invite-links-roster
+      - name: Run competency PT picker lab scope test
+        # BUG-189 part 1: VeritaComp's Import from VeritaPT picker lists the active lab's own events, matches the tester
+        # VeritaPT recorded, and fills the event id and name that exist (two made-up labs under one owner).
+        run: npm run test:competency-pt-picker-lab
       - name: Run quiz option letters test
         # Redington 2026-11-18: the answer key names an option by position (A = first); the quiz screens read the letter from
         # the option's text, so options typed without "A." graded every pick wrong. shared/quizOptions.ts and the admin count.

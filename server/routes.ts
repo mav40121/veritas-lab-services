@@ -29339,18 +29339,22 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // GET /api/labs/:labId/veritacomp/programs/:programId/pt-samples
   //
   // Wave I PR I3 (2026-06-06). Cross-module bridge from VeritaPT into
-  // the VeritaComp New Assessment dialog's Element 5 row. Returns the
-  // lab owner's recent pt_events filtered loosely by analytes appearing
-  // in the program's method groups, capped at 25 most recent (event_date
-  // DESC). Lets the lab director pick a real recorded PT event instead
-  // of typing the sample id, date, and acceptable status by hand.
+  // the VeritaComp New Assessment dialog's Element 5 row. Returns this
+  // LAB's recent pt_events filtered loosely by analytes appearing in the
+  // program's method groups, capped at 25 most recent (event_date DESC).
+  // Lets the lab director pick a real recorded PT event instead of typing
+  // the sample id, date, and acceptable status by hand.
   //
-  // Schema reality: pt_events.user_id is the LAB OWNER, not an employee
-  // (PT events are not attributed per testing personnel in our schema).
-  // The original I3 framing ("the employee's PT samples") was rescoped
-  // to "the lab's recent PT events" because the data model doesn't
-  // support per-employee attribution. The lab director picks which event
-  // was run by the employee being assessed.
+  // BUG-189 part 1 (2026-11-24): it listed events by the lab OWNER's user
+  // id, so an owner with several labs saw other labs' events, and an event
+  // with neither an id nor a name imported as "PT event #N". It now reads
+  // the lab's own events (pt_events.lab_id, as VeritaPT's list does), and
+  // the sample id is the event id and name that exist, else blank.
+  // ?employeeId= (a competency employee of this lab) matches the tester
+  // VeritaPT recorded (pt_events.tested_by_employee_id): an event recorded
+  // as tested by someone else is left out; one with no tester recorded
+  // stays, for the evaluator to judge. A limited Staff login reads only
+  // its own and unrecorded events and nobody's name.
   //
   // Filtering: program.method_groups[].analytes is a JSON array of
   // analyte names. We pull recent pt_events for the lab and keep only
@@ -29359,11 +29363,27 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // analytes recorded, we return all recent events as a fallback.
   app.get("/api/labs/:labId/veritacomp/programs/:programId/pt-samples", authMiddleware, labScopeMiddleware, (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
-    const ownerUserId = labOwnerUserId(req);
     const program = (db as any).$client.prepare(
       `SELECT id, name FROM competency_programs WHERE id = ? AND lab_id = ?`
     ).get(req.params.programId, req.scope.labId) as any;
     if (!program) return res.status(404).json({ error: "Program not found in this lab" });
+
+    // Whose record this is, when the dialog names the person: their roster row in this lab, by the link, else by name as
+    // suggested-method-groups does. Null when there is none, and then no event is left out.
+    const staffOwn = staffOwnIn(req);
+    let personId: number | null = null;
+    if (req.query.employeeId != null && req.query.employeeId !== "") {
+      const compEmp = (db as any).$client.prepare(
+        "SELECT id, staff_employee_id, name FROM competency_employees WHERE id = ? AND lab_id = ?"
+      ).get(Number(req.query.employeeId), req.scope.labId) as { id: number; staff_employee_id: number | null; name: string } | undefined;
+      if (!compEmp) return res.status(404).json({ error: "Employee not found" });
+      personId = compEmp.staff_employee_id ?? ((db as any).$client.prepare(
+        `SELECT id FROM staff_employees WHERE tier2_lab_id = ?
+          AND (LOWER(TRIM(first_name || ' ' || last_name)) = LOWER(TRIM(?)) OR LOWER(TRIM(last_name || ', ' || first_name)) = LOWER(TRIM(?)))
+          LIMIT 1`
+      ).get(req.scope.labId, compEmp.name, compEmp.name) as any)?.id ?? null;
+    }
+    if (staffOwn) personId = staffOwn.employeeId;
 
     // Collect the program's analytes from its method groups. analytes is
     // a JSON-encoded text array; tolerate parse failure by ignoring.
@@ -29383,7 +29403,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       } catch { /* swallow */ }
     }
 
-    // Pull recent PT events for the lab owner. 18 months is the practical
+    // Pull this lab's recent PT events. 18 months is the practical
     // surveyor-defensible window (CMS Subpart H allows the lab to use any
     // event in the current calendar year; widening to 18 months lets the
     // LD also reach a late-year event from the prior cycle).
@@ -29391,17 +29411,20 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     since.setMonth(since.getMonth() - 18);
     const sinceDate = since.toISOString().split("T")[0];
     const events = (db as any).$client.prepare(
-      `SELECT id, event_id, event_name, event_date, analyte, your_result, your_method,
-              acceptable_low, acceptable_high, sdi, pass_fail
-       FROM pt_events
-       WHERE user_id = ? AND date(event_date) >= date(?)
-       ORDER BY date(event_date) DESC, id DESC
+      `SELECT e.id, e.event_id, e.event_name, e.event_date, e.analyte, e.your_result, e.your_method,
+              e.acceptable_low, e.acceptable_high, e.sdi, e.pass_fail, e.tested_by_employee_id,
+              (SELECT TRIM(COALESCE(se.last_name, '') || ', ' || COALESCE(se.first_name, '')) FROM staff_employees se
+                WHERE se.id = e.tested_by_employee_id AND se.tier2_lab_id = e.lab_id) AS tested_by_name
+       FROM pt_events e
+       WHERE e.lab_id = @lab AND date(e.event_date) >= date(@since)
+         AND (@mine = 0 OR e.tested_by_employee_id IS NULL OR e.tested_by_employee_id = @person)
+       ORDER BY date(e.event_date) DESC, e.id DESC
        LIMIT 200`
-    ).all(ownerUserId, sinceDate) as Array<{
+    ).all({ lab: req.scope.labId, since: sinceDate, mine: personId != null || staffOwn ? 1 : 0, person: personId }) as Array<{
       id: number; event_id: string | null; event_name: string | null; event_date: string;
       analyte: string; your_result: number | null; your_method: string | null;
       acceptable_low: number | null; acceptable_high: number | null; sdi: number | null;
-      pass_fail: string;
+      pass_fail: string; tested_by_employee_id: number | null; tested_by_name: string | null;
     }>;
 
     // Filter against program analytes when we have them; otherwise return
@@ -29431,7 +29454,11 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       // Convenience pre-formatted fields the picker can drop straight
       // into the Element 5 form state.
       suggestedSampleType: "PT",
-      suggestedSampleId: e.event_id || e.event_name || `PT event #${e.id}`,
+      // The event id and the event name, whichever the lab entered; never a made-up number.
+      suggestedSampleId: [e.event_id, e.event_name].map((v) => String(v ?? "").trim()).filter((v, i, all) => v && all.indexOf(v) === i).join(", "),
+      testedByEmployeeId: staffOwn ? null : e.tested_by_employee_id,
+      testedByName: staffOwn ? null : e.tested_by_name,
+      testedByThisPerson: personId != null && e.tested_by_employee_id === personId,
       suggestedAcceptable: e.pass_fail === "pass" ? 1 : (e.pass_fail === "fail" ? 0 : null),
     })));
   });

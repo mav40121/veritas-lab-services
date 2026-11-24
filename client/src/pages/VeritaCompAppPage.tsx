@@ -5216,9 +5216,12 @@ function NewAssessmentDialog({
       onOpenChange={(v) => { if (!v) setPtPickerMgId(null); }}
       labId={activeLabId ?? null}
       programId={program.id}
+      employeeId={employeeId}
       onSelect={(s: PTSample) => {
         if (ptPickerMgId === null) return;
-        setTechField(5, ptPickerMgId, "el5_sample_id", s.suggestedSampleId);
+        // An event with no ID or name in VeritaPT leaves the Sample ID for the evaluator to enter.
+        if (s.suggestedSampleId) setTechField(5, ptPickerMgId, "el5_sample_id", s.suggestedSampleId);
+        else toast({ title: "Enter the sample ID", description: "This event has no event ID or name in VeritaPT™." });
         if (s.suggestedAcceptable === 1) setTechField(5, ptPickerMgId, "el5_acceptable", true);
         else if (s.suggestedAcceptable === 0) setTechField(5, ptPickerMgId, "el5_acceptable", false);
       }}
