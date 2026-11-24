@@ -93,7 +93,7 @@ function criterionAuthorityPhrase(testName: string, cfrSection: string, study: S
 
 // Used by every page.pdf() call below: takes the original HTML + footer
 // template and the request's license context, returns the augmented pair.
-function applyLicenseToPuppeteer(
+export function applyLicenseToPuppeteer(
   html: string,
   baseFooter: string,
   ctx?: Partial<LicenseContext> | null,

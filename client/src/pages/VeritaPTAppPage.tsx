@@ -4,6 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PtEventsTab } from "@/components/veritapt/PtEventsTab";
 import { PtEventDialog } from "@/components/veritapt/PtEventDialog";
 import { PtBiasTab } from "@/components/veritapt/PtBiasTab";
+import { PtReportTab } from "@/components/veritapt/PtReportTab";
 import { useStaffOwnScope } from "@/hooks/useStaffLogin";
 import { PtResultDialog } from "@/components/veritapt/PtResultDialog";
 import { PT_AAA_METHODS, type PtResult } from "@shared/ptEvents";
@@ -483,6 +484,7 @@ export default function VeritaPTAppPage() {
         <TabsTrigger value="coverage">Coverage</TabsTrigger>
         {activeLabId && <TabsTrigger value="events" data-testid="pt-tab-events">Events</TabsTrigger>}
         {activeLabId && !ownOnly && <TabsTrigger value="bias" data-testid="pt-tab-bias">Bias and trend</TabsTrigger>}
+        {activeLabId && !ownOnly && <TabsTrigger value="report" data-testid="pt-tab-report">Report</TabsTrigger>}
       </TabsList>
       {activeLabId && (
         <TabsContent value="events" className="mt-0">
@@ -490,6 +492,7 @@ export default function VeritaPTAppPage() {
         </TabsContent>
       )}
       {activeLabId && !ownOnly && <TabsContent value="bias" className="mt-0"><PtBiasTab labId={activeLabId} /></TabsContent>}
+      {activeLabId && !ownOnly && <TabsContent value="report" className="mt-0"><PtReportTab labId={activeLabId} /></TabsContent>}
       <TabsContent value="coverage" className="mt-0 space-y-6">
       {/* Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">

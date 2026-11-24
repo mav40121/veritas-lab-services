@@ -7,6 +7,7 @@
 //   3. The review of a whole event: what it saw, what it links to (never opened by itself), the laboratory director or designee
 //      review, and an event changed since.
 //   4. Bias and trend: the numbers worked out on the server, "no peer data" where there is none, and the two review flags.
+//   5. The period report: on screen, as Excel and as a PDF, with the compliance digest's numbers unchanged.
 //
 // Boots the REAL routes against a throwaway SQLite DB (made-up people, programs and numbers only). Run: npm run test:pt-events
 import { inspectionWorld } from "./inspectionFixture";
@@ -278,6 +279,60 @@ async function main() {
   check("4i. a later event on the other side ends the run and keeps it on the record", (await bias()).analytes.find((a: any) => a.analyte === "Calcium").flags.length === 1);
   check("4j. a view-only reviewer reads it; a limited Staff login and another customer don't", (await call(VIEWER, "GET", P("bias"))).s === 200 && (await call(STAFF, "GET", P("bias"))).j?.code === "STAFF_OWN_ONLY" && (await call(OTHER, "GET", P("bias"))).s === 403);
   check("4k. a qualitative row (no number) isn't charted", !bd.analytes.some((a: any) => a.analyte === "Chloride"));
+
+  // ── 5. The period report ──────────────────────────────────────────────────
+  // In lab B, so its numbers are only these.
+  const LB = (body: any) => seed("pt_events", { enrollment_id: bProg, user_id: OWNER.id, lab_id: B, peer_mean: null, ...body });
+  sqlite.prepare("DELETE FROM pt_events WHERE lab_id = ?").run(B);
+  const row5 = (event_id: string, event_date: string, analyte: string, pass_fail: string, x: any = {}) => LB({ event_id, event_date, analyte, pass_fail, ...x });
+  row5("R-0", "2025-12-20", "Glucose", "fail"); // before the year
+  const r1Id = row5("R-1", "2026-01-15", "Glucose", "pass", { submission_due_date: "2026-01-20", submitted_date: "2026-01-18" });
+  row5("R-1", "2026-01-15", "Sodium", "pass", { submission_due_date: "2026-01-20", submitted_date: "2026-01-18" });
+  row5("R-2", "2026-02-15", "Glucose", "fail", { submission_due_date: "2026-02-20", submitted_date: "2026-02-21" });
+  row5("R-2", "2026-02-15", "Sodium", "ungraded", { submission_due_date: "2026-02-20", submitted_date: "2026-02-21", ungraded_reason: "no_consensus" });
+  row5("R-3", "2026-03-31", "Glucose", "pass", { submission_due_date: "2026-03-30" });
+  row5("R-3", "2026-03-31", "Sodium", "pending", { submission_due_date: "2026-03-30" });
+  row5("R-4", "2026-04-01", "Glucose", "fail", { submission_due_date: "2099-04-20" }); // after Q1
+  const report = async (period: string, who: any = OWNER, lab = B) => (await call(who, "GET", `${P("report", lab)}?period=${period}`)).j;
+  let R5 = await report("2026-Q1");
+  check("5a. the quarter's days and label", R5.period.start === "2026-01-01" && R5.period.end === "2026-03-31" && R5.period.label === "Q1 2026 (January to March)");
+  check("5b. results by status, by event date, both ends in", R5.results.acceptable === 3 && R5.results.unacceptable === 1 && R5.results.ungraded === 1 && R5.results.not_graded === 1 && R5.results.graded === 4, JSON.stringify(R5.results));
+  check("5c. the rate is acceptable over graded; ungraded and not yet graded are never in it", R5.results.acceptable_rate === 75 && (await report("2026-01")).results.acceptable_rate === 100 && (await report("2026-06")).results.acceptable_rate === null);
+  check("5d. events due: on time, late, and past due with no submitted date on file", R5.due.total === 3 && R5.due.counts.on_time === 1 && R5.due.counts.late === 1 && R5.due.counts.not_recorded === 1 && R5.due.events.map((e: any) => e.event).join() === "R-1,R-2,R-3");
+  check("5e. unacceptable and ungraded by analyte and by department, and they add up", R5.by_analyte.map((a: any) => `${a.name}:${a.unacceptable}:${a.ungraded}`).join() === "Glucose:1:0,Sodium:0:1" && R5.by_department.length === 1 && R5.by_department[0].name === "No department on VeritaMap" && R5.by_department[0].unacceptable === R5.results.unacceptable && R5.by_department[0].ungraded === R5.results.ungraded);
+  check("5f. open reviews: an event with a status back and no review, and one with only pending results isn't one", R5.open_reviews.map((e: any) => e.event).join() === "R-1,R-2,R-3" && R5.open_evaluations === 1 && (await report("2026-01")).open_reviews.length === 1);
+  const dB = (await call(OWNER, "GET", P(`events/${r1Id}`, B))).j;
+  await call(OWNER, "POST", P("event-reviews", B), { result_id: r1Id, review_token: dB.review_token, corrective_action_ids: [], finding_ids: [] });
+  check("5g. a reviewed event leaves the list", (await report("2026-Q1")).open_reviews.map((e: any) => e.event).join() === "R-2,R-3");
+  // Glucose, graded: fail 12/20, pass 1/15, fail 2/15, pass 3/31, fail 4/1
+  check("5h. two of three as of the period's last day, not as of now", (await report("2026-01")).two_of_three.map((t: any) => `${t.analyte}:${t.state}`).join() === "Glucose:WATCH" && (await report("2026-02")).two_of_three.map((t: any) => `${t.analyte}:${t.state}`).join() === "Glucose:AT-RISK" && (await report("2026-Q1")).two_of_three.map((t: any) => `${t.analyte}:${t.state}`).join() === "Glucose:WATCH" && (await report("2026")).two_of_three.map((t: any) => `${t.analyte}:${t.state}`).join() === "Glucose:AT-RISK");
+  for (const bad5 of ["", "2026-13", "2026-Q5", "26", "2026-1", "soon"]) check(`5i. period "${bad5}": refused`, (await call(OWNER, "GET", `${P("report", B)}?period=${bad5}`)).s === 400);
+  check("5j. a leap February ends on the 29th", (await report("2028-02")).period.end === "2028-02-29");
+
+  // The digest: the same numbers as before, and the same as the report
+  const { digestCountsForLab } = await import("../../server/digestCounts");
+  const oldCount = (pf: string, s0: string, e0: string) => one(`SELECT COUNT(*) AS n FROM pt_events WHERE lab_id = ? AND pass_fail IN (${pf}) AND substr(event_date, 1, 10) BETWEEN ? AND ?`, B, s0, e0).n;
+  for (const [s0, e0, per] of [["2026-02-01", "2026-02-28", "2026-02"], ["2026-03-01", "2026-03-31", "2026-03"], ["2026-01-01", "2026-03-31", "2026-Q1"]] as const) {
+    const g = (digestCountsForLab as any)(sqlite, B, s0, e0);
+    const pt = g.sections?.pt ?? g.pt;
+    const rp = await report(per), ytd = await report("2026");
+    check(`5k. the digest's VeritaPT line for ${per} is the query it had, and the report's`, pt.unacceptableInMonth === oldCount("'fail'", s0, e0) && pt.acceptableYearToDate === oldCount("'pass'", "2026-01-01", e0) && pt.gradedYearToDate === oldCount("'pass','fail'", "2026-01-01", e0) && rp.results.unacceptable === pt.unacceptableInMonth && ytd.results.graded >= pt.gradedYearToDate, JSON.stringify(pt));
+  }
+
+  // Excel and PDF
+  const rx = await book((await call(OWNER, "GET", `${P("report/export.xlsx", B)}?period=2026-Q1`)).buf);
+  const sum5 = Object.fromEntries(rowsOf(rx.getWorksheet("Summary")).map((r) => [r[0], r[1]]));
+  check("5l. the Excel report carries the same numbers", rx.worksheets.map((s) => s.name).join() === "About,Summary,Events Due,By Analyte,By Department,Open Reviews,Two of Three" && sum5["Events due in the period"] === 3 && sum5["Acceptable rate (acceptable / graded)"] === "75.0%" && sum5["Beside the rate: ungraded"] === 1 && sum5["Beside the rate: not yet graded"] === 1 && rowsOf(rx.getWorksheet("Two of Three"))[0][0] === "Glucose", JSON.stringify(sum5));
+  const tk = await call(OWNER, "GET", `${P("report/pdf", B)}?period=2026-Q1`);
+  const pdf5 = await call(OWNER, "GET", `/api/pdf/${tk.j?.token}`);
+  check("5m. the PDF comes through the token store", tk.s === 200 && tk.j.filename === "VeritaPT_Report_2026-Q1.pdf" && pdf5.s === 200 && pdf5.buf.subarray(0, 5).toString() === "%PDF-", tk.text.slice(0, 200));
+  const { buildPtReportHTML } = await import("../../server/ptReportPdf");
+  const html = buildPtReportHTML({ ...R5, by_analyte: [{ name: "<b>Glucose</b> & co", unacceptable: 1, ungraded: 0 }] }, { labName: "A <i>Lab</i>", clia: null });
+  check("5n. what the lab typed is escaped; a missing CLIA says so; nothing is signed", html.includes("&lt;b&gt;Glucose&lt;/b&gt; &amp; co") && !html.includes("<i>Lab") && html.includes("CLIA: Not on file") && !/signature/i.test(html) && html.includes("laboratory director or designee") && !html.includes("\u2014"));
+  check("5o. a limited Staff login, another customer and an outsider to the sister lab don't read it, on screen or as a file", await (async () => {
+    const r = await Promise.all(["report", "report/export.xlsx", "report/pdf"].flatMap((x) => [call(STAFF, "GET", `${P(x)}?period=2026`), call(OTHER, "GET", `${P(x)}?period=2026`), call(EDITOR, "GET", `${P(x, B)}?period=2026`)]));
+    return r.every((x) => x.s === 403) && (await call(VIEWER, "GET", `${P("report")}?period=2026`)).s === 200;
+  })());
   void mo;
 
   w.finish();
