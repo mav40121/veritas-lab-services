@@ -63,6 +63,9 @@ export const PURGE_OVERRIDES: Record<string, PurgeRule> = {
   user_seats: del(`lab_id ${IN("labs")} OR owner_user_id ${IN("accounts")} OR seat_user_id ${IN("people")}`),
   staff_labs: del(`id ${IN("staffLabs")}`),
   inventory_transfers: del(`from_lab_id ${IN("labs")} OR to_lab_id ${IN("labs")}`),
+  // VeritaDC email notices (server/policyNotices.ts) name the person mailed, so they go with the person too.
+  policy_approval_notices: del(`lab_id ${IN("labs")} OR user_id ${IN("people")} OR for_user_id ${IN("people")}`),
+  policy_sign_notices: del(`lab_id ${IN("labs")} OR user_id ${IN("people")}`),
   // BUG-184: an attempt goes when its quiz, its record, its assignment or its person does (its quiz_id can't be cleared), and
   // a scan of an unknown barcode goes with the account it was made under.
   competency_quiz_results: del(`quiz_id IN (SELECT id FROM competency_quizzes WHERE ${LAB_OR_OWNER("user_id")})

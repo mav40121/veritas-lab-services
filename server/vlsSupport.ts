@@ -91,6 +91,10 @@ const ALWAYS: Record<string, string> = {
   // VeritaPolicy
   "POST /api/labs/:labId/veritapolicy/documents/:id/approve": "approve a policy",
   "POST /api/labs/:labId/veritapolicy/documents/:id/reject": "reject a policy",
+  "POST /api/labs/:labId/veritapolicy/approvals/bulk": "approve policies",
+  // Restoring puts an approved procedure back in use; turning the emails on sends them in the lab's name to its own people.
+  "POST /api/labs/:labId/veritapolicy/documents/:id/restore": "restore an archived policy",
+  "PUT /api/labs/:labId/veritapolicy/settings/email-notices": "turn the lab's email notices on or off",
   "POST /api/labs/:labId/veritapolicy/documents/:id/recertify": "recertify a policy",
   "POST /api/labs/:labId/veritapolicy/attestations/:id/complete": "attest a policy",
   "POST /api/labs/:labId/veritapolicy/attestations/:id/score-quiz": "score a policy attestation quiz",

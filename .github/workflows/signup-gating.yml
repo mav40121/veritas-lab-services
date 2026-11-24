@@ -390,6 +390,11 @@ jobs:
         # BUG-151: while a newer revision is a draft or in review, a limited Staff login, the staff portal and a share link read the version
         # recorded as approved; editors read the revision; every approval path records it; the one-time backfill guesses nothing.
         run: npm run test:veritadc-approved-version
+      - name: Run VeritaDC document control integration test
+        # B13: earlier versions open labelled superseded (Staff only ones that were in effect); archived documents are editors-only and come
+        # back as they were; a bulk approval signs each document as a single one does and refuses what moved; both email notices are off
+        # until the lab's owner or an admin turns one on, once per submission per step and once per person in 7 days.
+        run: npm run test:veritadc-document-control
       - name: Run structure-only database copy integration test
         # GET /api/admin/schema-db (Lifepoint questionnaire: customer data is not used for testing): secret-gated, every
         # table, index, view and trigger rebuilt with the same columns, no rows, nothing from the source in the file, audited.

@@ -17,6 +17,7 @@ import path from "path";
 import crypto from "crypto";
 import { labGroupSignerIds } from "./labGroups";
 import { seatTypeInLabSql } from "./seatContext";
+import { versionLabel } from "../shared/policyVersion";
 
 export const POLICY_STORAGE_ROOT =
   process.env.POLICY_STORAGE_ROOT || "/data/policies";
@@ -694,8 +695,14 @@ export function stepHasSignatures(sqlite: any, stepId: number): boolean {
   return !!sqlite.prepare("SELECT 1 FROM policy_signoffs WHERE workflow_step_id = ? LIMIT 1").get(stepId);
 }
 
+const userLabel = (sqlite: any, userId: number): string | null => {
+  const u = sqlite.prepare("SELECT name, email FROM users WHERE id = ?").get(userId) as any;
+  return u?.name || u?.email || null;
+};
+
 // Everything waiting for this person to sign in a lab: documents in review whose pending step they can sign today.
-export function approvalQueueFor(sqlite: any, labId: number, userId: number, todayStr: string) {
+// `detail` adds what the editor's bulk approval list shows: the version's label, and whom a delegate would sign for.
+export function approvalQueueFor(sqlite: any, labId: number, userId: number, todayStr: string, detail = false) {
   const docs = sqlite.prepare(
     `SELECT id, title, doc_number, owner_user_id, manual_id, current_version_id, updated_at
        FROM policy_documents
@@ -727,6 +734,10 @@ export function approvalQueueFor(sqlite: any, labId: number, userId: number, tod
       step_name: p.step.step_name,
       step_order: p.step.step_order,
       total_steps: p.totalSteps,
+      ...(detail ? {
+        version_label: versionLabel(sqlite.prepare("SELECT version_number, version_major, version_minor FROM policy_versions WHERE id = ?").get(d.current_version_id) as any),
+        delegator_name: check.viaDelegation ? userLabel(sqlite, check.viaDelegation.delegatorId) : null,
+      } : {}),
     });
   }
   return queue;

@@ -31,6 +31,10 @@ import { CarriedOverPanel, type CarriedRecord } from "@/components/CarriedOverPa
 import { DocumentSignatureRoster } from "@/components/DocumentSignatureRoster";
 import { ReadSignDialog, type ReadSignScopeRef } from "@/components/ReadSignDialog";
 import { PolicyShareLinks } from "@/components/PolicyShareLinks";
+import { ArchivedDocumentsDialog, type ArchivedDocument } from "@/components/ArchivedDocumentsDialog";
+import { BulkApproveDialog, type BulkApproveItem } from "@/components/BulkApproveDialog";
+import { DcEmailNotices } from "@/components/DcEmailNotices";
+import { MarkedDocument, PolicyVersionHistory, VersionBanner, watermarkFor, type PolicyVersionRow } from "@/components/PolicyVersionHistory";
 import { useStaffDocScope } from "@/hooks/useStaffLogin";
 import {
   Dialog,
@@ -157,15 +161,9 @@ interface Workflow {
   steps: WorkflowStep[];
 }
 
-interface PendingReview {
-  document_id: number;
-  title: string;
+interface PendingReview extends BulkApproveItem {
   manual_id: number | null;
   updated_at: string;
-  step_id: number;
-  step_name: string;
-  step_order: number;
-  total_steps: number;
 }
 
 interface PendingStepInfo {
@@ -841,7 +839,13 @@ export default function VeritaPolicyMyPoliciesPage() {
   };
 
   // Version history loaded into the View modal alongside signoffs.
-  const [viewVersions, setViewVersions] = useState<any[]>([]);
+  const [viewVersions, setViewVersions] = useState<PolicyVersionRow[]>([]);
+  // An earlier version being read in the viewer (B13), and whether the document itself is archived.
+  const [viewVersion, setViewVersion] = useState<PolicyVersionRow | null>(null);
+  const [viewCanOpenVersions, setViewCanOpenVersions] = useState(false);
+  const [viewArchived, setViewArchived] = useState(false);
+  const [archivedOpen, setArchivedOpen] = useState(false);
+  const [bulkItems, setBulkItems] = useState<BulkApproveItem[] | null>(null);
   const [viewCarried, setViewCarried] = useState<CarriedRecord | null>(null);
 
   // ── Per-policy notes (discussion thread) ────────────────────────────────
@@ -1143,10 +1147,13 @@ export default function VeritaPolicyMyPoliciesPage() {
     onSuccess: () => {
       toast({
         title: "Policy archived",
-        description: "Removed from the active list. Signatures and audit trail are retained.",
+        description: "Removed from the active list. Signatures and audit trail are retained. Archived shows it, and restores it.",
       });
       queryClient.invalidateQueries({
         queryKey: [`/api/labs/${activeLabId}/veritapolicy/documents`],
+      });
+      queryClient.invalidateQueries({
+        queryKey: [`/api/labs/${activeLabId}/veritapolicy/archived-documents`],
       });
     },
     onError: (err: any) =>
@@ -1414,16 +1421,64 @@ export default function VeritaPolicyMyPoliciesPage() {
     setAuditTrailErr(null);
   };
 
-  const openView = async (doc: PolicyDocument) => {
-    setViewDoc(doc);
+  // Show a file in the viewer: the document itself, or one of its earlier versions.
+  // PDF and images come back as the file itself; every other format (Word, HTML, Excel, text) as JSON
+  // with HTML. Decide by the response type, not the stored format (2026-10-16: more file types).
+  const loadIntoViewer = async (path: string) => {
     setViewHtml("");
-    setViewPdfUrl("");
+    setViewPdfUrl((u) => { if (u) URL.revokeObjectURL(u); return ""; });
     setViewIsImage(false);
     setViewTampered(false);
+    setViewLoading(true);
+    try {
+      const token = localStorage.getItem("veritas_token") || "";
+      const res = await fetch(`/api/labs/${activeLabId}/veritapolicy/documents/${path}`, { headers: { Authorization: `Bearer ${token}` } });
+      const ctype = res.headers.get("Content-Type") || "";
+      if (!ctype.includes("application/json")) {
+        if (!res.ok) throw new Error("Render failed");
+        if (res.headers.get("X-VeritaPolicy-Tamper") === "yes") setViewTampered(true);
+        const blob = await res.blob();
+        setViewIsImage(ctype.startsWith("image/"));
+        setViewPdfUrl(URL.createObjectURL(blob));
+      } else {
+        const body = await res.json();
+        if (!res.ok) throw new Error(body?.error || "Render failed");
+        setViewHtml(body.html || "");
+        if (body.tampered) setViewTampered(true);
+      }
+    } finally {
+      setViewLoading(false);
+    }
+  };
+  const viewFailed = (err: any) => toast({ title: "View failed", description: String(err?.message || err), variant: "destructive" });
+
+  // An earlier version, read-only, in the same viewer (B13). The banner says what it is and leads back.
+  const openVersion = async (v: PolicyVersionRow) => {
+    if (!viewDoc) return;
+    if (v.standing === "current") return backToCurrent();
+    const was = viewVersion;
+    setViewVersion(v);
+    try {
+      await loadIntoViewer(`${viewDoc.id}/versions/${v.id}/render`);
+    } catch (err: any) {
+      viewFailed(err);
+      setViewVersion(was);
+    }
+  };
+  const backToCurrent = async () => {
+    if (!viewDoc) return;
+    setViewVersion(null);
+    try { await loadIntoViewer(`${viewDoc.id}/render`); } catch (err: any) { viewFailed(err); }
+  };
+
+  const openView = async (doc: PolicyDocument, archived = false) => {
+    setViewDoc(doc);
+    setViewArchived(archived);
+    setViewVersion(null);
+    setViewCanOpenVersions(false);
     setViewSignoffs([]);
     setViewVersions([]);
     setViewCarried(null);
-    setViewLoading(true);
     try {
       const token = localStorage.getItem("veritas_token") || "";
       // Fire-and-forget signoff history so the audit trail renders alongside.
@@ -1440,37 +1495,14 @@ export default function VeritaPolicyMyPoliciesPage() {
         .then((r) => r.json())
         .then((body) => {
           setViewVersions(body?.versions || []);
+          setViewCanOpenVersions(body?.can_open_versions === true);
           setViewCarried(body?.carried || null);
         })
         .catch(() => {});
-      // PDF and images come back as the file itself; every other format (Word, HTML, Excel, text) as JSON
-      // with HTML. Decide by the response type, not the stored format (2026-10-16: more file types).
-      const res = await fetch(
-        `/api/labs/${activeLabId}/veritapolicy/documents/${doc.id}/render`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      const ctype = res.headers.get("Content-Type") || "";
-      if (!ctype.includes("application/json")) {
-        if (!res.ok) throw new Error("Render failed");
-        if (res.headers.get("X-VeritaPolicy-Tamper") === "yes") setViewTampered(true);
-        const blob = await res.blob();
-        setViewIsImage(ctype.startsWith("image/"));
-        setViewPdfUrl(URL.createObjectURL(blob));
-      } else {
-        const body = await res.json();
-        if (!res.ok) throw new Error(body?.error || "Render failed");
-        setViewHtml(body.html || "");
-        if (body.tampered) setViewTampered(true);
-      }
+      await loadIntoViewer(`${doc.id}/render`);
     } catch (err: any) {
-      toast({
-        title: "View failed",
-        description: String(err?.message || err),
-        variant: "destructive",
-      });
+      viewFailed(err);
       setViewDoc(null);
-    } finally {
-      setViewLoading(false);
     }
   };
 
@@ -1484,6 +1516,8 @@ export default function VeritaPolicyMyPoliciesPage() {
     setViewSignoffs([]);
     setViewVersions([]);
     setViewCarried(null);
+    setViewVersion(null);
+    setViewArchived(false);
   };
 
   // ── Download ────────────────────────────────────────────────────────────
@@ -1552,6 +1586,9 @@ export default function VeritaPolicyMyPoliciesPage() {
       setDownloadingSigReport(false);
     }
   };
+
+  // While an earlier version is on screen, only its own signatures show beside it.
+  const shownSignoffs = viewVersion ? viewSignoffs.filter((s: any) => s.version_id === viewVersion.id) : viewSignoffs;
 
   // ── Group documents by manual for display ──────────────────────────────
   const filteredDocs = useMemo(() => {
@@ -1681,7 +1718,8 @@ export default function VeritaPolicyMyPoliciesPage() {
           <Button hidden={isReadOnly}
             variant="outline"
             onClick={() => setEmailTemplatesOpen(true)}
-            title="Customize the automated policy review-reminder emails"
+            title="Turn on email notices, and customize the automated policy review-reminder emails"
+            data-testid="reminder-emails-open"
           >
             <MessageSquare size={14} className="mr-1.5" /> Reminder emails
           </Button>
@@ -1691,6 +1729,14 @@ export default function VeritaPolicyMyPoliciesPage() {
             title="Temporarily delegate approval authority when a reviewer is out"
           >
             <Users size={14} className="mr-1.5" /> Delegations
+          </Button>
+          <Button hidden={isReadOnly}
+            variant="outline"
+            onClick={() => setArchivedOpen(true)}
+            title="See archived documents, open one, or restore it"
+            data-testid="archived-open"
+          >
+            <Archive size={14} className="mr-1.5" /> Archived
           </Button>
           <Button hidden={isReadOnly} onClick={() => setUploadOpen(true)}>
             <Upload size={14} className="mr-1.5" /> Upload Policy
@@ -1812,6 +1858,11 @@ export default function VeritaPolicyMyPoliciesPage() {
             <CardTitle className="text-base flex items-center gap-2">
               <ShieldCheck size={16} className="text-amber-700 dark:text-amber-400" />
               Pending my review ({pendingReviews.length})
+              {pendingReviews.length > 1 && (
+                <Button size="sm" variant="outline" className="ml-auto h-7 text-xs font-normal" onClick={() => setBulkItems(pendingReviews)} data-testid="bulk-open">
+                  <CheckCircle2 size={12} className="mr-1" /> Approve several
+                </Button>
+              )}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -2525,6 +2576,26 @@ export default function VeritaPolicyMyPoliciesPage() {
         </DialogContent>
       </Dialog>
 
+      {/* ── Archived documents and bulk approval (B13). Before the view modal, so a document opened from either shows on top. ── */}
+      {activeLabId && (
+        <ArchivedDocumentsDialog<PolicyDocument & ArchivedDocument>
+          labId={activeLabId}
+          open={archivedOpen}
+          onClose={() => setArchivedOpen(false)}
+          onView={(d) => openView(d, true)}
+          fmtDate={fmtDate}
+        />
+      )}
+      {activeLabId && bulkItems && (
+        <BulkApproveDialog
+          labId={activeLabId}
+          items={bulkItems}
+          signerName={user?.name || ""}
+          onView={(id) => { const d = documents.find((x) => x.id === id); if (d) openView(d); }}
+          onClose={() => setBulkItems(null)}
+        />
+      )}
+
       {/* ── View modal ──────────────────────────────────────────────── */}
       <Dialog
         open={!!viewDoc}
@@ -2553,41 +2624,17 @@ export default function VeritaPolicyMyPoliciesPage() {
               </div>
             </div>
           )}
-          {viewVersions.length > 1 && (
-            <div className="rounded border bg-muted/30 p-2 text-xs space-y-1">
-              <div className="font-medium flex items-center gap-1">
-                <FileText size={14} /> Version history ({viewVersions.length})
-              </div>
-              <ul className="space-y-0.5">
-                {viewVersions.map((v: any) => (
-                  <li key={v.id} className="flex items-center justify-between gap-2">
-                    <span>
-                      <span className="font-medium">v{v.version_label ?? v.version_number}</span>
-                      <span className="ml-2 text-muted-foreground">
-                        {v.file_format?.toUpperCase()}
-                      </span>
-                      <span className="ml-2 text-muted-foreground">
-                        uploaded {fmtDate(v.uploaded_at)}
-                      </span>
-                      {v.change_summary && (
-                        <span className="ml-2 italic text-muted-foreground">
-                          - {v.change_summary}
-                        </span>
-                      )}
-                    </span>
-                    <span className="font-mono text-[10px] text-muted-foreground">
-                      {v.file_hash_sha256?.slice(0, 12)}…
-                    </span>
-                  </li>
-                ))}
-              </ul>
+          {viewArchived && (
+            <div className="rounded border border-amber-400 bg-amber-50 text-amber-900 p-2 text-sm dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200" role="status" data-testid="archived-banner">
+              <span className="font-semibold">Archived.</span> This document is out of use. It is shown for reference only.
             </div>
           )}
+          <PolicyVersionHistory versions={viewVersions} canOpen={viewCanOpenVersions} viewingId={viewVersion?.id ?? null} fmtDate={fmtDate} onOpen={openVersion} />
           {/* A link to this document's current approved version, for people outside the lab. VeritaDC editors only. */}
-          {viewDoc && activeLabId && !isReadOnly && !staffOwnDocs && (
+          {viewDoc && activeLabId && !isReadOnly && !staffOwnDocs && !viewArchived && !viewVersion && (
             <PolicyShareLinks labId={activeLabId} documentId={viewDoc.id} />
           )}
-          {viewDoc && (
+          {viewDoc && !viewArchived && !viewVersion && (
             <div className="rounded border bg-muted/20 p-2 text-xs space-y-2" data-testid="related-policies">
               <div className="font-medium flex items-center gap-1">
                 <Link2 size={14} /> Related policies
@@ -2640,7 +2687,7 @@ export default function VeritaPolicyMyPoliciesPage() {
               </div>
             </div>
           )}
-          <div className="flex justify-end gap-2">
+          <div className="flex flex-wrap justify-end gap-2">
             {viewDoc && !staffOwnDocs && (
               <Button
                 size="sm"
@@ -2664,13 +2711,13 @@ export default function VeritaPolicyMyPoliciesPage() {
               <History size={14} className="mr-1" /> View full audit trail
             </Button>
           </div>
-          {viewSignoffs.length > 0 && (
+          {shownSignoffs.length > 0 && (
             <div className="rounded border bg-muted/30 p-2 text-xs space-y-1">
               <div className="font-medium flex items-center gap-1">
-                <ShieldCheck size={14} /> Signature history ({viewSignoffs.length})
+                <ShieldCheck size={14} /> {viewVersion ? `Signatures on version ${viewVersion.version_label ?? viewVersion.version_number}` : "Signature history"} ({shownSignoffs.length})
               </div>
               <ol className="space-y-1">
-                {viewSignoffs.map((s: any) => (
+                {shownSignoffs.map((s: any) => (
                   <li key={s.id} className="flex items-start gap-2 leading-snug">
                     <span
                       className={`shrink-0 px-1.5 py-0.5 rounded text-[10px] uppercase border ${
@@ -2699,7 +2746,7 @@ export default function VeritaPolicyMyPoliciesPage() {
               </ol>
             </div>
           )}
-          {viewDoc && viewCarried && (
+          {viewDoc && viewCarried && !viewVersion && (
             <CarriedOverPanel
               carried={viewCarried}
               title={viewDoc.title}
@@ -2709,29 +2756,34 @@ export default function VeritaPolicyMyPoliciesPage() {
               fmtDate={(s) => fmtDate(s ?? null)}
             />
           )}
-          {viewDoc && <PolicyEvidenceLinks labId={activeLabId} policyId={viewDoc.id} />}
+          {viewDoc && !viewVersion && <PolicyEvidenceLinks labId={activeLabId} policyId={viewDoc.id} />}
+          {viewVersion && <VersionBanner version={viewVersion} onBack={backToCurrent} />}
           {viewLoading ? (
             <div className="p-6 flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="animate-spin" size={14} /> Loading...
             </div>
-          ) : viewPdfUrl && viewIsImage ? (
-            <img
-              src={viewPdfUrl}
-              alt={viewDoc?.title || "Policy"}
-              className="max-w-full max-h-[70vh] mx-auto border rounded"
-              data-testid="policy-view-image"
-            />
-          ) : viewPdfUrl ? (
-            <iframe
-              src={viewPdfUrl}
-              title={viewDoc?.title || "Policy"}
-              className="w-full h-[70vh] border"
-            />
           ) : (
-            <div
-              className="prose prose-sm max-w-none min-w-0 border rounded p-4 bg-white overflow-x-auto"
-              dangerouslySetInnerHTML={{ __html: viewHtml }}
-            />
+            <MarkedDocument mark={watermarkFor(viewVersion, viewArchived)}>
+              {viewPdfUrl && viewIsImage ? (
+                <img
+                  src={viewPdfUrl}
+                  alt={viewDoc?.title || "Policy"}
+                  className="max-w-full max-h-[70vh] mx-auto border rounded"
+                  data-testid="policy-view-image"
+                />
+              ) : viewPdfUrl ? (
+                <iframe
+                  src={viewPdfUrl}
+                  title={viewDoc?.title || "Policy"}
+                  className="w-full h-[70vh] border"
+                />
+              ) : (
+                <div
+                  className="prose prose-sm max-w-none min-w-0 border rounded p-4 bg-white overflow-x-auto"
+                  dangerouslySetInnerHTML={{ __html: viewHtml }}
+                />
+              )}
+            </MarkedDocument>
           )}
           <DialogFooter>
             <Button variant="outline" onClick={closeView}>
@@ -3793,9 +3845,10 @@ export default function VeritaPolicyMyPoliciesPage() {
       <Dialog open={emailTemplatesOpen} onOpenChange={(o) => { if (!o) setEmailTemplatesOpen(false); }}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Review-reminder emails</DialogTitle>
+            <DialogTitle>Email notices and review reminders</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            {activeLabId && <DcEmailNotices labId={activeLabId} />}
             <p className="text-sm text-muted-foreground">
               Customize the three automated policy review-reminder emails, or leave them on the
               default. Available merge fields:{" "}

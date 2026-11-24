@@ -321,6 +321,27 @@ app.use((req, res, next) => {
     console.error("[policy-reminders] Scheduler setup error:", err.message);
   }
 
+  // VeritaDC overdue read-and-sign email (B13; server/policyNotices.ts): off for a lab until its owner or an admin turns it on, and
+  // never more than one per person in 7 days. Daily at 12:00 UTC, a US lab's morning, when every US lab is on the same calendar day.
+  try {
+    const { runOverdueSignNotices } = await import("./policyNotices");
+    const { db: noticeDb } = await import("./db");
+    const runSignNotices = () => {
+      runOverdueSignNotices((noticeDb as any).$client)
+        .then((r) => console.log(`[dc-overdue-sign] labs=${r.labs} people=${r.people} sent=${r.sent} failed=${r.failed} waiting=${r.waiting}`))
+        .catch((err) => console.error("[dc-overdue-sign] Run failed:", err?.message || err));
+    };
+    const now = new Date();
+    const next = new Date(now);
+    next.setUTCHours(12, 0, 0, 0);
+    if (next.getTime() <= now.getTime()) next.setUTCDate(next.getUTCDate() + 1);
+    const ms = next.getTime() - now.getTime();
+    setTimeout(() => { runSignNotices(); setInterval(runSignNotices, 24 * 60 * 60 * 1000); }, ms);
+    console.log(`[dc-overdue-sign] Scheduled in ${Math.round(ms / 60000)} minutes`);
+  } catch (err: any) {
+    console.error("[dc-overdue-sign] Scheduler setup error:", err.message);
+  }
+
   // Schedule daily competency reminders and escalation at midnight UTC
   // (server/competencyReminders.ts). Per-lab opt-in; deduped by
   // competency_reminder_log; no-op without RESEND_API_KEY.

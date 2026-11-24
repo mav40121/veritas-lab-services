@@ -265,6 +265,9 @@ import { labCarriesMinorRevisions, signatureStillCurrent, carriedStaffSignature 
 import { attestationStillCurrent, closeAttestationsCoveredByStaffSignatures, documentSignatureStatus, staffHasSignedCurrent, unsignedDocumentsForStaff } from "./policySignatureStatus";
 import { priorCountsByPerson, priorHow, priorSignatureStillCurrent, priorSignaturesOfDocument } from "./policyPriorSignature";
 import { assignedDocumentIds, loadReadSignContext, logStaffDocumentView, lookupDocuments, registerReadSignRoutes, rulesForDocument, targetLabels, veritaDcStaffGuard } from "./policyReadSign";
+import { versionStandings } from "./policyVersionStanding";
+import { archivedDocumentGuard, mayOpenEarlierVersions, registerPolicyDocumentControlRoutes, type ApprovalDecision, type ApprovalDecisionInput } from "./policyDocumentControl";
+import { notifyStepSigners } from "./policyNotices";
 import { approvedReadVersionId, approvedReadVersionSql, revisionInProgress, revisionInProgressSql, reviewOverdueSql, surveyorReadVersionId, surveyorReadVersionSql, surveyorReads, surveyorReadsSql } from "./policyApprovedVersion";
 import { assessmentTypeLabel, assessmentTypeProblem, isEvaluationProgram, normalizeRecordKind } from "@shared/competencyEvaluation";
 import { normalizeSpecimen, normalizeReportableField, specimenLabel } from "@shared/veritamapSpecimen";
@@ -39821,6 +39824,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
   // In front of every /api/labs/:labId/veritapolicy route below, so a route added later is covered too: what a limited Staff login may reach (Step D).
   app.use("/api/labs/:labId/veritapolicy", veritaDcStaffGuard((db as any).$client));
+  // And an archived document reads as not found to anyone who can't edit VeritaDC (B13).
+  app.use("/api/labs/:labId/veritapolicy/documents/:id", archivedDocumentGuard((db as any).$client, hasModuleEditAccess));
 
   // GET /api/labs/:labId/veritapolicy/settings
   app.get('/api/labs/:labId/veritapolicy/settings', authMiddleware, labScopeMiddleware, (req: any, res) => {
@@ -41520,10 +41525,13 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
             ORDER BY version_number DESC`
         )
         .all(id);
+      // Editors and the approvers on its route may open its earlier versions (B13), so they are told where each stands. Nobody else is.
+      const standings = mayOpenEarlierVersions(sqlite, req.scope.labId, id, req.userId, hasModuleEditAccess) ? versionStandings(sqlite, row) : null;
       res.json({
         document: withVersionLabel(withManualTree(sqlite, req.scope.labId, [row]))[0],
         // A limited Staff login reads the current version only.
-        versions: (versions as any[]).filter((v) => !req.dcStaff || v.id === row.current_version_id).map((v) => ({ ...v, version_label: versionLabel(v) })),
+        versions: (versions as any[]).filter((v) => !req.dcStaff || v.id === row.current_version_id).map((v) => ({ ...v, version_label: versionLabel(v), ...standings?.get(v.id) })),
+        ...(standings ? { can_open_versions: true } : {}),
         // History carried over from the lab's prior system, or null (server/veritadcBulkLoad.ts).
         carried: carriedRecordFor(sqlite, id),
       });
@@ -42361,6 +42369,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         "policy_review_reminders",
         "policy_carried_records",
         "policy_share_links",
+        "policy_approval_notices",
         "policy_signoffs",
         "policy_versions",
       ];
@@ -42439,6 +42448,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         ipAddress: req.ip,
         userAgent: req.headers["user-agent"] as string | undefined,
       });
+      tellStepSigners(req.scope.labId, [id], req.userId);
       res.json({ ok: true });
     }
   );
@@ -42507,21 +42517,25 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     }
   );
 
+  // Email the people who can sign these documents' pending step, in a lab that turned it on (B13, server/policyNotices.ts). Runs in
+  // the background and can't fail the request it follows.
+  const tellStepSigners = (labId: number, documentIds: number[], actorUserId: number): void => {
+    notifyStepSigners((db as any).$client, { labId, documentIds, actorUserId, canEdit: (l, u) => hasModuleEditAccess(l, u, "veritapolicy") });
+  };
+
   // Approve or reject a document's pending step. One path for the editor screen and the staff login tile, so the password
   // check, the eligibility check and the signature record can't drift apart. Phase 3: password re-auth per FDA CPG 7153.17
   // minimum (21 CFR Part 11). A rejection is an electronic signature too: an attestation that this version does not meet standard.
-  async function decideApprovalStep(o: {
-    action: "approved" | "rejected";
-    documentId: number;
-    labId: number;
-    userId: number;
-    typedSignature: unknown;
-    password: unknown;
-    comment?: string | null;
-    ip?: string | null;
-    userAgent?: string;
-  }): Promise<{ status: number; body: any }> {
-    const { action, documentId: id, labId, userId, typedSignature, password, comment } = o;
+  // Two halves, so a bulk approval (server/policyDocumentControl.ts) checks the name and password once and records each document
+  // exactly as a single approval does.
+  async function decideApprovalStep(o: Omit<ApprovalDecisionInput, "typedSignature" | "expect"> & { typedSignature: unknown; password: unknown }): Promise<ApprovalDecision> {
+    const { typedSignature, password, ...decision } = o;
+    const refusal = await verifyElectronicSignature(o.userId, typedSignature, password);
+    return refusal ?? recordApprovalDecision({ ...decision, typedSignature: typedSignature as string });
+  }
+
+  // The typed name and the signer's own password, or why they can't sign.
+  async function verifyElectronicSignature(userId: number, typedSignature: unknown, password: unknown): Promise<ApprovalDecision | null> {
     if (!typedSignature || typeof typedSignature !== "string" || typedSignature.trim().length < 2) {
       return { status: 400, body: { error: "typedSignature required (full name)" } };
     }
@@ -42537,16 +42551,28 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (!passwordOk) {
       return { status: 401, body: { error: "Password incorrect; signature not recorded" } };
     }
+    return null;
+  }
+
+  // Record the decision on the document's pending step: the signature row, the audit row, and the document's move. No await, so
+  // nothing can move between the checks and the signature.
+  function recordApprovalDecision(o: ApprovalDecisionInput): ApprovalDecision {
+    const { action, documentId: id, labId, userId, typedSignature, comment } = o;
+    const sqlite = (db as any).$client;
     const doc = sqlite
-      .prepare("SELECT lab_id, owner_user_id, current_version_id, status, manual_id FROM policy_documents WHERE id = ?")
+      .prepare("SELECT lab_id, owner_user_id, current_version_id, status, manual_id, archived_at FROM policy_documents WHERE id = ?")
       .get(id) as any;
     if (!doc) return { status: 404, body: { error: "Not found" } };
     if (doc.lab_id !== labId) return { status: 403, body: { error: "Wrong lab" } };
+    if (doc.archived_at) return { status: 409, body: { error: "This document is archived.", code: "MOVED" } };
     if (doc.status !== "in_review") {
-      return { status: 409, body: { error: `Cannot ${action === "approved" ? "approve" : "reject"} from status ${doc.status}` } };
+      return { status: 409, body: { error: `Cannot ${action === "approved" ? "approve" : "reject"} from status ${doc.status}`, ...(o.expect ? { code: "MOVED" } : {}) } };
     }
     const pending = getCurrentPendingStep(sqlite, id);
-    if (!pending.step) return { status: 409, body: { error: "No pending step" } };
+    if (!pending.step) return { status: 409, body: { error: "No pending step", ...(o.expect ? { code: "MOVED" } : {}) } };
+    if (o.expect && (o.expect.versionId !== doc.current_version_id || o.expect.stepId !== pending.step.id)) {
+      return { status: 409, body: { error: "It moved since the list was shown. Open it and read it again before you sign.", code: "MOVED" } };
+    }
     const check = canUserApproveStepDelegated(sqlite, {
       userId,
       labId,
@@ -42656,6 +42682,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           action, documentId: id, labId: req.scope.labId, userId: req.userId, typedSignature, password, comment,
           ip: req.ip, userAgent: req.headers["user-agent"] as string | undefined,
         });
+        if (out.status === 200 && out.body.status === "in_review") tellStepSigners(req.scope.labId, [id], req.userId);
         res.status(out.status).json(out.body);
       }
     );
@@ -42724,6 +42751,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         ip: (req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "").toString().split(",")[0].trim() || null,
         userAgent: req.headers["user-agent"] as string | undefined,
       });
+      if (out.status === 200 && out.body.status === "in_review") tellStepSigners(req.staffPortalLabId, [req.approvalItem.document_id], req.staffPortalUserId);
       res.status(out.status).json(out.body);
     });
   }
@@ -43437,7 +43465,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const sqlite = (db as any).$client;
       const row = sqlite
         .prepare(
-          `SELECT d.lab_id, v.file_path, v.file_format, v.file_hash_sha256 AS expected_hash
+          `SELECT d.id, d.lab_id, d.status, d.archived_at, d.current_version_id, d.approved_version_id,
+                  v.file_path, v.file_format, v.file_hash_sha256 AS expected_hash
              FROM policy_documents d
              JOIN policy_versions v ON v.id = ?
             WHERE d.id = ? AND v.document_id = d.id`
@@ -43445,6 +43474,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         .get(versionId, id) as any;
       if (!row) return res.status(404).json({ error: "Not found" });
       if (row.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
+      // Any version but the document's own is for editors and the approvers on its route (B13). veritaDcStaffGuard has already held a
+      // limited Staff login to the approved version.
+      const opensEarlier = mayOpenEarlierVersions(sqlite, req.scope.labId, id, req.userId, hasModuleEditAccess);
+      if (!opensEarlier && !req.dcStaff && versionId !== row.current_version_id) {
+        return res.status(403).json({ error: "Earlier versions open for VeritaDC™ editors and approvers.", code: "EARLIER_VERSION" });
+      }
       let buffer: Buffer;
       try {
         buffer = readVersionBuffer(row.file_path);
@@ -43460,23 +43495,28 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         userId: req.userId,
         action: "version_viewed",
         details: { version_id: versionId },
+        ipAddress: req.ip,
+        userAgent: req.headers["user-agent"] as string | undefined,
       });
+      // Which version this is, for the viewer's label.
+      const standing = opensEarlier ? { standing: versionStandings(sqlite, row).get(versionId)?.standing ?? "superseded", archived: !!row.archived_at } : null;
       if (row.file_format === "docx") {
         try {
           const rendered = await renderDocxToHtml(buffer);
-          return res.json({ format: "html", html: rendered.html, messages: rendered.messages, tampered: !!tampered });
+          return res.json({ format: "html", html: rendered.html, messages: rendered.messages, tampered: !!tampered, ...standing });
         } catch (err: any) {
           return res.status(500).json({ error: "Render failed" });
         }
       }
       if (inlineDocContentType(row.file_format)) {
         if (tampered) res.setHeader("X-VeritaPolicy-Tamper", "yes");
+        if (standing) res.setHeader("X-VeritaDC-Version-Standing", standing.standing);
         res.setHeader("Access-Control-Expose-Headers", "X-VeritaPolicy-Tamper");
         res.setHeader("Content-Type", inlineDocContentType(row.file_format) as string);
         res.setHeader("Content-Disposition", "inline");
         return res.send(buffer);
       }
-      res.json({ format: "html", html: await htmlForStoredFormat(buffer, row.file_format), messages: [], tampered: !!tampered });
+      res.json({ format: "html", html: await htmlForStoredFormat(buffer, row.file_format), messages: [], tampered: !!tampered, ...standing });
     }
   );
 
@@ -45096,11 +45136,16 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       // Only list docs the caller can actually action: eligible AND holds
       // VeritaPolicy edit access (the approve/reject POSTs require it).
       const hasEdit = hasModuleEditAccess(req.scope.labId, req.userId, "veritapolicy");
-      const pending = hasEdit ? approvalQueueFor(sqlite, req.scope.labId, req.userId, labLocalDate(new Date().toISOString())) : [];
+      const pending = hasEdit ? approvalQueueFor(sqlite, req.scope.labId, req.userId, labLocalDate(new Date().toISOString()), true) : [];
       res.json({ pending });
     }
   );
 
+  // VeritaDC document control: archived documents, restore, bulk approval, email notices (B13; server/policyDocumentControl.ts).
+  registerPolicyDocumentControlRoutes(app, {
+    sqlite: () => (db as any).$client, authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit, hasModuleEditAccess,
+    verifyElectronicSignature, recordApprovalDecision,
+  });
   // VeritaDC read-and-sign by group (Step D; server/policyReadSign.ts).
   registerReadSignRoutes(app, { sqlite: () => (db as any).$client, authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit, hasModuleEditAccess });
 
