@@ -162,6 +162,11 @@ async function main() {
       refusals.push([`sister editor on the older route ${m} ${p}`, (await call(EDITOR, m, "/api/pi" + p, b, A)).s]);
     }
     check("4. every write and report by someone outside the laboratory is refused, and nothing moved", refusals.every(([, s]) => s === 403 || s === 404) && count() === frozen, refusals.filter(([, s]) => s !== 403 && s !== 404).map(String).join(" | "));
+    // One login, a writer in lab A and Staff in lab B: working in A, B's rows stay closed on both sets of routes (PR 1977's rule).
+    const BOTH = await w.login("both", "Bo Both"); w.member(A, BOTH); w.seat(OWNER.id, BOTH, A); w.member(LB, BOTH); w.seat(OWNER.id, BOTH, LB, { type: "staff_portal", perms: {} });
+    const bothOld = await call(BOTH, "GET", "/api/pi/metrics?department_id=all", undefined, A);
+    const bothTries = [await call(BOTH, "PUT", `/api/pi/metrics/${bMetric.id}`, { name: "n" }, A), await call(BOTH, "PUT", `${PI(A)}/metrics/${bMetric.id}`, { name: "n" }), await call(BOTH, "POST", `/api/pi/metrics/${bMetric.id}/report`, {}, A), await call(BOTH, "GET", `${PI(LB)}/metrics?department_id=all`)];
+    check("4. a writer here who is Staff in a sister laboratory reads this one and nothing of that one", ids(bothOld.j).includes(metric.id) && !ids(bothOld.j).includes(bMetric.id) && ids((await call(BOTH, "GET", `${PI(A)}/metrics?department_id=all`)).j).includes(metric.id) && bothTries.every((r) => r.s === 403 || r.s === 404) && one("SELECT name FROM pi_metrics WHERE id = ?", bMetric.id).name === "Lab B only", `${ids(bothOld.j)} / ${bothTries.map((r) => r.s)}`);
     const viewOnly = await call(SCAN_ONLY, "POST", `${PI(A)}/entries`, { metric_id: metric.id, year: 2026, month: 1, value: 1 });
     check("4. a seat without VeritaQA edit can't enter a result", viewOnly.s === 403, `${viewOnly.s}`);
     const sup = [await call(SUPPORT, "POST", `${PI(A)}/entries`, { metric_id: metric.id, year: 2026, month: 1, value: 1 }), await call(SUPPORT, "DELETE", `${PI(A)}/metrics/${metric.id}`), await call(SUPPORT, "POST", `${PI(A)}/plan/reviews`, { plan_id: 1, reviewed_by: "x", review_date: "2026-01-01" }), await call(SUPPORT, "POST", `${PI(A)}/metrics/${metric.id}/assign`, {})];
@@ -365,7 +370,11 @@ async function main() {
     check("9. a bad period is refused", (await rep("period=ytd&year=2026&month=3")).s === 400 && (await rep("period=month&year=2026&month=13")).s === 400);
     const threeReport = (await call(as(U.THREE), "GET", `${PI(L.T1)}/report?period=month&year=2026&month=1`)).j;
     check("9. account-wide indicators are in their own section, labelled, in a laboratory's report", threeReport.sections.length === 2 && threeReport.sections[1].title === "Account-wide, not assigned to a laboratory" && threeReport.sections[0].departments.flatMap((d: any) => d.rows).map((r: any) => r.metric_id).includes(9511) && threeReport.sections[1].departments.flatMap((d: any) => d.rows).map((r: any) => r.metric_id).includes(9512));
+    sqlite.prepare("UPDATE labs SET clia_number = NULL WHERE id = ?").run(A);
     const labPdf = await file(EDITOR, `${PI(A)}/report/pdf`, { period: "quarter", year: 2026, quarter: 1 }), labWords = words(labPdf.buf);
+    const noCliaSystem = words((await file(LEADER, `${ORGQ}/report/pdf`, body)).buf);
+    check("9. a missed month carries its letter, the key explains it, and an empty month reads No entry in the words of the key", /3\.6 M/.test(labWords) && /W after a number is Watch, M is Missed/.test(labWords) && /No entry: nothing was entered that month/.test(labWords) && /No entry/.test(labWords.split("Hemolyzed specimens")[1] ?? ""), labWords.slice(0, 900));
+    check("9. a blank CLIA is said, in both reports", /CLIA: Not on file\. Enter it in account settings\./.test(labWords) && /Not on file\. Enter it in account settings\./.test(noCliaSystem));
     check("9. the laboratory PDF: its name and CLIA line, the period, the footer, no signature line", labPdf.s === 200 && /Made-up Lab A/.test(labWords) && /CLIA:/.test(labWords) && /Quarter 1, 2026/.test(labWords) && /Hemolyzed specimens/.test(labWords) && /VeritaQA™ \| Confidential, For Internal Lab Use Only/.test(labWords) && !/Signature/i.test(labWords) && !/[–—]/.test(labWords), labWords.slice(0, 300));
     const labX = await file(EDITOR, `${PI(A)}/report/xlsx`, { period: "year", year: 2026 }), labWb = await cells(labX.buf);
     check("9. the laboratory workbook: About, Indicators, Months", JSON.stringify(labWb.names) === JSON.stringify(["About", "Indicators", "Months"]) && labWb.rows("Months").some((r) => r[0] === "Hemolyzed specimens" && r[1] === "2026-03" && r[3] === 3.6 && r[8] === "Missed"));

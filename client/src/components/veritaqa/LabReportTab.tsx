@@ -84,7 +84,7 @@ export default function LabReportTab({ labId }: { labId: number }) {
       downloadPdfToken(token, filename);
     } finally { setBusy(null); }
   }
-  const month = data?.period.kind === "month";
+  const month = data?.period.kind === "month", year = data?.period.kind === "year";
   return (
     <div className="space-y-4" data-testid="qa-lab-report">
       <div className="flex flex-wrap items-center gap-2">
@@ -108,11 +108,12 @@ export default function LabReportTab({ labId }: { labId: number }) {
                     <div key={d.name}>
                       <h3 className="mb-1 font-sans text-sm font-semibold text-[#01696F] dark:text-teal-300">{d.name}</h3>
                       <div className="overflow-x-auto">
-                        <table className="w-full text-sm" style={{ minWidth: data.period.kind === "year" ? 980 : 640 }}>
+                        <table className="w-full table-fixed text-sm" style={{ minWidth: year ? 1150 : 640 }}>
+                          <colgroup>{(month ? [24, 14, 11, 11, 11, 29] : year ? [14.8, 9.2, ...Array(12).fill(5.1), 7, 7.8] : [28, 18, 11, 11, 11, 10.5, 10.5]).map((w, i) => <col key={i} style={{ width: `${w}%` }} />)}</colgroup>
                           <thead className="border-b bg-muted text-left text-xs text-muted-foreground">
                             <tr>
                               <th className="px-2 py-2">Indicator</th><th className="px-2 py-2">Target</th>
-                              {month ? <><th className="px-2 py-2 text-right">Value</th><th className="px-2 py-2 text-right">Counted</th></> : data.period.months.map((m) => <th key={m} className="px-2 py-2 text-right">{MONTH_SHORT[m - 1]}</th>)}
+                              {month ? <><th className="px-2 py-2 text-right">Value</th><th className="px-2 py-2 text-right">Counted</th></> : data.period.months.map((m) => <th key={m} className="py-2 pl-1 pr-5 text-right">{MONTH_SHORT[m - 1]}</th>)}
                               {!month && <th className="px-2 py-2 text-right">Period total</th>}
                               <th className="px-2 py-2">Result</th>
                               {month && <th className="px-2 py-2">Notes and linked findings</th>}
@@ -130,7 +131,7 @@ export default function LabReportTab({ labId }: { labId: number }) {
                                       <td className="px-2 py-2 text-right font-mono">{m.value == null ? <span className="font-sans text-muted-foreground">No entry</span> : m.value_text}</td>
                                       <td className="px-2 py-2 text-right font-mono text-xs">{m.numerator != null ? (m.denominator != null ? `${m.numerator.toLocaleString()} / ${m.denominator.toLocaleString()}` : m.numerator.toLocaleString()) : m.volume != null ? `volume ${m.volume.toLocaleString()}` : ""}</td>
                                     </>
-                                  ) : x.months.map((y) => <td key={y.month} className={`px-2 py-2 text-right font-mono ${statusColor(y.status)}`} title={y.findings.map((f) => f.label).join("; ") || undefined}>{y.value == null ? (y.due ? <span className="text-muted-foreground" title="No entry">-</span> : "") : trimNumber(y.value)}{y.findings.length ? "*" : ""}</td>)}
+                                  ) : x.months.map((y) => <td key={y.month} className={`px-1 py-2 text-right font-mono ${year ? "text-xs" : ""} ${statusColor(y.status)}`} title={y.findings.map((f) => f.label).join("; ") || undefined}>{y.value == null ? (y.due ? <span className={`font-sans text-muted-foreground whitespace-nowrap ${year ? "text-[11px]" : "mr-4"}`}>No entry</span> : "") : <>{trimNumber(y.value)}<span aria-hidden="true" className="inline-block w-4 pl-0.5 text-left text-[11px] font-bold">{y.status === "yellow" ? "W" : y.status === "red" ? "M" : ""}{y.findings.length ? "*" : ""}</span>{(y.status === "yellow" || y.status === "red") && <span className="sr-only"> {y.status === "yellow" ? "Watch" : "Missed"}</span>}</>}</td>)}
                                   {!month && <td className="px-2 py-2 text-right font-mono font-semibold" title={x.period && x.period.denominator != null ? `${x.period.numerator} / ${x.period.denominator}` : undefined}>{x.period && x.period.value != null ? valueText(x.period.value, x.period.unit) : ""}</td>}
                                   <td className={`px-2 py-2 text-xs font-semibold whitespace-nowrap ${resultColor(x.result_text)}`}>{x.result_text}</td>
                                   {month && <td className="px-2 py-2 text-xs">{[m.notes, m.root_cause ? `Root cause: ${m.root_cause}` : "", m.corrective_action ? `Corrective action: ${m.corrective_action}` : "", m.findings.length ? `Linked: ${m.findings.map((f) => f.label).join("; ")}` : ""].filter(Boolean).map((t, i) => <div key={i}>{t}</div>)}</td>}
@@ -146,7 +147,7 @@ export default function LabReportTab({ labId }: { labId: number }) {
               </Card>
             ))}
             <p className="text-xs text-muted-foreground">
-              A month with nothing entered reads No entry and counts as neither met nor missed. A period total comes only from numerators and denominators; values entered alone are listed by month and not averaged. * A VeritaResponse™ entry is linked to that month.
+              {month ? "" : "W after a number is Watch, M is Missed; a number with no letter met its target, or has no target set. "}No entry: nothing was entered that month; it counts as neither met nor missed. Not judged: no single target applies. A period total comes only from numerators and denominators; values entered alone are listed by month and not averaged. * A VeritaResponse™ entry is linked to that month.
             </p>
           </>
         ) : null}

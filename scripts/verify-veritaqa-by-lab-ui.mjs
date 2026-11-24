@@ -208,6 +208,13 @@ try {
   await page.waitForTimeout(800);
   const yr = await page.getByTestId(`qa-report-row-${wide}`).innerText();
   check("U7c. the year lists the months and averages nothing", /1\.4/.test(yr) && /Met 3 of 5/.test(yr) && !/2\.06/.test(yr), yr);
+  const cells = await page.getByTestId(`qa-report-row-${wide}`).locator("td").allTextContents();
+  check("U7e. a missed month reads M beside its number, a watch W, an empty one No entry", /^3\.6M/.test(cells[4]) && /^2\.2W/.test(cells[5]) && cells[2] === "1.4" && cells[7] === "No entry", JSON.stringify(cells));
+  const lefts = await page.getByTestId("qa-lab-report").locator("thead tr").evaluateAll((rows) => rows.map((r) => [...r.children].map((c) => Math.round(c.getBoundingClientRect().left)).join(",")));
+  check("U7f. every department's columns are at the same places", lefts.length >= 3 && new Set(lefts).size === 1, JSON.stringify(lefts));
+  const spill = await page.getByTestId("qa-lab-report").locator("td").evaluateAll((tds) => tds.filter((t) => t.scrollWidth > t.clientWidth + 1).map((t) => t.textContent));
+  check("U7g. nothing runs over its cell", spill.length === 0, JSON.stringify(spill));
+  await page.screenshot({ path: `${OUT}/b15_lab_report_year_light.png`, fullPage: true });
   check("U7d. PDF and Excel download", /^VeritaQA_Report_Made-up_North_Hospital_Laboratory_\d{4}\.pdf$/.test(await downloads(page, "qa-report-pdf")) && /\.xlsx$/.test(await downloads(page, "qa-report-xlsx")));
 
   // U8
@@ -262,6 +269,9 @@ try {
   await darkLab.getByTestId("qa-tab-report").click();
   await darkLab.getByTestId("qa-report-summary").waitFor({ timeout: 20000 });
   await darkLab.screenshot({ path: `${OUT}/b15_lab_report_dark.png`, fullPage: true });
+  await darkLab.getByTestId("qa-report-period").selectOption("year");
+  await darkLab.waitForTimeout(800);
+  await darkLab.screenshot({ path: `${OUT}/b15_lab_report_year_dark.png`, fullPage: true });
   await darkLab.context().close();
   const phone = { viewport: { width: 390, height: 844 } };
   const pSys = await openAs(LEADER, A, `/labs/${A}/readiness/quality?org=${ORG}`, phone);

@@ -155,7 +155,8 @@ function ReportView({ org, initialGroup, onIndicators }: { org: Organization; in
                 </CardHeader>
                 <CardContent>
                   <div className="overflow-x-auto">
-                    <table className="w-full text-sm" style={{ minWidth: 720 }}>
+                    <table className="w-full table-fixed text-sm" style={{ minWidth: 820 }}>
+                      <colgroup>{[29, 11, 12, 13, 14, 13, 8].map((w, k) => <col key={k} style={{ width: `${w}%` }} />)}</colgroup>
                       <thead className="border-b bg-muted text-left text-xs text-muted-foreground">
                         <tr><th className="px-2 py-2">Laboratory</th><th className="px-2 py-2 text-right">{i.kind === "count" ? "Count" : "Numerator"}</th><th className="px-2 py-2 text-right">Denominator</th><th className="px-2 py-2 text-right">Value</th><th className="px-2 py-2">Target</th><th className="px-2 py-2">Result</th><th className="px-2 py-2 text-center">Entries</th></tr>
                       </thead>

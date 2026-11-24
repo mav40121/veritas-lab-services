@@ -20,7 +20,7 @@ import { logAudit, type AuditAction } from "./audit";
 import { hasOpsAccess } from "./veritabench";
 import { blockNonOperatorSeat } from "./seatAccess";
 import { ownerRowInReach } from "./labAccessGuard";
-import { editSeatInLab } from "./seatContext";
+import { editSeatInLab, managesLab } from "./seatContext";
 import { staffOwnScope } from "./competencySelfEntry";
 import { effectiveSeatPermission } from "@shared/seatEditRule";
 import { storePdfToken } from "./pdfTokens";
@@ -63,6 +63,9 @@ function accountReachesLab(sqlite: any, v: Extract<QaView, { kind: "account" }>,
   if (v.userId === v.accountId) {
     return !!sqlite.prepare("SELECT 1 FROM labs WHERE id = ? AND owner_user_id = ? UNION SELECT 1 FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active' LIMIT 1").get(labId, v.userId, labId, v.userId);
   }
+  // Their seat in THIS laboratory decides: Staff or view-only there doesn't read its rows through another laboratory (B3).
+  const seat = editSeatInLab(sqlite, v.userId, labId, "seat_type");
+  if (seat && String(seat.seat_type || "active") !== "active" && !managesLab(sqlite, v.userId, labId)) return false;
   if (ownerRowInReach(sqlite, v.userId, v.accountId, labId)) return true;
   // A seat with no lab on it, under an owner whose only laboratory this is: there is no sister laboratory to cross into.
   const labs = sqlite.prepare("SELECT id FROM labs WHERE owner_user_id = ? LIMIT 2").all(v.accountId) as { id: number }[];
