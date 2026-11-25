@@ -101,7 +101,10 @@ export function voidQcRun(sqlite: Sqlite, resultId: number, userId: number, reas
   sqlite.prepare("UPDATE qc_results SET voided_at = datetime('now'), voided_by_user_id = ?, void_reason = ? WHERE id = ?").run(userId, reason, resultId);
 }
 
-/** A run an import brought in and that was taken back with it isn't one the lab has: left out of the feeds and counts that read voided runs. */
+/** A run that counts. A voided run stays on file and shows only where it is marked voided; counts, charts and other modules take this (BUG-198). */
+export const LIVE_RUN = (a = "") => `${a}voided_at IS NULL`;
+
+/** A run an import brought in and that was taken back with it isn't one the lab has: left out even of the feed that shows voided runs, marked. */
 export const NOT_TAKEN_BACK = (a = "") => `COALESCE(${a}void_source, '') <> 'import_undo'`;
 
 /** Reads beyond the results themselves (imports on file, the sigma metric): any member, as VeritaQC's reads are, but not a limited Staff login. */

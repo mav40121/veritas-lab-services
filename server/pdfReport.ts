@@ -8467,7 +8467,7 @@ export type TypeReportKind = "pt_failure" | "aaa_escalation" | "fda_deviation" |
 export const TYPE_REPORT_KINDS: TypeReportKind[] = ["pt_failure", "aaa_escalation", "fda_deviation", "qc_escalation"];
 export interface TypeReportInput extends Cms2567Input {
   // QC escalations: the run behind the finding (analyte, level, lot, rule, value, date, instrument).
-  qc?: { analyte?: string | null; level?: string | null; lot_number?: string | null; rule_code?: string | null; result_value?: any; result_date?: string | null; instrument?: string | null } | null;
+  qc?: { analyte?: string | null; level?: string | null; lot_number?: string | null; rule_code?: string | null; result_value?: any; result_date?: string | null; instrument?: string | null; voided_at?: string | null } | null;
 }
 
 const filledVal = (v: any) => v !== undefined && v !== null && String(v).trim() !== "";
@@ -8641,7 +8641,7 @@ function buildTypeReportHTML(input: TypeReportInput, directorFirst = false): str
   }
   // qc_escalation
   const analyteLevel = [qc?.analyte, qc?.level].filter(filledVal).join(", ");
-  const valueDate = [filledVal(qc?.result_value) ? String(qc?.result_value) : "", qc?.result_date ? String(qc.result_date).slice(0, 10) : ""].filter(Boolean).join(", ");
+  const valueDate = [filledVal(qc?.result_value) ? String(qc?.result_value) : "", qc?.result_date ? String(qc.result_date).slice(0, 10) : "", qc?.voided_at ? "run voided" : ""].filter(Boolean).join(", ");
   // The escalation names the finding "QC-<rule>", or "QC-QC" when the corrective action was not tied to a rule.
   const fromNumber = String(finding.finding_number || "").replace(/^QC-/, "");
   const rule = qc?.rule_code || (fromNumber && fromNumber !== "QC" ? fromNumber : "");

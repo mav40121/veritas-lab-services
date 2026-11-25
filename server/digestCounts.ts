@@ -235,8 +235,8 @@ function build(sqlite: any, labId: number, start: string, end: string, tz: strin
   });
 
   // 8. VeritaQC: runs in the month (result_date, the monthly review's window) with a live rejection-rule violation, and
-  // how many have no corrective action. Voided runs are left out, as the monthly review leaves them out; readiness and
-  // the daily review feed (qc/recent) still count them.
+  // how many have no corrective action. Voided runs are left out, as the monthly review, readiness and the daily review
+  // feed's two lists (qc/recent with_violation and missing_ca) leave them out (BUG-198).
   const qc = section("qc", () => {
     const rows = sqlite.prepare(
       `SELECT r.id, EXISTS (SELECT 1 FROM qc_corrective_actions ca WHERE ca.qc_result_id = r.id) AS has_ca

@@ -130,7 +130,7 @@ export function computeGettingStarted(sqlite: Database.Database, labId: number, 
         return { status: docs > 0 ? "done" : "todo", detail: docs > 0 ? `${docs} polic${docs === 1 ? "y" : "ies"} in VeritaDC, ${Math.max(signoffs, 0)} read-and-sign action(s).` : "No policy authored or imported yet." };
       }
       case "p3.qc": {
-        const results = n("SELECT COUNT(*) AS n FROM qc_results WHERE lab_id = ?", labId);
+        const results = n("SELECT COUNT(*) AS n FROM qc_results WHERE lab_id = ? AND voided_at IS NULL", labId);
         return { status: results > 0 ? "done" : "todo", detail: results > 0 ? `${results} QC result(s) entered.` : "No QC results entered yet." };
       }
       case "p3.pt_track": {

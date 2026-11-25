@@ -12,6 +12,7 @@
 //   R8. take an import back: which stay and why, the reason, then the list says so
 //   R9. the sigma metric: not enough to compute, then a number with its formula and inputs, no color by value; a peer mean
 //   R10. a view-only seat reads the imports and the sigma metric and gets no upload, take back or setting; a Staff login gets neither; phone width doesn't overflow
+//   R11. a run voided by hand reads Voided with its reason in Review & Sign-off, and no count includes it (BUG-198)
 // Screenshots b12_*.png, light and dark. Run: PW_BASE=http://localhost:5212 SCRATCH_DB=<db> OUT=<dir> node scripts/verify-qc-file-import-ui.mjs
 import { createRequire } from "node:module";
 import fs from "node:fs";
@@ -318,7 +319,34 @@ try {
     await ph.screenshot({ path: `${OUT}/b12_${name}_phone.png`, fullPage: true });
     await ph.context().close();
   }
+  // ── R11 ──
+  const flagged = (await call("POST", `${L}/qc/results`, { control_lot_id: glu, result_value: 131, result_date: "2026-10-28", run_time: "07:15", map_instrument_id: anA }, token)).body.result_id;
+  const reviewFor = async (dark) => {
+    const p = await openAs(token, `/labs/${labId}/veritaqc-app/review`, { dark });
+    await p.waitForTimeout(800);
+    const sel = p.locator("button[role=combobox]");
+    for (let i = 0; i < await sel.count(); i++) if (/November|December|October/.test(await sel.nth(i).innerText())) { await sel.nth(i).click(); await p.getByRole("option", { name: "October" }).click(); break; }
+    await p.waitForTimeout(800);
+    return p;
+  };
+  const tiles = async (p) => (await p.locator(".text-xl.font-bold.tabular-nums").allInnerTexts()).map(Number);
+  const before = await reviewFor(false);
+  const t0 = await tiles(before);
+  await before.context().close();
+  await call("POST", `${L}/qc/results/${flagged}/void`, { reason: "Mis-keyed" }, token);
+  const vr = await reviewFor(false);
+  const t1 = await tiles(vr);
+  check("R11. a run voided by hand reads Voided with its reason", /Voided: Mis-keyed/.test(await vr.getByTestId(`review-voided-${flagged}`).innerText()));
+  check("R11. ... and no count includes it", t0[0] > t1[0] && t0[1] === t1[1] + 1 && await vis(vr.getByText(/\d+ runs, 1 voided/)), [t0, t1]);
+  await vr.getByTestId(`review-voided-${flagged}`).scrollIntoViewIfNeeded();
+  await vr.screenshot({ path: `${OUT}/b12_voided_light.png` });
+  const vd = await reviewFor(true);
+  await vd.getByTestId(`review-voided-${flagged}`).scrollIntoViewIfNeeded();
+  await vd.screenshot({ path: `${OUT}/b12_voided_dark.png` });
   // Dark
+  const ro = await openAs(viewToken, PAGE, { dark: true });
+  await vis(ro.getByTestId("imports-list"));
+  await ro.screenshot({ path: `${OUT}/b12_readonly_dark.png` });
   const dk = await openAs(token, PAGE, { dark: true });
   await dk.getByTestId("qcimport-file").setInputFiles(f1);
   await dk.getByTestId("qcimport-mapping").waitFor({ timeout: 10000 });
