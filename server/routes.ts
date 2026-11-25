@@ -68,6 +68,7 @@ import { normalizeLineItems, computeOrgInvoice, laterExpiry, orgSubscriptionExpi
 import { renderMonthlyReviewPDF, type MonthlyReviewPayload, type MonthlyReviewResult } from "./pdfQCMonthly";
 import { buildMonthlyReviewPayload } from "./qcMonthlyReviewPayload";
 import { applyLicenseToExcelJS } from "./licenseStamp";
+import { foreignSlotCounts } from "./verificationLinks";
 import { resolveLegacyLabId as sharedResolveLegacyLabId, ownerMatchCounts, ownerRowInReach, isOlderSeatDate, editRefusedInRecordLab, moduleEditInLab } from "./labAccessGuard";
 import { adminSeatLabId, editSeatInLab, labForNewAccountSeat, legacySeatForUser, seatForRequest, seatInLabOrderSql, seatInLabSql, seatTypeInLabSql, staffLabForRequest, staffOnlyInLab, stampLablessSeatLab } from "./seatContext";
 import { auditInvite, endInviteDesignation, inviteEmailForAccount, inviteLabId, inviteRoleLabel, memberInviteRefusal, recordInviteDesignation, registerLabInviteRoutes, rosterEntryTaken, staffInviteRefusal } from "./labInvites";
@@ -35565,6 +35566,13 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       }
     }
     res.json({ lotToLot, refInterval, byLab });
+  });
+
+  // ── ADMIN: verification slots and verifications on file whose study, analyzer or analyte isn't the verification's own, counts only
+  // (server/verificationLinks.ts). Header x-admin-secret only; counts and lab ids, nothing written.
+  app.get("/api/admin/veritacheck/foreign-slot-counts", (req, res) => {
+    if (!ADMIN_SECRET || req.headers["x-admin-secret"] !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    res.json(foreignSlotCounts((db as any).$client));
   });
 
   // ── ADMIN: saved studies whose criterion isn't the one their preset label names, counts only (BUG-153/154, 2026-11-10) ──
