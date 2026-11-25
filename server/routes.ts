@@ -68,7 +68,7 @@ import { normalizeLineItems, computeOrgInvoice, laterExpiry, orgSubscriptionExpi
 import { renderMonthlyReviewPDF, type MonthlyReviewPayload, type MonthlyReviewResult } from "./pdfQCMonthly";
 import { buildMonthlyReviewPayload } from "./qcMonthlyReviewPayload";
 import { applyLicenseToExcelJS } from "./licenseStamp";
-import { resolveLegacyLabId as sharedResolveLegacyLabId, ownerMatchCounts, ownerRowInReach, isOlderSeatDate, staffOutsideRecordLab } from "./labAccessGuard";
+import { resolveLegacyLabId as sharedResolveLegacyLabId, ownerMatchCounts, ownerRowInReach, isOlderSeatDate, editRefusedInRecordLab, moduleEditInLab } from "./labAccessGuard";
 import { adminSeatLabId, editSeatInLab, labForNewAccountSeat, legacySeatForUser, seatForRequest, seatInLabOrderSql, seatInLabSql, seatTypeInLabSql, staffLabForRequest, staffOnlyInLab, stampLablessSeatLab } from "./seatContext";
 import { auditInvite, endInviteDesignation, inviteEmailForAccount, inviteLabId, inviteRoleLabel, memberInviteRefusal, recordInviteDesignation, registerLabInviteRoutes, rosterEntryTaken, staffInviteRefusal } from "./labInvites";
 import { effectiveSeatPermission, staffSeatEditRefusal } from "@shared/seatEditRule";
@@ -1270,6 +1270,7 @@ function activeLabIdFromContext(req: any): number | null {
 // effectiveSeatPermission (shared/seatEditRule.ts), as useIsReadOnly does.
 function requireModuleEdit(module: string) {
   return (req: any, res: any, next: any) => {
+    req.moduleEditChecked = module; // a record found by its id is decided in its own lab too (editRefusedInRecordLab, BUG-196)
     // B3: an older route with no lab in its URL can write to another lab than the one judged below (the default lab, when no
     // header names one). If any lab it could land in is one where this person is only Staff, it's refused.
     if (req.staffOnlyLabId && !req.params?.labId) {
@@ -1379,24 +1380,9 @@ function requireModuleEdit(module: string) {
 // paths that need to REFLECT edit access rather than gate on it. Used by the
 // VeritaPolicy approval preview so it does not report "you can approve" to a
 // reviewer (or delegate) who would be 403'd by requireModuleEdit at approve time.
-// The middleware is unchanged; this only mirrors its checks for an explicit lab.
+// The middleware is unchanged; this only mirrors its checks for an explicit lab (server/labAccessGuard.ts moduleEditInLab).
 function hasModuleEditAccess(labId: number, userId: number, module: string): boolean {
-  if (!labId) return false;
-  const sqlite = (db as any).$client;
-  if (sqlite.prepare("SELECT 1 FROM labs WHERE id = ? AND owner_user_id = ? LIMIT 1").get(labId, userId)) return true;
-  const adminMember = sqlite.prepare(
-    "SELECT 1 FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active' AND role IN ('owner','admin') LIMIT 1"
-  ).get(labId, userId)
-    || sqlite.prepare(
-      `SELECT 1 FROM organization_members om JOIN labs l ON l.organization_id = om.organization_id
-        WHERE l.id = ? AND om.user_id = ? AND om.status = 'active' AND om.org_role IN ('org_owner','org_admin') LIMIT 1`
-    ).get(labId, userId);
-  if (adminMember) return true;
-  const seatRow = editSeatInLab(sqlite, userId, labId) as any;
-  if (!seatRow) return false;
-  let perms: SeatPermissions = {} as SeatPermissions;
-  try { perms = JSON.parse(seatRow.permissions || '{}') as SeatPermissions; } catch {}
-  return effectiveSeatPermission(seatRow.seat_type, perms, module) === 'edit';
+  return moduleEditInLab((db as any).$client, labId, userId, module);
 }
 
 // ── PDF TOKEN STORE ──────────────────────────────────────────────────────────
@@ -8382,7 +8368,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   }
   function activeStaffLab(req: any, dataUserId: number): any | null {
     const activeLab = resolveActiveLabForRequest(req.userId, req) as any;
-    return staffLabByLabId(activeLab?.id ?? null, dataUserId);
+    const lab = staffLabByLabId(activeLab?.id ?? null, dataUserId);
+    // The fallback can be another lab's roster: a change to it is decided there (BUG-196).
+    return lab && editRefusedInRecordLab((db as any).$client, req, lab.tier2_lab_id) ? null : lab;
   }
 
   // ── LAB MEMBER MANAGEMENT (Phase 1: admin role + transfer ownership) ─────
@@ -14691,14 +14679,14 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     return ownerRowInReach((db as any).$client, req.userId ?? req.user?.userId, req.ownerUserId ?? req.user?.userId, row?.lab_id, req);
   }
 
-  // B3 (server/labAccessGuard.ts staffOutsideRecordLab): each helper below first refuses a change to a record in a lab where this
-  // person is only Staff, made while working in another lab.
+  // Each helper below first refuses a change to a record in a lab where this person doesn't edit the module the route checked
+  // (BUG-196, server/labAccessGuard.ts editRefusedInRecordLab; B3's Staff rule is part of it).
   function userCanAccessMap(mapId: number | string, req: any): any | null {
     const map = (db as any).$client.prepare(
       "SELECT * FROM veritamap_maps WHERE id = ?"
     ).get(mapId) as any;
     if (!map) return null;
-    if (staffOutsideRecordLab((db as any).$client, req, map.lab_id)) return null;
+    if (editRefusedInRecordLab((db as any).$client, req, map.lab_id)) return null;
     if (ownerMatch(req, map.user_id, map.lab_id)) return map;
     if (map.lab_id) {
       const member = (db as any).$client.prepare(
@@ -14716,7 +14704,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   function userCanAccessFinding(id: number | string, req: any): any | null {
     const row = (db as any).$client.prepare("SELECT * FROM findings WHERE id = ?").get(id) as any;
     if (!row) return null;
-    if (staffOutsideRecordLab((db as any).$client, req, row.lab_id)) return null;
+    if (editRefusedInRecordLab((db as any).$client, req, row.lab_id)) return null;
     if (ownerMatch(req, row.user_id, row.lab_id)) return row;
     if (row.lab_id) {
       const member = (db as any).$client.prepare(
@@ -14731,7 +14719,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   function userCanAccessScan(id: number | string, req: any): any | null {
     const row = (db as any).$client.prepare("SELECT * FROM veritascan_scans WHERE id = ?").get(id) as any;
     if (!row) return null;
-    if (staffOutsideRecordLab((db as any).$client, req, row.lab_id)) return null;
+    if (editRefusedInRecordLab((db as any).$client, req, row.lab_id)) return null;
     if (ownerMatch(req, row.user_id, row.lab_id)) return row;
     if (row.lab_id) {
       const member = (db as any).$client.prepare(
@@ -14746,7 +14734,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   function userCanAccessPolicy(id: number | string, req: any): any | null {
     const row = (db as any).$client.prepare("SELECT * FROM veritapolicy_lab_policies WHERE id = ?").get(id) as any;
     if (!row) return null;
-    if (staffOutsideRecordLab((db as any).$client, req, row.lab_id)) return null;
+    if (editRefusedInRecordLab((db as any).$client, req, row.lab_id)) return null;
     if (ownerMatch(req, row.user_id, row.lab_id)) return row;
     if (row.lab_id) {
       const member = (db as any).$client.prepare(
@@ -14761,7 +14749,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   function userCanAccessStudy(id: number | string, req: any): any | null {
     const row = (db as any).$client.prepare("SELECT * FROM studies WHERE id = ?").get(id) as any;
     if (!row) return null;
-    if (staffOutsideRecordLab((db as any).$client, req, row.lab_id)) return null;
+    if (editRefusedInRecordLab((db as any).$client, req, row.lab_id)) return null;
     if (ownerMatch(req, row.user_id, row.lab_id)) return row;
     if (row.lab_id) {
       const member = (db as any).$client.prepare(
@@ -14781,7 +14769,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   function userCanAccessLabRow(table: string, id: number | string, req: any): any | null {
     const row = (db as any).$client.prepare(`SELECT * FROM ${table} WHERE id = ?`).get(id) as any;
     if (!row) return null;
-    if (staffOutsideRecordLab((db as any).$client, req, row.lab_id)) return null;
+    if (editRefusedInRecordLab((db as any).$client, req, row.lab_id)) return null;
     if (ownerMatch(req, row.user_id, row.lab_id)) return row;
     if (row.lab_id) {
       const member = (db as any).$client.prepare(
@@ -14801,7 +14789,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       "SELECT * FROM lab_certificates WHERE id = ? AND is_active = 1"
     ).get(id) as any;
     if (!row) return null;
-    if (staffOutsideRecordLab((db as any).$client, req, row.lab_id)) return null;
+    if (editRefusedInRecordLab((db as any).$client, req, row.lab_id)) return null;
     if (ownerMatch(req, row.user_id, row.lab_id)) return row;
     if (row.lab_id) {
       const member = (db as any).$client.prepare(
@@ -17533,6 +17521,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       : (db as any).$client.prepare(
           "SELECT * FROM veritamap_test_correlations WHERE test_a_id = ? AND test_b_id = ? AND (correlation_group_id IS ? OR correlation_group_id = ?)"
         ).get(aId, bId, groupId, groupId);
+    // The saved correlation named by its id, and any already in the group, belong to this lab too (BUG-196).
+    const elsewhere = (db as any).$client.prepare(
+      `SELECT 1 FROM veritamap_test_correlations c JOIN veritamap_tests t ON t.id IN (c.test_a_id, c.test_b_id) JOIN veritamap_maps m ON m.id = t.map_id
+        WHERE (c.id = ? OR c.correlation_group_id = ?) AND m.lab_id IS NOT ? LIMIT 1`
+    ).get(before?.id ?? null, groupId, auth.callerLabId);
+    if (elsewhere) return res.status(403).json({ error: "Both tests must belong to your lab" });
     const auditAction: "create" | "update" = before ? "update" : "create";
 
     const now = new Date().toISOString();
@@ -21028,9 +21022,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // Delete entry
   app.delete("/api/veritacheck/cumsum/entries/:id", authMiddleware, requireWriteAccess, requireModuleEdit("veritacheck"), (req: any, res) => {
     const entry = (db as any).$client.prepare(
-      "SELECT e.id, t.user_id FROM cumsum_entries e JOIN cumsum_trackers t ON e.tracker_id = t.id WHERE e.id = ?"
+      "SELECT e.id, t.user_id, t.lab_id FROM cumsum_entries e JOIN cumsum_trackers t ON e.tracker_id = t.id WHERE e.id = ?"
     ).get(req.params.id);
-    if (!entry || entry.user_id !== req.user.userId) return res.status(404).json({ error: "Entry not found" });
+    if (!entry || entry.user_id !== req.user.userId || editRefusedInRecordLab((db as any).$client, req, entry.lab_id)) return res.status(404).json({ error: "Entry not found" });
     (db as any).$client.prepare("DELETE FROM cumsum_entries WHERE id = ?").run(req.params.id);
     res.json({ ok: true });
   });
@@ -25989,14 +25983,11 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       autoRetakeOn,
       now,
     );
-    // write-path Shape A (batch 2): tag the ACTIVE lab. Quiz reads never filter
-    // by the quiz's lab_id (they scope by id / program_id), so this is safe; it
-    // keeps the tag consistent with the active lab the user is working in.
+    // A quiz is in its program's lab (changes to it are decided there, BUG-196); a program with no lab gives the ACTIVE lab.
     try {
-      const activeLab = resolveActiveLabForRequest(req.userId, req);
       (db as any).$client.prepare(
         "UPDATE competency_quizzes SET lab_id = ? WHERE id = ?"
-      ).run(activeLab?.id ?? null, result.lastInsertRowid);
+      ).run(program.lab_id ?? resolveActiveLabForRequest(req.userId, req)?.id ?? null, result.lastInsertRowid);
     } catch {}
     res.json({
       id: Number(result.lastInsertRowid),
@@ -33282,13 +33273,11 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const result = (db as any).$client.prepare(
       "INSERT INTO lab_certificate_documents (certificate_id, user_id, filename, original_filename, file_size, mime_type, file_data, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
     ).run(req.params.id, req.userId, filename, req.file.originalname, req.file.size, req.file.mimetype, req.file.buffer, now);
-    // write-path Shape A (batch 3): tag the ACTIVE lab (doc reads scope by
-    // certificate_id, so this is safe; keeps the doc's lab consistent).
+    // A document is in its certificate's lab (doc reads scope by certificate_id); a certificate with no lab gives the ACTIVE lab.
     try {
-      const activeLab = resolveActiveLabForRequest(req.userId, req);
       (db as any).$client.prepare(
         "UPDATE lab_certificate_documents SET lab_id = ? WHERE id = ?"
-      ).run(activeLab?.id ?? null, result.lastInsertRowid);
+      ).run(cert.lab_id ?? resolveActiveLabForRequest(req.userId, req)?.id ?? null, result.lastInsertRowid);
     } catch {}
 
     res.status(201).json({
@@ -39125,7 +39114,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // /api/labs/:labId/veritapolicy/settings route the app now uses).
     const labRow = sqlite.prepare("SELECT lab_id FROM users WHERE id = ?").get(userId) as any;
     const labId = labRow?.lab_id ?? null;
-    if (labId == null) {
+    if (labId == null || editRefusedInRecordLab(sqlite, req, labId)) {
       return res.status(400).json({ error: "No lab is associated with your account. Select a lab first." });
     }
     const { is_independent, setup_complete, accreditation_body } = req.body;
@@ -39211,6 +39200,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // collapsing onto a single home-lab row. Falls back to the user's home lab for legacy
     // single-lab flows where no active lab resolves.
     const reqLabId = resolveLegacyLabId(req) ?? (sqlite.prepare("SELECT lab_id FROM users WHERE id = ?").get(userId) as any)?.lab_id ?? null;
+    if (editRefusedInRecordLab(sqlite, req, reqLabId)) return res.status(404).json({ error: "Requirement not found" });
     sqlite.prepare(`
       INSERT INTO veritapolicy_requirement_status (user_id, lab_id, requirement_id, status, is_na, na_reason, lab_policy_id, policy_name, notes, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
@@ -39404,7 +39394,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // (superseded by /api/labs/:labId/veritapolicy/master-list/:policyId).
     const labRow = sqlite.prepare("SELECT lab_id FROM users WHERE id = ?").get(userId) as any;
     const labId = labRow?.lab_id ?? null;
-    if (labId == null) {
+    if (labId == null || editRefusedInRecordLab(sqlite, req, labId)) {
       return res.status(400).json({ error: "No lab is associated with your account. Select a lab first." });
     }
     const { status, is_na, na_reason, our_policy_name, notes } = req.body || {};
