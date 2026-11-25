@@ -2,7 +2,7 @@
 //
 // Math receipt for the VeritaQC sigma metric (B12; shared/qcSigma.ts). Hand-worked numbers, made-up runs.
 // Run: npx tsx scripts/verify-qc-sigma.mts
-import { allowablePercent, computeSigma, SIGMA_FORMULA, type AllowableErrorSetting } from "../shared/qcSigma";
+import { allowablePercent, computeSigma, isOwnMean, SIGMA_FORMULA, type AllowableErrorSetting } from "../shared/qcSigma";
 import { CLIA_PRESETS } from "../shared/cliaPresets";
 import fs from "node:fs";
 import path from "node:path";
@@ -46,6 +46,9 @@ check("runs all the same", miss({ values: [100, 100, 100] }).sigma === null && /
 check("everything missing is listed once each", miss({ allowable: null, target: null, values: [] }).missing.length === 3, miss({ allowable: null, target: null, values: [] }).missing);
 check("a units criterion with no target lists the target once", miss({ allowable: A({ units_value: 4, unit: "mmol/L" }), target: null }).missing.length === 1, miss({ allowable: A({ units_value: 4, unit: "mmol/L" }), target: null }).missing);
 check("the lab's own mean is never the target", miss({ target: null }).bias_percent === null);
+check("the typed manufacturer mean is the lab's own when it is the same number, or the lab's mean rounded to decimals too fine for chance",
+  isOwnMean(100, 100, 2) && isOwnMean(100.42, 100.4217, 2) && isOwnMean(1.288, 1.28793, 0.05) && isOwnMean(4.2, 4.2, null));
+check("... and a match that could be chance isn't called that", !isOwnMean(140, 140.3, 0.7) && !isOwnMean(100.4, 100.38, 2) && !isOwnMean(100.42, 100.43, 2) && !isOwnMean(100, null, 2) && !isOwnMean(100, 100.001, 2));
 check("the formula is stated", SIGMA_FORMULA === "Sigma = (allowable error % - bias %) / CV %");
 
 // No grading words and no suggested rules anywhere the metric is worked out or shown

@@ -23,6 +23,7 @@ import { AlertTriangle, CheckCircle2, Lock, FlaskConical, LineChart, ClipboardCh
 import { useToast } from "@/hooks/use-toast";
 import { ModuleHowToCard } from "@/components/ModuleHowToCard";
 import { RunOrigin } from "@/components/qcimport/importShared";
+import { useStaffOwnScope } from "@/hooks/useStaffLogin";
 
 interface ControlLot {
   id: number;
@@ -357,6 +358,7 @@ export default function VeritaQCAppPage() {
   // Recording QC (results, notes, corrective actions) is open to every lab
   // member; isReadOnly still gates lot setup, void and exclude-from-baseline.
   const canRecord = useCanRecord();
+  const { ownOnly: staffLogin } = useStaffOwnScope();
   const activeLabId = useActiveLabId();
   const labRoute = useLabRoute();
   const { toast } = useToast();
@@ -1063,10 +1065,10 @@ export default function VeritaQCAppPage() {
         <h1 className="text-2xl font-bold">VeritaQC&#8482;</h1>
         <Badge variant="outline" className="ml-2 text-xs">Phase 1 preview</Badge>
         <div className="ml-auto flex flex-wrap gap-2">
-          {!isReadOnly && (
+          {!staffLogin && (
             <>
               <Button asChild variant="outline" size="sm" data-testid="veritaqc-import-link">
-                <Link href={`/labs/${activeLabId}/veritaqc-app/import`}>Import results</Link>
+                <Link href={`/labs/${activeLabId}/veritaqc-app/import`}>{isReadOnly ? "Imported results" : "Import results"}</Link>
               </Button>
               <Button asChild variant="outline" size="sm" data-testid="veritaqc-sigma-link">
                 <Link href={`/labs/${activeLabId}/veritaqc-app/sigma`}>Sigma metric</Link>

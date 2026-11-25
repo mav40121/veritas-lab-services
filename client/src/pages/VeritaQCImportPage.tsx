@@ -1,9 +1,11 @@
 // VeritaQC: control results from a CSV or Excel export (B12, 2026-11-24). Choose the file, match its columns, look at what every row would
-// do, then import. VeritaQC edit only; a Staff login or a view-only seat gets a note and no upload. Server: server/qcFileImport.ts.
+// do, then import. Importing is VeritaQC edit only: a view-only seat reads the imports on file, and a Staff login gets a note.
+// Server: server/qcFileImport.ts.
 import { useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
 import { useAuth } from "@/components/AuthContext";
-import { useIsReadOnly } from "@/components/SubscriptionBanner";
+import { useCanRecord, useIsReadOnly } from "@/components/SubscriptionBanner";
+import { useStaffOwnScope } from "@/hooks/useStaffLogin";
 import { authHeaders } from "@/lib/auth";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { Button } from "@/components/ui/button";
@@ -23,12 +25,15 @@ import { importApi, num, plural, SELECT, sendForm, sendJson, type ImportRow, typ
 export default function VeritaQCImportPage() {
   const { user, isLoggedIn } = useAuth();
   const isReadOnly = useIsReadOnly("veritaqc");
+  const canRecord = useCanRecord();
+  const { ownOnly: staffLogin, ready } = useStaffOwnScope();
   const labId = useActiveLabId();
   const { toast } = useToast();
   const hasPlanAccess = !!user && [
     "annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "clinic", "waived", "community", "hospital", "large_hospital", "enterprise",
   ].includes(user.plan);
-  const allowed = isLoggedIn && hasPlanAccess && !!labId && !isReadOnly;
+  const allowed = isLoggedIn && hasPlanAccess && !!labId && ready && !staffLogin;
+  const canImport = allowed && !isReadOnly;
 
   const [setup, setSetup] = useState<Setup | null>(null);
   const [imports, setImports] = useState<ImportRow[]>([]);
@@ -48,16 +53,16 @@ export default function VeritaQCImportPage() {
   async function load() {
     if (!labId) return;
     try {
-      const [s, l] = await Promise.all([fetch(`${importApi(labId)}/setup`, { headers: authHeaders() }), fetch(importApi(labId), { headers: authHeaders() })]);
-      if (!s.ok || !l.ok) throw new Error();
-      setSetup(await s.json()); setImports((await l.json()).imports); setLoadError(false);
+      const [s, l] = await Promise.all([canImport ? fetch(`${importApi(labId)}/setup`, { headers: authHeaders() }) : null, fetch(importApi(labId), { headers: authHeaders() })]);
+      if ((s && !s.ok) || !l.ok) throw new Error();
+      setSetup(s ? await s.json() : null); setImports((await l.json()).imports); setLoadError(false);
     } catch { setLoadError(true); }
   }
   useEffect(() => {
     setSetup(null); setImports([]); clearFile();
     if (allowed) load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [labId, allowed]);
+  }, [labId, allowed, canImport]);
 
   function forget() { setFile(null); setInfo(null); setMapping(null); setPreview(null); setProblem(null); setMappingName(""); }
   function clearFile() { forget(); if (input.current) input.current.value = ""; }
@@ -143,13 +148,14 @@ export default function VeritaQCImportPage() {
     } finally { setBusy(null); }
   }
 
+  if (isLoggedIn && !ready) return <div className="container mx-auto max-w-5xl px-4 py-8 text-sm text-muted-foreground">Loading...</div>;
   if (!allowed) {
     return (
       <div className="container mx-auto max-w-2xl px-4 py-12">
         <Card><CardContent className="py-10 text-center">
           <Lock className="mx-auto mb-3 h-10 w-10 text-muted-foreground" />
-          <h2 className="mb-1 text-lg font-semibold">{!isLoggedIn ? "Sign in to use VeritaQC™" : !hasPlanAccess ? "VeritaQC™ requires a subscription" : !labId ? "Select a lab first" : "Importing needs VeritaQC™ edit access"}</h2>
-          <p className="text-sm text-muted-foreground" data-testid="qcimport-no-edit">{isLoggedIn && hasPlanAccess && labId ? "You have view-only access here. Results are still recorded one at a time on VeritaQC™." : ""}</p>
+          <h2 className="mb-1 text-lg font-semibold">{!isLoggedIn ? "Sign in to use VeritaQC™" : !hasPlanAccess ? "VeritaQC™ requires a subscription" : !labId ? "Select a lab first" : "Imports aren't part of a staff login"}</h2>
+          <p className="text-sm text-muted-foreground" data-testid="qcimport-staff">{isLoggedIn && hasPlanAccess && labId ? "Results are recorded one at a time on VeritaQC™." : ""}</p>
           {labId && <Button asChild variant="outline" size="sm" className="mt-4"><Link href={`/labs/${labId}/veritaqc-app`}>Back to VeritaQC™</Link></Button>}
         </CardContent></Card>
       </div>
@@ -160,12 +166,13 @@ export default function VeritaQCImportPage() {
     <div className="container mx-auto max-w-5xl px-4 py-8">
       <div className="mb-6 flex flex-wrap items-center gap-2">
         <Upload className="h-6 w-6 text-primary" />
-        <h1 className="text-2xl font-bold">Import QC results</h1>
+        <h1 className="text-2xl font-bold">{canImport ? "Import QC results" : "Imported QC results"}</h1>
         <Button asChild variant="outline" size="sm" className="ml-auto"><Link href={`/labs/${labId}/veritaqc-app`}>Back to VeritaQC™</Link></Button>
       </div>
       {loadError && <Card className="mb-4"><CardContent className="py-4 text-sm">The import page couldn't load. <Button size="sm" variant="outline" onClick={load}>Retry</Button></CardContent></Card>}
 
-      <Card className="mb-4">
+      {!canImport && <p className="mb-4 text-sm text-muted-foreground" data-testid="qcimport-no-edit">You have view-only access to VeritaQC™, so you can read what has been imported. Importing needs edit access.</p>}
+      {canImport && <Card className="mb-4">
         <CardHeader><CardTitle className="text-base">1. Choose the file</CardTitle></CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-muted-foreground">A CSV or Excel export of control results from your analyzer, middleware or LIS. Up to {num(QC_IMPORT_MAX_ROWS)} results and {QC_IMPORT_MAX_MB} MB. No patient information: a file with a patient column is refused. The file itself isn't kept, only its name, its SHA-256 and the row numbers.</p>
@@ -192,9 +199,9 @@ export default function VeritaQCImportPage() {
             </div>
           )}
         </CardContent>
-      </Card>
+      </Card>}
 
-      {info && mapping && (
+      {canImport && info && mapping && (
         <Card className="mb-4">
           <CardHeader><CardTitle className="text-base">2. Match the columns</CardTitle></CardHeader>
           <CardContent className="space-y-4">
@@ -214,7 +221,7 @@ export default function VeritaQCImportPage() {
         </Card>
       )}
 
-      {preview && (
+      {canImport && preview && (
         <Card className="mb-4">
           <CardHeader><CardTitle className="text-base">3. Preview</CardTitle></CardHeader>
           <CardContent><PreviewPanel preview={preview} onSaveNames={saveNames} saving={busy === "names" || busy === "preview"} onImport={() => setConfirming(true)} importing={busy === "import"} /></CardContent>
@@ -226,7 +233,7 @@ export default function VeritaQCImportPage() {
         <CardContent><ImportsList imports={imports} onOpen={setOpenId} /></CardContent>
       </Card>
 
-      {setup && (setup.mappings.length > 0 || setup.names.length > 0) && (
+      {canImport && setup && (setup.mappings.length > 0 || setup.names.length > 0) && (
         <Card>
           <CardHeader><CardTitle className="text-base">Saved mappings and remembered names</CardTitle></CardHeader>
           <CardContent className="space-y-3 text-sm">
@@ -255,7 +262,7 @@ export default function VeritaQCImportPage() {
           <div className="flex justify-end gap-2"><Button variant="outline" size="sm" onClick={() => setConfirming(false)}>Cancel</Button><Button size="sm" onClick={doImport} data-testid="qcimport-confirm-go">Import</Button></div>
         </DialogContent>
       </Dialog>
-      {labId && <ImportDetailDialog labId={labId} importId={openId} onClose={() => setOpenId(null)} onChanged={load} />}
+      {labId && <ImportDetailDialog labId={labId} importId={openId} canRecord={canRecord} onClose={() => setOpenId(null)} onChanged={load} />}
     </div>
   );
 }

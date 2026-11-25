@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { useAuth } from "@/components/AuthContext";
-import { useIsReadOnly } from "@/components/SubscriptionBanner";
+import { useStaffOwnScope } from "@/hooks/useStaffLogin";
 import { API_BASE } from "@/lib/queryClient";
 import { authHeaders } from "@/lib/auth";
 import { labDayOf } from "@/lib/labDate";
@@ -20,7 +20,7 @@ import { SIGMA_FORMULA, type SigmaResult } from "@shared/qcSigma";
 
 interface Allowable { preset_label: string | null; percent: number | null; units_value: number | null; unit: string | null; set_by_name: string | null; set_at: string }
 interface Row {
-  control_lot_id: number; analyte: string; level: string; lot_number: string; status: string; mfr_mean: number; peer_mean: { value: number; note: string | null; set_by_name: string | null; set_at: string } | null;
+  target_is_own_mean: boolean; control_lot_id: number; analyte: string; level: string; lot_number: string; status: string; mfr_mean: number; peer_mean: { value: number; note: string | null; set_by_name: string | null; set_at: string } | null;
   analyzers: string[]; first_run: string | null; last_run: string | null; left_out: number; result: SigmaResult;
 }
 interface Data { formula: string; can_set: boolean; rows: Row[]; analytes: Array<{ analyte: string; allowable: Allowable | null; criteria: Array<{ label: string; cfr: string }> }> }
@@ -31,13 +31,13 @@ const allowableText = (a: Allowable | null) => (!a ? "Not set" : a.preset_label 
 
 export default function VeritaQCSigmaPage() {
   const { user, isLoggedIn } = useAuth();
-  const isReadOnly = useIsReadOnly("veritaqc");
+  const { ownOnly: staffLogin, ready } = useStaffOwnScope();
   const labId = useActiveLabId();
   const { toast } = useToast();
   const hasPlanAccess = !!user && [
     "annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "clinic", "waived", "community", "hospital", "large_hospital", "enterprise",
   ].includes(user.plan);
-  const allowed = isLoggedIn && hasPlanAccess && !!labId && !isReadOnly;
+  const allowed = isLoggedIn && hasPlanAccess && !!labId && ready && !staffLogin;
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState(false);
   const [old, setOld] = useState(false);
@@ -74,11 +74,12 @@ export default function VeritaQCSigmaPage() {
     } finally { setBusy(false); }
   }
 
+  if (isLoggedIn && !ready) return <div className="container mx-auto max-w-5xl px-4 py-8 text-sm text-muted-foreground">Loading...</div>;
   if (!allowed) {
     return (
       <div className="container mx-auto max-w-2xl px-4 py-12"><Card><CardContent className="py-10 text-center">
         <Lock className="mx-auto mb-3 h-10 w-10 text-muted-foreground" />
-        <h2 className="mb-1 text-lg font-semibold">{!isLoggedIn ? "Sign in to use VeritaQC™" : !hasPlanAccess ? "VeritaQC™ requires a subscription" : !labId ? "Select a lab first" : "The sigma metric needs VeritaQC™ edit access"}</h2>
+        <h2 className="mb-1 text-lg font-semibold">{!isLoggedIn ? "Sign in to use VeritaQC™" : !hasPlanAccess ? "VeritaQC™ requires a subscription" : !labId ? "Select a lab first" : "The sigma metric isn't part of a staff login"}</h2>
         {labId && <Button asChild variant="outline" size="sm" className="mt-4"><Link href={`/labs/${labId}/veritaqc-app`}>Back to VeritaQC™</Link></Button>}
       </CardContent></Card></div>
     );
@@ -96,7 +97,7 @@ export default function VeritaQCSigmaPage() {
       </div>
       <Card className="mb-4"><CardContent className="space-y-1 py-4 text-sm" data-testid="sigma-formula">
         <p className="font-semibold">{SIGMA_FORMULA}</p>
-        <p>Bias % is the size of the difference between your mean and the target, as a percent of the target. The target is the peer mean you enter for the lot, or the manufacturer's mean on the lot when there is none. Your own mean is never the target.</p>
+        <p>Bias % is the size of the difference between your mean and the target, as a percent of the target. The target is the peer mean you enter for the lot, or the manufacturer's mean typed on the lot when there is none. A mean worked out from your own runs is never used as the target.</p>
         <p>CV % is your SD as a percent of your mean, from the runs on file: voided runs, and runs left out of the QC baseline by a corrective action, aren't used. Every analyzer's runs on a lot are taken together.</p>
         <p className="text-muted-foreground">The allowable error is the laboratory's choice. The number is for the laboratory director or designee to interpret.</p>
       </CardContent></Card>
@@ -132,7 +133,7 @@ export default function VeritaQCSigmaPage() {
                     <div><dt className="text-muted-foreground">Bias %</dt><dd className="tabular-nums">{n2(s.bias_percent)}</dd></div>
                     <div><dt className="text-muted-foreground">CV %</dt><dd className="tabular-nums">{n2(s.cv_percent)}</dd></div>
                     <div><dt className="text-muted-foreground">Your mean, SD</dt><dd className="tabular-nums">{s.mean === null ? "" : `${n4(s.mean)}${s.sd === null ? "" : `, ${n4(s.sd)}`}`}</dd></div>
-                    <div className="col-span-2"><dt className="text-muted-foreground">Target</dt><dd>{r.peer_mean ? `Peer mean ${r.peer_mean.value}${r.peer_mean.note ? ` (${r.peer_mean.note})` : ""}, entered by ${r.peer_mean.set_by_name ?? "the laboratory"} ${labDayOf(r.peer_mean.set_at)}` : `Manufacturer's mean on the lot, ${r.mfr_mean}`}
+                    <div className="col-span-2"><dt className="text-muted-foreground">Bias is measured against</dt><dd data-testid={`sigma-target-${r.control_lot_id}`}>{r.peer_mean ? `Target: peer mean on this lot, ${r.peer_mean.value}${r.peer_mean.note ? ` (${r.peer_mean.note})` : ""}, entered by ${r.peer_mean.set_by_name ?? "the laboratory"} ${labDayOf(r.peer_mean.set_at)}` : `Target: manufacturer mean on this lot, ${r.mfr_mean}.`}{r.target_is_own_mean && " This is the lot's own mean, so bias reads near 0."}
                       {data!.can_set && <button type="button" className="ml-2 text-primary underline" onClick={() => { setPeerFor(r); setValue(r.peer_mean ? String(r.peer_mean.value) : ""); setUnit(r.peer_mean?.note ?? ""); }} data-testid={`sigma-peer-${r.control_lot_id}`}>{r.peer_mean ? "Change peer mean" : "Enter a peer mean"}</button>}</dd></div>
                     {s.allowable_how && <div className="col-span-2"><dt className="text-muted-foreground">Allowable error from</dt><dd>{s.allowable_how}</dd></div>}
                   </dl>

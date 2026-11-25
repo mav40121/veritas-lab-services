@@ -8358,6 +8358,8 @@ try { (sqlite.prepare(`PRAGMA table_info(founding_lab_applications)`).all() as a
   // 2026-10-14 (St. Charles REQ-067): the date a control lot was taken out of use. opened_date is its
   // in-use date; out_of_use_date is stamped when the lot is retired (or replaced by a changeover).
   ensure("qc_control_lots", "out_of_use_date",    "ALTER TABLE qc_control_lots ADD COLUMN out_of_use_date TEXT");
+  // The lab's day the lot was put on hold, while it is on hold (B12; server/qcRuns.ts lotNotInUse). Empty on a lot held before this.
+  ensure("qc_control_lots", "held_date",          "ALTER TABLE qc_control_lots ADD COLUMN held_date TEXT");
   ensure("qc_control_lots", "status",             "ALTER TABLE qc_control_lots ADD COLUMN status TEXT NOT NULL DEFAULT 'active'");
   // prior_lot_id links a replacement lot to the lot it succeeds, forming a
   // per-(analyte, level) changeover chain. NULL = the first lot of a line.

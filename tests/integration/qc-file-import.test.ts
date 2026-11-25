@@ -9,7 +9,8 @@
 //   5. The same file again stores nothing. A row dated before runs on file changes no stored verdict. A signed month's review never changes.
 //   6. Taken back: voided runs only, with no corrective action and no review on them; the rest stay and are listed.
 //   7. Excel: dates and times, formulas, numbers, sheets; a zone becomes the lab's clock; both wide layouts; limits.
-//   8. Refusals: a Staff login, a view-only seat, another customer, Veritas support (setup only).
+//   8. Who may: a view-only seat reads the imports and the sigma metric and nothing else; a Staff login, another customer and Veritas
+//      support (setup only) are refused. A retired or held lot takes rows dated on or before that day, typed and imported alike.
 //   9. The sigma metric through the routes. 10. Export-all and the customer purge take every new table.
 //
 // Boots the REAL routes against a throwaway SQLite DB (made-up rows only). Run: npm run test:qc-file-import
@@ -375,19 +376,48 @@ async function main() {
     const utf16 = await prev({ name: "u16.csv", bytes: Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(`${HEAD.replace(/,/g, "\t")}\n6/9/2026 7:15\tAnalyzer A\tGlucose\tLow\tG1\t100\t\t`, "utf16le")]) });
     check("7. a tab-separated UTF-16 export reads", utf16.body.counts?.ready === 1, utf16.body);
 
-    // ── 8. Refusals ──
+    // ── 7b. A lot that is retired or on hold ──
+    const lotCall = (id: number, body: any) => call("PATCH", `/api/labs/${A.labId}/qc/control-lots/${id}`, body, A.token);
+    const rLot = lotIn(A.labId, "Retired test", "Low", "R1", 100, 2), hLot = lotIn(A.labId, "Held test", "Low", "H1", 100, 2);
+    sqlite.prepare("UPDATE qc_control_lots SET opened_date = '2026-01-01' WHERE id IN (?, ?)").run(rLot, hLot);
+    const laToday = wallClock(Date.now(), "America/Los_Angeles").date;
+    check("7. retiring keeps its day and putting on hold records the lab's own", (await lotCall(rLot, { status: "retired", out_of_use_date: "2026-07-10" })).status === 200 && (await lotCall(hLot, { status: "hold" })).status === 200
+      && (sqlite.prepare("SELECT held_date FROM qc_control_lots WHERE id = ?").get(hLot) as any).held_date === laToday);
+    sqlite.prepare("UPDATE qc_control_lots SET held_date = '2026-07-12' WHERE id = ?").run(hLot);
+    await lotCall(hLot, { status: "hold" });
+    check("7. ... and asking for the hold again keeps the day it began", (sqlite.prepare("SELECT held_date FROM qc_control_lots WHERE id = ?").get(hLot) as any).held_date === "2026-07-12");
+    const closedFile = csv(["7/10/2026 8:00,Analyzer A,Retired test,Low,R1,100,,", "7/11/2026 8:00,Analyzer A,Retired test,Low,R1,100,,", "7/12/2026 8:00,Analyzer A,Held test,Low,H1,100,,", "7/13/2026 8:00,Analyzer A,Held test,Low,H1,100,,"]);
+    const cp = await prev(closedFile);
+    check("7. a row on or before the day can be imported, one after it can't be placed, with the day",
+      JSON.stringify(cp.body.counts) === '{"ready":2,"duplicate":0,"unplaced":2}' && cp.body.rows[1].reason === "This lot was retired on 2026-07-10." && cp.body.rows[3].reason === "This lot was put on hold on 2026-07-12." && cp.body.notes.inactive_lot === 2, cp.body.rows);
+    const typedAt = async (lot: number, day: string, v = 101) => call("POST", `/api/labs/${A.labId}/qc/results`, { control_lot_id: lot, result_value: v, result_date: day, instrument: "Analyzer A" }, editor.token);
+    const storedOn = (lot: number) => JSON.stringify(sqlite.prepare("SELECT * FROM qc_results WHERE control_lot_id = ? ORDER BY id").all(lot));
+    const s0r = storedOn(rLot);
+    const tNo = [await typedAt(rLot, "2026-07-11"), await typedAt(hLot, "2026-07-13")];
+    check("7. the same day, the same answer, for a run typed at the server: 409 with the same words, nothing stored", tNo.every((r) => r.status === 409 && r.body.code === "LOT_NOT_IN_USE") && tNo[0].body.error === cp.body.rows[1].reason && tNo[1].body.error === cp.body.rows[3].reason && storedOn(rLot) === s0r, tNo.map((r) => r.body));
+    check("7. ... and one on the day is taken", (await typedAt(rLot, "2026-07-10")).status === 200 && (await typedAt(hLot, "2026-07-12")).status === 200);
+    sqlite.prepare("UPDATE qc_control_lots SET out_of_use_date = NULL WHERE id = ?").run(rLot);
+    const unk = await prev(closedFile);
+    check("7. with no day on file nobody can tell, so it can't be placed, and says how to put the day on file", /the day isn't on file\. Re-activate it, then retire it with its date/.test(unk.body.rows[0].reason) && (await typedAt(rLot, "2026-07-01")).status === 409, unk.body.rows[0]);
+    await lotCall(rLot, { status: "active" }); await lotCall(hLot, { status: "active" });
+    check("7. an active lot takes any day, and the hold's day is gone with the hold", (await typedAt(rLot, "2026-07-20")).status === 200 && (sqlite.prepare("SELECT held_date FROM qc_control_lots WHERE id = ?").get(hLot) as any).held_date === null);
+
+    // ── 8. Who may ──
     const one = csv(["6/20/2026 7:15,Analyzer A,Glucose,Low,G1,100.7,,"]);
     const op = await prev(one);
     const cnt = count(A.labId);
     for (const [who, token] of [["a Staff login", staff.token], ["a view-only seat", viewer.token]] as const) {
       const st = [
-        (await call("GET", `${L}/setup`, undefined, token)).status, (await call("GET", L, undefined, token)).status, (await call("GET", `${L}/${i1.body.import_id}`, undefined, token)).status,
+        (await call("GET", `${L}/setup`, undefined, token)).status,
         (await sendFile(`${L}/inspect`, one, {}, token)).status, (await prev(one, MAP, token)).status, (await imp(one, op, MAP, token)).status,
         (await call("PUT", `${L}/mappings`, { name: "x", mapping: MAP }, token)).status, (await put([{ kind: "instrument", text: "Q", context_key: "", target: "Analyzer B", map_instrument_id: anB }], token)).status,
-        (await call("POST", `${L}/${i1.body.import_id}/undo`, { reason: "no" }, token)).status, (await call("GET", `/api/labs/${A.labId}/qc/sigma`, undefined, token)).status,
-        (await call("PUT", `/api/labs/${A.labId}/qc/sigma/allowable-error`, { analyte: "Glucose", percent: 8 }, token)).status, (await call("DELETE", `${L}/mappings/${sm.body.id}`, undefined, token)).status,
+        (await call("POST", `${L}/${i1.body.import_id}/undo`, { reason: "no" }, token)).status,
+        (await call("PUT", `/api/labs/${A.labId}/qc/sigma/peer-mean`, { control_lot_id: glu, peer_mean: 5 }, token)).status, (await call("PUT", `/api/labs/${A.labId}/qc/sigma/allowable-error`, { analyte: "Glucose", percent: 8 }, token)).status, (await call("DELETE", `${L}/mappings/${sm.body.id}`, undefined, token)).status,
       ];
-      check(`8. ${who} is refused every one of them`, st.every((s) => s === 403), st);
+      check(`8. ${who} is refused mapping, names, preview, import, undo and every setting`, st.every((s) => s === 403), st);
+      const reads = [await call("GET", L, undefined, token), await call("GET", `${L}/${i1.body.import_id}`, undefined, token), await call("GET", `/api/labs/${A.labId}/qc/sigma`, undefined, token)];
+      if (who === "a Staff login") check("8. a Staff login reads neither the imports nor the sigma metric, as before", reads.every((r) => r.status === 403 && r.body.code === "STAFF_OWN_ONLY"), reads.map((r) => r.status));
+      else check("8. a view-only seat reads both, as VeritaQC's own reads, and is told it can't change them", reads.every((r) => r.status === 200) && reads[0].body.imports.length > 0 && reads[1].body.can_import === false && reads[2].body.can_set === false, reads.map((r) => r.status));
       check(`8. ${who} still records a run and reads the results as before`, (await call("POST", `/api/labs/${A.labId}/qc/results`, { control_lot_id: glu, result_value: 100, result_date: "2026-06-21", run_time: who === "a Staff login" ? "07:00" : "08:00" }, token)).status === 200 && (await call("GET", `/api/labs/${A.labId}/qc/results?control_lot_id=${glu}`, undefined, token)).status === 200);
     }
     const xs = [(await call("GET", `${L}/setup`, undefined, X.token)).status, (await prev(one, MAP, X.token)).status, (await imp(one, op, MAP, X.token)).status, (await call("POST", `${L}/${i1.body.import_id}/undo`, { reason: "no" }, X.token)).status, (await call("GET", `/api/labs/${A.labId}/qc/sigma`, undefined, X.token)).status];
@@ -402,6 +432,8 @@ async function main() {
     sqlite.prepare("UPDATE labs SET vls_support_access = 1 WHERE id = ?").run(A.labId);
     const sset = [(await call("GET", `${L}/setup`, undefined, support.token)).status, (await prev(one, MAP, support.token)).status, (await call("PUT", `${L}/mappings`, { name: "Set up by support", mapping: MAP }, support.token)).status, (await put([{ kind: "instrument", text: "Set by support", context_key: "", target: "Analyzer B", map_instrument_id: anB }], support.token)).status];
     check("8. Veritas support sets up a mapping and names, and its audit row says who it was", sset.every((s) => s === 200) && !!sqlite.prepare("SELECT 1 FROM audit_log WHERE entity_type = 'qc_import_mapping' AND user_id = ? AND acting_as = 'vls_support'").get(support.userId), sset);
+    const sread = [await call("GET", L, undefined, support.token), await call("GET", `${L}/${i1.body.import_id}`, undefined, support.token), await call("GET", `/api/labs/${A.labId}/qc/sigma`, undefined, support.token)];
+    check("8. ... reads the imports and the sigma metric, marked as not able to change them", sread.every((r) => r.status === 200) && sread[1].body.can_import === false && sread[2].body.can_set === false);
     const sno = [await imp(one, op, MAP, support.token), await call("POST", `${L}/${i1.body.import_id}/undo`, { reason: "no" }, support.token), await call("PUT", `/api/labs/${A.labId}/qc/sigma/allowable-error`, { analyte: "Glucose", percent: 8 }, support.token), await call("PUT", `/api/labs/${A.labId}/qc/sigma/peer-mean`, { control_lot_id: glu, peer_mean: 5 }, support.token)];
     check("8. ... and can't import, take back, or set an allowable error or a peer mean", sno.every((r) => r.status === 403 && r.body.code === "VLS_SUPPORT_CANNOT_SIGN"), sno.map((r) => [r.status, r.body.code]));
     check("8. nothing refused stored a run", count(A.labId) === cnt + 2);
@@ -427,6 +459,10 @@ async function main() {
     await call("PUT", `${S}/peer-mean`, { control_lot_id: sLot, peer_mean: 102, note: "Made-up peer report" }, editor.token);
     const s3 = row(await sig()).result;
     check("9. a peer mean the lab enters is the target", s3.target.source === "peer" && s3.bias_percent === 0 && Math.abs(s3.sigma - 8 / (200 / 102)) < 1e-9, s3);
+    const own = lotIn(A.labId, "Own mean", "Low", "OM1", 100.43, 2);
+    for (const [i, v] of [100.1, 102.3, 98.9].entries()) await call("POST", `/api/labs/${A.labId}/qc/results`, { control_lot_id: own, result_value: v, result_date: `2026-05-0${i + 1}`, instrument: "Analyzer A" }, editor.token);
+    const ownRow = (await sig()).rows.find((r: any) => r.control_lot_id === own);
+    check("9. the target is named, and a manufacturer mean that is the lab's own mean says so; one that isn't doesn't", ownRow.target_is_own_mean === true && ownRow.result.target.source === "manufacturer" && row(await sig()).target_is_own_mean === false && (await sig()).rows.find((r: any) => r.control_lot_id === glu).target_is_own_mean === false, ownRow);
     const last = (sqlite.prepare("SELECT id FROM qc_results WHERE control_lot_id = ? ORDER BY id DESC").get(sLot) as any).id;
     await call("POST", `/api/labs/${A.labId}/qc/results/${last}/void`, { reason: "Mis-keyed" }, editor.token);
     check("9. a voided run isn't used, and the count says so", row(await sig()).result.n === 2);

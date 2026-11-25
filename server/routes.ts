@@ -44,7 +44,7 @@ import { studyRowToClient, resolveInstrumentDisplay, studyPdfFilename } from "./
 import { foreignSlotCounts, ownMapInstrument, sameLabOrOwnerSql } from "./verificationLinks";
 import { scanPhi } from "./phiScan";
 import { rulesForRun } from "./qcWestgard";
-import { addedAfterReview, insertQcRun, judgeQcRun, NOT_TAKEN_BACK, qcRunSettings, signedMonths, voidQcRun } from "./qcRuns";
+import { addedAfterReview, insertQcRun, judgeQcRun, lotNotInUse, NOT_TAKEN_BACK, qcRunSettings, signedMonths, voidQcRun } from "./qcRuns";
 import { resolveBasis, computeBasis, basisConfig, sampleStats, type QcBasis } from "./qcBasis";
 import { importsOf, registerQcFileImportRoutes } from "./qcFileImport";
 import { registerQcSigmaRoutes } from "./qcSigma";
@@ -4821,9 +4821,13 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     }
     const sqlite = (db as any).$client;
     const lot = sqlite.prepare(
-      "SELECT id, analyte FROM qc_control_lots WHERE id = ? AND lab_id = ?"
+      "SELECT id, analyte, status, out_of_use_date, held_date FROM qc_control_lots WHERE id = ? AND lab_id = ?"
     ).get(Number(control_lot_id), req.scope.labId) as any;
     if (!lot) return res.status(404).json({ error: "Control lot not found in this lab" });
+    // The screen stops a run on a lot that isn't active; the server took any. Now it takes one dated on or before the day the lot was
+    // retired or held, as a file import does (server/qcRuns.ts lotNotInUse).
+    const closed = lotNotInUse(lot, String(result_date));
+    if (closed) return res.status(409).json({ error: closed, code: "LOT_NOT_IN_USE" });
     let mapInst: any = null;
     if (map_instrument_id !== undefined && map_instrument_id !== null && map_instrument_id !== "") {
       mapInst = resolveLabMapInstrument(sqlite, req.scope.labId, map_instrument_id);
@@ -4988,7 +4992,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
     const sqlite = (db as any).$client;
     const lot = sqlite.prepare(
-      "SELECT id, opened_date, out_of_use_date FROM qc_control_lots WHERE id = ? AND lab_id = ?"
+      "SELECT id, status, opened_date, out_of_use_date, held_date FROM qc_control_lots WHERE id = ? AND lab_id = ?"
     ).get(id, req.scope.labId) as any;
     if (!lot) return res.status(404).json({ error: "Control lot not found in this lab" });
 
@@ -5013,9 +5017,11 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       outOfUse = null;
     }
 
+    // The day it was put on hold, kept while it is on hold.
+    const held = s === "hold" ? (lot.status === "hold" && lot.held_date ? lot.held_date : labLocalDate(nowIso)) : null;
     sqlite.prepare(
-      "UPDATE qc_control_lots SET status = ?, out_of_use_date = ?, updated_at = ? WHERE id = ?"
-    ).run(s, outOfUse, nowIso, id);
+      "UPDATE qc_control_lots SET status = ?, out_of_use_date = ?, held_date = ?, updated_at = ? WHERE id = ?"
+    ).run(s, outOfUse, held, nowIso, id);
 
     const updated = sqlite.prepare(
       "SELECT id, analyte, level, lot_number, manufacturer, mfr_mean, mfr_sd, mfr_sd_interval, mfr_range_low, mfr_range_high, expiration_date, opened_date, out_of_use_date, status, prior_lot_id, created_at, updated_at FROM qc_control_lots WHERE id = ?"
@@ -5160,7 +5166,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         const newId = Number(ins.lastInsertRowid);
         if (retirePrior) {
           // The replaced lot goes out of use the day the new one is opened (else the lab's today).
-          sqlite.prepare("UPDATE qc_control_lots SET status = 'retired', out_of_use_date = COALESCE(out_of_use_date, ?), updated_at = ? WHERE id = ?")
+          sqlite.prepare("UPDATE qc_control_lots SET status = 'retired', out_of_use_date = COALESCE(out_of_use_date, ?), held_date = NULL, updated_at = ? WHERE id = ?")
             .run(opened_date || labLocalDate(now), now, priorId);
         }
         return newId;
@@ -5249,8 +5255,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   });
 
   // Runs read from an analyzer, middleware or LIS file, and the sigma metric (B12, 2026-11-24).
-  registerQcFileImportRoutes(app, { authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit, resolveLabMapInstrument });
-  registerQcSigmaRoutes(app, { authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit });
+  registerQcFileImportRoutes(app, { authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit, hasModuleEditAccess, resolveLabMapInstrument });
+  registerQcSigmaRoutes(app, { authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit, hasModuleEditAccess });
 
   app.get("/api/labs/:labId/qc/results", authMiddleware, labScopeMiddleware, (req: any, res) => {
     const controlLotId = req.query.control_lot_id ? Number(req.query.control_lot_id) : null;

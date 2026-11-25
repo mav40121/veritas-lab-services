@@ -58,6 +58,18 @@ export function allowablePercent(a: AllowableErrorSetting, target: number | null
   return { missing: "an allowable error for this test" };
 }
 
+/**
+ * Whether the mean typed as the manufacturer's is the lab's own mean: the same number, or the lab's mean rounded to the decimals typed
+ * when those are fine enough (half the last place within 1% of the SD) that a match isn't chance. 140 typed for a mean of 140.3 is not.
+ */
+export function isOwnMean(typed: number, own: number | null, sd: number | null): boolean {
+  if (own === null || !Number.isFinite(typed) || !Number.isFinite(own)) return false;
+  const gap = Math.abs(typed - own);
+  if (gap <= 1e-9 * Math.max(1, Math.abs(typed))) return true;
+  const half = 0.5 * 10 ** -(String(typed).split(".")[1]?.length ?? 0);
+  return sd !== null && sd > 0 && half <= sd * 0.01 && gap <= half * (1 + 1e-9);
+}
+
 export function computeSigma(input: SigmaInput): SigmaResult {
   const { values, target, allowable } = input;
   const n = values.length;

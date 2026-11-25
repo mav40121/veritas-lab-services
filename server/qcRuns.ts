@@ -11,6 +11,7 @@
 // touched by a later run; the run is marked instead, on screen and on the monthly review PDF.
 
 import { evaluateQcRun, type LotRuns, type WestgardViolation } from "./qcWestgard";
+import { staffOwnScope } from "./competencySelfEntry";
 import type { QcBasis } from "./qcBasis";
 
 type Sqlite = any;
@@ -28,6 +29,19 @@ export interface QcRunInput {
   now: string;
   /** Set on a run read from a file (server/qcFileImport.ts): which import, the file's row, and the operator the file names. */
   from?: { importId: number; row: number; column: string | null; operator: string | null };
+}
+
+/**
+ * Why a run of this day can't be recorded on this lot, or null when it can: a retired or held lot takes runs dated on or before the day
+ * it was retired or held, and none after. With no day on file nobody can tell, so it takes none. Typed and imported runs alike.
+ */
+export function lotNotInUse(lot: { status: string | null; out_of_use_date?: string | null; held_date?: string | null }, runDate: string): string | null {
+  const status = String(lot.status ?? "active");
+  if (status !== "retired" && status !== "hold") return null;
+  const day = status === "retired" ? lot.out_of_use_date : lot.held_date;
+  const what = status === "retired" ? "retired" : "put on hold";
+  if (!day) return `This lot is ${status === "retired" ? "retired" : "on hold"} and the day isn't on file. Re-activate it, then ${status === "retired" ? "retire it with its date" : "put it on hold again"}.`;
+  return runDate > day ? `This lot was ${what} on ${day}.` : null;
 }
 
 export function insertQcRun(sqlite: Sqlite, run: QcRunInput): number {
@@ -89,6 +103,12 @@ export function voidQcRun(sqlite: Sqlite, resultId: number, userId: number, reas
 
 /** A run an import brought in and that was taken back with it isn't one the lab has: left out of the feeds and counts that read voided runs. */
 export const NOT_TAKEN_BACK = (a = "") => `COALESCE(${a}void_source, '') <> 'import_undo'`;
+
+/** Reads beyond the results themselves (imports on file, the sigma metric): any member, as VeritaQC's reads are, but not a limited Staff login. */
+export const qcReader = (sqlite: () => Sqlite) => (req: any, res: any, next: any) =>
+  staffOwnScope(sqlite(), req.userId, req.scope.labId, "veritaqc")
+    ? res.status(403).json({ error: "A staff login records and reads QC results. Imports and the sigma metric aren't part of it.", code: "STAFF_OWN_ONLY" })
+    : next();
 
 // ── Runs stored after their month's review was signed ────────────────────────────────────────────────────────────────
 

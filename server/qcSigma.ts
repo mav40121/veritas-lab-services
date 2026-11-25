@@ -8,14 +8,16 @@
 // regulatory criteria for that test; the choice is the laboratory's), and a peer mean per lot. With no peer mean the target is the
 // manufacturer's mean on the lot. The lab's own mean is never the target.
 //
-// VeritaQC edit on every route; Veritas support reads and sets neither (server/vlsSupport.ts).
+// Reading follows VeritaQC's own read rule, so a view-only seat reads it; a limited Staff login doesn't (qcRuns.ts qcReader). Setting
+// either needs VeritaQC edit, and Veritas support sets neither (server/vlsSupport.ts).
 
 import type { Express } from "express";
 import { db } from "./db";
 import { logAudit } from "./audit";
 import { CLIA_PRESETS } from "../shared/cliaPresets";
 import { regulatedAnalyteFor } from "../shared/regulatedAnalytes";
-import { computeSigma, SIGMA_FORMULA, type AllowableErrorSetting, type SigmaTarget } from "../shared/qcSigma";
+import { qcReader } from "./qcRuns";
+import { computeSigma, isOwnMean, SIGMA_FORMULA, type AllowableErrorSetting, type SigmaTarget } from "../shared/qcSigma";
 
 type Sqlite = any;
 
@@ -28,7 +30,7 @@ export function criteriaForAnalyte(analyte: string): Array<{ label: string; cfr:
 
 export function sigmaRows(sqlite: Sqlite, labId: number) {
   const lots = sqlite.prepare(
-    "SELECT id, analyte, level, lot_number, status, mfr_mean FROM qc_control_lots WHERE lab_id = ? ORDER BY analyte COLLATE NOCASE, level COLLATE NOCASE, (status = 'active') DESC, id DESC"
+    "SELECT id, analyte, level, lot_number, status, mfr_mean, lab_mean, lab_basis_source FROM qc_control_lots WHERE lab_id = ? ORDER BY analyte COLLATE NOCASE, level COLLATE NOCASE, (status = 'active') DESC, id DESC"
   ).all(labId) as any[];
   const allowable = new Map<string, any>((sqlite.prepare("SELECT * FROM qc_allowable_errors WHERE lab_id = ?").all(labId) as any[]).map((a) => [a.analyte, a]));
   const peers = new Map<number, any>((sqlite.prepare("SELECT * FROM qc_peer_means WHERE lab_id = ?").all(labId) as any[]).map((p) => [p.control_lot_id, p]));
@@ -51,19 +53,23 @@ export function sigmaRows(sqlite: Sqlite, labId: number) {
     const target: SigmaTarget | null = peer ? { value: Number(peer.peer_mean), source: "peer", note: peer.source_note || null }
       : l.mfr_mean !== null && Number.isFinite(Number(l.mfr_mean)) ? { value: Number(l.mfr_mean), source: "manufacturer", note: null } : null;
     const setting: AllowableErrorSetting | null = a ? { preset_label: a.preset_label, percent: a.percent, units_value: a.units_value, unit: a.unit } : null;
+    const result = computeSigma({ values: runs.get(l.id) ?? [], target, allowable: setting });
+    // The lab's own mean: the one worked out from its runs, and the one it set for the lot (VeritaQC's established basis).
+    const set = (l.lab_basis_source === "manual" || l.lab_basis_source === "all_runs") && l.lab_mean !== null ? Number(l.lab_mean) : null;
     return {
+      target_is_own_mean: target?.source === "manufacturer" && (isOwnMean(target.value, result.mean, result.sd) || isOwnMean(target.value, set, result.sd)),
       control_lot_id: l.id, analyte: l.analyte, level: l.level, lot_number: l.lot_number, status: l.status, mfr_mean: l.mfr_mean,
       peer_mean: peer ? { value: Number(peer.peer_mean), note: peer.source_note, set_by_name: peer.set_by_name, set_at: peer.set_at } : null,
       analyzers: Array.from(analyzers.get(l.id) ?? []).sort(), first_run: first.get(l.id) ?? null, last_run: last.get(l.id) ?? null, left_out: excluded.get(l.id) ?? 0,
-      result: computeSigma({ values: runs.get(l.id) ?? [], target, allowable: setting }),
+      result,
     };
   });
 }
 
-export function registerQcSigmaRoutes(app: Express, deps: { authMiddleware: any; labScopeMiddleware: any; requireWriteAccess: any; requireModuleEdit: (mod: string) => any }) {
-  const { authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit } = deps;
+export function registerQcSigmaRoutes(app: Express, deps: { authMiddleware: any; labScopeMiddleware: any; requireWriteAccess: any; requireModuleEdit: (mod: string) => any; hasModuleEditAccess: (labId: number, userId: number, mod: string) => boolean }) {
+  const { authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit, hasModuleEditAccess } = deps;
   const sqlite = (): Sqlite => (db as any).$client;
-  const view = [authMiddleware, labScopeMiddleware, requireModuleEdit("veritaqc")];
+  const read = [authMiddleware, labScopeMiddleware, qcReader(sqlite)];
   const edit = [authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritaqc")];
   const userName = (userId: number): string => {
     const u = sqlite().prepare("SELECT name, email FROM users WHERE id = ?").get(userId) as any;
@@ -76,11 +82,11 @@ export function registerQcSigmaRoutes(app: Express, deps: { authMiddleware: any;
   const allowableIn = (labId: number, analyte: string): any => sqlite().prepare("SELECT preset_label, percent, units_value, unit, set_by_name, set_at FROM qc_allowable_errors WHERE lab_id = ? AND analyte = ?").get(labId, analyte) ?? null;
   const positive = (v: any): number | null => { const n = typeof v === "string" ? Number(v.trim() || NaN) : Number(v); return Number.isFinite(n) && n > 0 ? n : null; };
 
-  app.get("/api/labs/:labId/qc/sigma", ...view, (req: any, res) => {
+  app.get("/api/labs/:labId/qc/sigma", ...read, (req: any, res) => {
     const rows = sigmaRows(sqlite(), req.scope.labId);
     const analytes = Array.from(new Set(rows.map((r) => r.analyte)));
     res.json({
-      formula: SIGMA_FORMULA, can_set: !req.scope.viaVlsSupport, rows,
+      formula: SIGMA_FORMULA, can_set: !req.scope.viaVlsSupport && hasModuleEditAccess(req.scope.labId, req.userId, "veritaqc"), rows,
       analytes: analytes.map((a) => ({ analyte: a, allowable: allowableIn(req.scope.labId, a), criteria: criteriaForAnalyte(a) })),
     });
   });

@@ -100,7 +100,7 @@ export function PreviewPanel({ preview, onSaveNames, saving, onImport, importing
   if (notes.backdated) said.push(`${plural(notes.backdated, "row is", "rows are")} dated before a run already on file for that control lot. Each is judged against the runs before it. The runs already on file keep the verdict they have, as when a run is typed in late.`);
   if (notes.same_day) said.push(`${plural(notes.same_day, "row is", "rows are")} earlier in the day than a run already on file that day. Runs of one day are judged in the order they were recorded, so these come after it, as when a run is typed in late.`);
   for (const a of notes.after_review) said.push(`${plural(a.rows, "row lands", "rows land")} in ${a.month} for ${a.analyte} ${a.level}, lot ${a.lot}, whose review ${a.reviewed_by ? `${a.reviewed_by} ` : "was "}signed on ${labDayOf(a.reviewed_at)}. The signed review doesn't change; these runs will be marked as added after it.`);
-  if (notes.inactive_lot) said.push(`${plural(notes.inactive_lot, "row is", "rows are")} for a control lot that is retired or on hold.`);
+  if (notes.inactive_lot) said.push(`${plural(notes.inactive_lot, "row is", "rows are")} for a control lot that is retired or on hold now, dated on or before the day it was.`);
   if (notes.past_expiration) said.push(`${plural(notes.past_expiration, "row is", "rows are")} dated after the control lot's expiration.`);
   if (notes.maybe_same) said.push(`${plural(notes.maybe_same, "row has", "rows have")} the same value as a run on file that day with no time or no analyzer. Check they aren't the same run before importing.`);
   return (

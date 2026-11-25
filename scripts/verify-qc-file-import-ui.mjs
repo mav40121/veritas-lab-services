@@ -11,7 +11,7 @@
 //   R7. a second file with the saved mapping, and a wide Excel file
 //   R8. take an import back: which stay and why, the reason, then the list says so
 //   R9. the sigma metric: not enough to compute, then a number with its formula and inputs, no color by value; a peer mean
-//   R10. a view-only seat and a Staff login get no button and a note; phone width doesn't overflow
+//   R10. a view-only seat reads the imports and the sigma metric and gets no upload, take back or setting; a Staff login gets neither; phone width doesn't overflow
 // Screenshots b12_*.png, light and dark. Run: PW_BASE=http://localhost:5212 SCRATCH_DB=<db> OUT=<dir> node scripts/verify-qc-file-import-ui.mjs
 import { createRequire } from "node:module";
 import fs from "node:fs";
@@ -254,6 +254,8 @@ try {
 
   // ── R9 ──
   for (let i = 0; i < 21; i++) await call("POST", `${L}/qc/results`, { control_lot_id: na, result_value: 140 + [0.5, -0.5, 1, -1, 0][i % 5] + 0.4, result_date: `2026-10-${String(i + 1).padStart(2, "0")}`, map_instrument_id: anA }, token);
+  const own = await lot("Chloride", "Low", "45921", 101.43, 2);
+  for (const [i, v] of [101.1, 103.3, 99.9].entries()) await call("POST", `${L}/qc/results`, { control_lot_id: own, result_value: v, result_date: `2026-10-0${i + 1}`, map_instrument_id: anA }, token);
   const sg = await openAs(token, `/labs/${labId}/veritaqc-app/sigma`);
   await sg.getByTestId("sigma-formula").waitFor({ timeout: 10000 });
   check("R9. the formula is on the screen", (await sg.getByTestId("sigma-formula").innerText()).includes("Sigma = (allowable error % - bias %) / CV %"));
@@ -278,8 +280,9 @@ try {
   await sg.getByTestId("sigma-peer-value").fill("140.4");
   await sg.getByTestId("sigma-peer-note").fill("Made-up peer report, October 2026");
   await sg.getByTestId("sigma-peer-save").click();
-  await vis(sg.getByText("Peer mean 140.4 (Made-up peer report, October 2026)"));
-  check("R9. a peer mean the lab enters is the target", /Peer mean 140\.4/.test(await sg.getByTestId(`sigma-lot-${na}`).innerText()));
+  await vis(sg.getByText("Target: peer mean on this lot, 140.4 (Made-up peer report, October 2026)"));
+  check("R9. a peer mean the lab enters is the target, and the target is named", /Target: peer mean on this lot, 140\.4/.test(await sg.getByTestId(`sigma-target-${na}`).innerText()) && /Target: manufacturer mean on this lot, 300\./.test(await sg.getByTestId(`sigma-target-${gluHi}`).innerText()));
+  check("R9. a manufacturer mean that is the lab's own mean says so, and one that isn't doesn't", /This is the lot's own mean, so bias reads near 0\./.test(await sg.getByTestId(`sigma-target-${own}`).innerText()) && !/own mean, so/.test(await sg.getByTestId(`sigma-target-${gluHi}`).innerText()));
   await sg.waitForTimeout(6000);
   await top(sg);
   await sg.screenshot({ path: `${OUT}/b12_sigma_light.png`, fullPage: true });
@@ -287,14 +290,25 @@ try {
   check("R9. no grading words on the page", !/world.class|excellent|\bgood\b|marginal|\bpoor\b|unacceptable/.test(body));
 
   // ── R10 ──
-  for (const [who, tk] of [["a view-only seat", viewToken], ["a Staff login", staffToken]]) {
-    const p = await openAs(tk, `/labs/${labId}/veritaqc-app`);
-    await p.getByText("Log a QC result").first().waitFor({ timeout: 10000 }).catch(() => {});
-    const none = !(await p.getByTestId("veritaqc-import-link").count()) && !(await p.getByTestId("veritaqc-sigma-link").count());
-    await p.goto(`${BASE}${PAGE}`, { waitUntil: "networkidle" });
-    check(`R10. ${who} gets no button, and a note instead of an upload`, none && await vis(p.getByTestId("qcimport-no-edit")) && !(await p.getByTestId("qcimport-file").count()));
-    await p.context().close();
-  }
+  const st = await openAs(staffToken, `/labs/${labId}/veritaqc-app`);
+  await st.getByText("Log a QC result").first().waitFor({ timeout: 10000 }).catch(() => {});
+  const none = !(await st.getByTestId("veritaqc-import-link").count()) && !(await st.getByTestId("veritaqc-sigma-link").count());
+  await st.goto(`${BASE}${PAGE}`, { waitUntil: "networkidle" });
+  check("R10. a Staff login gets no button, and a note instead of the imports", none && await vis(st.getByTestId("qcimport-staff")) && !(await st.getByTestId("qcimport-file").count()) && !(await st.getByTestId("imports-list").count()));
+  await st.context().close();
+  const vw = await openAs(viewToken, `/labs/${labId}/veritaqc-app`);
+  await vw.getByTestId("veritaqc-import-link").waitFor({ timeout: 10000 }).catch(() => {});
+  check("R10. a view-only seat has Imported results and Sigma metric", /Imported results/.test(await vw.getByTestId("veritaqc-import-link").innerText()) && await vis(vw.getByTestId("veritaqc-sigma-link")));
+  await vw.goto(`${BASE}${PAGE}`, { waitUntil: "networkidle" });
+  await vis(vw.getByTestId("imports-list"));
+  await vw.getByTestId(`import-open-${imp1}`).click();
+  await vis(vw.getByTestId("import-summary"));
+  check("R10. ... reads an import and gets no upload and no take back", await vis(vw.getByTestId("qcimport-no-edit")) && !(await vw.getByTestId("qcimport-file").count()) && !(await vw.getByTestId("import-undo-open").count()) && /25 results stored/.test(await vw.getByTestId("import-summary").innerText()));
+  await closeDialog(vw);
+  await vw.screenshot({ path: `${OUT}/b12_readonly_light.png` });
+  await vw.goto(`${BASE}/labs/${labId}/veritaqc-app/sigma`, { waitUntil: "networkidle" });
+  check("R10. ... and reads the sigma metric with nothing to set", await vis(vw.getByTestId(`sigma-math-${na}`)) && !(await vw.getByTestId("sigma-set-Sodium").count()) && !(await vw.getByTestId(`sigma-peer-${na}`).count()));
+  await vw.context().close();
   for (const [p, name] of [[PAGE, "import"], [`/labs/${labId}/veritaqc-app/sigma`, "sigma"]]) {
     const ph = await openAs(token, p, { viewport: { width: 375, height: 812 } });
     if (name === "import") { await ph.getByTestId("qcimport-file").setInputFiles(f2); await ph.getByTestId("qcimport-mapping").waitFor({ timeout: 10000 }); await preview(ph); } else await ph.getByTestId("sigma-formula").waitFor({ timeout: 10000 });

@@ -14,8 +14,11 @@
 //   - A file with a column that looks like patient information is refused by naming the column, and one with a cell that does by naming
 //     the line and column (shared/phiPatterns.ts), the way the antibiogram upload does.
 //
-// VeritaQC edit on every route (a Staff login and a view-only seat get none of it). Veritas support sets up mappings and names and is
-// refused the import and taking one back (server/vlsSupport.ts).
+//   - A lot that is retired or on hold takes rows dated on or before that day, and none after, as a typed run does (qcRuns.ts lotNotInUse).
+//
+// The imports on file and one import's runs follow VeritaQC's own read rule, so a view-only seat reads them; a limited Staff login gets
+// neither (qcRuns.ts qcReader). Mapping, names, preview, import and undo need VeritaQC edit. Veritas support sets up mappings and names
+// and is refused the import and taking one back (server/vlsSupport.ts).
 
 import crypto from "crypto";
 import type { Express } from "express";
@@ -24,7 +27,7 @@ import { logAudit } from "./audit";
 import { labTimeZoneById } from "./dateLocal";
 import { vlsContext } from "./vlsSupport";
 import { loadLotRuns, type LotRuns } from "./qcWestgard";
-import { addedAfterReview, insertQcRun, judgeQcRun, momentMs, qcRunSettings, signedMonthOf, signedMonths, voidQcRun, type QcRunSettings } from "./qcRuns";
+import { addedAfterReview, insertQcRun, judgeQcRun, lotNotInUse, momentMs, qcReader, qcRunSettings, signedMonthOf, signedMonths, voidQcRun, type QcRunSettings } from "./qcRuns";
 import { detectPhi } from "../shared/phiPatterns";
 import {
   cellText, csvDelimiter, dataRowCount, headerLabels, likelyHeaderRow, missingColumns, nameKey, parseDelimited, patientColumn, readMapping, readRuns, sameTime, wallClock,
@@ -153,14 +156,14 @@ function checkedHeaders(file: FileGrid, headerRow: number): string[] {
 
 // ── The lab's names ───────────────────────────────────────────────────────────────────────────────────────────────────
 
-interface LabLot { id: number; analyte: string; level: string; lot_number: string; status: string; expiration_date: string | null; aKey: string; lvKey: string; lotKey: string }
+interface LabLot { id: number; analyte: string; level: string; lot_number: string; status: string; out_of_use_date: string | null; held_date: string | null; expiration_date: string | null; aKey: string; lvKey: string; lotKey: string }
 interface LabInstrument { id: number | null; name: string; label: string; keys: string[] }
 interface LabNames { lots: LabLot[]; instruments: LabInstrument[]; choices: Map<string, { target: string; map_instrument_id: number | null }> }
 
 const choiceKey = (kind: NameKind, fileKey: string, contextKey: string) => `${kind}\u0000${fileKey}\u0000${contextKey}`;
 
 function loadLabNames(sqlite: Sqlite, labId: number): LabNames {
-  const lots = (sqlite.prepare("SELECT id, analyte, level, lot_number, status, expiration_date FROM qc_control_lots WHERE lab_id = ? ORDER BY analyte, level, id").all(labId) as any[])
+  const lots = (sqlite.prepare("SELECT id, analyte, level, lot_number, status, out_of_use_date, held_date, expiration_date FROM qc_control_lots WHERE lab_id = ? ORDER BY analyte, level, id").all(labId) as any[])
     .map((l) => ({ ...l, aKey: nameKey(l.analyte), lvKey: nameKey(l.level), lotKey: nameKey(l.lot_number) }));
   const mapped = sqlite.prepare(
     `SELECT i.id, i.instrument_name, i.nickname, i.serial_number, m.name AS map_name
@@ -309,6 +312,7 @@ export function planImport(sqlite: Sqlite, labId: number, runs: RawRun[], tz: st
     }
     if ("error" in r.when) reasons.push(r.when.error);
     else if (`${r.when.date} ${(r.when.time ?? "00:00").slice(0, 5)}` > nowText) reasons.push(`The date is in the future (the lab's clock reads ${nowText}).`);
+    else if (lots.length) { const closed = lotNotInUse(lots[0], r.when.date); if (closed) reasons.push(closed); }
     if ("error" in r.value) reasons.push(r.value.error);
     if (r.operator && r.operator.length > QC_IMPORT_TEXT_MAX) reasons.push(`The operator is longer than ${QC_IMPORT_TEXT_MAX} characters.`);
     if (r.comment && r.comment.length > QC_IMPORT_COMMENT_MAX) reasons.push(`The comment is longer than ${QC_IMPORT_COMMENT_MAX} characters.`);
@@ -381,7 +385,7 @@ export function planImport(sqlite: Sqlite, labId: number, runs: RawRun[], tz: st
       afterReview.set(mk, a);
       r.notes.push("Its month's review is signed. The run will be marked as added after it.");
     }
-    if (lot.status !== "active") { notes.inactive_lot++; r.notes.push(`The control lot is ${lot.status}.`); }
+    if (lot.status !== "active") { notes.inactive_lot++; r.notes.push(lot.status === "retired" ? `Dated on or before the day the lot was retired, ${lot.out_of_use_date}.` : `Dated on or before the day the lot was put on hold, ${lot.held_date}.`); }
     if (lot.expiration_date && date > lot.expiration_date) { notes.past_expiration++; r.notes.push(`Run after the lot's expiration, ${lot.expiration_date}.`); }
   }
   notes.after_review = Array.from(afterReview.values());
@@ -429,9 +433,10 @@ export function undoPlan(sqlite: Sqlite, labId: number, importId: number): { goe
 
 export function registerQcFileImportRoutes(app: Express, deps: {
   authMiddleware: any; labScopeMiddleware: any; requireWriteAccess: any; requireModuleEdit: (mod: string) => any;
+  hasModuleEditAccess: (labId: number, userId: number, mod: string) => boolean;
   resolveLabMapInstrument: (sqlite: any, labId: number, id: any) => any;
 }) {
-  const { authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit, resolveLabMapInstrument } = deps;
+  const { authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit, hasModuleEditAccess, resolveLabMapInstrument } = deps;
   const sqlite = (): Sqlite => (db as any).$client;
   const multer = require("multer"); // same CJS load as the VeritaLab upload route
   const uploadOne = multer({ storage: multer.memoryStorage(), limits: { fileSize: QC_IMPORT_MAX_MB * 1024 * 1024, files: 1, fields: 20, fieldSize: 512 * 1024 } }).single("file");
@@ -441,7 +446,8 @@ export function registerQcFileImportRoutes(app: Express, deps: {
     if (req.scope?.viaVlsSupport) return vlsContext.run({ actingAs: "vls_support", labId: req.scope.labId, userId: req.userId }, () => next());
     next();
   });
-  const view = [authMiddleware, labScopeMiddleware, requireModuleEdit("veritaqc")];
+  const read = [authMiddleware, labScopeMiddleware, qcReader(sqlite)];
+  const canImport = (req: any): boolean => !req.scope.viaVlsSupport && hasModuleEditAccess(req.scope.labId, req.userId, "veritaqc");
   const edit = [authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritaqc")];
 
   const userName = (userId: number): string => {
@@ -506,10 +512,10 @@ export function registerQcFileImportRoutes(app: Express, deps: {
   ).all(labId);
 
   // ── Setup: saved mappings and remembered names ──
-  app.get(`${BASE}/setup`, ...view, (req: any, res) => {
+  app.get(`${BASE}/setup`, authMiddleware, labScopeMiddleware, requireModuleEdit("veritaqc"), (req: any, res) => {
     const tz = labTimeZoneById(sqlite(), req.scope.labId);
     res.json({
-      mappings: mappingsOf(req.scope.labId), names: namesOf(req.scope.labId), time_zone: tz, can_import: !req.scope.viaVlsSupport,
+      mappings: mappingsOf(req.scope.labId), names: namesOf(req.scope.labId), time_zone: tz, can_import: canImport(req),
       instruments: loadLabNames(sqlite(), req.scope.labId).instruments.map((i) => ({ id: i.id, name: i.name, label: i.label })),
       max_rows: QC_IMPORT_MAX_ROWS, max_mb: QC_IMPORT_MAX_MB,
     });
@@ -627,7 +633,7 @@ export function registerQcFileImportRoutes(app: Express, deps: {
     const mapping = mappingOf(req);
     const { runs, tz } = await readFor(f.buffer, mapping, req.scope.labId);
     const plan = planImport(sqlite(), req.scope.labId, runs, tz);
-    res.json({ file_name: f.name, file_sha256: f.sha256, time_zone: tz, can_import: !req.scope.viaVlsSupport, ...plan, rows: plan.rows.map(({ comment: _c, lot_id: _l, ...r }) => r) });
+    res.json({ file_name: f.name, file_sha256: f.sha256, time_zone: tz, can_import: canImport(req), ...plan, rows: plan.rows.map(({ comment: _c, lot_id: _l, ...r }) => r) });
   }));
 
   // ── Import ──
@@ -685,7 +691,7 @@ export function registerQcFileImportRoutes(app: Express, deps: {
   }));
 
   // ── Imports on file ──
-  app.get(BASE, ...view, (req: any, res) => {
+  app.get(BASE, ...read, (req: any, res) => {
     const rows = sqlite().prepare("SELECT * FROM qc_file_imports WHERE lab_id = ? ORDER BY id DESC LIMIT 200").all(req.scope.labId) as any[];
     const live = new Map<number, any>((sqlite().prepare(
       `SELECT r.import_id AS id, COUNT(*) AS n,
@@ -696,7 +702,7 @@ export function registerQcFileImportRoutes(app: Express, deps: {
     res.json({ imports: rows.map((i) => ({ ...importView(i), runs_on_file: live.get(i.id)?.n ?? 0, missing_corrective_action: live.get(i.id)?.missing_ca ?? 0 })) });
   });
 
-  app.get(`${BASE}/:id`, ...view, (req: any, res) => {
+  app.get(`${BASE}/:id`, ...read, (req: any, res) => {
     const imp = importIn(req);
     if (!imp) return res.status(404).json({ error: "That import isn't in this lab." });
     const client = sqlite();
@@ -715,7 +721,7 @@ export function registerQcFileImportRoutes(app: Express, deps: {
     res.json({
       import: { ...importView(imp), duplicate_rows: JSON.parse(imp.duplicate_rows_json || "[]"), unplaced_rows: JSON.parse(imp.unplaced_rows_json || "[]") },
       runs: runs.map((r) => ({ ...r, violations: byRun.get(r.id) ?? [], has_corrective_action: cas.has(r.id), added_after_review: r.voided_at ? null : addedAfterReview(months, r) })),
-      undo: { will_void: plan.goes.length, stays: plan.stays }, can_import: !req.scope.viaVlsSupport,
+      undo: { will_void: plan.goes.length, stays: plan.stays }, can_import: canImport(req),
     });
   });
 

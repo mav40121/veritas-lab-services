@@ -24,7 +24,7 @@ const runName = (r: { analyte: string; level: string; lot_number: string; result
   `${r.analyte} ${r.level}, lot ${r.lot_number}, ${r.result_date}${r.run_time ? ` ${r.run_time}` : ""}, ${r.result_value}`;
 const rejects = (r: Run) => !r.voided_at && r.violations.some((v) => v.severity === "rejection");
 
-function NeedsAction({ labId, run, onFiled }: { labId: number; run: Run; onFiled: () => void }) {
+function NeedsAction({ labId, run, canRecord, onFiled }: { labId: number; run: Run; canRecord: boolean; onFiled: () => void }) {
   const { toast } = useToast();
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -42,15 +42,15 @@ function NeedsAction({ labId, run, onFiled }: { labId: number; run: Run; onFiled
     <li className="space-y-1 rounded-md border p-2" data-testid={`import-needs-ca-${run.id}`}>
       <div className="text-sm"><Badge variant="outline" className="mr-2 border-red-500/30 bg-red-500/10 text-red-800 dark:text-red-300">{rule.rule_code}</Badge>{runName(run)}</div>
       <div className="text-xs text-muted-foreground">Row {run.import_row}{run.import_column ? `, ${run.import_column}` : ""}. {rule.detail}</div>
-      <div className="flex flex-col gap-2 sm:flex-row">
+      {canRecord && <div className="flex flex-col gap-2 sm:flex-row">
         <Input className="h-9" value={text} onChange={(e) => setText(e.target.value)} placeholder="What was done" aria-label={`Corrective action for ${runName(run)}`} data-testid={`import-ca-text-${run.id}`} />
         <Button size="sm" variant="outline" className="h-9 shrink-0" onClick={file} disabled={busy || !text.trim()} data-testid={`import-ca-file-${run.id}`}>File corrective action</Button>
-      </div>
+      </div>}
     </li>
   );
 }
 
-export function ImportDetailDialog({ labId, importId, onClose, onChanged }: { labId: number; importId: number | null; onClose: () => void; onChanged: () => void }) {
+export function ImportDetailDialog({ labId, importId, canRecord, onClose, onChanged }: { labId: number; importId: number | null; canRecord: boolean; onClose: () => void; onChanged: () => void }) {
   const { toast } = useToast();
   const [data, setData] = useState<Detail | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -102,7 +102,7 @@ export function ImportDetailDialog({ labId, importId, onClose, onChanged }: { la
               <section className="space-y-2" data-testid="import-needs-ca">
                 <h3 className="text-sm font-semibold">Corrective action required ({num(needs.length)})</h3>
                 <p className="text-xs text-muted-foreground">These runs fired a Westgard rejection rule. They're also in Review &amp; Sign-off until each has its corrective action.</p>
-                <ul className="max-h-80 space-y-2 overflow-y-auto">{needs.slice(0, 50).map((r) => <NeedsAction key={r.id} labId={labId} run={r} onFiled={() => { load(); onChanged(); }} />)}</ul>
+                <ul className="max-h-80 space-y-2 overflow-y-auto">{needs.slice(0, 50).map((r) => <NeedsAction key={r.id} labId={labId} run={r} canRecord={canRecord} onFiled={() => { load(); onChanged(); }} />)}</ul>
                 {needs.length > 50 && <p className="text-xs text-muted-foreground">{num(needs.length - 50)} more in Review &amp; Sign-off.</p>}
               </section>
             )}
