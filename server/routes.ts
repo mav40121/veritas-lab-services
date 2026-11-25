@@ -41,6 +41,7 @@ import { sanitizeTypeDetails, parseTypeDetails, FINDING_SOURCE_TYPES } from "@sh
 import { scheduleIntervals, parseMonitoringPlan, parseCounts, measuredStatus, type MonitoringPlan } from "@shared/effectivenessMeasure";
 import { PT_ROOT_CAUSE_CATEGORIES } from "@shared/ptFailure";
 import { studyRowToClient, resolveInstrumentDisplay, studyPdfFilename } from "./studyPdf";
+import { foreignSlotCounts, ownMapInstrument, sameLabOrOwnerSql } from "./verificationLinks";
 import { scanPhi } from "./phiScan";
 import { evaluateQcRun, rulesForRun } from "./qcWestgard";
 import { resolveBasis, computeBasis, basisConfig, sampleStats, type QcBasis } from "./qcBasis";
@@ -68,7 +69,6 @@ import { normalizeLineItems, computeOrgInvoice, laterExpiry, orgSubscriptionExpi
 import { renderMonthlyReviewPDF, type MonthlyReviewPayload, type MonthlyReviewResult } from "./pdfQCMonthly";
 import { buildMonthlyReviewPayload } from "./qcMonthlyReviewPayload";
 import { applyLicenseToExcelJS } from "./licenseStamp";
-import { foreignSlotCounts } from "./verificationLinks";
 import { resolveLegacyLabId as sharedResolveLegacyLabId, ownerMatchCounts, ownerRowInReach, isOlderSeatDate, editRefusedInRecordLab, moduleEditInLab } from "./labAccessGuard";
 import { adminSeatLabId, editSeatInLab, labForNewAccountSeat, legacySeatForUser, seatForRequest, seatInLabOrderSql, seatInLabSql, seatTypeInLabSql, staffLabForRequest, staffOnlyInLab, stampLablessSeatLab } from "./seatContext";
 import { auditInvite, endInviteDesignation, inviteEmailForAccount, inviteLabId, inviteRoleLabel, memberInviteRefusal, recordInviteDesignation, registerLabInviteRoutes, rosterEntryTaken, staffInviteRefusal } from "./labInvites";
@@ -12777,7 +12777,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
             const meta = typeof s.instrumentMeta === "string" ? JSON.parse(s.instrumentMeta) : s.instrumentMeta;
             const entry = meta["0"];
             if (entry?.instrument_id) {
-              const row2 = (db as any).$client.prepare("SELECT instrument_name, nickname, serial_number FROM veritamap_instruments WHERE id = ?").get(entry.instrument_id) as any;
+              const row2 = ownMapInstrument((db as any).$client, { lab_id: exportActiveLabId, user_id: payload.userId }, entry.instrument_id);
               const d = row2 || entry;
               const parts: string[] = [];
               if (d.nickname) { parts.push(`${d.instrument_name || d.model} (${d.nickname})`); } else { parts.push(d.instrument_name || d.model); }
@@ -14196,12 +14196,14 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       let cliaLabName: string | undefined;
       let preferredStandards: string[] | undefined;
       let resolvedLabId: number | null = null;
+      let resolvedUserId: number | null = null;
       let resolvedIsDemo = false;
       let licenseCtx: LicenseContext | undefined;
       const auth = req.headers.authorization;
       if (auth?.startsWith("Bearer ")) {
         try {
           const payload = verifySessionJwt((db as any).$client, auth.slice(7)) as { userId: number };
+          resolvedUserId = payload.userId;
           // 2026-06-10 (Michael L feedback): prefer the lab the
           // user has currently selected in the NavBar. The client
           // sends it as X-Active-Lab-Id header. Falls back to the
@@ -14261,7 +14263,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
       // Resolve VeritaMap-linked instrument data for report rendering (shared with export-all: server/studyPdf.ts)
       if (study.instrumentMeta) {
-        const resolved = resolveInstrumentDisplay((db as any).$client, study.instrumentMeta);
+        const resolved = resolveInstrumentDisplay((db as any).$client, study.instrumentMeta, { lab_id: resolvedLabId, user_id: resolvedUserId });
         if (resolved) (study as any)._instrumentDisplay = resolved;
       }
 
@@ -28607,6 +28609,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           vs.passed AS verification_passed
         FROM studies s
         LEFT JOIN veritacheck_verification_studies vs ON vs.study_id = s.id
+          AND EXISTS (SELECT 1 FROM veritacheck_verifications ov WHERE ov.id = vs.verification_id AND ${sameLabOrOwnerSql("s", "ov")})
         LEFT JOIN veritacheck_verifications v ON v.id = vs.verification_id
         WHERE LOWER(s.analyst) IN (${placeholders})
           AND (s.lab_id = ? OR (s.lab_id IS NULL AND s.user_id = ?))

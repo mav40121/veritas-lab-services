@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { stampPdfAuthor } from "./pdfMeta";
 import { db } from "./db";
 import { resolveRowForMutation, resolveLegacyLabId } from "./labAccessGuard";
+import { isIdColumn, linkIsOwn, LINK_NOT_FOUND, LINKED_STUDY_UNAVAILABLE, ownMapInstrument, SLOT_COLUMNS, slotLinkedSql, slotResultCountSql, slotStudyUnavailable, verificationSlots } from "./verificationLinks";
 import { resolveStudyAccess, consumeStudyCredit } from "./studyCredits";
 import { seedSlotsForAnalyte } from "./verificationSlots";
 import { blockNonOperatorSeat } from "./seatAccess";
@@ -870,6 +871,7 @@ export function buildVerificationBlockHtml(v: any, instruments: any[], studies: 
       ${slot?.clsi_protocol ? `<div style="font-size:12px;margin-bottom:6px"><strong>CLSI Protocol:</strong> ${slot.clsi_protocol}</div>` : ""}
       ${slot?.design_rationale ? `<div style="font-size:12px;margin-bottom:6px"><strong>Study Design Rationale:</strong><br><span style="color:#374151">${slot.design_rationale}</span></div>` : ""}
       ${slot?.testName ? `<div style="font-size:12px;margin-bottom:6px"><strong>Linked Study:</strong> ${slot.testName}</div>` : ""}
+      ${slot?.linked_study_unavailable ? `<div style="font-size:12px;margin-bottom:6px;color:#6b7280">${LINKED_STUDY_UNAVAILABLE}</div>` : ""}
       <div style="font-size:12px;margin-top:8px">
         <strong>Result:</strong>
         ${slot?.passed === 1 ? "<span style='color:#059669;font-weight:700'>PASS</span>" : slot?.passed === 0 ? "<span style='color:#dc2626;font-weight:700'>FAIL</span>" : "<span style='color:#d97706'>Pending evaluation</span>"}
@@ -1139,8 +1141,8 @@ export function registerVeritaCheckVerificationRoutes(
     const verifications = sqlite.prepare(`
       SELECT v.*,
         (SELECT COUNT(*) FROM veritacheck_verification_instruments WHERE verification_id = v.id) as unit_count,
-        (SELECT COUNT(*) FROM veritacheck_verification_studies WHERE verification_id = v.id AND passed = 1) as passed_count,
-        (SELECT COUNT(*) FROM veritacheck_verification_studies WHERE verification_id = v.id AND passed = 0) as failed_count
+        ${slotResultCountSql("v", 1)} as passed_count,
+        ${slotResultCountSql("v", 0)} as failed_count
       FROM veritacheck_verifications v
       WHERE v.lab_id = ?
       ORDER BY v.created_at DESC
@@ -1157,8 +1159,8 @@ export function registerVeritaCheckVerificationRoutes(
     const verifications = sqlite.prepare(`
       SELECT v.*,
         (SELECT COUNT(*) FROM veritacheck_verification_instruments WHERE verification_id = v.id) as unit_count,
-        (SELECT COUNT(*) FROM veritacheck_verification_studies WHERE verification_id = v.id AND passed = 1) as passed_count,
-        (SELECT COUNT(*) FROM veritacheck_verification_studies WHERE verification_id = v.id AND passed = 0) as failed_count
+        ${slotResultCountSql("v", 1)} as passed_count,
+        ${slotResultCountSql("v", 0)} as failed_count
       FROM veritacheck_verifications v
       WHERE v.lab_id = ?
       ORDER BY v.created_at DESC
@@ -1176,13 +1178,7 @@ export function registerVeritaCheckVerificationRoutes(
       return res.status(404).json({ error: "Not found" });
     }
     const instruments = sqlite.prepare("SELECT * FROM veritacheck_verification_instruments WHERE verification_id = ? ORDER BY id").all(req.params.id);
-    const studies = sqlite.prepare(`
-      SELECT vs.*, s.test_name AS testName, s.study_type AS studyType
-      FROM veritacheck_verification_studies vs
-      LEFT JOIN studies s ON s.id = vs.study_id
-      WHERE vs.verification_id = ?
-      ORDER BY vs.element
-    `).all(req.params.id);
+    const studies = verificationSlots(sqlite, req.params.id, "s.test_name AS testName, s.study_type AS studyType");
     res.json({ ...v as object, instruments, studies });
   });
 
@@ -1203,6 +1199,9 @@ export function registerVeritaCheckVerificationRoutes(
     if (!instrument_name || !trigger_type) {
       return res.status(400).json({ error: "instrument_name and trigger_type are required" });
     }
+    // The analyzer is one on this laboratory's own VeritaMap (server/verificationLinks.ts).
+    const analyzer = map_instrument_id ? ownMapInstrument(sqlite, { lab_id: labIdOrNull, user_id: userId }, map_instrument_id) : null;
+    if (map_instrument_id && !analyzer) return res.status(404).json({ error: "Instrument not found in this lab" });
     const now = new Date().toISOString();
     const elemArr = (Array.isArray(elements) && elements.length > 0)
       ? elements
@@ -1214,7 +1213,7 @@ export function registerVeritaCheckVerificationRoutes(
       VALUES (?,?,?,?,?,?,?,?,?,?)
     `).run(
       userId, labIdOrNull, instrument_name, manufacturer || null, trigger_type,
-      map_instrument_id || null,
+      analyzer?.id ?? null,
       JSON.stringify(elemArr),
       JSON.stringify(element_reasons || {}),
       now, now
@@ -1522,7 +1521,8 @@ export function registerVeritaCheckVerificationRoutes(
     // per element, guarding on slot existence alone would make analytes
     // undeletable; the empty (unlinked) slots are removed with the analyte below.
     const linked = sqlite.prepare(
-      "SELECT COUNT(*) AS n FROM veritacheck_verification_studies WHERE analyte_id = ? AND scope <> 'instrument' AND study_id IS NOT NULL"
+      `SELECT COUNT(*) AS n FROM veritacheck_verification_studies vs JOIN veritacheck_verifications v ON v.id = vs.verification_id
+        WHERE vs.analyte_id = ? AND vs.scope <> 'instrument' AND vs.study_id IS NOT NULL AND ${slotLinkedSql("vs", "v")}`
     ).get(req.params.analyteId) as any;
     if (linked.n > 0) {
       return res.status(409).json({ error: `Cannot delete: ${linked.n} linked study(ies) still reference this analyte. Unlink them first.` });
@@ -1536,7 +1536,11 @@ export function registerVeritaCheckVerificationRoutes(
       return res.status(409).json({ error: "Cannot delete the only analyte on a verification. Add another analyte first." });
     }
     // Remove this analyte's empty (unlinked) seeded slots, then the analyte.
-    sqlite.prepare("DELETE FROM veritacheck_verification_studies WHERE analyte_id = ? AND study_id IS NULL").run(req.params.analyteId);
+    sqlite.prepare(
+      `DELETE FROM veritacheck_verification_studies WHERE analyte_id = ? AND verification_id = ? AND (study_id IS NULL OR id IN (
+         SELECT vs.id FROM veritacheck_verification_studies vs JOIN veritacheck_verifications v ON v.id = vs.verification_id
+          WHERE vs.scope <> 'instrument' AND NOT ${slotLinkedSql("vs", "v")}))`
+    ).run(req.params.analyteId, req.params.id);
     sqlite.prepare("DELETE FROM veritacheck_verification_analytes WHERE id = ?").run(req.params.analyteId);
     res.json({ ok: true });
   });
@@ -1596,11 +1600,12 @@ export function registerVeritaCheckVerificationRoutes(
     // it, a writer could flip another lab's pass/fail verdict by primary key.
     const slot = sqlite.prepare("SELECT id FROM veritacheck_verification_studies WHERE id = ? AND verification_id = ?").get(req.params.studySlotId, req.params.id);
     if (!slot) return res.status(404).json({ error: "Study slot not found on this verification" });
-    const allowed = ["study_id","analyte","sample_count","clsi_protocol","design_rationale","result_summary","passed","analyte_id","scope","manual_method","manual_note","manual_evidence_url"];
     const sets: string[] = [];
     const vals: any[] = [];
-    for (const key of allowed) {
+    for (const key of SLOT_COLUMNS) {
       if (req.body[key] !== undefined) {
+        // An id is the verification's own, or it is answered as one that isn't there (server/verificationLinks.ts).
+        if (isIdColumn(key) && !linkIsOwn(sqlite, req, parent as any, key, req.body[key])) return res.status(409).json(LINK_NOT_FOUND);
         sets.push(`${key} = ?`);
         // `typeof null === "object"` in JS, so JSON.stringify(null) => the string
         // "null". Guard null explicitly so { study_id: null } (Unlink) and
@@ -1609,6 +1614,10 @@ export function registerVeritaCheckVerificationRoutes(
       }
     }
     if (sets.length === 0) return res.status(400).json({ error: "No valid fields" });
+    // A new link, or none, doesn't keep the result of a study that wasn't available.
+    if (req.body.study_id !== undefined && slotStudyUnavailable(sqlite, req.params.studySlotId)) {
+      for (const key of ["passed", "result_summary", "sample_count"]) if (req.body[key] === undefined) sets.push(`${key} = NULL`);
+    }
     sets.push("updated_at = ?");
     vals.push(new Date().toISOString());
     vals.push(req.params.studySlotId);
@@ -1620,7 +1629,7 @@ export function registerVeritaCheckVerificationRoutes(
       // Return a clean 409 instead of a 500 (which pages Sentry) so the UI can
       // tell the director to refresh. Unlink (study_id: null) is unaffected.
       if (/FOREIGN KEY/i.test(String(e?.message || ""))) {
-        return res.status(409).json({ error: "That study or analyte no longer exists (it may have been deleted). Refresh the page and try again." });
+        return res.status(409).json(LINK_NOT_FOUND);
       }
       throw e;
     }
@@ -1639,7 +1648,7 @@ export function registerVeritaCheckVerificationRoutes(
       if (status === 403) return res.status(403).json({ error: "You don't have access to this verification's lab" });
       return res.status(404).json({ error: "Not found" });
     }
-    const mapInstrumentId = v.map_instrument_id;
+    const mapInstrumentId = ownMapInstrument(sqlite, v, v.map_instrument_id)?.id;
     if (!mapInstrumentId) return res.json({ analytes: [] });
     const rows = sqlite.prepare(`
       SELECT DISTINCT analyte, specialty, complexity
@@ -1688,8 +1697,7 @@ export function registerVeritaCheckVerificationRoutes(
     }
 
     const instruments = sqlite.prepare("SELECT * FROM veritacheck_verification_instruments WHERE verification_id = ? ORDER BY id").all(req.params.id) as any[];
-    const studies = sqlite.prepare(`
-      SELECT vs.*,
+    const studies = verificationSlots(sqlite, req.params.id, `
         s.test_name AS testName, s.study_type AS studyType,
         s.instrument AS studyInstrument, s.analyst AS studyAnalyst, s.date AS studyDate,
         s.data_points AS studyDataPoints, s.instruments AS studyInstrumentsJson,
@@ -1697,12 +1705,7 @@ export function registerVeritaCheckVerificationRoutes(
         s.tea_is_percentage AS studyTeaIsPct, s.tea_unit AS studyTeaUnit,
         s.clia_absolute_floor AS studyAbsFloor,
         s.amr_low AS studyAmrLow, s.amr_high AS studyAmrHigh, s.amr_units AS studyAmrUnits,
-        s.censoring_policy AS studyCensoringPolicy
-      FROM veritacheck_verification_studies vs
-      LEFT JOIN studies s ON s.id = vs.study_id
-      WHERE vs.verification_id = ?
-      ORDER BY vs.element
-    `).all(req.params.id) as any[];
+        s.censoring_policy AS studyCensoringPolicy`);
 
     // Wave A3.2 (2026-06-07): per-verification rendering extracted into
     // buildVerificationBlockHtml + wrapVerificationPageHtml helpers so the
@@ -1779,8 +1782,8 @@ export function registerVeritaCheckVerificationRoutes(
       const verifications = sqlite.prepare(`
         SELECT v.id, v.instrument_name, v.manufacturer, v.trigger_type, v.status,
                v.approved_date, v.created_at, v.updated_at,
-               (SELECT COUNT(*) FROM veritacheck_verification_studies WHERE verification_id = v.id AND passed = 1) as passed_count,
-               (SELECT COUNT(*) FROM veritacheck_verification_studies WHERE verification_id = v.id AND passed = 0) as failed_count
+               ${slotResultCountSql("v", 1)} as passed_count,
+               ${slotResultCountSql("v", 0)} as failed_count
         FROM veritacheck_verifications v
         WHERE v.lab_id = ?
           AND (v.map_instrument_id = ? OR (v.map_instrument_id IS NULL AND v.instrument_name = ?))
@@ -1860,20 +1863,14 @@ export function registerVeritaCheckVerificationRoutes(
         const instruments = sqlite.prepare(
           "SELECT * FROM veritacheck_verification_instruments WHERE verification_id = ? ORDER BY id"
         ).all(v.id) as any[];
-        const studies = sqlite.prepare(`
-          SELECT vs.*,
+        const studies = verificationSlots(sqlite, v.id, `
             s.test_name AS testName, s.study_type AS studyType,
             s.instrument AS studyInstrument, s.analyst AS studyAnalyst, s.date AS studyDate,
             s.data_points AS studyDataPoints, s.instruments AS studyInstrumentsJson,
             s.clia_allowable_error AS studyTea,
             s.tea_is_percentage AS studyTeaIsPct, s.tea_unit AS studyTeaUnit,
             s.clia_absolute_floor AS studyAbsFloor,
-            s.censoring_policy AS studyCensoringPolicy
-          FROM veritacheck_verification_studies vs
-          LEFT JOIN studies s ON s.id = vs.study_id
-          WHERE vs.verification_id = ?
-          ORDER BY vs.element
-        `).all(v.id) as any[];
+            s.censoring_policy AS studyCensoringPolicy`);
         blocks.push(buildVerificationBlockHtml(v, instruments, studies));
       }
 

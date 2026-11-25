@@ -69,6 +69,8 @@ interface VerificationStudy {
   passed: number | null;
   testName: string | null;
   studyType: string | null;
+  // The study this slot holds isn't one of this laboratory's (server/verificationLinks.ts): it reads as not linked.
+  linked_study_unavailable?: boolean;
   // 2026-07-24 manual-method attestation (Longstreth): element completed by a
   // manual/offline method the director attests, with a note + evidence URL.
   manual_method?: number | null;
@@ -1091,6 +1093,14 @@ function ElementCard({ element, slot, suggested, verificationId, onPatch }: {
           </div>
         )}
 
+        {!attested && slot?.linked_study_unavailable && (
+          <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground bg-muted/40 px-3 py-2 rounded" data-testid={`study-unavailable-${slot.id}`}>
+            <FlaskConical size={12} />
+            <span>Linked study not available</span>
+            <button className="ml-auto underline" hidden={isReadOnly} onClick={() => onPatch({ study_id: null, passed: null })}>Unlink</button>
+          </div>
+        )}
+
         {/* 2026-06-09 PR3 of multi-analyte: Carryover scope toggle.
             EP10 is sample-path-based, not analyte-specific, so a
             single carryover study can legitimately cover every
@@ -1260,6 +1270,8 @@ function AnalyteSlotRow({ element, analyteName, slot, suggested, verificationId,
           <div className="flex items-center gap-2 flex-wrap">
             {slot?.testName && <span className="text-xs text-muted-foreground">Linked: <strong>{slot.testName}</strong></span>}
             {slot?.testName && <button className="text-xs underline text-muted-foreground" hidden={isReadOnly} onClick={() => slot && onPatch(slot.id, { study_id: null })}>Unlink</button>}
+            {slot?.linked_study_unavailable && <span className="text-xs text-muted-foreground" data-testid={`study-unavailable-${slot.id}`}>Linked study not available</span>}
+            {slot?.linked_study_unavailable && <button className="text-xs underline text-muted-foreground" hidden={isReadOnly} onClick={() => slot && onPatch(slot.id, { study_id: null, passed: null })}>Unlink</button>}
             <Button size="sm" className="h-7 text-xs gap-1" hidden={isReadOnly} onClick={() => navigate(runUrl)} data-testid={`analyte-run-${element.key}-${analyteName}`}>
               <FlaskConical size={12} /> Run
             </Button>
