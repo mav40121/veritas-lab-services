@@ -23,7 +23,8 @@ import { db } from "./db";
 import { labToday, labTimeZoneById } from "./dateLocal";
 import { loadLabMethodClocks, type PersonMethodClock } from "./competencyMethodClock";
 import { nontechnicalReminderItems } from "./competencyNontechnicalDue";
-import { MILESTONE_LABEL } from "@shared/competencySignoff";
+import { addMonthsIso } from "./competencySchedule";
+import { MILESTONE_LABEL, ANNUAL_MONTH_MAX_EARLIER_MONTHS } from "@shared/competencySignoff";
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -155,7 +156,10 @@ function deriveRecordStatus(e: any, today: Date): CompetencyStatus {
     const due = parseDate(e.annual_due_at);
     const lastDone = parseDate(e.last_annual_completed_at);
     if (due) {
-      if (lastDone && lastDone.getTime() > due.getTime() - 365 * DAY) {
+      // An annual finished in the last six months before the date on file was this cycle's, done early, on a row whose
+      // date wasn't figured again. A date the lab's annual month moved earlier is never that close to the annual before
+      // it (BUG-203), so it stands; the old 365-day test read it as a cycle already done and showed the year after.
+      if (lastDone && addMonthsIso(lastDone.toISOString().slice(0, 10), ANNUAL_MONTH_MAX_EARLIER_MONTHS) > due.toISOString().slice(0, 10)) {
         const next = new Date(due.getTime() + 365 * DAY);
         nextDue = next; reason = next.getTime() < today.getTime() ? "Annual cycle overdue" : "Annual due";
       } else { nextDue = due; reason = "Annual competency due"; }

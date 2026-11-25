@@ -100,6 +100,7 @@ import { validateClia } from "@shared/validateClia";
 import { isValidIfuUrl } from "@shared/ifu";
 import { incompleteElementCells as compIncompleteCells, incompleteElementCellsByInstrument as compIncompleteCellsByInstrument, aggregateElementStatus as compAggregateElementStatus, itemElementStatus as compItemElementStatus, competencyCycleWindowDays, WAIVED_METHOD_NAMES, WAIVED_METHODS_REQUIRED, waivedMethodPassed, waivedPassedCount, methodGroupCoversInstrument, NEEDS_REVIEW, workingElementStatus, unmarkedElements, methodPassProblem, recordPassProblem } from "@shared/competencyStatus";
 import { competencyDueColumns, competencySeedAtCreate, nextCompetencyDue } from "./competencySchedule";
+import { annualDueChanges, applyAnnualDueChanges } from "./competencyAnnualMonth";
 import { methodSignerOptions, nextMilestoneAfter, milestonesForComplexity, MILESTONE_LABEL, alignAnnualToMonth, MONTH_NAMES, type SignerCandidate, type MethodMilestone } from "@shared/competencySignoff";
 import { isManualMethod, groupProblem, suggestGroups, groupKey } from "@shared/competencyGrouping";
 import { cleanEl5Samples, el5Columns, el5SamplesFromRow } from "@shared/competencyEl5Samples";
@@ -30679,23 +30680,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const lab = sqlite.prepare("SELECT * FROM staff_labs WHERE tier2_lab_id = ?").get(req.scope.labId) as any;
     if (!lab) return res.status(409).json({ error: "Set up this lab in VeritaStaff™ first; the annual month is stored with its staff records." });
     const before = lab.competency_annual_month ?? null;
-    const rows = sqlite.prepare(
-      `SELECT s.employee_id, s.annual_due_at, s.initial_completed_at, s.six_month_completed_at, s.first_annual_completed_at, s.last_annual_completed_at,
-              e.highest_complexity, e.hire_date
-       FROM staff_competency_schedules s JOIN staff_employees e ON e.id = s.employee_id WHERE e.lab_id = ?`
-    ).all(lab.id) as any[];
     let updated = 0;
     sqlite.transaction(() => {
       sqlite.prepare("UPDATE staff_labs SET competency_annual_month = ? WHERE id = ?").run(month, lab.id);
-      const upd = sqlite.prepare("UPDATE staff_competency_schedules SET annual_due_at = ? WHERE employee_id = ?");
-      for (const r of rows) {
-        if (!r.initial_completed_at && !r.six_month_completed_at && !r.first_annual_completed_at && !r.last_annual_completed_at) continue;
-        const due = competencyDueColumns(
-          { accreditor: lab.accreditation_body, nys: lab.includes_nys === 1, highestComplexity: r.highest_complexity, hireDate: r.hire_date, annualMonth: month },
-          { initialCompletedAt: r.initial_completed_at, sixMonthCompletedAt: r.six_month_completed_at, firstAnnualCompletedAt: r.first_annual_completed_at, lastAnnualCompletedAt: r.last_annual_completed_at },
-        );
-        if ((due.annual_due_at ?? null) !== (r.annual_due_at ?? null)) { upd.run(due.annual_due_at, r.employee_id); updated++; }
-      }
+      updated = applyAnnualDueChanges(sqlite, annualDueChanges(sqlite, lab, month));
     })();
     logAudit({
       userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritacomp", action: "update",
@@ -31164,7 +31152,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // ── Signal A: Competency current ──
     // Reuses the same per-employee classification as
     // /competency/dashboard-stats (PR #562). Score = (compliant + dueSoon90) / total.
-    // "Due in 90 days" employees still count toward current because the
+    // "Due within 90 days" employees still count toward current because the
     // lab has runway to address them; "overdue" and "due in 30 days"
     // drag the score.
     const empRows = client.prepare(
@@ -36074,6 +36062,32 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       console.error("[restore-deleted-program]", e?.message || e);
       res.status(500).json({ error: "could not read that copy", code: "COPY_READ_FAILED" });
     }
+  });
+
+  // POST /api/admin/competency/annual-month-refigure { apply? } : VeritaStaff's stored annual due dates, for every lab with an
+  // annual month set, figured again from the completions on file (BUG-202). Reads only unless apply is true. Answers with lab
+  // ids, employee ids and dates; no names. Each lab changed is audit-logged.
+  app.post("/api/admin/competency/annual-month-refigure", (req: any, res) => {
+    if ((req.headers["x-admin-secret"] as string) !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    const sqlite = (db as any).$client;
+    const apply = req.body?.apply === true;
+    const labs: any[] = [];
+    for (const lab of sqlite.prepare("SELECT * FROM staff_labs WHERE competency_annual_month IS NOT NULL ORDER BY id").all() as any[]) {
+      const month = Number(lab.competency_annual_month);
+      const changes = annualDueChanges(sqlite, lab, month);
+      labs.push({ labId: lab.tier2_lab_id, month, changes });
+      if (!apply || !changes.length) continue;
+      sqlite.transaction(() => {
+        applyAnnualDueChanges(sqlite, changes);
+        logAudit({
+          userId: lab.user_id, ownerUserId: lab.user_id, module: "veritacomp", action: "update",
+          entityType: "competency_annual_month", entityId: String(lab.tier2_lab_id),
+          entityLabel: `Annual due dates figured again for the annual month (${changes.length})`,
+          before: Object.fromEntries(changes.map((c) => [c.employeeId, c.before])), after: Object.fromEntries(changes.map((c) => [c.employeeId, c.after])), ipAddress: req.ip,
+        });
+      })();
+    }
+    res.json({ applied: apply, labs });
   });
 
   app.get("/api/admin/competency/not-cleared-audit", (req, res) => {

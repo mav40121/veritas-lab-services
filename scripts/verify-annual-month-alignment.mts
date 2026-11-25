@@ -2,10 +2,10 @@
 //
 // Math receipt for the lab annual competency month (Michael Q157 = 1, 2026-10-13; Sampson REQ-057): a repeat annual
 // already due in the lab's month stays; any other moves EARLIER to the end of the last such month before it, never
-// later. Exercises shared/competencySignoff.ts alignAnnualToMonth directly and through server/competencySchedule.ts
+// later, and by at most six months (BUG-202, 2026-11-25): an annual done in the run-up to the month counts for it. Exercises shared/competencySignoff.ts alignAnnualToMonth directly and through server/competencySchedule.ts
 // competencyDueColumns (VeritaStaff's stored due dates): only the annual moves; the 6-month and first annual do not.
 // Run: npx tsx --tsconfig tsconfig.json scripts/verify-annual-month-alignment.mts
-import { alignAnnualToMonth } from "../shared/competencySignoff";
+import { alignAnnualToMonth, monthsBefore } from "../shared/competencySignoff";
 import { competencyDueColumns } from "../server/competencySchedule";
 
 let failures = 0;
@@ -23,19 +23,26 @@ eq("8. no month set: unchanged", alignAnnualToMonth("2028-11-20", null), "2028-1
 eq("9. month out of range: unchanged", alignAnnualToMonth("2028-11-20", 13), "2028-11-20");
 eq("10. no date: null", alignAnnualToMonth(null, 10), null);
 
-// Never later, always in the month, and never more than 12 months earlier: every day of 2027-2028, every month.
-let later = 0, wrongMonth = 0, tooEarly = 0, n = 0;
+eq("10a. signed 2026-11-24 with December: stays 2027-11-24, not 2026-12-31", alignAnnualToMonth("2027-11-24", 12), "2027-11-24");
+eq("10b. signed 2026-09-15 with October: stays 2027-09-15", alignAnnualToMonth("2027-09-15", 10), "2027-09-15");
+eq("10c. exactly six months earlier still moves (2027-04-30 with October)", alignAnnualToMonth("2027-04-30", 10), "2026-10-31");
+eq("10d. a day past six months stays (2027-05-01 with October)", alignAnnualToMonth("2027-05-01", 10), "2027-05-01");
+eq("10e. six months before the last day of August is the last day of February", monthsBefore("2027-08-31", 6), "2027-02-28");
+
+// Never later, never more than six months earlier, and either in the month or left where it was: every day of 2027-2028, every month.
+let later = 0, wrongMonth = 0, tooEarly = 0, n = 0, moved = 0, kept = 0;
 for (let t = Date.UTC(2027, 0, 1); t <= Date.UTC(2028, 11, 31); t += 86400000) {
   const d = new Date(t).toISOString().slice(0, 10);
   for (let m = 1; m <= 12; m++) {
     const a = alignAnnualToMonth(d, m)!;
     n++;
+    if (a === d) kept++; else moved++;
     if (a > d) later++;
-    if (Number(a.slice(5, 7)) !== m) wrongMonth++;
-    if (Date.parse(d) - Date.parse(a) >= 366 * 86400000) tooEarly++;
+    if (a !== d && Number(a.slice(5, 7)) !== m) wrongMonth++;
+    if (a < monthsBefore(d, 6)) tooEarly++;
   }
 }
-check(`11. ${n} date/month pairs: never later, always in the month, under a year earlier`, later === 0 && wrongMonth === 0 && tooEarly === 0, `later ${later}, wrong month ${wrongMonth}, a year or more early ${tooEarly}`);
+check(`11. ${n} date/month pairs (${moved} moved, ${kept} kept): never later, in the month when moved, at most six months earlier`, moved > 0 && kept > 0 && later === 0 && wrongMonth === 0 && tooEarly === 0, `later ${later}, wrong month ${wrongMonth}, too early ${tooEarly}`);
 
 // Through VeritaStaff's due-date projection (CLIA-only lab, non-waived and waived).
 const ctx = { accreditor: "CLIA_ONLY", nys: false, highestComplexity: "H", hireDate: "2023-12-01" };
