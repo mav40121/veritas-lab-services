@@ -319,6 +319,10 @@ jobs:
         # B3 (BUG-193): a Staff login invite can go to an address with an account; nothing is granted until that person accepts,
         # Staff limits are judged per lab on every request, and no role in another lab is lowered or raised.
         run: npm run test:staff-login-many-labs
+      - name: Run record lab edit tests
+        # BUG-196: a change to a record found by its id is decided in the record's own laboratory. The guard reads Express's routes and
+        # fails when a new by-id change doesn't ask; the other drives each one for every kind of seat and permission.
+        run: npm run test:record-lab-edit
       - name: Run invite accept first test
         # Michael 2026-11-24: an account joins a lab only when its own person accepts, for every kind of invite; a medical director
         # named by an invite acts from acceptance; an invitation that ends puts the designation back; a brand-new address is as before.

@@ -46,7 +46,8 @@
 // inventory mutation endpoints. Same shape sweep landed on veritatrack and
 // veritacheck_verifications in the same PR.
 
-import { legacySeatForUser, staffOnlyInLab } from "./seatContext";
+import { editSeatInLab, legacySeatForUser, managesLab, staffOnlyInLab } from "./seatContext";
+import { effectiveSeatPermission } from "@shared/seatEditRule";
 
 // Loose any to avoid coupling to better-sqlite3's exported type shape; the
 // caller passes the live `$client` instance which has `.prepare(...).get/run/all`.
@@ -116,14 +117,49 @@ export function ownerMatchCounts(sqlite: SqliteLike, userId: unknown, ownerId: u
  */
 export function staffOutsideRecordLab(sqlite: SqliteLike, req: any, rowLabId: unknown): boolean {
   const lab = Number(rowLabId);
-  if (!(lab > 0) || ["GET", "HEAD", "OPTIONS"].includes(String(req?.method || "GET").toUpperCase())) return false;
+  if (!(lab > 0) || isRead(req)) return false;
   if (Number(req?.scope?.labId) === lab) return false;
   return staffOnlyInLab(sqlite, Number(req?.userId ?? req?.user?.userId), lab);
 }
 
-/** For a route that has already matched the record's owner in its own query: the rule above, or an active membership in the record's lab. */
+const isRead = (req: any): boolean => ["GET", "HEAD", "OPTIONS"].includes(String(req?.method || "GET").toUpperCase());
+
+/** Edit on a module in one lab: the lab's owner, an owner or admin of it or of its organization, or a seat there whose permissions say edit. */
+export function moduleEditInLab(sqlite: SqliteLike, labId: number, userId: number, module: string): boolean {
+  if (!(Number(labId) > 0)) return false;
+  if (managesLab(sqlite, userId, labId)) return true;
+  const seat = editSeatInLab(sqlite, userId, labId) as { permissions: string | null; seat_type: string | null } | null;
+  if (!seat) return false;
+  let perms: any = {};
+  try { perms = JSON.parse(seat.permissions || "{}"); } catch {}
+  return effectiveSeatPermission(seat.seat_type, perms, module) === "edit";
+}
+
+/**
+ * BUG-196 (2026-11-24): a change to a record found by its id is decided in the record's own laboratory. requireModuleEdit notes the
+ * module it checked (req.moduleEditChecked) and judges the lab the request is working in; the record helpers below, the
+ * userCanAccess* helpers and any route with its own query ask this about the record's lab. True refuses, and the route answers as
+ * it does for a record out of reach.
+ *   - A read, a record with no lab (the owner rule) and a route with no module edit check (it has its own rule): never refused here,
+ *     except Staff in the record's lab working in another one (B3 above).
+ *   - Otherwise the person needs edit on that module in the record's lab (moduleEditInLab), or one of the two who hold no seat or
+ *     membership there and work in it as before: Veritas support the lab lets in, and an older seat (ownerMatchCounts).
+ */
+export function editRefusedInRecordLab(sqlite: SqliteLike, req: any, rowLabId: unknown): boolean {
+  if (staffOutsideRecordLab(sqlite, req, rowLabId)) return true;
+  const lab = Number(rowLabId), module = req?.moduleEditChecked;
+  if (!module || !(lab > 0) || isRead(req)) return false;
+  const userId = Number(req.userId ?? req.user?.userId), ownerId = Number(req.ownerUserId ?? userId);
+  if (moduleEditInLab(sqlite, lab, userId, module)) return false;
+  if (req.scope?.viaVlsSupport && Number(req.scope.labId) === lab) return false;
+  if (editSeatInLab(sqlite, userId, lab)) return true;
+  if (sqlite.prepare("SELECT 1 FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active' LIMIT 1").get(lab, userId)) return true;
+  return ownerId === userId || !ownerMatchCounts(sqlite, userId, ownerId, lab);
+}
+
+/** For a route that has already matched the record's owner in its own query: the rules above, or an active membership in the record's lab. */
 export function ownerRowInReach(sqlite: SqliteLike, userId: unknown, ownerId: unknown, rowLabId: unknown, req?: any): boolean {
-  if (req && staffOutsideRecordLab(sqlite, req, rowLabId)) return false;
+  if (req && editRefusedInRecordLab(sqlite, req, rowLabId)) return false;
   if (ownerMatchCounts(sqlite, userId, ownerId, rowLabId)) return true;
   return !!sqlite.prepare("SELECT 1 FROM lab_members WHERE lab_id = ? AND user_id = ? AND status = 'active' LIMIT 1").get(rowLabId, userId);
 }
@@ -151,6 +187,7 @@ export function resolveRowForMutation<T = any>(
   if (row.lab_id != null && Number((req as any).scope?.labId) !== Number(row.lab_id) && staffOnlyInLab(sqlite, Number(userId), Number(row.lab_id))) {
     return { row: null, status: 403 };
   }
+  if (editRefusedInRecordLab(sqlite, req, row.lab_id)) return { row: null, status: 403 };
 
   // Legacy direct ownership: row[ownerColumn] matches the requester, and the owner match counts for this row's lab
   if (row[ownerCol] != null && row[ownerCol] === ownerId && ownerMatchCounts(sqlite, userId, ownerId, row.lab_id)) {

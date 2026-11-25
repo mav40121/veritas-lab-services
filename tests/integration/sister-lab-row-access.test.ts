@@ -220,7 +220,8 @@ async function main() {
     const MIXED = await register("Mixed");
     member(labA, MIXED.id); member(labB, MIXED.id); seat(OWNER.id, MIXED, labA);
     await expectReads("seat in lab A, member of lab B", MIXED.token, inB, "lab B", "open");
-    await expectWrites("seat in lab A, member of lab B", MIXED.token, inB, "lab B", "open");
+    // A member of B with no seat there is view only in B, so a change to B's records is refused (BUG-196: the record's own lab decides).
+    await expectWrites("seat in lab A, member of lab B", MIXED.token, inB, "lab B", "refused");
     await expectReads("seat in lab A, member of lab B", MIXED.token, inHome, "the owner's home lab", "refused");
 
     // ── An older seat with no lab on it keeps the owner match ─────────────────

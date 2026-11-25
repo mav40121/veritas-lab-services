@@ -8,7 +8,7 @@ import { logAudit } from "./audit";
 import { logConsumption } from "./consumptionLedger";
 import { logCount } from "./countLedger";
 import { addLot, reconcileLots } from "./inventoryLots";
-import { resolveLegacyLabId, ownerMatchCounts, ownerRowInReach, staffOutsideRecordLab } from "./labAccessGuard";
+import { resolveLegacyLabId, ownerMatchCounts, ownerRowInReach, editRefusedInRecordLab } from "./labAccessGuard";
 import { blockNonOperatorSeat } from "./seatAccess";
 import { DEMO_USER_EMAIL } from "./constants";
 import { labLocalDate, labToday } from "./dateLocal";
@@ -1697,8 +1697,8 @@ export function registerVeritaBenchRoutes(
     if (!item) return { item: null, status: 404 };
     const userId = req.userId;
     const ownerId = req.ownerUserId ?? req.userId;
-    // B3: only Staff in the item's lab, working in another one.
-    if (staffOutsideRecordLab(sqlite, req, item.lab_id)) return { item: null, status: 403 };
+    // Decided in the item's own lab (BUG-196; B3's Staff rule is part of it).
+    if (editRefusedInRecordLab(sqlite, req, item.lab_id)) return { item: null, status: 403 };
     // Legacy account_id direct match (single-tenant case), where the owner match counts for this item's lab (Michael Q191 = 1)
     if (item.account_id === ownerId && ownerMatchCounts(sqlite, userId, ownerId, item.lab_id)) return { item, status: 200 };
     // Multi-lab: any active member of the item's lab can mutate
