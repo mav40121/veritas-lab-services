@@ -94,7 +94,9 @@ async function main() {
   check("3f. nothing was written or mailed by any refusal", one("SELECT assignee_user_id FROM findings WHERE id = ?", f1).assignee_user_id === ADMIN_A.id && one("SELECT assignee_user_id FROM findings WHERE id = ?", fX).assignee_user_id === null && sent.length === before3 && hist(f1).length === 4);
 
   // ── 4. Reminders ──────────────────────────────────────────────────────────
-  const inDays = (n: number) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
+  // The lab's own day, as the job counts it; the UTC day is already tomorrow after 7 PM Eastern.
+  const { addLabDays, labTimeZoneById, labToday } = await import("../../server/dateLocal");
+  const inDays = (n: number) => addLabDays(labToday(labTimeZoneById(sqlite, A)), n);
   const rem = async () => { const id = await mk(A, EDITOR); sqlite.prepare("UPDATE findings SET due_date = ? WHERE id = ?").run(inDays(7), id); return id; };
   const [rNone, rOther, rOwner, rGone] = [await rem(), await rem(), await rem(), await rem()];
   const GONE = await w.login("gone", "Gil Gone"); w.member(A, GONE);
