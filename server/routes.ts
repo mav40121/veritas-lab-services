@@ -4821,7 +4821,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     }
     const sqlite = (db as any).$client;
     const lot = sqlite.prepare(
-      "SELECT id, analyte, status, out_of_use_date, held_date FROM qc_control_lots WHERE id = ? AND lab_id = ?"
+      "SELECT id, analyte, level, lot_number, status, out_of_use_date, held_date FROM qc_control_lots WHERE id = ? AND lab_id = ?"
     ).get(Number(control_lot_id), req.scope.labId) as any;
     if (!lot) return res.status(404).json({ error: "Control lot not found in this lab" });
     // The screen stops a run on a lot that isn't active; the server took any. Now it takes one dated on or before the day the lot was
@@ -4849,6 +4849,17 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
     // Judged by server/qcRuns.ts, the same code a run read from a file goes through.
     const judged = judgeQcRun(sqlite, req.scope.labId, Number(control_lot_id), newResultId, qcRunSettings(sqlite, req.scope.labId, lot.analyte), now);
+    // BUG-199: a typed run left no audit row. An imported one is in its import's (server/qcFileImport.ts).
+    logAudit({
+      userId: req.userId, ownerUserId: req.scope.lab?.owner_user_id ?? req.userId, module: "veritaqc", action: "create",
+      entityType: "qc_result", entityId: newResultId, entityLabel: `${lot.analyte} ${lot.level} lot ${lot.lot_number}: ${Number(result_value)} on ${String(result_date)}`,
+      after: {
+        lab_id: req.scope.labId, control_lot_id: Number(control_lot_id), result_value: Number(result_value), result_date: String(result_date), run_time: run_time || null,
+        instrument: instrumentText, map_instrument_id: mapInst ? mapInst.id : null, comment: comment || null, rules_fired: judged.violations.map((v) => v.rule_code),
+        requires_corrective_action: judged.requires_corrective_action, basis_source: judged.basis?.source ?? null,
+      },
+      ipAddress: req.ip,
+    });
     res.json({
       ok: true,
       result_id: newResultId,
@@ -5322,11 +5333,22 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const reason = String(req.body?.reason ?? "").trim();
     if (!reason) return res.status(400).json({ error: "A reason is required to void a QC result" });
     const sqlite = (db as any).$client;
-    const row = sqlite.prepare("SELECT id, voided_at FROM qc_results WHERE id = ? AND lab_id = ?").get(id, req.scope.labId) as any;
+    const row = sqlite.prepare(
+      "SELECT r.id, r.voided_at, r.control_lot_id, r.result_value, r.result_date, r.run_time, r.instrument, r.accepted_for_reporting, l.analyte, l.level, l.lot_number FROM qc_results r JOIN qc_control_lots l ON l.id = r.control_lot_id WHERE r.id = ? AND r.lab_id = ?"
+    ).get(id, req.scope.labId) as any;
     if (!row) return res.status(404).json({ error: "QC result not found in this lab" });
     if (row.voided_at) return res.status(409).json({ error: "This result is already voided" });
     voidQcRun(sqlite, id, req.userId, reason);
     const findings = settleFindingsForVoidedRun(sqlite, req, id, reason);
+    // BUG-199: a void left its own columns and no audit row. An import taken back is in its own (server/qcFileImport.ts).
+    const { analyte, level, lot_number, id: _id, ...before } = row;
+    logAudit({
+      userId: req.userId, ownerUserId: req.scope.lab?.owner_user_id ?? req.userId, module: "veritaqc", action: "update",
+      entityType: "qc_result.void", entityId: id, entityLabel: `${analyte} ${level} lot ${lot_number}: ${row.result_value} on ${row.result_date}`,
+      before: { ...before, lab_id: req.scope.labId },
+      after: { ...before, lab_id: req.scope.labId, voided_at: (sqlite.prepare("SELECT voided_at FROM qc_results WHERE id = ?").get(id) as any).voided_at, voided_by_user_id: req.userId, void_reason: reason, findings },
+      ipAddress: req.ip,
+    });
     res.json({ ok: true, id, findings });
   });
 

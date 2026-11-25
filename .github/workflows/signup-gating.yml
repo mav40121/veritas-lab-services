@@ -411,6 +411,9 @@ jobs:
       - name: Run VeritaMaintain schedule migration integration test
         # Booting on a database from before schedules moves no due date and gives each instrument its first schedule once.
         run: npm run test:maintain-schedule-migration
+      - name: Run VeritaQC run audit integration test
+        # BUG-199: a typed run and a void each write one audit row (who, when, before, after).
+        run: npm run test:qc-run-audit
       - name: Run VeritaQC voided runs integration test
         # BUG-198: a run voided by hand is left out of the chart across lots, the feed's lists, readiness, the analyzer's run counts and
         # every VeritaCheck import, and shows only where it is marked voided.
