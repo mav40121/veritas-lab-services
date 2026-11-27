@@ -82,20 +82,8 @@ export function signerFor(sqlite: Sqlite, labId: number | null | undefined, user
   return { signer: { capacity: "designee", label: designeeLabel(a.position), delegationId: a.delegationId ?? null } };
 }
 
-/**
- * The B4 signing requests a view-only seat may make (B4 review, 2026-11-27): signing a plan, a package, a study, a package analyte
- * or a sign-off group. authMiddleware refuses every other write from a view-only seat; these routes decide by the signer's
- * qualification in the record's own laboratory (signerFor), so a director on a view-only seat signs and anyone else on one is
- * refused there. POST only, exact paths, numeric ids.
- */
-const SIGNING_PATHS = [
-  /^\/api\/(labs\/\d+\/)?studies\/\d+\/finalize$/,
-  /^\/api\/labs\/\d+\/veritacheck\/signoff-groups\/\d+\/sign$/,
-  /^\/api\/veritacheck\/verifications\/\d+\/(sign|plan\/sign|analytes\/\d+\/finalize)$/,
-];
-export function isQualifiedSigningRequest(method: string, path: string): boolean {
-  return String(method).toUpperCase() === "POST" && SIGNING_PATHS.some((re) => re.test(String(path || "")));
-}
+// A director or designee on a view-only seat signs these records: their routes are on the one allow-list of signatures a view-only
+// seat may make, server/qualifiedSigning.ts QUALIFIED_SIGNING_ROUTES (B4 review), because they decide by signerFor.
 
 /** A Staff login here: an active Staff seat in this lab and no other active seat, and not the lab's owner or admin. */
 function staffLoginOnly(sqlite: Sqlite, labId: number, userId: number): boolean {

@@ -12,7 +12,8 @@ import { isReservedTestAddress, isHoneypotFilled, newsletterRateLimitOk, newslet
 import { blockNonOperatorSeat } from "./seatAccess";
 import { isDelegationPosition, isDelegationComplexity, sanitizeResponsibilities, DELEGATION_CATALOG, DELEGATION_POSITIONS, DELEGATION_COMPLEXITIES } from "./directorDelegation";
 import { mayAttestAsDirectorOrDesignee, complexityForAnalyte, labHighestComplexity, isLabOwnerUser } from "./delegationGate";
-import { isQualifiedSigningRequest, readSignature, signAs, signatureColumns, studyComplexity, studiesComplexity, type Signature } from "./verificationSignatures";
+import { readSignature, signAs, signatureColumns, studyComplexity, studiesComplexity, type Signature } from "./verificationSignatures";
+import { isQualifiedSigningRequest } from "./qualifiedSigning";
 import { vlsContext, isVlsSupportUser, labAllowsVlsSupport, vlsSupportBlocked, recordVlsActivity } from "./vlsSupport";
 import { foldInviteDuplicates, linkInvitedMemberToRoster, membersNotOnRoster, reattachOrphanStaffInvites, rosterLinkProblem, rosterRowForInvite, rosterStaffStatus } from "./rosterMembers";
 import { buildStaffListWorkbook, staffListRows } from "./staffListExport";
@@ -1174,8 +1175,9 @@ function authMiddleware(req: any, res: any, next: any) {
       !['GET', 'HEAD', 'OPTIONS'].includes(req.method) &&
       // B3: answering your own invitation is about your sign-in, not about the lab where you are a reviewer.
       !String(req.path || "").startsWith("/api/me/lab-invites/") &&
-      // B4 review: a director or named designee on a view-only seat signs VeritaCheck verification records; those routes decide
-      // by qualification in the record's own laboratory (server/verificationSignatures.ts isQualifiedSigningRequest, signerFor).
+      // B4 review, BUG-204: a director or designee on a view-only seat signs. Only the signatures on the one allow-list
+      // (server/qualifiedSigning.ts QUALIFIED_SIGNING_ROUTES) pass; each decides by the signer's qualification in the record's
+      // own laboratory and refuses anyone else on a view-only seat itself. Every other write stays refused here.
       !isQualifiedSigningRequest(req.method, req.path)
     ) {
       return res.status(403).json({
@@ -5588,6 +5590,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // POST /api/labs/:labId/qc/period-reviews/md-cosign — the lab's designated
   // Medical Director co-signs a filed monthly review. Only the MD may co-sign,
   // and only after the reviewer has filed the attestation.
+  // BUG-204: a director or designee on a view-only seat co-signs here too (server/qualifiedSigning.ts); the check below decides.
   app.post("/api/labs/:labId/qc/period-reviews/md-cosign", authMiddleware, labScopeMiddleware, (req: any, res) => {
     const { control_lot_id, period_year, period_month, typed_name } = req.body || {};
     if (!control_lot_id || !period_year || !period_month) {

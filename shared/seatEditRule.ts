@@ -17,8 +17,9 @@ export const STAFF_SEAT_CAN_EDIT = false as const;
 
 /**
  * Seat types that never pass a module edit check. 'staff_portal' is the Staff login (read and sign). 'view_only' is the
- * reviewer seat: authMiddleware already refuses it every write (its view_only gate), so listing it here only keeps the edit
- * check and the screens saying the same thing as that gate. 'active' is a writer seat and reads its permissions as before.
+ * reviewer seat: authMiddleware already refuses it every write but the signatures on server/qualifiedSigning.ts's list (its
+ * view_only gate), so listing it here only keeps the edit check and the screens saying the same thing as that gate. 'active' is
+ * a writer seat and reads its permissions as before.
  */
 export const READ_ONLY_SEAT_TYPES: readonly string[] = ["staff_portal", "view_only"];
 

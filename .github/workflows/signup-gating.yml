@@ -735,3 +735,6 @@ jobs:
       - name: Run detection-limit factor integration test
         # BUG-190: new LoD studies use the CLSI EP17-A2 formula with their own L and K; saved studies keep their result.
         run: npm run test:lod-cbeta-formula
+      - name: Run director signs on a view-only seat integration test
+        # BUG-204: a director or designee on a view-only seat makes the signatures on server/qualifiedSigning.ts's list; every other write stays refused.
+        run: npm run test:director-sign-view-only
