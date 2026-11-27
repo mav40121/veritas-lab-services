@@ -185,6 +185,7 @@ async function main() {
       { route: "/api/veritacheck/verifications/:id/analytes", url: `/api/veritacheck/verifications/${verification}/analytes` },
       { route: "/api/veritacheck/verifications/:id/map-analytes", url: `/api/veritacheck/verifications/${verification}/map-analytes` },
       { route: "/api/veritacheck/verifications/:id/suggest-studies", url: `/api/veritacheck/verifications/${verification}/suggest-studies` },
+      { route: "/api/veritacheck/verifications/:id/signing", url: `/api/veritacheck/verifications/${verification}/signing` },
       { route: "/api/staffing-studies/:id", url: `/api/staffing-studies/${staffing}` },
       { route: "/api/staffing-studies/:id/export", url: `/api/staffing-studies/${staffing}/export` },
       { route: "/api/veritaops/studies/:id", url: `/api/veritaops/studies/${costStudy}` },

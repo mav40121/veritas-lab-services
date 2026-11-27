@@ -1183,20 +1183,36 @@ function directorReviewHTML(study?: any, appendExclusions = true): string {
   const signer = String((study && (study.finalized_signature ?? "")) || "").trim();
   const signedOn = labLocalDate(study?.finalized_at);
   const signed = finalized && !!signer;
+  // B4 (2026-11-27, Q3 = 1; server/verificationSignatures.ts): a study signed with name, password and role prints the signer's
+  // own choice of Accepted or Not accepted, "(electronically signed)", the title and how it was signed. A study signed before
+  // that prints exactly as it always did, Accepted marked by the rule below, so a reprint never looks less accepted than the copy
+  // the lab filed (B4 review), with a line saying it was recorded with a typed name and no password, never "electronically signed".
   // Only auto-mark "Accepted for patient testing" for a signed study whose
   // statistical verdict is not FAIL. A signed FAIL still shows the signature +
   // date (the review happened) but leaves the accept/not-accept boxes for the
   // director to mark, so the report never asserts acceptance on a failed run.
   const accepted = signed && String((study && study.status) || "").toLowerCase() !== "fail";
+  // signed_with (S0's column): 'password', or 'sso' with the hospital's name. Empty on a study signed before.
+  const eSigned = signed && (study.signed_with === "password" || study.signed_with === "sso");
+  const how = study?.signed_with === "sso" ? `with ${study.signed_with_provider || "hospital"} sign-in` : "with name and password";
+  const decision = eSigned && (study.finalized_decision === "accepted" || study.finalized_decision === "not_accepted") ? study.finalized_decision : null;
+  const asWho = study?.finalized_capacity === "medical_director" ? "the medical director"
+    : String(study?.finalized_capacity_label || "a designee").replace(/^Designee, /, "a designee, ");
+  const note = !signed ? null
+    : eSigned ? `Signed in VeritaCheck\u00AE ${how}, as ${asWho}.`
+    : `Recorded in VeritaCheck\u00AE on ${signedOn} with a typed name and no password or role check, before name-and-password signing.`;
 
   return reviewBlockHTML({
     statement: `"I have reviewed these results against my laboratory's established performance specifications and applicable regulatory requirements."`,
     acceptLabel: "Accepted for patient testing",
-    accepted,
+    accepted: !eSigned && accepted,
+    decision,
     signature: signed ? signer : null,
-    signatureNote: "(electronically signed)",
+    signatureNote: eSigned ? "(electronically signed)" : "(typed, not a password signature)",
     date: signed ? signedOn : null,
     printName: signed ? signer : null,
+    title: eSigned ? String(study.finalized_title || study.finalized_capacity_label || "") || null : null,
+    note,
   }) + `${study && appendExclusions ? excludedAndDeterminationHTML(study) : ""}`;
 }
 
@@ -1210,6 +1226,10 @@ export interface ReviewBlockOptions {
   statement: string;
   acceptLabel: string;
   accepted: boolean;
+  /** B4: the signer's own choice; overrides `accepted` when given. "not_accepted" marks Not accepted. */
+  decision?: "accepted" | "not_accepted" | null;
+  /** B4: one plain line under the block saying how the signature was recorded. Escaped. */
+  note?: string | null;
   signature?: string | null;
   signatureNote?: string;
   date?: string | null;
@@ -1217,9 +1237,12 @@ export interface ReviewBlockOptions {
   title?: string | null;
 }
 export function reviewBlockHTML(o: ReviewBlockOptions): string {
-  const acceptRow = o.accepted
+  const acceptRow = o.accepted || o.decision === "accepted"
     ? `<span style="margin-right:18px;font-weight:700;color:#01696F;">\u2611 ${escapeHtml(o.acceptLabel)}</span>
        <span style="color:#9a9a9a;">\u25CB Not accepted</span>`
+    : o.decision === "not_accepted"
+    ? `<span style="margin-right:18px;color:#9a9a9a;">\u25CB ${escapeHtml(o.acceptLabel)}</span>
+       <span style="font-weight:700;color:#01696F;">\u2611 Not accepted</span>`
     : `<span style="margin-right:18px;">\u25CB ${escapeHtml(o.acceptLabel)}</span>
        <span>\u25CB Not accepted</span>`;
   const sigCell = o.signature
@@ -1239,14 +1262,17 @@ export function reviewBlockHTML(o: ReviewBlockOptions): string {
         <div style="font-size:6.5pt;color:#888;">Title</div>`
     : `<div style="font-size:6.5pt;color:#888;margin-top:8px;">Title</div>`;
 
+  // B4: the note line is paid for out of the block's own spacing, so the block is no taller and nothing leaves page 1
+  // (scripts/verify-multi-analyzer-signature-page1.ts has 2px to spare on its tightest study).
+  const t = !!o.note;
   return `
-  <div style="margin-top:4px;border:1px solid #D4D1CA;border-left:4px solid #01696F;border-radius:5px;padding:6px 12px;background:#FAFAF8;break-inside:avoid;page-break-inside:avoid;">
+  <div style="margin-top:4px;border:1px solid #D4D1CA;border-left:4px solid #01696F;border-radius:5px;padding:${t ? "4px 12px 3px" : "6px 12px"};background:#FAFAF8;break-inside:avoid;page-break-inside:avoid;">
     <div style="font-size:8pt;font-weight:700;color:#01696F;margin-bottom:4px;letter-spacing:0.04em;text-transform:uppercase;">Laboratory Director or Designee Review</div>
-    <p style="font-size:7.5pt;color:#28251D;line-height:1.4;margin:0 0 5px 0;font-style:italic;">${o.statement}</p>
+    <p style="font-size:7.5pt;color:#28251D;line-height:1.4;margin:0 0 ${t ? 3 : 5}px 0;font-style:italic;">${o.statement}</p>
     <div style="font-size:8pt;color:#28251D;margin-bottom:2px;">
       ${acceptRow}
     </div>
-    <div style="display:flex;gap:16px;margin-top:6px;">
+    <div style="display:flex;gap:16px;margin-top:${t ? 3 : 6}px;">
       <div style="flex:3;border-bottom:1px solid #999;padding-bottom:2px;">
         ${sigCell}
       </div>
@@ -1254,14 +1280,15 @@ export function reviewBlockHTML(o: ReviewBlockOptions): string {
         ${dateCell}
       </div>
     </div>
-    <div style="display:flex;gap:16px;margin-top:4px;">
+    <div style="display:flex;gap:16px;margin-top:${t ? 2 : 4}px;">
       <div style="flex:3;border-bottom:1px solid #999;padding-bottom:2px;">
         ${nameCell}
       </div>
       <div style="flex:1;border-bottom:1px solid #999;padding-bottom:2px;">
         ${titleCell}
       </div>
-    </div>
+    </div>${o.note ? `
+    <div style="font-size:6.5pt;line-height:1.15;color:#555;margin-top:2px;">${escapeHtml(o.note)}</div>` : ""}
   </div>`;
 }
 

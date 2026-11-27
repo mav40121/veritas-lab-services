@@ -12,6 +12,13 @@ export const SIGNATURE_PURPOSES = [
   "policy_recertify",
   "policy_attest",
   "maintain_review",
+  // B4 (server/verificationSignatures.ts VERIFICATION_PURPOSES): a VeritaCheck verification plan, package, study, package analyte
+  // and sign-off group.
+  "verification_plan",
+  "verification_package",
+  "verification_study",
+  "verification_analyte",
+  "verification_signoff_group",
 ] as const;
 export type SignaturePurpose = (typeof SIGNATURE_PURPOSES)[number];
 export const isSignaturePurpose = (p: unknown): p is SignaturePurpose =>

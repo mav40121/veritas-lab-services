@@ -8,9 +8,10 @@
 // (test-system appropriateness, safety, onsite visits, signing/approving policies) are
 // NON-delegable and intentionally do not appear here.
 //
-// Two items carry a `gate`: they map to live access checks wired in Phase 2 (QC period
-// review co-sign; corrective-action / finding closure). The rest are documented
-// delegations with no software gate yet.
+// Items with a `gate` map to live access checks: QC period review co-sign and corrective-action / finding closure (Phase 2),
+// the monthly equipment record review, and (B4, 2026-11-27) verify_method, which lets a designee sign a VeritaCheck
+// verification plan, package, study, package analyte or sign-off group (server/verificationSignatures.ts). The rest are
+// documented delegations with no software gate yet.
 
 export type DelegationPosition =
   | "clinical_consultant"
@@ -19,7 +20,7 @@ export type DelegationPosition =
   | "general_supervisor";
 
 export type DelegationComplexity = "moderate" | "high";
-export type DelegationGate = "qc_period_cosign" | "finding_closure" | "equipment_record_review";
+export type DelegationGate = "qc_period_cosign" | "finding_closure" | "equipment_record_review" | "verify_method";
 
 export interface DelegationItem {
   key: string;
@@ -41,7 +42,7 @@ export const DELEGATION_CATALOG: DelegationItem[] = [
   // Technical Consultant / Technical Supervisor - general testing
   { key: "select_method", group: "General laboratory testing", positions: TC_TS,
     label: "Select the appropriate test methodology." },
-  { key: "verify_method", group: "General laboratory testing", positions: TC_TS,
+  { key: "verify_method", group: "General laboratory testing", positions: TC_TS, gate: "verify_method",
     label: "Verify test method performance (accuracy and precision) before use." },
   { key: "qc_program", group: "General laboratory testing", positions: TC_TS,
     label: "Establish and maintain the QA and QC programs." },

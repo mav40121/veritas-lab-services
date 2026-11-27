@@ -42,12 +42,24 @@ const POLICY_DECISION: Wording = {
   noPassword: "User has no password set; cannot sign electronically",
   wrong: "Password incorrect; signature not recorded",
 };
+// B4 (server/verificationSignatures.ts): the words its routes answered with before the switch to this check.
+export const VERIFICATION_WORDING: Wording = {
+  name: "Type your full name to sign.",
+  credential: "Enter your password to sign. Initials or a name alone are not a signature.",
+  noPassword: "User has no password set; cannot sign electronically",
+  wrong: "Password incorrect; signature not recorded",
+};
 const WORDING: Record<SignaturePurpose, Wording> = {
   policy_decision: POLICY_DECISION,
   policy_bulk_approve: POLICY_DECISION,
   policy_recertify: { name: "typedSignature required", credential: "password required", noPassword: "User has no password set", wrong: "Password incorrect; re-certification not recorded" },
   policy_attest: { name: "typedSignature required", credential: "password required for electronic signature", noPassword: "User has no password set", wrong: "Password incorrect; attestation not recorded" },
   maintain_review: { name: "Type your full name to sign", credential: "Enter your password to sign", noPassword: "User has no password set", wrong: "Password incorrect; the review was not signed" },
+  verification_plan: VERIFICATION_WORDING,
+  verification_package: VERIFICATION_WORDING,
+  verification_study: VERIFICATION_WORDING,
+  verification_analyte: VERIFICATION_WORDING,
+  verification_signoff_group: VERIFICATION_WORDING,
 };
 
 export const ACCOUNT_LOCKED_TEXT = "This account is locked after too many wrong passwords. Use Forgot password to set a new one, or ask your lab owner to unlock it.";

@@ -2252,6 +2252,22 @@ try {
   if (!sgCols.includes("signed_by_user_id")) { try { sqlite.exec("ALTER TABLE study_signoff_groups ADD COLUMN signed_by_user_id INTEGER"); } catch {} }
 }
 try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_signoff_groups_lab ON study_signoff_groups(lab_id)"); } catch {}
+// B4 (2026-11-27; server/verificationSignatures.ts): a study, a package analyte and a sign-off group are signed with name,
+// password, role and Accepted or Not accepted. signed_with / signed_with_provider say how (S0's columns: 'password', or 'sso'
+// and the hospital's name). A row signed before keeps what it holds and has no signed_with, so its PDF says it was typed.
+// Additive, guarded by PRAGMA table_info.
+{
+  const add = (table: string, cols: Array<[string, string]>) => {
+    const have = (sqlite.prepare(`PRAGMA table_info(${table})`).all() as any[]).map((c: any) => c.name);
+    for (const [name, decl] of cols) if (!have.includes(name)) { try { sqlite.exec(`ALTER TABLE ${table} ADD COLUMN ${name} ${decl}`); } catch {} }
+  };
+  const signed: Array<[string, string]> = [
+    ["finalized_decision", "TEXT"], ["signed_with", "TEXT"], ["signed_with_provider", "TEXT"], ["finalized_capacity", "TEXT"],
+    ["finalized_capacity_label", "TEXT"], ["finalized_title", "TEXT"], ["finalized_delegation_id", "INTEGER"],
+  ];
+  add("studies", signed);
+  add("study_signoff_groups", [["signed_signature", "TEXT"], ["signed_decision", "TEXT"], ["signed_with", "TEXT"], ["signed_with_provider", "TEXT"], ["signed_capacity_label", "TEXT"]]);
+}
 try { sqlite.exec("ALTER TABLE studies ADD COLUMN signoff_group_id INTEGER"); } catch {}
 try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_studies_signoff_group ON studies(signoff_group_id)"); } catch {}
 
@@ -5759,7 +5775,84 @@ try {
   // 2026-06-09 (overnight session 6/11): analyte amendment workflow.
   // Mirrors amends_study_id on studies (PR #693).
   if (!vcaCols.includes("amends_analyte_id"))    sqlite.exec("ALTER TABLE veritacheck_verification_analytes ADD COLUMN amends_analyte_id INTEGER");
+  // B4 (2026-11-27): the analyte's signature as a study's (server/verificationSignatures.ts signatureColumns).
+  if (!vcaCols.includes("finalized_decision"))       sqlite.exec("ALTER TABLE veritacheck_verification_analytes ADD COLUMN finalized_decision TEXT");
+  if (!vcaCols.includes("signed_with"))              sqlite.exec("ALTER TABLE veritacheck_verification_analytes ADD COLUMN signed_with TEXT");
+  if (!vcaCols.includes("signed_with_provider"))     sqlite.exec("ALTER TABLE veritacheck_verification_analytes ADD COLUMN signed_with_provider TEXT");
+  if (!vcaCols.includes("finalized_capacity"))       sqlite.exec("ALTER TABLE veritacheck_verification_analytes ADD COLUMN finalized_capacity TEXT");
+  if (!vcaCols.includes("finalized_capacity_label")) sqlite.exec("ALTER TABLE veritacheck_verification_analytes ADD COLUMN finalized_capacity_label TEXT");
+  if (!vcaCols.includes("finalized_title"))          sqlite.exec("ALTER TABLE veritacheck_verification_analytes ADD COLUMN finalized_title TEXT");
+  if (!vcaCols.includes("finalized_delegation_id"))  sqlite.exec("ALTER TABLE veritacheck_verification_analytes ADD COLUMN finalized_delegation_id INTEGER");
 } catch (e) { console.warn("veritacheck_verification_analytes migration:", e); }
+
+// B4 (2026-11-27; server/verificationSignatures.ts). A verification package's plan, one row per version: the medical director or
+// a designee signs it before testing, and a change after signing is a new version (the signed one stays). And each signature of
+// the finished package, with what it covered (parts_json, covers_json) and the page 1 it was signed on (page_html); a newer one
+// replaces it (replaces_signature_id) and nothing is overwritten.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS veritacheck_verification_plans (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    verification_id INTEGER NOT NULL,
+    lab_id INTEGER,
+    version INTEGER NOT NULL DEFAULT 1,
+    rows_json TEXT NOT NULL DEFAULT '[]',
+    written_by_user_id INTEGER,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    signed_at TEXT,
+    signed_by_user_id INTEGER,
+    typed_signature TEXT,
+    capacity TEXT,
+    capacity_label TEXT,
+    delegation_id INTEGER,
+    signed_with TEXT,
+    signed_with_provider TEXT,
+    rows_hash TEXT,
+    superseded_at TEXT,
+    FOREIGN KEY (verification_id) REFERENCES veritacheck_verifications(id)
+  )
+`);
+sqlite.exec("CREATE INDEX IF NOT EXISTS idx_vc_verification_plans_verification ON veritacheck_verification_plans(verification_id)");
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS veritacheck_verification_signatures (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    verification_id INTEGER NOT NULL,
+    lab_id INTEGER,
+    signed_at TEXT NOT NULL,
+    signed_by_user_id INTEGER NOT NULL,
+    typed_signature TEXT NOT NULL,
+    title TEXT,
+    capacity TEXT NOT NULL,
+    capacity_label TEXT NOT NULL,
+    delegation_id INTEGER,
+    decision TEXT NOT NULL,
+    signed_with TEXT NOT NULL,
+    signed_with_provider TEXT,
+    fingerprint TEXT NOT NULL,
+    parts_json TEXT NOT NULL DEFAULT '[]',
+    covers_json TEXT NOT NULL DEFAULT '{}',
+    page_html TEXT,
+    replaces_signature_id INTEGER,
+    ip_address TEXT,
+    user_agent TEXT,
+    FOREIGN KEY (verification_id) REFERENCES veritacheck_verifications(id)
+  )
+`);
+sqlite.exec("CREATE INDEX IF NOT EXISTS idx_vc_verification_signatures_verification ON veritacheck_verification_signatures(verification_id)");
+// Migration blocks paired with the two CREATEs (NEW DB TABLE RULE). Every column is in the CREATE, so these no-op today.
+try {
+  const vpCols = (sqlite.prepare("PRAGMA table_info(veritacheck_verification_plans)").all() as any[]).map((c: any) => c.name);
+  for (const [name, decl] of [
+    ["lab_id", "INTEGER"], ["version", "INTEGER NOT NULL DEFAULT 1"], ["rows_json", "TEXT NOT NULL DEFAULT '[]'"], ["written_by_user_id", "INTEGER"],
+    ["updated_at", "TEXT"], ["signed_at", "TEXT"], ["signed_by_user_id", "INTEGER"], ["typed_signature", "TEXT"], ["capacity", "TEXT"],
+    ["capacity_label", "TEXT"], ["delegation_id", "INTEGER"], ["signed_with", "TEXT"], ["signed_with_provider", "TEXT"], ["rows_hash", "TEXT"], ["superseded_at", "TEXT"],
+  ]) if (!vpCols.includes(name)) sqlite.exec(`ALTER TABLE veritacheck_verification_plans ADD COLUMN ${name} ${decl}`);
+  const vsCols = (sqlite.prepare("PRAGMA table_info(veritacheck_verification_signatures)").all() as any[]).map((c: any) => c.name);
+  for (const [name, decl] of [
+    ["lab_id", "INTEGER"], ["title", "TEXT"], ["delegation_id", "INTEGER"], ["signed_with_provider", "TEXT"], ["parts_json", "TEXT NOT NULL DEFAULT '[]'"],
+    ["covers_json", "TEXT NOT NULL DEFAULT '{}'"], ["page_html", "TEXT"], ["replaces_signature_id", "INTEGER"], ["ip_address", "TEXT"], ["user_agent", "TEXT"],
+  ]) if (!vsCols.includes(name)) sqlite.exec(`ALTER TABLE veritacheck_verification_signatures ADD COLUMN ${name} ${decl}`);
+} catch (e) { console.warn("veritacheck verification plans/signatures migration:", e); }
 
 // Idempotent backfill: every legacy verification gets a one-analyte
 // degenerate-case row so the new renderer + endpoints can rely on

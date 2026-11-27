@@ -56,7 +56,8 @@ async function main() {
   try {
     // ── Setup: made-up labs, maps and scans ─────────────────────────────────────────────────────────────────────────
     const email = `scanevidence-${Date.now()}@example.test`;
-    const T = (await call("POST", "/api/auth/register", { email, password: ["Scan", "evid", "77!"].join("-"), name: "Owner Madeup", hipaa_acknowledged: true })).j.token as string;
+    const PW = ["Scan", "evid", "77!"].join("-");
+    const T = (await call("POST", "/api/auth/register", { email, password: PW, name: "Owner Madeup", hipaa_acknowledged: true })).j.token as string;
     const ownerId = Number((sqlite.prepare("SELECT id FROM users WHERE email = ?").get(email) as any).id);
     const provision = async (labName: string) => Number((await call("POST", "/api/admin/provision-demo-lab", { secret: SECRET, ownerEmail: email, labName, plan: "hospital" })).j.labId);
     const labA = await provision("Made-up Evidence Lab A"), labC = await provision("Made-up Single Analyzer Lab C"), labD = await provision("Made-up No Map Lab D");
@@ -103,7 +104,10 @@ async function main() {
     });
     const save = async (labId: number, body: any) => { const r = await call("POST", `/api/labs/${labId}/studies`, body, T, labId); return { ...r, id: Number(r.j.id) }; };
     const statusOf = (id: number) => (sqlite.prepare("SELECT status, lifecycle_state FROM studies WHERE id = ?").get(id) as any);
-    const sign = (labId: number, id: number) => call("POST", `/api/labs/${labId}/studies/${id}/finalize`, { signature: "Made Up" }, T, labId);
+    // B4: a study is signed by the lab's medical director or a designee with name, password and a choice; the owner is the director here.
+    sqlite.prepare("UPDATE labs SET medical_director_email = ? WHERE owner_user_id = ?").run(email, ownerId);
+    const SIGNATURE = { signature: "Owner Madeup", password: PW, decision: "accepted" };
+    const sign = (labId: number, id: number) => call("POST", `/api/labs/${labId}/studies/${id}/finalize`, SIGNATURE, T, labId);
 
     // ── 1. A passing study links itself as evidence ─────────────────────────────────────────────────────────────────
     const s1 = await save(labA, calVer("Sodium", ALPHA, OLD));
@@ -175,7 +179,7 @@ async function main() {
     const d3 = draftRow("Chloride", good);
     const group = Number((await call("POST", `/api/labs/${labD}/veritacheck/signoff-groups`, { name: "Made-up group" }, T, labD)).j.id);
     await call("POST", `/api/labs/${labD}/veritacheck/signoff-groups/${group}/studies`, { studyIds: [d3] }, T, labD);
-    const groupSign = await call("POST", `/api/labs/${labD}/veritacheck/signoff-groups/${group}/sign`, { signature: "Made Up" }, T, labD);
+    const groupSign = await call("POST", `/api/labs/${labD}/veritacheck/signoff-groups/${group}/sign`, SIGNATURE, T, labD);
     check("6. a Sign-off Group sign runs the same marking", groupSign.s === 200 && groupSign.j.signed === 1 && [21, 22, 23, 24].every((i) => isEvidence(row(SD3, i), d3)), `HTTP ${groupSign.s} ${JSON.stringify(row(SD3, 21))}`);
 
     // ── 7. Lapse ────────────────────────────────────────────────────────────────────────────────────────────────────

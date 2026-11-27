@@ -3,7 +3,7 @@ import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { StudyPointExclusionDialog } from "@/components/StudyPointExclusionDialog";
 import { StudyAmrDialog } from "@/components/StudyAmrDialog";
-import { StudyFinalizeDialog } from "@/components/StudyFinalizeDialog";
+import { StudyFinalizeDialog, useStudySignAs } from "@/components/StudyFinalizeDialog";
 import { StudyCensoringPolicyDialog } from "@/components/StudyCensoringPolicyDialog";
 import { StudyArchiveDialog } from "@/components/StudyArchiveDialog";
 import { StudyNotes } from "@/components/StudyNotes";
@@ -2215,6 +2215,8 @@ function BottomPDFButton({ study, results }: { study: Study; results: StudyResul
 function StudySignPanel({ study, isReadOnly, onEdit, onFinalized }: { study: Study; isReadOnly: boolean; onEdit: () => void; onFinalized: () => void }) {
   const [open, setOpen] = useState(false);
   const s = study as any;
+  // B4 review: a view-only login who is the medical director or a named designee signs too.
+  const signAs = useStudySignAs(study.id, isReadOnly && s.lifecycle_state !== "finalized");
   return (
     <>
       <div className="mb-4 flex items-center gap-3 flex-wrap" data-testid="lifecycle-panel">
@@ -2223,7 +2225,7 @@ function StudySignPanel({ study, isReadOnly, onEdit, onFinalized }: { study: Stu
             <Button hidden={isReadOnly} size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground" onClick={onEdit} data-testid="study-edit">
               <Pencil size={13} className="mr-1" />Edit
             </Button>
-            <Button hidden={isReadOnly} variant="outline" size="sm" onClick={() => setOpen(true)} data-testid="open-finalize-dialog">
+            <Button hidden={isReadOnly && !signAs?.canSign} variant="outline" size="sm" onClick={() => setOpen(true)} data-testid="open-finalize-dialog">
               Sign and lock
             </Button>
             <span className="text-xs text-muted-foreground">Sign off this study with your signature. The PDF prints DRAFT until it is signed.</span>
@@ -2287,6 +2289,8 @@ function StudyResultsPage() {
   // #84 Phase 3: exclusions, AMR, censoring, sign/lock, amend, archive and
   // edit are VeritaCheck setup; a view-only login (e.g. a Staff login) reads.
   const isReadOnly = useIsReadOnly("veritacheck");
+  // B4 review: signing is decided by qualification, not edit access, so a view-only director or named designee signs too.
+  const studySignAs = useStudySignAs(Number(id), isReadOnly);
 
   // Auto-link this study back to a verification package if launched from there
   // (never for a view-only login: the server would refuse the write). A package takes only its own lab's studies.
@@ -3234,7 +3238,7 @@ function StudyResultsPage() {
             <Button hidden={isReadOnly} variant="default" size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => navigate(labRoute(`/study/${study.id}/edit`))} data-testid="edit-study-button">
               <Pencil size={13} className="mr-1" />Edit
             </Button>
-            <Button hidden={isReadOnly} variant="outline" size="sm" onClick={() => setFinalizeOpen(true)} data-testid="open-finalize-dialog">
+            <Button hidden={isReadOnly && !studySignAs?.canSign} variant="outline" size="sm" onClick={() => setFinalizeOpen(true)} data-testid="open-finalize-dialog">
               Sign and lock
             </Button>
             <span className="text-xs text-muted-foreground">

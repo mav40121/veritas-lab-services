@@ -12,6 +12,7 @@ import { isReservedTestAddress, isHoneypotFilled, newsletterRateLimitOk, newslet
 import { blockNonOperatorSeat } from "./seatAccess";
 import { isDelegationPosition, isDelegationComplexity, sanitizeResponsibilities, DELEGATION_CATALOG, DELEGATION_POSITIONS, DELEGATION_COMPLEXITIES } from "./directorDelegation";
 import { mayAttestAsDirectorOrDesignee, complexityForAnalyte, labHighestComplexity, isLabOwnerUser } from "./delegationGate";
+import { isQualifiedSigningRequest, readSignature, signAs, signatureColumns, studyComplexity, studiesComplexity, type Signature } from "./verificationSignatures";
 import { vlsContext, isVlsSupportUser, labAllowsVlsSupport, vlsSupportBlocked, recordVlsActivity } from "./vlsSupport";
 import { foldInviteDuplicates, linkInvitedMemberToRoster, membersNotOnRoster, reattachOrphanStaffInvites, rosterLinkProblem, rosterRowForInvite, rosterStaffStatus } from "./rosterMembers";
 import { buildStaffListWorkbook, staffListRows } from "./staffListExport";
@@ -1164,7 +1165,10 @@ function authMiddleware(req: any, res: any, next: any) {
       req.seatType === 'view_only' &&
       !['GET', 'HEAD', 'OPTIONS'].includes(req.method) &&
       // B3: answering your own invitation is about your sign-in, not about the lab where you are a reviewer.
-      !String(req.path || "").startsWith("/api/me/lab-invites/")
+      !String(req.path || "").startsWith("/api/me/lab-invites/") &&
+      // B4 review: a director or named designee on a view-only seat signs VeritaCheck verification records; those routes decide
+      // by qualification in the record's own laboratory (server/verificationSignatures.ts isQualifiedSigningRequest, signerFor).
+      !isQualifiedSigningRequest(req.method, req.path)
     ) {
       return res.status(403).json({
         error: 'view_only_seat',
@@ -13920,7 +13924,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // Sign-off Group sign so the two can never diverge. Writes the per-study
   // finalized signature + timestamp + signer and, for an amendment, archives
   // the superseded original. Caller owns validation and the response.
-  function finalizeStudyRowInPlace(userId: number, studyRow: any, signature: string, now: string) {
+  // B4 (2026-11-27): the signature is the full one (server/verificationSignatures.ts readSignature): typed name, password,
+  // the signer's role and Accepted or Not accepted, stored with how it was recorded.
+  function finalizeStudyRowInPlace(userId: number, studyRow: any, sig: Signature, now: string) {
+    const signature = sig.typedName;
     // Reconcile status. A finalized study is a completed compliance record, so its
     // status must reflect its verification result (pass/fail), never 'draft'. An
     // amendment is cloned in 'draft' state (see applyStudyAmend); signed off without
@@ -13937,11 +13944,14 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         );
       } catch { finalStatus = studyRow.status; }
     }
+    const cols = signatureColumns(sig);
     (db as any).$client.prepare(`
       UPDATE studies SET lifecycle_state = 'finalized', status = ?,
-        finalized_at = ?, finalized_by_user_id = ?, finalized_signature = ?
+        finalized_at = ?, finalized_by_user_id = ?, finalized_signature = ?,
+        finalized_decision = ?, signed_with = ?, signed_with_provider = ?, finalized_capacity = ?, finalized_capacity_label = ?, finalized_title = ?, finalized_delegation_id = ?
       WHERE id = ?
-    `).run(finalStatus, now, userId, signature, studyRow.id);
+    `).run(finalStatus, now, userId, signature, cols.finalized_decision, cols.signed_with, cols.signed_with_provider, cols.finalized_capacity, cols.finalized_capacity_label,
+      cols.finalized_title, cols.finalized_delegation_id, studyRow.id);
     // 2026-06-15: signing off an amendment auto-archives the original it
     // supersedes (the row amends_study_id points to), so the active list shows
     // only the current valid result while the superseded original is retained
@@ -13975,16 +13985,29 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     catch (err: any) { console.warn(`[veritamap-stamp] ${why} failed:`, err?.message); }
   }
 
-  function applyStudyFinalize(req: any, res: any, studyRow: any) {
+  // B4 (2026-11-27, Q3 = 1): a study is signed with the full signature by the medical director or a designee with the verify
+  // method duty in the study's own laboratory (server/verificationSignatures.ts). Initials or a name with no password are refused.
+  async function applyStudyFinalize(req: any, res: any, studyRow: any) {
     if (!studyRow) return res.status(404).json({ error: "Study not found" });
     if (studyRow.lifecycle_state === 'finalized') {
       return res.status(409).json({ error: "Study is already finalized." });
     }
-    const signature = typeof req.body?.signature === "string" ? req.body.signature.trim() : "";
-    if (!signature) return res.status(400).json({ error: "signature required" });
-    const now = new Date().toISOString();
-    finalizeStudyRowInPlace(req.userId, studyRow, signature, now);
-    const updated = (db as any).$client.prepare("SELECT * FROM studies WHERE id = ?").get(studyRow.id);
+    const sqlite = (db as any).$client;
+    const got = await readSignature(sqlite, req, studyRow.lab_id, studyComplexity(studyRow), { decision: true, purpose: "verification_study" });
+    if (!("sig" in got)) return res.status(got.status).json(got.body);
+    // Read again after the password check: nothing may move between the check and the signature.
+    const fresh = sqlite.prepare("SELECT * FROM studies WHERE id = ?").get(studyRow.id) as any;
+    if (!fresh) return res.status(404).json({ error: "Study not found" });
+    if (fresh.lifecycle_state === 'finalized') return res.status(409).json({ error: "Study is already finalized." });
+    finalizeStudyRowInPlace(req.userId, fresh, got.sig, got.sig.at);
+    logAudit({
+      userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritacheck", action: "update", entityType: "study_signature",
+      entityId: fresh.id, entityLabel: `${fresh.test_name} - ${fresh.study_type} (${fresh.date})`,
+      before: { lifecycle_state: fresh.lifecycle_state, status: fresh.status },
+      after: { lifecycle_state: "finalized", decision: got.sig.decision, capacity: got.sig.capacity, capacity_label: got.sig.capacityLabel, signed_with: got.sig.signedWith, signed_at: got.sig.at },
+      ipAddress: req.ip,
+    });
+    const updated = sqlite.prepare("SELECT * FROM studies WHERE id = ?").get(studyRow.id);
     res.json(updated);
   }
 
@@ -14022,12 +14045,14 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     res.json(newRow);
   }
 
-  app.post("/api/studies/:id/finalize", authMiddleware, requireWriteAccess, requireModuleEdit('veritacheck'), (req: any, res) => {
+  // B4 review: signing needs the signer's qualification in the study's own laboratory, not edit access to VeritaCheck
+  // (server/verificationSignatures.ts signerFor), as the monthly QC co-sign does.
+  app.post("/api/studies/:id/finalize", authMiddleware, requireWriteAccess, (req: any, res) => {
     const studyId = parseInt(req.params.id);
     const existing = userCanAccessStudy(studyId, req) as any;
     return applyStudyFinalize(req, res, existing);
   });
-  app.post("/api/labs/:labId/studies/:id/finalize", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacheck'), (req: any, res) => {
+  app.post("/api/labs/:labId/studies/:id/finalize", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
     const studyId = parseInt(req.params.id);
     const existing = (db as any).$client.prepare(
       "SELECT * FROM studies WHERE id = ? AND lab_id = ?"
@@ -14038,6 +14063,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const studyId = parseInt(req.params.id);
     const existing = userCanAccessStudy(studyId, req) as any;
     return applyStudyAmend(req, res, existing);
+  });
+  // Who the signed-in person signs as on this study, or why they can't (server/verificationSignatures.ts). Read only.
+  app.get("/api/labs/:labId/studies/:id/sign-as", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    const s = (db as any).$client.prepare("SELECT id, lab_id, test_name FROM studies WHERE id = ? AND lab_id = ?").get(parseInt(req.params.id), req.scope.labId) as any;
+    if (!s) return res.status(404).json({ error: "Study not found" });
+    res.json(signAs((db as any).$client, s.lab_id, req.userId, studyComplexity(s)));
   });
   app.post("/api/labs/:labId/studies/:id/amend", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacheck'), (req: any, res) => {
     const studyId = parseInt(req.params.id);
@@ -14190,31 +14221,54 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       res.json({ ok: true });
     });
 
+    // Who the signed-in person signs this group as, at the highest complexity among its unsigned studies. Read only.
+    app.get("/api/labs/:labId/veritacheck/signoff-groups/:id/sign-as", authMiddleware, labScopeMiddleware, (req: any, res) => {
+      const group = sfgDb.prepare("SELECT id FROM study_signoff_groups WHERE id = ? AND lab_id = ?").get(parseInt(req.params.id), req.scope.labId) as any;
+      if (!group) return res.status(404).json({ error: "Group not found" });
+      const drafts = sfgDb.prepare("SELECT test_name FROM studies WHERE signoff_group_id = ? AND lab_id = ? AND archived_at IS NULL AND lifecycle_state <> 'finalized'").all(group.id, req.scope.labId) as any[];
+      res.json(signAs(sfgDb, req.scope.labId, req.userId, studiesComplexity(req.scope.labId, drafts)));
+    });
+
     // The mass Sign and Lock. Finalizes every draft member in one transaction
     // using the shared per-study finalize; already-finalized members are skipped,
-    // not re-signed. A signature is required, exactly as for a single study.
-    app.post("/api/labs/:labId/veritacheck/signoff-groups/:id/sign", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacheck'), (req: any, res) => {
+    // not re-signed. The full signature is required, exactly as for a single study (B4, Q3 = 1): the signer's role covers the
+    // highest complexity among the studies it signs, and Accepted or Not accepted applies to each.
+    app.post("/api/labs/:labId/veritacheck/signoff-groups/:id/sign", authMiddleware, labScopeMiddleware, requireWriteAccess, async (req: any, res) => {
       const groupId = parseInt(req.params.id);
       const group = sfgDb.prepare("SELECT * FROM study_signoff_groups WHERE id = ? AND lab_id = ?").get(groupId, req.scope.labId) as any;
       if (!group) return res.status(404).json({ error: "Group not found" });
       if (group.status === 'signed') return res.status(409).json({ error: "Group is already signed." });
-      const signature = typeof req.body?.signature === "string" ? req.body.signature.trim() : "";
-      if (!signature) return res.status(400).json({ error: "signature required" });
-      const members = sfgDb.prepare(
+      const listMembers = () => sfgDb.prepare(
         "SELECT * FROM studies WHERE signoff_group_id = ? AND lab_id = ? AND archived_at IS NULL"
       ).all(groupId, req.scope.labId) as any[];
-      if (members.length === 0) return res.status(400).json({ error: "No studies in this group to sign." });
-      const now = new Date().toISOString();
+      const before = listMembers();
+      if (before.length === 0) return res.status(400).json({ error: "No studies in this group to sign." });
+      const got = await readSignature(sfgDb, req, req.scope.labId, studiesComplexity(req.scope.labId, before.filter((s) => s.lifecycle_state !== 'finalized')), { decision: true, purpose: "verification_signoff_group" });
+      if (!("sig" in got)) return res.status(got.status).json(got.body);
+      // Read again after the password check, and sign only what the role was checked against.
+      if ((sfgDb.prepare("SELECT status FROM study_signoff_groups WHERE id = ?").get(groupId) as any)?.status === 'signed') return res.status(409).json({ error: "Group is already signed." });
+      const members = listMembers();
+      const checked = new Set(before.map((s) => s.id));
+      if (members.some((s) => !checked.has(s.id) && s.lifecycle_state !== 'finalized')) return res.status(409).json({ error: "Not signed. A study was added to this group after you opened it. Read it again before you sign.", code: "MOVED" });
+      const now = got.sig.at;
       let signed = 0, skipped = 0;
       const tx = sfgDb.transaction(() => {
         for (const s of members) {
           if (s.lifecycle_state === 'finalized') { skipped++; continue; }
-          finalizeStudyRowInPlace(req.userId, s, signature, now);
+          finalizeStudyRowInPlace(req.userId, s, got.sig, now);
           signed++;
         }
-        sfgDb.prepare("UPDATE study_signoff_groups SET status = 'signed', signed_at = ?, signed_by_user_id = ? WHERE id = ?").run(now, req.userId, groupId);
+        const gc = signatureColumns(got.sig);
+        sfgDb.prepare("UPDATE study_signoff_groups SET status = 'signed', signed_at = ?, signed_by_user_id = ?, signed_signature = ?, signed_decision = ?, signed_with = ?, signed_with_provider = ?, signed_capacity_label = ? WHERE id = ?")
+          .run(now, req.userId, got.sig.typedName, got.sig.decision, gc.signed_with, gc.signed_with_provider, got.sig.capacityLabel, groupId);
       });
       tx();
+      logAudit({
+        userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritacheck", action: "update", entityType: "study_signoff_group_signature",
+        entityId: groupId, entityLabel: String(group.name || ""), before: { status: group.status },
+        after: { status: "signed", signed, skipped, decision: got.sig.decision, capacity: got.sig.capacity, capacity_label: got.sig.capacityLabel, signed_with: got.sig.signedWith, signed_at: now },
+        ipAddress: req.ip,
+      });
       res.json({ ok: true, groupId, signed, skipped, total: members.length });
     });
   }

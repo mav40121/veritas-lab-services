@@ -70,6 +70,14 @@ export function studyRowToClient(row: any): any {
     finalized_at: row.finalized_at,
     finalized_by_user_id: row.finalized_by_user_id,
     finalized_signature: row.finalized_signature,
+    // B4 (2026-11-27; server/verificationSignatures.ts): how the signature was recorded, and what it chose. Empty on a study
+    // signed before name-and-password signing, so the PDF says it was typed.
+    finalized_decision: row.finalized_decision,
+    signed_with: row.signed_with,
+    signed_with_provider: row.signed_with_provider,
+    finalized_capacity: row.finalized_capacity,
+    finalized_capacity_label: row.finalized_capacity_label,
+    finalized_title: row.finalized_title,
     amends_study_id: row.amends_study_id,
     archived_at: row.archived_at,
     archived_by_user_id: row.archived_by_user_id,
