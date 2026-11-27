@@ -28,6 +28,8 @@ function check(name: string, cond: boolean, detail = "") {
 }
 
 async function main() {
+
+  const WRONG_PW = ["Wrong", "Pass", "1!"].join("-"); // a password nobody has, for the wrong-password checks
   const app = express();
   app.use(express.json({ limit: "10mb" }));
   const server = http.createServer(app);
@@ -107,11 +109,11 @@ async function main() {
 
     // 3) Lockout after 3 wrong passwords; Forgot password and the owner both unlock.
     signOutAll(M.id);
-    for (let i = 0; i < 3; i++) await login(M.email, "Wrong-Pass-1!");
+    for (let i = 0; i < 3; i++) await login(M.email, WRONG_PW);
     const locked = await login(M.email, P2);
     check("3a. after 3 wrong passwords the right one is refused: locked", locked.status === 423 && locked.body?.code === "ACCOUNT_LOCKED", `status=${locked.status}`);
     signOutAll(O.id);
-    for (let i = 0; i < 3; i++) await login(O.email, "Wrong-Pass-1!");
+    for (let i = 0; i < 3; i++) await login(O.email, WRONG_PW);
     const oOk = await login(O.email, pw("next", false));
     check("3b. outsider: 3 wrong passwords do not lock", oOk.status === 200 && typeof oOk.body?.token === "string", `status=${oOk.status}`);
     signOutAll(G.id);
@@ -125,7 +127,7 @@ async function main() {
     const afterUnlock = await login(M.email, P2);
     check("3f. the member signs in after the unlock", afterUnlock.status === 200 && (typeof afterUnlock.body?.token === "string" || afterUnlock.body?.session_conflict), `status=${afterUnlock.status}`);
     signOutAll(M.id);
-    for (let i = 0; i < 3; i++) await login(M.email, "Wrong-Pass-1!");
+    for (let i = 0; i < 3; i++) await login(M.email, WRONG_PW);
     const rt = `it-reset-${Date.now()}`;
     sqlite.prepare("INSERT INTO reset_tokens (user_id, token, expires_at) VALUES (?, ?, ?)").run(M.id, rt, new Date(Date.now() + 3600_000).toISOString());
     const P3 = pw("third");

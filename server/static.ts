@@ -438,8 +438,9 @@ export function serveStatic(app: Express) {
     // Serve the index shell via getIndexHtml so the VeritaStock deployment flag
     // is injected on app routes too (not just the SEO-prerendered marketing ones).
     res.setHeader("Cache-Control", "no-cache");
-    // A VeritaDC document share link (server/policyShareLinks.ts) is never indexed, even by a crawler that runs no JS.
-    if (/^\/policy\/[^/]+\/?$/.test(fullPath)) {
+    // A VeritaDC document share link (server/policyShareLinks.ts) is never indexed, even by a crawler that runs no JS. Nor is the
+    // hospital sign-in window's last page when signing (/sso/sign-done, which carries a one-time code; server/ssoRoutes.ts).
+    if (/^\/policy\/[^/]+\/?$/.test(fullPath) || fullPath === "/sso/sign-done") {
       res.setHeader("X-Robots-Tag", "noindex, nofollow");
       res.setHeader("Cache-Control", "no-store");
       return res.type("html").send(getIndexHtml(distPath).replace(/<meta name="robots" content="[^"]*"\s*\/?>/, '<meta name="robots" content="noindex, nofollow" />'));

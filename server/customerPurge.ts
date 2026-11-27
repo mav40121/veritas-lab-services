@@ -104,6 +104,7 @@ export const PURGE_EXCLUDED: Record<string, PurgeRule> = {
   user_mfa_recovery_codes: del(`user_id ${IN("people")}`),
   sso_handoffs: del(`user_id ${IN("people")}`),
   sso_login_states: retain("A sign-in in progress, kept minutes; holds no account id."),
+  signature_sso_requests: del(`user_id ${IN("people")}`),
   password_history: del(`user_id ${IN("people")}`),
   terms_acceptances: retain(VLS_RECORD),
   terms_activations: retain(VLS_RECORD),

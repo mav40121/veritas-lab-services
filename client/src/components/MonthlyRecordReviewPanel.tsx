@@ -9,10 +9,10 @@ import { useCanRecord } from "@/components/SubscriptionBanner";
 import { useLabRoute } from "@/hooks/useLabRoute";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { SignaturePrompt, useSignatureCredential } from "@/components/SignaturePrompt";
 import { ClipboardCheck, FileSpreadsheet } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { labDayOf } from "@/lib/labDate";
@@ -43,7 +43,8 @@ export function MonthlyRecordReviewPanel({ labId }: { labId: number }) {
   const [signing, setSigning] = useState(false);
   const [action, setAction] = useState("");
   const [typed, setTyped] = useState("");
-  const [password, setPassword] = useState("");
+  // The password, or the hospital sign-in asked for again (components/SignaturePrompt.tsx, server/eSignature.ts).
+  const cred = useSignatureCredential("maintain_review");
   const [saving, setSaving] = useState(false);
   const [downloading, setDownloading] = useState(false);
 
@@ -68,17 +69,20 @@ export function MonthlyRecordReviewPanel({ labId }: { labId: number }) {
   async function sign() {
     if (needsAction && !action.trim()) { toast({ title: "Record the corrective action for the problems shown", variant: "destructive" }); return; }
     if (typed.trim().length < 2) { toast({ title: "Type your full name to sign", variant: "destructive" }); return; }
-    if (!password) { toast({ title: "Enter your password to sign", variant: "destructive" }); return; }
+    if (!cred.ready) {
+      toast({ title: cred.passwordAllowed ? "Enter your password to sign" : `Sign in with ${cred.hospital?.name ?? "your hospital"} to sign`, variant: "destructive" });
+      return;
+    }
     setSaving(true);
     try {
       const r = await fetch(base, {
         method: "POST", headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ month, items: chosen.map((i) => ({ type: i.type, id: i.id })), typed_signature: typed.trim(), password, corrective_action: action.trim() || null }),
+        body: JSON.stringify({ month, items: chosen.map((i) => ({ type: i.type, id: i.id })), typed_signature: typed.trim(), ...cred.body("snake"), corrective_action: action.trim() || null }),
       });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) { toast({ title: j.error || "Could not sign the review", variant: "destructive" }); return; }
       toast({ title: `Review signed for ${j.reviewed} record${j.reviewed === 1 ? "" : "s"}` });
-      setSigning(false); setAction(""); setTyped(""); setPassword("");
+      setSigning(false); setAction(""); setTyped(""); cred.reset();
       await load();
     } finally { setSaving(false); }
   }
@@ -198,8 +202,16 @@ export function MonthlyRecordReviewPanel({ labId }: { labId: number }) {
                 <Textarea id="rv-action" rows={3} value={action} onChange={(e) => setAction(e.target.value)} placeholder="What was done, and any impact on patient testing" data-testid="review-action" />
               </div>
             )}
-            <div><Label htmlFor="rv-name">Type your full name to sign <span className="text-red-600">*</span></Label><Input id="rv-name" value={typed} onChange={(e) => setTyped(e.target.value)} data-testid="review-name" /></div>
-            <div><Label htmlFor="rv-pw">Password <span className="text-red-600">*</span></Label><Input id="rv-pw" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} data-testid="review-password" /></div>
+            <SignaturePrompt
+              cred={cred}
+              typedName={typed}
+              onTypedName={setTyped}
+              required
+              labelClassName=""
+              labels={{ name: "Type your full name to sign", password: "Password" }}
+              ids={{ name: "rv-name", password: "rv-password" }}
+              testIds={{ name: "review-name", password: "review-password", hospital: "review-sign-with-hospital" }}
+            />
           </div>
           <div className="flex justify-end gap-2 mt-2">
             <Button variant="outline" onClick={() => setSigning(false)} disabled={saving}>Cancel</Button>

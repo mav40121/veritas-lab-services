@@ -22,6 +22,7 @@ import { noteMasterArchived } from "./policySharedDocuments";
 import { orderManualTree } from "@shared/manualTree";
 import { docNumberKey, versionLabel } from "../shared/policyVersion";
 import { BULK_APPROVE_MAX, OVERDUE_SIGN_DAYS } from "../shared/policyNotices";
+import { verifySigner, type SignedWith } from "./eSignature";
 
 type CanEdit = (labId: number, userId: number, module: string) => boolean;
 
@@ -81,6 +82,8 @@ export interface ApprovalDecisionInput {
   userAgent?: string;
   // What the signer was shown. When given, a document on another version or step is refused (code MOVED).
   expect?: { versionId: number; stepId: number };
+  // How the signer was checked (server/eSignature.ts verifySigner), recorded on the signoff row.
+  signedWith: SignedWith;
 }
 
 export function registerPolicyDocumentControlRoutes(app: any, deps: {
@@ -90,7 +93,6 @@ export function registerPolicyDocumentControlRoutes(app: any, deps: {
   requireWriteAccess: any;
   requireModuleEdit: (module: string) => any;
   hasModuleEditAccess: CanEdit;
-  verifyElectronicSignature: (userId: number, typedSignature: unknown, password: unknown) => Promise<ApprovalDecision | null>;
   recordApprovalDecision: (o: ApprovalDecisionInput) => ApprovalDecision;
 }) {
   const { sqlite, authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit, hasModuleEditAccess } = deps;
@@ -197,11 +199,11 @@ export function registerPolicyDocumentControlRoutes(app: any, deps: {
 
   // ── Bulk approval ──
 
-  // POST body: { typedSignature, password, items: [{ documentId, versionId, stepId }] }, the items as the signer's list showed
-  // them (GET .../pending-reviews). The name and password are checked once; each document then stands on its own.
+  // POST body: { typedSignature, password | ssoProof, items: [{ documentId, versionId, stepId }] }, the items as the signer's list
+  // showed them (GET .../pending-reviews). The signer is checked once (server/eSignature.ts); each document then stands on its own.
   app.post(`${R}/approvals/bulk`, ...edit, async (req: any, res: any) => {
     const labId = req.scope.labId;
-    const { typedSignature, password, items } = req.body || {};
+    const { typedSignature, password, ssoProof, items } = req.body || {};
     if (!Array.isArray(items) || !items.length) return res.status(400).json({ error: "Pick the documents to approve.", code: "NO_ITEMS" });
     if (items.length > BULK_APPROVE_MAX) return res.status(400).json({ error: `Approve up to ${BULK_APPROVE_MAX} documents at a time.`, code: "TOO_MANY" });
     const picked: { documentId: number; versionId: number; stepId: number }[] = items.map((i: any) => ({ documentId: i?.documentId, versionId: i?.versionId, stepId: i?.stepId }));
@@ -209,8 +211,8 @@ export function registerPolicyDocumentControlRoutes(app: any, deps: {
       return res.status(400).json({ error: "Each document needs its version and step as the list showed them.", code: "BAD_ITEM" });
     }
     if (new Set(picked.map((i) => i.documentId)).size !== picked.length) return res.status(400).json({ error: "A document is listed twice.", code: "DUPLICATE" });
-    const refusal = await deps.verifyElectronicSignature(req.userId, typedSignature, password);
-    if (refusal) return res.status(refusal.status).json(refusal.body);
+    const signer = await verifySigner(sqlite(), req.userId, { typedName: typedSignature, password, ssoProof, purpose: "policy_bulk_approve" }, { ip: req.ip });
+    if (!signer.ok) return res.status(signer.status).json(signer.body);
     const db = sqlite();
     const results = picked.map((i) => {
       const row = db.prepare("SELECT title FROM policy_documents WHERE id = ? AND lab_id = ?").get(i.documentId, labId) as any;
@@ -219,7 +221,7 @@ export function registerPolicyDocumentControlRoutes(app: any, deps: {
         out = row
           ? deps.recordApprovalDecision({
               action: "approved", documentId: i.documentId, labId, userId: req.userId, typedSignature: String(typedSignature),
-              ip: req.ip, userAgent: agent(req), expect: { versionId: i.versionId, stepId: i.stepId },
+              ip: req.ip, userAgent: agent(req), expect: { versionId: i.versionId, stepId: i.stepId }, signedWith: signer.signedWith,
             })
           : { status: 404, body: { error: "That document isn't in this lab." } };
       } catch (err: any) {

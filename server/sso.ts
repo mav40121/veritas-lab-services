@@ -15,12 +15,15 @@
 //  - The finished sign-in reaches the page through a single-use 60-second handoff code, never a token
 //    in a URL.
 //  - SSO sessions skip VeritaAssure's own two-factor step (the hospital's sign-in does that).
+//  - Signing (S0, 2026-11-27; server/eSignature.ts): the same round trip, asked again at the moment of signing with a fresh login
+//    forced (prompt=login, max_age=0). Its state row points at a signature_sso_requests row (sign_request_id), and the callback
+//    sends it down the signing branch instead of signing anyone in.
 import crypto from "crypto";
 import { sealSecret, openSecret } from "./twoFactor";
 
 export const STATE_TTL_MS = 10 * 60 * 1000;
 export const HANDOFF_TTL_MS = 60 * 1000;
-const CLOCK_SKEW_S = 120;
+export const CLOCK_SKEW_S = 120;
 const CACHE_MS = 60 * 60 * 1000;
 
 const sha = (s: string) => crypto.createHash("sha256").update(s).digest("hex");
@@ -112,17 +115,24 @@ export function newSignIn(): StartedSignIn {
   };
 }
 
-export function saveSignInState(sqlite: any, cfg: SsoConfig, s: StartedSignIn, redirectUri: string, emailHint: string | null): void {
+export function saveSignInState(sqlite: any, cfg: SsoConfig, s: StartedSignIn, redirectUri: string, emailHint: string | null, signRequestId: number | null = null): void {
   const now = Date.now();
   // delete-reinsert-ok: expiry cleanup of other rows; the INSERT adds a new state
   sqlite.prepare("DELETE FROM sso_login_states WHERE expires_at < ?").run(new Date(now - STATE_TTL_MS).toISOString());
   sqlite.prepare(
-    "INSERT INTO sso_login_states (state_hash, config_id, nonce, code_verifier, redirect_uri, email_hint, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
-  ).run(sha(s.state), cfg.id, s.nonce, s.verifier, redirectUri, emailHint, new Date(now).toISOString(), new Date(now + STATE_TTL_MS).toISOString());
+    "INSERT INTO sso_login_states (state_hash, config_id, nonce, code_verifier, redirect_uri, email_hint, created_at, expires_at, sign_request_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+  ).run(sha(s.state), cfg.id, s.nonce, s.verifier, redirectUri, emailHint, new Date(now).toISOString(), new Date(now + STATE_TTL_MS).toISOString(), signRequestId);
+}
+
+/** The signature round trip a state belongs to, used or not (so a late signing return lands back on the signing window). */
+export function peekSignRequestId(sqlite: any, state: string): number | null {
+  if (!state) return null;
+  const row = sqlite.prepare("SELECT sign_request_id FROM sso_login_states WHERE state_hash = ?").get(sha(state)) as any;
+  return row?.sign_request_id ? Number(row.sign_request_id) : null;
 }
 
 /** Takes (and spends) the state for a callback. Null when unknown, already used or expired. */
-export function takeSignInState(sqlite: any, state: string): { config_id: number; nonce: string; code_verifier: string; redirect_uri: string; email_hint: string | null } | null {
+export function takeSignInState(sqlite: any, state: string): { config_id: number; nonce: string; code_verifier: string; redirect_uri: string; email_hint: string | null; sign_request_id: number | null } | null {
   if (!state) return null;
   const row = sqlite.prepare("SELECT * FROM sso_login_states WHERE state_hash = ?").get(sha(state)) as any;
   if (!row || row.used_at) return null;
@@ -132,7 +142,7 @@ export function takeSignInState(sqlite: any, state: string): { config_id: number
   return row;
 }
 
-export function authorizeUrl(doc: Discovery, cfg: SsoConfig, s: StartedSignIn, redirectUri: string, emailHint: string | null): string {
+export function authorizeUrl(doc: Discovery, cfg: SsoConfig, s: StartedSignIn, redirectUri: string, emailHint: string | null, opts: { freshLogin?: boolean } = {}): string {
   const u = new URL(doc.authorization_endpoint);
   u.searchParams.set("client_id", cfg.client_id);
   u.searchParams.set("response_type", "code");
@@ -144,6 +154,8 @@ export function authorizeUrl(doc: Discovery, cfg: SsoConfig, s: StartedSignIn, r
   u.searchParams.set("code_challenge", s.challenge);
   u.searchParams.set("code_challenge_method", "S256");
   if (emailHint) u.searchParams.set("login_hint", emailHint);
+  // Signing: the provider must ask for the sign-in again now, whatever session it already holds (OpenID Connect Core 3.1.2.1).
+  if (opts.freshLogin) { u.searchParams.set("prompt", "login"); u.searchParams.set("max_age", "0"); }
   return u.toString();
 }
 

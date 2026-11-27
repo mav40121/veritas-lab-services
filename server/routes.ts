@@ -83,6 +83,7 @@ import { passwordProblem } from "@shared/passwordRule";
 import { registerTwoFactorRoutes, twoFactorLoginGate, setupResponse } from "./twoFactorRoutes";
 import { registerSsoRoutes } from "./ssoRoutes";
 import { ssoConfigForEmail } from "./sso";
+import { signerInputRefusal, signedWithValues, verifySigner } from "./eSignature";
 import { clearEmailVerification, confirmedUserByEmail, emailVerificationOn, isUnconfirmed, registerEmailVerificationRoutes, sendVerificationEmail, startEmailVerification } from "./emailVerification";
 import { mfaRequirement, getMfa, isEnrolled, setTwoFactorEmailSender, forgetDevices } from "./twoFactor";
 import {
@@ -4728,7 +4729,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   registerTwoFactorRoutes(app, { sqlite: (db as any).$client, storage, authMiddleware, labScopeMiddleware, logAudit, buildSignIn, adminSecret: ADMIN_SECRET });
   registerExportAllRoutes(app, { sqlite: (db as any).$client, authMiddleware, httpServer });
   // Single sign-on (server/sso.ts, server/ssoRoutes.ts; Michael 2026-10-15, Q39 = 1).
-  registerSsoRoutes(app, { sqlite: (db as any).$client, storage, logAudit, buildSignIn, adminSecret: ADMIN_SECRET });
+  registerSsoRoutes(app, { sqlite: (db as any).$client, storage, logAudit, buildSignIn, adminSecret: ADMIN_SECRET, authMiddleware });
   // System security settings (server/securityPolicy.ts; Michael Q27 = 1, 2026-10-25).
   registerSecuritySettingsRoutes(app, { sqlite: (db as any).$client, storage, authMiddleware, labScopeMiddleware, logAudit });
 
@@ -42306,35 +42307,16 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     canEdit: (labId, userId) => hasModuleEditAccess(labId, userId, "veritapolicy"),
   };
 
-  // Approve or reject a document's pending step. One path for the editor screen and the staff login tile, so the password
-  // check, the eligibility check and the signature record can't drift apart. Phase 3: password re-auth per FDA CPG 7153.17
-  // minimum (21 CFR Part 11). A rejection is an electronic signature too: an attestation that this version does not meet standard.
-  // Two halves, so a bulk approval (server/policyDocumentControl.ts) checks the name and password once and records each document
-  // exactly as a single approval does.
-  async function decideApprovalStep(o: Omit<ApprovalDecisionInput, "typedSignature" | "expect"> & { typedSignature: unknown; password: unknown }): Promise<ApprovalDecision> {
-    const { typedSignature, password, ...decision } = o;
-    const refusal = await verifyElectronicSignature(o.userId, typedSignature, password);
-    return refusal ?? recordApprovalDecision({ ...decision, typedSignature: typedSignature as string });
-  }
-
-  // The typed name and the signer's own password, or why they can't sign.
-  async function verifyElectronicSignature(userId: number, typedSignature: unknown, password: unknown): Promise<ApprovalDecision | null> {
-    if (!typedSignature || typeof typedSignature !== "string" || typedSignature.trim().length < 2) {
-      return { status: 400, body: { error: "typedSignature required (full name)" } };
-    }
-    if (!password || typeof password !== "string") {
-      return { status: 400, body: { error: "password required for electronic signature" } };
-    }
-    const sqlite = (db as any).$client;
-    const userRow = sqlite.prepare("SELECT id, password_hash FROM users WHERE id = ?").get(userId) as any;
-    if (!userRow || !userRow.password_hash) {
-      return { status: 401, body: { error: "User has no password set; cannot sign electronically" } };
-    }
-    const passwordOk = await bcrypt.compare(String(password), userRow.password_hash);
-    if (!passwordOk) {
-      return { status: 401, body: { error: "Password incorrect; signature not recorded" } };
-    }
-    return null;
+  // Approve or reject a document's pending step. One path for the editor screen and the staff login tile, so the signer check,
+  // the eligibility check and the signature record can't drift apart. Phase 3: re-authentication per FDA CPG 7153.17 minimum
+  // (21 CFR Part 11), now through server/eSignature.ts verifySigner (the password, or the hospital sign-in asked for again). A
+  // rejection is an electronic signature too: an attestation that this version does not meet standard. Two halves, so a bulk
+  // approval (server/policyDocumentControl.ts) checks the signer once and records each document exactly as a single approval does.
+  async function decideApprovalStep(o: Omit<ApprovalDecisionInput, "typedSignature" | "expect" | "signedWith"> & { typedSignature: unknown; password: unknown; ssoProof?: unknown }): Promise<ApprovalDecision> {
+    const { typedSignature, password, ssoProof, ...decision } = o;
+    const signer = await verifySigner((db as any).$client, o.userId, { typedName: typedSignature, password, ssoProof, purpose: "policy_decision" }, { ip: o.ip ?? undefined });
+    if (!signer.ok) return { status: signer.status, body: signer.body };
+    return recordApprovalDecision({ ...decision, typedSignature: typedSignature as string, signedWith: signer.signedWith });
   }
 
   // Record the decision on the document's pending step: the signature row, the audit row, and the document's move. No await, so
@@ -42383,8 +42365,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       .prepare(
         `INSERT INTO policy_signoffs
            (document_id, version_id, workflow_step_id, user_id, action,
-            comment, typed_signature, signed_document_hash, ip_address, user_agent)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            comment, typed_signature, signed_document_hash, ip_address, user_agent, signed_with, signed_with_provider)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         id,
@@ -42396,7 +42378,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         typedSignature.trim(),
         hash,
         o.ip || null,
-        o.userAgent || null
+        o.userAgent || null,
+        ...signedWithValues(o.signedWith)
       );
     const delegationDetails = delegatorUserId != null ? { via_delegation: true, delegator_user_id: delegatorUserId } : {};
     if (action === "rejected") {
@@ -42462,9 +42445,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       async (req: any, res) => {
         const id = Number(req.params.id);
         if (!Number.isFinite(id)) return res.status(400).json({ error: "Bad id" });
-        const { typedSignature, password, comment } = req.body || {};
+        const { typedSignature, password, ssoProof, comment } = req.body || {};
         const out = await decideApprovalStep({
-          action, documentId: id, labId: req.scope.labId, userId: req.userId, typedSignature, password, comment,
+          action, documentId: id, labId: req.scope.labId, userId: req.userId, typedSignature, password, ssoProof, comment,
           ip: req.ip, userAgent: req.headers["user-agent"] as string | undefined,
         });
         if (out.status === 200 && out.body.status === "in_review") tellStepSigners(req.scope.labId, [id], req.userId);
@@ -42543,14 +42526,14 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
   for (const [verb, action] of [["approve", "approved"], ["reject", "rejected"]] as const) {
     app.post(`/api/staff-portal-session/approvals/:documentId/${verb}`, staffPortalAuthMiddleware, staffApprovalWriteAccess, staffApprovalItem, async (req: any, res) => {
-      const { typed_signature, password, comment, version_id } = req.body || {};
+      const { typed_signature, password, sso_proof, comment, version_id } = req.body || {};
       // The document may have changed since this person opened it (recalled and revised). They sign what they read.
       if (version_id != null && Number(version_id) !== req.approvalItem.version_id) {
         return res.status(409).json({ error: "This document changed since you opened it. Please reload and read it again.", code: "VERSION_CHANGED" });
       }
       const out = await decideApprovalStep({
         action, documentId: req.approvalItem.document_id, labId: req.staffPortalLabId, userId: req.staffPortalUserId,
-        typedSignature: typed_signature, password, comment,
+        typedSignature: typed_signature, password, ssoProof: sso_proof, comment,
         ip: (req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "").toString().split(",")[0].trim() || null,
         userAgent: req.headers["user-agent"] as string | undefined,
       });
@@ -44388,7 +44371,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // overdue. For now Phase 5 ships the manual action + visual state.
 
   // POST /documents/:id/recertify — confirm still current.
-  // Body: { typedSignature, password, comment? }
+  // Body: { typedSignature, password | ssoProof, comment? }
   app.post(
     "/api/labs/:labId/veritapolicy/documents/:id/recertify",
     authMiddleware,
@@ -44398,13 +44381,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     async (req: any, res) => {
       const id = Number(req.params.id);
       if (!Number.isFinite(id)) return res.status(400).json({ error: "Bad id" });
-      const { typedSignature, password, comment } = req.body || {};
-      if (!typedSignature || typeof typedSignature !== "string" || typedSignature.trim().length < 2) {
-        return res.status(400).json({ error: "typedSignature required" });
-      }
-      if (!password || typeof password !== "string") {
-        return res.status(400).json({ error: "password required" });
-      }
+      const { typedSignature, password, ssoProof, comment } = req.body || {};
+      const signerInput = { typedName: typedSignature, password, ssoProof, purpose: "policy_recertify" as const };
+      const missing = signerInputRefusal(signerInput);
+      if (missing) return res.status(missing.status).json(missing.body);
       const sqlite = (db as any).$client;
       const doc = sqlite
         .prepare(
@@ -44423,16 +44403,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         )
         .get(req.scope.labId, req.userId);
       if (!member) return res.status(403).json({ error: "Not an active member of this lab" });
-      const userRow = sqlite
-        .prepare("SELECT password_hash FROM users WHERE id = ?")
-        .get(req.userId) as any;
-      if (!userRow?.password_hash) {
-        return res.status(401).json({ error: "User has no password set" });
-      }
-      const passwordOk = await bcrypt.compare(String(password), userRow.password_hash);
-      if (!passwordOk) {
-        return res.status(401).json({ error: "Password incorrect; re-certification not recorded" });
-      }
+      // 21 CFR Part 11 re-authentication (server/eSignature.ts).
+      const signer = await verifySigner(sqlite, req.userId, signerInput, { ip: req.ip });
+      if (!signer.ok) return res.status(signer.status).json(signer.body);
       const ver = sqlite
         .prepare("SELECT file_hash_sha256 FROM policy_versions WHERE id = ?")
         .get(doc.current_version_id) as { file_hash_sha256: string } | undefined;
@@ -44444,8 +44417,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         .prepare(
           `INSERT INTO policy_signoffs
              (document_id, version_id, workflow_step_id, user_id, action,
-              comment, typed_signature, signed_document_hash, ip_address, user_agent)
-           VALUES (?, ?, NULL, ?, 'recertified', ?, ?, ?, ?, ?)`
+              comment, typed_signature, signed_document_hash, ip_address, user_agent, signed_with, signed_with_provider)
+           VALUES (?, ?, NULL, ?, 'recertified', ?, ?, ?, ?, ?, ?, ?)`
         )
         .run(
           id,
@@ -44455,7 +44428,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           typedSignature.trim(),
           hash,
           req.ip || null,
-          (req.headers["user-agent"] as string | undefined) || null
+          (req.headers["user-agent"] as string | undefined) || null,
+          ...signedWithValues(signer.signedWith)
         );
       // Advance next_review_date by review_interval_months. SQLite date
       // arithmetic handles month boundaries correctly.
@@ -44845,7 +44819,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   );
 
   // POST /attestations/:id/complete — current user attests.
-  // Body: { typedSignature, password }
+  // Body: { typedSignature, password | ssoProof }
   app.post(
     "/api/labs/:labId/veritapolicy/attestations/:id/complete",
     authMiddleware,
@@ -44858,13 +44832,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     async (req: any, res) => {
       const id = Number(req.params.id);
       if (!Number.isFinite(id)) return res.status(400).json({ error: "Bad id" });
-      const { typedSignature, password } = req.body || {};
-      if (!typedSignature || typeof typedSignature !== "string" || typedSignature.trim().length < 2) {
-        return res.status(400).json({ error: "typedSignature required" });
-      }
-      if (!password || typeof password !== "string") {
-        return res.status(400).json({ error: "password required for electronic signature" });
-      }
+      const { typedSignature, password, ssoProof } = req.body || {};
+      const signerInput = { typedName: typedSignature, password, ssoProof, purpose: "policy_attest" as const };
+      const missing = signerInputRefusal(signerInput);
+      if (missing) return res.status(missing.status).json(missing.body);
       const sqlite = (db as any).$client;
       const att = sqlite
         .prepare(
@@ -44899,17 +44870,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           return res.status(422).json({ error: "quiz_not_passed", threshold: att.quiz_pass_threshold, score: att.quiz_score, message: `A score of at least ${att.quiz_pass_threshold}% is required to complete this attestation. Your score was ${att.quiz_score}%.` });
         }
       }
-      // 21 CFR Part 11 re-auth.
-      const userRow = sqlite
-        .prepare("SELECT password_hash FROM users WHERE id = ?")
-        .get(req.userId) as any;
-      if (!userRow?.password_hash) {
-        return res.status(401).json({ error: "User has no password set" });
-      }
-      const passwordOk = await bcrypt.compare(String(password), userRow.password_hash);
-      if (!passwordOk) {
-        return res.status(401).json({ error: "Password incorrect; attestation not recorded" });
-      }
+      // 21 CFR Part 11 re-auth (server/eSignature.ts).
+      const signer = await verifySigner(sqlite, req.userId, signerInput, { ip: req.ip });
+      if (!signer.ok) return res.status(signer.status).json(signer.body);
       sqlite
         .prepare(
           `UPDATE policy_attestations
@@ -44917,7 +44880,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
                  attested_document_hash = ?,
                  typed_signature = ?,
                  ip_address = ?,
-                 user_agent = ?
+                 user_agent = ?,
+                 signed_with = ?,
+                 signed_with_provider = ?
            WHERE id = ?`
         )
         .run(
@@ -44925,6 +44890,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           typedSignature.trim(),
           req.ip || null,
           (req.headers["user-agent"] as string | undefined) || null,
+          ...signedWithValues(signer.signedWith),
           id
         );
       writeAuditLog(sqlite, {
@@ -44959,7 +44925,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // VeritaDC document control: archived documents, restore, bulk approval, email notices (B13; server/policyDocumentControl.ts).
   registerPolicyDocumentControlRoutes(app, {
     sqlite: () => (db as any).$client, authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit, hasModuleEditAccess,
-    verifyElectronicSignature, recordApprovalDecision,
+    recordApprovalDecision,
   });
   // One controlled procedure for several laboratories (B1; server/policySharedDocuments.ts).
   registerPolicySharedDocumentRoutes(app, {

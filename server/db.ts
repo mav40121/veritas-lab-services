@@ -10457,6 +10457,48 @@ try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_veritaceu_profiles_lab ON veri
   addCol("sso_handoffs", "used_at", "ALTER TABLE sso_handoffs ADD COLUMN used_at TEXT");
 }
 
+// Signing with the hospital's single sign-on (S0, 2026-11-27; server/eSignature.ts, server/ssoRoutes.ts). signature_sso_requests:
+// one signature's round trip to the hospital's sign-in (who, for what purpose, through which configuration), the single-use
+// 60-second handoff code the provider's return carries back, and the single-use proof (120 seconds) the signer's own session trades
+// it for; codes stored only as SHA-256 hashes, rows kept a day. sso_login_states.sign_request_id marks a provider round trip as a
+// signature's. signed_with ('password' or 'sso') and signed_with_provider (the hospital's name) on each signature table say how a
+// signature was made; rows from before are empty. CREATE + ALTER blocks together per the NEW DB TABLE RULE.
+{
+  const addCol = (table: string, col: string, ddl: string) => {
+    const cols = (sqlite.prepare(`PRAGMA table_info(${table})`).all() as any[]).map((c: any) => c.name);
+    if (!cols.includes(col)) { try { sqlite.exec(ddl); } catch {} }
+  };
+  try {
+    sqlite.exec(`CREATE TABLE IF NOT EXISTS signature_sso_requests (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      purpose TEXT NOT NULL,
+      config_id INTEGER NOT NULL,
+      waiter TEXT,
+      created_at TEXT NOT NULL,
+      provider_name TEXT,
+      signed_in_at TEXT,
+      handoff_hash TEXT,
+      handoff_expires_at TEXT,
+      handed_at TEXT,
+      proof_hash TEXT,
+      proof_expires_at TEXT,
+      used_at TEXT
+    )`);
+  } catch {}
+  for (const [c, d] of [["waiter", "TEXT"], ["provider_name", "TEXT"], ["signed_in_at", "TEXT"], ["handoff_hash", "TEXT"], ["handoff_expires_at", "TEXT"],
+    ["handed_at", "TEXT"], ["proof_hash", "TEXT"], ["proof_expires_at", "TEXT"], ["used_at", "TEXT"]]) {
+    addCol("signature_sso_requests", c, `ALTER TABLE signature_sso_requests ADD COLUMN ${c} ${d}`);
+  }
+  try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_signature_sso_requests_handoff ON signature_sso_requests(handoff_hash)"); } catch {}
+  try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_signature_sso_requests_proof ON signature_sso_requests(proof_hash)"); } catch {}
+  addCol("sso_login_states", "sign_request_id", "ALTER TABLE sso_login_states ADD COLUMN sign_request_id INTEGER");
+  for (const t of ["policy_signoffs", "policy_attestations", "maintain_record_reviews"]) {
+    addCol(t, "signed_with", `ALTER TABLE ${t} ADD COLUMN signed_with TEXT`);
+    addCol(t, "signed_with_provider", `ALTER TABLE ${t} ADD COLUMN signed_with_provider TEXT`);
+  }
+}
+
 // Content-Security-Policy violation reports (2026-10-16, Q47 = 1; server/securityHeaders.ts). The CSP
 // ships as Report-Only first; browsers POST what would have been blocked to /api/csp-report. One row
 // per (directive, blocked origin, page path) with a running count, so the enforce decision rests on

@@ -129,6 +129,7 @@ const VeritaPolicyIqcpPage = lazy(() => import("@/pages/VeritaPolicyIqcpPage"));
 const VeritaPolicyCfrReferencePage = lazy(() => import("@/pages/VeritaPolicyCfrReferencePage"));
 const SurveyorViewPage = lazy(() => import("@/pages/SurveyorViewPage"));
 const PolicySharePage = lazy(() => import("@/pages/PolicySharePage"));
+const SsoSignDonePage = lazy(() => import("@/pages/SsoSignDonePage"));
 const VeritaPolicyPage = lazy(() => import("@/pages/VeritaPolicyPage"));
 const CumsumPage = lazy(() => import("@/pages/CumsumPage"));
 const RoadmapPage = lazy(() => import("@/pages/RoadmapPage"));
@@ -395,6 +396,11 @@ function AppContent() {
   // banners, onboarding or GA, for someone outside the lab such as nursing. See PolicySharePage.tsx.
   if (/^\/policy\/[^/]+$/.test(location)) {
     return <Suspense fallback={<PageFallback />}><PolicySharePage /></Suspense>;
+  }
+
+  // The hospital sign-in window's last page when signing (components/SignaturePrompt.tsx): alone, no navigation or banners.
+  if (location === "/sso/sign-done") {
+    return <Suspense fallback={<PageFallback />}><SsoSignDonePage /></Suspense>;
   }
 
   // Phase 2c: wraps a legacy workspace page component so unauthenticated /
