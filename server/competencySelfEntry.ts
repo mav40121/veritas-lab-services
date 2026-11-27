@@ -6,7 +6,7 @@
 // My sign-offs' PUT /api/staff-portal-session/competencies/:id, both in server/routes.ts.
 
 import { el5Columns, el5SamplesFromRow, type El5Sample } from "@shared/competencyEl5Samples";
-import { WAIVED_METHOD_NAMES } from "@shared/competencyStatus";
+import { WAIVED_METHOD_NAMES, elementHasData } from "@shared/competencyStatus";
 import { WAIVED_BLIND_METHOD, waivedSpecimenColumns, waivedSpecimensFromRow } from "@shared/competencyWaivedSpecimens";
 import { cleanSelfValue, mergeSelfSamples, mergeSelfSpecimens, SELF_ELEMENT_FIELDS, type SelfCleaned, type SelfFieldKind } from "@shared/competencySelfEntry";
 import { resolveSeatPermission, type SeatPermissions } from "@shared/schema";
@@ -144,13 +144,17 @@ export function planSelfElements(args: { rows: any[]; elements: any[]; elementCo
     if (naNow && Object.keys(changed).length) return { error: `${label}: your evaluator marked this N/A, so it takes no entry.` };
     if (row) {
       if (!Object.keys(changed).length) continue;
+      // B5 (mock 2): what the observer signed stays as signed. The observer signs again only after the evaluator changes it.
+      if (row.observer_signature_id != null) return { error: `${label} was signed by your observer, so it can't be changed here. Ask your evaluator.` };
       // Entries the person took back, on a row the evaluator never touched, leave no row: a blank row would keep the method
       // in progress and would block the evaluator from unlocking its earlier sign-off.
       const after = { ...row, ...changed };
       const prefix = `el${n}_`;
       const empty = !after.passed && Object.keys(after).every((k) => !k.startsWith(prefix) || after[k] == null || after[k] === "" || (after[k] === 0 && k !== "el5_acceptable"));
+      // B5, Q2 = 1: an element that had no entry before this went live and gets one now is an entry made after it.
+      const sets = row.observer_sign_required == null && !elementHasData(row, n) && elementHasData(after, n) ? { ...changed, observer_sign_required: 1 } : changed;
       if (empty) ops.deletes.push(Number(row.id));
-      else ops.updates.push({ id: Number(row.id), sets: changed });
+      else ops.updates.push({ id: Number(row.id), sets });
       continue;
     }
     const evaluatorOwned: Record<string, any> = {
@@ -158,6 +162,7 @@ export function planSelfElements(args: { rows: any[]; elements: any[]; elementCo
       [`el${n}_na`]: shown.na ? 1 : 0,
       [`el${n}_na_justification`]: shown.na ? (shown.naJustification || null) : null,
       ...(n === 1 || n === 4 || n === 7 ? { [`el${n}_observer_initials`]: shown.observerInitials || null } : {}),
+      ...(n === 1 ? { el1_date_observed: shown.dateObserved || null } : {}),
       ...(n === 4 || n === 7 ? { [`el${n}_date_observed`]: shown.dateObserved || null } : {}),
       ...(n === 8 ? { el8_function_assessed: shown.functionAssessed || null, el8_date: shown.date || null } : {}),
     };
@@ -166,7 +171,8 @@ export function planSelfElements(args: { rows: any[]; elements: any[]; elementCo
     Object.assign(data, next);
     // A blank Save starts nothing: no row, and the method stays Not started.
     if (!anyValue(data, true) && !anyValue(evaluatorOwned)) continue;
-    ops.inserts.push({ instrument_id: instrumentId, method_number: n, element_number: n, item_label: instrumentName, method_group_name: instrumentName, ...evaluatorOwned, ...data });
+    // B5, Q2 = 1: a row made now is an entry made after this went live.
+    ops.inserts.push({ instrument_id: instrumentId, method_number: n, element_number: n, item_label: instrumentName, method_group_name: instrumentName, observer_sign_required: 1, ...evaluatorOwned, ...data });
   }
   return { ops };
 }

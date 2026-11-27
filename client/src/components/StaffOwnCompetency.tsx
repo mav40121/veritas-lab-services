@@ -16,6 +16,7 @@ import { downloadPdfToken } from "@/lib/utils";
 import { fmtDate } from "@/lib/competencyElements";
 import { assessmentTypeLabel } from "@shared/competencyEvaluation";
 import { useNontechnicalDue, nontechnicalDueText, nontechnicalDueClass } from "@/components/CompetencyNontechnicalFrequencyCard";
+import CompetencyToSign from "@/components/CompetencyToSign";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -67,6 +68,9 @@ export function StaffOwnHome() {
         <h1 className="text-2xl font-bold tracking-tight">VeritaComp{"™"}</h1>
         <p className="text-sm text-muted-foreground mt-1">Your competency record. Your evaluator signs off each method on its own.</p>
       </div>
+
+      {/* B5 (mock 2, Q3 = 1): a Staff login signs as observer or evaluator, their own signature only, with no editing. */}
+      <CompetencyToSign labId={labId} staffView />
 
       {ownEmployeeId == null ? (
         <Card><CardContent className="p-5 text-sm text-muted-foreground" data-testid="staff-own-unlinked">{UNLINKED}</CardContent></Card>

@@ -21,6 +21,7 @@ import { assessmentTypeLabel, evaluationDueDate } from "@shared/competencyEvalua
 import { el5SamplesFromRow } from "@shared/competencyEl5Samples";
 import { waivedEvidenceText } from "@shared/competencyWaivedSpecimens";
 import { elementHasData, NEEDS_REVIEW } from "@shared/competencyStatus";
+import { howSignedText, observerHowText, fingerprintGroups, NOT_ESIGNED_TEXT } from "@shared/competencyObservation";
 import { existsSync as _teaExistsSync, readFileSync as _teaReadFileSync } from "fs";
 import { resolve as _teaResolve } from "path";
 import {
@@ -6145,6 +6146,11 @@ interface RecordSignoff {
   // BUG-051 (2026-10-14): Overall Determination; absent reads as pass (signed before the field existed).
   determination?: "pass" | "fail" | "remediation";
   remediationPlan?: string | null; remediationTargetDate?: string | null;
+  // B5 (mock 2): how it was signed (shared/competencyObservation.ts howSignedText), when, and the server's fingerprint of the entries.
+  signedWith?: string | null; provider?: string | null; signedAtText?: string | null;
+  fromPaper?: boolean; paperLocation?: string | null; recordedByName?: string | null; recordedDate?: string | null;
+  imported?: boolean; importedFrom?: string | null;
+  fingerprint?: string | null; fingerprintHolds?: boolean | null;
 }
 interface EmployeeCompetencyRecordInput {
   labName: string;
@@ -6207,6 +6213,7 @@ export function buildEmployeeCompetencyRecordHTML(input: EmployeeCompetencyRecor
     const parts = String(n || "").trim().split(/\s+/).filter(Boolean);
     return parts.length > 1 ? `${parts[0][0]}. ${parts.slice(1).join(" ")}` : parts.join(" ");
   };
+  const mdyDate = (iso: unknown) => { const s = String(iso || "").slice(0, 10); const [y, m, d] = s.split("-"); return y && m && d ? `${m}/${d}/${y}` : s; };
 
   let signedCount = 0;
   const signLines: string[] = [];
@@ -6237,7 +6244,15 @@ export function buildEmployeeCompetencyRecordHTML(input: EmployeeCompetencyRecor
     const cells = ts.waived
       ? `<td colspan="${anyElements ? elementCount : 1}" style="text-align:left;"><b>Waived testing: ${wPassed} of ${required} required methods passed.</b>${wMethods.filter((m) => m.status === "pass").length ? ` ${wMethods.filter((m) => m.status === "pass").map((m) => `${esc(m.name)}${m.date ? ` (${esc(String(m.date).slice(0, 10))})` : ""}`).join("; ")}` : ""}</td>`
       : Array.from({ length: elementCount }, (_, i) => `<td>${chip(statuses.find((x) => x.num === i + 1)?.status || "incomplete")}</td>`).join("");
-    signLines.push(`<tr><td>${label}${members.length ? `: ${esc(members.join(", "))}` : ""}</td><td>${assessment}</td><td>${last ? esc(last.signerName || "") : ""}</td><td>${last ? esc(role(last.signerRole)) : ""}</td><td>${last ? esc(last.signerInitials || "") : ""}</td><td>${last ? esc(last.signedDate || "") : ""}</td></tr>`);
+    // B5 (mock 2): one line per method, as the mock draws it: the method and its result, the evaluator and role, the date and time,
+    // and how it was signed (as themselves, from paper with where and who recorded it, or recorded before this build).
+    const detWord = det === "fail" ? "Fail" : det === "remediation" ? "Remediation Required" : "Pass";
+    const esigned = !!last && !last.fromPaper && (last.signedWith === "password" || last.signedWith === "sso");
+    const at = last?.signedAtText ? String(last.signedAtText).replace(/^\S+\s*/, "") : "";
+    signLines.push(`<tr><td><b>${label}</b>${members.length ? `: ${esc(members.join(", "))}` : ""}<span class="sm">${assessment}${last ? `, ${detWord}` : ""}</span></td>`
+      + `<td>${last ? `<span class="${esigned ? "esig" : "nm"}">${esc(last.signerName || "")}</span><span class="sm">${esc(role(last.signerRole))}${last.signerInitials ? `, ${esc(last.signerInitials)}` : ""}</span>` : ""}</td>`
+      + `<td>${last ? `${esc(mdyDate(last.signedDate))}${at ? `<span class="sm">${esc(at)}</span>` : ""}` : ""}</td>`
+      + `<td class="how">${last ? esc(howSignedText(last)) : ""}</td></tr>`);
     return `<tr>
       <td class="sys"><b>${label}</b><span>${meta}</span></td>
       ${cells}
@@ -6253,7 +6268,7 @@ export function buildEmployeeCompetencyRecordHTML(input: EmployeeCompetencyRecor
   // Michael 2026-11-02: the entries each method was signed on, after page 1 (the sign-off lines stay on page 1, CLAUDE.md
   // section 5). Every sign-off with stored entries, newest first per method; imported history has none here.
   const ENTRY_FIELDS: Record<number, Array<[string, string, "text" | "date" | "bool"]>> = {
-    1: [["specimenId", "Specimen ID observed", "text"], ["observerInitials", "Observer", "text"]],
+    1: [["specimenId", "Specimen ID observed", "text"], ["dateObserved", "Date observed", "date"], ["observerInitials", "Observer", "text"]],
     2: [["evidence", "Evidence", "text"], ["date", "Date", "date"]],
     3: [["qcDate", "Date QC was run", "date"]],
     4: [["dateObserved", "Date observed", "date"], ["observerInitials", "Observer", "text"]],
@@ -6264,16 +6279,37 @@ export function buildEmployeeCompetencyRecordHTML(input: EmployeeCompetencyRecor
   };
   const mdy = (iso: unknown) => { const s = String(iso || "").slice(0, 10); const [y, m, d] = s.split("-"); return y && m && d ? `${m}/${d}/${y}` : s; };
   const val = (v: unknown, kind: "text" | "date" | "bool") => (v === null || v === undefined || v === "" ? "" : kind === "date" ? mdy(v) : kind === "bool" ? (v ? "Yes" : "No") : String(v));
-  const entryCell = (el: any): string => {
+  // B5 (mock 2): an Element 1 or 4 entry says whether its observer signed it, as themselves. An entry made before this went live
+  // has nothing added: it prints as recorded (Q2 = 1).
+  const observerLine = (el: any, signoff?: any): string => {
+    const o = el.observer;
+    if (!o || el.na) return "";
+    if (o.signed) {
+      const s = o.signed;
+      return `<br><b>Signed by the observer, ${esc(s.name)}${s.role ? `, ${esc(s.role)}` : ""}, ${esc(s.signedAtText || "")}, ${esc(observerHowText(s))}</b>`;
+    }
+    // A sign-off entered from paper (Q1 = 1): the paper carries the observer's signature.
+    if (o.required && signoff?.fromPaper) return `<br><b>Observer signed on paper (${esc(signoff.paperLocation || "see the paper record")})</b>`;
+    if (o.required) return `<br><b>Observer not signed${o.changedAfterSigning ? " (the entry changed after the observer signed)" : ""}</b>`;
+    return "";
+  };
+  const entryCell = (el: any, signoff?: any): string => {
     if (el.na) return `N/A: ${esc(el.naJustification || "no reason entered")}`;
     if (el.num === 5 && Array.isArray(el.samples) && el.samples.length) {
       return el.samples.map((s: any, i: number) => `${el.samples.length > 1 ? `Sample ${i + 1}: ` : ""}${[s.sampleType, s.sampleId].filter(Boolean).map((x: any) => esc(String(x))).join(", ")}${s.acceptable == null ? "" : s.acceptable ? ", acceptable" : ", not acceptable"}`).join("<br>");
     }
-    return (ENTRY_FIELDS[el.num] || []).map(([k, label, kind]) => {
+    return ((ENTRY_FIELDS[el.num] || []).map(([k, label, kind]) => {
       const raw = val(el[k], kind);
       const shown = k === "observerInitials" && raw && el.observerName ? `${raw} (${el.observerName})` : raw;
       return shown ? `${label}: ${esc(shown)}` : "";
-    }).filter(Boolean).join("; ") || `<span style="color:#7A7974;">Not entered</span>`;
+    }).filter(Boolean).join("; ") || `<span style="color:#7A7974;">Not entered</span>`) + observerLine(el, signoff);
+  };
+  // B5: the fingerprint the server made from the entries as signed, or how a sign-off without one was made.
+  const recordLine = (s: any): string => {
+    if (s.fingerprint) {
+      return `<div class="edoc">Record ${esc(fingerprintGroups(s.fingerprint))}, made by the server from the entries as signed.${s.fingerprintHolds === false ? " The entries on file no longer match it." : ""} ${esc(howSignedText(s).replace(/\.$/, ""))}.</div>`;
+    }
+    return `<div class="edoc">${esc(NOT_ESIGNED_TEXT)}.</div>`;
   };
   const entryBlocks: string[] = [];
   for (const ts of input.testSystems) {
@@ -6287,9 +6323,9 @@ export function buildEmployeeCompetencyRecordHTML(input: EmployeeCompetencyRecor
             ((s.waivedMethods || []) as any[]).map((m) => `<tr><td style="text-align:left;">${esc(m.name)}</td><td style="text-align:center;">${chip(m.status === "pass" ? "pass" : m.status === "fail" ? "fail" : "inc")}</td><td style="text-align:left;">${esc(m.evidence || "")}</td><td class="nw">${esc(mdy(m.date))}</td><td>${esc(m.initials || "")}</td></tr>`).join("")
           }</tbody></table>`
         : `<table class="m e"><thead><tr><th style="width:34%">Element</th><th style="width:9%">Result</th><th>Entries as signed</th></tr></thead><tbody>${
-            ((s.elements || []) as any[]).map((el) => `<tr><td style="text-align:left;">El ${el.num}: ${EMP_REC_ELEMENT_NAMES[el.num] || ""}</td><td style="text-align:center;">${chip(el.na ? "na" : el.status)}</td><td style="text-align:left;">${entryCell(el)}</td></tr>`).join("")
+            ((s.elements || []) as any[]).map((el) => `<tr><td style="text-align:left;">El ${el.num}: ${EMP_REC_ELEMENT_NAMES[el.num] || ""}</td><td style="text-align:center;">${chip(el.na ? "na" : el.status)}</td><td style="text-align:left;">${entryCell(el, s)}</td></tr>`).join("")
           }</tbody></table>`;
-      entryBlocks.push(`<div class="eblock"><div class="ehead">${head}</div>${doc}${body}</div>`);
+      entryBlocks.push(`<div class="eblock"><div class="ehead">${head}</div>${doc}${body}${recordLine(s)}</div>`);
     }
   }
 
@@ -6335,8 +6371,12 @@ export function buildEmployeeCompetencyRecordHTML(input: EmployeeCompetencyRecor
     .attest { font-size:8.5px; margin:0 0 6px; }
     .sign table { width:100%; border-collapse:collapse; font-size:9.5px; }
     .sign th { text-align:left; font-size:8px; color:#6b6b6b; text-transform:uppercase; letter-spacing:.3px; padding:3px 4px; border-bottom:1px solid #D0D0D0; }
-    .sign td { padding:5px 4px; border-bottom:1px solid #999; font-weight:600; height:20px; }
-    .sign td:nth-child(n+4) { white-space:nowrap; }
+    .sign td { padding:5px 4px; border-bottom:1px solid #999; font-weight:600; height:20px; vertical-align:top; }
+    .sign td:nth-child(3) { white-space:nowrap; }
+    /* B5 (mock 2): the second line of a cell, an electronic signature's name, and how it was signed. */
+    .sign td .sm { display:block; font-weight:400; font-size:8.5px; color:#4a4a4a; }
+    .sign td .esig { font-family: "Segoe Script", "Brush Script MT", "Lucida Handwriting", cursive; font-style:italic; font-weight:400; font-size:11px; }
+    .sign td.how { font-weight:400; font-size:9px; }
     .entries { page-break-before: always; }
     .eblock { page-break-inside: avoid; margin: 0 0 12px; }
     .ehead { font-weight:700; font-size:10px; color:#0A3A3D; margin: 8px 2px 3px; }
@@ -6368,7 +6408,7 @@ export function buildEmployeeCompetencyRecordHTML(input: EmployeeCompetencyRecor
       <div class="h">EVALUATOR SIGN-OFF BY METHOD</div>
       <div class="body">
         <p class="attest">Each evaluator attests that the competency assessment for the method on that line was completed for the elements shown. Final approval and clinical determination must be made by the laboratory director or designee.</p>
-        <table><thead><tr><th style="width:27%">Method</th><th style="width:11%">Assessment</th><th style="width:22%">Evaluator name (signature)</th><th style="width:21%">Role</th><th style="width:7%">Initials</th><th style="width:12%">Date signed</th></tr></thead>
+        <table><thead><tr><th style="width:27%">Method</th><th style="width:27%">Evaluator and role</th><th style="width:14%">Date</th><th>How signed</th></tr></thead>
         <tbody>${signLines.join("") || `<tr><td colspan="6">&nbsp;</td></tr>`}</tbody></table>
       </div>
     </div>

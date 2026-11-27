@@ -124,6 +124,7 @@ export const EXPORT_TABLES: Record<string, ExportTable> = {
   competency_reminder_config: lab("VeritaComp"),
   competency_reminder_log: lab("VeritaComp"),
   competency_method_signoffs: lab("VeritaComp"),
+  competency_observation_signatures: lab("VeritaComp"),
   competency_method_history: lab("VeritaComp"),
   competency_instrument_groups: lab("VeritaComp"),
   competency_instrument_group_members: lab("VeritaComp"),

@@ -15,6 +15,7 @@ export const INSTRUMENT_REFERENCES: Array<{ table: string; column: string; what:
   { table: "staff_duty_change_events", column: "instrument_id", what: "VeritaStaff duty-change reevaluations" },
   { table: "competency_assessment_items", column: "instrument_id", what: "VeritaComp per-method competency items" },
   { table: "competency_method_signoffs", column: "instrument_id", what: "VeritaComp per-method sign-offs" },
+  { table: "competency_observation_signatures", column: "instrument_id", what: "VeritaComp observer signatures" },
   { table: "competency_method_history", column: "instrument_id", what: "VeritaComp method history" },
   { table: "competency_instrument_group_members", column: "instrument_id", what: "VeritaComp method group members" },
   { table: "iqcp_plans", column: "instrument_id", what: "IQCP plans" },

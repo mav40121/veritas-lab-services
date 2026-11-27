@@ -99,7 +99,7 @@ async function main() {
 
     // Pat: Signed Analyzer signed (frozen rows), Working Analyzer entered and unsigned, the meter's blind specimens entered.
     await put(pat, A, { elements: entries(allPass) });
-    const signed = await call("POST", `${L}/competency/employee/${pat}/test-system/${A}/sign`, { signerStaffEmployeeId: tc, signerInitials: "CT", determination: "pass" }, tk);
+    const signed = await call("POST", `${L}/competency/employee/${pat}/test-system/${A}/sign`, { fromPaper: true, paperLocation: "Made-up binder", signerStaffEmployeeId: tc, signerInitials: "CT", determination: "pass" }, tk);
     const signoffId = Number(signed.j.id ?? signed.j.signoffId ?? (sqlite.prepare("SELECT id FROM competency_method_signoffs WHERE staff_employee_id = ? AND instrument_id = ?").get(pat, A) as any)?.id);
     await put(pat, B, { elements: entries() });
     const pass = (evidence: string) => ({ evidence, date: day, initials: "MU", passed: true });

@@ -89,7 +89,7 @@ async function main() {
     const put = (emp: number, inst: number, body: any) => call("PUT", `${L}/competency/employee/${emp}/test-system/${inst}`, body, tk);
     const view = async (emp: number, token = tk) => (await call("GET", `${L}/competency/employee/${emp}`, undefined, token)).j;
     const tsOf = (v: any, id: number) => (v.testSystems || []).find((x: any) => x.instrumentId === id) || {};
-    const sign = (emp: number, inst: number, body: any = {}) => call("POST", `${L}/competency/employee/${emp}/test-system/${inst}/sign`, { signerStaffEmployeeId: tc, signerInitials: "CT", ...body }, tk);
+    const sign = (emp: number, inst: number, body: any = {}) => call("POST", `${L}/competency/employee/${emp}/test-system/${inst}/sign`, { fromPaper: true, paperLocation: "Made-up binder", signerStaffEmployeeId: tc, signerInitials: "CT", ...body }, tk);
     const rowsFor = (emp: number, inst: number) => sqlite.prepare(
       `SELECT i.* FROM competency_assessment_items i JOIN competency_assessments a ON a.id = i.assessment_id JOIN competency_employees ce ON ce.id = a.employee_id WHERE ce.staff_employee_id = ? AND i.instrument_id = ? ORDER BY i.id`
     ).all(emp, inst) as any[];

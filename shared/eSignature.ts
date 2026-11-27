@@ -6,6 +6,8 @@
 // policy_decision is one approval step's approve or reject: the staff login's screen offers both under one signature, and the
 // request itself says which (recorded as the signoff's action). policy_read_sign is a Staff login's read-and-sign under My sign-offs,
 // one document or several under one signature (BUG-188, server/policyStaffSign.ts).
+// B5: competency_observation is the observer signing Elements 1 and 4 (one or several at once); competency_method is the
+// evaluator signing one method's competency (shared/competencyObservation.ts).
 
 export const SIGNATURE_PURPOSES = [
   "policy_decision",
@@ -22,6 +24,8 @@ export const SIGNATURE_PURPOSES = [
   "verification_signoff_group",
   "qc_rules",
   "policy_read_sign",
+  "competency_observation",
+  "competency_method",
 ] as const;
 export type SignaturePurpose = (typeof SIGNATURE_PURPOSES)[number];
 export const isSignaturePurpose = (p: unknown): p is SignaturePurpose =>

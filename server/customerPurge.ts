@@ -71,6 +71,8 @@ export const PURGE_OVERRIDES: Record<string, PurgeRule> = {
   policy_shared_copies: del(`lab_id ${IN("labs")} OR organization_id ${IN("orgs")}`),
   policy_shared_versions: del(`lab_id ${IN("labs")} OR copy_id IN (SELECT id FROM policy_shared_copies WHERE organization_id ${IN("orgs")})`),
   policy_addenda: del(`lab_id ${IN("labs")}`),
+  // B5: an observer's competency signature goes with the lab it was signed in (lab_id is never empty).
+  competency_observation_signatures: del(`lab_id ${IN("labs")}`),
   // VeritaDC documents linked to a checklist item or a finding (server/inspectionLinks.ts) go with the lab, and a finding's
   // links with the finding.
   veritascan_item_policy_links: del(`lab_id ${IN("labs")}`),

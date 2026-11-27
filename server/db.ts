@@ -1541,6 +1541,12 @@ const newCompItemCols: [string, string][] = [
   // Element 5 with more than one blind / PT sample (2026-10-30, Michael Q71 = 1): the full list as JSON when there is
   // more than one; sample 1 also stays in el5_sample_type / el5_sample_id / el5_acceptable (shared/competencyEl5Samples.ts).
   ["el5_samples_json", "TEXT"],
+  // B5 (signatures mock 2, 2026-11-27; shared/competencyObservation.ts): the observer signs Elements 1 and 4. Element 1 gets
+  // its own date observed; observer_sign_required is 1 on an entry made after this went live (NULL on every row before, which
+  // stays as recorded, Q2 = 1); observer_signature_id names the observer's signature (competency_observation_signatures).
+  ["el1_date_observed", "TEXT"],
+  ["observer_sign_required", "INTEGER"],
+  ["observer_signature_id", "INTEGER"],
 ];
 for (const [col, colType] of newCompItemCols) {
   if (!compItemColNames.includes(col)) {
@@ -1667,7 +1673,54 @@ sqlite.exec(`CREATE TABLE IF NOT EXISTS competency_method_signoffs (
   cmsGuard("determination", "determination TEXT");
   cmsGuard("remediation_plan", "remediation_plan TEXT");
   cmsGuard("remediation_target_date", "remediation_target_date TEXT");
+  // B5 (signatures mock 2, 2026-11-27): the evaluator signs as themselves (server/eSignature.ts verifySigner), so the row keeps the
+  // typed name, how it was signed and when; or it is a sign-off from paper entered later by someone else (Q1 = 1), with where the
+  // paper is and who recorded it (recorded_by_user_id, created_at). record_fingerprint is the server's SHA-256 of the frozen entries.
+  // Unlock keeps its reason. A row with none of these was recorded before this build and prints so.
+  cmsGuard("typed_name", "typed_name TEXT");
+  cmsGuard("signed_with", "signed_with TEXT");
+  cmsGuard("signed_with_provider", "signed_with_provider TEXT");
+  cmsGuard("signed_at", "signed_at TEXT");
+  cmsGuard("from_paper", "from_paper INTEGER");
+  cmsGuard("paper_location", "paper_location TEXT");
+  cmsGuard("recorded_by_user_id", "recorded_by_user_id INTEGER");
+  cmsGuard("record_fingerprint", "record_fingerprint TEXT");
+  cmsGuard("revoke_reason", "revoke_reason TEXT");
   try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_cms_lab_emp_inst ON competency_method_signoffs(lab_id, staff_employee_id, instrument_id)"); } catch {}
+}
+// B5 (signatures mock 2, 2026-11-27): the observer's signature on Element 1 or Element 4, one row per observation, signed as
+// themselves (several at once under one signature, each its own row and audit row). signed_content is what was signed
+// (shared/competencyObservation.ts observationContent); the item points at its row through observer_signature_id, and a change
+// to the entry after signing leaves the row on file and no longer holding, so the observer signs again.
+sqlite.exec(`CREATE TABLE IF NOT EXISTS competency_observation_signatures (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  lab_id INTEGER NOT NULL,
+  staff_employee_id INTEGER NOT NULL,
+  instrument_id INTEGER NOT NULL,
+  assessment_id INTEGER,
+  item_id INTEGER,
+  element_number INTEGER NOT NULL,
+  signed_content TEXT NOT NULL,
+  watched TEXT,
+  date_observed TEXT NOT NULL,
+  result TEXT NOT NULL,
+  observer_staff_employee_id INTEGER NOT NULL,
+  observer_name TEXT NOT NULL,
+  observer_role TEXT,
+  typed_name TEXT NOT NULL,
+  signed_by_user_id INTEGER NOT NULL,
+  signed_at TEXT NOT NULL,
+  signed_with TEXT,
+  signed_with_provider TEXT,
+  created_at TEXT NOT NULL
+)`);
+{
+  // Columns added to the table after its first version join here, guarded, so a database made before them gains them.
+  const cosCols = (sqlite.prepare("PRAGMA table_info(competency_observation_signatures)").all() as any[]).map((c: any) => c.name);
+  const cosGuard = (name: string, decl: string) => { if (!cosCols.includes(name)) { try { sqlite.exec(`ALTER TABLE competency_observation_signatures ADD COLUMN ${decl}`); } catch { /* already there */ } } };
+  cosGuard("signed_with", "signed_with TEXT");
+  cosGuard("signed_with_provider", "signed_with_provider TEXT");
+  try { sqlite.exec("CREATE INDEX IF NOT EXISTS idx_cos_lab_emp ON competency_observation_signatures(lab_id, staff_employee_id)"); } catch {}
 }
 // Past competency dates loaded from a lab's own records (Michael 2026-11-04, Q164 = 1): a person, a method, a date and who evaluated it.
 // Read as imported history (loadImportedHistory): a live per-method sign-off always wins. One row per analyzer in a method group; the others
