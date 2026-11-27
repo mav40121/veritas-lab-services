@@ -43,6 +43,8 @@ export interface MonthlyReviewResult {
   added_after_review?: boolean;
   violations: { rule_code: string; severity: string; detail: string | null }[];
   corrective_actions: { action_taken: string; status: string; taken_at: string }[];
+  // The rules that judged the run (B12 part 2): "Rules of 12/01/2026", "Starting rules", "Before rule settings".
+  judged_under?: string | null;
 }
 
 export interface MonthlyReviewPayload {
@@ -52,6 +54,8 @@ export interface MonthlyReviewPayload {
   periodYear: number;
   periodMonth: number; // 1-12
   results: MonthlyReviewResult[];
+  // The lab's QC rules in force for this analyte in the period, one line per set (server/qcRuleSets.ts rulesInForceLines).
+  rulesInForce?: string[];
   baselineMean: number | null; // null if no accepted history; falls back to mfr_mean
   baselineSD: number | null;
   reviewerName: string;
@@ -84,6 +88,9 @@ const CSS = `
   .rule.warning { background: #fef2cc; color: #964219; }
   .pill { display: inline-block; padding: 1pt 5pt; border-radius: 8pt; font-size: 7pt; font-weight: 600; background: #e6f2f2; color: #01696F; }
   .ack { border: 1px solid #01696F; border-radius: 4pt; padding: 8pt 10pt; margin-top: 8pt; background: #f4fafa; }
+  .rules-box { border: 1px solid #01696F; border-radius: 4pt; padding: 5pt 8pt; margin-top: 6pt; background: #f4fafa; font-size: 8pt; line-height: 1.4; }
+  .rules-box .t { font-weight: 600; color: #01696F; font-size: 8.5pt; margin-bottom: 2pt; }
+  .legend { font-size: 7.5pt; color: #555; margin-top: 4pt; line-height: 1.4; }
   .ack-row { display: flex; gap: 16pt; align-items: flex-end; margin-top: 8pt; font-size: 9pt; }
   .ack-row > div { flex: 1 1 0; min-width: 0; }
   .ack-label { font-size: 7.5pt; color: #555; text-transform: uppercase; letter-spacing: 0.5pt; }
@@ -208,31 +215,42 @@ export function buildMonthlyReviewHTML(p: MonthlyReviewPayload): string {
   // ~2086-2128). Source: Westgard JO, Barry PL, Hunt MR, Groth T (1981)
   // "A multi-rule Shewhart chart for quality control in clinical chemistry."
   // Clin Chem 27(3):493-501; CLSI EP23-A.
+  // B12 part 2: a lab chooses whether each rule warns or rejects, so the severity is the one each flag was judged with.
   function ruleDescription(code: string): string {
-    if (code === "MFR-range") return "While the lab establishes its own mean and SD, a control result outside the manufacturer's published range for the lot. Rejection rule.";
-    if (code === "1-3s") return "One control result outside +/- 3 SD from the baseline mean. Rejection rule.";
-    if (code === "1-2s") return "One control result outside +/- 2 SD from the baseline mean. Warning only; investigate before reporting.";
-    if (code === "2-2s") return "Two consecutive results outside the same +2 SD or -2 SD limit. Rejection rule.";
-    if (code === "R-4s") return "Range between two consecutive results exceeds 4 SD. Rejection rule.";
-    if (code === "4-1s") return "Four consecutive results outside the same +1 SD or -1 SD limit on the same side of the mean. Rejection rule.";
-    const biasMatch = code.match(/^(\d+)-x$/);
-    if (biasMatch) return `${biasMatch[1]} consecutive results on the same side of the baseline mean (bias). Rejection rule.`;
-    const trendMatch = code.match(/^(\d+)-T$/);
-    if (trendMatch) return `${trendMatch[1]} consecutive results all trending in the same direction. Rejection rule.`;
-    return "";
+    const across = code.endsWith(" across");
+    const base = across ? code.slice(0, -" across".length) : code;
+    let d = "";
+    if (base === "MFR-range") d = "While the lab establishes its own mean and SD, a control result outside the manufacturer's published range for the lot.";
+    else if (base === "1-3s") d = "One control result outside +/- 3 SD from the baseline mean.";
+    else if (base === "1-2s") d = "One control result outside +/- 2 SD from the baseline mean.";
+    else if (base === "2-2s") d = "Two consecutive results outside the same +2 SD or -2 SD limit.";
+    else if (base === "R-4s") d = "Range between two consecutive results exceeds 4 SD.";
+    else if (base === "4-1s") d = "Four consecutive results outside the same +1 SD or -1 SD limit on the same side of the mean.";
+    else {
+      const biasMatch = base.match(/^(\d+)-x$/);
+      const trendMatch = base.match(/^(\d+)-T$/);
+      if (biasMatch) d = `${biasMatch[1]} consecutive results on the same side of the baseline mean (bias).`;
+      else if (trendMatch) d = `${trendMatch[1]} consecutive results all trending in the same direction.`;
+    }
+    if (!d) return "";
+    return across ? `Across levels: ${d.charAt(0).toLowerCase()}${d.slice(1)} Each level is judged against its own mean and SD; the other run is named under the runs table.` : d;
   }
-  const seenRules = new Set<string>();
+  const seenRules = new Map<string, Set<string>>();
   for (const r of p.results) {
     for (const v of r.violations) {
-      if (!seenRules.has(v.rule_code)) seenRules.add(v.rule_code);
+      if (!seenRules.has(v.rule_code)) seenRules.set(v.rule_code, new Set());
+      seenRules.get(v.rule_code)!.add(v.severity);
     }
   }
-  const glossaryRows = Array.from(seenRules)
+  const firedAs = (sevs: Set<string>) => sevs.has("rejection") && sevs.has("warning")
+    ? " Fired as a warning and as a rejection (the lab's rules changed in this period)."
+    : sevs.has("rejection") ? " Fired as a rejection." : " Fired as a warning.";
+  const glossaryRows = Array.from(seenRules.keys())
     .sort()
     .map(code => {
       const desc = ruleDescription(code);
       if (!desc) return "";
-      return `<tr><td style="white-space:nowrap;font-weight:600">${escapeHtml(code)}</td><td>${escapeHtml(desc)}</td></tr>`;
+      return `<tr><td style="white-space:nowrap;font-weight:600">${escapeHtml(code)}</td><td>${escapeHtml(desc + firedAs(seenRules.get(code)!))}</td></tr>`;
     })
     .filter(Boolean)
     .join("");
@@ -246,20 +264,21 @@ export function buildMonthlyReviewHTML(p: MonthlyReviewPayload): string {
        </table>`;
 
   const rowsHtml = p.results.length === 0
-    ? `<tr><td colspan="7" style="text-align:center;color:#888;padding:8pt">No results logged for this period.</td></tr>`
+    ? `<tr><td colspan="8" style="text-align:center;color:#888;padding:8pt">No results logged for this period.</td></tr>`
     : p.results.map(r => {
         const sdi = sd > 0 ? ((r.result_value - mean) / sd).toFixed(2) : "n/a";
         const rulesHtml = r.violations.length === 0
           ? `<span style="color:#888;font-size:7pt">none</span>`
           : r.violations.map(v => `<span class="rule ${v.severity === "rejection" ? "rejection" : "warning"}">${escapeHtml(v.rule_code)}</span>`).join("");
         return `<tr>
-          <td>${escapeHtml(r.result_date)}${r.added_after_review ? `<div style="font-size:6.5pt;font-weight:600;color:#964219">Added after the review</div>` : ""}</td>
+          <td><span style="white-space:nowrap">${escapeHtml(r.result_date)}</span>${r.added_after_review ? `<div style="font-size:6.5pt;font-weight:600;color:#964219">Added after the review</div>` : ""}</td>
           <td class="num">${r.result_value}</td>
           <td class="num">${sdi}</td>
           <td>${escapeHtml(r.instrument || "-")}</td>
           <td>${rulesHtml}</td>
           <td>${r.accepted_for_reporting === 1 ? "Accepted" : "Excluded"}</td>
           <td>${escapeHtml(r.operator_name || "-")}</td>
+          <td>${escapeHtml(r.judged_under || "-")}</td>
         </tr>`;
       }).join("");
 
@@ -282,6 +301,17 @@ export function buildMonthlyReviewHTML(p: MonthlyReviewPayload): string {
   const late = p.results.filter(r => r.added_after_review).length;
   const lateNote = late ? ` <b>${late} run${late === 1 ? " was" : "s were"} added after this review was signed on ${escapeHtml(p.reviewerDate)} and ${late === 1 ? "isn't" : "aren't"} part of it</b> (marked below).` : "";
   const narrative = `Monthly QC review for <b>${escapeHtml(p.lot.analyte)}</b> (Lot ${escapeHtml(p.lot.lot_number)}, ${escapeHtml(p.lot.level)} level) covering ${periodLabel}. ${p.results.length} run${p.results.length === 1 ? "" : "s"} logged: ${totalRejections} rejection-rule fire${totalRejections === 1 ? "" : "s"}, ${totalWarnings} warning${totalWarnings === 1 ? "" : "s"}, ${missingCA} result${missingCA === 1 ? "" : "s"} with a rejection but no corrective action filed. Chart and rule evaluation use: ${escapeHtml(basisLabel)}.${escapeHtml(mfrNote)}${observedNote}${lateNote} Final review and any clinical determination must be made by the laboratory director or designee.`;
+
+  // RULES IN FORCE (B12 part 2, mock 4): the lab's rules for this analyte in the period, and who changed them.
+  const rulesBox = p.rulesInForce && p.rulesInForce.length
+    ? `<div class="rules-box"><div class="t">RULES IN FORCE</div>${p.rulesInForce.map((l) => `<div>${escapeHtml(l)}</div>`).join("")}</div>`
+    : "";
+  // Under the runs table: W and R, and the run each across-levels flag pairs with.
+  const acrossNotes: string[] = [];
+  for (const r of [...p.results].reverse()) {
+    for (const v of r.violations) if (v.rule_code.endsWith(" across")) acrossNotes.push(`${r.result_date} ${v.rule_code}: ${v.detail || ""}.`);
+  }
+  const legendHtml = `<div class="legend">${p.rulesInForce && p.rulesInForce.length ? "W = warning, R = rejection. " : ""}${acrossNotes.map(escapeHtml).join(" ")}</div>`;
 
   const ackBox = `
     <div class="ack">
@@ -335,6 +365,7 @@ export function buildMonthlyReviewHTML(p: MonthlyReviewPayload): string {
       Period: <b>${periodLabel}</b>
     </div>
     <div class="narrative">${narrative}</div>
+    ${rulesBox}
     ${ackBox}
 
     <h2>Levey-Jennings Chart (SDI from baseline mean)</h2>
@@ -342,9 +373,10 @@ export function buildMonthlyReviewHTML(p: MonthlyReviewPayload): string {
 
     <h2>QC Runs (${p.results.length})</h2>
     <table>
-      <thead><tr><th>Date</th><th>Value</th><th>SDI</th><th>Instrument</th><th>Rules</th><th>Reporting</th><th>Operator</th></tr></thead>
+      <thead><tr><th>Date</th><th>Value</th><th>SDI</th><th>Instrument</th><th>Rules</th><th>Reporting</th><th>Operator</th><th>Judged under</th></tr></thead>
       <tbody>${rowsHtml}</tbody>
     </table>
+    ${legendHtml}
 
     ${ruleGlossaryHtml}
 

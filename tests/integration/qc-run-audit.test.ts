@@ -60,7 +60,7 @@ async function main() {
     check("1. ... what was recorded, and the rules it fired", after.result_value === 108.5 && after.result_date === "2026-09-01" && after.run_time === "07:15" && after.instrument === "Analyzer A" && after.control_lot_id === lot && after.lab_id === labId && after.comment === "first of the day"
       && JSON.stringify(after.rules_fired) === JSON.stringify(r.body.violations.map((v: any) => v.rule_code)) && after.requires_corrective_action === true && after.basis_source === "manufacturer", after);
     check("1. ... named so a person can read it", a?.entity_label === "Glucose Low lot A1: 108.5 on 2026-09-01", a?.entity_label);
-    check("1. the answer is the one it gave before", JSON.stringify(Object.keys(r.body).sort()) === '["basis","ok","requires_corrective_action","result_id","settings_used","violations"]');
+    check("1. the answer is the one it gave before", JSON.stringify(Object.keys(r.body).sort()) === '["basis","judged_under","ok","requires_corrective_action","result_id","settings_used","violations"]');
 
     // 2. Voided
     const ca = (await call("POST", `${L}/qc/corrective-actions`, { qc_result_id: id, action_taken: "Reran the control" }, tech.token)).body.corrective_action_id;

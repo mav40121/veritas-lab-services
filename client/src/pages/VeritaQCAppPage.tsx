@@ -132,6 +132,8 @@ interface ResultRow {
   void_reason: string | null;
   accepted_for_reporting: number;
   created_at: string;
+  // The rules that judged the run (B12 part 2): "Rules of 12/01/2026", "Starting rules", "Before rule settings".
+  judged_under?: string | null;
   violations: ViolationRow[];
   corrective_actions: CorrectiveActionRow[];
   notes: QcNoteRow[];
@@ -162,6 +164,14 @@ interface SubmitResponse {
   result_id: number;
   violations: ViolationRow[];
   requires_corrective_action: boolean;
+  // own_date: a late entry, judged under the rules of its own date rather than today's (B12 part 2).
+  judged_under?: { version_id: number | null; label: string; own_date: boolean };
+}
+
+// A late entry is judged under the rules of its own date, and says so.
+function judgedNoteOf(data: SubmitResponse): string | null {
+  const l = data.judged_under?.label ?? "";
+  return data.judged_under?.own_date ? `Judged under the ${l.charAt(0).toLowerCase()}${l.slice(1)}, the rules in force on this run's date, not today's.` : null;
 }
 
 function severityColor(severity: string): string {
@@ -418,6 +428,7 @@ export default function VeritaQCAppPage() {
   // names the rule(s) and the detail, then let them continue. No corrective
   // action is required; the result is already saved (acknowledge-and-proceed).
   const [warnAckOpen, setWarnAckOpen] = useState(false);
+  const [judgedNote, setJudgedNote] = useState<string | null>(null);
   const [warnViolations, setWarnViolations] = useState<ViolationRow[]>([]);
   const [warnValueLabel, setWarnValueLabel] = useState("");
 
@@ -693,6 +704,7 @@ export default function VeritaQCAppPage() {
         return;
       }
       const data: SubmitResponse = await res.json();
+      setJudgedNote(judgedNoteOf(data));
       // Clear the form so the tech doesn't re-submit the same value
       setFormValue("");
       setFormComment("");
@@ -718,7 +730,7 @@ export default function VeritaQCAppPage() {
         );
         setWarnAckOpen(true);
       } else {
-        toast({ title: "Result logged", description: "No Westgard rules fired." });
+        toast({ title: "Result logged", description: `No Westgard rules fired.${judgedNoteOf(data) ? ` ${judgedNoteOf(data)}` : ""}` });
       }
     } catch (err: any) {
       toast({ title: err.message || "Submit failed", variant: "destructive" });
@@ -1077,6 +1089,9 @@ export default function VeritaQCAppPage() {
           )}
           <Button asChild variant="outline" size="sm">
             <Link href={`/labs/${activeLabId}/veritaqc-app/review`}>Review &amp; Sign-off</Link>
+          </Button>
+          <Button asChild variant="outline" size="sm" className="ml-2" data-testid="veritaqc-rules-link">
+            <Link href={`/labs/${activeLabId}/veritaqc-app/rules`}>QC rules</Link>
           </Button>
         </div>
       </div>
@@ -1545,6 +1560,7 @@ export default function VeritaQCAppPage() {
                         <th className="py-2 pr-2">Instrument</th>
                         <th className="py-2 pr-2">Notes</th>
                         <th className="py-2 pr-2">Rules fired</th>
+                        <th className="py-2 pr-2">Judged under</th>
                         <th className="py-2 pr-2">CA filed</th>
                         <th className="py-2 pr-2">Accepted</th>
                         <th className="py-2 pr-2"></th>
@@ -1569,13 +1585,14 @@ export default function VeritaQCAppPage() {
                             ) : (
                               <div className="flex flex-wrap gap-1">
                                 {r.violations.map(v => (
-                                  <Badge key={v.id} variant="outline" className={severityColor(v.severity)}>
+                                  <Badge key={v.id} variant="outline" className={severityColor(v.severity)} title={v.detail || undefined}>
                                     {v.rule_code}
                                   </Badge>
                                 ))}
                               </div>
                             )}
                           </td>
+                          <td className="py-2 pr-2 text-xs text-muted-foreground whitespace-nowrap">{r.judged_under || "-"}</td>
                           <td className="py-2 pr-2 text-xs text-muted-foreground">
                             {r.corrective_actions.length > 0
                               ? `${r.corrective_actions.length} action${r.corrective_actions.length === 1 ? "" : "s"}`
@@ -1637,6 +1654,7 @@ export default function VeritaQCAppPage() {
             <div className="rounded-md border border-red-500/20 bg-red-500/5 p-3 text-sm">
               <div className="font-semibold text-red-700">{caForViolation.rule_code}</div>
               <div className="text-xs text-red-700/80 mt-0.5">{caForViolation.detail}</div>
+              {judgedNote && <div className="text-xs text-muted-foreground mt-1" data-testid="qc-judged-note">{judgedNote}</div>}
             </div>
           )}
           <div className="space-y-3">
@@ -1704,7 +1722,7 @@ export default function VeritaQCAppPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-amber-600" />
-              QC warning: result outside 2 SD
+              QC warning
             </DialogTitle>
             <DialogDescription>
               This result logged with a Westgard warning. No corrective action is
@@ -1727,6 +1745,7 @@ export default function VeritaQCAppPage() {
               </div>
             ))}
           </div>
+          {judgedNote && <p className="text-xs text-muted-foreground" data-testid="qc-judged-note">{judgedNote}</p>}
           <p className="text-xs text-muted-foreground">
             Logged for review at the monthly QC attestation. If a rejection rule had
             fired, a corrective action would be required instead.

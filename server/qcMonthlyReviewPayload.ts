@@ -6,6 +6,7 @@
 
 import { resolveBasis } from "./qcBasis";
 import { addedAfterReview, signedMonths } from "./qcRuns";
+import { judgedUnderLabels, rulesInForceLines } from "./qcRuleSets";
 import type { MonthlyReviewPayload, MonthlyReviewResult } from "./pdfQCMonthly";
 
 // BUG-066 (2026-10-16): the reviewer printed on the monthly review is the person who SIGNED the review
@@ -16,7 +17,7 @@ export function buildMonthlyReviewPayload(sqlite: any, labId: number, lot: any, 
   const nextMonthDate = new Date(year, month, 1);
   const monthEnd = `${nextMonthDate.getFullYear()}-${String(nextMonthDate.getMonth() + 1).padStart(2, "0")}-01`;
   const rawResults = sqlite.prepare(
-    "SELECT r.id, r.result_value, r.result_date, r.run_time, r.instrument, r.accepted_for_reporting, NULLIF(TRIM(COALESCE(se.first_name,'') || ' ' || COALESCE(se.last_name,'')), '') AS operator_name, r.created_at, r.control_lot_id, r.import_id, r.import_operator FROM qc_results r LEFT JOIN staff_employees se ON se.id = r.operator_staff_employee_id WHERE r.lab_id = ? AND r.control_lot_id = ? AND r.result_date >= ? AND r.result_date < ? AND r.voided_at IS NULL ORDER BY r.result_date DESC, r.id DESC"
+    "SELECT r.id, r.result_value, r.result_date, r.run_time, r.instrument, r.accepted_for_reporting, r.rule_version_id, NULLIF(TRIM(COALESCE(se.first_name,'') || ' ' || COALESCE(se.last_name,'')), '') AS operator_name, r.created_at, r.control_lot_id, r.import_id, r.import_operator FROM qc_results r LEFT JOIN staff_employees se ON se.id = r.operator_staff_employee_id WHERE r.lab_id = ? AND r.control_lot_id = ? AND r.result_date >= ? AND r.result_date < ? AND r.voided_at IS NULL ORDER BY r.result_date DESC, r.id DESC"
   ).all(labId, lot.id, monthStart, monthEnd) as any[];
   const resultIds = rawResults.map((r: any) => r.id);
   const violationsByR: Record<number, any[]> = {};
@@ -31,13 +32,18 @@ export function buildMonthlyReviewPayload(sqlite: any, labId: number, lot: any, 
   // A run stored after the review was signed isn't part of what was signed: it prints marked, and the signed review stays as it is.
   // A run read from a file prints the operator the file names (server/qcFileImport.ts).
   const months = signedMonths(sqlite, labId, [lot.id]);
+  // B12 part 2 (server/qcRuleSets.ts): each run says which rules judged it, and the page names the rules in force in the month.
+  const judgedUnder = judgedUnderLabels(sqlite, labId, rawResults.map((r: any) => r.rule_version_id));
   const results: MonthlyReviewResult[] = rawResults.map((r: any) => ({
     id: r.id, result_value: r.result_value, result_date: r.result_date, run_time: r.run_time,
     instrument: r.instrument, accepted_for_reporting: r.accepted_for_reporting,
     operator_name: r.operator_name || (r.import_id ? `${r.import_operator ? `${r.import_operator}, ` : ""}imported from a file` : null),
     added_after_review: !!addedAfterReview(months, r),
     violations: violationsByR[r.id] || [], corrective_actions: casByR[r.id] || [],
+    judged_under: r.rule_version_id ? (judgedUnder.get(r.rule_version_id) ?? "-") : "Before rule settings",
   }));
+  const lastDay = `${year}-${String(month).padStart(2, "0")}-${String(new Date(Date.UTC(year, month, 0)).getUTCDate()).padStart(2, "0")}`;
+  const rulesInForce = rulesInForceLines(sqlite, labId, lot.analyte, monthStart, lastDay, new Set(rawResults.map((r: any) => Number(r.rule_version_id)).filter((n: number) => n > 0)));
   const accepted = sqlite.prepare("SELECT result_value FROM qc_results WHERE lab_id = ? AND control_lot_id = ? AND accepted_for_reporting = 1 AND voided_at IS NULL").all(labId, lot.id) as { result_value: number }[];
   let baselineMean: number | null = null;
   let baselineSD: number | null = null;
@@ -58,7 +64,7 @@ export function buildMonthlyReviewPayload(sqlite: any, labId: number, lot: any, 
     // The chart and the narrative use the same basis the Westgard rules judge
     // the lot's runs against (server/qcBasis.ts).
     basis: (() => { const b = resolveBasis(sqlite, labId, lot.id); return b ? { mean: b.mean, sd: b.sd, source: b.source, label: b.label } : null; })(),
-    periodYear: year, periodMonth: month, results, baselineMean, baselineSD,
+    periodYear: year, periodMonth: month, results, baselineMean, baselineSD, rulesInForce,
     reviewerName: (mdReview && mdReview.reviewer_name) || "Pending signature",
     reviewerTitle: "Medical director or designee",
     reviewerDate: mdReview && mdReview.reviewed_at ? String(mdReview.reviewed_at).slice(0, 10) : "",

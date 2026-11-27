@@ -122,6 +122,7 @@ const SystemRepositoryPage = lazy(() => import("@/pages/SystemRepositoryPage"));
 const VeritaQCDailyReviewPage = lazy(() => import("@/pages/VeritaQCDailyReviewPage"));
 const VeritaQCImportPage = lazy(() => import("@/pages/VeritaQCImportPage"));
 const VeritaQCSigmaPage = lazy(() => import("@/pages/VeritaQCSigmaPage"));
+const VeritaQCRulesPage = lazy(() => import("@/pages/VeritaQCRulesPage"));
 const VeritaPolicyAppPage = lazy(() => import("@/pages/VeritaPolicyAppPage"));
 const VeritaPolicyMyPoliciesPage = lazy(() => import("@/pages/VeritaPolicyMyPoliciesPage"));
 const VeritaPolicyCompliancePage = lazy(() => import("@/pages/VeritaPolicyCompliancePage"));
@@ -523,6 +524,7 @@ function AppContent() {
           <Route path="/veritaqc-app/review">{wrapLegacy(VeritaQCDailyReviewPage)}</Route>
           <Route path="/veritaqc-app/import">{wrapLegacy(VeritaQCImportPage)}</Route>
           <Route path="/veritaqc-app/sigma">{wrapLegacy(VeritaQCSigmaPage)}</Route>
+          <Route path="/veritaqc-app/rules">{wrapLegacy(VeritaQCRulesPage)}</Route>
           <Route path="/equipment-app/stain-log">{wrapLegacy(StainLogPage)}</Route>
           <Route path="/equipment-app">{wrapLegacy(EquipmentAppPage)}</Route>
           <Route path="/readiness/findings">{wrapLegacy(SystemFindingsPage)}</Route>
@@ -647,6 +649,7 @@ function AppContent() {
           <Route path="/labs/:labId/veritaqc-app/review" component={VeritaQCDailyReviewPage} />
           <Route path="/labs/:labId/veritaqc-app/import" component={VeritaQCImportPage} />
           <Route path="/labs/:labId/veritaqc-app/sigma" component={VeritaQCSigmaPage} />
+          <Route path="/labs/:labId/veritaqc-app/rules" component={VeritaQCRulesPage} />
           <Route path="/labs/:labId/veritapolicy-app" component={VeritaPolicyAppPage} />
           <Route path="/labs/:labId/veritapolicy-app/my-policies" component={VeritaPolicyMyPoliciesPage} />
           <Route path="/labs/:labId/veritapolicy-app/compliance" component={VeritaPolicyCompliancePage} />

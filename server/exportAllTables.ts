@@ -189,6 +189,8 @@ export const EXPORT_TABLES: Record<string, ExportTable> = {
   qc_corrective_actions: lab("VeritaQC"),
   qc_period_reviews: lab("VeritaQC"),
   qc_rule_settings: lab("VeritaQC"),
+  qc_rule_versions: lab("VeritaQC"), // every set of QC rules the lab or an analyte has had, who changed it and why (server/qcRuleSets.ts)
+  qc_rule_lock_events: lab("VeritaQC"), // the lock on the lab's QC rules, on and off, signed
   veritaqc_import_mappings: lab("VeritaQC"),
   qc_file_imports: lab("VeritaQC"), // runs read from a file: the file's name, hash and row numbers, never the file (server/qcFileImport.ts)
   qc_import_mappings: lab("VeritaQC"),
