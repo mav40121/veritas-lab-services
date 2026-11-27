@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { VerificationAnalytesPanel } from "@/components/VerificationAnalytesPanel";
+import { BeforePlanNotice, PackageApprovalTab, PlanTab, SigningChip, signingKey, useVerificationSigning } from "@/components/VerificationPlanAndSignature";
 import { labLocaleDate } from "@/lib/labDate";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -645,7 +646,7 @@ function VerificationDetail({ id, onBack }: { id: number; onBack: () => void }) 
   const isReadOnly = useIsReadOnly("veritacheck");
   const qc = useQueryClient();
   const activeLabId = useActiveLabId();
-  const [activeTab, setActiveTab] = useState<"elements" | "analytes" | "units" | "director">("elements");
+  const [activeTab, setActiveTab] = useState<"plan" | "elements" | "analytes" | "units" | "director">("elements");
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState("");
   const [toastError, setToastError] = useState(false);
@@ -684,9 +685,15 @@ function VerificationDetail({ id, onBack }: { id: number; onBack: () => void }) 
     },
     enabled: !!verification,
   });
+  // B4: the plan, the package's signature and what it covers (server/verificationSignatures.ts). Re-read after every change
+  // here, so the screen's fingerprint is the one a signature is checked against.
+  const { data: signing } = useVerificationSigning(id);
+  const refreshSigning = () => qc.invalidateQueries({ queryKey: signingKey(id) });
+  const refreshAll = async () => { await refetch(); refreshSigning(); };
   const refreshAfterAnalyteChange = () => {
     refetch(); // new/removed per-analyte study slots
     qc.invalidateQueries({ queryKey: [`/api/veritacheck/verifications/${id}/analytes`] });
+    refreshSigning();
   };
 
   const showToast = (msg: string, isError = false) => { setToast(msg); setToastError(isError); setTimeout(() => setToast(""), isError ? 5000 : 3000); };
@@ -734,8 +741,9 @@ function VerificationDetail({ id, onBack }: { id: number; onBack: () => void }) 
         headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      if (!r.ok) { showToast(`Save failed (HTTP ${r.status}). Nothing was saved.`, true); return false; }
-      await refetch();
+      // A signed analyte's slots are locked (409 ANALYTE_SIGNED); say so in the server's words.
+      if (!r.ok) { const e = await r.json().catch(() => ({} as any)); showToast(e.code === "ANALYTE_SIGNED" ? `Not saved. ${e.error}` : `Save failed (HTTP ${r.status}). Nothing was saved.`, true); return false; }
+      await refreshAll();
       showToast("Saved");
       return true;
     } catch {
@@ -755,7 +763,7 @@ function VerificationDetail({ id, onBack }: { id: number; onBack: () => void }) 
         body: JSON.stringify(payload),
       });
       if (!r.ok) { showToast(`Save failed (HTTP ${r.status}). Nothing was saved.`, true); return false; }
-      await refetch();
+      await refreshAll();
       showToast("Saved");
       return true;
     } catch {
@@ -776,7 +784,7 @@ function VerificationDetail({ id, onBack }: { id: number; onBack: () => void }) 
         body: JSON.stringify({ serial_number: serial.trim() }),
       });
       if (!r.ok) { showToast(`Could not add instrument (HTTP ${r.status}).`, true); return; }
-      await refetch();
+      await refreshAll();
     } catch {
       showToast("Could not add instrument (network error).", true);
     }
@@ -786,7 +794,7 @@ function VerificationDetail({ id, onBack }: { id: number; onBack: () => void }) 
     try {
       const r = await fetch(`${API_BASE}/api/veritacheck/verifications/${id}/instruments/${unitId}`, { method: "DELETE", headers: authHeaders() });
       if (!r.ok) { showToast(`Could not remove instrument (HTTP ${r.status}).`, true); return; }
-      await refetch();
+      await refreshAll();
     } catch {
       showToast("Could not remove instrument (network error).", true);
     }
@@ -810,6 +818,7 @@ function VerificationDetail({ id, onBack }: { id: number; onBack: () => void }) 
             </div>
             <div className="flex items-center gap-2 flex-wrap">
               <Badge variant="outline" className={statusColor(verification)}>{statusLabel(verification)}</Badge>
+              <SigningChip signing={signing} />
               {verification.status !== "complete" && (
                 <Button size="sm" variant="outline" className="h-7 text-xs gap-1 text-emerald-600 border-emerald-500/30" hidden={isReadOnly} onClick={() => patchVerification({ status: "complete" })}>
                   <CheckCircle2 size={12} /> Mark Complete
@@ -888,25 +897,32 @@ function VerificationDetail({ id, onBack }: { id: number; onBack: () => void }) 
       </Card>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-border">
-        {(["elements", "analytes", "units", "director"] as const).map(tab => (
+      <div className="flex flex-wrap gap-1 border-b border-border">
+        {(["plan", "elements", "analytes", "units", "director"] as const).map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${activeTab === tab ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+            className={`whitespace-nowrap px-3 sm:px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${activeTab === tab ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
             data-testid={`tab-${tab}`}
           >
-            {tab === "elements" ? "Performance Elements"
+            {tab === "plan" ? "Plan"
+              : tab === "elements" ? "Performance Elements"
               : tab === "analytes" ? "Analytes"
               : tab === "units" ? `Instrument Units (${verification.instruments?.length ?? 0})`
-              : "Director Approval"}
+              : "Director or Designee Approval"}
           </button>
         ))}
       </div>
 
+      {/* Plan tab (B4) */}
+      {activeTab === "plan" && signing && (
+        <PlanTab verificationId={id} included={elements} elementInfo={ALL_ELEMENTS} signing={signing} readOnly={isReadOnly} onChanged={refreshAll} />
+      )}
+
       {/* Elements tab */}
       {activeTab === "elements" && (
         <div className="space-y-4">
+          <BeforePlanNotice signing={signing} />
           {ALL_ELEMENTS.filter(el => elements.includes(el.key)).map(el => {
             const elSlots = (verification.studies || []).filter(s => s.element === el.key);
             const suggested = suggestedStudies.filter(s =>
@@ -987,9 +1003,9 @@ function VerificationDetail({ id, onBack }: { id: number; onBack: () => void }) 
         </div>
       )}
 
-      {/* Director approval tab */}
-      {activeTab === "director" && (
-        <DirectorApprovalCard verification={verification} onSave={(payload) => patchVerification(payload)} />
+      {/* Director or designee approval tab (B4): signed with name, password, role and Accepted or Not accepted */}
+      {activeTab === "director" && signing && (
+        <PackageApprovalTab verificationId={id} instrumentName={verification.instrument_name} signing={signing} readOnly={isReadOnly} onChanged={refreshAll} />
       )}
 
       {toast && (
@@ -1371,48 +1387,6 @@ function UnitCard({ unit, verificationId, onSaved, onDeleted }: { unit: Instrume
   );
 }
 
-// ── Director approval card ────────────────────────────────────────────────────
-function DirectorApprovalCard({ verification, onSave }: { verification: Verification; onSave: (payload: object) => Promise<boolean> }) {
-  // #84 Phase 3: building a verification package is VeritaCheck setup; a
-  // view-only login (e.g. a Staff login) reads it.
-  const isReadOnly = useIsReadOnly("veritacheck");
-  const [name, setName] = useState(verification.director_name || "");
-  const [title, setTitle] = useState(verification.director_title || "");
-  const [date, setDate] = useState(verification.approved_date || "");
-  const [dirty, setDirty] = useState(false);
-
-  return (
-    <Card>
-      <CardContent className="p-6 space-y-5">
-        <div className="p-4 rounded-lg border border-primary/20 bg-primary/5">
-          <p className="text-sm font-semibold text-foreground mb-1">LABORATORY DIRECTOR OR DESIGNEE REVIEW</p>
-          <p className="text-sm text-muted-foreground">I have reviewed the verification study results for the instrument identified above and find that the performance specifications have been adequately verified.</p>
-          <p className="text-sm font-bold text-foreground mt-2">I approve this instrument/test for patient testing.</p>
-        </div>
-        <div className="grid grid-cols-3 gap-4">
-          <div>
-            <Label className="text-xs mb-1 block">Printed Name</Label>
-            <Input value={name} onChange={e => { setName(e.target.value); setDirty(true); }} className="h-9 text-sm" />
-          </div>
-          <div>
-            <Label className="text-xs mb-1 block">Title</Label>
-            <Input value={title} onChange={e => { setTitle(e.target.value); setDirty(true); }} className="h-9 text-sm" />
-          </div>
-          <div>
-            <Label className="text-xs mb-1 block">Date</Label>
-            <Input type="date" value={date} onChange={e => { setDate(e.target.value); setDirty(true); }} className="h-9 text-sm" />
-          </div>
-        </div>
-        <p className="text-xs text-muted-foreground">Signature line will appear on the PDF cover page.</p>
-        {dirty && (
-          <Button size="sm" className="gap-1" hidden={isReadOnly} onClick={async () => { const ok = await onSave({ director_name: name, director_title: title, approved_date: date }); if (ok) setDirty(false); }}>
-            <CheckCircle2 size={13} /> Save Approval Info
-          </Button>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
 
 // ── Remediation card ──────────────────────────────────────────────────────────
 function RemediationCard({ verification, onSave }: { verification: Verification; onSave: (notes: string) => Promise<boolean> }) {

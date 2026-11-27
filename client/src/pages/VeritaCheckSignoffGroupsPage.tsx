@@ -1,13 +1,14 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useIsReadOnly } from "@/components/SubscriptionBanner";
 import { Link, useLocation } from "wouter";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useQuery } from "@tanstack/react-query";
+import { API_BASE, queryClient } from "@/lib/queryClient";
+import { authHeaders } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ESignatureForm, postSignature, type SignAs } from "@/components/ESignatureForm";
 import { useToast } from "@/hooks/use-toast";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
 import { useLabRoute } from "@/hooks/useLabRoute";
@@ -48,7 +49,8 @@ export default function VeritaCheckSignoffGroupsPage() {
   const labId = useActiveLabId();
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [signOpen, setSignOpen] = useState(false);
-  const [signature, setSignature] = useState("");
+  // B4 (Q3 = 1): the group is signed with the full signature; who the person signs as comes from the server.
+  const [signAs, setSignAs] = useState<SignAs | null>(null);
 
   const groupsUrl = labId ? `/api/labs/${labId}/veritacheck/signoff-groups` : null;
   const detailUrl = groupsUrl && selectedId ? `${groupsUrl}/${selectedId}` : null;
@@ -56,17 +58,27 @@ export default function VeritaCheckSignoffGroupsPage() {
   const { data: groups } = useQuery<Group[]>({ queryKey: [groupsUrl], enabled: !!groupsUrl });
   const { data: detail } = useQuery<GroupDetail>({ queryKey: [detailUrl], enabled: !!detailUrl });
 
-  const signMut = useMutation({
-    mutationFn: () => apiRequest("POST", `${groupsUrl}/${selectedId}/sign`, { signature: signature.trim() }),
-    onSuccess: async (res) => {
-      const r = await res.json();
-      queryClient.invalidateQueries({ queryKey: [groupsUrl] });
-      queryClient.invalidateQueries({ queryKey: [detailUrl] });
-      setSignOpen(false); setSignature("");
-      toast({ title: `Signed and locked ${r.signed} ${r.signed === 1 ? "study" : "studies"}`, description: r.skipped ? `${r.skipped} were already finalized.` : undefined });
-    },
-    onError: () => toast({ title: "Could not sign the group", variant: "destructive" }),
-  });
+  // Read when a group opens, so a view-only director or named designee sees Sign and Lock (B4 review: qualification decides).
+  useEffect(() => {
+    if (!groupsUrl || !selectedId) return;
+    setSignAs(null);
+    let cancelled = false;
+    fetch(`${API_BASE}${groupsUrl}/${selectedId}/sign-as`, { headers: authHeaders() })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (!cancelled) setSignAs(j ?? { canSign: false, label: null, reason: "Could not check who can sign this group." }); })
+      .catch(() => { if (!cancelled) setSignAs({ canSign: false, label: null, reason: "Could not check who can sign this group." }); });
+    return () => { cancelled = true; };
+  }, [groupsUrl, selectedId]);
+
+  const signGroup = async (fields: object): Promise<string | null> => {
+    const refused = await postSignature(`${API_BASE}${groupsUrl}/${selectedId}/sign`, authHeaders(), fields);
+    if (refused) return refused;
+    queryClient.invalidateQueries({ queryKey: [groupsUrl] });
+    queryClient.invalidateQueries({ queryKey: [detailUrl] });
+    setSignOpen(false);
+    toast({ title: "Signed and locked the group's studies" });
+    return null;
+  };
 
   if (!labId) {
     return (
@@ -121,7 +133,7 @@ export default function VeritaCheckSignoffGroupsPage() {
               </div>
               {isSignedFromCounts(detail.status, detail.members.length, detail.members.length - draftCount)
                 ? <Badge variant="outline" className="text-emerald-600 border-emerald-500/40"><CheckCircle2 size={12} className="mr-1" />Signed</Badge>
-                : <Button disabled={draftCount === 0} hidden={isReadOnly} onClick={() => setSignOpen(true)} data-testid="button-sign-group"><Lock size={14} className="mr-2" />Sign and Lock all{draftCount ? ` (${draftCount})` : ""}</Button>}
+                : <Button disabled={draftCount === 0} hidden={isReadOnly && !signAs?.canSign} onClick={() => setSignOpen(true)} data-testid="button-sign-group"><Lock size={14} className="mr-2" />Sign and Lock all{draftCount ? ` (${draftCount})` : ""}</Button>}
             </div>
             <div className="overflow-auto max-h-[70vh]">
               <table className="w-full text-sm">
@@ -165,13 +177,11 @@ export default function VeritaCheckSignoffGroupsPage() {
               </div>
             ))}
           </div>
-          <Input placeholder="Type your name to sign" value={signature} onChange={(e) => setSignature(e.target.value)} data-testid="input-group-signature" />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setSignOpen(false)}>Cancel</Button>
-            <Button disabled={!signature.trim() || signMut.isPending || draftCount === 0} onClick={() => signMut.mutate()} data-testid="button-confirm-sign-group">
-              <Lock size={14} className="mr-2" />Sign and Lock all
-            </Button>
-          </DialogFooter>
+          <p className="text-xs text-muted-foreground">
+            The medical director, or someone named in a signed Letter of Delegation for verifying test method performance, signs with
+            their full name and own password. Accepted or Not accepted applies to every study above.
+          </p>
+          <ESignatureForm purpose="verification_signoff_group" signAs={signAs} withDecision submitLabel="Sign and Lock all" testId="group-sign" disabledReason={draftCount === 0 ? "Nothing in this group is left to sign." : null} onSign={signGroup} />
         </DialogContent>
       </Dialog>
     </div>

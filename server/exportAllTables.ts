@@ -81,6 +81,9 @@ export const EXPORT_TABLES: Record<string, ExportTable> = {
   veritacheck_verification_analytes: child("VeritaCheck", "verification_id", "veritacheck_verifications"),
   veritacheck_verification_instruments: child("VeritaCheck", "verification_id", "veritacheck_verifications"),
   veritacheck_verification_studies: child("VeritaCheck", "verification_id", "veritacheck_verifications"),
+  // B4: a package's plan versions and its signatures (verification_id is NOT NULL on both, so child is safe).
+  veritacheck_verification_plans: child("VeritaCheck", "verification_id", "veritacheck_verifications"),
+  veritacheck_verification_signatures: child("VeritaCheck", "verification_id", "veritacheck_verifications"),
   cumsum_trackers: labOrOwner("VeritaCheck"),
   cumsum_entries: child("VeritaCheck", "tracker_id", "cumsum_trackers"),
 

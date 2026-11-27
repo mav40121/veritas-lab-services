@@ -44,6 +44,12 @@ import {
 } from "./censoring";
 import { setPdfContent } from "./pdfContent";
 import { labToday } from "./dateLocal";
+import { logAudit } from "./audit";
+import { complexityForAnalyte } from "./delegationGate";
+import {
+  cleanPlanRows, isoDayUs, movedSinceShown, packageComplexity, packageSigning, planRowsHash, planVersions, printedDay, printedMoment,
+  readSignature, signAs, signatureColumns, signedAsPhrase, signedWithPhrase, slotLockedBy, whoCanSign, type PlanRow, type Refusal,
+} from "./verificationSignatures";
 
 // Build a "N censored (policy: X)" note for the appendix, or "" when
 // no censored points were seen. Shared by every renderer branch.
@@ -806,9 +812,43 @@ export function buildVerificationBlockHtml(v: any, instruments: any[], studies: 
 
   const today = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
 
+  // B4 (2026-11-27; server/verificationSignatures.ts): the plan, the package's signature and what it covers. A package with
+  // neither prints as it always did.
+  const esc = (s: unknown) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  let signing: ReturnType<typeof packageSigning> | null = null;
+  try { signing = packageSigning(sqlite, v); } catch (err) { console.error("[verification-pdf] signing state error:", err); }
+  const plan = signing?.plan ?? null;
+  const latestSig = signing?.latest ?? null;
+  const signedNow = !!latestSig && !!signing?.current;
+  const planRowFor = (key: string): PlanRow | null => ((plan?.rows ?? []) as PlanRow[]).find((r) => r.element === key) ?? null;
+
   const elementRows = allElements.map(el => {
     const slot = studies.find((s: any) => s.element === el.key);
     const included = elements.includes(el.key);
+    if (plan) {
+      const cell = `padding:8px 12px;border-bottom:1px solid #e5e7eb`;
+      if (!included) {
+        return `<tr>
+        <td style="${cell};font-weight:600">${el.label}</td>
+        <td style="${cell};color:#6b7280;font-style:italic">Excluded - see justification below</td>
+        <td style="${cell};color:#6b7280">Left out</td>
+        <td style="${cell};text-align:center">N/A</td>
+      </tr>`;
+      }
+      // Every slot of the element, as the mock draws it ("3 analytes, 60"): PASS only when each one passed.
+      const elSlots = studies.filter((s: any) => s.element === el.key);
+      const names = Array.from(new Set(elSlots.map((s: any) => s.analyte).filter(Boolean))) as string[];
+      const samples = elSlots.reduce((t: number, s: any) => t + (Number(s.sample_count) || 0), 0);
+      const who = names.length > 1 ? `${names.length} analytes` : names[0] || (el.key === "carryover" ? "Instrument-wide" : "");
+      const result = elSlots.length && elSlots.every((s: any) => s.passed === 1) ? "<span style='color:#059669;font-weight:600'>PASS</span>"
+        : elSlots.some((s: any) => s.passed === 0) ? "<span style='color:#dc2626;font-weight:600'>FAIL</span>" : "<span style='color:#d97706'>Pending</span>";
+      return `<tr>
+        <td style="${cell};font-weight:600">${el.label}</td>
+        <td style="${cell}">${esc(who)}${samples ? `${who ? ", " : ""}${samples}` : ""}</td>
+        <td style="${cell}">${esc(planRowFor(el.key)?.criterion || "Not in the plan")}</td>
+        <td style="${cell};text-align:center">${result}</td>
+      </tr>`;
+    }
     if (!included) {
       return `<tr>
         <td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-weight:600">${el.label}</td>
@@ -981,6 +1021,98 @@ export function buildVerificationBlockHtml(v: any, instruments: any[], studies: 
       <div style="font-size:12px;color:#374151">${elementReasons[el.key] || "Not documented"}</div>
     </div>`).join("");
 
+  // B4: page 1's status, plan and review block, and the plan on page 2.
+  const packageStatus = signedNow ? "<strong style='color:#059669'>Signed</strong>"
+    : latestSig ? "<strong style='color:#dc2626'>Changed since it was signed</strong>"
+    : v.status === "complete" ? "<strong style='color:#059669'>Complete</strong>" : "In Progress";
+  const beforePlan = signing?.beforePlan ?? [];
+  const studiesInPlan = Math.max(signing?.covers.studies.total ?? 0, beforePlan.length);
+  const beforeText = !signing?.firstSignedAt
+    ? `The plan isn't signed yet${beforePlan.length ? `: ${beforePlan.length} ${beforePlan.length === 1 ? "study" : "studies"} so far` : ""}`
+    : beforePlan.length === 0 ? "None"
+    : `${beforePlan.length} of ${studiesInPlan} ${studiesInPlan === 1 ? "study" : "studies"}: ${beforePlan.map((b) => `${esc(b.label)}, ${isoDayUs(b.date)}`).join("; ")}`;
+  const planCoverRows = plan ? `
+    <tr>
+      <td style="padding:4px 0;color:#6b7280">Verification plan</td>
+      <td style="padding:4px 0">${plan.signed_at ? `Signed ${esc(printedMoment(plan.signed_at, v.lab_id, sqlite))}, ${esc(plan.typed_signature)}${plan.version > 1 ? ` (version ${plan.version})` : ""}.` : `Version ${plan.version} isn't signed yet.`} The plan prints on page 2.</td>
+    </tr>
+    <tr>
+      <td style="padding:4px 0;color:#6b7280">Tested before the plan</td>
+      <td style="padding:4px 0">${beforeText}</td>
+    </tr>` : "";
+  const box = (on: boolean, label: string) => on
+    ? `<span style="font-weight:700;color:${teal}">&#9745; ${label}</span>`
+    : `<span style="color:#6b7280">&#9675; ${label}</span>`;
+  const shownSig = signedNow ? latestSig : null;
+  const replaced = shownSig?.replaces_signature_id ? (signing?.history ?? []).find((h: any) => h.id === shownSig.replaces_signature_id) : null;
+  const reviewNote = shownSig
+    ? `Signed in VeritaCheck&reg; ${esc(signedWithPhrase(shownSig.signed_with, shownSig.signed_with_provider))}, as ${esc(signedAsPhrase(shownSig.capacity, shownSig.capacity_label))}. Record ${esc(signing?.short)}.${replaced ? ` Replaces the signature of ${esc(printedDay(replaced.signed_at, v.lab_id, sqlite))}.` : ""}`
+    : latestSig
+    ? `<span style="color:#dc2626"><strong>Changed since it was signed.</strong> The signature of ${esc(printedMoment(latestSig.signed_at, v.lab_id, sqlite))} by ${esc(latestSig.typed_signature)} stays on the record and no longer covers this package${signing?.changed.length ? ` (changed: ${esc(signing.changed.join(", "))})` : ""}. It needs to be signed again. The page it was signed on is kept.</span>`
+    : `Not signed in VeritaCheck&reg; yet.`;
+  const line = (inner: string, label: string) => `<div style="border-bottom:1px solid #000;min-height:20px">${inner}</div><div style="font-size:9px;color:#888">${label}</div>`;
+  // With a plan or a signature, the package's one signature covers its units (listed above); a unit approval typed before
+  // prints as a line saying so, never as a second blank signature block.
+  const typedUnits = instruments.filter((u: any) => u.director_name || u.director_title || u.approved_date);
+  const unitLines = typedUnits.length ? `
+  <div style="font-size:10px;color:#555;margin:-16px 0 24px">${typedUnits.map((u: any) => `Unit S/N ${esc(u.serial_number)}: approval typed in VeritaCheck&reg; with no password, ${[u.director_name, u.director_title, u.approved_date].filter(Boolean).map(esc).join(", ")}.`).join("<br>")}</div>` : "";
+  const reviewBlock = `
+  <div style="border:2px solid ${teal};border-radius:6px;padding:20px;margin-bottom:28px">
+    <div style="font-weight:700;font-size:13px;color:${teal};margin-bottom:8px;letter-spacing:0.3px">LABORATORY DIRECTOR OR DESIGNEE REVIEW</div>
+    <div style="font-size:12px;color:#374151;margin-bottom:10px;line-height:1.6">
+      I have reviewed the verification study results for the instrument/test identified above and find that the performance specifications have been adequately verified.
+    </div>
+    <div style="font-size:13px;margin-bottom:14px">${box(shownSig?.decision === "accepted", "Accepted for patient testing")} &nbsp;&nbsp;&nbsp; ${box(shownSig?.decision === "not_accepted", "Not accepted")}</div>
+    <table style="font-size:12px;width:100%">
+      <tr>
+        <td style="width:60%;padding:0 16px 10px 0;vertical-align:bottom">${line(shownSig ? `<span style="font-family:'Segoe Script','Brush Script MT',cursive;font-size:17px;color:#0A3A3D">${esc(shownSig.typed_signature)}</span>` : "&nbsp;", `Signature${shownSig ? ` <span style="color:${teal}">(electronically signed)</span>` : ""}`)}</td>
+        <td style="padding:0 0 10px 0;vertical-align:bottom">${line(shownSig ? esc(printedMoment(shownSig.signed_at, v.lab_id, sqlite)) : "&nbsp;", "Date")}</td>
+      </tr>
+      <tr>
+        <td style="padding:0 16px 0 0">${line(shownSig ? esc(shownSig.typed_signature) : "&nbsp;", "Print Name")}</td>
+        <td>${line(shownSig ? esc(shownSig.title || shownSig.capacity_label) : "&nbsp;", "Title")}</td>
+      </tr>
+    </table>
+    <div style="font-size:10px;color:#555;margin-top:8px">${reviewNote}</div>
+  </div>`;
+
+  const analyteNames = (ids: number[] | null, element: string) => {
+    if (element === "carryover") return "Instrument-wide";
+    if (ids == null) return "All on this package";
+    const names = ids.map((id) => signing?.analytes.find((a) => a.id === id)?.name).filter(Boolean);
+    return names.length ? names.map(esc).join(", ") : "None";
+  };
+  const planCell = "padding:6px 8px;border-bottom:1px solid #e5e7eb;vertical-align:top";
+  const earlier = (signing?.versions ?? []).filter((p: any) => plan && p.id !== plan.id);
+  const planPage = plan ? `
+  <div style="margin-bottom:28px">
+    <div style="font-weight:700;font-size:16px;color:${teal};border-bottom:2px solid ${teal};padding-bottom:6px;margin-bottom:12px">Verification Plan${plan.version > 1 ? ` (version ${plan.version})` : ""}</div>
+    <table style="font-size:11px;border:1px solid #e5e7eb;margin-bottom:10px">
+      <thead><tr style="background:#f3f4f6">
+        <th style="padding:6px 8px;text-align:left">Element</th>
+        <th style="padding:6px 8px;text-align:left">What will be tested</th>
+        <th style="padding:6px 8px;text-align:left">Analytes</th>
+        <th style="padding:6px 8px;text-align:left">Acceptance criterion</th>
+        <th style="padding:6px 8px;text-align:left">Specimens</th>
+      </tr></thead>
+      <tbody>${((plan.rows ?? []) as PlanRow[]).map((r) => `<tr>
+        <td style="${planCell};font-weight:600">${esc(allElements.find((e) => e.key === r.element)?.label ?? r.element)}</td>
+        <td style="${planCell}">${esc(r.tested)}</td>
+        <td style="${planCell}">${analyteNames(r.analyte_ids, r.element)}</td>
+        <td style="${planCell}">${esc(r.criterion)}</td>
+        <td style="${planCell}">${esc(r.specimens)}</td>
+      </tr>`).join("")}</tbody>
+    </table>
+    ${(signing?.leftOut ?? []).length ? `<div style="font-size:11px;color:#374151;margin-bottom:8px"><strong>Left out, each with its reason:</strong> ${(signing?.leftOut ?? []).map((l) => `${esc(l.label)}: ${esc(l.reason || "No reason recorded")}`).join("; ")}</div>` : ""}
+    <div style="font-size:11px;padding:10px 12px;border:1px solid #e5e7eb;border-radius:6px;background:#fafafa">
+      <div style="font-style:italic;margin-bottom:4px">I approve this plan for verifying the performance of this instrument/test.</div>
+      ${plan.signed_at
+        ? `Signed ${esc(printedMoment(plan.signed_at, v.lab_id, sqlite))} by <strong>${esc(plan.typed_signature)}</strong>, ${esc(plan.capacity_label)}, ${esc(signedWithPhrase(plan.signed_with, plan.signed_with_provider))} in VeritaCheck&reg;.`
+        : "Not signed yet."}
+    </div>
+    ${earlier.length ? `<div style="font-size:10px;color:#6b7280;margin-top:6px">${earlier.map((p: any) => `Version ${p.version}${p.signed_at ? `, signed ${esc(printedDay(p.signed_at, v.lab_id, sqlite))} by ${esc(p.typed_signature)}` : ", not signed"}, replaced by a later version.`).join(" ")}</div>` : ""}
+  </div>` : "";
+
   return `
   <!-- COVER PAGE -->
   <div style="background:${teal};color:white;padding:20px 24px;border-radius:6px;margin-bottom:24px">
@@ -1000,8 +1132,8 @@ export function buildVerificationBlockHtml(v: any, instruments: any[], studies: 
     </tr>
     <tr>
       <td style="padding:4px 0;color:#6b7280">Package Status</td>
-      <td style="padding:4px 0">${v.status === "complete" ? "<strong style='color:#059669'>Complete</strong>" : "In Progress"}</td>
-    </tr>
+      <td style="padding:4px 0">${packageStatus}</td>
+    </tr>${planCoverRows}
     <tr>
       <td style="padding:4px 0;color:#6b7280">Units / Serial Numbers</td>
       <td style="padding:4px 0">${instruments.length > 0 ? instruments.map((u: any) => u.serial_number).join(", ") : "Not specified"}</td>
@@ -1015,17 +1147,22 @@ export function buildVerificationBlockHtml(v: any, instruments: any[], studies: 
   <div style="font-weight:700;font-size:14px;color:${teal};margin-bottom:10px">Performance Summary</div>
   <table style="font-size:12px;margin-bottom:28px;border:1px solid #e5e7eb;border-radius:4px;overflow:hidden">
     <thead>
-      <tr style="background:${teal};color:white">
+      ${plan ? `<tr style="background:${teal};color:white">
+        <th style="padding:10px 12px;text-align:left">Element</th>
+        <th style="padding:10px 12px;text-align:left">Analyte / Samples</th>
+        <th style="padding:10px 12px;text-align:left">Plan criterion</th>
+        <th style="padding:10px 12px;text-align:center">Result</th>
+      </tr>` : `<tr style="background:${teal};color:white">
         <th style="padding:10px 12px;text-align:left">Element</th>
         <th style="padding:10px 12px;text-align:left">Analyte / Samples</th>
         <th style="padding:10px 12px;text-align:center">Result</th>
         <th style="padding:10px 12px;text-align:left">CLSI Standard</th>
-      </tr>
+      </tr>`}
     </thead>
     <tbody>${elementRows}</tbody>
   </table>
 
-  <div style="border:2px solid ${teal};border-radius:6px;padding:20px;margin-bottom:28px">
+  ${plan || latestSig ? reviewBlock : `<div style="border:2px solid ${teal};border-radius:6px;padding:20px;margin-bottom:28px">
     <div style="font-weight:700;font-size:13px;color:${teal};margin-bottom:8px;letter-spacing:0.3px">LABORATORY DIRECTOR OR DESIGNEE REVIEW</div>
     <div style="font-size:12px;color:#374151;margin-bottom:12px;line-height:1.6">
       I have reviewed the verification study results for the instrument/test identified above and find that the performance specifications have been adequately verified.
@@ -1047,11 +1184,13 @@ export function buildVerificationBlockHtml(v: any, instruments: any[], studies: 
         <td>Title: ${v.director_title || "_________________________"}</td>
       </tr>
     </table>
-  </div>
+  </div>`}
 
-  ${unitBlocks}
+  ${plan || latestSig ? unitLines : unitBlocks}
 
   <div style="page-break-before:always"></div>
+
+  ${planPage}
 
   <div style="font-weight:700;font-size:16px;color:${teal};border-bottom:2px solid ${teal};padding-bottom:6px;margin-bottom:24px">Performance Study Details</div>
   ${elementDetails}
@@ -1256,7 +1395,9 @@ export function registerVeritaCheckVerificationRoutes(
       if (status === 403) return res.status(403).json({ error: "You don't have access to this verification's lab" });
       return res.status(404).json({ error: "Not found" });
     }
-    const allowed = ["instrument_name","manufacturer","trigger_type","status","director_name","director_title","approved_date","remediation_notes","elements","element_reasons"];
+    // B4 (2026-11-27): the package is signed with name and password (POST .../sign), so a typed director name, title and
+    // date are no longer saved here. Ones saved before stay and print as they did.
+    const allowed = ["instrument_name","manufacturer","trigger_type","status","remediation_notes","elements","element_reasons"];
     const sets: string[] = [];
     const vals: any[] = [];
     for (const key of allowed) {
@@ -1293,6 +1434,9 @@ export function registerVeritaCheckVerificationRoutes(
     // the parent row. Same FK-cascade class as the finding-delete fix (PR #748);
     // found in browser QA 2026-06-13.
     sqlite.prepare("DELETE FROM veritacheck_verification_analytes WHERE verification_id = ?").run(req.params.id);
+    // B4: the package's plan versions and signatures go with it (both reference it).
+    sqlite.prepare("DELETE FROM veritacheck_verification_plans WHERE verification_id = ?").run(req.params.id);
+    sqlite.prepare("DELETE FROM veritacheck_verification_signatures WHERE verification_id = ?").run(req.params.id);
     sqlite.prepare("DELETE FROM veritacheck_verifications WHERE id = ?").run(req.params.id);
     res.json({ ok: true });
   });
@@ -1478,7 +1622,10 @@ export function registerVeritaCheckVerificationRoutes(
     res.json({ ok: true });
   });
 
-  app.post("/api/veritacheck/verifications/:id/analytes/:analyteId/finalize", authMiddleware, requireWriteAccess, editVerification, (req: any, res) => {
+  // B4 (2026-11-27, Q3 = 1): an analyte is signed with the full signature by the medical director or a designee with the verify
+  // method duty for the analyte's complexity, in the package's own laboratory (server/verificationSignatures.ts). Edit access to
+  // VeritaCheck isn't asked: the qualification decides, as the monthly QC co-sign does.
+  app.post("/api/veritacheck/verifications/:id/analytes/:analyteId/finalize", authMiddleware, requireWriteAccess, async (req: any, res) => {
     if (!hasVeritaCheckAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaCheck® subscription required" });
     const { row: parent, status: parentStatus } = resolveRowForMutation((db as any).$client, "veritacheck_verifications", req.params.id, req);
     if (!parent) {
@@ -1492,13 +1639,24 @@ export function registerVeritaCheckVerificationRoutes(
     if (existing.lifecycle_state === "finalized") {
       return res.json({ ok: true, already_finalized: true });
     }
-    const signature = typeof req.body?.signature === "string" ? req.body.signature.trim() : "";
-    if (!signature) return res.status(400).json({ error: "signature required" });
-    sqlite.prepare(`
+    const labId = (parent as any).lab_id ?? null;
+    const got = await readSignature(sqlite, req, labId, complexityForAnalyte(Number(labId) || 0, existing.analyte_name), { decision: true, purpose: "verification_analyte" });
+    if (!("sig" in got)) return res.status(got.status).json(got.body);
+    const c = signatureColumns(got.sig);
+    const r = sqlite.prepare(`
       UPDATE veritacheck_verification_analytes
-      SET lifecycle_state = 'finalized', finalized_at = ?, finalized_by_user_id = ?, finalized_signature = ?, updated_at = ?
-      WHERE id = ?
-    `).run(new Date().toISOString(), req.userId, signature, new Date().toISOString(), req.params.analyteId);
+      SET lifecycle_state = 'finalized', finalized_at = ?, finalized_by_user_id = ?, finalized_signature = ?, updated_at = ?,
+        finalized_decision = ?, signed_with = ?, signed_with_provider = ?, finalized_capacity = ?, finalized_capacity_label = ?, finalized_title = ?, finalized_delegation_id = ?
+      WHERE id = ? AND lifecycle_state <> 'finalized'
+    `).run(got.sig.at, req.userId, got.sig.typedName, got.sig.at, c.finalized_decision, c.signed_with, c.signed_with_provider, c.finalized_capacity,
+      c.finalized_capacity_label, c.finalized_title, c.finalized_delegation_id, req.params.analyteId);
+    if (r.changes === 0) return res.json({ ok: true, already_finalized: true });
+    logAudit({
+      userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritacheck", action: "update", entityType: "verification_analyte_signature",
+      entityId: existing.id, entityLabel: `${(parent as any).instrument_name}: ${existing.analyte_name}`, before: { lifecycle_state: existing.lifecycle_state },
+      after: { lifecycle_state: "finalized", decision: got.sig.decision, capacity: got.sig.capacity, capacity_label: got.sig.capacityLabel, signed_with: got.sig.signedWith, signed_at: got.sig.at },
+      ipAddress: req.ip,
+    });
     res.json({ ok: true });
   });
 
@@ -1600,6 +1758,9 @@ export function registerVeritaCheckVerificationRoutes(
     // it, a writer could flip another lab's pass/fail verdict by primary key.
     const slot = sqlite.prepare("SELECT id FROM veritacheck_verification_studies WHERE id = ? AND verification_id = ?").get(req.params.studySlotId, req.params.id);
     if (!slot) return res.status(404).json({ error: "Study slot not found on this verification" });
+    // B4: a signed package analyte locks its study slots, until an amendment of it is opened.
+    const lockedBy = slotLockedBy(sqlite, Number(req.params.id), Number(req.params.studySlotId));
+    if (lockedBy) return res.status(409).json({ error: `${lockedBy} is signed, so its studies on this package are locked. Amend the analyte to change them.`, code: "ANALYTE_SIGNED" });
     const sets: string[] = [];
     const vals: any[] = [];
     for (const key of SLOT_COLUMNS) {
@@ -1682,6 +1843,182 @@ export function registerVeritaCheckVerificationRoutes(
       LIMIT 50
     `).all(v.lab_id);
     res.json(matches);
+  });
+
+  // ── B4 (2026-11-27): the plan, and the package's signature (server/verificationSignatures.ts) ──────────────────────
+  // The plan is written by an editor and signed by the medical director or a designee before testing; testing may start first.
+  // The package is signed with name, password, role and Accepted or Not accepted, over a fingerprint of what it covers; a change
+  // afterwards keeps that signature and its page and asks for a new one. Every one is decided in the package's own laboratory.
+  // Each handler passes resolveRowForMutation's answer in, so the record's own laboratory decides (BUG-196).
+  const findPackage = (req: any, res: any, found: { row: any; status?: number }): any | null => {
+    if (!hasVeritaCheckAccess(req.user, req.scope?.lab)) { res.status(403).json({ error: "VeritaCheck® subscription required" }); return null; }
+    const { row, status } = found;
+    if (!row) {
+      if (status === 403) res.status(403).json({ error: "You don't have access to this verification's lab" });
+      else res.status(404).json({ error: "Not found" });
+      return null;
+    }
+    return row;
+  };
+  const refuse = (res: any, r: Refusal) => res.status(r.status).json(r.body);
+  const publicPlan = (p: any) => p && ({
+    id: p.id, version: p.version, rows: p.rows, rows_hash: p.rows_hash, created_at: p.created_at, updated_at: p.updated_at,
+    signed_at: p.signed_at, typed_signature: p.typed_signature, capacity_label: p.capacity_label, superseded_at: p.superseded_at,
+    signed_with: p.signed_with, signed_with_provider: p.signed_with_provider,
+  });
+  const publicSignature = (s: any) => ({
+    id: s.id, signed_at: s.signed_at, typed_signature: s.typed_signature, title: s.title, capacity_label: s.capacity_label, decision: s.decision,
+    signed_with: s.signed_with, signed_with_provider: s.signed_with_provider,
+    replaces_signature_id: s.replaces_signature_id, covers: (() => { try { return JSON.parse(s.covers_json || "{}"); } catch { return {}; } })(),
+  });
+  const PDF_STUDY_COLUMNS = `
+        s.test_name AS testName, s.study_type AS studyType,
+        s.instrument AS studyInstrument, s.analyst AS studyAnalyst, s.date AS studyDate,
+        s.data_points AS studyDataPoints, s.instruments AS studyInstrumentsJson,
+        s.clia_allowable_error AS studyTea,
+        s.tea_is_percentage AS studyTeaIsPct, s.tea_unit AS studyTeaUnit,
+        s.clia_absolute_floor AS studyAbsFloor,
+        s.amr_low AS studyAmrLow, s.amr_high AS studyAmrHigh, s.amr_units AS studyAmrUnits,
+        s.censoring_policy AS studyCensoringPolicy`;
+
+  // Everything the Plan and Director or Designee Approval tabs show. Read only.
+  app.get("/api/veritacheck/verifications/:id/signing", authMiddleware, (req: any, res) => {
+    const v = findPackage(req, res, resolveRowForMutation<any>((db as any).$client, "veritacheck_verifications", req.params.id, req));
+    if (!v) return;
+    const state = packageSigning(sqlite, v);
+    const complexity = packageComplexity(sqlite, v);
+    const labNum = Number(v.lab_id) || 0;
+    res.json({
+      plan: publicPlan(state.plan), versions: state.versions.map(publicPlan), planSigned: state.planSigned, firstSignedAt: state.firstSignedAt,
+      required: state.required, missing: state.missing, beforePlan: state.beforePlan, leftOut: state.leftOut,
+      units: state.units.map((u: any) => u.serial_number), parts: state.parts, fingerprint: state.fingerprint, short: state.short,
+      history: state.history.map(publicSignature), current: state.current, changed: state.changed, covers: state.covers,
+      analytes: state.analytes,
+      signAs: signAs(sqlite, v.lab_id, req.userId, complexity), whoCanSign: whoCanSign(sqlite, v.lab_id, complexity),
+      analyteSignAs: Object.fromEntries(state.analytes.map((a) => [a.id, signAs(sqlite, v.lab_id, req.userId, complexityForAnalyte(labNum, a.name))])),
+      legacyApproval: v.director_name || v.director_title || v.approved_date ? { name: v.director_name, title: v.director_title, date: v.approved_date } : null,
+    });
+  });
+
+  // Save the plan. Unsigned: the current version changes. Signed: a new version, and the signed one stays.
+  app.put("/api/veritacheck/verifications/:id/plan", authMiddleware, requireWriteAccess, editVerification, (req: any, res) => {
+    const v = findPackage(req, res, resolveRowForMutation<any>((db as any).$client, "veritacheck_verifications", req.params.id, req));
+    if (!v) return;
+    const analyteIds = (sqlite.prepare("SELECT id FROM veritacheck_verification_analytes WHERE verification_id = ?").all(v.id) as any[]).map((a) => Number(a.id));
+    const clean = cleanPlanRows(req.body?.rows, v, analyteIds);
+    if (!("rows" in clean)) return refuse(res, clean);
+    const versions = planVersions(sqlite, v.id);
+    const latest = versions.length ? versions[versions.length - 1] : null;
+    const now = new Date().toISOString();
+    const rowsJson = JSON.stringify(clean.rows);
+    const label = `${v.instrument_name}: verification plan`;
+    if (latest && !latest.signed_at) {
+      if (latest.rows_json === rowsJson) return res.json({ ok: true, version: latest.version, unchanged: true });
+      sqlite.prepare("UPDATE veritacheck_verification_plans SET rows_json = ?, rows_hash = ?, updated_at = ? WHERE id = ?").run(rowsJson, planRowsHash(clean.rows), now, latest.id);
+      logAudit({ userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritacheck", action: "update", entityType: "verification_plan", entityId: latest.id, entityLabel: label,
+        before: { version: latest.version, rows: latest.rows }, after: { version: latest.version, rows: clean.rows }, ipAddress: req.ip });
+      return res.json({ ok: true, version: latest.version });
+    }
+    const version = (latest?.version ?? 0) + 1;
+    const ins = sqlite.prepare(
+      "INSERT INTO veritacheck_verification_plans (verification_id, lab_id, version, rows_json, rows_hash, written_by_user_id, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)"
+    ).run(v.id, v.lab_id ?? null, version, rowsJson, planRowsHash(clean.rows), req.userId, now, now);
+    logAudit({ userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritacheck", action: "create", entityType: "verification_plan", entityId: Number(ins.lastInsertRowid), entityLabel: label,
+      before: latest ? { version: latest.version, signed_at: latest.signed_at } : null, after: { version, rows: clean.rows }, ipAddress: req.ip });
+    res.json({ ok: true, version, newVersion: !!latest });
+  });
+
+  // Sign the plan's current version.
+  app.post("/api/veritacheck/verifications/:id/plan/sign", authMiddleware, requireWriteAccess, async (req: any, res) => {
+    const v = findPackage(req, res, resolveRowForMutation<any>((db as any).$client, "veritacheck_verifications", req.params.id, req));
+    if (!v) return;
+    const got = await readSignature(sqlite, req, v.lab_id, packageComplexity(sqlite, v), { decision: false, purpose: "verification_plan" });
+    if (!("sig" in got)) return refuse(res, got);
+    // Nothing awaits from here on, so what is checked is what is signed.
+    const versions = planVersions(sqlite, v.id);
+    const latest = versions.length ? versions[versions.length - 1] : null;
+    if (!latest) return res.status(409).json({ error: "Not signed. Write the plan before signing it.", code: "PLAN_MISSING" });
+    if (latest.signed_at) return res.status(409).json({ error: `Version ${latest.version} of the plan is already signed.`, code: "ALREADY_SIGNED" });
+    if (!latest.rows.length) return res.status(409).json({ error: "Not signed. The plan has no elements.", code: "PLAN_EMPTY" });
+    const expect = req.body?.expect_rows_hash;
+    if (typeof expect !== "string" || expect !== planRowsHash(latest.rows)) {
+      return res.status(409).json({ error: "Not signed. The plan was changed after you opened this page. Read it again before you sign.", code: "MOVED", moved: ["The plan"] });
+    }
+    const s = got.sig;
+    const sc = signatureColumns(s);
+    sqlite.prepare(
+      "UPDATE veritacheck_verification_plans SET signed_at = ?, signed_by_user_id = ?, typed_signature = ?, capacity = ?, capacity_label = ?, delegation_id = ?, signed_with = ?, signed_with_provider = ?, rows_hash = ? WHERE id = ? AND signed_at IS NULL"
+    ).run(s.at, s.userId, s.typedName, s.capacity, s.capacityLabel, s.delegationId, sc.signed_with, sc.signed_with_provider, planRowsHash(latest.rows), latest.id);
+    sqlite.prepare("UPDATE veritacheck_verification_plans SET superseded_at = ? WHERE verification_id = ? AND id <> ? AND superseded_at IS NULL").run(s.at, v.id, latest.id);
+    logAudit({ userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritacheck", action: "update", entityType: "verification_plan_signature", entityId: latest.id,
+      entityLabel: `${v.instrument_name}: verification plan version ${latest.version}`, before: { signed_at: null },
+      after: { version: latest.version, signed_at: s.at, capacity: s.capacity, capacity_label: s.capacityLabel, signed_with: s.signedWith }, ipAddress: req.ip });
+    res.json({ ok: true, version: latest.version, signed_at: s.at });
+  });
+
+  // Sign the finished package: every study in the plan signed (or attested by manual method), what the screen showed unchanged.
+  // The plan and the package are signed by qualification in the package's own laboratory, not edit access (as the QC co-sign).
+  app.post("/api/veritacheck/verifications/:id/sign", authMiddleware, requireWriteAccess, async (req: any, res) => {
+    const v0 = findPackage(req, res, resolveRowForMutation<any>((db as any).$client, "veritacheck_verifications", req.params.id, req));
+    if (!v0) return;
+    const got = await readSignature(sqlite, req, v0.lab_id, packageComplexity(sqlite, v0), { decision: true, purpose: "verification_package" });
+    if (!("sig" in got)) return refuse(res, got);
+    // Nothing awaits from here on, so what is checked is what is signed.
+    const v = sqlite.prepare("SELECT * FROM veritacheck_verifications WHERE id = ?").get(v0.id) as any;
+    const state = packageSigning(sqlite, v);
+    if (!state.plan) return res.status(409).json({ error: "Not signed. This package has no plan yet. Write the plan and have it signed first.", code: "PLAN_MISSING" });
+    if (!state.planSigned) return res.status(409).json({ error: "Not signed. The plan's current version isn't signed. Sign the plan first.", code: "PLAN_NOT_SIGNED" });
+    const moved = movedSinceShown(req.body?.expect, state.parts, state.fingerprint);
+    if (moved === null) return res.status(400).json({ error: "Not signed. Open the package again and sign from the page.", code: "EXPECT_REQUIRED" });
+    if (moved.length) return res.status(409).json({ error: `Not signed. ${moved.join("; ")} ${moved.length === 1 ? "was" : "were"} changed after you opened this page.`, code: "MOVED", moved });
+    if (state.missing.length) return res.status(409).json({ error: "Not signed. Every study in the plan needs to be signed, or attested by manual method, first.", code: "NOT_READY", missing: state.missing });
+    if (state.current) return res.status(409).json({ error: "This package is already signed and nothing has changed since.", code: "ALREADY_SIGNED" });
+    const s = got.sig;
+    const sc = signatureColumns(s);
+    const ins = sqlite.prepare(
+      `INSERT INTO veritacheck_verification_signatures (verification_id, lab_id, signed_at, signed_by_user_id, typed_signature, title, capacity, capacity_label,
+         delegation_id, decision, signed_with, signed_with_provider, fingerprint, parts_json, covers_json, replaces_signature_id, ip_address, user_agent)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+    ).run(v.id, v.lab_id ?? null, s.at, s.userId, s.typedName, s.title, s.capacity, s.capacityLabel, s.delegationId, s.decision, sc.signed_with, sc.signed_with_provider,
+      state.fingerprint, JSON.stringify(state.parts), JSON.stringify(state.covers), state.latest?.id ?? null, req.ip ?? null, String(req.headers?.["user-agent"] || "").slice(0, 300) || null);
+    const signatureId = Number(ins.lastInsertRowid);
+    // The page 1 it was signed on, kept with the signature.
+    try {
+      const instruments = sqlite.prepare("SELECT * FROM veritacheck_verification_instruments WHERE verification_id = ? ORDER BY id").all(v.id) as any[];
+      const page = buildVerificationBlockHtml(v, instruments, verificationSlots(sqlite, v.id, PDF_STUDY_COLUMNS));
+      sqlite.prepare("UPDATE veritacheck_verification_signatures SET page_html = ? WHERE id = ?").run(page, signatureId);
+    } catch (err: any) {
+      console.error("[verification-sign] keeping the signed page failed:", err?.message);
+    }
+    logAudit({ userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritacheck", action: "create", entityType: "verification_signature", entityId: signatureId,
+      entityLabel: `${v.instrument_name}: verification package`, before: state.latest ? { signature_id: state.latest.id, signed_at: state.latest.signed_at } : null,
+      after: { decision: s.decision, capacity: s.capacity, capacity_label: s.capacityLabel, signed_with: s.signedWith, fingerprint: state.fingerprint, signed_at: s.at }, ipAddress: req.ip });
+    res.json({ ok: true, signatureId, fingerprint: state.short });
+  });
+
+  // The package as it was signed: the page kept with a signature, now or after a change.
+  app.post("/api/veritacheck/verifications/:id/signatures/:signatureId/pdf", authMiddleware, async (req: any, res) => {
+    if (blockNonOperatorSeat(req, res)) return;
+    const v = findPackage(req, res, resolveRowForMutation<any>((db as any).$client, "veritacheck_verifications", req.params.id, req));
+    if (!v) return;
+    const s = sqlite.prepare("SELECT page_html, signed_at FROM veritacheck_verification_signatures WHERE id = ? AND verification_id = ?").get(req.params.signatureId, v.id) as any;
+    if (!s?.page_html) return res.status(404).json({ error: "Signature not found" });
+    const userId = req.ownerUserId ?? req.user.userId;
+    const u = sqlite.prepare("SELECT clia_number, clia_lab_name FROM users WHERE id = ?").get(userId) as any;
+    const html = wrapVerificationPageHtml([s.page_html], u?.clia_lab_name || undefined, u?.clia_number || undefined);
+    try {
+      const puppeteer = await import("puppeteer");
+      const browser = await puppeteer.default.launch({ args: ["--no-sandbox", "--disable-setuid-sandbox"] });
+      const page = await browser.newPage();
+      await setPdfContent(page, html);
+      const pdf = await page.pdf({ format: "Letter", printBackground: true, margin: { top: "0.5in", bottom: "0.5in", left: "0.5in", right: "0.5in" } });
+      await browser.close();
+      const day = String(printedDay(s.signed_at, v.lab_id, sqlite)).replace(/\//g, "-");
+      res.set({ "Content-Type": "application/pdf", "Content-Disposition": `attachment; filename="VeritaCheck_Verification_${String(v.instrument_name).replace(/[^a-zA-Z0-9]/g, "_")}_signed_${day}.pdf"` });
+      res.send(await stampPdfAuthor(pdf));
+    } catch (err: any) {
+      res.status(500).json({ error: "PDF generation failed", detail: err.message });
+    }
   });
 
   // POST generate PDF package — Shape A guard.

@@ -39,6 +39,7 @@ import { API_BASE } from "@/lib/queryClient";
 import { Plus, Edit2, Trash2, CheckCircle2, Lock, ListChecks } from "lucide-react";
 import fdaData from "@/lib/fdaInstrumentData.json";
 import { labLocaleDate } from "@/lib/labDate";
+import { ESignatureForm, postSignature, type SignAs } from "@/components/ESignatureForm";
 
 const INSTRUMENT_DATA = fdaData as unknown as Record<string, { tests: Record<string, { complexity: string; specialty: string }> }>;
 
@@ -124,7 +125,8 @@ export function VerificationAnalytesPanel({ verificationId, instrumentName, onAn
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState<AnalyteFormState>(emptyFormState());
   const [signing, setSigning] = useState<VerificationAnalyte | null>(null);
-  const [signature, setSignature] = useState("");
+  // B4: who the signed-in person signs this analyte as (GET .../signing analyteSignAs), checked again on the server.
+  const [signAs, setSignAs] = useState<SignAs | null>(null);
   // FDA-cleared analyte menu for this verification's linked VeritaMap instrument.
   const [mapAnalytes, setMapAnalytes] = useState<{ analyte: string; specialty: string; complexity: string }[]>([]);
   // Multi-select add
@@ -216,8 +218,12 @@ export function VerificationAnalytesPanel({ verificationId, instrumentName, onAn
   }
   function startSign(a: VerificationAnalyte) {
     if (a.lifecycle_state === "finalized") return;
-    setSignature("");
+    setSignAs(null);
     setSigning(a);
+    fetch(`${API_BASE}/api/veritacheck/verifications/${verificationId}/signing`, { headers: authHeaders() })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => setSignAs(j?.analyteSignAs?.[a.id] ?? { canSign: false, label: null, reason: "Could not check who can sign this analyte." }))
+      .catch(() => setSignAs({ canSign: false, label: null, reason: "Could not check who can sign this analyte." }));
   }
 
   async function saveAdd() {
@@ -267,26 +273,15 @@ export function VerificationAnalytesPanel({ verificationId, instrumentName, onAn
     } finally { setBusy(false); }
   }
 
-  async function doSign() {
-    if (!signing || !signature.trim()) return;
-    setBusy(true);
-    try {
-      const r = await fetch(`${API_BASE}/api/veritacheck/verifications/${verificationId}/analytes/${signing.id}/finalize`, {
-        method: "POST",
-        headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ signature: signature.trim() }),
-      });
-      if (!r.ok) {
-        const e = await r.json().catch(() => ({}));
-        throw new Error(e.error || `HTTP ${r.status}`);
-      }
-      toast({ title: "Analyte signed" });
-      setSigning(null);
-      setSignature("");
-      await reload();
-    } catch (e: any) {
-      toast({ title: "Could not sign", description: e.message, variant: "destructive" });
-    } finally { setBusy(false); }
+  async function doSign(fields: object): Promise<string | null> {
+    if (!signing) return null;
+    const refused = await postSignature(`${API_BASE}/api/veritacheck/verifications/${verificationId}/analytes/${signing.id}/finalize`, authHeaders(), fields);
+    if (refused) return refused;
+    toast({ title: "Analyte signed" });
+    setSigning(null);
+    await reload();
+    onAnalytesChanged?.();
+    return null;
   }
 
   async function doAmend(a: VerificationAnalyte) {
@@ -517,21 +512,16 @@ export function VerificationAnalytesPanel({ verificationId, instrumentName, onAn
 
       {/* Sign dialog */}
       <Dialog open={signing !== null} onOpenChange={(v) => { if (!v) setSigning(null); }}>
-        <DialogContent className="max-w-md" data-testid="analyte-sign-dialog">
+        <DialogContent className="max-w-lg" data-testid="analyte-sign-dialog">
           <DialogHeader>
-            <DialogTitle>Sign and finalize analyte</DialogTitle>
+            <DialogTitle>Sign and finalize analyte{signing ? `: ${signing.analyte_name}` : ""}</DialogTitle>
             <DialogDescription>
-              Signing locks this analyte from edits. Subsequent changes require the amendment workflow. Type your initials or full name as the signature.
+              Signing locks this analyte and its studies on this package from edits. Subsequent changes require the amendment workflow.
+              The medical director, or someone named in a signed Letter of Delegation for verifying test method performance, signs
+              with their full name and own password.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-2">
-            <Label htmlFor="ana-sig" className="text-xs">Signature (initials or full name)</Label>
-            <Input id="ana-sig" value={signature} onChange={(e) => setSignature(e.target.value)} placeholder="e.g. MV or Michael Veri" data-testid="analyte-sign-input" />
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setSigning(null)}>Cancel</Button>
-            <Button onClick={doSign} disabled={busy || !signature.trim()} data-testid="analyte-sign-confirm">Sign and lock</Button>
-          </DialogFooter>
+          <ESignatureForm purpose="verification_analyte" signAs={signAs} withDecision submitLabel="Sign and lock" testId="analyte-sign" onSign={doSign} />
         </DialogContent>
       </Dialog>
     </div>

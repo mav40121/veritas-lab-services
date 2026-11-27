@@ -85,7 +85,6 @@ export function recordRoutes(w: RouteWorld): RecordRoute[] {
   add("POST", "study point include", "veritacheck", studyCall("/points/0/include", {}));
   add("POST", "study range", "veritacheck", studyCall("/amr", { amr_low: 1, amr_high: 9, amr_units: "mg/dL" }));
   add("POST", "study censoring", "veritacheck", studyCall("/censoring-policy", { policy: "substitute_lld" }));
-  add("POST", "study sign", "veritacheck", studyCall("/finalize", { signature: "Made Up" }));
   add("POST", "study amend", "veritacheck", (lab, owner) => { const id = study(lab, owner, { lifecycle_state: "finalized", status: "pass" }); return { path: `/api/studies/${id}/amend`, body: {}, snap: count("studies", "amends_study_id", id) }; });
   add("POST", "study archive", "veritacheck", studyCall("/archive", { reason: "made up" }));
   add("POST", "study unarchive", "veritacheck", studyCall("/unarchive", {}, { archived_at: now, archive_reason: "made up" }));
@@ -101,7 +100,12 @@ export function recordRoutes(w: RouteWorld): RecordRoute[] {
   add("DELETE", "verification unit", "veritacheck", verif((v) => { const id = unit(v); return { path: `${vBase}/${v}/instruments/${id}`, snap: row("veritacheck_verification_instruments", id) }; }));
   add("POST", "verification analyte", "veritacheck", verif((v) => ({ path: `${vBase}/${v}/analytes`, body: { analyte_name: "Sodium" }, snap: count("veritacheck_verification_analytes", "verification_id", v) })));
   add("PATCH", "verification analyte", "veritacheck", verif((v) => { const id = analyte(v); return { path: `${vBase}/${v}/analytes/${id}`, body: { tea_units: "changed" }, snap: row("veritacheck_verification_analytes", id) }; }));
-  add("POST", "verification analyte sign", "veritacheck", verif((v) => { const id = analyte(v); return { path: `${vBase}/${v}/analytes/${id}/finalize`, body: { signature: "Made Up" }, snap: row("veritacheck_verification_analytes", id) }; }));
+  // Signing a study or an analyte is the medical director's or a designee's, not any editor's (B4): driven by
+  // verification-signatures.test.ts, which the guard test names.
+  add("PUT", "verification plan", "veritacheck", (lab, owner) => {
+    const v = seed("veritacheck_verifications", { user_id: owner, lab_id: lab, instrument_name: `Verification ${tag()}`, trigger_type: "new_instrument", elements: '["accuracy"]' });
+    return { path: `${vBase}/${v}/plan`, body: { rows: [{ element: "accuracy", tested: "Made up", criterion: "Made up", specimens: "Made up" }] }, snap: () => JSON.stringify(one("SELECT rows_json FROM veritacheck_verification_plans WHERE verification_id = ?", v) ?? null) };
+  });
   add("DELETE", "verification analyte", "veritacheck", verif((v) => { analyte(v); const id = analyte(v); return { path: `${vBase}/${v}/analytes/${id}`, snap: row("veritacheck_verification_analytes", id) }; }));
   add("POST", "verification analyte amend", "veritacheck", verif((v) => { const id = analyte(v, { lifecycle_state: "finalized" }); return { path: `${vBase}/${v}/analytes/${id}/amend`, body: {}, snap: count("veritacheck_verification_analytes", "amends_analyte_id", id) }; }));
   add("PATCH", "verification study slot", "veritacheck", verif((v) => { const id = seed("veritacheck_verification_studies", { verification_id: v, element: "accuracy" }); return { path: `${vBase}/${v}/studies/${id}`, body: { result_summary: "changed" }, snap: row("veritacheck_verification_studies", id) }; }));
