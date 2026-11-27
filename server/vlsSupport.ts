@@ -73,6 +73,9 @@ const ALWAYS: Record<string, string> = {
   "POST /api/labs/:labId/qc/file-imports/:id/undo": "take back a QC import",
   "PUT /api/labs/:labId/qc/sigma/allowable-error": "set an allowable error",
   "PUT /api/labs/:labId/qc/sigma/peer-mean": "record a peer mean",
+  // The lab's own criteria for accepting a control run (42 CFR 493.1256(d)(10)), and the lock on them (B12 part 2).
+  "PUT /api/labs/:labId/qc/rule-settings": "change the lab's QC rules",
+  "POST /api/labs/:labId/qc/rule-settings/lock": "lock or unlock the lab's QC rules",
   // VeritaComp
   "POST /api/labs/:labId/competency/assessments": "create a competency assessment",
   "PUT /api/labs/:labId/competency/assessments/:id": "edit a competency assessment",

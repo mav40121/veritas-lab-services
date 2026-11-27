@@ -44,8 +44,9 @@ import { PT_ROOT_CAUSE_CATEGORIES } from "@shared/ptFailure";
 import { studyRowToClient, resolveInstrumentDisplay, studyPdfFilename } from "./studyPdf";
 import { foreignSlotCounts, ownMapInstrument, sameLabOrOwnerSql } from "./verificationLinks";
 import { scanPhi } from "./phiScan";
-import { rulesForRun } from "./qcWestgard";
-import { addedAfterReview, insertQcRun, judgeQcRun, LIVE_RUN, lotNotInUse, NOT_TAKEN_BACK, qcRunSettings, signedMonths, voidQcRun } from "./qcRuns";
+import { rulesForRun, usesManufacturerRange } from "./qcWestgard";
+import { addedAfterReview, insertQcRun, judgeQcRun, LIVE_RUN, lotNotInUse, NOT_TAKEN_BACK, signedMonths, voidQcRun } from "./qcRuns";
+import { judgedUnderLabels, ruleSetForRescore, acrossLevelViolations } from "./qcRuleSets";
 import { resolveBasis, computeBasis, basisConfig, sampleStats, type QcBasis } from "./qcBasis";
 import { importsOf, registerQcFileImportRoutes } from "./qcFileImport";
 import { registerQcSigmaRoutes } from "./qcSigma";
@@ -4613,7 +4614,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const now = new Date().toISOString();
     const reason = `rescore ${now.slice(0, 10)}: lab-established basis (server/qcBasis.ts)`;
     const report: any[] = [];
-    const work: { resultId: number; after: any[]; basis: QcBasis | null; changed: boolean }[] = [];
+    const work: { resultId: number; after: any[]; basis: QcBasis | null; changed: boolean; versionId: number | null }[] = [];
     for (const labId of labs) {
       const lots = sqlite.prepare(
         "SELECT id, lab_id, analyte, level, lot_number, mfr_mean, mfr_sd, mfr_range_low, mfr_range_high, lab_mean, lab_sd, lab_basis_n, lab_basis_locked_at, lab_basis_source, prior_lot_id FROM qc_control_lots WHERE lab_id = ? ORDER BY analyte, level, id"
@@ -4621,15 +4622,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const labOut: any = { labId, lots: [], changed: 0, unchanged: 0 };
       for (const lot of lots) {
         const hist = sqlite.prepare(
-          "SELECT id, result_value, result_date FROM qc_results WHERE lab_id = ? AND control_lot_id = ? AND accepted_for_reporting = 1 AND voided_at IS NULL ORDER BY result_date ASC, id ASC"
+          "SELECT id, result_value, result_date, rule_version_id FROM qc_results WHERE lab_id = ? AND control_lot_id = ? AND accepted_for_reporting = 1 AND voided_at IS NULL ORDER BY result_date ASC, id ASC"
         ).all(labId, lot.id) as any[];
         if (!hist.some((h: any) => h.result_date >= since)) continue;
         const cfg = basisConfig(sqlite, labId, lot.analyte);
-        const st = sqlite.prepare(
-          "SELECT bias_consecutive_count, trend_consecutive_count FROM qc_rule_settings WHERE lab_id = ? AND (analyte = ? OR analyte IS NULL) ORDER BY (analyte IS NULL) ASC LIMIT 1"
-        ).get(labId, lot.analyte) as any;
-        const biasN = st?.bias_consecutive_count ?? 10;
-        const trendN = st?.trend_consecutive_count ?? 7;
+        // B12 part 2 (server/qcRuleSets.ts): each run is judged under the rules that judged it, or, for a run judged before rule
+        // settings, the set in force on its date (a lab that never changed its rules gets today's, with its 10 and 7).
         // A basis an owner/admin set by hand stands; an automatic lock is
         // recomputed so every run is judged as it would have been on entry.
         const simLot = (lot.lab_basis_source === "manual" || lot.lab_basis_source === "all_runs")
@@ -4640,12 +4638,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         for (let i = 0; i < hist.length; i++) {
           if (hist[i].result_date < since) continue;
           const basis = computeBasis(simLot, vals.slice(0, i), cfg);
-          const after = rulesForRun(vals, ids, i, basis, { low: lot.mfr_range_low ?? null, high: lot.mfr_range_high ?? null }, cfg, biasN, trendN);
+          const mfrRange = { low: lot.mfr_range_low ?? null, high: lot.mfr_range_high ?? null };
+          const rs = ruleSetForRescore(sqlite, labId, lot.analyte, hist[i]);
+          const after = rulesForRun(vals, ids, i, basis, mfrRange, cfg, 0, 0, rs.set);
+          if (basis && !usesManufacturerRange(basis, mfrRange, cfg)) after.push(...acrossLevelViolations(sqlite, labId, ids[i], (vals[i] - basis.mean) / basis.sd, rs.set));
           const before = sqlite.prepare("SELECT rule_code, severity FROM qc_rule_violations WHERE qc_result_id = ? AND superseded_at IS NULL ORDER BY rule_code").all(ids[i]) as any[];
           const bKey = before.map((v: any) => v.rule_code).sort().join(",");
           const aKey = after.map((v) => v.rule_code).sort().join(",");
           const changed = bKey !== aKey;
-          work.push({ resultId: ids[i], after, basis, changed });
+          work.push({ resultId: ids[i], after, basis, changed, versionId: hist[i].rule_version_id ? null : rs.versionId });
           if (changed) {
             lotOut.changes.push({
               result_id: ids[i], result_date: hist[i].result_date, value: vals[i],
@@ -4667,8 +4668,11 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const sup = sqlite.prepare("UPDATE qc_rule_violations SET superseded_at = ?, superseded_reason = ? WHERE qc_result_id = ? AND superseded_at IS NULL");
       const ins = sqlite.prepare("INSERT INTO qc_rule_violations (qc_result_id, rule_code, severity, detail, related_result_ids, evaluated_at) VALUES (?, ?, ?, ?, ?, ?)");
       const stamp = sqlite.prepare("UPDATE qc_results SET basis_mean = ?, basis_sd = ?, basis_source = ? WHERE id = ?");
+      // A run judged before rule settings is stamped with the version that judged it now; one that kept its version keeps it.
+      const stampVersion = sqlite.prepare("UPDATE qc_results SET rule_version_id = ? WHERE id = ? AND rule_version_id IS NULL");
       for (const w of work) {
         if (w.basis) stamp.run(w.basis.mean, w.basis.sd, w.basis.source, w.resultId);
+        if (w.versionId) stampVersion.run(w.versionId, w.resultId);
         if (!w.changed) continue;
         sup.run(now, reason, w.resultId);
         for (const v of w.after) ins.run(w.resultId, v.rule_code, v.severity, v.detail, JSON.stringify(v.related_result_ids), now);
@@ -4852,8 +4856,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       return res.status(500).json({ error: err.message || "Insert failed" });
     }
 
-    // Judged by server/qcRuns.ts, the same code a run read from a file goes through.
-    const judged = judgeQcRun(sqlite, req.scope.labId, Number(control_lot_id), newResultId, qcRunSettings(sqlite, req.scope.labId, lot.analyte), now);
+    // Judged by server/qcRuns.ts, the same code a run read from a file goes through: under the lab's rules in force on the run's own
+    // date (B12 part 2, server/qcRuleSets.ts), and the version that judged it is kept on the run.
+    const judged = judgeQcRun(sqlite, req.scope.labId, Number(control_lot_id), newResultId, now);
     // BUG-199: a typed run left no audit row. An imported one is in its import's (server/qcFileImport.ts).
     logAudit({
       userId: req.userId, ownerUserId: req.scope.lab?.owner_user_id ?? req.userId, module: "veritaqc", action: "create",
@@ -4862,6 +4867,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         lab_id: req.scope.labId, control_lot_id: Number(control_lot_id), result_value: Number(result_value), result_date: String(result_date), run_time: run_time || null,
         instrument: instrumentText, map_instrument_id: mapInst ? mapInst.id : null, comment: comment || null, rules_fired: judged.violations.map((v) => v.rule_code),
         requires_corrective_action: judged.requires_corrective_action, basis_source: judged.basis?.source ?? null,
+        rule_version_id: judged.judged_under.version_id,
       },
       ipAddress: req.ip,
     });
@@ -4872,6 +4878,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       requires_corrective_action: judged.requires_corrective_action,
       settings_used: judged.settings_used,
       basis: judged.basis,
+      // A late entry is judged under the rules of its own date and says so (own_date).
+      judged_under: judged.judged_under,
     });
   });
 
@@ -5286,7 +5294,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     ).get(controlLotId, req.scope.labId) as any;
     if (!lot) return res.status(404).json({ error: "Control lot not found in this lab" });
     const results = sqlite.prepare(
-      "SELECT id, lab_id, control_lot_id, instrument, map_instrument_id, result_value, result_date, run_time, operator_user_id, comment, accepted_for_reporting, created_at, voided_at, voided_by_user_id, void_reason, import_id, import_row, import_column, import_operator FROM qc_results WHERE lab_id = ? AND control_lot_id = ? ORDER BY result_date DESC, id DESC LIMIT ?"
+      "SELECT id, lab_id, control_lot_id, instrument, map_instrument_id, result_value, result_date, run_time, operator_user_id, comment, accepted_for_reporting, created_at, voided_at, voided_by_user_id, void_reason, rule_version_id, import_id, import_row, import_column, import_operator FROM qc_results WHERE lab_id = ? AND control_lot_id = ? ORDER BY result_date DESC, id DESC LIMIT ?"
     ).all(req.scope.labId, controlLotId, limit) as any[];
     if (results.length === 0) return res.json({ results: [], analyte: lot.analyte });
     const ids = results.map(r => r.id);
@@ -5317,8 +5325,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // A run read from a file says so (server/qcFileImport.ts), and a run stored after its month's review was signed is marked.
     const imports = importsOf(sqlite, req.scope.labId, results);
     const months = signedMonths(sqlite, req.scope.labId, [controlLotId]);
+    const judgedUnder = judgedUnderLabels(sqlite, req.scope.labId, results.map(r => r.rule_version_id));
     const enriched = results.map(r => ({
       ...r,
+      judged_under: r.rule_version_id ? (judgedUnder.get(r.rule_version_id) ?? null) : "Before rule settings",
       violations: violByResult[r.id] || [],
       corrective_actions: caByResult[r.id] || [],
       notes: notesByResult[r.id] || [],
@@ -36908,6 +36918,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       sqlite.prepare("DELETE FROM qc_peer_means WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM qc_control_lots WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM qc_rule_settings WHERE lab_id = ?").run(id);
+      sqlite.prepare("DELETE FROM qc_rule_versions WHERE lab_id = ?").run(id);
+      sqlite.prepare("DELETE FROM qc_rule_lock_events WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM veritaqc_import_mappings WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM stock_vendor_contacts WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM stock_vendors WHERE lab_id = ?").run(id);
@@ -45047,6 +45059,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   registerTemperatureLogRoutes(app, authMiddleware, requireWriteAccess, requireModuleEdit);
   const { registerMaintainRecordReviewRoutes } = await import('./maintainRecordReview');
   registerMaintainRecordReviewRoutes(app, authMiddleware, requireWriteAccess);
+  // VeritaQC rule settings (/api/labs/:labId/qc/rule-settings; B12 part 2, server/qcRuleSets.ts)
+  const { registerQcRuleSettingsRoutes } = await import('./qcRuleSets');
+  registerQcRuleSettingsRoutes(app, authMiddleware, requireWriteAccess);
   const { registerStainLogRoutes } = await import('./stainLog');
   registerStainLogRoutes(app, authMiddleware, requireWriteAccess, requireModuleEdit, hasModuleEditAccess);
   const { registerBlankFormRoutes } = await import('./veritadcBlankForms');

@@ -111,7 +111,7 @@ async function main() {
     const id0 = typed[0].body.result_id;
     const got = typed.map((r) => [r.body.violations.map((x: any) => `${x.rule_code}:${x.related_result_ids.map((i: number) => i - id0).join(".")}`).join(" "), r.body.basis.source[0], Number(r.body.basis.mean.toFixed(4)), Number(r.body.basis.sd.toFixed(4))]);
     check("1. a typed run fires the same rules on the same basis as before, backdated ones too", JSON.stringify(got) === JSON.stringify(RECORDED), got);
-    check("1. ... and answers with the same keys", JSON.stringify(Object.keys(typed[1].body).sort()) === '["basis","ok","requires_corrective_action","result_id","settings_used","violations"]' && JSON.stringify(Object.keys(typed[1].body.violations[0]).sort()) === '["detail","id","related_result_ids","rule_code","severity"]');
+    check("1. ... and answers with the same keys", JSON.stringify(Object.keys(typed[1].body).sort()) === '["basis","judged_under","ok","requires_corrective_action","result_id","settings_used","violations"]' && JSON.stringify(Object.keys(typed[1].body.violations[0]).sort()) === '["detail","id","related_result_ids","rule_code","severity"]');
     const bad = [];
     for (const b of [{}, { control_lot_id: tLot, result_value: "abc", result_date: "2026-09-01" }, { control_lot_id: tLot, result_value: 5, result_date: "9/1/2026" }, { control_lot_id: 99999, result_value: 5, result_date: "2026-09-01" }, { control_lot_id: tLot, result_value: 5, result_date: "2026-09-01", map_instrument_id: 12345 }]) bad.push((await call("POST", `/api/labs/${T.labId}/qc/results`, b, T.token)).status);
     check("1. ... and refuses what it refused", JSON.stringify(bad) === "[400,400,400,404,400]", bad);

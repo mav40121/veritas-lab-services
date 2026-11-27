@@ -10,6 +10,7 @@
 // runs and the manufacturer's only until then (emails 2026-09-30, 2026-10-08).
 
 import { computeBasis, loadBasisLot, basisConfig, type QcBasis, type QcBasisConfig } from "./qcBasis";
+import type { QcRuleCode, QcRuleSet } from "../shared/qcRuleSets";
 
 export type WestgardViolation = {
   rule_code: string;
@@ -20,40 +21,51 @@ export type WestgardViolation = {
 
 // PURE rule engine over a chronological series, judged at index i against one
 // mean/SD. Every window rule uses the same basis as the run being judged.
+// `set` (B12 part 2, shared/qcRuleSets.ts): the laboratory's chosen rules, each on
+// or off and a warning or a rejection, with its own N-x and N-T counts. Without
+// one, the rules are the ones the app always used (biasN and trendN as given).
+// 1-3s is looked at first: with it on, a result past 3 SD is a 1-3s and not also
+// a 1-2s, as before; with it off, that result is a 1-2s.
 export function westgardRulesAt(
   vals: number[], ids: number[], i: number, mean: number, sd: number,
-  biasN: number, trendN: number,
+  biasN: number, trendN: number, set?: QcRuleSet | null,
 ): WestgardViolation[] {
   const violations: WestgardViolation[] = [];
   if (i < 0 || i >= vals.length) return violations;
   if (!Number.isFinite(mean) || !Number.isFinite(sd) || sd <= 0) return violations;
+  const on = (code: QcRuleCode) => (set ? set.rules[code].on : true);
+  const sev = (code: QcRuleCode, dflt: "warning" | "rejection") => (set ? set.rules[code].severity : dflt);
+  if (set) {
+    biasN = set.rules["N-x"].on ? Number(set.rules["N-x"].n) : 0;
+    trendN = set.rules["N-T"].on ? Number(set.rules["N-T"].n) : 0;
+  }
   const sdis = vals.map(x => (x - mean) / sd);
   const z = sdis[i];
-  if (Math.abs(z) > 3) {
-    violations.push({ rule_code: "1-3s", severity: "rejection",
+  if (on("1-3s") && Math.abs(z) > 3) {
+    violations.push({ rule_code: "1-3s", severity: sev("1-3s", "rejection"),
       detail: `|SDI|=${Math.abs(z).toFixed(2)} > 3`, related_result_ids: [ids[i]] });
-  } else if (Math.abs(z) > 2) {
-    violations.push({ rule_code: "1-2s", severity: "warning",
+  } else if (on("1-2s") && Math.abs(z) > 2) {
+    violations.push({ rule_code: "1-2s", severity: sev("1-2s", "warning"),
       detail: `|SDI|=${Math.abs(z).toFixed(2)} > 2`, related_result_ids: [ids[i]] });
   }
-  if (i >= 1 && Math.abs(z) > 2 && Math.abs(sdis[i - 1]) > 2 && z * sdis[i - 1] > 0) {
-    violations.push({ rule_code: "2-2s", severity: "rejection",
+  if (on("2-2s") && i >= 1 && Math.abs(z) > 2 && Math.abs(sdis[i - 1]) > 2 && z * sdis[i - 1] > 0) {
+    violations.push({ rule_code: "2-2s", severity: sev("2-2s", "rejection"),
       detail: "2 consecutive results on same side >2SD",
       related_result_ids: [ids[i - 1], ids[i]] });
   }
   // Audit #6 (2026-07-12): canonical Westgard R-4s requires the two points to
   // STRADDLE the mean (one > +2s AND the other < -2s) with a > 4s span, not merely
   // a > 4s range.
-  if (i >= 1 && Math.abs(z - sdis[i - 1]) > 4 &&
+  if (on("R-4s") && i >= 1 && Math.abs(z - sdis[i - 1]) > 4 &&
       ((z > 2 && sdis[i - 1] < -2) || (z < -2 && sdis[i - 1] > 2))) {
-    violations.push({ rule_code: "R-4s", severity: "rejection",
+    violations.push({ rule_code: "R-4s", severity: sev("R-4s", "rejection"),
       detail: `range ${Math.abs(z - sdis[i - 1]).toFixed(2)}SD, points straddle the mean (>+2s and <-2s)`,
       related_result_ids: [ids[i - 1], ids[i]] });
   }
-  if (i >= 3) {
+  if (on("4-1s") && i >= 3) {
     const window = sdis.slice(i - 3, i + 1);
     if (window.every(s => Math.abs(s) > 1) && window.every(s => s * window[0] > 0)) {
-      violations.push({ rule_code: "4-1s", severity: "rejection",
+      violations.push({ rule_code: "4-1s", severity: sev("4-1s", "rejection"),
         detail: "4 consecutive results on same side >1SD",
         related_result_ids: ids.slice(i - 3, i + 1) });
     }
@@ -61,7 +73,7 @@ export function westgardRulesAt(
   if (biasN > 0 && i >= biasN - 1) {
     const window = sdis.slice(i - biasN + 1, i + 1);
     if (window.every(s => s * window[0] > 0)) {
-      violations.push({ rule_code: `${biasN}-x`, severity: "rejection",
+      violations.push({ rule_code: `${biasN}-x`, severity: sev("N-x", "rejection"),
         detail: `${biasN} consecutive results on same side of mean (bias)`,
         related_result_ids: ids.slice(i - biasN + 1, i + 1) });
     }
@@ -72,7 +84,7 @@ export function westgardRulesAt(
     const strictlyDown = window.every((x, k) => k === 0 || x < window[k - 1]);
     if (strictlyUp || strictlyDown) {
       const direction = strictlyUp ? "increasing" : "decreasing";
-      violations.push({ rule_code: `${trendN}-T`, severity: "rejection",
+      violations.push({ rule_code: `${trendN}-T`, severity: sev("N-T", "rejection"),
         detail: `${trendN} consecutive results strictly ${direction} (trend)`,
         related_result_ids: ids.slice(i - trendN + 1, i + 1) });
     }
@@ -88,15 +100,26 @@ export const MFR_RANGE_RULE = "MFR-range";
 // mean and SD); a lot with no published range falls back to the full rules.
 // Otherwise the full Westgard rules run against the basis. Shared by entry and
 // the admin re-score so both judge a run the same way.
-export function rulesForRun(
-  vals: number[], ids: number[], i: number, basis: QcBasis | null,
-  mfrRange: { low: number | null; high: number | null }, cfg: QcBasisConfig,
-  biasN: number, trendN: number,
-): WestgardViolation[] {
+// True when run i is judged on the manufacturer's published range alone (the lab's
+// 'range' policy while the lot is still on the manufacturer's values). Across
+// levels doesn't apply then: the full rules start once the lab has its own.
+export function usesManufacturerRange(
+  basis: QcBasis | null, mfrRange: { low: number | null; high: number | null }, cfg: QcBasisConfig,
+): boolean {
   const low = mfrRange.low == null ? null : Number(mfrRange.low);
   const high = mfrRange.high == null ? null : Number(mfrRange.high);
   const hasRange = (low != null && Number.isFinite(low)) || (high != null && Number.isFinite(high));
-  if (basis?.source === "manufacturer" && cfg.establishingRules === "range" && hasRange) {
+  return basis?.source === "manufacturer" && cfg.establishingRules === "range" && hasRange;
+}
+
+export function rulesForRun(
+  vals: number[], ids: number[], i: number, basis: QcBasis | null,
+  mfrRange: { low: number | null; high: number | null }, cfg: QcBasisConfig,
+  biasN: number, trendN: number, set?: QcRuleSet | null,
+): WestgardViolation[] {
+  const low = mfrRange.low == null ? null : Number(mfrRange.low);
+  const high = mfrRange.high == null ? null : Number(mfrRange.high);
+  if (usesManufacturerRange(basis, mfrRange, cfg)) {
     const v = vals[i];
     if ((low != null && Number.isFinite(low) && v < low) || (high != null && Number.isFinite(high) && v > high)) {
       return [{ rule_code: MFR_RANGE_RULE, severity: "rejection",
@@ -105,7 +128,7 @@ export function rulesForRun(
     }
     return [];
   }
-  return westgardRulesAt(vals, ids, i, basis ? basis.mean : NaN, basis ? basis.sd : NaN, biasN, trendN);
+  return westgardRulesAt(vals, ids, i, basis ? basis.mean : NaN, basis ? basis.sd : NaN, biasN, trendN, set);
 }
 
 // The runs on one lot in the order they are judged (result_date, then entry), with the lot and its basis settings. A
@@ -129,7 +152,7 @@ export function loadLotRuns(sqlite: any, labId: number, controlLotId: number): L
 // has just reached its establish count, the lab's mean/SD is locked.
 export function evaluateQcRun(
   sqlite: any, labId: number, controlLotId: number, newResultId: number,
-  biasN: number, trendN: number, loaded?: LotRuns,
+  biasN: number, trendN: number, loaded?: LotRuns, set?: QcRuleSet | null,
 ): { violations: WestgardViolation[]; basis: QcBasis | null } {
   const { history, lot, cfg } = loaded ?? loadLotRuns(sqlite, labId, controlLotId);
   const ids = history.map(r => r.id);
@@ -143,7 +166,7 @@ export function evaluateQcRun(
   const basis = lot ? computeBasis(lot, vals.slice(0, i), cfg) : null;
   const violations = rulesForRun(vals, ids, i, basis,
     { low: lot?.mfr_range_low ?? null, high: lot?.mfr_range_high ?? null },
-    cfg, biasN, trendN);
+    cfg, biasN, trendN, set);
   return { violations, basis };
 }
 

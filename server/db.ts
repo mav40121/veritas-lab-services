@@ -8665,6 +8665,82 @@ try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_qc_rule_violations_result ON q
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_qc_corrective_actions_result ON qc_corrective_actions(qc_result_id)`); } catch {}
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_qc_period_reviews_lot_period ON qc_period_reviews(lab_id, control_lot_id, period_year, period_month)`); } catch {}
 
+// ── VeritaQC rule settings (B12 part 2; server/qcRuleSets.ts, shared/qcRuleSets.ts) ──
+//   qc_rule_versions     every set of QC rules a lab (analyte NULL) or one analyte has had: the rules, the day they apply from,
+//                        why, who, and how they signed. Never updated or deleted; a change is a new row. kind 'start' is
+//                        today's behaviour (every lab's first), 'change' a change, 'own' an analyte taking its own set,
+//                        'lab' an analyte going back to the laboratory's (uses_lab = 1, no rules).
+//   qc_rule_lock_events  the lock on a lab's QC rules, on and off, each signed by the director or a designee. The newest row is
+//                        the state; none means unlocked. Signed rows of both keep how they were signed (signed_with 'password' or
+//                        'sso', signed_with_provider), as S0's signature rows do.
+//   qc_results.rule_version_id  the version whose rules judged the run (NULL: judged before rule settings). Never re-set.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS qc_rule_versions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    analyte TEXT,
+    kind TEXT NOT NULL,
+    uses_lab INTEGER NOT NULL DEFAULT 0,
+    rules_json TEXT,
+    changes_json TEXT NOT NULL DEFAULT '[]',
+    effective_from TEXT NOT NULL,
+    reason TEXT,
+    note TEXT,
+    changed_by_user_id INTEGER,
+    changed_by_name TEXT,
+    capacity TEXT,
+    capacity_label TEXT,
+    signed INTEGER NOT NULL DEFAULT 0,
+    typed_signature TEXT,
+    signed_with TEXT,
+    signed_with_provider TEXT,
+    delegation_id INTEGER,
+    ip_address TEXT,
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_qc_rule_versions_scope ON qc_rule_versions(lab_id, analyte, effective_from);
+
+  CREATE TABLE IF NOT EXISTS qc_rule_lock_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    locked INTEGER NOT NULL,
+    reason TEXT NOT NULL,
+    changed_by_user_id INTEGER NOT NULL,
+    changed_by_name TEXT,
+    capacity TEXT NOT NULL,
+    capacity_label TEXT NOT NULL,
+    typed_signature TEXT NOT NULL,
+    signed_with TEXT,
+    signed_with_provider TEXT,
+    delegation_id INTEGER,
+    ip_address TEXT,
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_qc_rule_lock_events_lab ON qc_rule_lock_events(lab_id, id);
+`);
+// One starting set per scope, so two first judgments at once can't make two (INSERT OR IGNORE in server/qcRuleSets.ts).
+try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS ux_qc_rule_versions_start ON qc_rule_versions(lab_id, COALESCE(analyte, '')) WHERE kind = 'start'`); } catch {}
+{
+  // NEW DB TABLE RULE: an older live copy gets any missing columns.
+  try {
+    const have = (t: string) => (sqlite.prepare(`PRAGMA table_info(${t})`).all() as { name: string }[]).map((c) => c.name);
+    const v = have("qc_rule_versions");
+    for (const [c, t] of [["lab_id", "INTEGER"], ["analyte", "TEXT"], ["kind", "TEXT"], ["uses_lab", "INTEGER NOT NULL DEFAULT 0"], ["rules_json", "TEXT"],
+      ["changes_json", "TEXT NOT NULL DEFAULT '[]'"], ["effective_from", "TEXT"], ["reason", "TEXT"], ["note", "TEXT"], ["changed_by_user_id", "INTEGER"],
+      ["changed_by_name", "TEXT"], ["capacity", "TEXT"], ["capacity_label", "TEXT"], ["signed", "INTEGER NOT NULL DEFAULT 0"], ["typed_signature", "TEXT"],
+      ["signed_with", "TEXT"], ["signed_with_provider", "TEXT"], ["delegation_id", "INTEGER"], ["ip_address", "TEXT"], ["created_at", "TEXT"]] as const) {
+      if (!v.includes(c)) { try { sqlite.exec(`ALTER TABLE qc_rule_versions ADD COLUMN ${c} ${t}`); } catch {} }
+    }
+    const l = have("qc_rule_lock_events");
+    for (const [c, t] of [["lab_id", "INTEGER"], ["locked", "INTEGER"], ["reason", "TEXT"], ["changed_by_user_id", "INTEGER"], ["changed_by_name", "TEXT"],
+      ["capacity", "TEXT"], ["capacity_label", "TEXT"], ["typed_signature", "TEXT"], ["signed_with", "TEXT"], ["signed_with_provider", "TEXT"], ["delegation_id", "INTEGER"],
+      ["ip_address", "TEXT"], ["created_at", "TEXT"]] as const) {
+      if (!l.includes(c)) { try { sqlite.exec(`ALTER TABLE qc_rule_lock_events ADD COLUMN ${c} ${t}`); } catch {} }
+    }
+    if (!have("qc_results").includes("rule_version_id")) { try { sqlite.exec("ALTER TABLE qc_results ADD COLUMN rule_version_id INTEGER"); } catch {} }
+  } catch {}
+}
+
 // ── VeritaLab extension: CMS-116 application drafts + state licensure registry ──
 //
 // Parking-lot #22 Phase 1 scaffolding. Two surfaces land alongside the

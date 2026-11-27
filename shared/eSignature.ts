@@ -19,6 +19,7 @@ export const SIGNATURE_PURPOSES = [
   "verification_study",
   "verification_analyte",
   "verification_signoff_group",
+  "qc_rules",
 ] as const;
 export type SignaturePurpose = (typeof SIGNATURE_PURPOSES)[number];
 export const isSignaturePurpose = (p: unknown): p is SignaturePurpose =>

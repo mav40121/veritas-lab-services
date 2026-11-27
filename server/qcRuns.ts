@@ -5,12 +5,14 @@
 // the Westgard evaluation in the lot's own order (qcWestgard.ts), the basis kept on the run, and its rule violations.
 //
 // A run entered late (backdated) is judged against the runs that precede it in that order. Runs already stored keep the
-// verdict they were given; nothing here judges one again.
+// verdict they were given; nothing here judges one again. Since B12 part 2 the rules are the lab's own, in force on the run's date
+// (server/qcRuleSets.ts judgeRunWithRules), and the version that judged a run is kept on it (qc_results.rule_version_id).
 //
 // Also here: which runs were stored after their month's review was signed (addedAfterReview). A signed review row is never
 // touched by a later run; the run is marked instead, on screen and on the monthly review PDF.
 
-import { evaluateQcRun, type LotRuns, type WestgardViolation } from "./qcWestgard";
+import { type LotRuns, type WestgardViolation } from "./qcWestgard";
+import { judgeRunWithRules } from "./qcRuleSets";
 import { staffOwnScope } from "./competencySelfEntry";
 import type { QcBasis } from "./qcBasis";
 
@@ -60,27 +62,24 @@ export function insertQcRun(sqlite: Sqlite, run: QcRunInput): number {
   ).lastInsertRowid);
 }
 
+/** The N-x and N-T counts of the rules that judged a run (0: that rule was off). */
 export interface QcRunSettings { bias_consecutive_count: number; trend_consecutive_count: number }
-
-/** Per-lab settings with an optional per-analyte override: the per-analyte row wins, else the lab-wide row (analyte IS NULL). */
-export function qcRunSettings(sqlite: Sqlite, labId: number, analyte: string): QcRunSettings {
-  const settings = sqlite.prepare(
-    "SELECT bias_consecutive_count, trend_consecutive_count FROM qc_rule_settings WHERE lab_id = ? AND (analyte = ? OR analyte IS NULL) ORDER BY (analyte IS NULL) ASC LIMIT 1"
-  ).get(labId, analyte) as any;
-  return { bias_consecutive_count: settings?.bias_consecutive_count ?? 10, trend_consecutive_count: settings?.trend_consecutive_count ?? 7 };
-}
 
 export interface JudgedRun {
   violations: Array<{ id: number } & WestgardViolation>;
   requires_corrective_action: boolean;
   settings_used: QcRunSettings;
   basis: QcBasis | null;
+  /** Which rules judged it; own_date: a late entry, judged under the rules of its own date rather than today's. */
+  judged_under: { version_id: number | null; label: string; own_date: boolean };
 }
 
-/** Judge a stored run, keep the basis that judged it, and store the rules it fired. */
-export function judgeQcRun(sqlite: Sqlite, labId: number, controlLotId: number, resultId: number, settings: QcRunSettings, now: string, loaded?: LotRuns): JudgedRun {
-  const { violations, basis } = evaluateQcRun(sqlite, labId, controlLotId, resultId, settings.bias_consecutive_count, settings.trend_consecutive_count, loaded);
+/** Judge a stored run under the lab's rules in force on its date, keep the basis and the version that judged it, and store the rules it fired. */
+export function judgeQcRun(sqlite: Sqlite, labId: number, controlLotId: number, resultId: number, now: string, loaded?: LotRuns): JudgedRun {
+  const judged = judgeRunWithRules(sqlite, labId, controlLotId, resultId, loaded);
+  const { violations, basis } = judged;
   if (basis) sqlite.prepare("UPDATE qc_results SET basis_mean = ?, basis_sd = ?, basis_source = ? WHERE id = ?").run(basis.mean, basis.sd, basis.source, resultId);
+  if (judged.version.id) sqlite.prepare("UPDATE qc_results SET rule_version_id = ? WHERE id = ?").run(judged.version.id, resultId);
   const insertViol = sqlite.prepare(
     "INSERT INTO qc_rule_violations (qc_result_id, rule_code, severity, detail, related_result_ids, evaluated_at) VALUES (?, ?, ?, ?, ?, ?)"
   );
@@ -89,7 +88,15 @@ export function judgeQcRun(sqlite: Sqlite, labId: number, controlLotId: number, 
     const r = insertViol.run(resultId, v.rule_code, v.severity, v.detail, JSON.stringify(v.related_result_ids), now);
     stored.push({ id: Number(r.lastInsertRowid), ...v });
   }
-  return { violations: stored, requires_corrective_action: violations.some((v) => v.severity === "rejection"), settings_used: settings, basis };
+  const set = judged.version.rules!;
+  const settings: QcRunSettings = {
+    bias_consecutive_count: set.rules["N-x"].on ? Number(set.rules["N-x"].n) : 0,
+    trend_consecutive_count: set.rules["N-T"].on ? Number(set.rules["N-T"].n) : 0,
+  };
+  return {
+    violations: stored, requires_corrective_action: violations.some((v) => v.severity === "rejection"), settings_used: settings, basis,
+    judged_under: { version_id: judged.version.id, label: judged.judgedUnder, own_date: judged.ownDate },
+  };
 }
 
 /** The module's void: the row stays with who, when and why, and drops out of the chart, statistics, rules and the monthly review. */

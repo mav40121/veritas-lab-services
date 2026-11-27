@@ -89,8 +89,8 @@ for (const file of ROUTE_FILES) {
     const parent = m[1];
     const children = parentToChildren.get(parent);
     if (!children || children.size === 0) continue;
-    // Window: 35 lines above the parent delete (handlers clear children first). 25 until purge-orphan-lab's list grew past it (tissue tables, 2026-11-06), 30 until VeritaQC's import tables (2026-11-24).
-    const start = Math.max(0, i - 35);
+    // Window: 40 lines above the parent delete (handlers clear children first). 25 until purge-orphan-lab's list grew past it (tissue tables, 2026-11-06), 30 until VeritaQC's import tables (2026-11-24), 35 until its rule versions (2026-11-27).
+    const start = Math.max(0, i - 40);
     const window = srcLines.slice(start, i + 2).join("\n");
     const missing = [];
     for (const child of children) {

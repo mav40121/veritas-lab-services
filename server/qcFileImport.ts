@@ -27,7 +27,7 @@ import { logAudit } from "./audit";
 import { labTimeZoneById } from "./dateLocal";
 import { vlsContext } from "./vlsSupport";
 import { loadLotRuns, type LotRuns } from "./qcWestgard";
-import { addedAfterReview, insertQcRun, judgeQcRun, lotNotInUse, momentMs, qcReader, qcRunSettings, signedMonthOf, signedMonths, voidQcRun, type QcRunSettings } from "./qcRuns";
+import { addedAfterReview, insertQcRun, judgeQcRun, lotNotInUse, momentMs, qcReader, signedMonthOf, signedMonths, voidQcRun } from "./qcRuns";
 import { detectPhi } from "../shared/phiPatterns";
 import {
   cellText, csvDelimiter, dataRowCount, headerLabels, likelyHeaderRow, missingColumns, nameKey, parseDelimited, patientColumn, readMapping, readRuns, sameTime, wallClock,
@@ -663,12 +663,11 @@ export function registerQcFileImportRoutes(app: Express, deps: {
       // By lot, date and time (then the file's order), so a file's runs of one day are judged in the order they were made.
       const ready = plan.rows.map((r, i) => ({ r, i })).filter((x) => x.r.outcome === "ready")
         .sort((a, b) => (a.r.lot_id! - b.r.lot_id!) || (a.r.date! < b.r.date! ? -1 : a.r.date! > b.r.date! ? 1 : 0) || ((a.r.time ?? "") < (b.r.time ?? "") ? -1 : (a.r.time ?? "") > (b.r.time ?? "") ? 1 : 0) || a.i - b.i);
-      let lotId = -1, loaded: LotRuns | null = null, settings: QcRunSettings | null = null, flagged = 0, rejected = 0;
+      let lotId = -1, loaded: LotRuns | null = null, flagged = 0, rejected = 0;
       for (const { r } of ready) {
         if (r.lot_id !== lotId) {
           lotId = r.lot_id!;
           loaded = loadLotRuns(client, labId, lotId);
-          settings = qcRunSettings(client, labId, loaded.lot?.analyte ?? r.analyte);
         }
         const id = insertQcRun(client, {
           labId, controlLotId: lotId, instrument: r.instrument, mapInstrumentId: r.map_instrument_id, value: r.value!, date: r.date!, time: r.time,
@@ -679,7 +678,8 @@ export function registerQcFileImportRoutes(app: Express, deps: {
         let lo = 0, hi = h.length;
         while (lo < hi) { const mid = (lo + hi) >> 1; if (h[mid].result_date <= r.date!) lo = mid + 1; else hi = mid; }
         h.splice(lo, 0, { id, result_value: r.value!, result_date: r.date! });
-        const judged = judgeQcRun(client, labId, lotId, id, settings!, at, loaded!);
+        // Under the lab's rules in force on the run's date (B12 part 2, server/qcRuleSets.ts), as a typed run is.
+        const judged = judgeQcRun(client, labId, lotId, id, at, loaded!);
         if (judged.violations.length) flagged++;
         if (judged.requires_corrective_action) rejected++;
       }
