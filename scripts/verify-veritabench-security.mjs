@@ -23,10 +23,13 @@ let fails = 0;
 const ok = (label, cond) => { console.log(`${cond ? "PASS" : "FAIL"}: ${label}`); if (!cond) fails++; };
 
 console.log("=== source proofs ===");
-ok("#1 PI-entries validates metric ownership before upsert",
-  /SELECT 1 FROM pi_metrics WHERE id = \? AND account_id = \?[\s\S]*?if \(!owns\) return res\.status\(404\)/.test(src));
-ok("#1 the pi_entries read-back is account-filtered",
-  /SELECT \* FROM pi_entries WHERE metric_id = \? AND year = \? AND month = \? AND account_id = \?/.test(src));
+// VeritaQA is by laboratory since B15 (server/veritaqaPi.ts): the metric must be one the person reaches before the write, and the
+// read-back is that metric's own month. tests/integration/veritaqa-by-lab.test.ts section 4 exercises it through the routes.
+const pi = fs.readFileSync(path.join(ROOT, "server/veritaqaPi.ts"), "utf8");
+ok("#1 PI-entries validates the metric before upsert",
+  /app\.post\(`\$\{base\}\/entries`[\s\S]*?qaRow\(sqlite, v, "pi_metrics", b\.metric_id\);\s*\n\s*if \(!metric\) return res\.status\(404\)[\s\S]*?INSERT INTO pi_entries/.test(pi));
+ok("#1 the pi_entries read-back is the validated metric's",
+  /SELECT \* FROM pi_entries WHERE metric_id = \? AND year = \? AND month = \?"\)\.get\(metric\.id, b\.year, b\.month\)/.test(pi));
 ok("#5 resolveOpsLabId membership-validates ?labId (labs owner OR lab_members)",
   /FROM labs WHERE id = \? AND owner_user_id IN \(\?, \?\)[\s\S]*?FROM lab_members WHERE lab_id = \? AND user_id = \? AND status = 'active'/.test(src));
 ok("#5 an unowned ?labId falls back to null (account-only scoping)",

@@ -70,6 +70,10 @@ export const PURGE_OVERRIDES: Record<string, PurgeRule> = {
   // links with the finding.
   veritascan_item_policy_links: del(`lab_id ${IN("labs")}`),
   finding_policy_links: del(`lab_id ${IN("labs")} OR finding_id IN (SELECT id FROM findings WHERE ${LAB_OR_OWNER("user_id")})`),
+  // VeritaResponse findings linked to a VeritaQA month go with the lab, and with the finding; a laboratory's place on an
+  // organization's indicator goes with either.
+  pi_finding_links: del(`lab_id ${IN("labs")} OR finding_id IN (SELECT id FROM findings WHERE ${LAB_OR_OWNER("user_id")})`),
+  org_quality_indicator_labs: del(`lab_id ${IN("labs")} OR organization_id ${IN("orgs")}`),
   // BUG-184: an attempt goes when its quiz, its record, its assignment or its person does (its quiz_id can't be cleared), and
   // a scan of an unknown barcode goes with the account it was made under.
   competency_quiz_results: del(`quiz_id IN (SELECT id FROM competency_quizzes WHERE ${LAB_OR_OWNER("user_id")})
@@ -102,6 +106,9 @@ export const PURGE_EXCLUDED: Record<string, PurgeRule> = {
   // Roll-up groups: the customer's own groupings go, and any grouping's rows naming the customer's labs go with them.
   rollup_groups: del(`organization_id ${IN("orgs")} OR owner_user_id ${IN("people")}`),
   rollup_group_labs: del(`lab_id ${IN("labs")} OR group_id IN (SELECT id FROM rollup_groups WHERE organization_id ${IN("orgs")} OR owner_user_id ${IN("people")})`),
+  // An organization's quality indicators and their versions go with the organization; a laboratory's own numbers go with the lab.
+  org_quality_indicators: del(`organization_id ${IN("orgs")}`),
+  org_quality_indicator_versions: del(`indicator_id IN (SELECT id FROM org_quality_indicators WHERE organization_id ${IN("orgs")})`),
   contact_messages: retain(VLS_RECORD),
   discount_codes: retain(VLS_RECORD),
   founding_lab_applications: retain(VLS_RECORD),
@@ -261,7 +268,7 @@ export function planCustomerPurge(sqlite: Sqlite, target: PurgeTarget): { plan: 
     const u = one("SELECT email FROM users WHERE id = ?", o);
     if (isVeritasLogin(u?.email)) return { status: 400, code: "PROTECTED_ACCOUNT", error: "A Veritas account is never purged", detail: { ownerUserId: o } };
   }
-  // An owner's account-level data (VeritaQA, the audit trail) belongs to all of its labs, so every one must go together.
+  // An owner's account-level data (VeritaQA's account-wide rows, the audit trail) belongs to all of its labs, so every one must go together.
   const ownersOutside = all(`SELECT id, owner_user_id FROM labs WHERE owner_user_id IN (${owners.map(() => "?").join(",")})`, ...owners).filter((l) => !labSet.has(l.id));
   if (ownersOutside.length) {
     return { status: 409, code: "OWNER_HAS_OTHER_LABS", error: "An owner of these labs also owns labs outside the customer; purge by the owner account instead", detail: { labIds: uniq(ownersOutside.map((l) => l.id)) } };

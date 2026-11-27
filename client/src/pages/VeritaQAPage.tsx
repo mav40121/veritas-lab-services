@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   Lock, Users, Activity, BarChart3, Save, Plus, Edit2, Trash2, FileText,
-  ChevronDown, ChevronRight, BookOpen, Library, AlertTriangle, Printer, FlaskConical,
+  ChevronDown, ChevronRight, BookOpen, Library, AlertTriangle, Printer, FlaskConical, ClipboardList, Link2, MapPin,
 } from "lucide-react";
 import { useMemberships } from "@/hooks/useMemberships";
 import { useActiveLabId } from "@/hooks/useActiveLabId";
@@ -36,6 +36,10 @@ import {
   type StarterMetric,
 } from "@/lib/piStarterLibrary";
 import StewardshipTab from "@/components/veritaqa/StewardshipTab";
+import LabReportTab from "@/components/veritaqa/LabReportTab";
+import AssignIndicatorDialog from "@/components/veritaqa/AssignIndicatorDialog";
+import IndicatorFindingsDialog, { type IndicatorFindingLink } from "@/components/veritaqa/IndicatorFindingsDialog";
+import { ACCOUNT_WIDE_LABEL, MONTH_SHORT, entryMonths, indicatorStatus, monthKey, orgUnit, orgValue, targetMet, targetText, valueText, versionForMonth, type OrgFrequency, type OrgIndicatorKind, type OrgIndicatorVersion } from "@shared/qualityIndicators";
 
 // -- Types --------------------------------------------------------------------
 
@@ -45,6 +49,21 @@ interface PIDepartment {
   name: string;
   sort_order: number;
   active: number;
+  // "account" = account-wide: not assigned to a laboratory, so it shows in each one (server/veritaqaPi.ts).
+  scope?: "lab" | "account";
+}
+
+// An organization's indicator, as a laboratory's metric carries it (server/orgQualityStore.ts).
+interface PIMetricOrg {
+  indicator_id: number;
+  organization_name: string | null;
+  on: boolean;
+  turned_off_at: string | null;
+  kind: OrgIndicatorKind;
+  frequency: OrgFrequency;
+  numerator_text: string | null;
+  denominator_text: string | null;
+  versions: OrgIndicatorVersion[];
 }
 
 interface PIMetric {
@@ -65,6 +84,8 @@ interface PIMetric {
   tat_start_event?: string | null;
   tat_end_event?: string | null;
   tat_threshold_minutes?: number | null;
+  scope?: "lab" | "account";
+  org?: PIMetricOrg;
 }
 
 interface PIEntry {
@@ -81,6 +102,13 @@ interface PIEntry {
   corrective_action?: string | null;
   rca_reviewed_by?: string | null;
   rca_reviewed_at?: string | null;
+  // An organization's indicator: what was counted, and the kind and target in force when it was entered.
+  numerator?: number | null;
+  denominator?: number | null;
+  entry_kind?: OrgIndicatorKind | null;
+  entry_unit?: string | null;
+  target_value?: number | null;
+  target_direction?: string | null;
 }
 
 interface DashboardMetric {
@@ -121,6 +149,20 @@ function byDepartment<T>(items: T[], deptOf: (item: T) => number): { deptId: num
   return runs;
 }
 
+// The laboratory's own VeritaQA routes. The account routes are only for someone with no laboratory to work in.
+function useQaBase(): string {
+  const labId = useActiveLabId();
+  return labId ? `/api/labs/${labId}/veritaqa/pi` : "/api/pi";
+}
+
+function AccountWideTag() {
+  return <span className="inline-block rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-300" data-testid="qa-account-wide">{ACCOUNT_WIDE_LABEL}</span>;
+}
+
+function OrgTag({ org }: { org: PIMetricOrg }) {
+  return <span className="inline-block rounded border border-teal-300 bg-teal-50 px-1.5 py-0.5 text-[10px] font-medium text-teal-800 dark:border-teal-700 dark:bg-teal-950/40 dark:text-teal-200">{org.organization_name || "Organization"} indicator</span>;
+}
+
 function StatusDot({ status }: { status: string | null }) {
   if (!status) return <span className="inline-block w-2.5 h-2.5 rounded-full bg-gray-300" title="No benchmark configured" />;
   const color = BENCHMARK_COLORS[status] || "#9ca3af";
@@ -146,6 +188,10 @@ function MiniSparkline({ data }: { data: { month: number; value: number | null }
     </ResponsiveContainer>
   );
 }
+
+interface EntryForm { value: string; volume: string; notes: string; numerator: string; denominator: string }
+const BLANK_ENTRY: EntryForm = { value: "", volume: "", notes: "", numerator: "", denominator: "" };
+const typedNumber = (s: string) => (s.trim() === "" || !Number.isFinite(Number(s)) ? null : Number(s));
 
 function PhaseBadge({ phase }: { phase: string }) {
   const color = PHASE_COLORS[phase] || "#6b7280";
@@ -351,14 +397,16 @@ function StarterLibraryPicker({
 
 // -- PI Plan tab (Phase 1: program plan + improvement priorities + annual
 //    leadership review). Backend: GET/PUT /api/pi/plan, POST/PUT/DELETE
-//    /api/pi/plan/priorities, POST /api/pi/plan/reviews (server/veritabench.ts).
-//    Account-scoped (no lab_id), so no lab-switching logic here.
+//    /api/pi/plan/priorities, POST /api/pi/plan/reviews (server/veritaqaPi.ts),
+//    under the laboratory's own base. A laboratory reads the account-wide plan
+//    until it starts its own.
 
 interface PIPlan {
   id: number; title: string | null; effective_year: number | null;
   program_scope: string | null; measurement_methods: string | null;
   analysis_methods: string | null; remediation_methods: string | null;
   monitor_sustain_methods: string | null;
+  scope?: "lab" | "account";
 }
 interface PIPriority {
   id: number; plan_id: number; process_name: string;
@@ -420,8 +468,13 @@ function PlanTextarea({ label, value, onChange, disabled, placeholder }: {
 
 function PIPlanTab({ readOnly, departments }: { readOnly: boolean; departments: PIDepartment[] }) {
   const { toast } = useToast();
+  const qaBase = useQaBase();
   const [loading, setLoading] = useState(true);
   const [plan, setPlan] = useState<PIPlan | null>(null);
+  const [plans, setPlans] = useState<{ id: number; title: string | null; scope: "lab" | "account" }[]>([]);
+  const [canStartLabPlan, setCanStartLabPlan] = useState(false);
+  const [planScope, setPlanScope] = useState<"" | "lab" | "account">("");
+  const [startOpen, setStartOpen] = useState(false);
   const [priorities, setPriorities] = useState<PIPriority[]>([]);
   const [reviews, setReviews] = useState<PIReview[]>([]);
   const [reviewStatus, setReviewStatus] = useState<PIReviewStatus | null>(null);
@@ -444,12 +497,14 @@ function PIPlanTab({ readOnly, departments }: { readOnly: boolean; departments: 
   const [reviewForm, setReviewForm] = useState({ reviewed_by: "", reviewer_title: "", review_date: today, changes_summary: "" });
   const [savingReview, setSavingReview] = useState(false);
 
-  async function loadPlan() {
+  async function loadPlan(scope: "" | "lab" | "account" = planScope) {
     try {
-      const res = await fetch(`${API_BASE}/api/pi/plan`, { headers: authHeaders() });
+      const res = await fetch(`${API_BASE}${qaBase}/plan${scope ? `?scope=${scope}` : ""}`, { headers: authHeaders() });
       if (res.ok) {
         const d = await res.json();
         setPlan(d.plan);
+        setPlans(d.plans || []);
+        setCanStartLabPlan(!!d.can_start_lab_plan);
         setPriorities(d.priorities || []);
         setReviews(d.reviews || []);
         setReviewStatus(d.review_status);
@@ -471,7 +526,7 @@ function PIPlanTab({ readOnly, departments }: { readOnly: boolean; departments: 
   async function loadAllMetrics() {
     try {
       const lists = await Promise.all((departments || []).map(async (dept) => {
-        const res = await fetch(`${API_BASE}/api/pi/metrics?department_id=${dept.id}`, { headers: authHeaders() });
+        const res = await fetch(`${API_BASE}${qaBase}/metrics?department_id=${dept.id}`, { headers: authHeaders() });
         if (!res.ok) return [] as PlanMetricOpt[];
         const ms = await res.json();
         return (ms as PIMetric[]).map((m) => ({ ...m, department_id: dept.id }));
@@ -483,10 +538,23 @@ function PIPlanTab({ readOnly, departments }: { readOnly: boolean; departments: 
   useEffect(() => { loadPlan(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
   useEffect(() => { if (departments && departments.length) loadAllMetrics(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [departments]);
 
+  async function showPlan(scope: "lab" | "account") {
+    setPlanScope(scope);
+    setLoading(true);
+    await loadPlan(scope);
+  }
+  async function startLabPlan() {
+    setStartOpen(false);
+    const res = await fetch(`${API_BASE}${qaBase}/plan/start`, { method: "POST", headers: { ...authHeaders(), "Content-Type": "application/json" }, body: JSON.stringify({ effective_year: new Date().getFullYear() }) });
+    const d = await res.json().catch(() => ({}));
+    if (res.ok) { toast({ title: "This laboratory's own plan started" }); await showPlan("lab"); }
+    else toast({ title: "Error", description: d.error, variant: "destructive" });
+  }
+
   async function savePlan() {
     setSavingPlan(true);
     try {
-      const res = await fetch(`${API_BASE}/api/pi/plan`, {
+      const res = await fetch(`${API_BASE}${qaBase}/plan${plan?.scope ? `?scope=${plan.scope}` : ""}`, {
         method: "PUT", headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({
           title: planForm.title.trim() || null,
@@ -534,7 +602,7 @@ function PIPlanTab({ readOnly, departments }: { readOnly: boolean; departments: 
         linked_metric_id: prioForm.linked_metric_id ? Number(prioForm.linked_metric_id) : null,
         sort_order: prioForm.sort_order ? Number(prioForm.sort_order) : 0,
       };
-      const url = prioEdit ? `${API_BASE}/api/pi/plan/priorities/${prioEdit.id}` : `${API_BASE}/api/pi/plan/priorities`;
+      const url = prioEdit ? `${API_BASE}${qaBase}/plan/priorities/${prioEdit.id}` : `${API_BASE}${qaBase}/plan/priorities`;
       const res = await fetch(url, { method: prioEdit ? "PUT" : "POST", headers: { ...authHeaders(), "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const d = await res.json().catch(() => ({}));
       if (res.ok) { toast({ title: prioEdit ? "Priority updated" : "Priority added" }); setPrioOpen(false); await loadPlan(); }
@@ -544,7 +612,7 @@ function PIPlanTab({ readOnly, departments }: { readOnly: boolean; departments: 
   async function confirmDeletePrio() {
     if (!deletePrio) return;
     try {
-      const res = await fetch(`${API_BASE}/api/pi/plan/priorities/${deletePrio.id}`, { method: "DELETE", headers: authHeaders() });
+      const res = await fetch(`${API_BASE}${qaBase}/plan/priorities/${deletePrio.id}`, { method: "DELETE", headers: authHeaders() });
       if (res.ok) { toast({ title: "Priority removed" }); setDeletePrio(null); await loadPlan(); }
       else { const d = await res.json().catch(() => ({})); toast({ title: "Error", description: d.error, variant: "destructive" }); }
     } catch { toast({ title: "Error", variant: "destructive" }); }
@@ -554,7 +622,7 @@ function PIPlanTab({ readOnly, departments }: { readOnly: boolean; departments: 
     if (!reviewForm.reviewed_by.trim() || !reviewForm.review_date) { toast({ title: "Reviewer and date are required", variant: "destructive" }); return; }
     setSavingReview(true);
     try {
-      const res = await fetch(`${API_BASE}/api/pi/plan/reviews`, {
+      const res = await fetch(`${API_BASE}${qaBase}/plan/reviews`, {
         method: "POST", headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({
           plan_id: plan.id, reviewed_by: reviewForm.reviewed_by.trim(),
@@ -603,6 +671,33 @@ function PIPlanTab({ readOnly, departments }: { readOnly: boolean; departments: 
 
   return (
     <div className="space-y-6" data-testid="pi-plan-tab">
+      {plan && (plan.scope === "account" || plans.length > 1) && (
+        <div className="rounded-lg border px-4 py-3 text-sm flex items-center gap-3 flex-wrap" data-testid="pi-plan-scope">
+          {plans.length > 1 ? (
+            <div className="inline-flex rounded-md border overflow-hidden" role="group" aria-label="Which plan">
+              {(["lab", "account"] as const).map((k) => (
+                <button key={k} type="button" aria-pressed={plan.scope === k} className={`px-3 h-9 text-sm ${plan.scope === k ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`} onClick={() => showPlan(k)} data-testid={`pi-plan-scope-${k}`}>
+                  {k === "lab" ? "This laboratory's plan" : "Account-wide plan"}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {plan.scope === "account" && <span>This is the account-wide plan. It covers every laboratory on the account, and a change here changes it for all of them.</span>}
+          {canStartLabPlan && !readOnly && <Button size="sm" variant="outline" className="ml-auto" onClick={() => setStartOpen(true)} data-testid="pi-plan-start-lab">Start this laboratory's own plan</Button>}
+        </div>
+      )}
+      <AlertDialog open={startOpen} onOpenChange={setStartOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Start this laboratory's own plan?</AlertDialogTitle>
+            <AlertDialogDescription>It starts blank. The account-wide plan, its priorities and its leadership reviews stay as they are, and this laboratory can still open it.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={startLabPlan}>Start the plan</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       {plan && reviewStatus && (
         <div className={`rounded-lg border px-4 py-3 text-sm flex items-center gap-2 ${reviewStatus.overdue ? "border-[#A12C7B] bg-[#A12C7B]/5 text-[#A12C7B]" : "border-[#437A22] bg-[#437A22]/5 text-[#437A22]"}`} data-testid="pi-plan-review-banner">
           <AlertTriangle size={16} className="shrink-0" />
@@ -732,7 +827,7 @@ function PIPlanTab({ readOnly, departments }: { readOnly: boolean; departments: 
       {/* The printed plan. Only this part prints (index.css #compliance-print-area); the browser's print dialog saves it as a PDF. */}
       {plan && (
         <div id="compliance-print-area" data-print-solo="" className="hidden print:block" style={PRINT.page} data-testid="pi-plan-print-area">
-          <h1 style={PRINT.h1}>{plan.title || "Performance Improvement Program Plan"}</h1>
+          <h1 style={PRINT.h1}>{plan.title || "Performance Improvement Program Plan"}{plan.scope === "account" ? " (account-wide)" : ""}</h1>
           <p style={PRINT.sub}>
             {lab?.labName || ""}{lab?.labName ? " | " : ""}CLIA: {lab?.cliaNumber || "Not on file. Enter it in account settings."}
             {plan.effective_year != null ? ` | Effective ${plan.effective_year}` : ""} | Printed {today}
@@ -750,7 +845,7 @@ function PIPlanTab({ readOnly, departments }: { readOnly: boolean; departments: 
             <p style={PRINT.text}>No indicators entered.</p>
           ) : printDepartments.map(({ dept, metrics }) => (
             <div key={dept.id} data-testid={`pi-plan-print-dept-${dept.id}`} style={{ breakInside: "avoid", pageBreakInside: "avoid" }}>
-              <h3 style={PRINT.h3}>{dept.name} ({metrics.length})</h3>
+              <h3 style={PRINT.h3}>{dept.name}{dept.scope === "account" ? " (account-wide)" : ""} ({metrics.length})</h3>
               <table style={PRINT.table}>
                 <thead>
                   <tr>
@@ -886,11 +981,22 @@ function PIPlanTab({ readOnly, departments }: { readOnly: boolean; departments: 
 
 // -- Main Component -----------------------------------------------------------
 
+// Another laboratory is another page: nothing one laboratory loaded shows while the next one's is on its way.
 export default function VeritaQAPage() {
+  const labId = useActiveLabId();
+  return <VeritaQAForLab key={labId ?? "none"} />;
+}
+
+function VeritaQAForLab() {
   const { user, isLoggedIn } = useAuth();
   const readOnly = useIsReadOnly("veritabench");
   const { toast } = useToast();
-  const [tab, setTab] = useState<"dashboard" | "data" | "plan" | "stewardship">("dashboard");
+  const qaBase = useQaBase();
+  const activeLabId = useActiveLabId();
+  const [tab, setTab] = useState<"dashboard" | "data" | "plan" | "report" | "stewardship">("dashboard");
+  const [assignMetric, setAssignMetric] = useState<PIMetric | null>(null);
+  const [findingLinks, setFindingLinks] = useState<IndicatorFindingLink[]>([]);
+  const [findingsFor, setFindingsFor] = useState<{ metric: PIMetric; entry: PIEntry } | null>(null);
 
   // Data state
   const [departments, setDepartments] = useState<PIDepartment[]>([]);
@@ -904,7 +1010,7 @@ export default function VeritaQAPage() {
   const [entryMonth, setEntryMonth] = useState<number>(new Date().getMonth() + 1);
 
   // Entry form state (batch editing)
-  const [entryValues, setEntryValues] = useState<Record<number, { value: string; volume: string; notes: string }>>({});
+  const [entryValues, setEntryValues] = useState<Record<number, EntryForm>>({});
   const [saving, setSaving] = useState(false);
   // Wave D4: root-cause documentation dialog state.
   const [rcaEntry, setRcaEntry] = useState<PIEntry | null>(null);
@@ -924,7 +1030,7 @@ export default function VeritaQAPage() {
     if (!rcaEntry) return;
     setRcaSaving(true);
     try {
-      const res = await fetch(`${API_BASE}/api/pi/entries/${rcaEntry.id}/rca`, {
+      const res = await fetch(`${API_BASE}${qaBase}/entries/${rcaEntry.id}/rca`, {
         method: "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify(clear ? { clear: true } : rcaForm),
@@ -945,7 +1051,7 @@ export default function VeritaQAPage() {
   async function handlePiReport(m: PIMetric) {
     setReportingId(m.id);
     try {
-      const res = await fetch(`${API_BASE}/api/pi/metrics/${m.id}/report?year=${year}`, {
+      const res = await fetch(`${API_BASE}${qaBase}/metrics/${m.id}/report?year=${year}`, {
         method: "POST", headers: authHeaders(),
       });
       if (!res.ok) {
@@ -980,7 +1086,7 @@ export default function VeritaQAPage() {
   async function loadDepartments() {
     setLoadError(false);
     try {
-      const res = await fetch(`${API_BASE}/api/pi/departments`, { headers: authHeaders() });
+      const res = await fetch(`${API_BASE}${qaBase}/departments`, { headers: authHeaders() });
       if (res.ok) {
         const depts = await res.json();
         setDepartments(depts);
@@ -1004,8 +1110,17 @@ export default function VeritaQAPage() {
     if (!selectedDeptId || !isLoggedIn || !hasPlanAccess) return;
     setLoading(true);
     setLoadError(false);
-    Promise.all([loadMetrics(), loadEntries(), loadDashboard()]).finally(() => setLoading(false));
+    Promise.all([loadMetrics(), loadEntries(), loadDashboard(), loadFindingLinks()]).finally(() => setLoading(false));
   }, [selectedDeptId, year]);
+
+  // VeritaResponse entries linked to a month (an extra: the numbers stand without them).
+  async function loadFindingLinks() {
+    if (!activeLabId) return;
+    try {
+      const res = await fetch(`${API_BASE}${qaBase}/finding-links?year=${year}`, { headers: authHeaders() });
+      if (res.ok) setFindingLinks(await res.json());
+    } catch { /* the rows show without their links */ }
+  }
 
   function retryAll() {
     setLoadError(false);
@@ -1019,7 +1134,7 @@ export default function VeritaQAPage() {
 
   async function loadMetrics() {
     try {
-      const res = await fetch(`${API_BASE}/api/pi/metrics?department_id=${selectedDeptId}`, { headers: authHeaders() });
+      const res = await fetch(`${API_BASE}${qaBase}/metrics?department_id=${selectedDeptId}`, { headers: authHeaders() });
       if (res.ok) setMetrics(await res.json());
       else setLoadError(true);
     } catch { setLoadError(true); }
@@ -1027,7 +1142,7 @@ export default function VeritaQAPage() {
 
   async function loadEntries() {
     try {
-      const res = await fetch(`${API_BASE}/api/pi/entries?year=${year}&department_id=${selectedDeptId}`, { headers: authHeaders() });
+      const res = await fetch(`${API_BASE}${qaBase}/entries?year=${year}&department_id=${selectedDeptId}`, { headers: authHeaders() });
       if (res.ok) setEntries(await res.json());
       else setLoadError(true);
     } catch { setLoadError(true); }
@@ -1035,7 +1150,7 @@ export default function VeritaQAPage() {
 
   async function loadDashboard() {
     try {
-      const res = await fetch(`${API_BASE}/api/pi/dashboard?year=${year}&department_id=${selectedDeptId}`, { headers: authHeaders() });
+      const res = await fetch(`${API_BASE}${qaBase}/dashboard?year=${year}&department_id=${selectedDeptId}`, { headers: authHeaders() });
       if (res.ok) {
         const data = await res.json();
         setDashboardData(data.metrics || []);
@@ -1046,13 +1161,15 @@ export default function VeritaQAPage() {
   // -- Populate entry form when month/metrics/entries change ------------------
 
   useEffect(() => {
-    const newValues: Record<number, { value: string; volume: string; notes: string }> = {};
+    const newValues: Record<number, EntryForm> = {};
     for (const m of metrics) {
       const entry = entries.find(e => e.metric_id === m.id && e.month === entryMonth);
       newValues[m.id] = {
         value: entry?.value != null ? String(entry.value) : "",
         volume: entry?.volume != null ? String(entry.volume) : "",
         notes: entry?.notes ?? "",
+        numerator: entry?.numerator != null ? String(entry.numerator) : "",
+        denominator: entry?.denominator != null ? String(entry.denominator) : "",
       };
     }
     setEntryValues(newValues);
@@ -1066,17 +1183,29 @@ export default function VeritaQAPage() {
     // always toasted "Saved". Count failures so a rejected entry (validation,
     // permission, network) is reported instead of silently dropped, and keep the
     // typed values on screen on partial failure rather than reloading over them.
-    let attempted = 0, failed = 0;
+    let attempted = 0, failed = 0, firstError = "";
     try {
       for (const m of metrics) {
         const vals = entryValues[m.id];
         if (!vals) continue;
-        if (vals.value === "" && vals.volume === "" && vals.notes === "") continue;
+        if (m.org) {
+          // An organization's indicator is entered as what was counted; the server works the value out.
+          const saved = entries.find(e => e.metric_id === m.id && e.month === entryMonth);
+          const unchanged = (saved?.numerator != null ? String(saved.numerator) : "") === vals.numerator && (saved?.denominator != null ? String(saved.denominator) : "") === vals.denominator && (saved?.notes ?? "") === vals.notes;
+          if (!m.org.on || unchanged) continue;
+        } else if (vals.value === "" && vals.volume === "" && vals.notes === "") continue;
         attempted++;
-        const res = await fetch(`${API_BASE}/api/pi/entries`, {
+        const res = await fetch(`${API_BASE}${qaBase}/entries`, {
           method: "POST",
           headers: { ...authHeaders(), "Content-Type": "application/json" },
-          body: JSON.stringify({
+          body: JSON.stringify(m.org ? {
+            metric_id: m.id,
+            year,
+            month: entryMonth,
+            numerator: typedNumber(vals.numerator),
+            denominator: typedNumber(vals.denominator),
+            notes: vals.notes || null,
+          } : {
             metric_id: m.id,
             year,
             month: entryMonth,
@@ -1085,7 +1214,10 @@ export default function VeritaQAPage() {
             notes: vals.notes || null,
           }),
         });
-        if (!res.ok) failed++;
+        if (!res.ok) {
+          failed++;
+          if (!firstError) { const e = await res.json().catch(() => ({})); firstError = e.error ? `${m.name}: ${e.error} ` : ""; }
+        }
       }
       if (failed === 0) {
         toast({ title: attempted > 0 ? "Saved" : "Nothing to save" });
@@ -1094,7 +1226,7 @@ export default function VeritaQAPage() {
       } else {
         toast({
           title: `Saved ${attempted - failed} of ${attempted}`,
-          description: `${failed} ${failed === 1 ? "entry" : "entries"} did not save. Your values remain on screen; press Save All to retry.`,
+          description: `${firstError}${failed} ${failed === 1 ? "entry" : "entries"} did not save. Your values remain on screen; press Save All to retry.`,
           variant: "destructive",
         });
       }
@@ -1146,7 +1278,7 @@ export default function VeritaQAPage() {
       measurement_methodology: metricForm.measurement_methodology || null,
     };
     try {
-      const url = editMetric ? `${API_BASE}/api/pi/metrics/${editMetric.id}` : `${API_BASE}/api/pi/metrics`;
+      const url = editMetric ? `${API_BASE}${qaBase}/metrics/${editMetric.id}` : `${API_BASE}${qaBase}/metrics`;
       const method = editMetric ? "PUT" : "POST";
       const res = await fetch(url, {
         method,
@@ -1168,7 +1300,7 @@ export default function VeritaQAPage() {
   async function handleDeleteMetric() {
     if (!deleteMetricTarget) return;
     try {
-      const res = await fetch(`${API_BASE}/api/pi/metrics/${deleteMetricTarget.id}`, { method: "DELETE", headers: authHeaders() });
+      const res = await fetch(`${API_BASE}${qaBase}/metrics/${deleteMetricTarget.id}`, { method: "DELETE", headers: authHeaders() });
       if (res.ok) {
         toast({ title: "Deleted" });
         loadMetrics();
@@ -1205,7 +1337,7 @@ export default function VeritaQAPage() {
       for (const [deptName, deptMetrics] of Object.entries(byDept)) {
         let deptId = deptIdMap[deptName];
         if (!existingDeptNames.has(deptName)) {
-          const res = await fetch(`${API_BASE}/api/pi/departments`, {
+          const res = await fetch(`${API_BASE}${qaBase}/departments`, {
             method: "POST",
             headers: { ...authHeaders(), "Content-Type": "application/json" },
             body: JSON.stringify({ name: deptName, sort_order: PI_STARTER_DEPARTMENTS.indexOf(deptName as any) }),
@@ -1224,7 +1356,7 @@ export default function VeritaQAPage() {
 
         for (let i = 0; i < deptMetrics.length; i++) {
           const m = deptMetrics[i];
-          const res = await fetch(`${API_BASE}/api/pi/metrics`, {
+          const res = await fetch(`${API_BASE}${qaBase}/metrics`, {
             method: "POST",
             headers: { ...authHeaders(), "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -1274,18 +1406,19 @@ export default function VeritaQAPage() {
     return { total, greenCount, yellowRedCount, completeness };
   }, [dashboardData]);
 
-  function getBenchmarkStatusForValue(value: number | null, metric: PIMetric): string | null {
-    if (value == null) return null;
-    if (metric.benchmark_green == null && metric.benchmark_yellow == null) return null;
-    if (metric.direction === "lower_is_better") {
-      if (metric.benchmark_green != null && value <= metric.benchmark_green) return "green";
-      if (metric.benchmark_yellow != null && value <= metric.benchmark_yellow) return "yellow";
-      return "red";
-    } else {
-      if (metric.benchmark_green != null && value >= metric.benchmark_green) return "green";
-      if (metric.benchmark_yellow != null && value >= metric.benchmark_yellow) return "yellow";
-      return "red";
-    }
+  // An organization's indicator for the month being entered: the kind and target already kept with the entry, else the version
+  // in force for that month.
+  function orgMonth(m: PIMetric) {
+    const org = m.org!;
+    const entry = entries.find(e => e.metric_id === m.id && e.month === entryMonth);
+    const v = versionForMonth(org.versions, monthKey(year, entryMonth));
+    const kind = (entry?.entry_kind ?? v?.kind ?? org.kind) as OrgIndicatorKind;
+    const unit = entry?.entry_kind ? entry.entry_unit ?? "" : v ? orgUnit(v.kind, v.unit) : m.unit;
+    const target = entry?.entry_kind ? entry.target_value ?? null : v?.target ?? null;
+    const direction = entry?.entry_kind ? entry.target_direction ?? null : v?.direction ?? null;
+    const frequency = (v?.frequency ?? org.frequency) as OrgFrequency;
+    const open = !!entry || entryMonths(frequency).includes(entryMonth);
+    return { kind, unit, target, direction, frequency, open };
   }
 
   // Set of existing metric names (for duplicate detection in library browser)
@@ -1392,7 +1525,9 @@ export default function VeritaQAPage() {
   // -- Normal Dashboard/Data View ---------------------------------------------
 
   const showAll = selectedDeptId === ALL_DEPARTMENTS;
-  const deptName = (id: number) => departments.find(d => d.id === id)?.name ?? "";
+  const deptOf = (id: number) => departments.find(d => d.id === id);
+  // Two departments can share a name, the laboratory's own and an account-wide one, so the account-wide one says so.
+  const deptName = (id: number) => { const d = deptOf(id); return d ? `${d.name}${d.scope === "account" ? " (account-wide)" : ""}` : ""; };
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
@@ -1410,7 +1545,7 @@ export default function VeritaQAPage() {
             <SelectContent>
               <SelectItem value={ALL_DEPARTMENTS}>All departments</SelectItem>
               {departments.map(d => (
-                <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>
+                <SelectItem key={d.id} value={String(d.id)}>{deptName(d.id)}</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -1436,7 +1571,7 @@ export default function VeritaQAPage() {
       )}
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-6 border-b">
+      <div className="flex gap-1 mb-6 border-b overflow-x-auto [&>button]:shrink-0">
         <button onClick={() => setTab("dashboard")} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${tab === "dashboard" ? "border-[#01696F] text-[#01696F]" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
           <BarChart3 size={14} className="inline mr-1.5" />Dashboard
         </button>
@@ -1446,12 +1581,18 @@ export default function VeritaQAPage() {
         <button onClick={() => setTab("plan")} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${tab === "plan" ? "border-[#01696F] text-[#01696F]" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
           <BookOpen size={14} className="inline mr-1.5" />Plan
         </button>
+        {activeLabId && (
+          <button onClick={() => setTab("report")} data-testid="qa-tab-report" className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${tab === "report" ? "border-[#01696F] text-[#01696F]" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
+            <ClipboardList size={14} className="inline mr-1.5" />Report
+          </button>
+        )}
         <button onClick={() => setTab("stewardship")} data-testid="qa-tab-stewardship" className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${tab === "stewardship" ? "border-[#01696F] text-[#01696F]" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
           <FlaskConical size={14} className="inline mr-1.5" />Stewardship
         </button>
       </div>
 
       {tab === "plan" && <PIPlanTab readOnly={readOnly} departments={departments} />}
+      {tab === "report" && activeLabId && <LabReportTab labId={activeLabId} />}
       {tab === "stewardship" && <StewardshipTab readOnly={readOnly} />}
 
       {/* -- Dashboard Tab -------------------------------------------------- */}
@@ -1529,6 +1670,8 @@ export default function VeritaQAPage() {
                         <div>
                           <CardTitle className="text-sm font-medium">{dm.metric.name}</CardTitle>
                           <div className="text-xs text-muted-foreground">{dm.metric.unit}</div>
+                          {dm.metric.org && <div className="mt-1"><OrgTag org={dm.metric.org} /></div>}
+                          {dm.metric.scope === "account" && <div className="mt-1"><AccountWideTag /></div>}
                         </div>
                         <div className="flex items-center gap-2">
                           <StatusDot status={dm.currentStatus} />
@@ -1544,7 +1687,7 @@ export default function VeritaQAPage() {
                       </div>
                       <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
                         <div className="flex justify-between">
-                          <span className="text-muted-foreground">YTD Avg</span>
+                          <span className="text-muted-foreground">{dm.metric.org ? "YTD" : "YTD Avg"}</span>
                           <span className="font-mono font-medium flex items-center gap-1">
                             {dm.ytdAvg != null ? dm.ytdAvg.toFixed(2) : "-"}
                             {dm.ytdStatus && <StatusDot status={dm.ytdStatus} />}
@@ -1613,7 +1756,7 @@ export default function VeritaQAPage() {
               </SelectContent>
             </Select>
             <span className="text-sm text-muted-foreground">{year}</span>
-            <div className="ml-auto flex gap-2 items-center">
+            <div className="ml-auto flex flex-wrap gap-2 items-center">
               {showAll && !readOnly && (
                 <span className="text-xs text-muted-foreground" data-testid="qa-add-metric-hint">Pick a department to add a metric to it.</span>
               )}
@@ -1667,9 +1810,14 @@ export default function VeritaQAPage() {
                   </thead>
                   <tbody>
                     {metrics.map((m, i) => {
-                      const vals = entryValues[m.id] || { value: "", volume: "", notes: "" };
-                      const parsedVal = vals.value !== "" ? parseFloat(vals.value) : null;
-                      const status = getBenchmarkStatusForValue(parsedVal, m);
+                      const vals = entryValues[m.id] || BLANK_ENTRY;
+                      const org = m.org ? orgMonth(m) : null;
+                      const parsedVal = org ? orgValue(org.kind, typedNumber(vals.numerator), typedNumber(vals.denominator)) : vals.value !== "" ? parseFloat(vals.value) : null;
+                      const met = org ? targetMet(parsedVal, org.target, org.direction) : null;
+                      const status = org ? (met == null ? null : met ? "green" : "red") : indicatorStatus(parsedVal, m);
+                      const savedEntry = entries.find(e => e.metric_id === m.id && e.month === entryMonth) || null;
+                      const links = savedEntry ? findingLinks.filter(l => l.entry_id === savedEntry.id) : [];
+                      const orgClosed = !!m.org && (!m.org.on || !org!.open);
                       const startsDepartment = showAll && (i === 0 || metrics[i - 1].department_id !== m.department_id);
                       return (
                         <Fragment key={m.id}>
@@ -1681,29 +1829,66 @@ export default function VeritaQAPage() {
                         <tr className={`border-b hover:bg-muted/30 ${i % 2 === 0 ? "" : "bg-muted/10"}`}>
                           <td className="px-3 py-2">
                             <div className="font-medium">{m.name}</div>
-                            <div className="text-xs text-muted-foreground">{m.unit}</div>
+                            <div className="text-xs text-muted-foreground">{org ? org.unit : m.unit}</div>
+                            {m.scope === "account" && <div className="mt-1"><AccountWideTag /></div>}
+                            {m.org && (
+                              <div className="mt-1 space-y-0.5 text-xs text-muted-foreground" data-testid={`qa-org-${m.id}`}>
+                                <OrgTag org={m.org} />
+                                <div>{org!.kind === "count" ? `Count: ${m.org.numerator_text ?? ""}` : `Numerator: ${m.org.numerator_text ?? ""}. Denominator: ${m.org.denominator_text ?? ""}`}</div>
+                                <div>Target: {targetText(org!.target, org!.direction, org!.unit)}</div>
+                                {!m.org.on ? <div className="text-amber-700 dark:text-amber-300">Turned off by your organization. Its entries are kept.</div>
+                                  : !org!.open ? <div>{org!.frequency === "yearly" ? "Entered once a year, in December." : `Entered once a quarter, in ${entryMonths("quarterly").map(x => MONTH_SHORT[x - 1]).join(", ")}.`}</div> : null}
+                              </div>
+                            )}
+                            {links.length > 0 && (
+                              <div className="mt-1 text-xs" data-testid={`qa-links-${m.id}`}>
+                                {links.map(l => <Link key={l.link_id} href={`/labs/${activeLabId}/veritaresponse/${l.finding_id}`} className="mr-2 text-teal-700 dark:text-teal-400 hover:underline">{l.label}</Link>)}
+                              </div>
+                            )}
                           </td>
-                          <td className="px-3 py-2">
-                            <Input
-                              type="text" inputMode="decimal"
-                              step="any"
-                              className="text-right font-mono h-8"
-                              value={vals.value}
-                              onChange={e => setEntryValues(prev => ({ ...prev, [m.id]: { ...prev[m.id], value: e.target.value } }))}
-                              disabled={readOnly}
-                              placeholder="-"
-                            />
-                          </td>
-                          <td className="px-3 py-2">
-                            <Input
-                              type="text" inputMode="decimal"
-                              className="text-right font-mono h-8"
-                              value={vals.volume}
-                              onChange={e => setEntryValues(prev => ({ ...prev, [m.id]: { ...prev[m.id], volume: e.target.value } }))}
-                              disabled={readOnly}
-                              placeholder="-"
-                            />
-                          </td>
+                          {m.org ? (
+                            <>
+                              <td className="px-3 py-2">
+                                <Input type="text" inputMode="decimal" aria-label={org!.kind === "count" ? "Count" : "Numerator"} className="text-right font-mono h-8" value={vals.numerator} disabled={readOnly || orgClosed}
+                                  onChange={e => setEntryValues(prev => ({ ...prev, [m.id]: { ...(prev[m.id] || BLANK_ENTRY), numerator: e.target.value } }))} placeholder={org!.kind === "count" ? "Count" : "Numerator"} data-testid={`qa-numerator-${m.id}`} />
+                                <div className="mt-1 flex justify-between gap-1 text-xs text-muted-foreground">
+                                  <span>{org!.kind === "count" ? "Count" : "Numerator"}</span>
+                                  {org!.kind !== "count" && <span className="font-mono text-foreground" data-testid={`qa-value-${m.id}`}>{parsedVal == null ? "No entry" : valueText(parsedVal, org!.unit)}</span>}
+                                </div>
+                              </td>
+                              <td className="px-3 py-2">
+                                {org!.kind === "count" ? null : (
+                                  <Input type="text" inputMode="decimal" aria-label="Denominator" className="text-right font-mono h-8" value={vals.denominator} disabled={readOnly || orgClosed}
+                                    onChange={e => setEntryValues(prev => ({ ...prev, [m.id]: { ...(prev[m.id] || BLANK_ENTRY), denominator: e.target.value } }))} placeholder="Denominator" data-testid={`qa-denominator-${m.id}`} />
+                                )}
+                                {org!.kind !== "count" && <div className="mt-1 text-xs text-muted-foreground">Denominator</div>}
+                              </td>
+                            </>
+                          ) : (
+                            <>
+                              <td className="px-3 py-2">
+                                <Input
+                                  type="text" inputMode="decimal"
+                                  step="any"
+                                  className="text-right font-mono h-8"
+                                  value={vals.value}
+                                  onChange={e => setEntryValues(prev => ({ ...prev, [m.id]: { ...prev[m.id], value: e.target.value } }))}
+                                  disabled={readOnly}
+                                  placeholder="-"
+                                />
+                              </td>
+                              <td className="px-3 py-2">
+                                <Input
+                                  type="text" inputMode="decimal"
+                                  className="text-right font-mono h-8"
+                                  value={vals.volume}
+                                  onChange={e => setEntryValues(prev => ({ ...prev, [m.id]: { ...prev[m.id], volume: e.target.value } }))}
+                                  disabled={readOnly}
+                                  placeholder="-"
+                                />
+                              </td>
+                            </>
+                          )}
                           <td className="px-3 py-2 text-center">
                             <StatusDot status={status} />
                           </td>
@@ -1712,7 +1897,7 @@ export default function VeritaQAPage() {
                               className="h-8 text-xs"
                               value={vals.notes}
                               onChange={e => setEntryValues(prev => ({ ...prev, [m.id]: { ...prev[m.id], notes: e.target.value } }))}
-                              disabled={readOnly}
+                              disabled={readOnly || orgClosed}
                               placeholder="Optional notes"
                             />
                           </td>
@@ -1735,12 +1920,27 @@ export default function VeritaQAPage() {
                               <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handlePiReport(m)} disabled={reportingId === m.id} title="Print monthly report (PDF)" data-testid={`pi-report-${m.id}`}>
                                 <FileText size={13} className={reportingId === m.id ? "animate-pulse" : ""} />
                               </Button>
-                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditMetric(m)} disabled={readOnly}>
-                                <Edit2 size={13} />
-                              </Button>
-                              <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeleteMetricTarget(m)} disabled={readOnly}>
-                                <Trash2 size={13} />
-                              </Button>
+                              {activeLabId && m.scope === "lab" && savedEntry && (links.length > 0 || status === "red" || status === "yellow") && (
+                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setFindingsFor({ metric: m, entry: savedEntry })} disabled={readOnly && links.length === 0}
+                                  title={links.length ? `Linked findings (${links.length})` : "Link a VeritaResponse finding to this month"} data-testid={`qa-findings-${m.id}`}>
+                                  <Link2 size={13} />
+                                </Button>
+                              )}
+                              {activeLabId && m.scope === "account" && !readOnly && (
+                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setAssignMetric(m)} title="Assign to this laboratory" data-testid={`qa-assign-${m.id}`}>
+                                  <MapPin size={13} />
+                                </Button>
+                              )}
+                              {!m.org && (
+                                <>
+                                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditMetric(m)} disabled={readOnly}>
+                                    <Edit2 size={13} />
+                                  </Button>
+                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeleteMetricTarget(m)} disabled={readOnly}>
+                                    <Trash2 size={13} />
+                                  </Button>
+                                </>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -1927,7 +2127,7 @@ export default function VeritaQAPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete metric?</AlertDialogTitle>
             <AlertDialogDescription>
-              {deleteMetricTarget ? `Delete "${deleteMetricTarget.name}" and all its entries? This cannot be undone.` : ""}
+              {deleteMetricTarget ? `Delete "${deleteMetricTarget.name}" and all its entries? This cannot be undone.${deleteMetricTarget.scope === "account" ? " It is account-wide, so it goes from every laboratory on the account." : ""}` : ""}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1936,6 +2136,15 @@ export default function VeritaQAPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {assignMetric && activeLabId && (
+        <AssignIndicatorDialog labId={activeLabId} metricId={assignMetric.id} onClose={() => setAssignMetric(null)}
+          onAssigned={async () => { setAssignMetric(null); await loadDepartments(); loadMetrics(); loadEntries(); loadDashboard(); }} />
+      )}
+      {findingsFor && activeLabId && (
+        <IndicatorFindingsDialog labId={activeLabId} entryId={findingsFor.entry.id} title={`${findingsFor.metric.name}, ${FULL_MONTHS[findingsFor.entry.month]} ${findingsFor.entry.year}`} readOnly={readOnly}
+          links={findingLinks.filter(l => l.entry_id === findingsFor.entry.id)} onChanged={loadFindingLinks} onClose={() => setFindingsFor(null)} />
+      )}
 
       {/* -- Browse Metric Library Dialog ----------------------------------- */}
       <Dialog open={showLibraryDialog} onOpenChange={setShowLibraryDialog}>

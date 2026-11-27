@@ -131,6 +131,15 @@ const ALWAYS: Record<string, string> = {
   // Assigning work emails a person in the lab's name; who does what is the lab's own decision (server/inspectionAssign.ts).
   "PUT /api/labs/:labId/findings/:id/assignee": "assign a finding to a person",
   "PUT /api/labs/:labId/veritascan/scans/:id/items/:itemId/assignee": "assign a VeritaScan item to a person",
+  // VeritaQA: a laboratory's results, what it concluded about them, its leadership review and which laboratory an indicator
+  // belongs to are its own people's (server/veritaqaPi.ts, server/qualityFindings.ts).
+  "POST /api/labs/:labId/veritaqa/pi/entries": "enter a laboratory's quality results",
+  "POST /api/labs/:labId/veritaqa/pi/entries/:id/rca": "document the root cause of a quality result",
+  "POST /api/labs/:labId/veritaqa/pi/entries/:id/findings": "link a finding to a quality result",
+  "DELETE /api/labs/:labId/veritaqa/pi/entries/:id/findings/:linkId": "unlink a finding from a quality result",
+  "POST /api/labs/:labId/veritaqa/pi/metrics/:id/assign": "assign an account-wide indicator to a laboratory",
+  "DELETE /api/labs/:labId/veritaqa/pi/metrics/:id": "delete an indicator and its results",
+  "POST /api/labs/:labId/veritaqa/pi/plan/reviews": "record a leadership review of the quality plan",
   // Compliance digest: an acknowledgment is a reader's own word that they read the issue.
   "POST /api/labs/:labId/digest/issues/:id/ack": "acknowledge a compliance digest issue",
   // The notice email goes out in the lab's name to its own people; the lab's owner or an admin sends it (PR 5).

@@ -81,6 +81,10 @@ EXEMPT_PREFIXES = (
     # promote quizzes to per-lab — at that point flip this back.
     "/api/veritacomp/quizzes",
     "/api/veritacomp/programs",
+    # 2026-11-24: an organization's quality indicators and its report across
+    # laboratories (B15, server/orgQuality.ts) belong to the organization, not
+    # to the lab in the address; there is no lab-scoped form of them.
+    "/api/org-quality",
 )
 
 def is_exempt_url(url: str) -> bool:

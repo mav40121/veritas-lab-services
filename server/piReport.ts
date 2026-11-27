@@ -9,6 +9,7 @@
 import { getBrowser } from "./pdfReport";
 import { stampPdfAuthor } from "./pdfMeta";
 import { setPdfContent } from "./pdfContent";
+import { rollPeriod, targetMet, valueText, type OrgIndicatorKind } from "@shared/qualityIndicators";
 
 const TEAL = "#01696F";
 const DARK = "#28251D";
@@ -27,9 +28,14 @@ export interface PiMetric {
   benchmark_yellow: number | null;
   benchmark_red: number | null;
   department?: string | null;
+  /** Entered as a numerator and a denominator (an organization's indicator): the year adds those up and each month keeps its own target. */
+  fromCounts?: boolean;
 }
-export interface PiEntry { year: number; month: number; value: number | null; volume: number | null; notes: string | null; }
-export interface PiReportCtx { labName: string | null; cliaNumber: string | null; preparedBy: string | null; year: number; }
+export interface PiEntry {
+  year: number; month: number; value: number | null; volume: number | null; notes: string | null;
+  numerator?: number | null; denominator?: number | null; entry_kind?: string | null; entry_unit?: string | null; target_value?: number | null; target_direction?: string | null;
+}
+export interface PiReportCtx { labName: string | null; cliaNumber: string | null; preparedBy: string | null; year: number; scopeNote?: string | null; }
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const esc = (s: any) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -49,6 +55,13 @@ function statusFor(m: PiMetric, v: number | null): Status {
   if (v <= g) return { label: "On target", color: GREEN };
   if (y != null && v <= y) return { label: "Watch", color: AMBER };
   return { label: "Action", color: RED };
+}
+
+/** An entry's status: an organization's indicator against the target kept with the entry, a lab's own against its thresholds. */
+function entryStatusFor(m: PiMetric, e: PiEntry): Status {
+  if (!m.fromCounts) return statusFor(m, e.value);
+  const met = targetMet(e.value, e.target_value, e.target_direction);
+  return met == null ? null : met ? { label: "On target", color: GREEN } : { label: "Action", color: RED };
 }
 
 // Inline SVG trend: benchmark band shading + threshold lines + monthly points.
@@ -88,7 +101,7 @@ function trendSvg(m: PiMetric, points: { month: number; value: number }[]): stri
 }
 
 export function buildPiReportHTML(m: PiMetric, entries: PiEntry[], ctx: PiReportCtx): string {
-  const unit = m.unit || "";
+  const unit = m.fromCounts && m.unit && m.unit !== "%" ? ` ${m.unit}` : m.unit || "";
   const byMonth = new Map<number, PiEntry>();
   for (const e of entries) if (e.value != null) byMonth.set(e.month, e);
   const present = [...byMonth.values()].sort((a, b) => a.month - b.month);
@@ -99,9 +112,10 @@ export function buildPiReportHTML(m: PiMetric, entries: PiEntry[], ctx: PiReport
   const withVol = present.filter((e) => e.volume != null && (e.volume as number) > 0);
   const volSum = withVol.reduce((a, e) => a + (e.volume as number), 0);
   const pooled = volSum > 0 ? withVol.reduce((a, e) => a + (e.value as number) * (e.volume as number), 0) / volSum : null;
-  const onTarget = present.filter((e) => statusFor(m, e.value)?.label === "On target").length;
+  const onTarget = present.filter((e) => entryStatusFor(m, e)?.label === "On target").length;
   const last = present[present.length - 1];
-  const lastStatus = last ? statusFor(m, last.value) : null;
+  const lastStatus = last ? entryStatusFor(m, last) : null;
+  const year = m.fromCounts ? rollPeriod(present.map((e) => ({ month: e.month, numerator: e.numerator ?? null, denominator: e.denominator ?? null, kind: (e.entry_kind ?? null) as OrgIndicatorKind | null, unit: e.entry_unit ?? null, target: e.target_value ?? null, direction: e.target_direction ?? null })), 0) : null;
 
   const dir = (m.direction || "lower_is_better") === "higher_is_better" ? "Higher is better" : "Lower is better";
   const bench = m.benchmark_green != null
@@ -111,7 +125,7 @@ export function buildPiReportHTML(m: PiMetric, entries: PiEntry[], ctx: PiReport
     : "Not set";
 
   const rows = present.map((e, i) => {
-    const st = statusFor(m, e.value);
+    const st = entryStatusFor(m, e);
     const bg = i % 2 === 1 ? ALT : "#fff";
     return `<tr style="background:${bg}">
       <td style="padding:4px 6px;border:0.5px solid #d0d0d0;">${MONTHS[e.month - 1]} ${ctx.year}</td>
@@ -125,11 +139,19 @@ export function buildPiReportHTML(m: PiMetric, entries: PiEntry[], ctx: PiReport
   const chart = points.length ? trendSvg(m, points) : `<div style="color:${MUTED};font-size:9pt;padding:24px 0;">No monthly values entered for ${ctx.year} yet.</div>`;
 
   const summaryParts: string[] = [];
-  if (ytdAvg != null) summaryParts.push(`Year-to-date average (unweighted): <b>${num(ytdAvg, 2)}${unit}</b>.`);
-  if (pooled != null) summaryParts.push(`Year-to-date pooled rate (volume-weighted across ${volSum.toLocaleString()}): <b>${num(pooled, 2)}${unit}</b>.`);
-  if (m.benchmark_green != null) summaryParts.push(`Months on target: <b>${onTarget} of ${present.length}</b>.`);
-  if (last && lastStatus) summaryParts.push(`Most recent (${MONTHS[last.month - 1]} ${ctx.year}): <b>${num(last.value)}${unit}, ${lastStatus.label}</b>.`);
-  if (pooled != null) summaryParts.push("The pooled rate weights each month by its volume and is the surveyor-facing figure.");
+  if (year) {
+    if (year.value != null) summaryParts.push(`Year to date, from ${year.denominator != null ? `${Number(year.numerator).toLocaleString()} of ${Number(year.denominator).toLocaleString()}` : "the counts"}: <b>${esc(valueText(year.value, year.unit))}</b>.`);
+    if (present.length) summaryParts.push(`Months on target: <b>${onTarget} of ${present.length}</b>.`);
+    if (last && lastStatus) summaryParts.push(`Most recent (${MONTHS[last.month - 1]} ${ctx.year}): <b>${num(last.value)}${unit}, ${lastStatus.label}</b>.`);
+    if (year.note) summaryParts.push(esc(year.note));
+    if (present.length) summaryParts.push("The year adds up numerators and denominators. Each month is read against the target in force when it was entered.");
+  } else {
+    if (ytdAvg != null) summaryParts.push(`Year-to-date average (unweighted): <b>${num(ytdAvg, 2)}${unit}</b>.`);
+    if (pooled != null) summaryParts.push(`Year-to-date pooled rate (volume-weighted across ${volSum.toLocaleString()}): <b>${num(pooled, 2)}${unit}</b>.`);
+    if (m.benchmark_green != null) summaryParts.push(`Months on target: <b>${onTarget} of ${present.length}</b>.`);
+    if (last && lastStatus) summaryParts.push(`Most recent (${MONTHS[last.month - 1]} ${ctx.year}): <b>${num(last.value)}${unit}, ${lastStatus.label}</b>.`);
+      if (pooled != null) summaryParts.push("The pooled rate weights each month by its volume and is the surveyor-facing figure.");
+  }
 
   return `<!doctype html><html><head><meta charset="utf-8"><style>
     * { box-sizing: border-box; } body { font-family: Arial, Helvetica, sans-serif; color: ${DARK}; margin: 0; font-size: 10pt; }
@@ -138,7 +160,8 @@ export function buildPiReportHTML(m: PiMetric, entries: PiEntry[], ctx: PiReport
   </style></head><body>
     <div style="background:${TEAL};color:#fff;padding:12px 14px;border-radius:6px;">
       <div style="font-size:16pt;font-weight:700;">Performance Indicator Report</div>
-      <div style="font-size:9.5pt;opacity:0.92;">Prepared for: ${esc(ctx.labName || "Lab name not on file")}    CLIA: ${esc(ctx.cliaNumber || "Not on file - enter in account settings")}</div>
+      <div style="font-size:9.5pt;opacity:0.92;">Prepared for: ${esc(ctx.labName || "Lab name not on file")}    CLIA: ${esc(ctx.cliaNumber || "Not on file - enter in account settings")}</div>${ctx.scopeNote ? `
+      <div style="font-size:9pt;opacity:0.92;">${esc(ctx.scopeNote)}</div>` : ""}
     </div>
     <table style="margin-top:12px;font-size:9pt;">
       <tr>
