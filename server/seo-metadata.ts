@@ -508,10 +508,10 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
     }),
   },
   "/resources/how-to-choose-lab-compliance-software": {
-    title: "How to Choose Lab Compliance Software, 2026 Buyer's Guide",
+    title: "Best Lab Compliance Software? How to Choose (2026 Buyer's Guide)",
     description: "A former Joint Commission surveyor's six-question guide to evaluating lab compliance software for a clinical laboratory: accreditor fit, lifecycle coverage, surveyor-defensible output, PHI risk, who built it, and pricing.",
     jsonLd: articleJsonLd({
-      headline: "How to Choose Lab Compliance Software, 2026 Buyer's Guide",
+      headline: "Best Lab Compliance Software? How to Choose (2026 Buyer's Guide)",
       description: "A former Joint Commission surveyor's six-question guide to evaluating lab compliance software for a clinical laboratory: accreditor fit, lifecycle coverage, surveyor-defensible output, PHI risk, who built it, and pricing.",
       articleBody: "Lab compliance software helps a clinical laboratory document and maintain what CLIA and its accreditor expect: performance verification, proficiency testing, quality control, competency, policies, personnel, and inspection readiness. Choosing one is less about counting features than about one question: will its output hold up in front of a surveyor. Evaluate six things. Does it match your accreditor, crosswalked to CLIA plus TJC, CAP, or COLA, not a generic checklist. Does it cover the whole compliance lifecycle or just one piece. Will its outputs survive a surveyor, stating the regulatory determination, citing the 42 CFR Part 493 section, and carrying a director signature block on the page with the results. Does it store protected health information, adding a HIPAA surface you may not need. Who built it, and have they conducted surveys. How does it price, and can you try it on transparent published pricing with a real free trial. Sections: six questions to ask; the kinds of tools you will find; where VeritaAssure fits; frequently asked questions.",
       path: "/resources/how-to-choose-lab-compliance-software",
@@ -542,7 +542,7 @@ export const seoMetadataMap: Record<string, SEOMetadata> = {
   },
   "/resources/clia-tea-lookup": {
     title: "CLIA TEa Lookup Tool | Total Allowable Error by Analyte | Veritas Lab Services",
-    description: "Look up CLIA proficiency testing acceptance limits by analyte, from 42 CFR Part 493, Subpart I.",
+    description: "Look up CLIA proficiency testing limits by analyte (42 CFR 493, Subpart I), for labs that enter them as TEa in Data Innovations' EP Evaluator or VeritaCheck®.",
   },
   "/calculator": {
     title: "VeritaBench\u2122 | Free Lab Productivity Scorecard | VeritaAssure\u00AE",

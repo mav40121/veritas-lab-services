@@ -8,7 +8,7 @@ import { NewsletterSignup } from "@/components/NewsletterSignup";
 import { CHOOSE_SOFTWARE_FAQ } from "@/lib/faqContent";
 
 export default function ArticleChooseComplianceSoftwarePage() {
-  useSEO({ title: "How to Choose Lab Compliance Software, 2026 Buyer's Guide", description: "A former Joint Commission surveyor's six-question guide to evaluating lab compliance software for a clinical laboratory: accreditor fit, lifecycle coverage, surveyor-defensible output, PHI risk, who built it, and pricing." });
+  useSEO({ title: "Best Lab Compliance Software? How to Choose (2026 Buyer's Guide)", description: "A former Joint Commission surveyor's six-question guide to evaluating lab compliance software for a clinical laboratory: accreditor fit, lifecycle coverage, surveyor-defensible output, PHI risk, who built it, and pricing." });
   return (
     <div className="min-h-screen bg-background">
       <section className="border-b border-border bg-gradient-to-br from-primary/5 via-transparent to-transparent">
