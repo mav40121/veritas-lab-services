@@ -20,7 +20,7 @@
 // - No NavBar, no chrome, no links out. Kiosk surface.
 
 import { Fragment, useEffect, useRef, useState } from "react";
-import { labTodayIso, labDayOf } from "@/lib/labDate";
+import { labTodayIso, labDayOf, labStampLabel } from "@/lib/labDate";
 import { useLocation } from "wouter";
 import DOMPurify from "dompurify";
 import { QuizQuestionImage } from "@/components/QuizQuestionImage";
@@ -41,6 +41,8 @@ import { useMemberships } from "@/hooks/useMemberships";
 import { pickCurrentMembership } from "@/lib/currentLab";
 import { authHeaders } from "@/lib/auth";
 import { setStaffPortalLab, staffPortalHeaders } from "@/lib/staffPortalHeaders";
+import { SignaturePrompt, useSignatureCredential } from "@/components/SignaturePrompt";
+import { BULK_APPROVE_MAX } from "@shared/policyNotices";
 
 // 2026-06-09 PR2: shared DOMPurify config (mirrors VeritaCompAppPage).
 // Lets quiz prompts marked question_format='html' render inline tables,
@@ -483,13 +485,20 @@ function TileScreenWithPendingCounts({
 //      server/policyReadSign.ts) + signed/unsigned chip per row, and a
 //      read-only lookup for any other approved document.
 //   2. Detail: title + rendered policy content (mammoth HTML for docx,
-//      <object> for pdf) + typed signature input + Sign button. Sign
-//      submits document_id/version_id/content_hash/typed_signature to
+//      <object> for pdf) + the signature: typed name and the person's own
+//      password, or their hospital sign-in asked for again (BUG-188,
+//      components/SignaturePrompt.tsx, purpose policy_read_sign). Sign
+//      submits document_id/version_id/typed_signature and the credential to
 //      /api/staff-portal-session/policies/:documentId/sign and rolls
 //      back to the list on success with the row showing "Signed".
+//   3. Sign several (BUG-188, mock 3 screen 3): when two or more documents
+//      are opened at the version listed, one name and one password sign
+//      the ones ticked, each its own signature. One not opened at that
+//      version can't be ticked (Q1).
 //
-// Surveyor defensibility: typed name + version's file_hash_sha256 +
-// IP/UA/timestamp captured server-side. A revision between read and
+// Surveyor defensibility: typed name + the server's own hash of the version
+// on file + IP/UA/timestamp + how it was signed, captured server-side, with
+// an audit row each (server/policyStaffSign.ts). A revision between read and
 // sign returns 409 and the staff member is asked to re-read.
 interface PortalPolicy {
   document_id: number;
@@ -514,7 +523,13 @@ interface PortalPolicy {
   status?: string;
   // A newer revision is a draft or in review; this is the approved version (BUG-151).
   revision_in_progress?: boolean;
+  // BUG-188 (Q1): when this person opened the version listed, or which other version they opened. Sign several needs the first.
+  opened_at?: string | null;
+  opened_version_label?: string | null;
 }
+
+// What Sign several answers for each document (server/policyStaffSign.ts).
+interface SeveralResult { document_id: number; title: string | null; version_label: string | null; ok: boolean; signed_at: string | null; message: string | null }
 
 interface PortalLookupRow {
   document_id: number;
@@ -567,6 +582,14 @@ function StaffPortalPoliciesView({
   const [typedName, setTypedName] = useState<string>(`${employee.first_name}${employee.middle_initial ? ` ${employee.middle_initial}.` : ""} ${employee.last_name}`.trim());
   const [signing, setSigning] = useState(false);
   const [signError, setSignError] = useState<string | null>(null);
+  // BUG-188: the person's own password, or their hospital sign-in asked for again, for one document and for Sign several.
+  const cred = useSignatureCredential("policy_read_sign", { headers: () => staffPortalHeaders(token) });
+  const severalCred = useSignatureCredential("policy_read_sign", { headers: () => staffPortalHeaders(token) });
+  const [several, setSeveral] = useState(false);
+  const [ticked, setTicked] = useState<Set<number>>(new Set());
+  const [severalBusy, setSeveralBusy] = useState(false);
+  const [severalError, setSeveralError] = useState<string | null>(null);
+  const [outcome, setOutcome] = useState<{ results: SeveralResult[]; signed: number; refused: number } | null>(null);
   const [listQ, setListQ] = useState("");
   const [lookupQ, setLookupQ] = useState("");
   const [lookup, setLookup] = useState<PortalLookupRow[] | null>(null);
@@ -610,6 +633,19 @@ function StaffPortalPoliciesView({
   }
 
   useEffect(() => { fetchList(); }, [employee.id]);
+
+  // The list again without blanking it, so an opening just recorded shows (Sign several needs it).
+  function refreshList() {
+    fetch(`/api/staff-portal-session/policies?employee_id=${employee.id}`, { headers: { ...staffPortalHeaders(token) } })
+      .then(async (r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!d?.policies) return;
+        setPolicies(d.policies);
+        const ready = new Set<number>((d.policies as PortalPolicy[]).filter((p) => !p.signed && p.opened_at).map((p) => p.document_id));
+        setTicked((prev) => new Set([...prev].filter((id) => ready.has(id))));
+      })
+      .catch(() => { /* the list on screen stays */ });
+  }
 
   // Revoke any blob URLs on unmount or when switching policies, so we
   // don't leak PDF object URLs in a long-lived shared-tablet session.
@@ -669,7 +705,11 @@ function StaffPortalPoliciesView({
     setRenderIsImage(false);
     setRenderError(null);
     setSignError(null);
+    cred.reset();
+    refreshList();
   }
+
+  const credentialMissing = (c: typeof cred) => (c.passwordAllowed ? "Enter your password to sign." : `Sign in with ${c.hospital?.name ?? "your hospital"} to sign.`);
 
   async function submitSignature() {
     if (!active || !meta) return;
@@ -677,17 +717,19 @@ function StaffPortalPoliciesView({
       setSignError("Type your full name to sign.");
       return;
     }
+    if (!cred.ready) { setSignError(credentialMissing(cred)); return; }
     setSigning(true);
     setSignError(null);
     try {
+      // The server makes the document's hash from the file it shows; none is sent from here (BUG-188).
       const r = await fetch(`/api/staff-portal-session/policies/${active.document_id}/sign`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...staffPortalHeaders(token) },
         body: JSON.stringify({
           employee_id: employee.id,
           version_id: meta.version_id,
-          content_hash: meta.file_hash,
           typed_signature: typedName.trim(),
+          ...cred.body("snake"),
         }),
       });
       const data = await r.json().catch(() => ({}));
@@ -702,6 +744,65 @@ function StaffPortalPoliciesView({
       setSignError(e.message || "Signature failed");
     } finally {
       setSigning(false);
+    }
+  }
+
+  // ── Sign several (BUG-188, Q1): only documents opened at the version listed can be ticked ──
+  const toSign = (policies ?? []).filter((p) => !p.signed);
+  const readyIds = toSign.filter((p) => !!p.opened_at).map((p) => p.document_id);
+  const tickedRows = toSign.filter((p) => ticked.has(p.document_id));
+  const docs = (n: number) => `${n} ${n === 1 ? "document" : "documents"}`;
+
+  function startSeveral() {
+    setSeveral(true);
+    setOutcome(null);
+    setSeveralError(null);
+    setTicked(new Set(readyIds.slice(0, BULK_APPROVE_MAX)));
+  }
+  function endSeveral() {
+    setSeveral(false);
+    setTicked(new Set());
+    setOutcome(null);
+    setSeveralError(null);
+    severalCred.reset();
+  }
+  function toggleTick(id: number, on: boolean) {
+    setTicked((prev) => {
+      const next = new Set(prev);
+      if (on && next.size < BULK_APPROVE_MAX) next.add(id); else next.delete(id);
+      return next;
+    });
+  }
+
+  async function signSeveral() {
+    if (!tickedRows.length) return;
+    if (typedName.trim().length < 2) { setSeveralError("Type your full name to sign."); return; }
+    if (!severalCred.ready) { setSeveralError(credentialMissing(severalCred)); return; }
+    setSeveralBusy(true);
+    setSeveralError(null);
+    setOutcome(null);
+    try {
+      // What is signed is the version this list showed.
+      const r = await fetch("/api/staff-portal-session/policies/sign-several", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...staffPortalHeaders(token) },
+        body: JSON.stringify({
+          employee_id: employee.id,
+          items: tickedRows.map((p) => ({ document_id: p.document_id, version_id: p.version_id })),
+          typed_signature: typedName.trim(),
+          ...severalCred.body("snake"),
+        }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(`Nothing was signed. ${data.error || `HTTP ${r.status}`}`);
+      setOutcome({ results: data.results || [], signed: Number(data.signed || 0), refused: Number(data.refused || 0) });
+      setTicked(new Set());
+      severalCred.reset();
+      refreshList();
+    } catch (e: any) {
+      setSeveralError(e.message || "Nothing was signed.");
+    } finally {
+      setSeveralBusy(false);
     }
   }
 
@@ -815,20 +916,23 @@ function StaffPortalPoliciesView({
               )}
             </div>
           ) : (
-            <div className="border border-border rounded-lg bg-card p-4" data-testid="sp-policies-sign-block">
-              <label className="block text-xs uppercase tracking-wider text-muted-foreground mb-1" htmlFor="sp-policy-typed-name">
-                Type your full name to sign
-              </label>
-              <input
-                id="sp-policy-typed-name"
-                type="text"
-                value={typedName}
-                onChange={(e) => setTypedName(e.target.value)}
-                className="w-full border border-border rounded-md p-2 text-sm bg-background mb-3"
-                data-testid="sp-policies-typed-name"
-              />
+            <div className="border-2 border-[#01696F] dark:border-teal-700 rounded-lg bg-card p-4" data-testid="sp-policies-sign-block">
+              <div className="text-sm font-semibold mb-3">Your signature</div>
+              {/* BUG-188: the person's own typed name and password, or their hospital sign-in asked for again. */}
+              <div className="mb-3">
+                <SignaturePrompt
+                  cred={cred}
+                  typedName={typedName}
+                  onTypedName={setTypedName}
+                  layout="grid"
+                  labels={{ name: "Full name", password: "Your password" }}
+                  labelClassName="text-xs text-muted-foreground"
+                  ids={{ name: "sp-policy-typed-name", password: "sp-policy-password" }}
+                  testIds={{ name: "sp-policies-typed-name", password: "sp-policies-password", hospital: "sp-policies-sign-with-hospital" }}
+                />
+              </div>
               {signError && (
-                <div className="text-xs text-red-600 bg-red-50 dark:bg-red-950/30 border border-red-200 rounded p-2 mb-3">
+                <div className="text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 rounded p-2 mb-3" role="alert" data-testid="sp-policies-sign-error">
                   {signError}
                 </div>
               )}
@@ -840,10 +944,10 @@ function StaffPortalPoliciesView({
                 style={{ backgroundColor: "#01696F" }}
                 data-testid="sp-policies-sign-submit"
               >
-                {signing ? "Signing..." : "I have read this policy. Sign."}
+                {signing ? "Signing..." : "I have read this document. Sign."}
               </button>
               <p className="text-xs text-muted-foreground mt-2">
-                Your typed name, IP address, and the policy's content hash are recorded as your acknowledgement.
+                Your typed name, the time, your IP address and the document's content hash are recorded with your signature. The server makes the hash from the file it shows you.
               </p>
             </div>
           )}
@@ -853,24 +957,155 @@ function StaffPortalPoliciesView({
   }
 
   // ── List screen ───────────────────────────────────────────────────
+  const listHeader = (
+    <div className="flex items-center justify-between gap-3 mb-6">
+      <div className="min-w-0">
+        <div className="text-xs uppercase tracking-wider text-muted-foreground">Sign Policies</div>
+        <div className="font-serif text-xl font-bold [overflow-wrap:anywhere]">{labName}</div>
+        <div className="text-xs text-muted-foreground">
+          Signing as {employee.first_name} {employee.last_name}
+          {policies !== null && <span data-testid="sp-policies-to-sign">. {docs(toSign.length)} to sign</span>}
+        </div>
+      </div>
+      <div className="flex flex-col items-end gap-1 shrink-0">
+        <button onClick={several ? endSeveral : onBack} className="text-xs text-muted-foreground hover:underline" data-testid="sp-policies-back">
+          &larr; {several ? "Back to the list" : "Back to modules"}
+        </button>
+        <button onClick={onSignOut} className="text-xs text-muted-foreground hover:underline">
+          Sign out
+        </button>
+      </div>
+    </div>
+  );
+
+  // ── Sign several (BUG-188, mock 3 screen 3) ───────────────────────
+  if (several && policies !== null) {
+    const allTicked = readyIds.length > 0 && readyIds.slice(0, BULK_APPROVE_MAX).every((id) => ticked.has(id));
+    return (
+      <div className="min-h-screen bg-background p-6" data-testid="sp-policies-several">
+        <div className="max-w-2xl mx-auto">
+          {listHeader}
+          <div className="border border-border rounded-lg bg-card p-4 mb-4" data-testid="sp-several-list">
+            <label className="flex items-center gap-2 text-sm font-medium pb-2 border-b border-border cursor-pointer">
+              <input
+                type="checkbox"
+                className="h-4 w-4 shrink-0 accent-[#01696F]"
+                checked={allTicked}
+                disabled={readyIds.length === 0}
+                onChange={(e) => setTicked(e.target.checked ? new Set(readyIds.slice(0, BULK_APPROVE_MAX)) : new Set())}
+                data-testid="sp-several-select-all"
+              />
+              Select every document you have opened ({readyIds.length})
+            </label>
+            {toSign.length === 0 && <div className="text-sm text-muted-foreground py-4 text-center">Nothing is waiting for your signature.</div>}
+            <ul className="divide-y divide-border">
+              {toSign.map((p) => {
+                const ready = !!p.opened_at;
+                const v = `v${p.version_label ?? p.version_number ?? ""}`;
+                const where = [p.doc_number, v].filter(Boolean).join(", ");
+                const line = ready
+                  ? `${where}. You opened it ${labStampLabel(p.opened_at)}`
+                  : p.opened_version_label
+                  ? `${where}. You opened v${p.opened_version_label}. Open ${v} before you sign it`
+                  : `${where}. Open it before you sign it`;
+                return (
+                  <li key={p.document_id} className="flex items-start gap-2 py-2" data-testid="sp-several-row">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 mt-0.5 shrink-0 accent-[#01696F]"
+                      aria-label={`Sign ${p.title}`}
+                      checked={ticked.has(p.document_id)}
+                      disabled={!ready}
+                      onChange={(e) => toggleTick(p.document_id, e.target.checked)}
+                      data-testid="sp-several-tick"
+                    />
+                    <div className={`flex-1 min-w-0 [overflow-wrap:anywhere] ${ready ? "" : "opacity-70"}`}>
+                      <div className="text-sm font-medium" data-testid="sp-several-row-title">{p.title}</div>
+                      <div className="text-xs text-muted-foreground" data-testid="sp-several-row-line">{line}</div>
+                    </div>
+                    <button type="button" onClick={() => openPolicy(p)} className="shrink-0 text-xs px-2.5 py-1 rounded-md border border-border hover:bg-muted" data-testid="sp-several-read">
+                      Read
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+
+          {tickedRows.length > 0 && (
+            <div className="border-2 border-[#01696F] dark:border-teal-700 rounded-lg bg-card p-4 mb-4" data-testid="sp-several-sign">
+              <div className="space-y-3 mb-3">
+                <SignaturePrompt
+                  cred={severalCred}
+                  typedName={typedName}
+                  onTypedName={setTypedName}
+                  reason={`I have read each of the ${docs(tickedRows.length)} ticked. My name, the time and the hash of each document's version are recorded as my signature on each one.`}
+                  layout="grid"
+                  labels={{ name: "Full name", password: "Your password" }}
+                  labelClassName="text-xs text-muted-foreground"
+                  ids={{ name: "sp-several-name", password: "sp-several-password" }}
+                  testIds={{ hospital: "sp-several-sign-with-hospital" }}
+                />
+              </div>
+              {severalError && (
+                <div className="text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 rounded p-2 mb-3" role="alert" data-testid="sp-several-error">
+                  {severalError}
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={signSeveral}
+                disabled={severalBusy}
+                className="w-full text-white font-semibold py-2 rounded-md disabled:opacity-50"
+                style={{ backgroundColor: "#01696F" }}
+                data-testid="sp-several-submit"
+              >
+                {severalBusy ? "Signing..." : `Sign ${docs(tickedRows.length)}`}
+              </button>
+              <p className="text-xs text-muted-foreground mt-2">What is signed is the version this list showed. Up to {BULK_APPROVE_MAX} at a time.</p>
+            </div>
+          )}
+
+          {outcome && (
+            <div className="border border-border rounded-lg bg-card p-4 mb-4" data-testid="sp-several-outcome">
+              <div className="text-sm font-semibold">
+                What happened{" "}
+                <span className="font-normal text-muted-foreground" data-testid="sp-several-outcome-count">
+                  {docs(outcome.signed)} signed{outcome.refused ? `, ${outcome.refused} not signed` : ""}
+                </span>
+              </div>
+              <ul className="mt-2 divide-y divide-border">
+                {outcome.results.map((r) => (
+                  <li key={r.document_id} className="flex items-start gap-2 py-1.5 text-sm" data-testid={r.ok ? "sp-several-outcome-signed" : "sp-several-outcome-refused"}>
+                    <span aria-hidden="true" className={`shrink-0 font-semibold ${r.ok ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>{r.ok ? "\u2713" : "\u2715"}</span>
+                    <span className="min-w-0 [overflow-wrap:anywhere]">
+                      <span className="font-medium">{r.title ?? `Document ${r.document_id}`}</span>
+                      {r.ok ? `, v${r.version_label ?? ""}. Signed ${labStampLabel(r.signed_at)}` : `. Not signed. ${r.message ?? ""}`}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background p-6" data-testid="sp-policies-list">
       <div className="max-w-2xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <div className="text-xs uppercase tracking-wider text-muted-foreground">Sign Policies</div>
-            <div className="font-serif text-xl font-bold">{labName}</div>
-            <div className="text-xs text-muted-foreground">Signing as {employee.first_name} {employee.last_name}</div>
-          </div>
-          <div className="flex flex-col items-end gap-1">
-            <button onClick={onBack} className="text-xs text-muted-foreground hover:underline" data-testid="sp-policies-back">
-              &larr; Back to modules
-            </button>
-            <button onClick={onSignOut} className="text-xs text-muted-foreground hover:underline">
-              Sign out
+        {listHeader}
+
+        {/* BUG-188: Sign several shows when two or more documents are opened at the version listed. Signing one at a time stays. */}
+        {policies !== null && readyIds.length >= 2 && (
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3" data-testid="sp-policies-several-bar">
+            <div className="text-xs text-muted-foreground min-w-0">{docs(readyIds.length)} opened and ready to sign</div>
+            <button type="button" onClick={startSeveral} className="text-sm font-medium px-3 py-1.5 rounded-md border border-border bg-card hover:bg-muted" data-testid="sp-policies-sign-several">
+              Sign several
             </button>
           </div>
-        </div>
+        )}
 
         <div className="border border-border rounded-lg bg-card p-4">
           {listError && (

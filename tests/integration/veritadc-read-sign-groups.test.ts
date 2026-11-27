@@ -148,9 +148,11 @@ async function main() {
     const listIds = async (who: { emp: number; token: string }) => ((await call("GET", `/api/staff-portal-session/policies?employee_id=${who.emp}`, undefined, who.token)).body.policies || []).map((p: any) => p.document_id).sort((a: number, b: number) => a - b);
     const docIds = async (who: { token: string }) => ((await call("GET", `${P}/documents`, undefined, who.token)).body.documents || []).map((d: any) => d.id).sort((a: number, b: number) => a - b);
     const bellIds = async (who: { token: string }) => ((await call("GET", `/api/me/pending-staff-portal-items?lab_id=${A.labId}`, undefined, who.token)).body.policies || []).map((p: any) => p.document_id);
+    // BUG-188: they open the version, then sign with their own password.
     const signAs = async (id: number, who: { emp: number; token: string; name: string }) => {
       const version = (sqlite.prepare("SELECT current_version_id AS v FROM policy_documents WHERE id = ?").get(id) as any).v;
-      return call("POST", `/api/staff-portal-session/policies/${id}/sign`, { employee_id: who.emp, version_id: version, typed_signature: who.name, content_hash: "madeuphash" }, who.token);
+      await call("GET", `/api/staff-portal-session/policies/${id}/render`, undefined, who.token);
+      return call("POST", `/api/staff-portal-session/policies/${id}/sign`, { employee_id: who.emp, version_id: version, typed_signature: who.name, password: PW }, who.token);
     };
     const assign = (body: any, token = A.token, prefix = P) => call("POST", `${prefix}/read-sign`, body, token);
     const eq = (a: number[], b: number[]) => JSON.stringify([...a].sort((x, y) => x - y)) === JSON.stringify([...b].sort((x, y) => x - y));
@@ -248,7 +250,9 @@ async function main() {
     check("5. an assigned document can be signed", signed.status === 200 && signed.body.already_signed === false, `HTTP ${signed.status}`);
     const sigRow = sqlite.prepare("SELECT * FROM staff_portal_policy_signatures WHERE document_id = ? AND staff_employee_id = ?").get(docChem, ann.emp) as any;
     const curV = (sqlite.prepare("SELECT current_version_id AS v FROM policy_documents WHERE id = ?").get(docChem) as any).v;
-    check("5. it records who, when and the version, on the roster row", sigRow.version_id === curV && sigRow.typed_signature === ann.name && !!sigRow.signed_at && sigRow.lab_id === A.labId && sigRow.signed_document_hash === "madeuphash", JSON.stringify({ v: sigRow.version_id, at: sigRow.signed_at }));
+    const curHash = (sqlite.prepare("SELECT file_hash_sha256 AS h FROM policy_versions WHERE id = ?").get(curV) as any).h;
+    // BUG-188: the hash is the server's own, from the version on file, and the row says it was signed with a password.
+    check("5. it records who, when and the version, on the roster row", sigRow.version_id === curV && sigRow.typed_signature === ann.name && !!sigRow.signed_at && sigRow.lab_id === A.labId && sigRow.signed_document_hash === curHash && sigRow.signed_with === "password", JSON.stringify({ v: sigRow.version_id, at: sigRow.signed_at }));
     const row = (await call("GET", `/api/staff-portal-session/policies?employee_id=${ann.emp}`, undefined, ann.token)).body.policies.find((p: any) => p.document_id === docChem);
     check("5. their list reads signed, and the bell drops it", row.signed === true && !(await bellIds(ann)).includes(docChem));
     check("5. their document list agrees", (await call("GET", `${P}/documents`, undefined, ann.token)).body.documents.find((d: any) => d.id === docChem).my_read_sign === "signed");

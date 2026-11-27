@@ -22,6 +22,7 @@ import { createRequire } from "node:module";
 import { registerRoutes } from "../../server/routes";
 import { db } from "../../server/db";
 import { issueSession } from "../../server/sessionAuth";
+import bcrypt from "bcryptjs";
 
 let failures = 0;
 function check(name: string, cond: boolean, detail = "") {
@@ -77,7 +78,9 @@ async function main() {
     const sl = existingSl?.id ?? Number(sqlite.prepare("INSERT INTO staff_labs (user_id, lab_name, clia_number, tier2_lab_id, created_at, updated_at) VALUES (?, 'Rev Lab A', '22D0000098', ?, ?, ?)").run(owner.owner_user_id, A.labId, now, now).lastInsertRowid);
     const emp = Number(sqlite.prepare("INSERT INTO staff_employees (lab_id, user_id, last_name, first_name, status, created_at, updated_at) VALUES (?, ?, 'Example', 'Sam', 'active', ?, ?)").run(sl, owner.owner_user_id, now, now).lastInsertRowid);
     const staffEmail = `minorrev-staff-${Date.now()}@example.com`;
-    const staffUid = Number(sqlite.prepare("INSERT INTO users (email, password_hash, name, plan, created_at, hipaa_acknowledged, hipaa_ack_source) VALUES (?, 'x', 'Sam Example', 'free', ?, 1, 'signup')").run(staffEmail, now).lastInsertRowid);
+    // BUG-188: a Staff login signs with their own password, so this one has one.
+    const STAFF_PW = ["Minor", "rev", "42!"].join("-");
+    const staffUid = Number(sqlite.prepare("INSERT INTO users (email, password_hash, name, plan, created_at, hipaa_acknowledged, hipaa_ack_source) VALUES (?, ?, 'Sam Example', 'free', ?, 1, 'signup')").run(staffEmail, bcrypt.hashSync(STAFF_PW, 4), now).lastInsertRowid);
     sqlite.prepare("INSERT INTO user_seats (owner_user_id, seat_email, seat_user_id, status, seat_type, lab_id, staff_employee_id) VALUES (?, ?, ?, 'active', 'staff_portal', ?, ?)").run(owner.owner_user_id, staffEmail, staffUid, A.labId, emp);
     const staffTok = issueSession(sqlite, staffUid, { headers: { "user-agent": "minor-rev-test" }, ip: "127.0.0.1" }).token;
 
@@ -92,7 +95,8 @@ async function main() {
     approve();
     const staffRow = async () => ((await call("GET", `/api/staff-portal-session/policies?employee_id=${emp}`, undefined, staffTok)).body.policies || []).find((p: any) => p.document_id === id);
     const v10 = (await staffRow())?.version_id;
-    const sign = await call("POST", `/api/staff-portal-session/policies/${id}/sign`, { employee_id: emp, version_id: v10, typed_signature: "Sam Example" }, staffTok);
+    await call("GET", `/api/staff-portal-session/policies/${id}/render`, undefined, staffTok); // BUG-188: opened at this version
+    const sign = await call("POST", `/api/staff-portal-session/policies/${id}/sign`, { employee_id: emp, version_id: v10, typed_signature: "Sam Example", password: STAFF_PW }, staffTok);
     const assign = await call("POST", `${D}/attestations`, { assignedToUserIds: [A.userId] }, A.token);
     const signedOn10 = await staffRow();
     check("setup: the staff member signed 1.0 and the owner has an attestation on 1.0",
@@ -132,7 +136,8 @@ async function main() {
     check("5. on 2.0 the attestation on 1.0 is stale", (await tracker())?.is_stale_version === true && (await pending())?.is_stale_version === true);
 
     // 6. Sign 2.0, then 2.1 carries from 2.0
-    const sign20 = await call("POST", `/api/staff-portal-session/policies/${id}/sign`, { employee_id: emp, version_id: afterMajor.version_id, typed_signature: "Sam Example" }, staffTok);
+    await call("GET", `/api/staff-portal-session/policies/${id}/render`, undefined, staffTok);
+    const sign20 = await call("POST", `/api/staff-portal-session/policies/${id}/sign`, { employee_id: emp, version_id: afterMajor.version_id, typed_signature: "Sam Example", password: STAFF_PW }, staffTok);
     const v21 = await upload(A, {}, `${D}/versions`);
     approve();
     const carried2 = await staffRow();

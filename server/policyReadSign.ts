@@ -555,9 +555,10 @@ export function lookupDocuments(sqlite: any, labId: number, q: string): any[] {
   return rows.map((r) => ({ ...r, revision_in_progress: r.revision_in_progress === 1 }));
 }
 
-/** A read by a Staff login shows on the document's trail, as a read in the main app does. */
-export function logStaffDocumentView(sqlite: any, labId: number, documentId: number, userId: number, req: any) {
-  writeAuditLog(sqlite, { labId, documentId, userId, action: "viewed", details: { via: "staff_login" }, ipAddress: req.ip, userAgent: req.headers?.["user-agent"] });
+/** A read by a Staff login shows on the document's trail, as a read in the main app does, with the version it showed (BUG-188: a
+ *  document is signed only at a version its reader opened, server/policyStaffSign.ts). */
+export function logStaffDocumentView(sqlite: any, labId: number, documentId: number, userId: number, req: any, versionId: number | null) {
+  writeAuditLog(sqlite, { labId, documentId, userId, action: "viewed", details: { via: "staff_login", version_id: versionId }, ipAddress: req.ip, userAgent: req.headers?.["user-agent"] });
 }
 
 // ── The guard in front of every VeritaDC route ───────────────────────────────

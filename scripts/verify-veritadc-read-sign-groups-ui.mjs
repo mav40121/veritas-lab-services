@@ -218,6 +218,7 @@ const noticesSent = () => sql("SELECT COUNT(*) AS n FROM policy_audit_log WHERE 
   // They sign one.
   await page.getByText("Made-up Glucose procedure").first().click();
   await page.getByTestId("sp-policies-typed-name").waitFor({ timeout: 15000 });
+  await page.getByTestId("sp-policies-password").fill(pw); // BUG-188: their own password
   await page.getByTestId("sp-policies-sign-submit").click();
   await page.getByTestId("sp-policies-list").waitFor({ timeout: 15000 });
   await page.waitForTimeout(600);
