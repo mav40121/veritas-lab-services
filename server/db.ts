@@ -9736,9 +9736,14 @@ try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS uq_spps_doc_version_employe
 
 // Migration sentinel for staff_portal_policy_signatures. Pure read of
 // PRAGMA table_info — no cascading writes per the boot-migration rule.
+// BUG-188 (2026-11-27; server/policyStaffSign.ts): how a Staff login's signature was made, as on the other signature tables (S0):
+// signed_with 'password' or 'sso' and signed_with_provider (the hospital's name); signed_together, how many documents one signature
+// signed when it was more than one. Rows from before stay empty: a typed name with no password, and a hash the browser sent.
 {
   const sppsCols = (sqlite.prepare("PRAGMA table_info(staff_portal_policy_signatures)").all() as { name: string }[]).map((c) => c.name);
-  void sppsCols;
+  for (const [c, d] of [["signed_with", "TEXT"], ["signed_with_provider", "TEXT"], ["signed_together", "INTEGER"]]) {
+    if (!sppsCols.includes(c)) { try { sqlite.exec(`ALTER TABLE staff_portal_policy_signatures ADD COLUMN ${c} ${d}`); } catch {} }
+  }
 }
 
 // ─── VeritaDC signatures carried over from a prior system (Q207, 2026-11-06) ──

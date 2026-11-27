@@ -85,6 +85,9 @@ EXEMPT_PREFIXES = (
     # laboratories (B15, server/orgQuality.ts) belong to the organization, not
     # to the lab in the address; there is no lab-scoped form of them.
     "/api/org-quality",
+    # 2026-11-27: a Staff login's own session routes (staffPortalAuthMiddleware) take the lab from the signed-in staff
+    # session's seat, never from the address, so there is no lab-scoped form of them (BUG-188, Sign several).
+    "/api/staff-portal-session",
 )
 
 def is_exempt_url(url: str) -> bool:

@@ -105,6 +105,7 @@ const openTracker = async (page) => {
   await page.getByText("Made-up fire plan SAF_3").first().click();
   await page.getByTestId("sp-policies-typed-name").waitFor({ timeout: 15000 });
   await page.getByTestId("sp-policies-typed-name").fill("Ann Signer");
+  await page.getByTestId("sp-policies-password").fill(pw); // BUG-188: their own password
   await page.screenshot({ path: `${OUT}/signature-staff-sign.png` });
   await page.getByTestId("sp-policies-sign-submit").click();
   await page.waitForTimeout(1200);
@@ -122,7 +123,8 @@ const openTracker = async (page) => {
   const count = await page.getByTestId("roster-count").innerText();
   check("S3. the count moved", /1 of 3 on the roster have signed/.test(count), count);
   const row = await page.getByTestId(`roster-row-${annEmp}`).innerText();
-  check("S3. the roster reads signed, with how", /Signed \d{4}-\d{2}-\d{2}/.test(row) && /Staff login/.test(row), row);
+  // BUG-188: a Staff login signature says how it was made (mock 3, the record the lab sees).
+  check("S3. the roster reads signed, with how", /Signed \d{4}-\d{2}-\d{2}/.test(row) && /Name and password/.test(row) && /Hash matches/.test(row), row);
   const dialog = await page.getByRole("dialog").innerText();
   check("S3. the assigned list no longer says Pending or outstanding for her", /Attested:\s*1/.test(dialog) && /Outstanding:\s*0/.test(dialog), dialog.match(/Assigned:[\s\S]{0,70}/)?.[0]);
   await page.screenshot({ path: `${OUT}/signature-tracker.png` });

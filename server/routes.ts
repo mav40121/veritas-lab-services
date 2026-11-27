@@ -274,6 +274,8 @@ import { labCarriesMinorRevisions, signatureStillCurrent, carriedStaffSignature 
 import { attestationStillCurrent, closeAttestationsCoveredByStaffSignatures, documentSignatureStatus, staffHasSignedCurrent, unsignedDocumentsForStaff } from "./policySignatureStatus";
 import { priorCountsByPerson, priorHow, priorSignatureStillCurrent, priorSignaturesOfDocument } from "./policyPriorSignature";
 import { assignedDocumentIds, loadReadSignContext, logStaffDocumentView, lookupDocuments, registerReadSignRoutes, rulesForDocument, targetLabels, veritaDcStaffGuard } from "./policyReadSign";
+import { openingsOf, recordStaffSignatures, staffSignCheck, STAFF_SIGN_SEVERAL_MAX, SUPPORT_REFUSAL as STAFF_SIGN_SUPPORT_REFUSAL, type StaffSigner, type StaffSignItem } from "./policyStaffSign";
+import { readSignHow, readSignNote } from "../shared/staffReadSign";
 import { versionStandings } from "./policyVersionStanding";
 import { archivedDocumentGuard, mayOpenEarlierVersions, registerPolicyDocumentControlRoutes, type ApprovalDecision, type ApprovalDecisionInput } from "./policyDocumentControl";
 import { addendaOf, approvedAddendumAt } from "./policyAddenda";
@@ -8582,6 +8584,19 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       ).all(employeeId, labId) as any[];
       const assigned = assignedDocumentIds(sqlite, labId, { employeeId, userId: req.staffPortalUserId });
       const staffManualPath = new Map(orderManualTree(sqlite.prepare("SELECT id, parent_id, name, display_order FROM policy_manuals WHERE lab_id = ?").all(labId) as any[]).map((m: any) => [m.id, m.path]));
+      // BUG-188 (Q1): Sign several takes only a document opened at the version listed. When they opened it, or which other version.
+      const openings = openingsOf(sqlite, labId, req.staffPortalUserId);
+      const openedLabel = (versionId: number) => {
+        const v = sqlite.prepare("SELECT version_number, version_major, version_minor FROM policy_versions WHERE id = ?").get(versionId) as any;
+        return v ? versionLabel(v) : null;
+      };
+      const openedOf = (documentId: number, currentVersionId: number) => {
+        const seen = openings.get(documentId);
+        const now = seen?.get(currentVersionId) ?? null;
+        let other: number | null = null, otherAt = "";
+        if (!now && seen) for (const [v, at] of seen) if (v !== currentVersionId && at > otherAt) { other = v; otherAt = at; }
+        return { opened_at: now, opened_version_label: other != null ? openedLabel(other) : null };
+      };
 
       res.json({
         policies: policies.filter((p: any) => assigned.has(p.document_id)).map((p: any) => {
@@ -8609,6 +8624,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
             prior_system: prior ? { system: prior.source_system, version: prior.source_version, signed_on: prior.signed_on } : null,
             carried_forward: !!carried,
             signed_version_label: carried ? carried.signed_version_label : null,
+            ...openedOf(p.document_id, p.current_version_id),
           };
         }),
       });
@@ -8762,8 +8778,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       ).get(documentId, labId) as any;
       if (!row) return res.status(404).json({ error: "Not found" });
 
-      // Shows on the document's trail and as "opened" on the tracker, as a read in the main app does.
-      logStaffDocumentView(sqlite, labId, documentId, req.staffPortalUserId, req);
+      // Shows on the document's trail and as "opened" on the tracker, as a read in the main app does, with the version (BUG-188).
+      logStaffDocumentView(sqlite, labId, documentId, req.staffPortalUserId, req, row.version_id);
       return await sendStaffVersion(res, row);
     } catch (err: any) {
       console.error("[staff-portal-session/policies render] error:", err);
@@ -8771,19 +8787,35 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     }
   });
 
+  // The roster row a Staff login signs as must be active on this lab's roster. The refusal the sign route always gave, or null.
+  function staffSignerOffRoster(labId: number, employeeId: number): { error: string } | null {
+    const sqlite = (db as any).$client;
+    const ownerRow = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(labId) as any;
+    if (!ownerRow) return { error: "Lab not found" };
+    const staffLab = staffLabByLabId(labId, ownerRow.owner_user_id) as any;
+    if (!staffLab) return { error: "Staff roster not found" };
+    const employee = sqlite.prepare("SELECT id FROM staff_employees WHERE id = ? AND lab_id = ? AND status = 'active'").get(employeeId, staffLab.id);
+    return employee ? null : { error: "Employee not found on this lab's roster" };
+  }
+  const staffSignerOf = (req: any, employeeId: number): StaffSigner => ({
+    labId: req.staffPortalLabId,
+    employeeId,
+    userId: req.staffPortalUserId,
+    ip: (req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "").toString().split(",")[0].trim() || null,
+    userAgent: (req.headers["user-agent"] || "").toString().slice(0, 500) || null,
+  });
+
   // POST /api/staff-portal-session/policies/:documentId/sign
-  //   Body: { employee_id, version_id, content_hash, typed_signature }
-  //   Records a signature row keyed on (document_id, version_id,
-  //   staff_employee_id). Re-submitting the same triple is a no-op (the
-  //   unique index returns the existing row's id). If the version_id in
-  //   the request doesn't match the document's current_version_id at
-  //   write time, we 409 — the policy was revised mid-read and the
-  //   staff member needs to re-read the new version before signing.
-  app.post("/api/staff-portal-session/policies/:documentId/sign", staffPortalAuthMiddleware, (req: any, res) => {
+  //   Body: { employee_id, version_id, typed_signature, password | sso_proof }. BUG-188 (server/policyStaffSign.ts): the person's own
+  //   typed name and password, or their hospital sign-in asked for again (server/eSignature.ts verifySigner); only a version they
+  //   opened; the server hashes the version on file and refuses a file that doesn't match its record (a content_hash in the body is
+  //   not read); one signature row and one audit row. A version already signed answers already_signed and records nothing. A
+  //   version_id that isn't the document's current version is 409: it was revised mid-read, and they read it again before signing.
+  app.post("/api/staff-portal-session/policies/:documentId/sign", staffPortalAuthMiddleware, async (req: any, res) => {
     try {
       const labId = req.staffPortalLabId;
       const documentId = parseInt(req.params.documentId, 10);
-      const { employee_id, version_id, content_hash, typed_signature } = req.body || {};
+      const { employee_id, version_id, typed_signature, password, sso_proof } = req.body || {};
       const employeeId = parseInt(String(employee_id ?? ""), 10);
       const versionId = parseInt(String(version_id ?? ""), 10);
       if (!Number.isFinite(documentId) || documentId <= 0) return res.status(400).json({ error: "Bad documentId" });
@@ -8794,67 +8826,67 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       if (typed.length > 200) return res.status(400).json({ error: "typed_signature too long" });
 
       const sqlite = (db as any).$client;
-
-      // Validate lab + employee + document scope
-      const ownerRow = sqlite.prepare("SELECT owner_user_id FROM labs WHERE id = ?").get(labId) as any;
-      if (!ownerRow) return res.status(404).json({ error: "Lab not found" });
-      const staffLab = staffLabByLabId(labId, ownerRow.owner_user_id) as any;
-      if (!staffLab) return res.status(404).json({ error: "Staff roster not found" });
-      const employee = sqlite.prepare(
-        "SELECT id, first_name, last_name FROM staff_employees WHERE id = ? AND lab_id = ? AND status = 'active'"
-      ).get(employeeId, staffLab.id) as any;
-      if (!employee) return res.status(404).json({ error: "Employee not found on this lab's roster" });
-
-      const doc = sqlite.prepare(
-        `SELECT id, current_version_id FROM policy_documents
-         WHERE id = ? AND lab_id = ? AND status = 'approved' AND archived_at IS NULL`
-      ).get(documentId, labId) as any;
-      if (!doc) return res.status(404).json({ error: "Policy not found or not approved" });
-      if (doc.current_version_id !== versionId) {
-        return res.status(409).json({ error: "Policy revised since you started reading. Please reload and re-read.", expected_version_id: doc.current_version_id });
-      }
-      // Staff sign only what's assigned to them (Step D). Anything else they may read, but there is nothing to sign.
-      if (!assignedDocumentIds(sqlite, labId, { employeeId, userId: req.staffPortalUserId }).has(documentId)) {
-        return res.status(403).json({ error: "This document isn't assigned to you, so there's nothing to sign.", code: "NOT_ASSIGNED" });
-      }
-      // A manual's assignment can cover a form or job aid the lab set to no read-and-sign. That stays readable, with nothing to sign.
-      const noSign = sqlite.prepare(
-        `SELECT 1 FROM policy_documents d JOIN policy_doc_type_settings ts ON ts.lab_id = d.lab_id AND ts.doc_type = d.doc_type
-          WHERE d.id = ? AND ts.requires_read_and_sign = 0`
-      ).get(documentId);
-      if (noSign) return res.status(409).json({ error: "This document type doesn't need read-and-sign in this lab.", code: "TYPE_NO_READ_AND_SIGN" });
-
-      const ip = (req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "").toString().split(",")[0].trim() || null;
-      const ua = (req.headers["user-agent"] || "").toString().slice(0, 500) || null;
-      const hashOrNull = typeof content_hash === "string" && content_hash.length <= 128 ? content_hash : null;
-
-      // Idempotent insert thanks to the unique index. On conflict, return
-      // the existing row's signed_at so the kiosk can show a calm "already
-      // signed" state without throwing.
-      const existing = sqlite.prepare(
-        `SELECT id, signed_at FROM staff_portal_policy_signatures
-         WHERE document_id = ? AND version_id = ? AND staff_employee_id = ?`
-      ).get(documentId, versionId, employeeId) as any;
-      if (existing) {
+      // Veritas support never signs for a lab (server/vlsSupport.ts), even with a roster row.
+      if (isVlsSupportUser(sqlite, req.staffPortalUserId)) return res.status(403).json(STAFF_SIGN_SUPPORT_REFUSAL);
+      const offRoster = staffSignerOffRoster(labId, employeeId);
+      if (offRoster) return res.status(404).json(offRoster);
+      const who = staffSignerOf(req, employeeId);
+      const item = { documentId, versionId };
+      const pre = staffSignCheck(sqlite, who, item);
+      if (!pre.ok) return res.status(pre.refusal.status).json(pre.refusal.body);
+      if (pre.existing) {
         closeAttestationsCoveredByStaffSignatures(sqlite, labId, { documentId, userId: req.staffPortalUserId });
-        return res.json({ id: existing.id, signed_at: existing.signed_at, already_signed: true });
+        return res.json({ id: pre.existing.id, signed_at: pre.existing.signed_at, already_signed: true });
       }
-
-      const result = sqlite.prepare(
-        `INSERT INTO staff_portal_policy_signatures
-         (lab_id, document_id, version_id, staff_employee_id, signed_document_hash, typed_signature, ip_address, user_agent)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-      ).run(labId, documentId, versionId, employeeId, hashOrNull, typed, ip, ua);
-      // If this document was assigned to them, this signature answers it (2026-11-04, Q161).
-      closeAttestationsCoveredByStaffSignatures(sqlite, labId, { documentId, userId: req.staffPortalUserId });
-
-      const row = sqlite.prepare(
-        `SELECT id, signed_at FROM staff_portal_policy_signatures WHERE id = ?`
-      ).get(result.lastInsertRowid) as any;
-
-      res.json({ id: row.id, signed_at: row.signed_at, already_signed: false });
+      const signerInput = { typedName: typed, password, ssoProof: sso_proof, purpose: "policy_read_sign" as const };
+      const missing = signerInputRefusal(signerInput);
+      if (missing) return res.status(missing.status).json(missing.body);
+      const signer = await verifySigner(sqlite, req.staffPortalUserId, signerInput, { ip: who.ip ?? undefined });
+      if (!signer.ok) return res.status(signer.status).json(signer.body);
+      const [out] = recordStaffSignatures(sqlite, who, [item], { typedName: typed, signedWith: signer.signedWith }, { several: false });
+      if (!out.ok) return res.status(out.status).json({ error: out.message, code: out.code, ...(out.expected_version_id != null ? { expected_version_id: out.expected_version_id } : {}) });
+      res.json({ id: out.signature_id, signed_at: out.signed_at, already_signed: out.already_signed, signed_with: signer.signedWith.method });
     } catch (err: any) {
       console.error("[staff-portal-session/policies POST sign] error:", err);
+      return res.status(500).json({ error: err.message || "policy_sign_failed" });
+    }
+  });
+
+  // POST /api/staff-portal-session/policies/sign-several
+  //   Body: { employee_id, items: [{ document_id, version_id }], typed_signature, password | sso_proof }, the items as the list showed
+  //   them (BUG-188, mock 3 screen 3). The signer is checked once; then each document stands alone, as bulk approval does, with its own
+  //   signature row and audit row, exactly as one signed on its own: a document that moved, wasn't opened at that version or whose file
+  //   doesn't match its record is refused and the rest go. A wrong password signs nothing.
+  app.post("/api/staff-portal-session/policies/sign-several", staffPortalAuthMiddleware, async (req: any, res) => {
+    try {
+      const labId = req.staffPortalLabId;
+      const employeeId = Number(req.staffPortalStaffEmployeeId);
+      const { items, typed_signature, password, sso_proof } = req.body || {};
+      if (!Array.isArray(items) || !items.length) return res.status(400).json({ error: "Pick the documents to sign.", code: "NO_ITEMS" });
+      if (items.length > STAFF_SIGN_SEVERAL_MAX) return res.status(400).json({ error: `Sign up to ${STAFF_SIGN_SEVERAL_MAX} documents at a time.`, code: "TOO_MANY" });
+      const picked: StaffSignItem[] = items.map((i: any) => ({ documentId: Number(i?.document_id), versionId: Number(i?.version_id) }));
+      if (picked.some((i) => ![i.documentId, i.versionId].every((n) => Number.isInteger(n) && n > 0))) {
+        return res.status(400).json({ error: "Each document needs its version as the list showed it.", code: "BAD_ITEM" });
+      }
+      if (new Set(picked.map((i) => i.documentId)).size !== picked.length) return res.status(400).json({ error: "A document is listed twice.", code: "DUPLICATE" });
+      const typed = typeof typed_signature === "string" ? typed_signature.trim() : "";
+      if (!typed) return res.status(400).json({ error: "typed_signature required" });
+      if (typed.length > 200) return res.status(400).json({ error: "typed_signature too long" });
+
+      const sqlite = (db as any).$client;
+      if (isVlsSupportUser(sqlite, req.staffPortalUserId)) return res.status(403).json(STAFF_SIGN_SUPPORT_REFUSAL);
+      const offRoster = staffSignerOffRoster(labId, employeeId);
+      if (offRoster) return res.status(404).json(offRoster);
+      const signerInput = { typedName: typed, password, ssoProof: sso_proof, purpose: "policy_read_sign" as const };
+      const missing = signerInputRefusal(signerInput);
+      if (missing) return res.status(missing.status).json(missing.body);
+      const who = staffSignerOf(req, employeeId);
+      const signer = await verifySigner(sqlite, req.staffPortalUserId, signerInput, { ip: who.ip ?? undefined });
+      if (!signer.ok) return res.status(signer.status).json(signer.body);
+      const results = recordStaffSignatures(sqlite, who, picked, { typedName: typed, signedWith: signer.signedWith }, { several: true });
+      res.json({ results, signed: results.filter((r) => r.ok).length, refused: results.filter((r) => !r.ok).length });
+    } catch (err: any) {
+      console.error("[staff-portal-session/policies POST sign-several] error:", err);
       return res.status(500).json({ error: err.message || "policy_sign_failed" });
     }
   });
@@ -41451,7 +41483,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const sqlite = (db as any).$client;
       const row = sqlite
         .prepare(
-          `SELECT d.lab_id, v.file_path, v.file_format,
+          `SELECT d.lab_id, v.id AS version_id, v.file_path, v.file_format,
                   v.file_hash_sha256 AS expected_hash
              FROM policy_documents d
              JOIN policy_versions v ON v.id = COALESCE(?, d.current_version_id) AND v.document_id = d.id
@@ -41490,6 +41522,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         documentId: id,
         userId: req.userId,
         action: "viewed",
+        // The version shown (BUG-188): a Staff login signs only a version they opened.
+        details: { version_id: row.version_id },
         ipAddress: req.ip,
         userAgent: req.headers["user-agent"] as string | undefined,
       });
@@ -42569,7 +42603,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         "SELECT id AS version_id, file_path, file_format, file_hash_sha256 AS expected_hash FROM policy_versions WHERE id = ? AND document_id = ?"
       ).get(addendum.version_id, addendum.document_id) as any);
       if (!row) return res.status(404).json({ error: "Not found" });
-      logStaffDocumentView(sqlite, req.staffPortalLabId, addendum!.document_id, req.staffPortalUserId, req);
+      logStaffDocumentView(sqlite, req.staffPortalLabId, addendum!.document_id, req.staffPortalUserId, req, row.version_id);
       return await sendStaffVersion(res, row);
     } catch (err: any) {
       console.error("[STAFF-APPROVALS] addendum render failed:", err?.message);
@@ -43119,8 +43153,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const rows = sqlite.prepare(
       `SELECT sps.id, sps.document_id, sps.version_id, sps.signed_at,
               sps.typed_signature, sps.ip_address, sps.user_agent,
+              sps.signed_with, sps.signed_with_provider, sps.signed_together, sps.signed_document_hash,
               se.first_name, se.last_name, se.middle_initial, se.title,
-              pv.version_number, pv.version_major, pv.version_minor
+              pv.version_number, pv.version_major, pv.version_minor, pv.file_hash_sha256 AS version_hash
          FROM staff_portal_policy_signatures sps
          LEFT JOIN staff_employees se ON se.id = sps.staff_employee_id
          LEFT JOIN policy_versions pv ON pv.id = sps.version_id
@@ -43142,6 +43177,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         signer_name: nm ? nm + (r.middle_initial ? ` ${r.middle_initial}.` : "") : (r.typed_signature || "Staff member"),
         signer_title: r.title || null,
         source: "kiosk",
+        // How it was made (BUG-188; shared/staffReadSign.ts). One from before has no signed_with: a typed name, a hash the browser sent.
+        how: readSignHow(r.signed_with, r.signed_with_provider),
+        how_note: readSignNote(r.signed_with, r.signed_document_hash, r.version_hash),
+        signed_together: r.signed_together ?? null,
+        signed_document_hash: r.signed_document_hash ?? null,
+        hash_from: r.signed_with ? "server" : "browser",
       };
     });
   }
@@ -44744,7 +44785,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       // document. (policy_documents has no policy_number column — that field is
       // on the separate master-list tracker, so it is intentionally omitted.)
       const ver = doc.current_version_id
-        ? (sqlite.prepare("SELECT version_number, version_major, version_minor FROM policy_versions WHERE id = ?").get(doc.current_version_id) as any)
+        ? (sqlite.prepare("SELECT version_number, version_major, version_minor, file_hash_sha256 FROM policy_versions WHERE id = ?").get(doc.current_version_id) as any)
         : null;
       const effRow = sqlite.prepare("SELECT effective_date FROM policy_documents WHERE id = ?").get(id) as any;
 
@@ -44793,6 +44834,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         {
           doc: { title: doc.title, policy_number: null, status: doc.status },
           versionNumber: ver ? versionLabel(ver) : null, // major.minor (shared/policyVersion.ts)
+          versionHash: ver?.file_hash_sha256 ?? null,
           effectiveDate: effRow?.effective_date ?? null,
           signoffs,
           attestations,

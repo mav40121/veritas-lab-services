@@ -57,7 +57,8 @@ const doc = await upload({ title: "Specimen Rejection Procedure (made-up)", doc_
 sql("UPDATE policy_documents SET status = 'approved' WHERE id = ?", doc.id);
 const staffList = async () => ((await call("GET", `/api/staff-portal-session/policies?employee_id=${emp}`, undefined, staffToken)).body.policies || []).find((p) => p.document_id === doc.id);
 const first = await staffList();
-const signed = await call("POST", `/api/staff-portal-session/policies/${doc.id}/sign`, { employee_id: emp, version_id: first?.version_id, typed_signature: "Sam Example" }, staffToken);
+await fetch(`${BASE}/api/staff-portal-session/policies/${doc.id}/render`, { headers: { Authorization: `Bearer ${staffToken}` } }); // BUG-188: opened first
+const signed = await call("POST", `/api/staff-portal-session/policies/${doc.id}/sign`, { employee_id: emp, version_id: first?.version_id, typed_signature: "Sam Example", password: pw }, staffToken);
 const v11 = await upload({ change_summary: "Corrected a phone number" }, `/api/labs/${labId}/veritapolicy/documents/${doc.id}/versions`);
 sql("UPDATE policy_documents SET status = 'approved' WHERE id = ?", doc.id);
 check("setup: staff login signed 1.0, the document is now 1.1", !!staffToken && signed.status < 300 && v11.version_label === "1.1", `login ${login.status} sign ${signed.status} v ${v11.version_label}`);

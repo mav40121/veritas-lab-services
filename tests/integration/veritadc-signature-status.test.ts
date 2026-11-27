@@ -102,10 +102,13 @@ async function main() {
     const status = async (id: number, token = A.token) => call("GET", `${P}/documents/${id}/signature-status`, undefined, token);
     const person = (s: any, emp: number) => s.body.people?.find((p: any) => p.employee_id === emp);
     const staffRow = async (id: number, who: { emp: number; token: string }) => (await call("GET", `/api/staff-portal-session/policies?employee_id=${who.emp}`, undefined, who.token)).body.policies?.find((p: any) => p.document_id === id);
+    // BUG-188: they open the version, then sign with their own password; a hash the browser sends isn't read.
     const signAs = async (id: number, who: { emp: number; token: string; name: string }) => {
       const row = await staffRow(id, who);
-      return call("POST", `/api/staff-portal-session/policies/${id}/sign`, { employee_id: who.emp, version_id: row?.version_id, typed_signature: who.name, content_hash: "madeuphash" }, who.token);
+      await call("GET", `/api/staff-portal-session/policies/${id}/render`, undefined, who.token);
+      return call("POST", `/api/staff-portal-session/policies/${id}/sign`, { employee_id: who.emp, version_id: row?.version_id, typed_signature: who.name, content_hash: "madeuphash", password: PW }, who.token);
     };
+    const versionHash = (id: number) => (sqlite.prepare("SELECT v.file_hash_sha256 AS h FROM policy_documents d JOIN policy_versions v ON v.id = d.current_version_id WHERE d.id = ?").get(id) as any)?.h;
     const assign = (id: number, userId: number) => call("POST", `${P}/documents/${id}/attestations`, { assignedToUserIds: [userId] }, A.token);
     const tracker = async (id: number) => (await call("GET", `${P}/documents/${id}/attestations`, undefined, A.token)).body;
     const pendingIds = async (who: { token: string }) => ((await call("GET", `${P}/pending-attestations`, undefined, who.token)).body.pending || []).map((p: any) => p.document_id);
@@ -125,7 +128,7 @@ async function main() {
     const signed = await signAs(doc1, ann);
     check("2. the signature saves", signed.status === 200 && signed.body.already_signed === false, `HTTP ${signed.status}`);
     const att = attRow(doc1, ann.userId);
-    check("2. it closes the assignment with what they signed", !!att.completed_at && att.typed_signature === ann.name && att.attested_document_hash === "madeuphash", JSON.stringify({ c: att.completed_at, t: att.typed_signature, h: att.attested_document_hash }));
+    check("2. it closes the assignment with what they signed (the server's hash, BUG-188)", !!att.completed_at && att.typed_signature === ann.name && att.attested_document_hash === versionHash(doc1), JSON.stringify({ c: att.completed_at, t: att.typed_signature, h: att.attested_document_hash }));
     const staffSig = sqlite.prepare("SELECT signed_at FROM staff_portal_policy_signatures WHERE document_id = ? AND staff_employee_id = ?").get(doc1, ann.emp) as any;
     check("2. the completed time is when they signed", att.completed_at === staffSig.signed_at, `${att.completed_at} / ${staffSig.signed_at}`);
     check("2. it is gone from their pending list and the tracker counts it", !(await pendingIds(ann)).includes(doc1) && (await tracker(doc1)).summary.completed === 1 && (await tracker(doc1)).summary.outstanding === 0);

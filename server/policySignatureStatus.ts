@@ -13,6 +13,7 @@
 // Who a document is assigned to comes from server/policyReadSign.ts (Step D): a person owes it when a rule reaches them or an older
 // per-person assignment is open. Everyone on the roster still shows, signed or not; a person nobody assigned reads Not assigned and isn't chased.
 import { versionLabel } from "../shared/policyVersion";
+import { readSignHow, readSignNote } from "../shared/staffReadSign";
 import { signatureStillCurrent, carriedStaffSignature } from "./policyMinorRevision";
 import { assignedDocumentIds, documentAudience } from "./policyReadSign";
 import { priorHow, priorSignatureStillCurrent, priorSignaturesOfDocument, priorSignaturesOfPerson } from "./policyPriorSignature";
@@ -122,16 +123,23 @@ export function documentSignatureStatus(sqlite: any, labId: number, doc: { id: n
   ).all(doc.id, doc.current_version_id) as any[]).map((r) => r.u));
   const people = employees.map((e) => {
     const users = [e.login_user_id, seatBy.get(e.id)].filter((u): u is number => u != null);
+    // How a Staff login signature was made (BUG-188): name and password, the hospital's sign-in, or, before, a typed name alone (Q3).
     const signed = (sqlite.prepare(
-      "SELECT version_id, signed_at FROM staff_portal_policy_signatures WHERE lab_id = ? AND document_id = ? AND staff_employee_id = ?"
-    ).all(labId, doc.id, e.id) as any[]).map((s) => ({ version_id: s.version_id, at: s.signed_at, how: "Staff login", label: null as string | null, prior: null as { system: string; version: string; signed_on: string } | null }));
+      `SELECT s.version_id, s.signed_at, s.signed_with, s.signed_with_provider, s.signed_document_hash, v.file_hash_sha256 AS version_hash
+         FROM staff_portal_policy_signatures s LEFT JOIN policy_versions v ON v.id = s.version_id
+        WHERE s.lab_id = ? AND s.document_id = ? AND s.staff_employee_id = ?`
+    ).all(labId, doc.id, e.id) as any[]).map((s) => ({
+      version_id: s.version_id, at: s.signed_at, how: "Staff login", label: null as string | null, prior: null as { system: string; version: string; signed_on: string } | null,
+      method: readSignHow(s.signed_with, s.signed_with_provider) as string | null, method_note: readSignNote(s.signed_with, s.signed_document_hash, s.version_hash) as string | null,
+    }));
     const attested = users.flatMap((u) => (sqlite.prepare(
       "SELECT version_id, completed_at FROM policy_attestations WHERE document_id = ? AND assigned_to_user_id = ? AND completed_at IS NOT NULL"
-    ).all(doc.id, u) as any[]).map((a) => ({ version_id: a.version_id, at: a.completed_at, how: "Attestation", label: null as string | null, prior: null as { system: string; version: string; signed_on: string } | null })));
+    ).all(doc.id, u) as any[]).map((a) => ({ version_id: a.version_id, at: a.completed_at, how: "Attestation", label: null as string | null, prior: null as { system: string; version: string; signed_on: string } | null, method: null as string | null, method_note: null as string | null })));
     // Signed in the prior system. The label is the version the report names, and the record says where it happened (Q207).
     const carriedOver = priorSignaturesOfPerson(sqlite, labId, doc.id, e.id).map((p) => ({
       version_id: p.version_id as number, at: p.signed_on, how: priorHow(p.source_system), label: p.source_version as string | null,
       prior: { system: p.source_system, version: p.source_version, signed_on: p.signed_on } as { system: string; version: string; signed_on: string } | null,
+      method: null as string | null, method_note: null as string | null,
     }));
     // A Staff login signature that closed an assignment appears in both; it is the same act, so the signature wins the tie.
     const all = [...signed, ...attested, ...carriedOver].sort((a, b) => String(b.at).localeCompare(String(a.at)));
@@ -148,6 +156,9 @@ export function documentSignatureStatus(sqlite: any, labId: number, doc: { id: n
       version_label: newest?.label ?? labelFor(newest?.version_id ?? null),
       carried_forward: !!current && current.version_id !== doc.current_version_id,
       how: newest?.how ?? null,
+      // A Staff login signature says how it was made, and whether the server's hash matched or it is from before (BUG-188).
+      method: newest?.method ?? null,
+      method_note: newest?.method_note ?? null,
       prior_system: newest?.prior ?? null,
       named: users.some((u) => namedUsers.has(u)),
     };

@@ -10,6 +10,11 @@
 //
 // The pure roster join (buildSignatureReportRows) is unit-tested by
 // scripts/verify-policy-signature-report.mts.
+//
+// BUG-188 (2026-11-27): each staff signature says how it was made (name and password, the hospital's sign-in, or, before passwords
+// were asked, a typed name alone) and the start of the version hash it was made against: the server's own, or for one from before,
+// the one the browser sent (shared/staffReadSign.ts).
+import { BEFORE_PASSWORDS, HASH_FROM_BROWSER, TYPED_NAME_ONLY, shortHash } from "../shared/staffReadSign";
 
 export interface SignatureRosterRow {
   name: string;
@@ -18,6 +23,8 @@ export interface SignatureRosterRow {
   assignedAt: string;  // yyyy-mm-dd or ""
   signedAt: string;    // yyyy-mm-dd or ""
   status: string;      // "Signed" | "Pending"
+  how: string;         // how a staff signature was made (BUG-188), else ""
+  hash: string;        // the start of the version hash it was made against, else ""
   note: string;        // e.g. "Signed an earlier version" for stale writer attestations
 }
 
@@ -31,7 +38,7 @@ const ymd = (s: string | null | undefined): string => {
 
 export function buildSignatureReportRows(input: {
   attestations: Array<{ assignee_name?: string | null; assignee_email?: string | null; assigned_at?: string | null; completed_at?: string | null; is_stale_version?: boolean }>;
-  staffSignatures: Array<{ signer_name?: string | null; signer_title?: string | null; signed_at?: string | null }>;
+  staffSignatures: Array<{ signer_name?: string | null; signer_title?: string | null; signed_at?: string | null; how?: string | null; hash_from?: string | null; signed_document_hash?: string | null; signed_together?: number | null }>;
   // Signed in the prior system (server/policyPriorSignature.ts). Its own kind, so it never reads as a signature in VeritaAssure.
   priorSignatures?: Array<{ source_system: string; source_name: string; source_credentials?: string | null; source_version: string; signed_on: string; version_id?: number | null; staff_employee_id?: number | null }>;
 }): SignatureRosterRow[] {
@@ -45,10 +52,15 @@ export function buildSignatureReportRows(input: {
       assignedAt: ymd(a.assigned_at),
       signedAt: signed ? ymd(a.completed_at) : "",
       status: signed ? "Signed" : "Pending",
+      how: "",
+      hash: "",
       note: signed && a.is_stale_version ? "Signed an earlier version" : "",
     });
   }
   for (const s of input.staffSignatures || []) {
+    // A signature from before has no how recorded (hash_from "browser"): it stays signed, and says how it was made (mock 3, Q3).
+    const before = s.hash_from === "browser";
+    const together = Number(s.signed_together || 0) > 1 ? `, one of ${s.signed_together} signed together` : "";
     rows.push({
       name: s.signer_name || "(staff member)",
       detail: s.signer_title || "",
@@ -56,6 +68,8 @@ export function buildSignatureReportRows(input: {
       assignedAt: "",
       signedAt: ymd(s.signed_at),
       status: "Signed",
+      how: s.hash_from == null ? "" : before ? `${TYPED_NAME_ONLY} (${BEFORE_PASSWORDS.toLowerCase()})` : `${s.how || ""}${together}`,
+      hash: s.hash_from == null ? "" : before ? HASH_FROM_BROWSER : shortHash(s.signed_document_hash),
       note: "",
     });
   }
@@ -68,6 +82,8 @@ export function buildSignatureReportRows(input: {
       assignedAt: "",
       signedAt: ymd(p.signed_on),
       status: "Signed",
+      how: "",
+      hash: "",
       note: `Signed version ${p.source_version} in ${p.source_system}, the prior system, not in VeritaAssure.${whoNote}`,
     });
   }
@@ -97,11 +113,13 @@ export async function generatePolicySignatureReportExcel(
   data: {
     doc: { title: string; policy_number?: string | null; status?: string | null };
     versionNumber: string | number | null;
+    // The current version's SHA-256, as the server holds it (BUG-188).
+    versionHash?: string | null;
     effectiveDate: string | null;
     signoffs: Array<{ user_name?: string | null; action?: string | null; step_name?: string | null; signed_at?: string | null; comment?: string | null }>;
     attestations: any[];
     staffSignatures: any[];
-    roster?: Array<{ name: string; title: string | null; has_login: boolean; status: string; signed_at: string | null; version_label: string | null; how: string | null; assigned?: boolean; groups?: string[] }>;
+    roster?: Array<{ name: string; title: string | null; has_login: boolean; status: string; signed_at: string | null; version_label: string | null; how: string | null; method?: string | null; assigned?: boolean; groups?: string[] }>;
     priorSignatures?: Array<{ source_system: string; source_name: string; source_credentials?: string | null; source_version: string; signed_on: string; version_id?: number | null; staff_employee_id?: number | null }>;
     // How each lab group stands on this document (server/policyReadSign.ts documentAudience), when any group has people in it.
     rosterGroups?: Array<{ name: string; total: number; signed: number; assigned: boolean }>;
@@ -157,6 +175,7 @@ export async function generatePolicySignatureReportExcel(
   blank();
   section("How to read it");
   if (data.priorSignatures?.length) body(`Some signatures on this report were made in ${data.priorSignatures[0].source_system}, the lab's prior system, before it moved to VeritaAssure. They are marked Carried over, with the date and version from that system's report. There is no typed name or file hash behind them here.`);
+  body("How signed says how each staff signature was made: name and password, the hospital's sign-in, or, for one made before passwords were asked, a typed name alone. Those stay signed. Version hash is the start of the document's fingerprint the signature was made against: the server's own, or for one made before, the one the browser sent.");
   body("The Director Approval block lists each approval sign-off on the current version. The Signature Roster lists every assigned writer attestation and every staff signature, pending first so open items are obvious. 'Signed an earlier version' flags a signature captured before the current version, which usually needs a fresh attestation. The Everyone on the Roster sheet lists every active person on the VeritaStaff roster, including people nobody assigned this document to, with the date each one signed the current version or a plain Not signed, whether they are assigned it, and their lab groups. The By Group sheet shows how many in each group have signed.");
   blank();
   section("Disclaimer");
@@ -179,7 +198,8 @@ export async function generatePolicySignatureReportExcel(
     },
   });
   sheet.getColumn(1).width = 30; sheet.getColumn(2).width = 34; sheet.getColumn(3).width = 20;
-  sheet.getColumn(4).width = 14; sheet.getColumn(5).width = 14; sheet.getColumn(6).width = 12; sheet.getColumn(7).width = 26;
+  sheet.getColumn(4).width = 14; sheet.getColumn(5).width = 14; sheet.getColumn(6).width = 12; sheet.getColumn(7).width = 34;
+  sheet.getColumn(8).width = 18; sheet.getColumn(9).width = 26;
 
   const rows = buildSignatureReportRows({ attestations: data.attestations, staffSignatures: data.staffSignatures, priorSignatures: data.priorSignatures });
   const sum = signatureReportSummary(rows);
@@ -197,8 +217,9 @@ export async function generatePolicySignatureReportExcel(
   label(4, "Effective date", ymd(data.effectiveDate) || "n/a");
   label(5, "Status", data.doc.status || "n/a");
   label(6, "Signed", `${sum.signed} of ${sum.total} (${sum.pending} pending)`);
+  if (data.versionHash) label(7, "Version hash", `${shortHash(data.versionHash, 4)} (server)`);
 
-  let rr = 8;
+  let rr = data.versionHash ? 9 : 8;
   const hdrBar = (text: string) => {
     const c = sheet.getCell(`A${rr}`); c.value = text;
     c.font = { name: "Calibri", bold: true, color: { argb: accent } };
@@ -214,7 +235,7 @@ export async function generatePolicySignatureReportExcel(
     sheet.getCell(`A${rr}`).value = `${what} was approved and reviewed in ${c.source_system}, the prior system, not in VeritaAssure®${when ? ` (${when})` : ""}. The signature face page on this document's VeritaDC™ record shows who signed and when.`;
     sheet.getCell(`A${rr}`).font = { name: "Calibri", italic: true, color: { argb: ink } };
     sheet.getCell(`A${rr}`).alignment = { wrapText: true, vertical: "top" };
-    sheet.mergeCells(`A${rr}:G${rr}`);
+    sheet.mergeCells(`A${rr}:I${rr}`);
     sheet.getRow(rr).height = 34;
     rr += 1;
   }
@@ -238,7 +259,7 @@ export async function generatePolicySignatureReportExcel(
 
   hdrBar(`Signature roster (${sum.writers} writer attestations, ${sum.staff} staff signatures${sum.carried ? `, ${sum.carried} carried over from the prior system` : ""})`);
   const head = sheet.getRow(rr);
-  head.values = ["Name", "Email / Title", "Type", "Assigned", "Signed", "Status", "Note"];
+  head.values = ["Name", "Email / Title", "Type", "Assigned", "Signed", "Status", "How signed", "Version hash", "Note"];
   head.font = { name: "Calibri", bold: true, color: { argb: "FFFFFFFF" } };
   head.fill = { type: "pattern", pattern: "solid", fgColor: { argb: teal } };
   head.alignment = { vertical: "middle", horizontal: "left", indent: 1 };
@@ -247,7 +268,7 @@ export async function generatePolicySignatureReportExcel(
   let band = false;
   for (const row of rows) {
     const x = sheet.getRow(rr);
-    x.values = [row.name, row.detail, row.kind, row.assignedAt, row.signedAt, row.status, row.note];
+    x.values = [row.name, row.detail, row.kind, row.assignedAt, row.signedAt, row.status, row.how, row.hash, row.note];
     if (band) x.eachCell((c) => { c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: alt } }; });
     const statusCell = x.getCell(6);
     statusCell.font = { name: "Calibri", bold: true, color: { argb: row.status === "Signed" ? "FF437A22" : "FF964219" } };
@@ -258,7 +279,7 @@ export async function generatePolicySignatureReportExcel(
     sheet.getCell(`A${rr}`).font = { name: "Calibri", italic: true, color: { argb: "FF7A7974" } };
     rr += 1;
   } else {
-    sheet.autoFilter = { from: { row: headRowNum, column: 1 }, to: { row: headRowNum, column: 7 } };
+    sheet.autoFilter = { from: { row: headRowNum, column: 1 }, to: { row: headRowNum, column: 9 } };
   }
 
   // ── Everyone on the roster (2026-11-04, Q161; CAP GEN.75400 evidence: a roster with dates of participation) ──
@@ -280,7 +301,7 @@ export async function generatePolicySignatureReportExcel(
     const STATUS_TEXT: Record<string, string> = { signed: "Signed", older_version: "Signed an earlier version", not_signed: "Not signed" };
     data.roster.forEach((p, i) => {
       const row = rosterSheet.getRow(i + 2);
-      row.values = [p.name, p.title || "", p.has_login ? "Yes" : "No", STATUS_TEXT[p.status] || p.status, ymd(p.signed_at), p.version_label || "", p.how || "", p.assigned ? "Yes" : "No", (p.groups || []).join(", ")];
+      row.values = [p.name, p.title || "", p.has_login ? "Yes" : "No", STATUS_TEXT[p.status] || p.status, ymd(p.signed_at), p.version_label || "", p.method ? `${p.how}: ${p.method}` : p.how || "", p.assigned ? "Yes" : "No", (p.groups || []).join(", ")];
       row.eachCell({ includeEmpty: true }, (c) => {
         c.font = { name: "Calibri", size: 10, color: { argb: ink } };
         c.alignment = { vertical: "middle", wrapText: true };

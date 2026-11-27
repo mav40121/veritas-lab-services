@@ -10,6 +10,8 @@ type RosterPerson = {
   employee_id: number; name: string; title: string | null; has_login: boolean;
   status: "signed" | "older_version" | "not_signed";
   signed_at: string | null; version_label: string | null; carried_forward: boolean; how: string | null;
+  // A Staff login signature: how it was made, and whether the server's hash matched or it is from before (BUG-188).
+  method?: string | null; method_note?: string | null;
   assigned: boolean; owes: boolean; groups: string[]; group_ids: number[];
   // Signed in the lab's prior system and carried over, not signed in VeritaAssure.
   prior_system?: { system: string; version: string; signed_on: string } | null;
@@ -98,8 +100,11 @@ export function DocumentSignatureRoster({ labId, documentId }: { labId: number; 
                 Signed {day(p.prior_system.signed_on)} on v{p.prior_system.version} in {p.prior_system.system}, carried over
               </span>
             ) : p.status === "signed" ? (
-              <span className="text-xs text-green-800 dark:text-green-300" data-testid="roster-status">
-                Signed {day(p.signed_at)}{p.carried_forward ? ` on v${p.version_label}, carried forward` : ""} ({p.how})
+              <span className="text-xs text-green-800 dark:text-green-300 [overflow-wrap:anywhere]" data-testid="roster-status">
+                Signed {day(p.signed_at)}{p.carried_forward ? ` on v${p.version_label}, carried forward` : ""} ({p.method ?? p.how})
+                {p.method_note && (
+                  <span className="ml-1.5 inline-block rounded-full border border-border px-1.5 py-px text-[11px] text-muted-foreground" data-testid="roster-how-note">{p.method_note}</span>
+                )}
               </span>
             ) : p.status === "older_version" ? (
               <span className={`text-xs ${p.assigned ? "text-amber-800 dark:text-amber-300" : "text-muted-foreground"}`} data-testid="roster-status">

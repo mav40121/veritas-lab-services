@@ -4,7 +4,8 @@
 // prompt (client/src/components/SignaturePrompt.tsx) read the same list. A hospital sign-in proof is bound to one purpose, so a
 // proof asked for to decide a document's approval step can't attest one or sign a review. A new signature adds its purpose here.
 // policy_decision is one approval step's approve or reject: the staff login's screen offers both under one signature, and the
-// request itself says which (recorded as the signoff's action).
+// request itself says which (recorded as the signoff's action). policy_read_sign is a Staff login's read-and-sign under My sign-offs,
+// one document or several under one signature (BUG-188, server/policyStaffSign.ts).
 
 export const SIGNATURE_PURPOSES = [
   "policy_decision",
@@ -20,6 +21,7 @@ export const SIGNATURE_PURPOSES = [
   "verification_analyte",
   "verification_signoff_group",
   "qc_rules",
+  "policy_read_sign",
 ] as const;
 export type SignaturePurpose = (typeof SIGNATURE_PURPOSES)[number];
 export const isSignaturePurpose = (p: unknown): p is SignaturePurpose =>

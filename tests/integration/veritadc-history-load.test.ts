@@ -287,7 +287,8 @@ async function main() {
     check("7. the roster reads an older version, naming what they signed", person(ann.emp, stMajor).status === "older_version" && person(ann.emp, stMajor).version_label === "1.0", JSON.stringify(person(ann.emp, stMajor)));
     await call("PUT", `${P}/settings/minor-revisions`, { carryForward: false }, ownerToken);
     const v = (sqlite.prepare("SELECT current_version_id AS v FROM policy_documents WHERE id = ?").get(mu4.id) as any).v;
-    const realSign = await call("POST", `/api/staff-portal-session/policies/${mu4.id}/sign`, { employee_id: ann.emp, version_id: v, typed_signature: ann.name, content_hash: "madeup" }, ann.token);
+    await call("GET", `/api/staff-portal-session/policies/${mu4.id}/render`, undefined, ann.token); // BUG-188: opened at this version
+    const realSign = await call("POST", `/api/staff-portal-session/policies/${mu4.id}/sign`, { employee_id: ann.emp, version_id: v, typed_signature: ann.name, password: PW }, ann.token);
     const stReal = await call("GET", `${P}/documents/${mu4.id}/signature-status`, undefined, ownerToken);
     check("7. signing the new version here reads as a Staff login signature", realSign.status === 200 && person(ann.emp, stReal).status === "signed" && person(ann.emp, stReal).how === "Staff login" && !person(ann.emp, stReal).prior_system, JSON.stringify(person(ann.emp, stReal)));
     const compBoth = (await call("GET", `${P}/compliance`, undefined, ownerToken)).body.perStaffAttest?.find((s: any) => s.staff_employee_id === ann.emp);

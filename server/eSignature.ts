@@ -62,6 +62,8 @@ const WORDING: Record<SignaturePurpose, Wording> = {
   verification_signoff_group: VERIFICATION_WORDING,
   // VeritaQC rule settings (B12 part 2, server/qcRuleSets.ts): locking, unlocking and changing locked rules.
   qc_rules: { name: "Type your full name to sign.", credential: "Enter your password to sign.", noPassword: "This account has no password set, so it can't sign.", wrong: "Password incorrect; nothing was saved." },
+  // BUG-188: a Staff login's read-and-sign, one document or several. The words mock 3 draws.
+  policy_read_sign: { name: "Type your full name to sign.", credential: "Enter your password to sign.", noPassword: "User has no password set; cannot sign electronically", wrong: "Password incorrect; signature not recorded" },
 };
 
 export const ACCOUNT_LOCKED_TEXT = "This account is locked after too many wrong passwords. Use Forgot password to set a new one, or ask your lab owner to unlock it.";
