@@ -259,7 +259,7 @@ async function main() {
       { num: 4, dateObserved: day, observerInitials: "CT", passed: true }, { num: 5, sampleType: "PT", sampleId: "P", acceptable: true, passed: true }, { num: 6, quizId: "Q", score: 100, dateTaken: day, passed: true },
     ];
     await evaluatorPut(annId, THIRD, { elements: completeEls });
-    const signed = await call("POST", `${L}/competency/employee/${annId}/test-system/${THIRD}/sign`, { signerStaffEmployeeId: tc, signerInitials: "CT" }, OWNER.token);
+    const signed = await call("POST", `${L}/competency/employee/${annId}/test-system/${THIRD}/sign`, { fromPaper: true, paperLocation: "Made-up binder", signerStaffEmployeeId: tc, signerInitials: "CT" }, OWNER.token);
     const frozen = rowsFor(annId, THIRD);
     const frozenBefore = JSON.stringify(frozen);
     check("10a. fixture: the method is signed and its rows are frozen", signed.s === 200 && frozen.length === 6 && frozen.every((r) => r.signoff_id != null), `${signed.s} ${JSON.stringify(signed.j).slice(0, 120)}`);
@@ -494,7 +494,7 @@ async function main() {
     const { staffOwnScope } = await import("../../server/competencySelfEntry");
     const zorkId = await person("Quillfeather", "Zork", [ANALYZER, METER]);
     await evaluatorPut(zorkId, ANALYZER, { elements: completeEls.map((e) => (e.num === 1 ? { ...e, specimenId: "ZQ-SPECIMEN-1" } : e)) });
-    const zorkSigned = await call("POST", `${L}/competency/employee/${zorkId}/test-system/${ANALYZER}/sign`, { signerStaffEmployeeId: tc, signerInitials: "CT" }, OWNER.token);
+    const zorkSigned = await call("POST", `${L}/competency/employee/${zorkId}/test-system/${ANALYZER}/sign`, { fromPaper: true, paperLocation: "Made-up binder", signerStaffEmployeeId: tc, signerInitials: "CT" }, OWNER.token);
     await evaluatorPut(zorkId, ANALYZER, { elements: [{ num: 1, specimenId: "ZQ-SPECIMEN-2", observerInitials: "CT", passed: true }] });
     const zorkComp = sqlite.prepare("SELECT id FROM competency_employees WHERE staff_employee_id = ? AND lab_id = ?").get(zorkId, labId) as any;
     const zorkRec = await call("POST", `${L}/competency/assessments`, { programId: techProg, employeeId: zorkComp.id, assessmentType: "annual", assessmentDate: day, evaluatorName: "Made Up", competencyType: "technical", status: "fail", remediationPlan: "ZQ-REMEDIATION",

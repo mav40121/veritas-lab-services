@@ -77,7 +77,7 @@ async function main() {
   ];
   const signInitial = async (emp: number) => {
     const put = await call("PUT", `${L}/competency/employee/${emp}/test-system/${SED}`, { elements: els }, tk);
-    const sign = await call("POST", `${L}/competency/employee/${emp}/test-system/${SED}/sign`, { signerStaffEmployeeId: tc, signerInitials: "CT", milestone: "initial" }, tk);
+    const sign = await call("POST", `${L}/competency/employee/${emp}/test-system/${SED}/sign`, { fromPaper: true, paperLocation: "Made-up binder", signerStaffEmployeeId: tc, signerInitials: "CT", milestone: "initial" }, tk);
     return { put: put.s, sign: sign.s, err: sign.j.error };
   };
   check("fixture: lab, moderate i-Sed, three people, a TC signer", !!SED && !!newHire && !!existing && !!dated && !!tc);

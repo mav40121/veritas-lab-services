@@ -113,7 +113,7 @@ async function main() {
     // A signed set spells out every specimen, which is what the record PDF prints
     const gs = (await call("POST", `${L}/staff/employees`, { lastName: "Ellis", firstName: "Jordan", highestComplexity: "H", roles: [{ role: "GS" }] }, token)).body.id;
     await put({ waivedMethods: [{ num: 1, specimens: [pass("BS-1 glucose 92"), pass("BS-2 glucose 180")] }, { num: 3, evidence: "QC run", date: day, initials: "MU", passed: true }] });
-    const sign = await call("POST", `${L}/competency/employee/${emp}/test-system/${inst}/sign`, { signerStaffEmployeeId: gs, signerInitials: "JE" }, token);
+    const sign = await call("POST", `${L}/competency/employee/${emp}/test-system/${inst}/sign`, { fromPaper: true, paperLocation: "Made-up binder", signerStaffEmployeeId: gs, signerInitials: "JE" }, token);
     check("1. two methods passed, one with two specimens, can be signed", sign.status === 200, `HTTP ${sign.status} ${JSON.stringify(sign.body).slice(0, 160)}`);
     const signedView = (await call("GET", `${L}/competency/employee/${emp}`, undefined, token)).body;
     const signedTs = (signedView.testSystems || []).find((t: any) => t.instrumentId === inst || t.id === inst);

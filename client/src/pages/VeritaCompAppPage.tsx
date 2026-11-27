@@ -17,6 +17,7 @@ import { useMemberships } from "@/hooks/useMemberships";
 import { useLabRoute } from "@/hooks/useLabRoute";
 import { useStaffOwnScope } from "@/hooks/useStaffLogin";
 import { StaffOwnHome, StaffOwnProgram } from "@/components/StaffOwnCompetency";
+import CompetencyToSign from "@/components/CompetencyToSign";
 import { downloadPdfToken } from "@/lib/utils";
 import { checklistLabel, matchSavedChecklistRows, checklistItemsForType, CHECKLIST_STAGES, CHECKLIST_MAX_ITEMS, CHECKLIST_MAX_DESCRIPTION } from "@shared/competencyChecklist";
 import { assessmentTypeLabel, evaluationDueDate } from "@shared/competencyEvaluation";
@@ -609,9 +610,16 @@ export default function VeritaCompAppPage() {
   return (
     <>
       <WipBanner />
+      <ToSignSlot />
       <ProgramListView />
     </>
   );
+}
+
+// B5 (mock 2): the observations and methods waiting for this person's own signature. Shows nothing when there are none.
+function ToSignSlot() {
+  const labId = useActiveLabId();
+  return <div className="max-w-4xl mx-auto px-4 sm:px-6 pt-6 empty:hidden"><CompetencyToSign labId={labId} /></div>;
 }
 
 // ── WIP Banner (dismissible) ──────────────────────────────────────────

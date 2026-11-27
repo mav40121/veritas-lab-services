@@ -22,7 +22,8 @@ export type ElementFieldType = "text" | "date" | "number" | "bool" | "observer";
 // "observer" = the lab's LD/TC/TS people in VeritaStaff, picked from a list (BUG-075, Michael Q35 = 1); the server
 // refuses anyone else on a new or changed value. Element 7 (NYS) keeps typed entry.
 export const ELEMENT_FIELDS: Record<number, Array<{ key: string; label: string; type: ElementFieldType }>> = {
-  1: [{ key: "specimenId", label: "Specimen ID observed", type: "text" }, { key: "observerInitials", label: "Observer (LD / TC / TS)", type: "observer" }],
+  // B5 (mock 2): Element 1 has its own date observed, which the observer sets as they sign (the evaluator can enter one from paper).
+  1: [{ key: "specimenId", label: "Specimen ID observed", type: "text" }, { key: "observerInitials", label: "Observer (LD / TC / TS)", type: "observer" }, { key: "dateObserved", label: "Date observed", type: "date" }],
   2: [{ key: "evidence", label: "Evidence", type: "text" }, { key: "date", label: "Date", type: "date" }],
   3: [{ key: "qcDate", label: "Date QC was run", type: "date" }],
   4: [{ key: "dateObserved", label: "Date observed", type: "date" }, { key: "observerInitials", label: "Observer (LD / TC / TS)", type: "observer" }],

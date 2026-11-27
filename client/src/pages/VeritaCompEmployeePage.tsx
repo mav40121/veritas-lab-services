@@ -40,6 +40,7 @@ import { WAIVED_BLIND_METHOD, type WaivedSpecimen } from "@shared/competencyWaiv
 import { ELEMENT_NAMES, ELEMENT_FIELDS } from "@/lib/competencyElements";
 import { SELF_ELEMENT_FIELDS, isSelfEntryField, selfSampleRemovable } from "@shared/competencySelfEntry";
 import { NEEDS_REVIEW, NEEDS_REVIEW_LABEL } from "@shared/competencyStatus";
+import type { ObserverState } from "@shared/competencyObservation";
 import { useStaffOwnScope } from "@/hooks/useStaffLogin";
 import { StaffOwnRefusal } from "@/components/StaffOwnCompetency";
 
@@ -81,6 +82,32 @@ function waivedBadge(status: string) {
   if (status === "fail") return <Badge className="text-[10px] bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">Not passed</Badge>;
   if (status === "incomplete") return <Badge className="text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">Needs date</Badge>;
   return <Badge className="text-[10px] bg-muted text-muted-foreground">Not used</Badge>;
+}
+
+// B5 (mock 2): Elements 1 and 4 wait for the observer named on them, who signs as themselves under Observations to sign. An entry
+// made before this went live has nothing to wait for and shows nothing new.
+function observerBadge(o: ObserverState | null | undefined) {
+  if (!o) return null;
+  if (o.signed) return <Badge className="text-[10px] bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" data-testid="observer-signed-chip">Observer signed</Badge>;
+  if (!o.required) return null;
+  return <Badge className="text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300" data-testid="observer-not-signed-chip">Not signed</Badge>;
+}
+function ObserverNote({ observer: o }: { observer: ObserverState | null | undefined }) {
+  if (!o || (!o.signed && !o.required)) return null;
+  if (o.signed) {
+    return (
+      <p className="text-[11px] mt-2 text-emerald-800 dark:text-emerald-300" data-testid="observer-signed-note">
+        Signed by the observer, {o.signed.name}{o.signed.role ? `, ${o.signed.role}` : ""}, {o.signed.signedAtText}. Changing the specimen, date observed, observer or Pass means they sign again.
+      </p>
+    );
+  }
+  const first = (o.observerName || "").split(" ")[0];
+  return (
+    <p className="text-[11px] mt-2 text-amber-800 dark:text-amber-300" data-testid="observer-waiting-note">
+      {o.changedAfterSigning ? "Changed after the observer signed. " : ""}
+      {o.observerName ? `${first} sees this under Observations to sign, and enters the date observed and the result as they sign.` : "Name the observer, save, and they sign it under Observations to sign."}
+    </p>
+  );
 }
 
 function statusBadge(status: string) {
@@ -314,10 +341,13 @@ export default function VeritaCompEmployeePage() {
                 <CardContent className="p-4">
                   {current && (
                     <>
-                      <div className="flex items-center gap-2 mb-1">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
                         <FlaskConical size={16} className="text-primary" />
                         <h3 className="font-semibold">{current.instrumentName}</h3>
                         <Badge className={`text-[10px] ${TONE[signoffSummary(current).tone]}`}>{signoffSummary(current).label}</Badge>
+                        {!!current.observersWaiting?.length && (
+                          <Badge className={`text-[10px] ${TONE.amber}`} data-testid="observer-waiting-count">Waiting for {current.observersWaiting.length} observer signature{current.observersWaiting.length === 1 ? "" : "s"}</Badge>
+                        )}
                       </div>
                       <div className="mb-3">
                         <MethodSignOffPanel part="status" labId={activeLabId!} employeeId={employeeId} employeeName={data.employee.name} ts={current} readOnly={evaluatorLocked} onChanged={refresh} openSignoffId={linkedSignoff} />
@@ -410,6 +440,7 @@ export default function VeritaCompEmployeePage() {
                                     </label>
                                   )}
                                   {statusBadge(el.status)}
+                                  {!f.na && observerBadge(el.observer)}
                                 </div>
                               </div>
                               {f.na ? (
@@ -480,6 +511,7 @@ export default function VeritaCompEmployeePage() {
                                   ))}
                                 </div>
                               )}
+                              {!f.na && <ObserverNote observer={el.observer} />}
                             </div>
                           );
                         })}

@@ -8,6 +8,7 @@
 import { Badge } from "@/components/ui/badge";
 import { ELEMENT_NAMES, ELEMENT_FIELDS, fmtDate } from "@/lib/competencyElements";
 import type { MethodSignoff } from "@/components/MethodSignOffPanel";
+import { observerHowText, type ObserverState } from "@shared/competencyObservation";
 
 function statusBadge(status: string) {
   const cls = status === "pass" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
@@ -29,7 +30,30 @@ function Fact({ label, value }: { label: string; value: string }) {
   );
 }
 
-export default function SignedEntries({ signoff, waived }: { signoff: MethodSignoff; waived?: boolean }) {
+// B5 (mock 2): Elements 1 and 4 say whether their observer signed, as themselves. An entry made before this went live says nothing more.
+function ObserverLine({ observer, paperLocation }: { observer?: ObserverState | null; paperLocation?: string | null }) {
+  if (!observer) return null;
+  // A sign-off entered from paper (Q1 = 1): the paper carries the observer's signature.
+  if (!observer.signed && observer.required && paperLocation != null) {
+    return <div className="text-[11px] mt-1.5 text-muted-foreground" data-testid="observer-on-paper">Observer signed on paper ({paperLocation || "see the paper record"}).</div>;
+  }
+  if (observer.signed) {
+    const s = observer.signed;
+    return (
+      <div className="text-[11px] mt-1.5 text-emerald-800 dark:text-emerald-300" data-testid="signed-observer">
+        Signed by the observer, {s.name}{s.role ? `, ${s.role}` : ""}, {s.signedAtText}, {observerHowText(s)}.
+      </div>
+    );
+  }
+  if (!observer.required) return null;
+  return (
+    <div className="text-[11px] mt-1.5 text-amber-800 dark:text-amber-300" data-testid="observer-not-signed">
+      {observer.changedAfterSigning ? "Changed after the observer signed; " : ""}Observer not signed{observer.observerName ? ` (${observer.observerName})` : ""}.
+    </div>
+  );
+}
+
+export default function SignedEntries({ signoff, waived, caption = "Entries as signed (read only)." }: { signoff: MethodSignoff; waived?: boolean; caption?: string }) {
   const testId = `signed-entries-${signoff.id ?? "legacy"}`;
   if (!signoff.hasEntries) {
     return (
@@ -46,7 +70,7 @@ export default function SignedEntries({ signoff, waived }: { signoff: MethodSign
   return (
     <div className="rounded-md border bg-muted/30 p-3 space-y-2" data-testid={testId}>
       <div className="text-[11px] text-muted-foreground">
-        Entries as signed (read only).{signoff.documentation ? ` Documentation: ${signoff.documentation}` : ""}
+        {caption}{signoff.documentation ? ` Documentation: ${signoff.documentation}` : ""}
       </div>
       {waived ? (
         (signoff.waivedMethods || []).length ? (signoff.waivedMethods || []).map((m) => (
@@ -96,6 +120,7 @@ export default function SignedEntries({ signoff, waived }: { signoff: MethodSign
                   })}
                 </div>
               )}
+              {!el.na && <ObserverLine observer={el.observer} paperLocation={signoff.fromPaper ? (signoff.paperLocation ?? "") : null} />}
             </div>
           );
         })

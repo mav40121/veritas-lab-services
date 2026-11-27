@@ -85,6 +85,8 @@ const ALWAYS: Record<string, string> = {
   // Each method is signed off on its own since 2026-10-13.
   "POST /api/labs/:labId/competency/employee/:employeeId/test-system/:instrumentId/sign": "sign a method's competency",
   "POST /api/labs/:labId/competency/employee/:employeeId/test-system/:instrumentId/signoffs/:signoffId/revoke": "unlock a method's signed competency",
+  // B5: the observer signs Elements 1 and 4 as themselves.
+  "POST /api/labs/:labId/competency/observations/sign": "sign a competency observation",
   "POST /api/labs/:labId/competency/assessments/bulk-commit": "commit signed competency records",
   "POST /api/labs/:labId/competency/assessments/cohort-commit": "commit signed competency records",
   // VeritaCheck

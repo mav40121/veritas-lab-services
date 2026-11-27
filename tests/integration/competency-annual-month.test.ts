@@ -75,7 +75,7 @@ async function main() {
   ];
   const sign = async (e: number, i: number, milestone: string, signedDate: string) => {
     await call("PUT", `${L}/competency/employee/${e}/test-system/${i}`, { elements: els }, T);
-    return call("POST", `${L}/competency/employee/${e}/test-system/${i}/sign`, { signerStaffEmployeeId: jordan, milestone, signedDate, documentation: "Paper record in the competency binder" }, T);
+    return call("POST", `${L}/competency/employee/${e}/test-system/${i}/sign`, { fromPaper: true, paperLocation: "Made-up binder", signerStaffEmployeeId: jordan, milestone, signedDate, documentation: "Paper record in the competency binder" }, T);
   };
   const tsOf = async (e: number, i: number) => ((await call("GET", `${L}/competency/employee/${e}`, undefined, T)).j.testSystems || []).find((x: any) => x.instrumentId === i) || {};
 

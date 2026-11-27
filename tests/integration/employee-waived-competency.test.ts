@@ -92,7 +92,7 @@ async function main() {
     { num: 6, quizId: "Q-1", score: 100, dateTaken: today, passed: true },
   ];
   const rSed = await put(mixed, SED, { elements: sedEls });
-  const signMethod = (emp: number, inst: number, signer: number) => call("POST", `${L}/competency/employee/${emp}/test-system/${inst}/sign`, { signerStaffEmployeeId: signer, signerInitials: "JE" }, tk);
+  const signMethod = (emp: number, inst: number, signer: number) => call("POST", `${L}/competency/employee/${emp}/test-system/${inst}/sign`, { fromPaper: true, paperLocation: "Made-up binder", signerStaffEmployeeId: signer, signerInitials: "JE" }, tk);
   const r3b = await signMethod(mixed, NOVA, gs);
   check("3b. the meter's sign-off is blocked at 1 of 2", rSed.s === 200 && r3b.s === 409 && (r3b.j.incomplete || []).some((x: string) => /Nova.*1 of 2 waived methods passed/.test(x)), `${rSed.s} ${r3b.s} ${JSON.stringify(r3b.j.incomplete)}`);
 

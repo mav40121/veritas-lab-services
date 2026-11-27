@@ -107,7 +107,7 @@ import { isValidIfuUrl } from "@shared/ifu";
 import { incompleteElementCells as compIncompleteCells, incompleteElementCellsByInstrument as compIncompleteCellsByInstrument, aggregateElementStatus as compAggregateElementStatus, itemElementStatus as compItemElementStatus, competencyCycleWindowDays, WAIVED_METHOD_NAMES, WAIVED_METHODS_REQUIRED, waivedMethodPassed, waivedPassedCount, methodGroupCoversInstrument, NEEDS_REVIEW, workingElementStatus, unmarkedElements, methodPassProblem, recordPassProblem } from "@shared/competencyStatus";
 import { competencyDueColumns, competencySeedAtCreate, nextCompetencyDue } from "./competencySchedule";
 import { annualDueChanges, applyAnnualDueChanges } from "./competencyAnnualMonth";
-import { methodSignerOptions, nextMilestoneAfter, milestonesForComplexity, MILESTONE_LABEL, alignAnnualToMonth, MONTH_NAMES, type SignerCandidate, type MethodMilestone } from "@shared/competencySignoff";
+import { methodSignerOptions, nextMilestoneAfter, milestonesForComplexity, MILESTONE_LABEL, alignAnnualToMonth, MONTH_NAMES, initialsOf, type SignerCandidate, type MethodMilestone } from "@shared/competencySignoff";
 import { isManualMethod, groupProblem, suggestGroups, groupKey } from "@shared/competencyGrouping";
 import { cleanEl5Samples, el5Columns, el5SamplesFromRow } from "@shared/competencyEl5Samples";
 import { programHoldsRecordsMessage, programHoldsQuizzesMessage } from "@shared/competencyProgramDelete";
@@ -261,6 +261,8 @@ import { checklistImageIdProblem, checklistItemImageIds, checklistForAudit, chec
 import { FORM_OWNED_ROWS, personPageEntryCount, holdsPersonPageEntriesMessage, planRecordSaveRestore, applyRecordSaveRestore, recordLosses } from "./competencyRecordRestore";
 import { programQuizCount, orphanQuizzes, planDeletedProgramRestore, applyDeletedProgramRestore, RestoreRefused } from "./competencyProgramRestore";
 import { ownRosterRows, ownRosterRowForSession, labsForApprovals } from "./ownRoster";
+import { ownStaffIdInLab, signedAtText, loadObservationSignatures, observerStateFor, observerDisplayName, carriedObserverColumns, recordFingerprint } from "./competencySignatures";
+import { isObservedElement, observedDateColumn, observationContent, observersWaiting, observerPassProblem, OBSERVATION_SIGN_MAX, UNLOCK_REASON_MAX } from "@shared/competencyObservation";
 import { quizScoreRows, rowsForPerson, buildQuizScoresWorkbook } from "./quizScores";
 import { filterQuizScores, type QuizScoreRow } from "../shared/quizScores";
 import { notApplicableRows, notApplicableIds, notApplicableProblem, NOT_APPLICABLE_REASON_MAX } from "./competencyNotApplicable";
@@ -29988,12 +29990,20 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // Element 1 / 4 observers resolved to the VeritaStaff person, so a signed set reads "MV (Veri, Michael)".
     const qualifiedObservers = loadQualifiedObservers(sqlite, labId);
     const observerName = (v: unknown): string | null => { const o = matchObserver(qualifiedObservers, v); return o ? o.name : null; };
+    // B5 (mock 2): the observer's own signature on Elements 1 and 4, read with the row it signed (server/competencySignatures.ts).
+    const observerCtx = { sigById: loadObservationSignatures(sqlite, labId, empId), observers: qualifiedObservers, tz: labTimeZoneById(sqlite, labId) };
+    const signedByName = (userId: unknown): string | null => {
+      if (userId == null) return null;
+      const u = sqlite.prepare("SELECT name, email FROM users WHERE id = ?").get(Number(userId)) as any;
+      return u ? (String(u.name || "").trim() || u.email || null) : null;
+    };
     // One element's raw entries from its item row: the entry form pre-fills from these, and a signed set shows them
     // read-only (Michael 2026-11-02: "once it is signed, the supporting documentation is no longer visible").
     const elementData = (rows: any[], el: number): any => {
       const row: any = rows.find((it: any) => Number(it.element_number ?? it.method_number) === el) || {};
       const data: any = { passed: !!row.passed, na: !!row[`el${el}_na`], naJustification: row[`el${el}_na_justification`] || "" };
-      if (el === 1) { data.specimenId = row.el1_specimen_id || ""; data.observerInitials = row.el1_observer_initials || ""; }
+      if (isObservedElement(el)) data.observer = row.id != null ? observerStateFor(row, el, observerCtx) : null;
+      if (el === 1) { data.specimenId = row.el1_specimen_id || ""; data.observerInitials = row.el1_observer_initials || ""; data.dateObserved = row.el1_date_observed || ""; }
       else if (el === 2) { data.evidence = row.el2_evidence || ""; data.date = row.el2_date || ""; }
       else if (el === 3) { data.qcDate = row.el3_qc_date || ""; }
       else if (el === 4) { data.dateObserved = row.el4_date_observed || ""; data.observerInitials = row.el4_observer_initials || ""; }
@@ -30023,9 +30033,19 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const signoffs: any[] = rows.map((s: any) => {
         const key = s.group_signoff_id ?? s.id;
         const frozen = frozenStmt.all(key) as any[];
+        // B5: how it was signed (shared/competencyObservation.ts howSignedText): as the evaluator themselves, from paper (Q1 = 1), or
+        // recorded before this build. The fingerprint is the lead row's, made from the entries it froze; it is checked again here.
+        const lead = s.group_signoff_id != null ? (sqlite.prepare("SELECT * FROM competency_method_signoffs WHERE id = ?").get(key) as any) || s : s;
         return {
           id: key, legacy: false, milestone: s.milestone, signedDate: s.signed_date,
           signerName: s.signer_name, signerRole: s.signer_role, signerInitials: s.signer_initials || null,
+          signedWith: lead.signed_with || null, provider: lead.signed_with_provider || null,
+          signedAt: lead.signed_at || null, signedAtText: lead.signed_at ? signedAtText(lead.signed_at, observerCtx.tz) : null,
+          fromPaper: Number(lead.from_paper) === 1, paperLocation: lead.paper_location || null,
+          recordedByName: Number(lead.from_paper) === 1 ? signedByName(lead.recorded_by_user_id) : null,
+          recordedDate: Number(lead.from_paper) === 1 ? labLocalDate(lead.created_at) || null : null,
+          fingerprint: lead.record_fingerprint || null,
+          fingerprintHolds: lead.record_fingerprint ? recordFingerprint(lead, frozen) === lead.record_fingerprint : null,
           documentation: s.documentation || null,
           // BUG-051: rows signed before the determination existed could only be signed complete, so they read as pass.
           determination: s.determination || "pass",
@@ -30175,6 +30195,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         needsReview,
         readyToSign: signable && !needsReview,
         passBlockMessage: signable ? methodPassProblem(inst.instrument_name, elements) : null,
+        // B5 (Q2 = 1): Elements 1 and 4 entered after this went live wait for their observer's own signature before an electronic Pass.
+        observersWaiting: observersWaiting(elements),
+        observerPassBlock: signable ? observerPassProblem(inst.instrument_name, elements) : null,
         fromLegacyProgram,
         ...signState,
         ...groupFields,
@@ -30564,6 +30587,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
     const tx = sqlite.transaction(() => {
       const assessment = openImplicitAssessment(sqlite, labId, emp, ownerUserId, now);
+      // B5: what each element's row keeps from the row it replaces: the observer's signature (it holds only while the entry reads
+      // the same) and whether the entry was made before this went live (server/competencySignatures.ts carriedObserverColumns).
+      const replaced = sqlite.prepare(`SELECT * FROM competency_assessment_items WHERE assessment_id = ? AND instrument_id IN (${method.memberIds.map(() => "?").join(",")}) AND signoff_id IS NULL ORDER BY id`).all(assessment.id, ...method.memberIds) as any[];
+      const carried = (n: number) => carriedObserverColumns(replaced.find((r) => Number(r.element_number ?? r.method_number) === n && r.waived_method_number == null), n);
       // Replace this instrument's WORKING items only; items frozen by a sign-off are never touched.
       sqlite.prepare(`DELETE FROM competency_assessment_items WHERE assessment_id = ? AND instrument_id IN (${method.memberIds.map(() => "?").join(",")}) AND signoff_id IS NULL`).run(assessment.id, ...method.memberIds);
       if (isWaivedSystem) {
@@ -30589,8 +30616,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
            el6_quiz_id, el6_score, el6_date_taken, el6_na, el6_na_justification,
            el7_date_observed, el7_observer_initials, el7_na, el7_na_justification,
            el8_function_assessed, el8_date, el8_na, el8_na_justification,
-           passed
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+           passed, el1_date_observed, observer_sign_required, observer_signature_id
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       );
       const byNum = new Map<number, any>();
       for (const el of elements) { if (Number.isFinite(Number(el?.num))) byNum.set(Number(el.num), el); }
@@ -30613,6 +30640,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           n === 7 ? (d.dateObserved ?? null) : null, n === 7 ? (d.observerInitials ?? null) : null, n === 7 ? na : 0, n === 7 ? naJ : null,
           n === 8 ? (d.functionAssessed ?? null) : null, n === 8 ? (d.date ?? null) : null, n === 8 ? na : 0, n === 8 ? naJ : null,
           d.passed ? 1 : 0,
+          n === 1 ? (String(d.dateObserved ?? "").trim().slice(0, 10) || null) : null,
+          carried(n).observer_sign_required, carried(n).observer_signature_id,
         );
       }
       // competency_assessments has no updated_at column (created_at only); the
@@ -30632,15 +30661,33 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // be signed department by department. Requires that method's working elements complete (data or N/A on each; two
   // passed methods for waived) and a signer whose VeritaStaff role qualifies for the method's complexity
   // (shared/competencySignoff.ts, re-checked here). Freezes the method's items under the sign-off; the person's other
-  // methods stay open. Body: { signerStaffEmployeeId | signerIsMedicalDirector, signerInitials?, signedDate?, milestone?,
-  // documentation? (required when the date is not today) }.
-  app.post("/api/labs/:labId/competency/employee/:employeeId/test-system/:instrumentId/sign", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
+  // methods stay open.
+  // B5 (signatures mock 2, 2026-11-27; shared/competencyObservation.ts): the evaluator signs as themselves. The signer is the signed-in
+  // person's own VeritaStaff row (server/ownRoster.ts), never a name picked from a list, checked by the one signature check
+  // (server/eSignature.ts verifySigner, purpose competency_method), dated today. Anyone in the lab whose own row may sign the method
+  // can, a Staff login included (Q3 = 1); signing edits nothing else. A sign-off done on paper and entered later by someone else is
+  // kept as From paper (Q1 = 1): that one needs edit on VeritaComp, names the paper's evaluator from the list and where the paper is,
+  // and records who entered it. An electronic Pass waits for the observer's own signature on Elements 1 and 4 entered after this
+  // went live (Q2 = 1); a sign-off from paper doesn't, the paper carries both. The server makes the record's fingerprint from the
+  // frozen entries. Body: { typedName, password | ssoProof, milestone?, determination, remediationPlan?, remediationTargetDate?,
+  // signerInitials? } or { fromPaper: true, paperLocation, signerStaffEmployeeId | signerIsMedicalDirector, signedDate?, milestone?,
+  // determination, ... }.
+  app.post("/api/labs/:labId/competency/employee/:employeeId/test-system/:instrumentId/sign", authMiddleware, labScopeMiddleware, requireWriteAccess, async (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
     const labId = req.scope.labId;
     const sqlite = (db as any).$client;
     const empId = Number(req.params.employeeId);
     const instrumentId = Number(req.params.instrumentId);
     if (!Number.isFinite(empId) || !Number.isFinite(instrumentId)) return res.status(400).json({ error: "Bad ids" });
+    const b = req.body || {};
+    const fromPaper = b.fromPaper === true;
+    // Entering a paper sign-off changes the record, which is an editor's work; signing as yourself is not.
+    if (fromPaper && !hasModuleEditAccess(labId, req.userId, "veritacomp")) {
+      return res.status(403).json({ error: "Entering a sign-off from paper changes the record, so it needs edit access to VeritaComp™. Sign as yourself instead, or ask an editor.", code: "PAPER_NEEDS_EDIT" });
+    }
+    if (!fromPaper && (b.signerStaffEmployeeId != null || b.signerIsMedicalDirector)) {
+      return res.status(400).json({ error: "Sign as yourself with your name and password. To enter a sign-off done on paper, choose Enter a sign-off from paper.", code: "SIGN_AS_YOURSELF" });
+    }
     const view = assembleEmployeeCompetencyView(sqlite, labId, empId);
     if (!view) return res.status(404).json({ error: "Employee not found" });
     // A lab-chosen group signs as one method (Michael Q168 = 1); any analyzer in it names the group.
@@ -30655,26 +30702,37 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       return res.status(409).json({ error: "Every element needs data or N/A before this method can be signed.", incomplete });
     }
 
-    const b = req.body || {};
-    const signer = b.signerIsMedicalDirector
-      ? ts.signers.find((o: any) => o.staffEmployeeId == null && o.role === "LD")
-      : ts.signers.find((o: any) => o.staffEmployeeId != null && o.staffEmployeeId === Number(b.signerStaffEmployeeId));
-    if (!signer) return res.status(400).json({ error: "Choose who is signing from the list." });
-    if (!signer.eligible) return res.status(403).json({ error: `${signer.name} cannot sign ${ts.instrumentName}: ${signer.reason}.` });
+    let signer: any;
+    if (fromPaper) {
+      signer = b.signerIsMedicalDirector
+        ? ts.signers.find((o: any) => o.staffEmployeeId == null && o.role === "LD")
+        : ts.signers.find((o: any) => o.staffEmployeeId != null && o.staffEmployeeId === Number(b.signerStaffEmployeeId));
+      if (!signer) return res.status(400).json({ error: "Choose who signed the paper from the list." });
+    } else {
+      const ownId = ownStaffIdInLab(sqlite, req.userId, labId);
+      if (!ownId) return res.status(403).json({ error: "Your sign-in isn't linked to a person in VeritaStaff™ in this lab, so it can't sign. Ask your lab owner to link it (VeritaStaff™, Link to existing entry).", code: "NOT_ON_ROSTER" });
+      signer = ts.signers.find((o: any) => o.staffEmployeeId != null && o.staffEmployeeId === ownId);
+      if (!signer) return res.status(403).json({ error: `You can't sign ${ts.instrumentName}: your VeritaStaff™ record has no laboratory director, technical consultant, technical supervisor or general supervisor role.`, code: "NOT_A_SIGNER" });
+    }
+    if (!signer.eligible) return res.status(403).json({ error: `${signer.name} cannot sign ${ts.instrumentName}: ${signer.reason}.`, code: "NOT_ELIGIBLE" });
 
     const allowed = milestonesForComplexity(ts.complexity);
     const milestone: MethodMilestone = (b.milestone || ts.nextMilestone) as MethodMilestone;
     if (!allowed.includes(milestone)) return res.status(400).json({ error: `${ts.instrumentName} is ${ts.complexity.toLowerCase()} complexity: sign it as ${allowed.map((m) => MILESTONE_LABEL[m]).join(" or ")}.` });
 
     const today = labLocalDate(new Date().toISOString());
-    const signedDate = String(b.signedDate || today).trim().slice(0, 10);
+    const signedDate = fromPaper ? String(b.signedDate || today).trim().slice(0, 10) : today;
+    if (!fromPaper && b.signedDate && String(b.signedDate).slice(0, 10) !== today) {
+      return res.status(400).json({ error: "A signature made here is dated today. For a sign-off done on paper on an earlier date, choose Enter a sign-off from paper.", code: "SIGNED_TODAY" });
+    }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(signedDate) || Number.isNaN(new Date(`${signedDate}T00:00:00Z`).getTime())) return res.status(400).json({ error: "Enter the date signed as a valid date." });
     if (signedDate > today) return res.status(400).json({ error: "The date signed cannot be in the future." });
     const lastDated = ts.signoffs.find((s: any) => s.signedDate);
     if (lastDated && signedDate < lastDated.signedDate) return res.status(400).json({ error: `${ts.instrumentName} was last signed on ${lastDated.signedDate}. A new sign-off cannot be dated earlier.` });
-    const documentation = String(b.documentation || "").trim();
-    if (signedDate !== today && !documentation) return res.status(400).json({ error: "Written documentation is required when the date signed is not today (for example, where the paper record is kept)." });
-    const initials = String(b.signerInitials || "").trim().slice(0, 6) || null;
+    const paperLocation = fromPaper ? String(b.paperLocation || "").trim().slice(0, 300) : "";
+    if (fromPaper && !paperLocation) return res.status(400).json({ error: "Say where the signed paper is kept (for example, Binder C-4).", code: "PAPER_LOCATION_REQUIRED" });
+    const documentation = String(b.documentation || "").trim() || null;
+    const initials = String(b.signerInitials || "").trim().slice(0, 6) || initialsOf(signer.name) || null;
     // BUG-051 (2026-10-14): the Overall Determination (Pass / Fail / Remediation Required) the whole-record form had.
     // Fail and Remediation Required need the action plan; the target completion date is optional.
     const determination = String(b.determination || "pass");
@@ -30684,6 +30742,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // methods (signable above), so it has no block here. Same text as the sign form shows (passBlockMessage).
     if (determination === "pass" && ts.passBlockMessage) {
       return res.status(409).json({ error: ts.passBlockMessage, code: "ELEMENTS_UNMARKED", unmarked: unmarkedElements(ts.elements) });
+    }
+    // B5, Q2 = 1: an electronic Pass waits for the observer's own signature on Elements 1 and 4 entered after this went live.
+    if (determination === "pass" && !fromPaper && ts.observerPassBlock) {
+      return res.status(409).json({ error: ts.observerPassBlock, code: "OBSERVER_NOT_SIGNED", waiting: ts.observersWaiting });
     }
     const remediationPlan = determination === "pass" ? null : (String(b.remediationPlan || "").trim().slice(0, 2000) || null);
     if (determination !== "pass" && !remediationPlan) return res.status(400).json({ error: "Enter the remediation action plan for a Fail or Remediation Required determination." });
@@ -30699,36 +30761,56 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (!openIds.length) return res.status(409).json({ error: "No competency data entered yet for this method." });
     const ph = openIds.map(() => "?").join(",");
 
+    // The signature itself, last, once everything else is in order (a refusal above never touches the password count).
+    let signedWith: [string, string | null] = [null as any, null];
+    const typedName = fromPaper ? null : String(b.typedName || "").trim().slice(0, 200);
+    if (!fromPaper) {
+      const verdict = await verifySigner(sqlite, req.userId, { typedName: b.typedName, password: b.password, ssoProof: b.ssoProof, purpose: "competency_method" }, { ip: req.ip });
+      if (!verdict.ok) return res.status(verdict.status).json(verdict.body);
+      signedWith = signedWithValues(verdict.signedWith);
+    }
+
     const now = new Date().toISOString();
+    let fingerprint = "";
     const signoffId = sqlite.transaction(() => {
       // One row per analyzer: the lead row holds the frozen items; for a group, every other analyzer gets a row that
       // points at it, so Competencies owed counts each analyzer and a later split keeps each one's history.
       const ins = sqlite.prepare(
         `INSERT INTO competency_method_signoffs (lab_id, staff_employee_id, instrument_id, assessment_id, milestone, signed_date,
            signer_staff_employee_id, signer_name, signer_role, signer_initials, complexity, documentation, signed_by_user_id, created_at,
-           group_id, group_signoff_id, determination, remediation_plan, remediation_target_date)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+           group_id, group_signoff_id, determination, remediation_plan, remediation_target_date,
+           typed_name, signed_with, signed_with_provider, signed_at, from_paper, paper_location, recorded_by_user_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       );
       const groupId = method.group ? method.group.groupId : null;
+      const how = [typedName, signedWith[0], signedWith[1], fromPaper ? null : now, fromPaper ? 1 : 0, fromPaper ? paperLocation : null, fromPaper ? req.userId : null];
       const r = ins.run(labId, empId, method.leadId, openIds[0], milestone, signedDate, signer.staffEmployeeId, signer.name, signer.role,
-        initials, ts.complexity, documentation || null, req.userId, now, groupId, null, determination, remediationPlan, remediationTargetDate);
+        initials, ts.complexity, documentation, req.userId, now, groupId, null, determination, remediationPlan, remediationTargetDate, ...how);
       const id = Number(r.lastInsertRowid);
       for (const other of method.memberIds.filter((x) => x !== method.leadId)) {
         ins.run(labId, empId, other, openIds[0], milestone, signedDate, signer.staffEmployeeId, signer.name, signer.role,
-          initials, ts.complexity, documentation || null, req.userId, now, groupId, id, determination, remediationPlan, remediationTargetDate);
+          initials, ts.complexity, documentation, req.userId, now, groupId, id, determination, remediationPlan, remediationTargetDate, ...how);
       }
       const moved = sqlite.prepare(
         `UPDATE competency_assessment_items SET signoff_id = ? WHERE assessment_id IN (${ph}) AND instrument_id IN (${method.memberIds.map(() => "?").join(",")}) AND signoff_id IS NULL`
       ).run(id, ...openIds, ...method.memberIds);
       if (!moved.changes) throw new Error("No entered items to sign for this method.");
+      // The record's fingerprint, made here from the entries just frozen (server/competencySignatures.ts recordFingerprint).
+      const lead = sqlite.prepare("SELECT * FROM competency_method_signoffs WHERE id = ?").get(id);
+      fingerprint = recordFingerprint(lead, sqlite.prepare("SELECT * FROM competency_assessment_items WHERE signoff_id = ?").all(id) as any[]);
+      sqlite.prepare("UPDATE competency_method_signoffs SET record_fingerprint = ? WHERE id = ? OR group_signoff_id = ?").run(fingerprint, id, id);
       return id;
     })();
 
+    const howLabel = fromPaper ? `from paper (${paperLocation}), recorded by user ${req.userId}` : `electronically (${signedWith[0] === "sso" ? `${signedWith[1]} sign-in` : "name and password"})`;
     logAudit({
       userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritacomp", action: "update",
       entityType: "employee_competency", entityId: String(empId),
-      entityLabel: `${view.employee.name} / ${ts.instrumentName} / ${MILESTONE_LABEL[milestone]} ${determination === "pass" ? "Pass" : determination === "fail" ? "Fail" : "Remediation Required"}, signed by ${signer.name}, ${signer.roleLabel}`,
-      after: { signoff_id: signoffId, milestone, signed_date: signedDate, signer: signer.name, role: signer.role, determination, remediation_plan: remediationPlan, remediation_target_date: remediationTargetDate },
+      entityLabel: `${view.employee.name} / ${ts.instrumentName} / ${MILESTONE_LABEL[milestone]} ${determination === "pass" ? "Pass" : determination === "fail" ? "Fail" : "Remediation Required"}, signed by ${signer.name}, ${signer.roleLabel}, ${howLabel}`,
+      after: {
+        signoff_id: signoffId, milestone, signed_date: signedDate, signer: signer.name, role: signer.role, determination, remediation_plan: remediationPlan, remediation_target_date: remediationTargetDate,
+        typed_name: typedName, signed_with: signedWith[0], signed_with_provider: signedWith[1], from_paper: fromPaper, paper_location: fromPaper ? paperLocation : null, record_fingerprint: fingerprint,
+      },
       ipAddress: req.ip,
     });
     // Michael Q19 = 1: a passed initial clears the person in VeritaStaff when their record is still empty
@@ -30738,14 +30820,15 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         syncInitialToStaffSchedule(sqlite, empId, { date: signedDate, signedBy: signer.name, source: "VeritaComp sign-off" }, { actorUserId: req.userId, ip: req.ip });
       } catch (e: any) { console.error("[competency] clearance sync failed:", e?.message || e); }
     }
-    res.json({ ok: true, signoffId, milestone, signedDate, determination });
+    res.json({ ok: true, signoffId, milestone, signedDate, determination, fromPaper, signedWith: signedWith[0], fingerprint });
   });
 
   // POST /api/labs/:labId/competency/employee/:employeeId/test-system/:instrumentId/signoffs/:signoffId/revoke
   //
   // Unlock one method (per-method sign-off): reopens the method's MOST RECENT sign-off so its elements can be corrected.
   // The frozen items return to the working set; the sign-off row is kept with revoked_at for the audit trail. Refused
-  // while the method already has entries for its next competency, so two sets never mix.
+  // while the method already has entries for its next competency, so two sets never mix. B5 (mock 2): unlock asks a reason
+  // { reason }, kept on the sign-off row and its audit row.
   app.post("/api/labs/:labId/competency/employee/:employeeId/test-system/:instrumentId/signoffs/:signoffId/revoke", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit('veritacomp'), (req: any, res) => {
     if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
     const labId = req.scope.labId;
@@ -30754,6 +30837,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const instrumentId = Number(req.params.instrumentId);
     const signoffId = Number(req.params.signoffId);
     if (![empId, instrumentId, signoffId].every(Number.isFinite)) return res.status(400).json({ error: "Bad ids" });
+    const reason = String(req.body?.reason ?? "").trim().slice(0, UNLOCK_REASON_MAX);
+    if (!reason) return res.status(400).json({ error: "Say why this sign-off is being unlocked.", code: "UNLOCK_REASON_REQUIRED" });
     // A lab-chosen group unlocks as one: the lead row and every row that points at it (Michael Q168 = 1).
     const method = methodOf(loadInstrumentGroups(sqlite, labId), instrumentId);
     const mph = method.memberIds.map(() => "?").join(",");
@@ -30771,16 +30856,183 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (working?.n > 0) return res.status(409).json({ error: "This method already has entries for its next competency. Clear them before unlocking the earlier sign-off." });
     const now = new Date().toISOString();
     sqlite.transaction(() => {
-      sqlite.prepare("UPDATE competency_method_signoffs SET revoked_at = ?, revoked_by_user_id = ? WHERE id = ? OR group_signoff_id = ?").run(now, req.userId, signoffId, signoffId);
+      sqlite.prepare("UPDATE competency_method_signoffs SET revoked_at = ?, revoked_by_user_id = ?, revoke_reason = ? WHERE id = ? OR group_signoff_id = ?").run(now, req.userId, reason, signoffId, signoffId);
       sqlite.prepare("UPDATE competency_assessment_items SET signoff_id = NULL WHERE signoff_id = ?").run(signoffId);
     })();
     logAudit({
       userId: req.userId, ownerUserId: req.ownerUserId ?? req.userId, module: "veritacomp", action: "update",
       entityType: "employee_competency", entityId: String(empId),
-      entityLabel: `Unlocked ${MILESTONE_LABEL[latest.milestone as MethodMilestone] || latest.milestone} sign-off (instrument ${instrumentId}, signed ${latest.signed_date} by ${latest.signer_name})`,
-      before: { signoff_id: signoffId, revoked_at: null }, after: { revoked_at: now }, ipAddress: req.ip,
+      entityLabel: `Unlocked ${MILESTONE_LABEL[latest.milestone as MethodMilestone] || latest.milestone} sign-off (instrument ${instrumentId}, signed ${latest.signed_date} by ${latest.signer_name}): ${reason}`,
+      before: { signoff_id: signoffId, revoked_at: null }, after: { revoked_at: now, revoke_reason: reason }, ipAddress: req.ip,
     });
     res.json({ ok: true });
+  });
+
+  // B5 (signatures mock 2, 2026-11-27): what waits for the signed-in person's own signature in this lab.
+  // Every working Element 1 and 4 row in the lab, on the open record each person's page shows (per person and analyzer, the newest
+  // open record holding any entry), with the person's name. Used by the list below and by the observer's sign route.
+  const workingObservationRows = (sqlite: any, labId: number): any[] => {
+    const rows = sqlite.prepare(
+      `SELECT i.*, ce.staff_employee_id AS emp_id, se.first_name AS emp_first, se.last_name AS emp_last
+         FROM competency_assessment_items i
+         JOIN competency_assessments a ON a.id = i.assessment_id
+         JOIN competency_programs p ON p.id = a.program_id
+         JOIN competency_employees ce ON ce.id = a.employee_id
+         JOIN staff_employees se ON se.id = ce.staff_employee_id
+        WHERE p.lab_id = ? AND p.is_implicit = 1 AND (a.locked IS NULL OR a.locked = 0) AND i.signoff_id IS NULL
+          AND i.instrument_id IS NOT NULL AND i.waived_method_number IS NULL AND se.tier2_lab_id = ? AND se.status = 'active'
+        ORDER BY a.assessment_date DESC, a.id DESC, i.id`
+    ).all(labId, labId) as any[];
+    const shownRecord = new Map<string, number>();
+    return rows.filter((r) => {
+      const k = `${r.emp_id}:${r.instrument_id}`;
+      if (!shownRecord.has(k)) shownRecord.set(k, Number(r.assessment_id));
+      return shownRecord.get(k) === Number(r.assessment_id) && isObservedElement(r.element_number ?? r.method_number);
+    });
+  };
+  const labObservationSignatures = (sqlite: any, labId: number): Map<number, any> =>
+    new Map((sqlite.prepare("SELECT * FROM competency_observation_signatures WHERE lab_id = ?").all(labId) as any[]).map((r) => [Number(r.id), r]));
+
+  // GET /api/labs/:labId/competency/to-sign[?part=me]
+  //   me: the signed-in person's own VeritaStaff row here ({ staffEmployeeId, name, observer }), or null when the sign-in isn't linked
+  //   canRecordPaper: they may enter a sign-off from paper (edit on VeritaComp)
+  //   observations: Element 1 and 4 entries naming them as the observer, not yet signed, on someone else's open record
+  //   methods: methods ready for a sign-off that they may sign, on someone else's record, cut to their own signer line
+  // Only their own signature's work: a Staff login sees the entries they are asked to sign (Q3 = 1) and no one else's record.
+  app.get("/api/labs/:labId/competency/to-sign", authMiddleware, labScopeMiddleware, (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const labId = req.scope.labId;
+    const sqlite = (db as any).$client;
+    const meId = ownStaffIdInLab(sqlite, req.userId, labId);
+    const canRecordPaper = !staffOwnIn(req) && hasModuleEditAccess(labId, req.userId, "veritacomp");
+    const observers = loadQualifiedObservers(sqlite, labId);
+    const meObserver = meId != null ? observers.find((o) => o.employeeId === meId && o.active) : undefined;
+    const meRow = meId != null ? sqlite.prepare("SELECT first_name, last_name, title FROM staff_employees WHERE id = ?").get(meId) as any : null;
+    const me = meId != null && meRow ? { staffEmployeeId: meId, name: `${meRow.first_name || ""} ${meRow.last_name || ""}`.trim(), title: meRow.title || null, observer: !!meObserver } : null;
+    if (req.query?.part === "me" || !me) return res.json({ me, canRecordPaper, observations: [], methods: [] });
+
+    const observations: any[] = [];
+    if (meObserver) {
+      const sigs = labObservationSignatures(sqlite, labId);
+      for (const r of workingObservationRows(sqlite, labId)) {
+        const el = Number(r.element_number ?? r.method_number);
+        if (Number(r.emp_id) === meId || r[`el${el}_na`]) continue;
+        const named = matchObserver(observers, el === 1 ? r.el1_observer_initials : r.el4_observer_initials);
+        if (!named || named.employeeId !== meId) continue;
+        const sig = r.observer_signature_id != null ? sigs.get(Number(r.observer_signature_id)) : null;
+        if (sig && sig.signed_content === observationContent(r, el)) continue;
+        observations.push({
+          itemId: Number(r.id), element: el, employeeId: Number(r.emp_id), employeeName: `${r.emp_first || ""} ${r.emp_last || ""}`.trim(),
+          methodName: r.method_group_name || r.item_label || "", instrumentId: Number(r.instrument_id),
+          watched: el === 1 ? (r.el1_specimen_id || "") : "", dateObserved: r[observedDateColumn(el)] || "",
+          result: r.passed ? "pass" : null, required: Number(r.observer_sign_required) === 1, changedAfterSigning: !!sig,
+        });
+      }
+      observations.sort((a, b) => a.employeeName.localeCompare(b.employeeName) || a.methodName.localeCompare(b.methodName) || a.element - b.element);
+    }
+
+    const methods: any[] = [];
+    const candidate = loadCompetencySignerCandidates(sqlite, labId).some((c) => c.staffEmployeeId === meId);
+    if (candidate) {
+      const people = sqlite.prepare("SELECT id FROM staff_employees WHERE tier2_lab_id = ? AND status = 'active' AND id <> ? ORDER BY last_name, first_name").all(labId, meId) as any[];
+      for (const p of people) {
+        const v = assembleEmployeeCompetencyView(sqlite, labId, Number(p.id));
+        for (const ts of v?.testSystems || []) {
+          if (!ts.signable || ts.fromLegacyProgram) continue;
+          const mine = (ts.signers || []).find((o: any) => o.staffEmployeeId === meId);
+          if (!mine?.eligible) continue;
+          methods.push({ employee: { id: v.employee.id, name: v.employee.name, title: v.employee.title }, testSystem: { ...ts, signers: [mine], signoffs: [], lastSignoff: null } });
+        }
+      }
+    }
+    res.json({ me, canRecordPaper, observations, methods });
+  });
+
+  // POST /api/labs/:labId/competency/observations/sign
+  //
+  // B5 (mock 2): the observer signs what they watched, Elements 1 and 4, as themselves: one or several at once under one signature
+  // (server/eSignature.ts verifySigner, purpose competency_observation), each its own competency_observation_signatures row and
+  // audit row, as bulk document approval does. Only the observer named on the entry signs it, and nobody signs their own
+  // competency; the observer sets the date observed and the result as they sign. A Staff login signs here too (Q3 = 1), and changes
+  // nothing else. Body: { typedName, password | ssoProof, items: [{ itemId, dateObserved, result: "pass" | "fail" }] }.
+  app.post("/api/labs/:labId/competency/observations/sign", authMiddleware, labScopeMiddleware, requireWriteAccess, async (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const labId = req.scope.labId;
+    const sqlite = (db as any).$client;
+    const b = req.body || {};
+    const items: any[] = Array.isArray(b.items) ? b.items : [];
+    if (!items.length) return res.status(400).json({ error: "Tick the observations to sign.", code: "NO_ITEMS" });
+    if (items.length > OBSERVATION_SIGN_MAX) return res.status(400).json({ error: `Sign up to ${OBSERVATION_SIGN_MAX} observations at a time.`, code: "TOO_MANY" });
+    const picked = items.map((i) => ({ itemId: Number(i?.itemId), dateObserved: String(i?.dateObserved ?? "").trim().slice(0, 10), result: String(i?.result ?? "") }));
+    if (picked.some((p) => !Number.isInteger(p.itemId) || p.itemId <= 0)) return res.status(400).json({ error: "Each observation needs its entry as the list showed it.", code: "BAD_ITEM" });
+    if (new Set(picked.map((p) => p.itemId)).size !== picked.length) return res.status(400).json({ error: "An observation is listed twice.", code: "DUPLICATE" });
+    const meId = ownStaffIdInLab(sqlite, req.userId, labId);
+    if (!meId) return res.status(403).json({ error: "Your sign-in isn't linked to a person in VeritaStaff™ in this lab, so it can't sign. Ask your lab owner to link it (VeritaStaff™, Link to existing entry).", code: "NOT_ON_ROSTER" });
+    const observers = loadQualifiedObservers(sqlite, labId);
+    const me = observers.find((o) => o.employeeId === meId && o.active);
+    if (!me) return res.status(403).json({ error: "The observer on Elements 1 and 4 is a laboratory director, technical consultant or technical supervisor in VeritaStaff™, and your record has none of those roles.", code: "NOT_AN_OBSERVER" });
+    const verdict = await verifySigner(sqlite, req.userId, { typedName: b.typedName, password: b.password, ssoProof: b.ssoProof, purpose: "competency_observation" }, { ip: req.ip });
+    if (!verdict.ok) return res.status(verdict.status).json(verdict.body);
+    const [signedWith, provider] = signedWithValues(verdict.signedWith);
+    const typedName = String(b.typedName || "").trim().slice(0, 200);
+    const myName = observerDisplayName(me);
+    const myRole = me.roles.join("/") || null;
+    const today = labLocalDate(new Date().toISOString());
+    const rows = new Map(workingObservationRows(sqlite, labId).map((r) => [Number(r.id), r]));
+    const sigs = labObservationSignatures(sqlite, labId);
+    const results = picked.map((p) => {
+      const refuse = (message: string, code: string) => ({ itemId: p.itemId, ok: false, code, message, signatureId: null as number | null });
+      const row = rows.get(p.itemId);
+      if (!row) return refuse("Not signed. This entry isn't waiting for an observer's signature in this lab, or it changed since the list was opened. Open the list again.", "NOT_FOUND");
+      const el = Number(row.element_number ?? row.method_number);
+      if (Number(row.emp_id) === meId) return refuse("Not signed. Nobody signs their own competency.", "OWN_COMPETENCY");
+      if (row[`el${el}_na`]) return refuse(`Not signed. Element ${el} is marked N/A.`, "NOT_APPLICABLE");
+      const named = matchObserver(observers, el === 1 ? row.el1_observer_initials : row.el4_observer_initials);
+      if (!named) return refuse("Not signed. No observer is named on this element yet.", "NO_OBSERVER");
+      if (named.employeeId !== meId) return refuse(`Not signed. ${observerDisplayName(named)} is the observer named on this element.`, "NOT_NAMED_OBSERVER");
+      const existing = row.observer_signature_id != null ? sigs.get(Number(row.observer_signature_id)) : null;
+      if (existing && existing.signed_content === observationContent(row, el)) return refuse("Already signed by the observer.", "ALREADY_SIGNED");
+      if (el === 1 && !String(row.el1_specimen_id || "").trim()) return refuse("Not signed. Element 1 needs the specimen ID observed first.", "NO_SPECIMEN");
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(p.dateObserved) || Number.isNaN(new Date(`${p.dateObserved}T00:00:00Z`).getTime())) return refuse("Not signed. Enter the date observed.", "BAD_DATE");
+      if (p.dateObserved > today) return refuse("Not signed. The date observed can't be in the future.", "FUTURE_DATE");
+      if (p.result !== "pass" && p.result !== "fail") return refuse("Not signed. Choose Pass or Fail.", "NO_RESULT");
+      const dateCol = observedDateColumn(el);
+      const passed = p.result === "pass" ? 1 : 0;
+      const content = observationContent({ ...row, [dateCol]: p.dateObserved, passed }, el);
+      const watched = el === 1 ? String(row.el1_specimen_id || "").trim() : null;
+      const now = new Date().toISOString();
+      let signatureId = 0;
+      try {
+        signatureId = sqlite.transaction(() => {
+          const r = sqlite.prepare(
+            `INSERT INTO competency_observation_signatures (lab_id, staff_employee_id, instrument_id, assessment_id, item_id, element_number, signed_content,
+               watched, date_observed, result, observer_staff_employee_id, observer_name, observer_role, typed_name, signed_by_user_id, signed_at,
+               signed_with, signed_with_provider, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          ).run(labId, Number(row.emp_id), Number(row.instrument_id), Number(row.assessment_id), Number(row.id), el, content,
+            watched, p.dateObserved, p.result, meId, myName, myRole, typedName, req.userId, now, signedWith, provider, now);
+          const id = Number(r.lastInsertRowid);
+          const upd = sqlite.prepare(`UPDATE competency_assessment_items SET ${dateCol} = ?, passed = ?, observer_signature_id = ? WHERE id = ? AND signoff_id IS NULL`)
+            .run(p.dateObserved, passed, id, Number(row.id));
+          if (Number(upd.changes) !== 1) throw new Error("entry changed");
+          return id;
+        })();
+      } catch (e: any) {
+        console.error("[competency observation sign]", p.itemId, e?.message || e);
+        return refuse("Not signed. This entry changed while you were signing. Open the list again and sign it.", "CHANGED");
+      }
+      const person = `${row.emp_first || ""} ${row.emp_last || ""}`.trim();
+      const methodName = row.method_group_name || row.item_label || "";
+      logAudit({
+        userId: req.userId, ownerUserId: req.scope?.lab?.owner_user_id ?? req.userId, module: "veritacomp", action: "update",
+        entityType: "competency_observation_signature", entityId: String(signatureId),
+        entityLabel: `${person} / ${methodName} / Element ${el} observed ${p.dateObserved}: ${passed ? "Pass" : "Fail"}, signed by the observer ${myName}${myRole ? `, ${myRole}` : ""}`,
+        before: { item_id: Number(row.id), [dateCol]: row[dateCol] ?? null, passed: row.passed ? 1 : 0, observer_signature_id: row.observer_signature_id ?? null },
+        after: { item_id: Number(row.id), [dateCol]: p.dateObserved, passed, observer_signature_id: signatureId, typed_name: typedName, signed_with: signedWith, signed_with_provider: provider },
+        ipAddress: req.ip,
+      });
+      return { itemId: p.itemId, ok: true, code: null, message: null, signatureId };
+    });
+    res.json({ results, signed: results.filter((r) => r.ok).length, refused: results.filter((r) => !r.ok).length });
   });
 
   // GET/PUT /api/labs/:labId/competency/annual-month : the lab's annual competency month (Michael Q157 = 1, 2026-10-13;
