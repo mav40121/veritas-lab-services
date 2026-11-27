@@ -67,13 +67,13 @@ export function CompetencyStatusTile({ className = "" }: { className?: string })
       tone: "text-red-700 bg-red-500/10 border-red-500/30",
     },
     {
-      label: "Due in 30 days",
+      label: "Due within 30 days",
       value: data.dueSoon30,
       icon: Clock,
       tone: "text-amber-700 bg-amber-500/10 border-amber-500/30",
     },
     {
-      label: "Due in 90 days",
+      label: "Due within 90 days",
       value: data.dueSoon90,
       icon: Clock,
       tone: "text-yellow-700 bg-yellow-500/10 border-yellow-500/30",

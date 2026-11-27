@@ -72,7 +72,7 @@ export interface RegisterRow {
   nextAnnualDue: string | null;
   nextItem: string;
   nextDue: string | null;
-  status: string;                   // Overdue | Not cleared | Due in 30 days | Due in 90 days | Compliant
+  status: string;                   // Overdue | Not cleared | Due within 30 days | Due within 90 days | Compliant
   testSystems: string;
   openReevaluations: number;
 }
@@ -86,7 +86,7 @@ export interface MethodRow {
   nextItem: string;
   nextDue: string | null;
   lateCeiling: string | null;         // the latest the next competency may be done (TJC/NYS tolerance)
-  status: string;                     // Overdue | Remediation open | Initial not signed | Due in 30 days | Due in 90 days | Current
+  status: string;                     // Overdue | Remediation open | Initial not signed | Due within 30 days | Due within 90 days | Current
 }
 
 export interface ReevaluationRow {
@@ -139,8 +139,8 @@ export function buildCompetencyRegisterRows(
     let status: string;
     if (st.bucket === "overdue") status = "Overdue";
     else if (!clr.cleared) status = "Not cleared";
-    else if (st.bucket === "dueSoon30") status = "Due in 30 days";
-    else if (st.bucket === "dueSoon90") status = "Due in 90 days";
+    else if (st.bucket === "dueSoon30") status = "Due within 30 days";
+    else if (st.bucket === "dueSoon90") status = "Due within 90 days";
     else status = "Compliant";
     const recordedAs = e.recorded_as === "existing" ? "Existing staff" : e.recorded_as === "new_hire" ? "New hire" : "Not set";
     return {
@@ -181,8 +181,8 @@ export function buildCompetencyRegisterRows(
       const status = !m.signed ? "Initial not signed"
         : c.needsRemediation ? "Remediation open"
         : c.overdue ? "Overdue"
-        : days != null && days <= 30 ? "Due in 30 days"
-        : days != null && days <= 90 ? "Due in 90 days" : "Current";
+        : days != null && days <= 30 ? "Due within 30 days"
+        : days != null && days <= 90 ? "Due within 90 days" : "Current";
       byMethod.push({
         name: nameById.get(e.id) || personName(e),
         method: m.name,
@@ -331,7 +331,7 @@ export async function generateCompetencyRegisterExcel(
       toDate(p.lastAnnualCompleted), toDate(p.nextAnnualDue), p.nextItem || null, toDate(p.nextDue), p.status, p.testSystems || null, p.openReevaluations]);
   }
   styleBody(ws, headers.length, [4, 6, 9, 12, 13, 14, 15, 16, 17, 19], 20, (v) =>
-    v === "Compliant" ? green : v === "Overdue" ? red : v === "Not cleared" || v.startsWith("Due in") ? amber : gray);
+    v === "Compliant" ? green : v === "Overdue" ? red : v === "Not cleared" || v.startsWith("Due within") ? amber : gray);
   for (let i = 2; i <= ws.rowCount; i++) {
     const link = ws.getRow(i).getCell(8);
     if (link.value && typeof link.value === "object") link.font = { name: "Calibri", size: 10, color: { argb: teal }, underline: true };
@@ -352,7 +352,7 @@ export async function generateCompetencyRegisterExcel(
     bm.addRow([m.name, m.method, m.complexity, toDate(m.initialSigned), m.lastSignoff || null, m.nextItem, toDate(m.nextDue), toDate(m.lateCeiling), m.status]);
   }
   styleBody(bm, bh.length, [4, 7, 8], 9, (v) =>
-    v === "Current" ? green : v === "Overdue" ? red : v.startsWith("Due in") || v === "Remediation open" || v === "Initial not signed" ? amber : gray);
+    v === "Current" ? green : v === "Overdue" ? red : v.startsWith("Due within") || v === "Remediation open" || v === "Initial not signed" ? amber : gray);
   if (byMethod.length === 0) {
     bm.getCell("A2").value = "No methods are assigned to testing personnel yet (VeritaStaff, assigned test systems).";
     bm.getCell("A2").font = { name: "Calibri", size: 10, italic: true, color: { argb: gray } };

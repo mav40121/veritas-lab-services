@@ -163,6 +163,15 @@ export function initialsOf(name: string): string {
 // October"). A repeat annual already due in the lab's month stays where it is. Any other moves EARLIER, to the last day
 // of that month before it: never later, so nothing goes overdue. Once it is done in that month, the next annual (12
 // months later) falls in the same month. Year one (initial, 6-month, first annual) is never moved by callers.
+// BUG-202 (Redington, 2026-11-25): it moves at most six months earlier, so an annual is never due again sooner than six
+// months after the one before it. An annual signed 11/24/2026 in a December lab counts for that December and stays due
+// 11/24/2027; it used to read due again 12/31/2026.
+export const ANNUAL_MONTH_MAX_EARLIER_MONTHS = 6;
+export function monthsBefore(iso: string, months: number): string {
+  const [y, mo, d] = iso.slice(0, 10).split("-").map(Number);
+  const lastDay = new Date(Date.UTC(y, mo - months, 0)).getUTCDate();
+  return new Date(Date.UTC(y, mo - 1 - months, Math.min(d, lastDay))).toISOString().slice(0, 10);
+}
 export const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 export function alignAnnualToMonth(targetIso: string | null | undefined, month: number | null | undefined): string | null {
   if (!targetIso) return targetIso ?? null;
@@ -173,5 +182,6 @@ export function alignAnnualToMonth(targetIso: string | null | undefined, month: 
   if (mo === m) return target;
   const endOf = (yy: number) => new Date(Date.UTC(yy, m, 0)).toISOString().slice(0, 10); // last day of month m
   const sameYear = endOf(y);
-  return sameYear < target ? sameYear : endOf(y - 1);
+  const moved = sameYear < target ? sameYear : endOf(y - 1);
+  return moved < monthsBefore(target, ANNUAL_MONTH_MAX_EARLIER_MONTHS) ? target : moved;
 }

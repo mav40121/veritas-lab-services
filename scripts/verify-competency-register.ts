@@ -44,17 +44,17 @@ ok("late 6-month: next item 1st annual, next due 2027-04-06, Compliant", h.nextI
 ok("test systems joined; 1 open reevaluation", h.testSystems === "XN-1000; Manual Differential" && h.openReevaluations === 1, `${h.testSystems} / ${h.openReevaluations}`);
 const b = by("Bell");
 ok("1st annual figured from the initial before the 6-month (2026-04-20 + 12 = 2027-04-20)", b.firstAnnualDue === "2027-04-20" && b.sixMonthDue === "2026-10-20", `${b.firstAnnualDue}`);
-ok("6-month due in 9 days -> 'Due in 30 days'", b.status === "Due in 30 days" && b.nextDue === "2026-10-20", `${b.status} ${b.nextDue}`);
+ok("6-month due in 9 days -> 'Due within 30 days'", b.status === "Due within 30 days" && b.nextDue === "2026-10-20", `${b.status} ${b.nextDue}`);
 const c = by("Cole");
 ok("new hire without initial, not past hire + 90 -> 'Not cleared', cleared 'No'", c.status === "Not cleared" && c.cleared === "No" && c.nextItem === "Initial competency not completed", `${c.status} ${c.cleared}`);
 const d = by("Dunn");
 ok("legacy row without initial, past hire/added + 90 -> 'Overdue', recorded as 'Not set'", d.status === "Overdue" && d.recordedAs === "Not set", `${d.status} ${d.recordedAs}`);
 const m = by("Moss");
-ok("existing staff with last annual -> cleared 'Existing staff', annual due 2026-12-15, 'Due in 90 days'", m.cleared === "Existing staff" && m.nextAnnualDue === "2026-12-15" && m.status === "Due in 90 days" && m.recordedAs === "Existing staff", `${m.cleared} ${m.status}`);
+ok("existing staff with last annual -> cleared 'Existing staff', annual due 2026-12-15, 'Due within 90 days'", m.cleared === "Existing staff" && m.nextAnnualDue === "2026-12-15" && m.status === "Due within 90 days" && m.recordedAs === "Existing staff", `${m.cleared} ${m.status}`);
 const f = by("Ford");
 ok("waived: 6-month and 1st annual N/A; complexity 'Waived'; annual due 2027-02-10", f.sixMonthDue === "N/A (waived)" && f.firstAnnualDue === "N/A (waived)" && f.complexity === "Waived" && f.nextAnnualDue === "2027-02-10", JSON.stringify([f.sixMonthDue, f.firstAnnualDue, f.complexity]));
 const g = by("Gray");
-ok("existing staff, annual due in 20 days -> 'Due in 30 days'", g.status === "Due in 30 days" && g.nextDue === "2026-10-31", `${g.status} ${g.nextDue}`);
+ok("existing staff, annual due in 20 days -> 'Due within 30 days'", g.status === "Due within 30 days" && g.nextDue === "2026-10-31", `${g.status} ${g.nextDue}`);
 const nys = buildCompetencyRegisterRows({ employees: [employees[1]], testSystems: new Map(), events: [], nys: true }, T).personnel[0];
 ok("NYS lab: 1st annual is not figured from the initial (hire-anchored stored value only)", nys.firstAnnualDue === null, String(nys.firstAnnualDue));
 

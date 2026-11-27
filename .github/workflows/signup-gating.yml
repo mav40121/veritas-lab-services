@@ -219,6 +219,13 @@ jobs:
         # A site sets how often non-technical competency comes due; owner or admin only; blank leaves records with no due date. Every technical reader answers the
         # same at every setting, a save rewrites no record, reminders follow it and clearing it restores them, and a Staff login sees only their own rows.
         run: npm run test:competency-nontechnical-frequency
+      - name: Annual competency month math
+        # BUG-202 (2026-11-25): the month moves a repeat annual at most six months earlier, never later; year one never moves.
+        run: npx tsx --tsconfig tsconfig.json scripts/verify-annual-month-alignment.mts
+      - name: Run annual competency month integration test
+        # BUG-202, BUG-203: an annual done in the run-up to the month is due 12 months later on every screen, a stored date reads as itself, and
+        # the admin re-figure reads only by default.
+        run: npm run test:competency-annual-month
       - name: Run admin access audit counts integration test
         # 2026-11-06: GET /api/admin/access-audit-counts gives numbers only, for sizing the access work. Exact counts on made-up rows, no names, emails or
         # lab ids in the answer, writes nothing, and refuses with no secret, a wrong secret, a secret in the URL, or no secret set on the server.

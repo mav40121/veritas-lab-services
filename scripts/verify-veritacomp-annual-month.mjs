@@ -5,7 +5,7 @@
 // below is a scratch-DB fixture.
 //   1. GET starts off; PUT rejects month 13; PUT October saves and re-figures VeritaStaff's stored annual due dates
 //      (2026-11-20 -> 2026-10-31); turning it off puts the natural date back
-//   2. per-method: an annual signed 2026-09-15 is next due 2026-10-31 (natural 2027-09-15); an annual already due in
+//   2. per-method: an annual signed 2026-02-15 is next due 2026-10-31 (natural 2027-02-15); an annual already due in
 //      October stays; a new initial's 6-month is not moved
 //   3. VeritaStaff saves after the month is set land in the month too
 //   4. browser: the VeritaComp page shows the setting card (October saved); the person page explains the moved date;
@@ -71,19 +71,23 @@ const sign = (e, i, body) => call("POST", `${L}/competency/employee/${e}/test-sy
 const view = async (e) => (await call("GET", `${L}/competency/employee/${e}`, undefined, T)).body;
 const tsOf = (v, i) => (v.testSystems || []).find((x) => x.instrumentId === i) || {};
 await put(pat, CHEM, { elements: els });
-let r = await sign(pat, CHEM, { signerStaffEmployeeId: jordan, milestone: "annual", signedDate: "2026-09-15", documentation: "Paper annual in the competency binder" });
+let r = await sign(pat, CHEM, { signerStaffEmployeeId: jordan, milestone: "annual", signedDate: "2026-02-15", documentation: "Paper annual in the competency binder" });
 await put(pat, UA, { waivedMethods: [{ num: 1, evidence: "Blind BS-1", date: today, initials: "SO", passed: true }, { num: 4, evidence: "Written test", date: today, initials: "SO", passed: true }] });
 const r2 = await sign(pat, UA, { signerStaffEmployeeId: sam });
 await put(pat, C311, { elements: els });
 const r3 = await sign(pat, C311, { signerStaffEmployeeId: jordan });
 let v = await view(pat);
 const chem = tsOf(v, CHEM), ua = tsOf(v, UA), c311 = tsOf(v, C311);
-check("2a. annual signed 2026-09-15: next annual due 2026-10-31 (natural 2027-09-15), moved into October",
-  r.status === 200 && chem.nextMilestone === "annual" && chem.nextDue?.targetDate === "2026-10-31" && chem.nextDue?.naturalTargetDate === "2027-09-15" && chem.nextDue?.annualMonth === 10,
+check("2a. annual signed 2026-02-15: next annual due 2026-10-31 (natural 2027-02-15), moved into October",
+  r.status === 200 && chem.nextMilestone === "annual" && chem.nextDue?.targetDate === "2026-10-31" && chem.nextDue?.naturalTargetDate === "2027-02-15" && chem.nextDue?.annualMonth === 10,
   `${r.status} ${JSON.stringify(chem.nextDue)}`);
 check("2b. the late ceiling moves by the same number of days (CLIA-only: ceiling = target)", chem.nextDue?.latest === "2026-10-31", `${chem.nextDue?.latest}`);
-check(`2c. waived initial today: annual ${ua.nextDue?.targetDate} is already in October and is not moved`,
-  r2.status === 200 && ua.nextMilestone === "annual" && /^\d{4}-10-/.test(ua.nextDue?.targetDate || "") && !ua.nextDue?.naturalTargetDate, JSON.stringify(ua.nextDue));
+// The waived initial is signed today, so what its annual does depends on the month this runs in: October stays, November and December move back
+// to that October, January to April move back to the October before, May to September stay (more than six months from it).
+const nat = `${Number(today.slice(0, 4)) + 1}${today.slice(4)}`, mo = Number(today.slice(5, 7)), ny = Number(nat.slice(0, 4));
+const wantUa = mo >= 11 ? `${ny}-10-31` : mo <= 4 ? `${ny - 1}-10-31` : nat;
+check(`2c. waived initial today: annual due ${wantUa}`,
+  r2.status === 200 && ua.nextMilestone === "annual" && ua.nextDue?.targetDate === wantUa && (wantUa === nat) === !ua.nextDue?.naturalTargetDate, JSON.stringify(ua.nextDue));
 check("2d. a new initial's 6-month is never moved", r3.status === 200 && c311.nextMilestone === "six_month" && !c311.nextDue?.naturalTargetDate, JSON.stringify(c311.nextDue));
 
 // ---------- 3. VeritaStaff saves after the month is set ----------
@@ -108,8 +112,8 @@ for (const [scheme, width] of [["light", 1400], ["dark", 1400], ["light", 390]])
   await page.goto(`${BASE}/labs/${labId}/veritacomp-app/employee/${pat}`, { waitUntil: "networkidle" }); await page.waitForTimeout(900);
   await page.getByTestId("test-system-tab").filter({ hasText: "Beckman Coulter AU5800" }).click(); await page.waitForTimeout(400);
   const note = await page.getByTestId("method-next-due").innerText().catch(() => "");
-  check(`4b. ${tag} person page: "Annual due 10/31/2026 (moved earlier into the lab's annual month, October; 09/15/2027 without it)"`,
-    /Annual due 10\/31\/2026/.test(note) && /annual month, October; 09\/15\/2027 without it/.test(note), note);
+  check(`4b. ${tag} person page: "Annual due 10/31/2026 (moved earlier into the lab's annual month, October; 02/15/2027 without it)"`,
+    /Annual due 10\/31\/2026/.test(note) && /annual month, October; 02\/15\/2027 without it/.test(note), note);
   check(`${tag} person page: no horizontal page scroll`, await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1));
   await page.getByTestId("method-signed").screenshot({ path: `${OUT}/ann_person_${scheme}_${width}.png` });
   await ctx.close();

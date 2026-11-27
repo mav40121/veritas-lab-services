@@ -2,8 +2,8 @@
 //
 // VeritaComp "Annual competency month" setting (2026-10-13, Michael Q157 = 1; Sampson REQ-057: "I want all my repeat
 // annual competencies due the end of October each year"). Optional. A repeat annual already due in that month stays;
-// any other moves earlier to the end of the last such month before it, never later. Initial, 6-month and first
-// annual are not moved. Saving re-figures the stored VeritaStaff annual due dates for the lab.
+// any other moves earlier to the end of the last such month before it, never later, and at most six months earlier
+// (BUG-202). Initial, 6-month and first annual are not moved. Saving re-figures the stored VeritaStaff annual due dates for the lab.
 //   GET/PUT /api/labs/:labId/competency/annual-month
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -83,9 +83,10 @@ export function CompetencyAnnualMonthCard() {
           </div>
         </div>
         <p className="text-xs text-muted-foreground leading-relaxed">
-          Puts every repeat annual competency due in one month. An annual already due in that month stays where it is. Any
-          other moves earlier, to the end of the last such month before it, never later, so nothing goes overdue. Initial,
-          6-month and first-annual dates are not moved.
+          Brings repeat annual competencies due in one month. An annual already due in that month stays where it is. Any
+          other moves earlier, to the end of the last such month before it, by at most six months, and never later, so
+          nothing goes overdue. An annual signed within six months before the end of that month counts for it and stays due
+          12 months after it was signed. Initial, 6-month and first-annual dates are not moved.
         </p>
         {data && !data.staffLabConfigured && (
           <p className="text-xs text-amber-700 dark:text-amber-400">Set up this lab in VeritaStaff&trade; first; the annual month is kept with its staff records.</p>
