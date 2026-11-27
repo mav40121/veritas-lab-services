@@ -43,6 +43,7 @@ import { scheduleIntervals, parseMonitoringPlan, parseCounts, measuredStatus, ty
 import { PT_ROOT_CAUSE_CATEGORIES } from "@shared/ptFailure";
 import { studyRowToClient, resolveInstrumentDisplay, studyPdfFilename } from "./studyPdf";
 import { foreignSlotCounts, ownMapInstrument, sameLabOrOwnerSql } from "./verificationLinks";
+import { lodFactorChangeList } from "./lodFactorChangeList";
 import { scanPhi } from "./phiScan";
 import { rulesForRun, usesManufacturerRange } from "./qcWestgard";
 import { addedAfterReview, insertQcRun, judgeQcRun, LIVE_RUN, lotNotInUse, NOT_TAKEN_BACK, signedMonths, voidQcRun } from "./qcRuns";
@@ -35797,6 +35798,14 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   app.get("/api/admin/veritacheck/foreign-slot-counts", (req, res) => {
     if (!ADMIN_SECRET || req.headers["x-admin-secret"] !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
     res.json(foreignSlotCounts((db as any).$client));
+  });
+
+  // ── ADMIN: saved detection-limit (sensitivity) studies, the factor and LoD they were saved with and what the CLSI EP17-A2
+  // formula gives (BUG-190, owner pick 2026-11-27, option 1; server/lodFactorChangeList.ts). Header x-admin-secret only;
+  // counts first, then study and lab ids with numbers, no names. Read-only: nothing is written.
+  app.get("/api/admin/veritacheck/lod-cbeta-change-list", (req, res) => {
+    if (!ADMIN_SECRET || req.headers["x-admin-secret"] !== ADMIN_SECRET) return res.status(403).json({ error: "forbidden" });
+    res.json(lodFactorChangeList((db as any).$client));
   });
 
   // ── ADMIN: saved studies whose criterion isn't the one their preset label names, counts only (BUG-153/154, 2026-11-10) ──

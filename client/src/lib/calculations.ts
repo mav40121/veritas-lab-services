@@ -1,5 +1,8 @@
 // Relative import: the server bundles this file (studyResults.ts, computeStudyStatus).
 import { lotCohortsFor, pairInCohort } from "../../../shared/lotToLotCohort";
+import {
+  LOD_FACTOR_FORMULA, ep17FormulaFactor, lodFactorMethodOf, lowLevelSamples, pooledSd, supersededTableFactor, type LodFactorMethod,
+} from "../../../shared/lodFactor";
 
 // ─── Shared types ────────────────────────────────────────────────────────────
 
@@ -1824,6 +1827,7 @@ export interface SensitivityReplicate {
   lot?: string;
   day?: number;
   run?: number;
+  sample?: string;           // low-level only: which sample the result is from (BUG-190; no label = one sample)
 }
 
 export interface SensitivityLowLevelGroup {
@@ -1841,11 +1845,14 @@ export interface SensitivityLobResult {
 }
 
 export interface SensitivityLodResult {
-  value: number;             // LoD = LoB + Cβ * SD(low-level)
+  value: number;             // LoD = LoB + cp * SD(low-level)
   lobUsed: number;           // which LoB went into the formula (parametric per EP17-A2 default)
-  cBeta: number;             // finite-sample correction factor from Table A1
-  sdLowLevel: number;
-  nLowLevel: number;
+  cBeta: number;             // the factor (shared/lodFactor.ts): the EP17-A2 formula's cp, or the superseded table's value
+  sdLowLevel: number;        // pooled within samples under the formula (one sample: the ordinary SD)
+  nLowLevel: number;         // L, low-level results
+  // Set only by the formula (BUG-190). A result worked out with the superseded table has neither, exactly as it was saved.
+  nLowLevelSamples?: number; // K, distinct low-level samples
+  cbetaMethod?: LodFactorMethod;
 }
 
 export interface SensitivityLoqLevelResult {
@@ -1892,28 +1899,9 @@ export interface SensitivityInput {
   cvThreshold?: number;                            // fraction, default 0.20 (20%)
   biasThreshold?: number;                          // fraction, default 0.25 (25%)
   manufacturerClaim?: SensitivityManufacturerClaim; // required when mode = verification
-}
-
-// EP17-A2 Table A1: Cβ finite-sample correction factor at α=β=0.05 (one-sided).
-// Linear interpolation between table entries; asymptote at 1.645 as n grows.
-const CBETA_TABLE: { n: number; c: number }[] = [
-  { n: 5,    c: 2.063 }, { n: 10,   c: 1.831 }, { n: 15,   c: 1.766 },
-  { n: 20,   c: 1.749 }, { n: 25,   c: 1.717 }, { n: 30,   c: 1.704 },
-  { n: 40,   c: 1.683 }, { n: 50,   c: 1.671 }, { n: 60,   c: 1.660 },
-  { n: 80,   c: 1.654 }, { n: 100,  c: 1.652 }, { n: 1000, c: 1.645 },
-];
-function cBeta(n: number): number {
-  if (n <= CBETA_TABLE[0].n) return CBETA_TABLE[0].c;
-  if (n >= CBETA_TABLE[CBETA_TABLE.length - 1].n) return 1.645;
-  for (let i = 0; i < CBETA_TABLE.length - 1; i++) {
-    const a = CBETA_TABLE[i], b = CBETA_TABLE[i + 1];
-    if (n === a.n) return a.c;
-    if (n > a.n && n < b.n) {
-      const w = (n - a.n) / (b.n - a.n);
-      return a.c + w * (b.c - a.c);
-    }
-  }
-  return 1.645;
+  // How the LoD factor is worked out (BUG-190, shared/lodFactor.ts). buildSensitivityInput stamps the EP17-A2 formula on
+  // every new calculation; an input saved before has none and reproduces with the superseded table.
+  cbetaMethod?: LodFactorMethod;
 }
 
 // Non-parametric percentile via linear interpolation (R-7 / numpy default).
@@ -1956,13 +1944,22 @@ export function calculateSensitivity(input: SensitivityInput): SensitivityResult
   }
 
   // ── LoD ───────────────────────────────────────────────────────────────────
-  const lowValues = input.lowLevel.filter(r => r.value != null && !isNaN(r.value)).map(r => r.value);
-  const sdLowLevel = stddev(lowValues);
+  const lowReps = input.lowLevel.filter(r => r.value != null && !isNaN(r.value));
+  const lowValues = lowReps.map(r => r.value);
   const nLowLevel = lowValues.length;
-  const cb = cBeta(nLowLevel);
-  // EP17-A2 default: LoD = LoB(parametric) + Cβ * SD(low-level)
+  // BUG-190: new calculations take cp from the EP17-A2 formula with L results and K samples, and the SD pooled within
+  // samples. An input saved before names no method and is worked out as it was saved (superseded table, plain SD).
+  const formula = lodFactorMethodOf(input) === LOD_FACTOR_FORMULA;
+  const samples = lowLevelSamples(lowReps);
+  const nLowLevelSamples = samples.length;
+  const sdLowLevel = formula ? pooledSd(samples) : stddev(lowValues);
+  const cb = formula ? ep17FormulaFactor(nLowLevel, nLowLevelSamples) : supersededTableFactor(nLowLevel);
+  // EP17-A2 default: LoD = LoB(parametric) + cp * SD(low-level)
   const lobUsed = lobParametric;
   const lodValue = lobUsed + cb * sdLowLevel;
+  const lodFor = formula
+    ? `L = ${nLowLevel} low-level result${nLowLevel === 1 ? "" : "s"}, K = ${nLowLevelSamples} sample${nLowLevelSamples === 1 ? "" : "s"}, cp = ${cb.toFixed(3)}`
+    : `n=${nLowLevel} low-level replicates, Cβ=${cb.toFixed(3)}`;
 
   // ── LoQ (optional) ────────────────────────────────────────────────────────
   let loq: SensitivityLoqResult | null = null;
@@ -2009,7 +2006,7 @@ export function calculateSensitivity(input: SensitivityInput): SensitivityResult
   }
 
   const summary = input.mode === "establishment"
-    ? `Analytical sensitivity established per CLSI EP17-A2. LoB = ${lobParametric.toFixed(3)} (parametric, n=${nBlank}); LoD = ${lodValue.toFixed(3)} (n=${nLowLevel} low-level replicates, Cβ=${cb.toFixed(3)})` +
+    ? `Analytical sensitivity established per CLSI EP17-A2. LoB = ${lobParametric.toFixed(3)} (parametric, n=${nBlank}); LoD = ${lodValue.toFixed(3)} (${lodFor})` +
       (loq ? `; LoQ = ${loq.value !== null ? loq.value.toFixed(3) : "not identified"} (criteria: CV ≤ ${loq.cvThreshold.toFixed(0)}%, |bias| ≤ ${loq.biasThreshold.toFixed(0)}%).` : '.') +
       ` ${overallPass ? 'PASSED' : 'FAILED'} the establishment criterion.`
     : `Manufacturer's analytical sensitivity claim verification per CLSI EP17-A2. ` +
@@ -2022,7 +2019,9 @@ export function calculateSensitivity(input: SensitivityInput): SensitivityResult
     type: "sensitivity",
     mode: input.mode,
     lob: { parametric: lobParametric, nonParametric: lobNonParametric, meanBlank, sdBlank, nBlank, byLot },
-    lod: { value: lodValue, lobUsed, cBeta: cb, sdLowLevel, nLowLevel },
+    lod: formula
+      ? { value: lodValue, lobUsed, cBeta: cb, sdLowLevel, nLowLevel, nLowLevelSamples, cbetaMethod: LOD_FACTOR_FORMULA }
+      : { value: lodValue, lobUsed, cBeta: cb, sdLowLevel, nLowLevel },
     loq,
     manufacturerClaim: input.manufacturerClaim,
     overallPass,

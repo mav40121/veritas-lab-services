@@ -24,6 +24,7 @@ import {
   type SensitivityInput,
   type DataPoint,
 } from "@/lib/calculations";
+import { LOD_FACTOR_FORMULA } from "@shared/lodFactor";
 
 const DEMO_LAB_NAME = "Sample Regional Medical Center";
 const DEMO_CLIA = "22D0999999";
@@ -334,6 +335,7 @@ function buildSensitivitySample() {
     },
     cvThreshold: 0.20,
     biasThreshold: 0.25,
+    cbetaMethod: LOD_FACTOR_FORMULA,   // a sample report is a new calculation: the EP17-A2 formula (BUG-190)
   };
 
   const results = calculateSensitivity(input);

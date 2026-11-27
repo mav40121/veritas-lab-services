@@ -34,6 +34,7 @@ import { cfrSectionForTestName } from "./backfillAbsoluteFloor";
 import { criterionStanding, teaLabelFor } from "@shared/regulatedAnalytes";
 import { printedPresetLabel } from "@shared/studyCriterion";
 import { CLIA_PRESETS } from "@shared/cliaPresets";
+import { lodFactorWorking } from "@shared/lodFactor";
 // The preset name printed beside a study's criterion (Q275 = 1): none for a type that sets its own criterion, none when the
 // label names a preset whose criterion isn't the stored one; otherwise the saved label. shared/studyCriterion.ts.
 const presetSuffix = (study: Study): string => { const l = printedPresetLabel(study, CLIA_PRESETS); return l ? ` (${l})` : ""; };
@@ -3767,7 +3768,7 @@ function buildCarryoverHTML(study: Study, results: any): string {
 
 function buildSensitivityHTML(study: Study, results: any): string {
   // EP17-A2 results shape: { mode, lob: {parametric, nonParametric, meanBlank, sdBlank,
-  // nBlank, byLot?}, lod: {value, lobUsed, cBeta, sdLowLevel, nLowLevel}, loq: {value,
+  // nBlank, byLot?}, lod: {value, lobUsed, cBeta, sdLowLevel, nLowLevel, nLowLevelSamples?, cbetaMethod?}, loq: {value,
   // byLevel[], cvThreshold, biasThreshold} | null, manufacturerClaim?, overallPass, summary }
   const mode: "establishment" | "verification" = results.mode || "establishment";
   const analyte = (study as any).testName || "Analyte";
@@ -3782,6 +3783,9 @@ function buildSensitivityHTML(study: Study, results: any): string {
   const lod = results.lod || {};
   const loq = results.loq || null;
   const mfg = results.manufacturerClaim || {};
+  // BUG-190: a formula result prints its factor with how it was worked out (shared/lodFactor.ts); a result saved with
+  // the superseded table prints as it always did.
+  const lodWorking = lodFactorWorking(lod);
 
   const cfrCite = mode === "establishment"
     ? "42 CFR §493.1253(b)(2)(iii)"
@@ -3833,13 +3837,18 @@ function buildSensitivityHTML(study: Study, results: any): string {
       <div class="stat-item"><div class="stat-label">LoD</div><div class="stat-value">${sf(lod.value, 4)} ${units}</div></div>
       <div class="stat-item"><div class="stat-label">LoQ</div><div class="stat-value">${loq && loq.value !== null ? sf(loq.value, 4) + " " + units : "Not assessed"}</div></div>
       <div class="stat-item"><div class="stat-label">Blank Replicates (n)</div><div class="stat-value">${lob.nBlank || 0}</div></div>
-      <div class="stat-item"><div class="stat-label">Low-Level Replicates (n)</div><div class="stat-value">${lod.nLowLevel || 0}</div></div>
-      <div class="stat-item"><div class="stat-label">Cβ (finite-sample correction)</div><div class="stat-value">${sf(lod.cBeta, 3)}</div></div>
+      ${lodWorking
+        ? `<div class="stat-item"><div class="stat-label">Low-Level Results (L)</div><div class="stat-value">${lod.nLowLevel || 0}</div></div>
+      <div class="stat-item"><div class="stat-label">Low-Level Samples (K)</div><div class="stat-value">${lod.nLowLevelSamples || 0}</div></div>
+      <div class="stat-item"><div class="stat-label">cp (EP17-A2 correction factor)</div><div class="stat-value">${sf(lod.cBeta, 3)}</div></div>`
+        : `<div class="stat-item"><div class="stat-label">Low-Level Replicates (n)</div><div class="stat-value">${lod.nLowLevel || 0}</div></div>
+      <div class="stat-item"><div class="stat-label">Cβ (finite-sample correction)</div><div class="stat-value">${sf(lod.cBeta, 3)}</div></div>`}
       ${mode === "verification" && mfg.lob !== undefined ? `<div class="stat-item"><div class="stat-label">Claimed LoB</div><div class="stat-value">${sf(mfg.lob, 4)} ${units}</div></div>` : ""}
       ${mode === "verification" && mfg.lod !== undefined ? `<div class="stat-item"><div class="stat-label">Claimed LoD</div><div class="stat-value">${sf(mfg.lod, 4)} ${units}</div></div>` : ""}
       ${mode === "verification" && mfg.loq !== undefined ? `<div class="stat-item"><div class="stat-label">Claimed LoQ</div><div class="stat-value">${sf(mfg.loq, 4)} ${units}</div></div>` : ""}
       <div class="stat-item"><div class="stat-label">Result</div><div class="stat-value ${passClass}">${verdictText}</div></div>
-    </div>`;
+    </div>${lodWorking ? `
+    <p style="font-size:7.5pt;color:#28251D;margin:6px 0 0;">LoD = LoB + cp x SD(low level), where ${lodWorking}.${Number(lod.nLowLevelSamples) > 1 ? " SD(low level) is pooled within the samples." : ""}</p>` : ""}`;
 
   const narrative = `<div style="margin-top:12px;padding:10px 12px;background:#F7F6F2;border:1px solid #D4D1CA;border-radius:5px;">
     <div style="font-size:7.5pt;font-weight:700;color:#01696F;margin-bottom:4px;letter-spacing:0.04em;text-transform:uppercase;">Study Narrative Summary</div>

@@ -33,6 +33,7 @@ import { useToast } from "@/hooks/use-toast";
 import { calculateStudy, calculateCalVerCorrelation, calculatePrecision, calculateLotToLot, calculatePTCoag, calculateQCRange, calculateMultiAnalyteCoag, calculateRefInterval, calculateQualitative, calculateSemiQuant, calculateSensitivity, type DataPoint, type PrecisionDataPoint, type LotToLotDataPoint, type RefIntervalDataPoint, type SensitivityInput, calculateINR, formatTeaCriterion } from "@/lib/calculations";
 import { buildPtCoagPayload, readPtPairRows, type PtCoagForm } from "@/lib/ptCoagPayload";
 import { FIXED_CRITERION_TYPES, savedPresetLabel } from "@shared/studyCriterion";
+import { lowLevelSampleProblem } from "@shared/lodFactor";
 import { splitPastedCells, fillCellsFrom, splitPastedRows, fillPairsFrom, parsePairCell, pairRowId, type PairRow } from "@/lib/pasteCells";
 import {
   GRADE_PRESETS, readStudyForms, studyDraftFields, buildPrecisionPayload, buildLotToLotPayload, buildQcRangePayload,
@@ -2241,10 +2242,12 @@ export default function VeritaCheckPage() {
     }
 
     if (studyType === "sensitivity") {
-      // One replicate per line, "value" or "value,lot" (studyFormPayload.ts buildSensitivityInput).
+      // One replicate per line, "value" or "value,lot"; a low-level line may add its sample, "value,lot,sample" (studyFormPayload.ts buildSensitivityInput).
       const input: SensitivityInput = buildSensitivityInput(sensitivityForm());
       if (input.blanks.length < 5) { toast({ title: "Enter at least 5 blank replicates", variant: "destructive" }); return; }
       if (input.lowLevel.length < 5) { toast({ title: "Enter at least 5 low-level replicates", variant: "destructive" }); return; }
+      const sampleProblem = lowLevelSampleProblem(input.lowLevel);
+      if (sampleProblem) { toast({ title: sampleProblem, variant: "destructive" }); return; }
       const results = calculateSensitivity(input);
       const study: InsertStudy = {
         testName: testName.trim() || sensAnalyteName || "Sensitivity Study",
@@ -4276,7 +4279,7 @@ return (
                   <CardContent className="space-y-5">
                     <div className="flex items-start gap-2 p-2.5 rounded-md bg-primary/5 border border-primary/15 text-xs text-muted-foreground leading-relaxed">
                       <Info size={13} className="text-primary shrink-0 mt-0.5" />
-                      <span>Paste replicate values, one per line. Optional second value per line (comma or tab separated) is the reagent lot label, which enables a per-lot LoB breakdown in the report.</span>
+                      <span>Paste replicate values, one per line. Optional second value per line (comma or tab separated) is the reagent lot label, which enables a per-lot LoB breakdown in the report. A low-level line takes an optional third value, its sample label (for example 0.021,LotA,S1, or 0.021,,S1 with no lot), so the LoD counts each low-level sample; lines with no sample label are one sample.</span>
                     </div>
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
@@ -4298,7 +4301,7 @@ return (
                       <textarea
                         value={sensLowLevelText}
                         onChange={e => setSensLowLevelText(e.target.value)}
-                        placeholder={"0.020\n0.025,LotA\n0.022,LotB\n..."}
+                        placeholder={"0.020\n0.025,LotA\n0.022,LotB\n0.021,LotA,S2\n..."}
                         className="w-full min-h-[140px] rounded-md border border-input bg-background px-3 py-2 text-sm font-mono"
                       />
                     </div>
