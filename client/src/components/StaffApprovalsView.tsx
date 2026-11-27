@@ -1,9 +1,10 @@
 // The staff login's approvals screen (Michael 2026-11-04, Q155 = 1). A staff login named on an approval step, or in a group a step
-// goes to, reads the document and approves or rejects it here with password and typed name. No editing seat is used, and nothing
-// here uploads or edits.
+// goes to, reads the document and approves or rejects it here with password and typed name (or the hospital sign-in asked for again,
+// components/SignaturePrompt.tsx). No editing seat is used, and nothing here uploads or edits.
 import { staffPortalHeaders } from "@/lib/staffPortalHeaders";
 import { useEffect, useState } from "react";
 import { AddendaNotice } from "@/components/AddendaView";
+import { SignaturePrompt, useSignatureCredential } from "@/components/SignaturePrompt";
 
 interface ApprovalRow {
   document_id: number;
@@ -41,7 +42,7 @@ export function StaffApprovalsView({ token, employee, labName, onBack, onSignOut
   const [renderError, setRenderError] = useState<string | null>(null);
   const fullName = `${employee.first_name}${employee.middle_initial ? ` ${employee.middle_initial}.` : ""} ${employee.last_name}`.trim();
   const [typedName, setTypedName] = useState(fullName);
-  const [password, setPassword] = useState("");
+  const cred = useSignatureCredential("policy_decision", { headers: () => staffPortalHeaders(token) });
   const [comment, setComment] = useState("");
   const [busy, setBusy] = useState(false);
   const [signError, setSignError] = useState<string | null>(null);
@@ -69,7 +70,7 @@ export function StaffApprovalsView({ token, employee, labName, onBack, onSignOut
     setFileIsImage(false);
     setRenderError(null);
     setSignError(null);
-    setPassword("");
+    cred.reset();
     setComment("");
   }
 
@@ -103,7 +104,7 @@ export function StaffApprovalsView({ token, employee, labName, onBack, onSignOut
   async function decide(verb: "approve" | "reject") {
     if (!active || !meta) return;
     if (typedName.trim().length < 2) { setSignError("Type your full name to sign."); return; }
-    if (!password) { setSignError("Enter your password to sign."); return; }
+    if (!cred.ready) { setSignError(cred.passwordAllowed ? "Enter your password to sign." : `Sign in with ${cred.hospital?.name ?? "your hospital"} to sign.`); return; }
     if (verb === "reject" && !comment.trim()) { setSignError("Say why you are rejecting it, so the author knows what to fix."); return; }
     setBusy(true);
     setSignError(null);
@@ -111,7 +112,7 @@ export function StaffApprovalsView({ token, employee, labName, onBack, onSignOut
       const r = await fetch(`/api/staff-portal-session/approvals/${active.document_id}/${verb}`, {
         method: "POST",
         headers: { ...headers, "Content-Type": "application/json" },
-        body: JSON.stringify({ typed_signature: typedName.trim(), password, comment: comment.trim() || null, version_id: meta.version_id }),
+        body: JSON.stringify({ typed_signature: typedName.trim(), ...cred.body("snake"), comment: comment.trim() || null, version_id: meta.version_id }),
       });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
@@ -179,10 +180,16 @@ export function StaffApprovalsView({ token, employee, labName, onBack, onSignOut
 
           <div className="border border-border rounded-lg bg-card p-4" data-testid="sp-approvals-sign">
             <div className="text-sm font-semibold mb-3">Your signature</div>
-            <label className="text-xs text-muted-foreground block mb-1" htmlFor="sp-approval-name">Full name</label>
-            <input id="sp-approval-name" className={inputClass} value={typedName} onChange={(e) => setTypedName(e.target.value)} data-testid="sp-approval-name" />
-            <label className="text-xs text-muted-foreground block mb-1" htmlFor="sp-approval-password">Your password</label>
-            <input id="sp-approval-password" type="password" autoComplete="current-password" className={inputClass} value={password} onChange={(e) => setPassword(e.target.value)} data-testid="sp-approval-password" />
+            <SignaturePrompt
+              cred={cred}
+              typedName={typedName}
+              onTypedName={setTypedName}
+              variant="plain"
+              inputClassName={inputClass}
+              labels={{ name: "Full name", password: "Your password" }}
+              ids={{ name: "sp-approval-name", password: "sp-approval-password" }}
+              testIds={{ hospital: "sp-approval-sign-with-hospital" }}
+            />
             <label className="text-xs text-muted-foreground block mb-1" htmlFor="sp-approval-comment">Comment (needed to reject)</label>
             <textarea id="sp-approval-comment" rows={2} className={inputClass} value={comment} onChange={(e) => setComment(e.target.value)} data-testid="sp-approval-comment" />
             {signError && (

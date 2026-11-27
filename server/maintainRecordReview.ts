@@ -22,8 +22,8 @@
 // moved instrument's history stays with the lab that made it, so those months are reviewed there and not again in the new lab.
 // Its schedules (B10; server/equipmentScheduleReview.ts): a day a daily schedule has no record, and any other schedule past due, are problems.
 import type { Express } from "express";
-import bcrypt from "bcryptjs";
 import { db } from "./db";
+import { signerInputRefusal, signedWithValues, verifySigner } from "./eSignature";
 import { labLocalDate } from "./dateLocal";
 import { logAudit } from "./audit";
 import { exportAllPlanBypass } from "./exportAllContext";
@@ -236,7 +236,7 @@ export function registerMaintainRecordReviewRoutes(app: Express, authMiddleware:
     if (!capacity) {
       return res.status(403).json({ error: "Only the medical director, or someone named in a signed Letter of Delegation for this review, can sign it.", code: "NOT_DIRECTOR_OR_DESIGNEE" });
     }
-    const { month, items: picked, typed_signature, password, corrective_action } = req.body || {};
+    const { month, items: picked, typed_signature, password, sso_proof, corrective_action } = req.body || {};
     const today = labLocalDate(new Date().toISOString());
     if (!isMonth(month)) return res.status(400).json({ error: "month must be YYYY-MM" });
     if (month > today.slice(0, 7)) return res.status(400).json({ error: "That month hasn't started" });
@@ -244,7 +244,9 @@ export function registerMaintainRecordReviewRoutes(app: Express, authMiddleware:
     const typed = String(typed_signature || "").trim();
     if (typed.length < 2) return res.status(400).json({ error: "Type your full name to sign" });
     if (typed.length > 200) return res.status(400).json({ error: "The typed name is too long" });
-    if (!password || typeof password !== "string") return res.status(400).json({ error: "Enter your password to sign" });
+    const signerInput = { typedName: typed, password, ssoProof: sso_proof, purpose: "maintain_review" as const };
+    const missing = signerInputRefusal(signerInput);
+    if (missing) return res.status(missing.status).json(missing.body);
 
     const all = monthReviewItems(db0, labId, month);
     const chosen: any[] = [];
@@ -261,21 +263,22 @@ export function registerMaintainRecordReviewRoutes(app: Express, authMiddleware:
       return res.status(400).json({ error: "These records have problems: record the corrective action.", code: "CORRECTIVE_ACTION_REQUIRED" });
     }
 
-    const user = db0.prepare("SELECT password_hash FROM users WHERE id = ?").get(req.userId) as any;
-    if (!user?.password_hash) return res.status(401).json({ error: "User has no password set" });
-    if (!(await bcrypt.compare(password, user.password_hash))) return res.status(401).json({ error: "Password incorrect; the review was not signed" });
+    const ip = (req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "").toString().split(",")[0].trim() || null;
+    // The typed name and the reviewer's password, or their hospital sign-in asked for again (server/eSignature.ts).
+    const signer = await verifySigner(db0, req.userId, signerInput, { ip: ip ?? undefined });
+    if (!signer.ok) return res.status(signer.status).json(signer.body);
 
     const signedAt = new Date().toISOString();
-    const ip = (req.headers["x-forwarded-for"] || req.socket?.remoteAddress || "").toString().split(",")[0].trim() || null;
     const ua = (req.headers["user-agent"] || "").toString().slice(0, 500) || null;
     const insert = db0.prepare(
-      `INSERT INTO maintain_record_reviews (lab_id, period, item_type, item_id, item_name, summary_json, problems_json, corrective_action, reviewed_by_user_id, typed_signature, capacity, capacity_label, delegation_id, ip_address, user_agent, signed_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO maintain_record_reviews (lab_id, period, item_type, item_id, item_name, summary_json, problems_json, corrective_action, reviewed_by_user_id, typed_signature, capacity, capacity_label, delegation_id, ip_address, user_agent, signed_at, signed_with, signed_with_provider)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     );
+    const [signedWith, signedWithProvider] = signedWithValues(signer.signedWith);
     try {
       db0.transaction(() => {
         for (const i of chosen) {
-          insert.run(labId, month, i.type, i.id, i.name, JSON.stringify({ ...i.summary, notes: i.notes }), JSON.stringify(i.problems), action || null, req.userId, typed, capacity.capacity, capacity.label, capacity.delegationId, ip, ua, signedAt);
+          insert.run(labId, month, i.type, i.id, i.name, JSON.stringify({ ...i.summary, notes: i.notes }), JSON.stringify(i.problems), action || null, req.userId, typed, capacity.capacity, capacity.label, capacity.delegationId, ip, ua, signedAt, signedWith, signedWithProvider);
         }
       })();
     } catch (err: any) {

@@ -34,6 +34,7 @@ import { ReadSignDialog, type ReadSignScopeRef } from "@/components/ReadSignDial
 import { PolicyShareLinks } from "@/components/PolicyShareLinks";
 import { ArchivedDocumentsDialog, type ArchivedDocument } from "@/components/ArchivedDocumentsDialog";
 import { BulkApproveDialog, type BulkApproveItem } from "@/components/BulkApproveDialog";
+import { SignaturePrompt, useSignatureCredential } from "@/components/SignaturePrompt";
 import { DcEmailNotices } from "@/components/DcEmailNotices";
 import { DocumentAddenda, SystemDocumentChip, SystemDocumentPanel, SystemDocumentsNotice, type SharedDetail, type SystemDocumentMark } from "@/components/SystemDocumentPanel";
 import { SendSystemDocumentDialog } from "@/components/SendSystemDocumentDialog";
@@ -720,14 +721,15 @@ export default function VeritaPolicyMyPoliciesPage() {
   const [signDoc, setSignDoc] = useState<PolicyDocument | null>(null);
   const [signAction, setSignAction] = useState<SignAction>("approved");
   const [signTypedName, setSignTypedName] = useState("");
-  const [signPassword, setSignPassword] = useState("");
+  // The password, or the hospital sign-in asked for again (components/SignaturePrompt.tsx, server/eSignature.ts).
+  const signCred = useSignatureCredential("policy_decision");
   const [signComment, setSignComment] = useState("");
 
   const openSign = (doc: PolicyDocument, action: SignAction) => {
     setSignDoc(doc);
     setSignAction(action);
     setSignTypedName(user?.name || "");
-    setSignPassword("");
+    signCred.reset();
     setSignComment("");
   };
 
@@ -740,7 +742,7 @@ export default function VeritaPolicyMyPoliciesPage() {
         `/api/labs/${activeLabId}/veritapolicy/documents/${signDoc.id}/${endpoint}`,
         {
           typedSignature: signTypedName.trim(),
-          password: signPassword,
+          ...signCred.body(),
           comment: signComment.trim() || undefined,
         }
       );
@@ -758,7 +760,7 @@ export default function VeritaPolicyMyPoliciesPage() {
       });
       setSignDoc(null);
       setSignTypedName("");
-      setSignPassword("");
+      signCred.reset();
       setSignComment("");
       invalidateAll();
       queryClient.invalidateQueries({
@@ -940,13 +942,13 @@ export default function VeritaPolicyMyPoliciesPage() {
 
   const [recertifyDoc, setRecertifyDoc] = useState<PolicyDocument | null>(null);
   const [recertifyTypedName, setRecertifyTypedName] = useState("");
-  const [recertifyPassword, setRecertifyPassword] = useState("");
+  const recertifyCred = useSignatureCredential("policy_recertify");
   const [recertifyComment, setRecertifyComment] = useState("");
 
   const openRecertify = (doc: PolicyDocument) => {
     setRecertifyDoc(doc);
     setRecertifyTypedName(user?.name || "");
-    setRecertifyPassword("");
+    recertifyCred.reset();
     setRecertifyComment("");
   };
 
@@ -958,7 +960,7 @@ export default function VeritaPolicyMyPoliciesPage() {
         `/api/labs/${activeLabId}/veritapolicy/documents/${recertifyDoc.id}/recertify`,
         {
           typedSignature: recertifyTypedName.trim(),
-          password: recertifyPassword,
+          ...recertifyCred.body(),
           comment: recertifyComment.trim() || undefined,
         }
       );
@@ -970,7 +972,7 @@ export default function VeritaPolicyMyPoliciesPage() {
         description: "Next review date advanced.",
       });
       setRecertifyDoc(null);
-      setRecertifyPassword("");
+      recertifyCred.reset();
       setRecertifyComment("");
       invalidateAll();
     },
@@ -1193,12 +1195,12 @@ export default function VeritaPolicyMyPoliciesPage() {
   // Completion modal
   const [attestTarget, setAttestTarget] = useState<PendingAttestation | null>(null);
   const [attestTypedName, setAttestTypedName] = useState("");
-  const [attestPassword, setAttestPassword] = useState("");
+  const attestCred = useSignatureCredential("policy_attest");
 
   const openAttest = (p: PendingAttestation) => {
     setAttestTarget(p);
     setAttestTypedName(user?.name || "");
-    setAttestPassword("");
+    attestCred.reset();
   };
 
   const attestCompleteMutation = useMutation({
@@ -1209,7 +1211,7 @@ export default function VeritaPolicyMyPoliciesPage() {
         `/api/labs/${activeLabId}/veritapolicy/attestations/${attestTarget.attestation_id}/complete`,
         {
           typedSignature: attestTypedName.trim(),
-          password: attestPassword,
+          ...attestCred.body(),
         }
       );
       return res.json();
@@ -1218,7 +1220,7 @@ export default function VeritaPolicyMyPoliciesPage() {
       toast({ title: "Attestation recorded" });
       setAttestTarget(null);
       setAttestTypedName("");
-      setAttestPassword("");
+      attestCred.reset();
       queryClient.invalidateQueries({
         queryKey: [`/api/labs/${activeLabId}/veritapolicy/pending-attestations`],
       });
@@ -3165,29 +3167,16 @@ export default function VeritaPolicyMyPoliciesPage() {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">
-              {signAction === "approved"
+            <SignaturePrompt
+              cred={signCred}
+              typedName={signTypedName}
+              onTypedName={setSignTypedName}
+              reason={signAction === "approved"
                 ? "Your typed name plus a hash of the current version is recorded as your electronic signature for this approval step."
                 : "Rejecting returns the document to draft. The owner can revise and resubmit."}
-            </p>
-            <div>
-              <Label className="text-xs">Type your full name</Label>
-              <Input
-                value={signTypedName}
-                onChange={(e) => setSignTypedName(e.target.value)}
-                placeholder="e.g., Michael Veri"
-              />
-            </div>
-            <div>
-              <Label className="text-xs">Your password (21 CFR Part 11 re-auth)</Label>
-              <Input
-                type="password"
-                value={signPassword}
-                onChange={(e) => setSignPassword(e.target.value)}
-                placeholder="Account password"
-                autoComplete="current-password"
-              />
-            </div>
+              labels={{ name: "Type your full name", password: "Your password (21 CFR Part 11 re-auth)", namePlaceholder: "e.g., Michael Veri", passwordPlaceholder: "Account password" }}
+              testIds={{ name: "sign-name", password: "sign-password" }}
+            />
             <div>
               <Label className="text-xs">
                 Comment{signAction === "rejected" ? " (recommended)" : " (optional)"}
@@ -3229,8 +3218,9 @@ export default function VeritaPolicyMyPoliciesPage() {
               disabled={
                 signMutation.isPending ||
                 signTypedName.trim().length < 2 ||
-                signPassword.length < 1
+                !signCred.ready
               }
+              data-testid="sign-submit"
             >
               {signMutation.isPending && (
                 <Loader2 className="animate-spin mr-1" size={14} />
@@ -3319,7 +3309,7 @@ export default function VeritaPolicyMyPoliciesPage() {
         onOpenChange={(open) => {
           if (!open) {
             setRecertifyDoc(null);
-            setRecertifyPassword("");
+            recertifyCred.reset();
             setRecertifyComment("");
           }
         }}
@@ -3329,29 +3319,22 @@ export default function VeritaPolicyMyPoliciesPage() {
             <DialogTitle>Confirm still current: {recertifyDoc?.title}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">
-              By submitting this form you attest that this policy remains current and accurate
-              as written. The next review date will advance by{" "}
-              {recertifyDoc?.review_interval_months ?? 12} months. Typed name plus password is
-              your 21 CFR Part 11 electronic signature; a sha256 of the current version is
-              captured at this time.
-            </p>
-            <div>
-              <Label className="text-xs">Type your full name</Label>
-              <Input
-                value={recertifyTypedName}
-                onChange={(e) => setRecertifyTypedName(e.target.value)}
-              />
-            </div>
-            <div>
-              <Label className="text-xs">Your password</Label>
-              <Input
-                type="password"
-                value={recertifyPassword}
-                onChange={(e) => setRecertifyPassword(e.target.value)}
-                autoComplete="current-password"
-              />
-            </div>
+            <SignaturePrompt
+              cred={recertifyCred}
+              typedName={recertifyTypedName}
+              onTypedName={setRecertifyTypedName}
+              reason={(how) => (
+                <>
+                  By submitting this form you attest that this policy remains current and accurate
+                  as written. The next review date will advance by{" "}
+                  {recertifyDoc?.review_interval_months ?? 12} months. Typed name plus{" "}
+                  {how === "sso" ? `your ${recertifyCred.hospital?.name ?? "hospital"} sign-in` : "password"} is
+                  your 21 CFR Part 11 electronic signature; a sha256 of the current version is
+                  captured at this time.
+                </>
+              )}
+              testIds={{ name: "recertify-name", password: "recertify-password" }}
+            />
             <div>
               <Label className="text-xs">Comment (optional)</Label>
               <Textarea
@@ -3371,7 +3354,7 @@ export default function VeritaPolicyMyPoliciesPage() {
               disabled={
                 recertifyMutation.isPending ||
                 recertifyTypedName.trim().length < 2 ||
-                recertifyPassword.length < 1
+                !recertifyCred.ready
               }
             >
               {recertifyMutation.isPending && (
@@ -3984,7 +3967,7 @@ export default function VeritaPolicyMyPoliciesPage() {
           if (!open) {
             setAttestTarget(null);
             setAttestTypedName("");
-            setAttestPassword("");
+            attestCred.reset();
           }
         }}
       >
@@ -3993,27 +3976,20 @@ export default function VeritaPolicyMyPoliciesPage() {
             <DialogTitle>Attest to: {attestTarget?.title}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            <p className="text-sm text-muted-foreground">
-              By submitting this form you confirm that you have read and understood the current
-              version of this policy. Typed name plus password is your 21 CFR Part 11 electronic
-              signature; a sha256 of the current version is captured at attest time.
-            </p>
-            <div>
-              <Label className="text-xs">Type your full name</Label>
-              <Input
-                value={attestTypedName}
-                onChange={(e) => setAttestTypedName(e.target.value)}
-              />
-            </div>
-            <div>
-              <Label className="text-xs">Your password</Label>
-              <Input
-                type="password"
-                value={attestPassword}
-                onChange={(e) => setAttestPassword(e.target.value)}
-                autoComplete="current-password"
-              />
-            </div>
+            <SignaturePrompt
+              cred={attestCred}
+              typedName={attestTypedName}
+              onTypedName={setAttestTypedName}
+              reason={(how) => (
+                <>
+                  By submitting this form you confirm that you have read and understood the current
+                  version of this policy. Typed name plus{" "}
+                  {how === "sso" ? `your ${attestCred.hospital?.name ?? "hospital"} sign-in` : "password"} is your 21 CFR Part 11 electronic
+                  signature; a sha256 of the current version is captured at attest time.
+                </>
+              )}
+              testIds={{ name: "attest-name", password: "attest-password" }}
+            />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAttestTarget(null)}>
@@ -4024,7 +4000,7 @@ export default function VeritaPolicyMyPoliciesPage() {
               disabled={
                 attestCompleteMutation.isPending ||
                 attestTypedName.trim().length < 2 ||
-                attestPassword.length < 1
+                !attestCred.ready
               }
             >
               {attestCompleteMutation.isPending && (

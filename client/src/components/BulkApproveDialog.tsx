@@ -2,16 +2,16 @@
 //
 // Approve several VeritaDC documents waiting on the signed-in person's own step (B13; server/policyDocumentControl.ts). The list is
 // fixed when the dialog opens: what is signed is the version and step each row showed, and the server refuses a document that has
-// moved since. One typed name and one password; each document gets its own signature. No bulk reject, on purpose.
+// moved since. One typed name and one password (or the hospital sign-in, components/SignaturePrompt.tsx); each document gets its own
+// signature. No bulk reject, on purpose.
 
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { CheckCircle2, Eye, Loader2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { SignaturePrompt, useSignatureCredential } from "@/components/SignaturePrompt";
 import { apiErrorMessage, apiRequest, queryClient } from "@/lib/queryClient";
 import { BULK_APPROVE_MAX } from "@shared/policyNotices";
 
@@ -44,7 +44,7 @@ export function BulkApproveDialog({ labId, items, signerName, onView, onClose }:
   const [shown] = useState(items);
   const [picked, setPicked] = useState<Set<number>>(new Set());
   const [typedName, setTypedName] = useState(signerName);
-  const [password, setPassword] = useState("");
+  const cred = useSignatureCredential("policy_bulk_approve");
   const [results, setResults] = useState<Result[] | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const all = shown.length > 0 && picked.size === Math.min(shown.length, BULK_APPROVE_MAX);
@@ -54,13 +54,13 @@ export function BulkApproveDialog({ labId, items, signerName, onView, onClose }:
       setProblem(null);
       const res = await apiRequest("POST", `/api/labs/${labId}/veritapolicy/approvals/bulk`, {
         typedSignature: typedName.trim(),
-        password,
+        ...cred.body(),
         items: shown.filter((i) => picked.has(i.document_id)).map((i) => ({ documentId: i.document_id, versionId: i.version_id, stepId: i.step_id })),
       });
       return (await res.json()) as { results: Result[]; signed: number; refused: number };
     },
     onSuccess: (body) => {
-      setPassword("");
+      cred.reset();
       setResults(body.results);
       queryClient.invalidateQueries({ queryKey: [`/api/labs/${labId}/veritapolicy/documents`] });
       queryClient.invalidateQueries({ queryKey: [`/api/labs/${labId}/veritapolicy/pending-reviews`] });
@@ -132,20 +132,19 @@ export function BulkApproveDialog({ labId, items, signerName, onView, onClose }:
                 </li>
               ))}
             </ul>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div>
-                <Label className="text-xs" htmlFor="bulk-name">Type your full name</Label>
-                <Input id="bulk-name" value={typedName} onChange={(e) => setTypedName(e.target.value)} data-testid="bulk-name" />
-              </div>
-              <div>
-                <Label className="text-xs" htmlFor="bulk-password">Your password (21 CFR Part 11 re-auth)</Label>
-                <Input id="bulk-password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} data-testid="bulk-password" />
-              </div>
-            </div>
+            <SignaturePrompt
+              cred={cred}
+              typedName={typedName}
+              onTypedName={setTypedName}
+              layout="grid"
+              labels={{ name: "Type your full name", password: "Your password (21 CFR Part 11 re-auth)" }}
+              ids={{ name: "bulk-name", password: "bulk-password" }}
+              testIds={{ hospital: "bulk-sign-with-hospital" }}
+            />
             {problem && <p className="text-sm text-red-700 dark:text-red-400" role="alert" data-testid="bulk-problem">{problem}</p>}
             <DialogFooter className="gap-2">
               <Button variant="outline" onClick={onClose} disabled={sign.isPending}>Cancel</Button>
-              <Button onClick={() => sign.mutate()} disabled={sign.isPending || picked.size === 0 || typedName.trim().length < 2 || !password} data-testid="bulk-sign">
+              <Button onClick={() => sign.mutate()} disabled={sign.isPending || picked.size === 0 || typedName.trim().length < 2 || !cred.ready} data-testid="bulk-sign">
                 {sign.isPending && <Loader2 className="animate-spin mr-1" size={14} />}
                 {picked.size ? `Approve ${plural(picked.size)}` : "Approve"}
               </Button>

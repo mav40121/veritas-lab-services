@@ -318,6 +318,7 @@ export const EXPORT_TABLES: Record<string, ExportTable> = {
   user_mfa_recovery_codes: exclude(SIGN_IN),
   sso_handoffs: exclude(SIGN_IN),
   sso_login_states: exclude(SIGN_IN),
+  signature_sso_requests: exclude(SIGN_IN),
   password_history: exclude(SIGN_IN),
   // Terms of Use and Confidentiality Agreement (server/termsOfUse.ts): Veritas's record of who accepted which version.
   terms_acceptances: exclude(VLS_BUSINESS),
