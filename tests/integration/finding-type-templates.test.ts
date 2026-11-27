@@ -93,7 +93,8 @@ async function main() {
     check("3b. a page save cannot close a finding", closePut.status === 409 && row(inspId).status === "open", JSON.stringify(closePut.body));
     const sigPut = await call("PUT", `/api/labs/${labId}/findings/${inspId}`, { ...row(inspId), signed_by: "Someone Else", signed_at: "2026-10-21T09:00:00", root_cause: "Training gap" });
     check("3c. a page save does not write the signature", sigPut.status === 200 && row(inspId).signed_by === null && row(inspId).root_cause === "Training gap", JSON.stringify({ s: sigPut.status, sb: row(inspId).signed_by }));
-    const signed = await call("POST", `/api/labs/${labId}/findings/${inspId}/signoff`, {});
+    // BUG-205: signed with the typed name and the owner's own password.
+    const signed = await call("POST", `/api/labs/${labId}/findings/${inspId}/signoff`, { signed_by: "IT Types Owner", password: PW });
     const sRow = row(inspId);
     check("3d. the gated sign-off closes and signs it (owner as logged override here)", signed.status === 200 && sRow.status === "closed" && sRow.signoff_role === "owner_override" && !!sRow.signed_by, JSON.stringify({ s: signed.status, st: sRow.status, r: sRow.signoff_role }));
     const afterClose = await call("PUT", `/api/labs/${labId}/findings/${inspId}`, { ...sRow, monitoring_plan: "Audit at 30 days" });

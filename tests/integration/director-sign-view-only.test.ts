@@ -72,7 +72,8 @@ async function main() {
   const r1 = filed(A, lot1), r2 = filed(A, lot2), r3 = filed(A, lot3), rB = filed(B, lotB), rX = filed(X, lotX);
   const review = (id: number) => one("SELECT md_signed_at, md_signed_by_user_id, md_signed_name FROM qc_period_reviews WHERE id = ?", id);
   const cosignPath = (lab: number) => `/api/labs/${lab}/qc/period-reviews/md-cosign`;
-  const cosign = (u: Login, lab: number, lotId: number, path = cosignPath(lab)) => call(u, "POST", path, { control_lot_id: lotId, period_year: py, period_month: pm }, lab);
+  // BUG-205: the co-sign is signed with the typed name and the signer's own password (tests/integration/cosign-signature-check.test.ts).
+  const cosign = (u: Login, lab: number, lotId: number, path = cosignPath(lab)) => call(u, "POST", path, { control_lot_id: lotId, period_year: py, period_month: pm, typed_name: u.name, password: PW }, lab);
 
   // The old gap: the screen said the director may co-sign, and main's gate refused the request before the route's check ran.
   const screen = (await call(MD, "GET", `${L}/qc/period-reviews?control_lot_id=${lot1}`, undefined, A)).j;
@@ -126,7 +127,7 @@ async function main() {
   const fPath = (id: number) => `${L}/findings/${id}/signoff`;
   check("4a. the old gap: main's gate refused a finding's sign-off from a view-only seat", !mainLetsThrough("POST", fPath(f1)) && isQualifiedSigningRequest("POST", fPath(f1)));
   const fHist = (await call(MD, "GET", `${L}/findings/${f1}/history`, undefined, A)).j;
-  const fSign = await call(MD, "POST", fPath(f1), {}, A);
+  const fSign = await call(MD, "POST", fPath(f1), { signed_by: MD.name, password: PW }, A);
   check("4a. the view-only director signs off and closes a finding", fHist?.signoffAs === "medical_director" && fSign.s === 200 && F(f1).status === "closed" && F(f1).signoff_role === "medical_director" && F(f1).signed_by === "Dana Director", `${fSign.s} ${fSign.text.slice(0, 200)}`);
   const fViewer = await call(VIEWER, "POST", fPath(f2), {}, A);
   check("4a. a view-only seat with no director role or duty gets the route's 403", fViewer.s === 403 && fViewer.j?.error !== "view_only_seat" && F(f2).status === "open", `${fViewer.s} ${fViewer.text}`);

@@ -67,6 +67,10 @@ const WORDING: Record<SignaturePurpose, Wording> = {
   // B5 (mock 2): the observer's and the evaluator's competency signatures, in the mock's words.
   competency_observation: { name: "Type your full name to sign", credential: "Enter your password to sign", noPassword: "User has no password set; cannot sign electronically", wrong: "Password incorrect; signature not recorded" },
   competency_method: { name: "Type your full name to sign", credential: "Enter your password to sign", noPassword: "User has no password set; cannot sign electronically", wrong: "Password incorrect; signature not recorded" },
+  // BUG-205: the monthly VeritaQC co-sign and a finding's sign-off, in the VeritaMaintain monthly review's words (they sign the same
+  // way). Before, both recorded the signed-in user and a typed name with no password.
+  qc_md_cosign: { name: "Type your full name to sign", credential: "Enter your password to sign", noPassword: "User has no password set", wrong: "Password incorrect; the review was not co-signed" },
+  finding_signoff: { name: "Type your full name to sign", credential: "Enter your password to sign", noPassword: "User has no password set", wrong: "Password incorrect; the finding was not signed off" },
 };
 
 export const ACCOUNT_LOCKED_TEXT = "This account is locked after too many wrong passwords. Use Forgot password to set a new one, or ask your lab owner to unlock it.";

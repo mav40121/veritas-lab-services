@@ -58,6 +58,7 @@ async function main() {
     body: JSON.stringify({ accreditor: "CMS", root_cause: "Made-up root cause", corrective_action: "Made-up action" }) });
   check("0. setup: lab, four users, a finding created and edited", labId > 0 && fid > 0 && put.status === 200, `put=${put.status}`);
 
+  const SIGN = JSON.stringify({ signed_by: "Made-Up Signer", password: "Testpass123" });
   const cases: [string, { token: string }, string | null][] = [
     ["the designated medical director", md, "medical_director"],
     ["a technical supervisor delegated finding closure", ts, "designee"],
@@ -68,7 +69,8 @@ async function main() {
   for (const [who, u, want] of cases) {
     const id = await mk();
     const g = await j(await fetch(base + `/api/labs/${labId}/findings/${id}/history`, { headers: hdr(u.token) }));
-    const p = await fetch(base + `/api/labs/${labId}/findings/${id}/signoff`, { method: "POST", headers: hdr(u.token), body: "{}" });
+    // BUG-205: the sign-off is signed with the typed name and the signer's own password.
+    const p = await fetch(base + `/api/labs/${labId}/findings/${id}/signoff`, { method: "POST", headers: hdr(u.token), body: SIGN });
     const pb = await j(p);
     const postAs = p.status === 200 ? pb.signoff_role : null;
     check(`${n}. ${who}: the page offers ${want ?? "no button"}, and the server agrees`, (g.signoffAs ?? null) === want && postAs === want,
@@ -77,7 +79,7 @@ async function main() {
   }
 
   // History on the first finding: sign it off as the MD, then read it back.
-  await fetch(base + `/api/labs/${labId}/findings/${fid}/signoff`, { method: "POST", headers: hdr(md.token), body: "{}" });
+  await fetch(base + `/api/labs/${labId}/findings/${fid}/signoff`, { method: "POST", headers: hdr(md.token), body: SIGN });
   const h = await j(await fetch(base + `/api/labs/${labId}/findings/${fid}/history`, { headers: hdr(staff.token) }));
   const ev = (h.events || []) as any[];
   check(`${n++}. history lists created, updated and signed_off, newest first`, ev.map((e) => e.event).join(",") === "signed_off,updated,created", ev.map((e) => e.event).join(","));

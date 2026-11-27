@@ -1074,6 +1074,10 @@ export function staffPortalAuthMiddleware(req: any, res: any, next: any) {
   return next();
 }
 
+// The hospital sign-in asked for again at signing (S0, server/ssoRoutes.ts): start and the code-for-proof trade. A view-only seat
+// may make these two requests (BUG-205; authMiddleware's view_only gate).
+const SIGNATURE_SSO_PATHS = new Set(["/api/auth/signature/sso/start", "/api/auth/signature/sso/complete"]);
+
 function authMiddleware(req: any, res: any, next: any) {
   const auth = req.headers.authorization;
   if (!auth?.startsWith("Bearer ")) return res.status(401).json({ error: "Unauthorized" });
@@ -1175,6 +1179,10 @@ function authMiddleware(req: any, res: any, next: any) {
       !['GET', 'HEAD', 'OPTIONS'].includes(req.method) &&
       // B3: answering your own invitation is about your sign-in, not about the lab where you are a reviewer.
       !String(req.path || "").startsWith("/api/me/lab-invites/") &&
+      // BUG-205: asking your hospital's sign-in again to sign (server/ssoRoutes.ts) is about your own sign-in too; it writes
+      // nothing in a lab, and its proof signs only through a route the allow-list below already lets through. Without this a
+      // director on a view-only seat whose hospital requires single sign-on could sign nothing.
+      !(req.method === "POST" && SIGNATURE_SSO_PATHS.has(String(req.path || ""))) &&
       // B4 review, BUG-204: a director or designee on a view-only seat signs. Only the signatures on the one allow-list
       // (server/qualifiedSigning.ts QUALIFIED_SIGNING_ROUTES) pass; each decides by the signer's qualification in the record's
       // own laboratory and refuses anyone else on a view-only seat itself. Every other write stays refused here.
@@ -5591,8 +5599,11 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // Medical Director co-signs a filed monthly review. Only the MD may co-sign,
   // and only after the reviewer has filed the attestation.
   // BUG-204: a director or designee on a view-only seat co-signs here too (server/qualifiedSigning.ts); the check below decides.
-  app.post("/api/labs/:labId/qc/period-reviews/md-cosign", authMiddleware, labScopeMiddleware, (req: any, res) => {
-    const { control_lot_id, period_year, period_month, typed_name } = req.body || {};
+  // BUG-205: the co-signature is a signature like every other director signature: the typed name and the signer's own password,
+  // or their hospital's sign-in asked for again (server/eSignature.ts verifySigner, purpose qc_md_cosign), the owner override
+  // included. A wrong or missing credential records nothing. Who may co-sign and the filed-review rule are unchanged.
+  app.post("/api/labs/:labId/qc/period-reviews/md-cosign", authMiddleware, labScopeMiddleware, async (req: any, res) => {
+    const { control_lot_id, period_year, period_month, typed_name, password, sso_proof } = req.body || {};
     if (!control_lot_id || !period_year || !period_month) {
       return res.status(400).json({ error: "control_lot_id, period_year, period_month required" });
     }
@@ -5609,14 +5620,30 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       if (isLabOwnerUser(req.scope.labId, req.userId)) via = "owner_override";
       else return res.status(403).json({ error: "Only the medical director, a delegated Technical Consultant or Supervisor for this test's complexity, or the account owner (override) may co-sign." });
     }
-    const review = sqlite.prepare("SELECT id, attestation_acknowledged FROM qc_period_reviews WHERE lab_id = ? AND control_lot_id = ? AND period_year = ? AND period_month = ?").get(req.scope.labId, Number(control_lot_id), Number(period_year), Number(period_month)) as any;
+    const review = sqlite.prepare("SELECT id, attestation_acknowledged, md_signed_at, md_signed_by_user_id, md_signed_name, md_signed_with, md_signed_with_provider FROM qc_period_reviews WHERE lab_id = ? AND control_lot_id = ? AND period_year = ? AND period_month = ?").get(req.scope.labId, Number(control_lot_id), Number(period_year), Number(period_month)) as any;
     if (!review || review.attestation_acknowledged !== 1) return res.status(409).json({ error: "The reviewer must file the attestation before the Medical Director can co-sign." });
-    const signerRow = sqlite.prepare("SELECT name FROM users WHERE id = ?").get(req.userId) as any;
-    let signedName = (String(typed_name || "").trim()) || (signerRow?.name ? String(signerRow.name).trim() : "") || "Medical Director";
+    const typed = String(typed_name ?? "").trim();
+    const signerInput = { typedName: typed, password, ssoProof: sso_proof, purpose: "qc_md_cosign" as const };
+    const missing = signerInputRefusal(signerInput);
+    if (missing) return res.status(missing.status).json(missing.body);
+    if (typed.length > 200) return res.status(400).json({ error: "The typed name is too long" });
+    const signer = await verifySigner(sqlite, req.userId, signerInput, { ip: req.ip });
+    if (!signer.ok) return res.status(signer.status).json(signer.body);
+    const [signedWith, signedWithProvider] = signedWithValues(signer.signedWith);
+    let signedName = typed;
     if (via === "designee") signedName += " (designee)";
     else if (via === "owner_override") signedName += " (owner override)";
-    sqlite.prepare("UPDATE qc_period_reviews SET md_signed_at = datetime('now'), md_signed_by_user_id = ?, md_signed_name = ? WHERE id = ?").run(req.userId, signedName, review.id);
-    res.json({ ok: true, signed_as: via });
+    sqlite.prepare("UPDATE qc_period_reviews SET md_signed_at = datetime('now'), md_signed_by_user_id = ?, md_signed_name = ?, md_signed_with = ?, md_signed_with_provider = ? WHERE id = ?")
+      .run(req.userId, signedName, signedWith, signedWithProvider, review.id);
+    const after = sqlite.prepare("SELECT md_signed_at, md_signed_by_user_id, md_signed_name, md_signed_with, md_signed_with_provider FROM qc_period_reviews WHERE id = ?").get(review.id) as any;
+    const { id: _reviewId, attestation_acknowledged: _filed, ...before } = review;
+    logAudit({
+      userId: req.userId, ownerUserId: req.scope.lab?.owner_user_id ?? req.userId, module: "veritaqc", action: "update",
+      entityType: "qc_period_review.md_cosign", entityId: review.id,
+      entityLabel: `${lot?.analyte || "Control lot"} ${Number(period_year)}-${String(Number(period_month)).padStart(2, "0")}: co-signed (${via})`,
+      before: { ...before, lab_id: req.scope.labId }, after: { ...after, lab_id: req.scope.labId, signed_as: via }, ipAddress: req.ip,
+    });
+    res.json({ ok: true, signed_as: via, signed_with: signedWith });
   });
 
   // Assemble the monthly-review payload for one control lot + period. Used by
@@ -24315,7 +24342,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     return res.json(sqlite.prepare("SELECT * FROM findings WHERE id = ?").get(f.id));
   });
 
-  app.post("/api/labs/:labId/findings/:id/signoff", authMiddleware, labScopeMiddleware, requireWriteAccess, (req: any, res) => {
+  // BUG-205: the sign-off is a signature like every other director signature: the typed name and the signer's own password, or
+  // their hospital's sign-in asked for again (server/eSignature.ts verifySigner, purpose finding_signoff), the owner override
+  // included. A wrong or missing credential records nothing. Who may sign off is unchanged.
+  app.post("/api/labs/:labId/findings/:id/signoff", authMiddleware, labScopeMiddleware, requireWriteAccess, async (req: any, res) => {
     const sqlite = (db as any).$client;
     const finding = sqlite.prepare("SELECT * FROM findings WHERE id = ? AND lab_id = ?").get(Number(req.params.id), req.scope.labId) as any;
     if (!finding) return res.status(404).json({ error: "Finding not found in this lab" });
@@ -24330,16 +24360,22 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       if (isLabOwnerUser(req.scope.labId, req.userId)) signoff_role = "owner_override";
       else return res.status(403).json({ error: "Only the designated medical director, a delegated designee for finding closure, or the account owner (override) can close this finding." });
     }
-    const signerRow = sqlite.prepare("SELECT name FROM users WHERE id = ?").get(req.userId) as any;
-    const signerName = String(req.body?.signed_by ?? "").trim() || (signerRow?.name ? String(signerRow.name).trim() : "") || "Authorized signer";
+    const signerName = String(req.body?.signed_by ?? "").trim();
+    const signerInput = { typedName: signerName, password: req.body?.password, ssoProof: req.body?.sso_proof, purpose: "finding_signoff" as const };
+    const missing = signerInputRefusal(signerInput);
+    if (missing) return res.status(missing.status).json(missing.body);
+    if (signerName.length > 200) return res.status(400).json({ error: "The typed name is too long" });
+    const signer = await verifySigner(sqlite, req.userId, signerInput, { ip: req.ip });
+    if (!signer.ok) return res.status(signer.status).json(signer.body);
+    const [signedWith, signedWithProvider] = signedWithValues(signer.signedWith);
     const now = new Date().toISOString();
     sqlite.prepare(
-      "UPDATE findings SET signed_by = ?, signed_at = ?, signoff_role = ?, status = 'closed', completion_date = COALESCE(completion_date, ?), updated_at = datetime('now') WHERE id = ?"
-    ).run(signerName, now, signoff_role, labToday(), finding.id);
+      "UPDATE findings SET signed_by = ?, signed_at = ?, signoff_role = ?, signed_with = ?, signed_with_provider = ?, status = 'closed', completion_date = COALESCE(completion_date, ?), updated_at = datetime('now') WHERE id = ?"
+    ).run(signerName, now, signoff_role, signedWith, signedWithProvider, labToday(), finding.id);
     try {
       sqlite.prepare(
         `INSERT INTO finding_history (finding_id, event, by_user_id, payload) VALUES (?, ?, ?, ?)`
-      ).run(finding.id, 'signed_off', req.userId ?? null, JSON.stringify({ signoff_role, signed_by: signerName }));
+      ).run(finding.id, 'signed_off', req.userId ?? null, JSON.stringify({ signoff_role, signed_by: signerName, signed_with: signedWith, signed_with_provider: signedWithProvider, status_before: finding.status }));
     } catch {}
     const updated = sqlite.prepare("SELECT * FROM findings WHERE id = ?").get(finding.id);
     res.json(updated);

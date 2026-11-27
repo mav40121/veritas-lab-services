@@ -14,9 +14,10 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { SignaturePrompt, useSignatureCredential } from "@/components/SignaturePrompt";
 import { RunOrigin } from "@/components/qcimport/importShared";
 import {
   AlertTriangle, CheckCircle2, Lock, ClipboardList, ChevronRight, FileDown, RefreshCw,
@@ -254,6 +255,13 @@ export default function VeritaQCDailyReviewPage() {
   // BUG-077: how this user may co-sign (server rule): medical director, delegated designee, owner override, or not.
   const [cosignAs, setCosignAs] = useState<null | "medical_director" | "designee" | "owner_override">(null);
   const [cosigning, setCosigning] = useState(false);
+  // BUG-205: the co-sign is signed like the VeritaMaintain monthly review: the typed name and the password, or the hospital
+  // sign-in asked for again (components/SignaturePrompt.tsx, server/eSignature.ts).
+  const [cosignOpen, setCosignOpen] = useState(false);
+  const [cosignTyped, setCosignTyped] = useState("");
+  const cosignCred = useSignatureCredential("qc_md_cosign");
+  const cosignLabel = cosignAs === "designee" ? "Co-sign as designee" : cosignAs === "owner_override" ? "Co-sign (owner override)" : "Co-sign as Medical Director";
+  const cosignCapacity = cosignAs === "designee" ? "a designee of the medical director" : cosignAs === "owner_override" ? "the account owner (owner override)" : "the medical director";
   const [filing, setFiling] = useState(false);
   const [reviewNotes, setReviewNotes] = useState("");
 
@@ -395,12 +403,17 @@ export default function VeritaQCDailyReviewPage() {
   // The designated Medical Director co-signs the filed attestation for this period.
   async function handleCosign() {
     if (!activeLabId || !reviewLotId) return;
+    if (cosignTyped.trim().length < 2) { toast({ title: "Type your full name to sign", variant: "destructive" }); return; }
+    if (!cosignCred.ready) {
+      toast({ title: cosignCred.passwordAllowed ? "Enter your password to sign" : `Sign in with ${cosignCred.hospital?.name ?? "your hospital"} to sign`, variant: "destructive" });
+      return;
+    }
     setCosigning(true);
     try {
       const res = await fetch(`${API_BASE}/api/labs/${activeLabId}/qc/period-reviews/md-cosign`, {
         method: "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ control_lot_id: reviewLotId, period_year: reviewYear, period_month: reviewMonth }),
+        body: JSON.stringify({ control_lot_id: reviewLotId, period_year: reviewYear, period_month: reviewMonth, typed_name: cosignTyped.trim(), ...cosignCred.body("snake") }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -409,6 +422,7 @@ export default function VeritaQCDailyReviewPage() {
       }
       const done = await res.json().catch(() => ({}));
       toast({ title: done.signed_as === "designee" ? "Co-signed as designee" : done.signed_as === "owner_override" ? "Co-signed (owner override)" : "Co-signed as Medical Director" });
+      setCosignOpen(false); setCosignTyped(""); cosignCred.reset();
       await loadPastReviews(reviewLotId);
     } catch (err: any) {
       toast({ title: err.message || "Co-signature failed", variant: "destructive" });
@@ -849,8 +863,8 @@ export default function VeritaQCDailyReviewPage() {
               <div className="flex flex-wrap items-center gap-2 mt-2">
                 <span className="text-xs text-amber-700">Awaiting Medical Director co-signature.</span>
                 {cosignAs && (
-                  <Button size="sm" variant="outline" onClick={handleCosign} disabled={cosigning} data-testid="qc-cosign-button">
-                    {cosigning ? "Co-signing..." : cosignAs === "designee" ? "Co-sign as designee" : cosignAs === "owner_override" ? "Co-sign (owner override)" : "Co-sign as Medical Director"}
+                  <Button size="sm" variant="outline" onClick={() => setCosignOpen(true)} disabled={cosigning} data-testid="qc-cosign-button">
+                    {cosignLabel}
                   </Button>
                 )}
               </div>
@@ -886,6 +900,34 @@ export default function VeritaQCDailyReviewPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* BUG-205: the co-sign dialog, the VeritaMaintain monthly review's signing dialog with the same fields and words. */}
+      <Dialog open={cosignOpen} onOpenChange={(o) => { if (!cosigning) setCosignOpen(o); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Co-sign the {MONTH_NAMES[reviewMonth]} {reviewYear} review</DialogTitle>
+            <DialogDescription>
+              You are signing as {cosignCapacity}, for {(() => { const l = lots.find((x) => x.id === reviewLotId); return l ? `${l.analyte} ${l.level}, lot ${l.lot_number}` : "this lot"; })()}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 min-w-0">
+            <SignaturePrompt
+              cred={cosignCred}
+              typedName={cosignTyped}
+              onTypedName={setCosignTyped}
+              required
+              labelClassName=""
+              labels={{ name: "Type your full name to sign", password: "Password" }}
+              ids={{ name: "qc-cosign-name", password: "qc-cosign-password" }}
+              testIds={{ name: "qc-cosign-name", password: "qc-cosign-password", hospital: "qc-cosign-sign-with-hospital" }}
+            />
+          </div>
+          <div className="flex flex-wrap justify-end gap-2 mt-2">
+            <Button variant="outline" onClick={() => setCosignOpen(false)} disabled={cosigning}>Cancel</Button>
+            <Button onClick={handleCosign} disabled={cosigning} data-testid="qc-cosign-sign">{cosigning ? "Signing..." : cosignLabel}</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* 2026-10-08: close out a corrective action with its resolution. */}
       <Dialog open={!!closeTarget} onOpenChange={(o) => { if (!o) setCloseTarget(null); }}>

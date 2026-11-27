@@ -8137,6 +8137,10 @@ sqlite.exec(`
       if (!have.has("assigned_at")) sqlite.exec("ALTER TABLE findings ADD COLUMN assigned_at TEXT");
       if (!have.has("assigned_by_user_id")) sqlite.exec("ALTER TABLE findings ADD COLUMN assigned_by_user_id INTEGER");
       if (!have.has("study_id")) sqlite.exec("ALTER TABLE findings ADD COLUMN study_id INTEGER");
+      // How the sign-off was made (BUG-205; S0's columns: 'password', or 'sso' and the hospital's name). A sign-off from before
+      // has neither, and stays as it was.
+      if (!have.has("signed_with")) sqlite.exec("ALTER TABLE findings ADD COLUMN signed_with TEXT");
+      if (!have.has("signed_with_provider")) sqlite.exec("ALTER TABLE findings ADD COLUMN signed_with_provider TEXT");
     }
   } catch {
     // fresh DB: CREATE TABLE above handled it
@@ -8549,6 +8553,10 @@ try { (sqlite.prepare(`PRAGMA table_info(founding_lab_applications)`).all() as a
   ensure("qc_period_reviews", "md_signed_at",         "ALTER TABLE qc_period_reviews ADD COLUMN md_signed_at TEXT");
   ensure("qc_period_reviews", "md_signed_by_user_id", "ALTER TABLE qc_period_reviews ADD COLUMN md_signed_by_user_id INTEGER");
   ensure("qc_period_reviews", "md_signed_name",       "ALTER TABLE qc_period_reviews ADD COLUMN md_signed_name TEXT");
+  // BUG-205: how the co-signature was made (S0's columns: 'password', or 'sso' and the hospital's name). A co-signature from
+  // before has neither, and stays as it was.
+  ensure("qc_period_reviews", "md_signed_with",          "ALTER TABLE qc_period_reviews ADD COLUMN md_signed_with TEXT");
+  ensure("qc_period_reviews", "md_signed_with_provider", "ALTER TABLE qc_period_reviews ADD COLUMN md_signed_with_provider TEXT");
   ensure("labs", "qc_md_cosign_required",             "ALTER TABLE labs ADD COLUMN qc_md_cosign_required INTEGER NOT NULL DEFAULT 0");
 
   ensure("qc_rule_settings", "analyte",                    "ALTER TABLE qc_rule_settings ADD COLUMN analyte TEXT");

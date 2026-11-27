@@ -738,3 +738,6 @@ jobs:
       - name: Run director signs on a view-only seat integration test
         # BUG-204: a director or designee on a view-only seat makes the signatures on server/qualifiedSigning.ts's list; every other write stays refused.
         run: npm run test:director-sign-view-only
+      - name: Run QC co-sign and finding sign-off signature check integration test
+        # BUG-205: the monthly QC co-sign and a finding's sign-off take the typed name and password, or the hospital sign-in again, through server/eSignature.ts verifySigner.
+        run: npm run test:cosign-signature-check
