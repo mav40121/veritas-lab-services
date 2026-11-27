@@ -39,6 +39,8 @@ export interface MonthlyReviewResult {
   instrument: string | null;
   accepted_for_reporting: number;
   operator_name?: string | null;
+  // Stored after this month's review was signed (server/qcRuns.ts addedAfterReview).
+  added_after_review?: boolean;
   violations: { rule_code: string; severity: string; detail: string | null }[];
   corrective_actions: { action_taken: string; status: string; taken_at: string }[];
 }
@@ -251,7 +253,7 @@ export function buildMonthlyReviewHTML(p: MonthlyReviewPayload): string {
           ? `<span style="color:#888;font-size:7pt">none</span>`
           : r.violations.map(v => `<span class="rule ${v.severity === "rejection" ? "rejection" : "warning"}">${escapeHtml(v.rule_code)}</span>`).join("");
         return `<tr>
-          <td>${escapeHtml(r.result_date)}</td>
+          <td>${escapeHtml(r.result_date)}${r.added_after_review ? `<div style="font-size:6.5pt;font-weight:600;color:#964219">Added after the review</div>` : ""}</td>
           <td class="num">${r.result_value}</td>
           <td class="num">${sdi}</td>
           <td>${escapeHtml(r.instrument || "-")}</td>
@@ -277,7 +279,9 @@ export function buildMonthlyReviewHTML(p: MonthlyReviewPayload): string {
     ? `<div style="font-size:8pt;color:#666;padding:4pt 0">No corrective actions filed for this period.</div>`
     : `<table><thead><tr><th>QC Date</th><th>Value</th><th>CA Filed</th><th>Status</th><th>Action Taken</th></tr></thead><tbody>${caRows.join("")}</tbody></table>`;
 
-  const narrative = `Monthly QC review for <b>${escapeHtml(p.lot.analyte)}</b> (Lot ${escapeHtml(p.lot.lot_number)}, ${escapeHtml(p.lot.level)} level) covering ${periodLabel}. ${p.results.length} run${p.results.length === 1 ? "" : "s"} logged: ${totalRejections} rejection-rule fire${totalRejections === 1 ? "" : "s"}, ${totalWarnings} warning${totalWarnings === 1 ? "" : "s"}, ${missingCA} result${missingCA === 1 ? "" : "s"} with a rejection but no corrective action filed. Chart and rule evaluation use: ${escapeHtml(basisLabel)}.${escapeHtml(mfrNote)}${observedNote} Final review and any clinical determination must be made by the laboratory director or designee.`;
+  const late = p.results.filter(r => r.added_after_review).length;
+  const lateNote = late ? ` <b>${late} run${late === 1 ? " was" : "s were"} added after this review was signed on ${escapeHtml(p.reviewerDate)} and ${late === 1 ? "isn't" : "aren't"} part of it</b> (marked below).` : "";
+  const narrative = `Monthly QC review for <b>${escapeHtml(p.lot.analyte)}</b> (Lot ${escapeHtml(p.lot.lot_number)}, ${escapeHtml(p.lot.level)} level) covering ${periodLabel}. ${p.results.length} run${p.results.length === 1 ? "" : "s"} logged: ${totalRejections} rejection-rule fire${totalRejections === 1 ? "" : "s"}, ${totalWarnings} warning${totalWarnings === 1 ? "" : "s"}, ${missingCA} result${missingCA === 1 ? "" : "s"} with a rejection but no corrective action filed. Chart and rule evaluation use: ${escapeHtml(basisLabel)}.${escapeHtml(mfrNote)}${observedNote}${lateNote} Final review and any clinical determination must be made by the laboratory director or designee.`;
 
   const ackBox = `
     <div class="ack">

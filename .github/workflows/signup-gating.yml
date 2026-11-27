@@ -411,6 +411,17 @@ jobs:
       - name: Run VeritaMaintain schedule migration integration test
         # Booting on a database from before schedules moves no due date and gives each instrument its first schedule once.
         run: npm run test:maintain-schedule-migration
+      - name: Run VeritaQC run audit integration test
+        # BUG-199: a typed run and a void each write one audit row (who, when, before, after).
+        run: npm run test:qc-run-audit
+      - name: Run VeritaQC voided runs integration test
+        # BUG-198: a run voided by hand is left out of the chart across lots, the feed's lists, readiness, the analyzer's run counts and
+        # every VeritaCheck import, and shows only where it is marked voided.
+        run: npm run test:qc-voided-runs
+      - name: Run VeritaQC file import and sigma integration test
+        # B12: a CSV or Excel export is previewed row by row before anything is stored, judged as typed runs are, taken back as a whole;
+        # no stored verdict or signed month changes, typed runs answer as before, and the sigma metric.
+        run: npm run test:qc-file-import
       - name: Run VeritaMaintain stain log integration test
         # Michael 2026-11-06 (Q178 = 1): a month grid with the lab's own rows and codes, lot and expiration on a stain change, a manual
         # list with no specimen number, one review with the rest of VeritaMaintain, Staff record, and the ROSE blank form in VeritaDC.

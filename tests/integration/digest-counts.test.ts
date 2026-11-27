@@ -303,11 +303,11 @@ async function main() {
     const withV = await call("GET", `${L}/qc/recent?since=${M0}&until=${M1}&status=with_violation`, undefined, T);
     const missIds = ((missing.j.results as any[]) || []).map((r) => r.id);
     const rejIds = ((withV.j.results as any[]) || []).filter((r) => r.violations.some((v: any) => v.severity === "rejection")).map((r) => r.id);
-    check("8. QC equals the daily review feed (qc/recent) for the month less its voided run",
-      missing.s === 200 && withV.s === 200 && d8.qc?.withoutCorrectiveAction === missIds.filter((id) => id !== R4).length && d8.qc?.rejectedRunsInMonth === rejIds.filter((id) => id !== R4).length,
+    check("8. QC equals the daily review feed (qc/recent) for the month",
+      missing.s === 200 && withV.s === 200 && d8.qc?.withoutCorrectiveAction === missIds.length && d8.qc?.rejectedRunsInMonth === rejIds.length,
       JSON.stringify({ digest: d8.qc, missIds, rejIds }));
-    check("8. QC: 2 rejected runs in the month, 1 without a corrective action; the feed counts the voided run, the digest doesn't",
-      d8.qc?.rejectedRunsInMonth === 2 && d8.qc?.withoutCorrectiveAction === 1 && missIds.includes(R4) && missIds.includes(R1), JSON.stringify({ d: d8.qc, missIds }));
+    check("8. QC: 2 rejected runs in the month, 1 without a corrective action; neither the feed nor the digest counts the voided run (BUG-198)",
+      d8.qc?.rejectedRunsInMonth === 2 && d8.qc?.withoutCorrectiveAction === 1 && !missIds.includes(R4) && missIds.includes(R1), JSON.stringify({ d: d8.qc, missIds }));
     const d8p = digestCountsForLab(sqlite, LAB, prevStart, prevLast);
     check("8. the month before: its rejected run", d8p.qc?.rejectedRunsInMonth === 1 && d8p.qc?.withoutCorrectiveAction === 1, JSON.stringify(d8p.qc));
 

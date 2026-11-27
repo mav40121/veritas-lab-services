@@ -43,8 +43,11 @@ import { PT_ROOT_CAUSE_CATEGORIES } from "@shared/ptFailure";
 import { studyRowToClient, resolveInstrumentDisplay, studyPdfFilename } from "./studyPdf";
 import { foreignSlotCounts, ownMapInstrument, sameLabOrOwnerSql } from "./verificationLinks";
 import { scanPhi } from "./phiScan";
-import { evaluateQcRun, rulesForRun } from "./qcWestgard";
+import { rulesForRun } from "./qcWestgard";
+import { addedAfterReview, insertQcRun, judgeQcRun, LIVE_RUN, lotNotInUse, NOT_TAKEN_BACK, qcRunSettings, signedMonths, voidQcRun } from "./qcRuns";
 import { resolveBasis, computeBasis, basisConfig, sampleStats, type QcBasis } from "./qcBasis";
+import { importsOf, registerQcFileImportRoutes } from "./qcFileImport";
+import { registerQcSigmaRoutes } from "./qcSigma";
 import { buildWasteReport, generateWasteReportPDF, generateWasteReportExcel, type WasteEventRow, type WasteReportContext } from "./wasteReport";
 import { entireLabFlag, sanitizeSpecialties, expandEntireLabRoles, cms209Gaps, withoutPlaceholderRoles } from "./cms209Roles";
 import { computeCoverageForLab, setLinearityExemption, alignStudyToAnalyte, resolvePresetMapAnalyte, presetCorroboratesName, studyNeedsAttribution, analyteMatch, stampMapDatesFromStudies, recordOutsideStudies, voidOutsideRecord } from "./veritacheckCoverage";
@@ -4234,6 +4237,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // qc_period_reviews FK the lot (control_lot_id); clear them too so the lot
       // delete leaves no orphaned monthly-review rows (delete-cascade guard).
       periodReviews = sqlite.prepare("DELETE FROM qc_period_reviews WHERE control_lot_id = ?").run(Number(lotId)).changes;
+      sqlite.prepare("DELETE FROM qc_peer_means WHERE control_lot_id = ?").run(Number(lotId)); // FK on the lot (server/qcSigma.ts)
       sqlite.prepare("DELETE FROM qc_control_lots WHERE id = ? AND lab_id = ?").run(Number(lotId), Number(labId));
       sqlite.exec("COMMIT");
     } catch (err: any) {
@@ -4817,9 +4821,13 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     }
     const sqlite = (db as any).$client;
     const lot = sqlite.prepare(
-      "SELECT id, analyte FROM qc_control_lots WHERE id = ? AND lab_id = ?"
+      "SELECT id, analyte, level, lot_number, status, out_of_use_date, held_date FROM qc_control_lots WHERE id = ? AND lab_id = ?"
     ).get(Number(control_lot_id), req.scope.labId) as any;
     if (!lot) return res.status(404).json({ error: "Control lot not found in this lab" });
+    // The screen stops a run on a lot that isn't active; the server took any. Now it takes one dated on or before the day the lot was
+    // retired or held, as a file import does (server/qcRuns.ts lotNotInUse).
+    const closed = lotNotInUse(lot, String(result_date));
+    if (closed) return res.status(409).json({ error: closed, code: "LOT_NOT_IN_USE" });
     let mapInst: any = null;
     if (map_instrument_id !== undefined && map_instrument_id !== null && map_instrument_id !== "") {
       mapInst = resolveLabMapInstrument(sqlite, req.scope.labId, map_instrument_id);
@@ -4830,46 +4838,35 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const now = new Date().toISOString();
     let newResultId: number;
     try {
-      const ins = sqlite.prepare(
-        "INSERT INTO qc_results (lab_id, control_lot_id, instrument, map_instrument_id, result_value, result_date, run_time, operator_user_id, comment, accepted_for_reporting, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)"
-      ).run(
-        req.scope.labId, Number(control_lot_id), instrumentText, mapInst ? mapInst.id : null, Number(result_value),
-        String(result_date), run_time || null, req.userId, comment || null, now, now,
-      );
-      newResultId = Number(ins.lastInsertRowid);
+      newResultId = insertQcRun(sqlite, {
+        labId: req.scope.labId, controlLotId: Number(control_lot_id), instrument: instrumentText, mapInstrumentId: mapInst ? mapInst.id : null,
+        value: Number(result_value), date: String(result_date), time: run_time || null, operatorUserId: req.userId, comment: comment || null, now,
+      });
     } catch (err: any) {
       console.error("[qc/results] insert failed:", err.message);
       return res.status(500).json({ error: err.message || "Insert failed" });
     }
 
-    // Per-lab settings with optional per-analyte override. Per-analyte row wins
-    // if present; otherwise fall back to the lab-wide row (analyte IS NULL).
-    const settings = sqlite.prepare(
-      "SELECT bias_consecutive_count, trend_consecutive_count FROM qc_rule_settings WHERE lab_id = ? AND (analyte = ? OR analyte IS NULL) ORDER BY (analyte IS NULL) ASC LIMIT 1"
-    ).get(req.scope.labId, lot.analyte) as any;
-    const biasN = settings?.bias_consecutive_count ?? 10;
-    const trendN = settings?.trend_consecutive_count ?? 7;
-
-    const { violations, basis } = evaluateQcRun(sqlite, req.scope.labId, Number(control_lot_id), newResultId, biasN, trendN);
-    if (basis) sqlite.prepare("UPDATE qc_results SET basis_mean = ?, basis_sd = ?, basis_source = ? WHERE id = ?").run(basis.mean, basis.sd, basis.source, newResultId);
-
-    const insertViol = sqlite.prepare(
-      "INSERT INTO qc_rule_violations (qc_result_id, rule_code, severity, detail, related_result_ids, evaluated_at) VALUES (?, ?, ?, ?, ?, ?)"
-    );
-    const storedViolations: any[] = [];
-    for (const v of violations) {
-      const r = insertViol.run(newResultId, v.rule_code, v.severity, v.detail, JSON.stringify(v.related_result_ids), now);
-      storedViolations.push({ id: Number(r.lastInsertRowid), ...v });
-    }
-
-    const requires_corrective_action = violations.some(v => v.severity === "rejection");
+    // Judged by server/qcRuns.ts, the same code a run read from a file goes through.
+    const judged = judgeQcRun(sqlite, req.scope.labId, Number(control_lot_id), newResultId, qcRunSettings(sqlite, req.scope.labId, lot.analyte), now);
+    // BUG-199: a typed run left no audit row. An imported one is in its import's (server/qcFileImport.ts).
+    logAudit({
+      userId: req.userId, ownerUserId: req.scope.lab?.owner_user_id ?? req.userId, module: "veritaqc", action: "create",
+      entityType: "qc_result", entityId: newResultId, entityLabel: `${lot.analyte} ${lot.level} lot ${lot.lot_number}: ${Number(result_value)} on ${String(result_date)}`,
+      after: {
+        lab_id: req.scope.labId, control_lot_id: Number(control_lot_id), result_value: Number(result_value), result_date: String(result_date), run_time: run_time || null,
+        instrument: instrumentText, map_instrument_id: mapInst ? mapInst.id : null, comment: comment || null, rules_fired: judged.violations.map((v) => v.rule_code),
+        requires_corrective_action: judged.requires_corrective_action, basis_source: judged.basis?.source ?? null,
+      },
+      ipAddress: req.ip,
+    });
     res.json({
       ok: true,
       result_id: newResultId,
-      violations: storedViolations,
-      requires_corrective_action,
-      settings_used: { bias_consecutive_count: biasN, trend_consecutive_count: trendN },
-      basis,
+      violations: judged.violations,
+      requires_corrective_action: judged.requires_corrective_action,
+      settings_used: judged.settings_used,
+      basis: judged.basis,
     });
   });
 
@@ -5006,7 +5003,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
     const sqlite = (db as any).$client;
     const lot = sqlite.prepare(
-      "SELECT id, opened_date, out_of_use_date FROM qc_control_lots WHERE id = ? AND lab_id = ?"
+      "SELECT id, status, opened_date, out_of_use_date, held_date FROM qc_control_lots WHERE id = ? AND lab_id = ?"
     ).get(id, req.scope.labId) as any;
     if (!lot) return res.status(404).json({ error: "Control lot not found in this lab" });
 
@@ -5031,9 +5028,11 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       outOfUse = null;
     }
 
+    // The day it was put on hold, kept while it is on hold.
+    const held = s === "hold" ? (lot.status === "hold" && lot.held_date ? lot.held_date : labLocalDate(nowIso)) : null;
     sqlite.prepare(
-      "UPDATE qc_control_lots SET status = ?, out_of_use_date = ?, updated_at = ? WHERE id = ?"
-    ).run(s, outOfUse, nowIso, id);
+      "UPDATE qc_control_lots SET status = ?, out_of_use_date = ?, held_date = ?, updated_at = ? WHERE id = ?"
+    ).run(s, outOfUse, held, nowIso, id);
 
     const updated = sqlite.prepare(
       "SELECT id, analyte, level, lot_number, manufacturer, mfr_mean, mfr_sd, mfr_sd_interval, mfr_range_low, mfr_range_high, expiration_date, opened_date, out_of_use_date, status, prior_lot_id, created_at, updated_at FROM qc_control_lots WHERE id = ?"
@@ -5178,7 +5177,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         const newId = Number(ins.lastInsertRowid);
         if (retirePrior) {
           // The replaced lot goes out of use the day the new one is opened (else the lab's today).
-          sqlite.prepare("UPDATE qc_control_lots SET status = 'retired', out_of_use_date = COALESCE(out_of_use_date, ?), updated_at = ? WHERE id = ?")
+          sqlite.prepare("UPDATE qc_control_lots SET status = 'retired', out_of_use_date = COALESCE(out_of_use_date, ?), held_date = NULL, updated_at = ? WHERE id = ?")
             .run(opened_date || labLocalDate(now), now, priorId);
         }
         return newId;
@@ -5228,7 +5227,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // recent 1000 to bound the payload, then re-sort ascending so the chart runs
     // oldest to newest. (1000 covers years of daily multi-level QC on one line.)
     const rows = sqlite.prepare(
-      "SELECT r.id, r.control_lot_id, l.lot_number, r.result_value, r.result_date, r.run_time, r.instrument, r.accepted_for_reporting, l.mfr_mean, l.mfr_sd FROM qc_results r JOIN qc_control_lots l ON r.control_lot_id = l.id WHERE r.lab_id = ? AND r.control_lot_id IN (" + ph + ") ORDER BY r.result_date DESC, r.id DESC LIMIT 1000"
+      "SELECT r.id, r.control_lot_id, l.lot_number, r.result_value, r.result_date, r.run_time, r.instrument, r.accepted_for_reporting, l.mfr_mean, l.mfr_sd FROM qc_results r JOIN qc_control_lots l ON r.control_lot_id = l.id WHERE r.lab_id = ? AND r.control_lot_id IN (" + ph + ") AND " + LIVE_RUN("r.") + " ORDER BY r.result_date DESC, r.id DESC LIMIT 1000"
     ).all(req.scope.labId, ...lotIds).reverse() as any[];
     // Rejection flags for point coloring (same shape as the per-lot endpoint).
     const rejected = new Set<number>();
@@ -5266,6 +5265,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     res.json({ analyte, level, lots: lots.map(l => ({ ...l, basis: basisByLot.get(l.id) || null })), points });
   });
 
+  // Runs read from an analyzer, middleware or LIS file, and the sigma metric (B12, 2026-11-24).
+  registerQcFileImportRoutes(app, { authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit, hasModuleEditAccess, resolveLabMapInstrument });
+  registerQcSigmaRoutes(app, { authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit, hasModuleEditAccess });
+
   app.get("/api/labs/:labId/qc/results", authMiddleware, labScopeMiddleware, (req: any, res) => {
     const controlLotId = req.query.control_lot_id ? Number(req.query.control_lot_id) : null;
     const limit = Math.min(Number(req.query.limit) || 20, 200);
@@ -5278,7 +5281,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     ).get(controlLotId, req.scope.labId) as any;
     if (!lot) return res.status(404).json({ error: "Control lot not found in this lab" });
     const results = sqlite.prepare(
-      "SELECT id, lab_id, control_lot_id, instrument, map_instrument_id, result_value, result_date, run_time, operator_user_id, comment, accepted_for_reporting, created_at, voided_at, voided_by_user_id, void_reason FROM qc_results WHERE lab_id = ? AND control_lot_id = ? ORDER BY result_date DESC, id DESC LIMIT ?"
+      "SELECT id, lab_id, control_lot_id, instrument, map_instrument_id, result_value, result_date, run_time, operator_user_id, comment, accepted_for_reporting, created_at, voided_at, voided_by_user_id, void_reason, import_id, import_row, import_column, import_operator FROM qc_results WHERE lab_id = ? AND control_lot_id = ? ORDER BY result_date DESC, id DESC LIMIT ?"
     ).all(req.scope.labId, controlLotId, limit) as any[];
     if (results.length === 0) return res.json({ results: [], analyte: lot.analyte });
     const ids = results.map(r => r.id);
@@ -5306,11 +5309,16 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     for (const n of notes) {
       (notesByResult[n.qc_result_id] = notesByResult[n.qc_result_id] || []).push(n);
     }
+    // A run read from a file says so (server/qcFileImport.ts), and a run stored after its month's review was signed is marked.
+    const imports = importsOf(sqlite, req.scope.labId, results);
+    const months = signedMonths(sqlite, req.scope.labId, [controlLotId]);
     const enriched = results.map(r => ({
       ...r,
       violations: violByResult[r.id] || [],
       corrective_actions: caByResult[r.id] || [],
       notes: notesByResult[r.id] || [],
+      imported: r.import_id ? imports.get(r.import_id) ?? null : null,
+      added_after_review: r.voided_at ? null : addedAfterReview(months, r),
     }));
     res.json({ results: enriched, analyte: lot.analyte });
   });
@@ -5325,11 +5333,22 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const reason = String(req.body?.reason ?? "").trim();
     if (!reason) return res.status(400).json({ error: "A reason is required to void a QC result" });
     const sqlite = (db as any).$client;
-    const row = sqlite.prepare("SELECT id, voided_at FROM qc_results WHERE id = ? AND lab_id = ?").get(id, req.scope.labId) as any;
+    const row = sqlite.prepare(
+      "SELECT r.id, r.voided_at, r.control_lot_id, r.result_value, r.result_date, r.run_time, r.instrument, r.accepted_for_reporting, l.analyte, l.level, l.lot_number FROM qc_results r JOIN qc_control_lots l ON l.id = r.control_lot_id WHERE r.id = ? AND r.lab_id = ?"
+    ).get(id, req.scope.labId) as any;
     if (!row) return res.status(404).json({ error: "QC result not found in this lab" });
     if (row.voided_at) return res.status(409).json({ error: "This result is already voided" });
-    sqlite.prepare("UPDATE qc_results SET voided_at = datetime('now'), voided_by_user_id = ?, void_reason = ? WHERE id = ?").run(req.userId, reason, id);
+    voidQcRun(sqlite, id, req.userId, reason);
     const findings = settleFindingsForVoidedRun(sqlite, req, id, reason);
+    // BUG-199: a void left its own columns and no audit row. An import taken back is in its own (server/qcFileImport.ts).
+    const { analyte, level, lot_number, id: _id, ...before } = row;
+    logAudit({
+      userId: req.userId, ownerUserId: req.scope.lab?.owner_user_id ?? req.userId, module: "veritaqc", action: "update",
+      entityType: "qc_result.void", entityId: id, entityLabel: `${analyte} ${level} lot ${lot_number}: ${row.result_value} on ${row.result_date}`,
+      before: { ...before, lab_id: req.scope.labId },
+      after: { ...before, lab_id: req.scope.labId, voided_at: (sqlite.prepare("SELECT voided_at FROM qc_results WHERE id = ?").get(id) as any).voided_at, voided_by_user_id: req.userId, void_reason: reason, findings },
+      ipAddress: req.ip,
+    });
     res.json({ ok: true, id, findings });
   });
 
@@ -5426,7 +5445,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const limit = Math.min(Number(req.query.limit) || 100, 500);
     const sqlite = (db as any).$client;
     const params: any[] = [req.scope.labId];
-    let sql = "SELECT r.id, r.lab_id, r.control_lot_id, r.instrument, r.map_instrument_id, r.result_value, r.result_date, r.run_time, r.accepted_for_reporting, r.created_at, l.analyte, l.lot_number, l.level, r.operator_staff_employee_id, NULLIF(TRIM(COALESCE(se.first_name,'') || ' ' || COALESCE(se.last_name,'')), '') AS operator_name FROM qc_results r JOIN qc_control_lots l ON r.control_lot_id = l.id LEFT JOIN staff_employees se ON se.id = r.operator_staff_employee_id WHERE r.lab_id = ?";
+    let sql = "SELECT r.id, r.lab_id, r.control_lot_id, r.instrument, r.map_instrument_id, r.result_value, r.result_date, r.run_time, r.accepted_for_reporting, r.created_at, l.analyte, l.lot_number, l.level, r.operator_staff_employee_id, NULLIF(TRIM(COALESCE(se.first_name,'') || ' ' || COALESCE(se.last_name,'')), '') AS operator_name, r.import_id, r.import_row, r.import_column, r.import_operator, r.voided_at, r.void_reason FROM qc_results r JOIN qc_control_lots l ON r.control_lot_id = l.id LEFT JOIN staff_employees se ON se.id = r.operator_staff_employee_id WHERE r.lab_id = ? AND " + NOT_TAKEN_BACK("r.");
+    // BUG-198: a voided run is listed, marked voided (a corrective action on it can still be closed out there), under All results only.
+    // The two lists of what needs attention hold runs that count.
+    if (status === "with_violation" || status === "missing_ca") sql += " AND " + LIVE_RUN("r.");
     if (since) { sql += " AND r.result_date >= ?"; params.push(since); }
     if (until) { sql += " AND r.result_date <= ?"; params.push(until); }
     sql += " ORDER BY r.result_date DESC, r.id DESC LIMIT ?";
@@ -5450,11 +5472,15 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     ).all(...ids) as any[];
     const nByR: Record<number, any[]> = {};
     for (const n of rNotes) (nByR[n.qc_result_id] = nByR[n.qc_result_id] || []).push(n);
+    const imports = importsOf(sqlite, req.scope.labId, results);
+    const months = signedMonths(sqlite, req.scope.labId, results.map(r => r.control_lot_id));
     let enriched = results.map(r => ({
       ...r,
       violations: vByR[r.id] || [],
       corrective_actions: cByR[r.id] || [],
       notes: nByR[r.id] || [],
+      imported: r.import_id ? imports.get(r.import_id) ?? null : null,
+      added_after_review: r.voided_at ? null : addedAfterReview(months, r),
     }));
     if (status === "with_violation") {
       enriched = enriched.filter(r => r.violations.length > 0);
@@ -5907,7 +5933,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // tracked).
     const instrumentRows = sqlite.prepare(
       `SELECT DISTINCT instrument FROM qc_results
-       WHERE lab_id = ? AND control_lot_id IN (${lotPlaceholders})
+       WHERE lab_id = ? AND control_lot_id IN (${lotPlaceholders}) AND ${LIVE_RUN()}
          AND instrument IS NOT NULL AND instrument != ''
        ORDER BY instrument ASC`
     ).all(req.scope.labId, ...lotIds) as any[];
@@ -5918,6 +5944,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const filterClauses: string[] = [
       "r.lab_id = ?",
       `r.control_lot_id IN (${lotPlaceholders})`,
+      LIVE_RUN("r."), // a voided run is never evidence for a study (BUG-198)
     ];
     const filterArgs: any[] = [req.scope.labId, ...lotIds];
     if (instrument) {
@@ -6026,7 +6053,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
     // Build the results query with the same filter shape as the candidates
     // endpoint, plus mandatory control_lot_id (we're committing now).
-    const where: string[] = ["r.lab_id = ?", "r.control_lot_id = ?"];
+    const where: string[] = ["r.lab_id = ?", "r.control_lot_id = ?", LIVE_RUN("r.")];
     const args: any[] = [req.scope.labId, lot.id];
     if (instrument) { where.push("r.instrument = ?"); args.push(String(instrument).trim()); }
     if (start_date) { where.push("r.result_date >= ?"); args.push(String(start_date).trim()); }
@@ -6228,7 +6255,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       }
 
       const buildWhere = (lotId: number) => {
-        const clauses: string[] = ["r.lab_id = ?", "r.control_lot_id = ?"];
+        const clauses: string[] = ["r.lab_id = ?", "r.control_lot_id = ?", LIVE_RUN("r.")];
         const args: any[] = [req.scope.labId, lotId];
         if (instrument) {
           clauses.push("r.instrument = ?");
@@ -22722,7 +22749,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       `SELECT r.id, r.result_date, r.run_time, r.result_value, r.instrument, r.map_instrument_id, r.accepted_for_reporting,
               r.voided_at, r.void_reason, r.basis_mean, r.basis_sd, r.basis_source,
               l.analyte, l.level, l.lot_number,
-              COALESCE(NULLIF(TRIM(COALESCE(se.first_name, '') || ' ' || COALESCE(se.last_name, '')), ''), u.name) AS operator_name
+              COALESCE(NULLIF(TRIM(COALESCE(se.first_name, '') || ' ' || COALESCE(se.last_name, '')), ''), u.name, r.import_operator) AS operator_name
        FROM qc_results r
        JOIN qc_control_lots l ON l.id = r.control_lot_id
        LEFT JOIN staff_employees se ON se.id = r.operator_staff_employee_id
@@ -22795,14 +22822,16 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
        ORDER BY d.down_from DESC`
     ).all(labId, ...eqIds, since) as any[] : [];
 
-    const rejections = failures.filter((f) => f.has_rejection);
+    // A voided run is in the timeline, marked; the run counts leave it out. A corrective action on one is still an action on file.
+    const standing = failures.filter((f) => !f.voided_at);
+    const rejections = standing.filter((f) => f.has_rejection);
     const allCas = failures.flatMap((f) => f.corrective_actions);
     res.json({
       instrument: inst,
       period: { since, days },
       summary: {
         runs: totals?.runs ?? 0,
-        runs_with_flags: failures.length,
+        runs_with_flags: standing.length,
         rejections: rejections.length,
         rejections_without_action: rejections.filter((f) => f.corrective_actions.length === 0).length,
         corrective_actions: allCas.length,
@@ -23484,7 +23513,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       let qc: any = null;
       if (finding.source_type === "qc_escalation") {
         qc = sqlite.prepare(
-          `SELECT cl.analyte, cl.level, cl.lot_number, r.result_value, r.result_date, r.instrument, v.rule_code
+          `SELECT cl.analyte, cl.level, cl.lot_number, r.result_value, r.result_date, r.instrument, r.voided_at, v.rule_code
              FROM qc_corrective_actions ca
              JOIN qc_results r ON r.id = ca.qc_result_id
              JOIN qc_control_lots cl ON cl.id = r.control_lot_id
@@ -36817,6 +36846,11 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       sqlite.prepare("DELETE FROM qc_corrective_actions WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM qc_results WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM qc_period_reviews WHERE lab_id = ?").run(id);
+      sqlite.prepare("DELETE FROM qc_file_imports WHERE lab_id = ?").run(id);
+      sqlite.prepare("DELETE FROM qc_import_mappings WHERE lab_id = ?").run(id);
+      sqlite.prepare("DELETE FROM qc_import_names WHERE lab_id = ?").run(id);
+      sqlite.prepare("DELETE FROM qc_allowable_errors WHERE lab_id = ?").run(id);
+      sqlite.prepare("DELETE FROM qc_peer_means WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM qc_control_lots WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM qc_rule_settings WHERE lab_id = ?").run(id);
       sqlite.prepare("DELETE FROM veritaqc_import_mappings WHERE lab_id = ?").run(id);

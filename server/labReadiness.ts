@@ -110,9 +110,9 @@ export function computeLabReadiness(client: any, labId: number) {
     push("pt_deadlines", "PT submission deadlines", od, ds, rows.length, "pending submissions",
       { setUp: rows.length > 0 || has("SELECT 1 FROM pt_events WHERE lab_id = ? LIMIT 1"), notSetUp: "No PT events entered" });
   } catch {}
-  // QC corrective actions (rejection violations with no CA filed)
+  // QC corrective actions (rejection violations with no CA filed; a voided run owes none, BUG-198)
   try {
-    const miss = client.prepare("SELECT COUNT(*) AS n FROM qc_rule_violations v WHERE v.severity = 'rejection' AND v.superseded_at IS NULL AND v.qc_result_id IN (SELECT id FROM qc_results WHERE lab_id = ?) AND NOT EXISTS (SELECT 1 FROM qc_corrective_actions ca WHERE ca.qc_result_id = v.qc_result_id)").get(labId).n as number;
+    const miss = client.prepare("SELECT COUNT(*) AS n FROM qc_rule_violations v WHERE v.severity = 'rejection' AND v.superseded_at IS NULL AND v.qc_result_id IN (SELECT id FROM qc_results WHERE lab_id = ? AND voided_at IS NULL) AND NOT EXISTS (SELECT 1 FROM qc_corrective_actions ca WHERE ca.qc_result_id = v.qc_result_id)").get(labId).n as number;
     const lots = client.prepare("SELECT COUNT(*) AS n FROM qc_control_lots WHERE lab_id = ? AND status = 'active'").get(labId).n as number;
     push("qc", "QC corrective actions", miss, 0, lots, "active lots",
       { setUp: lots > 0 || has("SELECT 1 FROM qc_control_lots WHERE lab_id = ? LIMIT 1"), notSetUp: "No control lots entered" });

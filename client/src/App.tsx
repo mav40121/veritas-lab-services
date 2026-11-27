@@ -120,6 +120,8 @@ const SystemDocumentsPage = lazy(() => import("@/pages/SystemDocumentsPage"));
 const DigestPage = lazy(() => import("@/pages/DigestPage"));
 const SystemRepositoryPage = lazy(() => import("@/pages/SystemRepositoryPage"));
 const VeritaQCDailyReviewPage = lazy(() => import("@/pages/VeritaQCDailyReviewPage"));
+const VeritaQCImportPage = lazy(() => import("@/pages/VeritaQCImportPage"));
+const VeritaQCSigmaPage = lazy(() => import("@/pages/VeritaQCSigmaPage"));
 const VeritaPolicyAppPage = lazy(() => import("@/pages/VeritaPolicyAppPage"));
 const VeritaPolicyMyPoliciesPage = lazy(() => import("@/pages/VeritaPolicyMyPoliciesPage"));
 const VeritaPolicyCompliancePage = lazy(() => import("@/pages/VeritaPolicyCompliancePage"));
@@ -513,6 +515,8 @@ function AppContent() {
           <Route path="/veritalab-app">{wrapLegacy(VeritaLabAppPage)}</Route>
           <Route path="/veritaqc-app">{wrapLegacy(VeritaQCAppPage)}</Route>
           <Route path="/veritaqc-app/review">{wrapLegacy(VeritaQCDailyReviewPage)}</Route>
+          <Route path="/veritaqc-app/import">{wrapLegacy(VeritaQCImportPage)}</Route>
+          <Route path="/veritaqc-app/sigma">{wrapLegacy(VeritaQCSigmaPage)}</Route>
           <Route path="/equipment-app/stain-log">{wrapLegacy(StainLogPage)}</Route>
           <Route path="/equipment-app">{wrapLegacy(EquipmentAppPage)}</Route>
           <Route path="/readiness/findings">{wrapLegacy(SystemFindingsPage)}</Route>
@@ -635,6 +639,8 @@ function AppContent() {
           <Route path="/labs/:labId/digest" component={DigestPage} />
           <Route path="/labs/:labId/repository" component={SystemRepositoryPage} />
           <Route path="/labs/:labId/veritaqc-app/review" component={VeritaQCDailyReviewPage} />
+          <Route path="/labs/:labId/veritaqc-app/import" component={VeritaQCImportPage} />
+          <Route path="/labs/:labId/veritaqc-app/sigma" component={VeritaQCSigmaPage} />
           <Route path="/labs/:labId/veritapolicy-app" component={VeritaPolicyAppPage} />
           <Route path="/labs/:labId/veritapolicy-app/my-policies" component={VeritaPolicyMyPoliciesPage} />
           <Route path="/labs/:labId/veritapolicy-app/compliance" component={VeritaPolicyCompliancePage} />

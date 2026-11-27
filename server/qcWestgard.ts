@@ -9,7 +9,7 @@
 // mean/SD. The client (MedStar) wants the lab's own numbers once it has enough
 // runs and the manufacturer's only until then (emails 2026-09-30, 2026-10-08).
 
-import { resolveBasis, loadBasisLot, basisConfig, type QcBasis, type QcBasisConfig } from "./qcBasis";
+import { computeBasis, loadBasisLot, basisConfig, type QcBasis, type QcBasisConfig } from "./qcBasis";
 
 export type WestgardViolation = {
   rule_code: string;
@@ -108,28 +108,42 @@ export function rulesForRun(
   return westgardRulesAt(vals, ids, i, basis ? basis.mean : NaN, basis ? basis.sd : NaN, biasN, trendN);
 }
 
+// The runs on one lot in the order they are judged (result_date, then entry), with the lot and its basis settings. A
+// file import (server/qcFileImport.ts) holds one per lot and adds each run to it as it is stored, so thousands of runs
+// don't re-read the lot's history each; what judges a run is the same either way.
+export interface LotRuns {
+  history: { id: number; result_value: number; result_date: string }[];
+  lot: ReturnType<typeof loadBasisLot>;
+  cfg: QcBasisConfig;
+}
+export function loadLotRuns(sqlite: any, labId: number, controlLotId: number): LotRuns {
+  const history = sqlite.prepare(
+    "SELECT id, result_value, result_date FROM qc_results WHERE lab_id = ? AND control_lot_id = ? AND accepted_for_reporting = 1 AND voided_at IS NULL ORDER BY result_date ASC, id ASC"
+  ).all(labId, controlLotId) as LotRuns["history"];
+  const lot = loadBasisLot(sqlite, labId, controlLotId);
+  return { history, lot, cfg: basisConfig(sqlite, labId, lot?.analyte ?? null) };
+}
+
 // Judge one just-entered run. Returns the violations and the basis that judged
 // it (callers store the basis on the result for the audit trail). When the lot
 // has just reached its establish count, the lab's mean/SD is locked.
 export function evaluateQcRun(
   sqlite: any, labId: number, controlLotId: number, newResultId: number,
-  biasN: number, trendN: number,
+  biasN: number, trendN: number, loaded?: LotRuns,
 ): { violations: WestgardViolation[]; basis: QcBasis | null } {
-  const history = sqlite.prepare(
-    "SELECT id, result_value FROM qc_results WHERE lab_id = ? AND control_lot_id = ? AND accepted_for_reporting = 1 AND voided_at IS NULL ORDER BY result_date ASC, id ASC"
-  ).all(labId, controlLotId) as { id: number; result_value: number }[];
+  const { history, lot, cfg } = loaded ?? loadLotRuns(sqlite, labId, controlLotId);
   const ids = history.map(r => r.id);
   // Audit HIGH #1 (2026-07-12): anchor evaluation to the ACTUAL just-entered
   // result, not the last date-ordered element, so a back-dated entry is judged
   // itself (and against the runs that precede it in chart order).
   const i = ids.indexOf(newResultId);
   if (i < 0) return { violations: [], basis: null };
-  const basis = resolveBasis(sqlite, labId, controlLotId, { beforeResultId: newResultId });
   const vals = history.map(r => Number(r.result_value));
-  const lot = loadBasisLot(sqlite, labId, controlLotId);
+  // The basis is the runs before this one in that order (resolveBasis with beforeResultId, from the history in hand).
+  const basis = lot ? computeBasis(lot, vals.slice(0, i), cfg) : null;
   const violations = rulesForRun(vals, ids, i, basis,
     { low: lot?.mfr_range_low ?? null, high: lot?.mfr_range_high ?? null },
-    basisConfig(sqlite, labId, lot?.analyte ?? null), biasN, trendN);
+    cfg, biasN, trendN);
   return { violations, basis };
 }
 

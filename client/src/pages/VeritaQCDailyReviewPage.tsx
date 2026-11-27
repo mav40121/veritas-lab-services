@@ -17,6 +17,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { RunOrigin } from "@/components/qcimport/importShared";
 import {
   AlertTriangle, CheckCircle2, Lock, ClipboardList, ChevronRight, FileDown, RefreshCw,
 } from "lucide-react";
@@ -53,6 +54,14 @@ interface RecentResult {
   run_time: string | null;
   accepted_for_reporting: number;
   operator_name?: string | null;
+  imported?: { id: number; file_name: string; imported_by_name: string; imported_at: string } | null;
+  import_row?: number | null;
+  import_column?: string | null;
+  import_operator?: string | null;
+  added_after_review?: string | null;
+  // A voided run is listed, marked, and counted nowhere (BUG-198).
+  voided_at?: string | null;
+  void_reason?: string | null;
   violations: ViolationRow[];
   corrective_actions: CARow[];
 }
@@ -491,9 +500,10 @@ export default function VeritaQCDailyReviewPage() {
   const entryHref = `/labs/${activeLabId}/veritaqc-app`;
 
   // Summary counters surface the "what should I look at first" answer.
-  const totalRejections = results.reduce(
+  const counted = results.filter(r => !r.voided_at);
+  const totalRejections = counted.reduce(
     (n, r) => n + r.violations.filter(v => v.severity === "rejection").length, 0);
-  const missingCA = results.filter(r =>
+  const missingCA = counted.filter(r =>
     r.violations.some(v => v.severity === "rejection") && r.corrective_actions.length === 0
   ).length;
 
@@ -613,7 +623,7 @@ export default function VeritaQCDailyReviewPage() {
                 <Badge variant="outline" className="text-xs">Lot {g.lot_number}</Badge>
                 <Badge variant="outline" className="text-xs">{g.level}</Badge>
                 <span className="ml-auto text-xs font-normal text-muted-foreground">
-                  {g.rows.length} run{g.rows.length === 1 ? "" : "s"}
+                  {(() => { const n = g.rows.filter(r => !r.voided_at).length, v = g.rows.length - n; return `${n} run${n === 1 ? "" : "s"}${v ? `, ${v} voided` : ""}`; })()}
                 </span>
               </CardTitle>
             </CardHeader>
@@ -633,14 +643,16 @@ export default function VeritaQCDailyReviewPage() {
                   <tbody>
                     {g.rows.map(r => {
                       const hasRej = r.violations.some(v => v.severity === "rejection");
-                      const needsCA = hasRej && r.corrective_actions.length === 0;
+                      const needsCA = hasRej && r.corrective_actions.length === 0 && !r.voided_at;
                       return (
-                        <tr key={r.id} className={`border-b last:border-b-0 ${needsCA ? "bg-red-500/5" : ""}`}>
+                        <tr key={r.id} className={`border-b last:border-b-0 ${needsCA ? "bg-red-500/5" : ""} ${r.voided_at ? "opacity-70" : ""}`}>
                           <td className="py-2 pr-2">
                             {r.result_date}
                             {r.operator_name && <div className="text-[11px] text-muted-foreground">by {r.operator_name}</div>}
+                            <div className="max-w-[16rem]"><RunOrigin run={r} /></div>
+                            {r.voided_at && <div className="max-w-[16rem] text-[11px] font-medium" data-testid={`review-voided-${r.id}`}>Voided{r.void_reason ? `: ${r.void_reason}` : ""}</div>}
                           </td>
-                          <td className="py-2 pr-2 font-mono">{r.result_value}</td>
+                          <td className={`py-2 pr-2 font-mono ${r.voided_at ? "line-through" : ""}`}>{r.result_value}</td>
                           <td className="py-2 pr-2 text-muted-foreground">
                             {r.map_instrument_id ? (
                               <Link href={labRoute(`/instruments/${r.map_instrument_id}/trail`)} className="text-teal-700 hover:underline" title="Open this analyzer's QC trail">
@@ -694,7 +706,7 @@ export default function VeritaQCDailyReviewPage() {
                                       <Link href={`/veritaresponse/${linked.nce_reference!.split("#")[1]}`} className="inline-flex items-center gap-1 text-emerald-700 hover:underline" title="Open in VeritaResponse">
                                         <ClipboardList className="h-3 w-3" /> VeritaResponse #{linked.nce_reference!.split("#")[1]}
                                       </Link>
-                                    ) : escalatable && hasPlanAccess ? (
+                                    ) : escalatable && hasPlanAccess && !r.voided_at ? (
                                       <Button
                                         variant="ghost"
                                         size="sm"
@@ -734,7 +746,9 @@ export default function VeritaQCDailyReviewPage() {
                             )}
                           </td>
                           <td className="py-2 pr-2">
-                            {r.accepted_for_reporting === 1 ? (
+                            {r.voided_at ? (
+                              <span className="text-xs">voided</span>
+                            ) : r.accepted_for_reporting === 1 ? (
                               <CheckCircle2 className="h-4 w-4 text-emerald-600" />
                             ) : (
                               <span className="text-xs text-amber-700">excluded</span>
