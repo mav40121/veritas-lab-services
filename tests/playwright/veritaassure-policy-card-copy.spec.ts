@@ -3,7 +3,7 @@
 // The public /veritaassure page previously described VeritaPolicy as a
 // "TJC Policy Compliance Tracker" that "Tracks all 88 TJC-required laboratory
 // policies." VeritaPolicy is CLIA-grounded (42 CFR 493) and crosswalks each
-// policy to CAP, COLA, TJC, and AABB. This spec asserts the card no longer
+// policy to TJC and CAP (COLA and AABB being verified, BUG-191). This spec asserts the card no longer
 // implies TJC-only scope.
 //
 // Env: PW_BASE (default production www). No auth required; this is a public page.
@@ -21,7 +21,9 @@ test.describe("VeritaAssure page - VeritaDC card (formerly VeritaPolicy)", () =>
     await expect(body).toContainText("VeritaDC");
     await expect(body).toContainText("Formerly VeritaPolicy");
     await expect(body).toContainText("Policy and Document Control");
-    await expect(body).toContainText("CAP, COLA, TJC, or AABB");
+    await expect(body).toContainText("CLIA (42 CFR 493)");
+    // BUG-191 (2026-11-27): our COLA and AABB citations read "being verified" until checked against the source standards.
+    await expect(body).toContainText("COLA and AABB citations are being verified");
   });
 
   test("page does not render retired tier prices (dead PRICING const removed)", async ({ page }) => {

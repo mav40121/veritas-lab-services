@@ -7,6 +7,7 @@ import { CheckCircle2, Shield, ChevronRight, FileText, ToggleLeft, BarChart2, Bo
 import { useAuth } from "@/components/AuthContext";
 import { useQuery } from "@tanstack/react-query";
 import { useLabRoute } from "@/hooks/useLabRoute";
+import { joinRefNames, refSourceVerified, type RefSource } from "@shared/accreditorRefs";
 
 // Accreditor display profiles. Counts and chapters are sourced from the server
 // requirement files which are auto-generated from the master citation index.
@@ -18,6 +19,9 @@ type AccreditorProfile = {
   count: number;
   chapters: string;
   surveyTerm: string;
+  // The citation sources the profile lists, each with the name the hero uses. BUG-191: a source on
+  // UNVERIFIED_REF_SOURCES (shared/accreditorRefs.ts) is said to be being verified, never listed or counted.
+  sources: { source: RefSource; name: string }[];
 };
 
 const ACCREDITOR_PROFILES: Record<string, AccreditorProfile> = {
@@ -27,6 +31,7 @@ const ACCREDITOR_PROFILES: Record<string, AccreditorProfile> = {
     count: 88,
     chapters: "APR, DC, EC, EM, HR, IC, IM, LD, PI, QSA, TS, WT",
     surveyTerm: "TJC survey",
+    sources: [{ source: "TJC", name: "The Joint Commission" }],
   },
   CAP: {
     short: "CAP",
@@ -34,6 +39,7 @@ const ACCREDITOR_PROFILES: Record<string, AccreditorProfile> = {
     count: 65,
     chapters: "GEN, COM, CHM, HEM, MIC, IMM, TRM, MOL",
     surveyTerm: "CAP inspection",
+    sources: [{ source: "CAP", name: "College of American Pathologists" }],
   },
   COLA: {
     short: "COLA",
@@ -41,6 +47,7 @@ const ACCREDITOR_PROFILES: Record<string, AccreditorProfile> = {
     count: 81,
     chapters: "QC, GLS, PRE, PT, PST, VER, CA",
     surveyTerm: "COLA survey",
+    sources: [{ source: "COLA", name: "COLA Inc." }],
   },
   "CAP+AABB": {
     short: "CAP and AABB",
@@ -48,6 +55,7 @@ const ACCREDITOR_PROFILES: Record<string, AccreditorProfile> = {
     count: 65,
     chapters: "GEN, COM, CHM, HEM, MIC, IMM, TRM, MOL",
     surveyTerm: "CAP and AABB inspection",
+    sources: [{ source: "CAP", name: "College of American Pathologists" }, { source: "AABB", name: "AABB" }],
   },
   CLIA: {
     short: "CLIA",
@@ -55,6 +63,7 @@ const ACCREDITOR_PROFILES: Record<string, AccreditorProfile> = {
     count: 286,
     chapters: "42 CFR Part 493 and related federal rules (21 CFR, 29 CFR, 45 CFR, and 42 CFR 482 and 483)",
     surveyTerm: "CLIA survey",
+    sources: [{ source: "CFR", name: "Clinical Laboratory Improvement Amendments" }],
   },
 };
 
@@ -77,6 +86,15 @@ export default function VeritaPolicyPage() {
 
   const choice = accountSettings?.accreditation_choice || "TJC";
   const profile = ACCREDITOR_PROFILES[choice] || DEFAULT_PROFILE;
+  // BUG-191: only sources whose numbers are checked are named and counted; the rest are being verified.
+  const listedSources = profile.sources.filter((s) => refSourceVerified(s.source));
+  const pendingSources = profile.sources.filter((s) => !refSourceVerified(s.source)).map((s) => s.source);
+  const pendingCitations = pendingSources.length ? `${joinRefNames(pendingSources)} citations are being verified` : "";
+  const citedPhrase = (listedSources.length ? `related ${joinRefNames(listedSources.map((s) => s.name))} citations listed` : "its 42 CFR Part 493 citations listed")
+    + (pendingCitations ? ` (${pendingCitations})` : "");
+  const referenceSetLine = listedSources.length
+    ? `Reference set of ${profile.count} citations: ${profile.chapters}${pendingCitations ? `; ${pendingCitations}` : ""}`
+    : `${pendingCitations}.`;
 
   const FEATURE_CARDS = [
     {
@@ -116,7 +134,7 @@ export default function VeritaPolicyPage() {
     "PDF inspection report: summary on page 1, requirements by chapter, policy index",
     "Laboratory Director or Designee review signature block on all reports",
     "CLIA number on the report, filled in from your account",
-    `Reference set of ${profile.count} citations: ${profile.chapters}`,
+    referenceSetLine,
     "Built by a credentialed MLS(ASCP), CPHQ with direct laboratory accreditation experience",
   ];
 
@@ -142,7 +160,7 @@ export default function VeritaPolicyPage() {
               <p className="text-muted-foreground mb-8 leading-relaxed">
                 Document control for the lab: manage policies, procedures, and forms with version history,
                 director approval, and periodic reviews. A master list of 58 laboratory policies comes
-                pre-loaded with related {profile.full} citations listed, so you build your library, enter your
+                pre-loaded with {citedPhrase}, so you build your library, enter your
                 policy against each requirement, and download a readiness report. Built by a former TJC
                 laboratory surveyor with 200+ facility inspections.
               </p>

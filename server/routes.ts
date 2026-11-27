@@ -938,6 +938,8 @@ import { IQCP_QUESTION_BANK, evaluatePrescreen, type PrescreenAnswers } from "./
 // Used as a fallback when client-sent referenceItems are missing accreditor fields
 // (e.g. stale browser bundles). Pure data module, safe to import on the server.
 import { SCAN_ITEMS as VERITASCAN_SCAN_ITEMS } from "../client/src/lib/veritaScanData";
+// BUG-191: the one switch for the COLA and AABB reference numbers we supplied ("Being verified" until each is checked).
+import { displayRef, displayRefList, unverifiedRefNote, refSourceVerified, joinRefNames, type RefSource } from "../shared/accreditorRefs";
 import { exportAllPlanBypass, exportAllMiddleware } from "./exportAllContext";
 import { registerExportAllRoutes } from "./exportAll";
 import { findBackfillItems, clearBackfillItems, summarizeByLab } from "./competencyBackfillCleanup";
@@ -19823,12 +19825,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       }
     }
 
-    type AccreditorCol = { key: "tjc" | "cap" | "aabb" | "cola"; label: string };
+    type AccreditorCol = { key: "tjc" | "cap" | "aabb" | "cola"; label: string; source: RefSource };
     const xlsxSelected: AccreditorCol[] = [];
-    if (xlsxPreferredStandards.includes("TJC")) xlsxSelected.push({ key: "tjc", label: "TJC Standard" });
-    if (xlsxPreferredStandards.includes("CAP")) xlsxSelected.push({ key: "cap", label: "CAP Requirement" });
-    if (xlsxPreferredStandards.includes("AABB")) xlsxSelected.push({ key: "aabb", label: "AABB Standard" });
-    if (xlsxPreferredStandards.includes("COLA")) xlsxSelected.push({ key: "cola", label: "COLA Criterion" });
+    if (xlsxPreferredStandards.includes("TJC")) xlsxSelected.push({ key: "tjc", label: "TJC Standard", source: "TJC" });
+    if (xlsxPreferredStandards.includes("CAP")) xlsxSelected.push({ key: "cap", label: "CAP Requirement", source: "CAP" });
+    if (xlsxPreferredStandards.includes("AABB")) xlsxSelected.push({ key: "aabb", label: "AABB Standard", source: "AABB" });
+    if (xlsxPreferredStandards.includes("COLA")) xlsxSelected.push({ key: "cola", label: "COLA Criterion", source: "COLA" });
 
     try {
       const { default: ExcelJS } = await import("exceljs");
@@ -19906,7 +19908,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         ? xlsxSelected.map(a => a.label.replace(/ (Standard|Requirement|Criterion)$/, "")).join(", ")
         : "none on file (CFR-only view)";
       aboutSection("About this product");
-      aboutBody(`This workbook is the row-by-row record of a VeritaScan self-assessment. It walks 173 compliance questions across the operational domains of a clinical laboratory and records, for each question, the lab's self-assessed status, the owner accountable for it, the due date for follow-up, and the lab's notes. Citations columns reflect the accreditation bodies on file for this lab: ${accreditorList}.`);
+      aboutBody(`This workbook is the row-by-row record of a VeritaScan self-assessment. It walks 173 compliance questions across the operational domains of a clinical laboratory and records, for each question, the lab's self-assessed status, the owner accountable for it, the due date for follow-up, and the lab's notes. Citations columns reflect the accreditation bodies on file for this lab: ${accreditorList}.${unverifiedRefNote(xlsxSelected.map(a => a.source)) ? ` ${unverifiedRefNote(xlsxSelected.map(a => a.source))}` : ""}`);
       aboutBlank();
       aboutSection("How to use this workbook");
       aboutBody("The VeritaScan tab lists every compliance question. Use the auto-filter on the header row to narrow by domain or status. The Status column is color-coded: green for Pass/Compliant/Current, amber for Due Soon/Pending, magenta for Fail/Overdue/Non-Compliant, gray for N/A or Not Assessed. Owner and Due Date capture remediation accountability; Notes capture the lab's own context for each item.");
@@ -19950,8 +19952,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         // Phase 3.6 fallback: if client omitted an accreditor field (stale
         // bundle), pull it from the authoritative server-side SCAN_ITEMS.
         const authoritative = VERITASCAN_ITEM_BY_ID[ref.id] || {};
+        // Our built-in AABB and COLA numbers read "Being verified" until each is checked (BUG-191).
         const accreditorCells = xlsxSelected.map(a => {
-          const v = ref[a.key] || authoritative[a.key];
+          const v = displayRef(a.source, ref[a.key] || authoritative[a.key]);
           return v && v !== "N/A" ? v : "";
         });
         return [
@@ -20182,9 +20185,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         cap: ref.cap || authoritative.cap || "",
         cfr: ref.cfr || authoritative.cfr || "",
         // Phase 3.5 (2026-05-01): aabb + cola pass-through to match the
-        // ScanItem shape and keep the PDF data complete for future use.
-        aabb: ref.aabb || authoritative.aabb || "",
-        cola: ref.cola || authoritative.cola || "",
+        // ScanItem shape. BUG-191: our numbers read "Being verified" until each is checked.
+        aabb: displayRef("AABB", ref.aabb || authoritative.aabb),
+        cola: displayRef("COLA", ref.cola || authoritative.cola),
         status: saved.status || "Not Assessed",
         notes: scanExportNotes(saved, (d) => labLocalDate(d)),
         owner: saved.owner || "",
@@ -21951,9 +21954,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           cfr: ref.cfr || authoritative.cfr || "",
           // Phase 3.5 (2026-05-01): pass through aabb + cola so future PDF
           // accreditor gating has the data. The current PDF table renders
-          // TJC/CAP/CFR columns only.
-          aabb: ref.aabb || authoritative.aabb || "",
-          cola: ref.cola || authoritative.cola || "",
+          // TJC/CAP/CFR columns only. BUG-191: our numbers read "Being verified" until each is checked.
+          aabb: displayRef("AABB", ref.aabb || authoritative.aabb),
+          cola: displayRef("COLA", ref.cola || authoritative.cola),
           status: saved.status || "Not Assessed",
           notes: saved.notes || "",
           owner: saved.owner || "",
@@ -39437,6 +39440,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const linkedPolicy = userStatus?.lab_policy_id ? policyMap[userStatus.lab_policy_id] : null;
       return {
         ...req,
+        // The CFR crosswalk's COLA and AABB numbers are ours and unchecked (BUG-191): "Being verified" until each is.
+        ...(Array.isArray(req.cola_ids) ? { cola_ids: displayRefList("COLA", req.cola_ids) } : {}),
+        ...(Array.isArray(req.aabb_ids) ? { aabb_ids: displayRefList("AABB", req.aabb_ids) } : {}),
         status,
         is_na: isNa,
         auto_na: autoNa,
@@ -39715,12 +39721,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
 
       // Pick the AO columns to include based on the lab record. CFR is always
       // included. If no AO is checked, the workbook is CFR-only.
-      type AoCol = { key: 'tjc_citations' | 'cap_citations' | 'cola_citations' | 'aabb_citations'; label: string };
+      type AoCol = { key: 'tjc_citations' | 'cap_citations' | 'cola_citations' | 'aabb_citations'; label: string; source: RefSource };
       const aoCols: AoCol[] = [];
-      if (lab?.accreditation_tjc)  aoCols.push({ key: 'tjc_citations',  label: 'TJC Citations' });
-      if (lab?.accreditation_cap)  aoCols.push({ key: 'cap_citations',  label: 'CAP Citations' });
-      if (lab?.accreditation_cola) aoCols.push({ key: 'cola_citations', label: 'COLA Citations' });
-      if (lab?.accreditation_aabb) aoCols.push({ key: 'aabb_citations', label: 'AABB Citations' });
+      if (lab?.accreditation_tjc)  aoCols.push({ key: 'tjc_citations',  label: 'TJC Citations', source: 'TJC' });
+      if (lab?.accreditation_cap)  aoCols.push({ key: 'cap_citations',  label: 'CAP Citations', source: 'CAP' });
+      if (lab?.accreditation_cola) aoCols.push({ key: 'cola_citations', label: 'COLA Citations', source: 'COLA' });
+      if (lab?.accreditation_aabb) aoCols.push({ key: 'aabb_citations', label: 'AABB Citations', source: 'AABB' });
       const aoLabel = aoCols.length === 0
         ? 'CLIA only (CFR-only view)'
         : aoCols.map(a => a.label.replace(' Citations', '')).join(', ');
@@ -39788,7 +39794,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       aboutBody('The Master List tab contains the policies most clinical laboratories need to meet federal regulations and accrediting body standards. Use the column filters at the top of each column to narrow by Section, Subspecialty, Service Line, or other fields.');
       aboutBody('Sections: Sections organize policies by where they live in laboratory operations: Specimen Management, Testing, Results, Quality, Personnel, Safety, Information Systems, Leadership, and Specialty Services.');
       aboutBody('Service line: Service Line marks rows that apply only when a specific service is offered. Most rows show "all" because they apply to every laboratory regardless of service mix. Specialty Services rows show their specific line (blood_bank, microbiology, molecular, anatomic_pathology, etc.) so they can be filtered out when a service is not offered.');
-      aboutBody(`Citations: This workbook shows the CFR column plus the column for the accrediting body on file for this lab: ${aoLabel}. Each citation cell shows the most-relevant standards for that policy, capped at five per accrediting body.`);
+      aboutBody(`Citations: This workbook shows the CFR column plus the column for the accrediting body on file for this lab: ${aoLabel}. Each citation cell shows the most-relevant standards for that policy, capped at five per accrediting body.${unverifiedRefNote(aoCols.map(a => a.source)) ? ` ${unverifiedRefNote(aoCols.map(a => a.source))}` : ''}`);
       aboutBody('Notes: Notes describe where the supporting documentation typically lives, which VeritaDC or VeritaCheck module helps draft it, conditional applicability, and role consolidation rules.');
       aboutBody('Reviewing this draft: Mark the Keep column with "n" for any row your laboratory does not need. Edit the Notes column to capture your review comments. The other columns are locked to preserve the integrity of the citation set; the next iteration will incorporate the changes you make in Notes and Keep.');
       aboutBlank();
@@ -39806,7 +39812,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       aboutBlank();
 
       aboutSection('Source');
-      aboutBody('Citations are derived from the VeritaAssure master citation index, which crosswalks 42 CFR 493 (CLIA), 21 CFR 600 series (FDA blood and tissue), 29 CFR 1910 (OSHA), 10 CFR 20 (NRC), and 45 CFR 164 (HIPAA Security Rule) against the published standards of TJC, CAP, COLA, and AABB.');
+      aboutBody(`Citations are derived from the VeritaAssure master citation index, which crosswalks 42 CFR 493 (CLIA), 21 CFR 600 series (FDA blood and tissue), 29 CFR 1910 (OSHA), 10 CFR 20 (NRC), and 45 CFR 164 (HIPAA Security Rule) against the published standards of ${joinRefNames((['TJC', 'CAP', 'COLA', 'AABB'] as RefSource[]).filter(refSourceVerified))}.${unverifiedRefNote(['COLA', 'AABB']) ? ` ${unverifiedRefNote(['COLA', 'AABB'])}` : ''}`);
       aboutBlank();
 
       aboutSection('Coverage gaps');
@@ -39842,7 +39848,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       ws.columns = allHeaders.map((h, i) => ({ header: h.label, key: `col${i}`, width: h.width }));
 
       for (const r of VERITAPOLICY_MASTER_LIST) {
-        const aoCells = aoCols.map(a => (r as any)[a.key] || '');
+        const aoCells = aoCols.map(a => displayRef(a.source, (r as any)[a.key]) || ''); // BUG-191: our COLA/AABB read "Being verified"
         ws.addRow([
           r.policy_id,
           r.policy_name,
@@ -40124,8 +40130,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       if (masterRow?.cfr_citations)                       crosswalk.cfr  = masterRow.cfr_citations;
       if (lab.accreditation_tjc  && masterRow?.tjc_citations)  crosswalk.tjc  = masterRow.tjc_citations;
       if (lab.accreditation_cap  && masterRow?.cap_citations)  crosswalk.cap  = masterRow.cap_citations;
-      if (lab.accreditation_cola && masterRow?.cola_citations) crosswalk.cola = masterRow.cola_citations;
-      if (lab.accreditation_aabb && masterRow?.aabb_citations) crosswalk.aabb = masterRow.aabb_citations;
+      // BUG-191: our COLA and AABB numbers read "Being verified" until each is checked (shared/accreditorRefs.ts).
+      const cwCola = displayRef('COLA', masterRow?.cola_citations), cwAabb = displayRef('AABB', masterRow?.aabb_citations);
+      if (lab.accreditation_cola && cwCola) crosswalk.cola = cwCola;
+      if (lab.accreditation_aabb && cwAabb) crosswalk.aabb = cwAabb;
 
       // MediaLab parity #39 item 1 (2026-06-07): capture downloader
       // identity + timestamp for the footer watermark. Soft deterrent
@@ -40314,8 +40322,10 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         if (row.cfr_citations)                            crosswalk.cfr  = row.cfr_citations;
         if (lab.accreditation_tjc  && row.tjc_citations)  crosswalk.tjc  = row.tjc_citations;
         if (lab.accreditation_cap  && row.cap_citations)  crosswalk.cap  = row.cap_citations;
-        if (lab.accreditation_cola && row.cola_citations) crosswalk.cola = row.cola_citations;
-        if (lab.accreditation_aabb && row.aabb_citations) crosswalk.aabb = row.aabb_citations;
+        // BUG-191: our COLA and AABB numbers read "Being verified" until each is checked (shared/accreditorRefs.ts).
+        const cwCola = displayRef('COLA', row.cola_citations), cwAabb = displayRef('AABB', row.aabb_citations);
+        if (lab.accreditation_cola && cwCola) crosswalk.cola = cwCola;
+        if (lab.accreditation_aabb && cwAabb) crosswalk.aabb = cwAabb;
 
         const buf = await generatePolicyDocxBuffer(pid, labCtx, crosswalk, { downloadedBy: bundleDownloadedBy, downloadedAt: bundleDownloadedAt, uncontrolled: bundleUncontrolled }, houseFormatFor(sqlite, labId, pid));
         if (!buf) { skipped += 1; continue; }
@@ -40413,12 +40423,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const cliaNumber = lab?.clia_number || 'Not on file';
       const exportPwd = process.env.EXCEL_PROTECT_PASSWORD || 'veritaassure-export';
 
-      type AoCol = { key: 'tjc_citations' | 'cap_citations' | 'cola_citations' | 'aabb_citations'; label: string };
+      type AoCol = { key: 'tjc_citations' | 'cap_citations' | 'cola_citations' | 'aabb_citations'; label: string; source: RefSource };
       const aoCols: AoCol[] = [];
-      if (lab?.accreditation_tjc)  aoCols.push({ key: 'tjc_citations',  label: 'TJC Citations' });
-      if (lab?.accreditation_cap)  aoCols.push({ key: 'cap_citations',  label: 'CAP Citations' });
-      if (lab?.accreditation_cola) aoCols.push({ key: 'cola_citations', label: 'COLA Citations' });
-      if (lab?.accreditation_aabb) aoCols.push({ key: 'aabb_citations', label: 'AABB Citations' });
+      if (lab?.accreditation_tjc)  aoCols.push({ key: 'tjc_citations',  label: 'TJC Citations', source: 'TJC' });
+      if (lab?.accreditation_cap)  aoCols.push({ key: 'cap_citations',  label: 'CAP Citations', source: 'CAP' });
+      if (lab?.accreditation_cola) aoCols.push({ key: 'cola_citations', label: 'COLA Citations', source: 'COLA' });
+      if (lab?.accreditation_aabb) aoCols.push({ key: 'aabb_citations', label: 'AABB Citations', source: 'AABB' });
       const aoLabel = aoCols.length === 0
         ? 'CLIA only (CFR-only view)'
         : aoCols.map(a => a.label.replace(' Citations', '')).join(', ');
@@ -40481,7 +40491,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       aboutBody('The Master List tab contains the policies most clinical laboratories need to meet federal regulations and accrediting body standards. Use the column filters at the top of each column to narrow by Section, Subspecialty, Service Line, or other fields.');
       aboutBody('Sections: Sections organize policies by where they live in laboratory operations: Specimen Management, Testing, Results, Quality, Personnel, Safety, Information Systems, Leadership, and Specialty Services.');
       aboutBody('Service line: Service Line marks rows that apply only when a specific service is offered. Most rows show "all" because they apply to every laboratory regardless of service mix. Specialty Services rows show their specific line (blood_bank, microbiology, molecular, anatomic_pathology, etc.) so they can be filtered out when a service is not offered.');
-      aboutBody(`Citations: This workbook shows the CFR column plus the column for the accrediting body on file for this lab: ${aoLabel}. Each citation cell shows the most-relevant standards for that policy, capped at five per accrediting body.`);
+      aboutBody(`Citations: This workbook shows the CFR column plus the column for the accrediting body on file for this lab: ${aoLabel}. Each citation cell shows the most-relevant standards for that policy, capped at five per accrediting body.${unverifiedRefNote(aoCols.map(a => a.source)) ? ` ${unverifiedRefNote(aoCols.map(a => a.source))}` : ''}`);
       aboutBody('Notes: Notes describe where the supporting documentation typically lives, which VeritaDC or VeritaCheck module helps draft it, conditional applicability, and role consolidation rules.');
       aboutBody('Reviewing this draft: Mark the Keep column with "n" for any row your laboratory does not need. Edit the Notes column to capture your review comments. The other columns are locked to preserve the integrity of the citation set; the next iteration will incorporate the changes you make in Notes and Keep.');
       aboutBlank();
@@ -40496,7 +40506,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       aboutBody(`This workbook was prepared for ${labName} (CLIA ${cliaNumber}). The accrediting body on file for this lab is ${aoLabel}. The lab name and CLIA appear on every printed page header and footer.`);
       aboutBlank();
       aboutSection('Source');
-      aboutBody('Citations are derived from the VeritaAssure master citation index, which crosswalks 42 CFR 493 (CLIA), 21 CFR 600 series (FDA blood and tissue), 29 CFR 1910 (OSHA), 10 CFR 20 (NRC), and 45 CFR 164 (HIPAA Security Rule) against the published standards of TJC, CAP, COLA, and AABB.');
+      aboutBody(`Citations are derived from the VeritaAssure master citation index, which crosswalks 42 CFR 493 (CLIA), 21 CFR 600 series (FDA blood and tissue), 29 CFR 1910 (OSHA), 10 CFR 20 (NRC), and 45 CFR 164 (HIPAA Security Rule) against the published standards of ${joinRefNames((['TJC', 'CAP', 'COLA', 'AABB'] as RefSource[]).filter(refSourceVerified))}.${unverifiedRefNote(['COLA', 'AABB']) ? ` ${unverifiedRefNote(['COLA', 'AABB'])}` : ''}`);
       aboutBlank();
       aboutSection('Coverage gaps');
       aboutBody('Every laboratory operates in a slightly different context. If your laboratory identifies content not covered here, such as a state-specific requirement, a specialty (histocompatibility, cytogenetics, embryology, public-health), or a policy class your operation needs, please email info@veritaslabservices.com so it can be evaluated for inclusion in a future revision.');
@@ -40529,7 +40539,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const allHeaders = [...baseHeaders, ...aoHeaderDefs, ...tailHeaders];
       ws.columns = allHeaders.map((h, i) => ({ header: h.label, key: `col${i}`, width: h.width }));
       for (const r of VERITAPOLICY_MASTER_LIST) {
-        const aoCells = aoCols.map(a => (r as any)[a.key] || '');
+        const aoCells = aoCols.map(a => displayRef(a.source, (r as any)[a.key]) || ''); // BUG-191: our COLA/AABB read "Being verified"
         ws.addRow([
           r.policy_id, r.policy_name, r.section, r.subspecialty, r.service_line,
           r.description, r.cfr_citations, ...aoCells, r.notes || '', '',

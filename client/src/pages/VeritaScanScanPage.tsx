@@ -31,6 +31,7 @@ import {
   type ScanStatus,
   isVeritaCheckEvidence,
 } from "@/lib/veritaScanData";
+import { displayRef, refSourceVerified, unverifiedRefNote } from "@shared/accreditorRefs";
 import {
   ArrowLeft,
   Download,
@@ -219,8 +220,11 @@ function CitationRow({
   if (!expanded) return null;
   const showTjc = choiceIncludes(accreditationChoice, "TJC") && item.tjc && item.tjc !== "N/A";
   const showCap = choiceIncludes(accreditationChoice, "CAP") && item.cap && item.cap !== "N/A";
-  const showAabb = choiceIncludes(accreditationChoice, "AABB") && item.aabb && item.aabb !== "N/A";
-  const showCola = choiceIncludes(accreditationChoice, "COLA") && item.cola && item.cola !== "N/A";
+  // BUG-191: our AABB and COLA numbers read "Being verified" until each is checked (shared/accreditorRefs.ts).
+  const aabb = displayRef("AABB", item.aabb);
+  const cola = displayRef("COLA", item.cola);
+  const showAabb = choiceIncludes(accreditationChoice, "AABB") && aabb && aabb !== "N/A";
+  const showCola = choiceIncludes(accreditationChoice, "COLA") && cola && cola !== "N/A";
   const showCfr = item.cfr && item.cfr !== "N/A";
   return (
     <div className="flex flex-wrap gap-1.5 mt-1.5">
@@ -235,13 +239,13 @@ function CitationRow({
         </span>
       )}
       {showAabb && (
-        <span className="text-[10px] font-mono bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 rounded px-1.5 py-0.5">
-          {item.aabb}
+        <span data-testid={`ref-aabb-${item.id}`} title={refSourceVerified("AABB") ? undefined : unverifiedRefNote(["AABB"])} className="text-[10px] font-mono bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 rounded px-1.5 py-0.5">
+          {refSourceVerified("AABB") ? aabb : `AABB ${aabb}`}
         </span>
       )}
       {showCola && (
-        <span className="text-[10px] font-mono bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 rounded px-1.5 py-0.5">
-          {item.cola}
+        <span data-testid={`ref-cola-${item.id}`} title={refSourceVerified("COLA") ? undefined : unverifiedRefNote(["COLA"])} className="text-[10px] font-mono bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 rounded px-1.5 py-0.5">
+          {refSourceVerified("COLA") ? cola : `COLA ${cola}`}
         </span>
       )}
       {showCfr && (
@@ -1563,8 +1567,8 @@ export default function VeritaScanScanPage() {
         tjc: item.tjc,
         cap: item.cap,
         cfr: item.cfr,
-        aabb: item.aabb,
-        cola: item.cola,
+        aabb: displayRef("AABB", item.aabb),
+        cola: displayRef("COLA", item.cola),
       }));
       const pdfUrl = activeLabId
         ? `${API_BASE}/api/labs/${activeLabId}/veritascan/pdf/${scanId}/${type}`
@@ -1607,8 +1611,8 @@ export default function VeritaScanScanPage() {
         tjc: item.tjc,
         cap: item.cap,
         cfr: item.cfr,
-        aabb: item.aabb,
-        cola: item.cola,
+        aabb: displayRef("AABB", item.aabb),
+        cola: displayRef("COLA", item.cola),
       }));
       const excelUrl = activeLabId
         ? `${API_BASE}/api/labs/${activeLabId}/veritascan/excel/${scanId}`

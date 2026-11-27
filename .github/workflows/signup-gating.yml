@@ -729,3 +729,6 @@ jobs:
       - name: Run VeritaMap specimen type and reportable range integration test
         # REQ-079/080 (Lindsay Webber 10/19): migration keeps rows and attestations; urine bands and AMRs separate; locks per specimen; export rows.
         run: npm run test:veritamap-specimen-reportable
+      - name: Run hidden COLA and AABB references integration test
+        # BUG-191: our unchecked COLA and AABB numbers read "Being verified" on every screen, PDF, workbook and document.
+        run: npm run test:accreditor-refs-hidden

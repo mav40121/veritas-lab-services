@@ -24,6 +24,7 @@ import {
   BorderStyle, WidthType, ShadingType, PageNumber, ImageRun, HeightRule,
 } from "docx";
 import type { PolicyTemplate, LabContext, AccreditorCrosswalk, PolicyDocxOptions } from "./veritapolicyDocx";
+import { displayRef } from "../shared/accreditorRefs";
 import { REDINGTON_FAIRVIEW_LOGO_PNG_B64, SAMPSON_REGIONAL_LOGO_PNG_B64 } from "./veritapolicyHouseAssets";
 
 export const HOUSE_FORMATS = ["veritadc", "umass_milford", "redington_fairview", "sampson_regional"] as const;
@@ -162,8 +163,8 @@ export function buildUmassMilfordDocument(
   for (const b of tmpl.cfr_text_blocks || []) refs.push(b.label ? `${b.citation}, ${b.label}` : b.citation);
   if (crosswalk?.tjc) refs.push(`TJC: ${crosswalk.tjc}`);
   if (crosswalk?.cap) refs.push(`CAP: ${crosswalk.cap}`);
-  if (crosswalk?.cola) refs.push(`COLA: ${crosswalk.cola}`);
-  if (crosswalk?.aabb) refs.push(`AABB: ${crosswalk.aabb}`);
+  if (crosswalk?.cola) refs.push(`COLA: ${displayRef("COLA", crosswalk.cola)}`); // BUG-191: ours, unchecked
+  if (crosswalk?.aabb) refs.push(`AABB: ${displayRef("AABB", crosswalk.aabb)}`);
   if (refs.length) refs.forEach((r) => children.push(para([run(r)], { after: 60 })));
   else children.push(para([run("None cited.")]));
 
@@ -344,8 +345,8 @@ export function buildRedingtonFairviewDocument(
   for (const b of tmpl.cfr_text_blocks || []) refs.push(b.label ? `${b.citation}, ${b.label}` : b.citation);
   if (crosswalk?.tjc) refs.push(`TJC: ${crosswalk.tjc}`);
   if (crosswalk?.cap) refs.push(`CAP: ${crosswalk.cap}`);
-  if (crosswalk?.cola) refs.push(`COLA: ${crosswalk.cola}`);
-  if (crosswalk?.aabb) refs.push(`AABB: ${crosswalk.aabb}`);
+  if (crosswalk?.cola) refs.push(`COLA: ${displayRef("COLA", crosswalk.cola)}`); // BUG-191: ours, unchecked
+  if (crosswalk?.aabb) refs.push(`AABB: ${displayRef("AABB", crosswalk.aabb)}`);
   if (refs.length) refs.forEach((r) => children.push(rfBody(r, { after: 40 })));
   else children.push(rfBody("None cited."));
 
@@ -515,8 +516,8 @@ export function buildSampsonRegionalDocument(
   for (const b of tmpl.cfr_text_blocks || []) refs.push(b.label ? `${b.citation}, ${b.label}` : b.citation);
   if (crosswalk?.tjc) refs.push(`TJC: ${crosswalk.tjc}`);
   if (crosswalk?.cap) refs.push(`CAP: ${crosswalk.cap}`);
-  if (crosswalk?.cola) refs.push(`COLA: ${crosswalk.cola}`);
-  if (crosswalk?.aabb) refs.push(`AABB: ${crosswalk.aabb}`);
+  if (crosswalk?.cola) refs.push(`COLA: ${displayRef("COLA", crosswalk.cola)}`); // BUG-191: ours, unchecked
+  if (crosswalk?.aabb) refs.push(`AABB: ${displayRef("AABB", crosswalk.aabb)}`);
   if (refs.length) refs.forEach((r) => children.push(srPara([srRun(r)], { numbering: "sr-refs", after: 60 })));
   else children.push(srPara([srRun("None cited.")]));
   children.push(srPara([srRun("Printed copies are for reference only. Please refer to the electronic copy for the latest version.", { size: 19 })], { before: 160 }));
