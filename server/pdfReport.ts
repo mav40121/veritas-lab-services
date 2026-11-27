@@ -15,6 +15,7 @@ import { isQuizImage } from "@shared/quizImages";
 import { optionIndexFor, shownOptions } from "@shared/quizOptions";
 import { hasRunDetails, runDetailRows } from "@shared/studyRunDetails";
 import { studyLotRows } from "@shared/studyLotRows";
+import { BEING_VERIFIED, displayRef, displayRefList, unverifiedRefNote } from "@shared/accreditorRefs";
 import { PT_CHECKLIST, parseTypeDetails, ptScorePercent, PATIENT_IMPACT, FDA_DISPOSITIONS, QC_CAUSES, saferPlacement, validateTjcEscFields } from "@shared/findingTypes";
 import { rootCauseLabel } from "@shared/ptFailure";
 import { assessmentTypeLabel, evaluationDueDate } from "@shared/competencyEvaluation";
@@ -1454,7 +1455,9 @@ function regulatoryComplianceBoxHTML(studyType: string, preferredStandards?: Acc
     : DEFAULT_PREFERRED_STANDARDS;
 
   const cell = (items: string[]) =>
-    items.length === 0 ? `<span style="font-size:7pt;color:#888;">None mapped</span>` : items.map(i => `<span style="display:inline-block;margin:1px 4px 1px 0;font-size:7pt;font-weight:600;color:#01696F;background:#E8F4F4;border:1px solid #B0D8D8;border-radius:3px;padding:1px 5px;">${i}</span>`).join("");
+    items.length === 0 ? `<span style="font-size:7pt;color:#888;">None mapped</span>`
+    : items.length === 1 && items[0] === BEING_VERIFIED ? `<span style="font-size:7pt;color:#888;">${BEING_VERIFIED}</span>`
+    : items.map(i => `<span style="display:inline-block;margin:1px 4px 1px 0;font-size:7pt;font-weight:600;color:#01696F;background:#E8F4F4;border:1px solid #B0D8D8;border-radius:3px;padding:1px 5px;">${i}</span>`).join("");
 
   // Build columns based on selected standards, always append CLSI and CFR
   const cols: { label: string; content: string }[] = [];
@@ -1465,11 +1468,12 @@ function regulatoryComplianceBoxHTML(studyType: string, preferredStandards?: Acc
   if (standards.includes("TJC")) {
     cols.push({ label: "TJC Standard", content: cell(refs.tjc) });
   }
+  // Our COLA and AABB numbers read "Being verified" until each is checked (BUG-191, shared/accreditorRefs.ts).
   if (standards.includes("COLA")) {
-    cols.push({ label: "COLA Criteria", content: cell(refs.cola) });
+    cols.push({ label: "COLA Criteria", content: cell(displayRefList("COLA", refs.cola)) });
   }
   if (standards.includes("AABB")) {
-    cols.push({ label: "AABB Standard", content: cell(refs.aabb) });
+    cols.push({ label: "AABB Standard", content: cell(displayRefList("AABB", refs.aabb)) });
   }
   // CLSI and CFR always shown
   cols.push({ label: "CLSI Guideline", content: cell(refs.clsi) });
@@ -5137,7 +5141,7 @@ function buildVeritaScanFullHTML(data: VeritaScanPDFData): string {
   // CFR is always rendered (every CLIA lab is bound by it). Accreditor columns
   // (TJC, CAP, AABB, COLA) render only when the lab's accreditation_choice
   // includes that body. CLIA-only labs see CFR alone.
-  const selectedAccreditors: Array<{ key: "tjc" | "cap" | "aabb" | "cola"; label: string }> = [];
+  const selectedAccreditors: Array<{ key: "tjc" | "cap" | "aabb" | "cola"; label: "TJC" | "CAP" | "AABB" | "COLA" }> = [];
   const ps = data.preferredStandards || [];
   if (ps.includes("TJC" as AccreditationBody)) selectedAccreditors.push({ key: "tjc", label: "TJC" });
   if (ps.includes("CAP" as AccreditationBody)) selectedAccreditors.push({ key: "cap", label: "CAP" });
@@ -5150,7 +5154,8 @@ function buildVeritaScanFullHTML(data: VeritaScanPDFData): string {
     const rows = domItems.map((item, idx) => {
       const sc = SCAN_STATUS_COLORS[item.status] || SCAN_STATUS_COLORS["Not Assessed"];
       const accreditorCells = selectedAccreditors.map((a) => {
-        const v = (item as any)[a.key] as string | undefined;
+        // Built-in items: our AABB and COLA numbers read "Being verified" until each is checked (BUG-191).
+        const v = displayRef(a.label, (item as any)[a.key] as string | undefined);
         const display = v && v !== "N/A" ? v : "-";
         return `<td style="font-size:6.5pt">${display}</td>`;
       }).join("");
@@ -5189,7 +5194,7 @@ function buildVeritaScanFullHTML(data: VeritaScanPDFData): string {
     const cRows = customItems.map((item, idx) => {
       const sc = SCAN_STATUS_COLORS[item.status] || SCAN_STATUS_COLORS["Not Assessed"];
       const accCells = selectedAccreditors.map((a) => {
-        const v = (item as any)[a.key] as string | undefined;
+        const v = (item as any)[a.key] as string | undefined; // the lab's own custom question: printed as the lab typed it
         const display = v && v !== "N/A" ? v : "-";
         return `<td style="font-size:6.5pt">${display}</td>`;
       }).join("");
@@ -5250,6 +5255,7 @@ function buildVeritaScanFullHTML(data: VeritaScanPDFData): string {
     </div>
 
     <div style="margin-top:14px;font-size:7.5pt;color:${MUTED};font-style:italic;line-height:1.5;">This report is for internal use only. It is designed to assist the laboratory in identifying compliance gaps before an inspection. It does not constitute an accreditation submission or regulatory filing.</div>
+    ${unverifiedRefNote(selectedAccreditors.map((a) => a.label)) ? `<div style="margin-top:4px;font-size:7.5pt;color:${MUTED};font-style:italic;line-height:1.5;">${unverifiedRefNote(selectedAccreditors.map((a) => a.label))}</div>` : ""}
 
     <!-- Page 2+: domain detail sections, natural flow -->
     <div style="page-break-before:always"></div>

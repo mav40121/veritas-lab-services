@@ -25,6 +25,7 @@ import { EXPORT_TABLES, TRANSIENT_TABLE, DROPPED_COLUMN } from "./exportAllTable
 import { registerExportSecret, revokeExportSecret } from "./exportAllContext";
 import { resolveVersionFilePath } from "./veritapolicyApproval";
 import { SCAN_ITEMS } from "../client/src/lib/veritaScanData";
+import { displayRef } from "../shared/accreditorRefs";
 import { logAudit } from "./audit";
 import { issuePurposeToken, verifyPurposeToken } from "./sessionAuth";
 import { buildStudyPdf } from "./studyPdf";
@@ -145,7 +146,8 @@ function reportCalls(sqlite: any, ctx: ExportCtx): ReportCall[] {
   const L = ctx.labId;
   const calls: ReportCall[] = [];
   const ids = (sql: string, ...p: any[]) => (sqlite.prepare(sql).all(...p) as any[]);
-  const referenceItems = (SCAN_ITEMS as any[]).map((it) => ({ id: it.id, domain: it.domain, question: it.question, tjc: it.tjc, cap: it.cap, cfr: it.cfr, aabb: it.aabb, cola: it.cola }));
+  // Our AABB and COLA numbers read "Being verified" until each is checked (BUG-191, shared/accreditorRefs.ts).
+  const referenceItems = (SCAN_ITEMS as any[]).map((it) => ({ id: it.id, domain: it.domain, question: it.question, tjc: it.tjc, cap: it.cap, cfr: it.cfr, aabb: displayRef("AABB", it.aabb), cola: displayRef("COLA", it.cola) }));
 
   calls.push({ module: "VeritaMap", what: "Coverage report", method: "GET", path: `/api/labs/${L}/veritamap/coverage-report.xlsx`, fallbackName: "VeritaMap_Coverage_Report.xlsx" });
   for (const m of ids("SELECT id, name FROM veritamap_maps WHERE lab_id = ?", L)) {

@@ -33,6 +33,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { ExternalLink, Archive, Pencil, Plus, Search, Link2, X, FileCheck2, FileSpreadsheet } from "lucide-react";
 import { SCAN_ITEMS } from "@/lib/veritaScanData";
+import { displayRef } from "@shared/accreditorRefs";
 import { Link as RouterLink } from "wouter";
 import { useLabRoute } from "@/hooks/useLabRoute";
 
@@ -873,7 +874,7 @@ function LinkedItemsSection({ docId }: { docId: number }) {
                 <div className="font-medium">#{link.checklist_item_id} <span className="text-muted-foreground">[{item?.domain || "?"}]</span></div>
                 <div className="text-muted-foreground line-clamp-2">{item?.question || "Item not found"}</div>
                 <div className="text-muted-foreground mt-1 text-[10px]">
-                  {item ? `TJC: ${item.tjc} | CAP: ${item.cap} | CFR: ${item.cfr} | AABB: ${item.aabb} | COLA: ${item.cola}` : ""}
+                  {item ? `TJC: ${item.tjc} | CAP: ${item.cap} | CFR: ${item.cfr} | AABB: ${displayRef("AABB", item.aabb)} | COLA: ${displayRef("COLA", item.cola)}` : ""}
                 </div>
               </div>
               <Button hidden={isReadOnly} variant="ghost" size="sm" onClick={() => unlinkMutation.mutate(link.id)} disabled={unlinkMutation.isPending} data-testid={`button-unlink-${link.id}`}>
@@ -1084,8 +1085,8 @@ function ChecklistItemPicker({ alreadyLinkedIds, onPick, onClose }: {
           it.tjc.toLowerCase().includes(lower) ||
           it.cap.toLowerCase().includes(lower) ||
           it.cfr.toLowerCase().includes(lower) ||
-          it.aabb.toLowerCase().includes(lower) ||
-          it.cola.toLowerCase().includes(lower);
+          displayRef("AABB", it.aabb).toLowerCase().includes(lower) ||
+          displayRef("COLA", it.cola).toLowerCase().includes(lower);
       }
       return true;
     });
@@ -1119,7 +1120,7 @@ function ChecklistItemPicker({ alreadyLinkedIds, onPick, onClose }: {
                 <div className="text-xs font-medium">#{it.id} <span className="text-muted-foreground">[{it.domain}]</span></div>
                 <div className="text-xs">{it.question}</div>
                 <div className="text-[10px] text-muted-foreground mt-0.5">
-                  TJC: {it.tjc} | CAP: {it.cap} | CFR: {it.cfr} | AABB: {it.aabb} | COLA: {it.cola}
+                  TJC: {it.tjc} | CAP: {it.cap} | CFR: {it.cfr} | AABB: {displayRef("AABB", it.aabb)} | COLA: {displayRef("COLA", it.cola)}
                 </div>
               </button>
             ))}

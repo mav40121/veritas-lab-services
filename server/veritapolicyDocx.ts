@@ -21,6 +21,7 @@ import {
   TextWrappingType,
 } from "docx";
 import { CFR_TOPICS_IN_OUR_WORDS } from "./cfrTopicsInOurWords";
+import { displayRef } from "../shared/accreditorRefs";
 import { buildUmassMilfordDocument, buildRedingtonFairviewDocument, buildSampsonRegionalDocument, type HouseFormatContext } from "./veritapolicyHouseFormats";
 import { labToday } from "./dateLocal";
 import { fixDocxListRestarts } from "./docxListRestart";
@@ -470,8 +471,9 @@ function crosswalkTable(cw: AccreditorCrosswalk): Table {
   if (cw.cfr)  rows.push(crosswalkRow("CFR",  cw.cfr));
   if (cw.tjc)  rows.push(crosswalkRow("TJC",  cw.tjc));
   if (cw.cap)  rows.push(crosswalkRow("CAP",  cw.cap));
-  if (cw.cola) rows.push(crosswalkRow("COLA", cw.cola));
-  if (cw.aabb) rows.push(crosswalkRow("AABB", cw.aabb));
+  // The crosswalk is our master list's, so its COLA and AABB numbers read "Being verified" until each is checked (BUG-191).
+  if (cw.cola) rows.push(crosswalkRow("COLA", displayRef("COLA", cw.cola)));
+  if (cw.aabb) rows.push(crosswalkRow("AABB", displayRef("AABB", cw.aabb)));
   return new Table({
     width: { size: 9360, type: WidthType.DXA },
     columnWidths: [1440, 7920],

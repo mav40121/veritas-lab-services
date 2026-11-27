@@ -37,6 +37,7 @@ import {
   type ScanItem,
   type ScanDomain,
 } from "@/lib/veritaScanData";
+import { displayRef, unverifiedRefNote, type RefSource } from "@shared/accreditorRefs";
 import { ArrowLeft, ExternalLink, FileText, Printer, Search } from "lucide-react";
 import { LinkedDocDialog, docFlag, docLabel, type LinkedDoc } from "@/components/LinkedDcDocument";
 
@@ -44,13 +45,21 @@ const API_BASE = "";
 
 type Accreditor = "cap" | "tjc" | "cfr" | "aabb" | "cola";
 
-const ACCREDITORS: { key: Accreditor; label: string; fieldName: keyof ScanItem }[] = [
-  { key: "cap",  label: "CAP",  fieldName: "cap" },
-  { key: "tjc",  label: "TJC",  fieldName: "tjc" },
-  { key: "cfr",  label: "CLIA / 42 CFR", fieldName: "cfr" },
-  { key: "aabb", label: "AABB", fieldName: "aabb" },
-  { key: "cola", label: "COLA", fieldName: "cola" },
+const ACCREDITORS: { key: Accreditor; label: string; fieldName: keyof ScanItem; source: RefSource }[] = [
+  { key: "cap",  label: "CAP",  fieldName: "cap", source: "CAP" },
+  { key: "tjc",  label: "TJC",  fieldName: "tjc", source: "TJC" },
+  { key: "cfr",  label: "CLIA / 42 CFR", fieldName: "cfr", source: "CFR" },
+  { key: "aabb", label: "AABB", fieldName: "aabb", source: "AABB" },
+  { key: "cola", label: "COLA", fieldName: "cola", source: "COLA" },
 ];
+
+// The item's citation for the tab as it may be shown. BUG-191: our AABB and COLA numbers read "Being verified" until each
+// is checked (shared/accreditorRefs.ts), and since which items they apply to came from the same mapping, every item is in
+// scope on those tabs until then.
+function citationOf(item: ScanItem, accreditor: Accreditor): string {
+  const a = ACCREDITORS.find(x => x.key === accreditor)!;
+  return displayRef(a.source, item[a.fieldName] as string);
+}
 
 interface CoverageLink {
   document_id: number;
@@ -72,8 +81,7 @@ type DcLink = LinkedDoc & { link_id: number; checklist_item_id: number };
 type CoverageStatus = "green" | "amber" | "red";
 
 function isInScope(item: ScanItem, accreditor: Accreditor): boolean {
-  const field = ACCREDITORS.find(a => a.key === accreditor)!.fieldName;
-  const value = (item[field] as string) || "";
+  const value = citationOf(item, accreditor) || "";
   return value.trim() !== "" && value.trim().toUpperCase() !== "N/A";
 }
 
@@ -157,7 +165,7 @@ export default function VeritaScanInspectionProofPage() {
       if (!lower) return true;
       return it.question.toLowerCase().includes(lower) ||
         String(it.id).includes(lower) ||
-        (it[ACCREDITORS.find(a => a.key === accreditor)!.fieldName] as string).toLowerCase().includes(lower);
+        citationOf(it, accreditor).toLowerCase().includes(lower);
     };
     const matchStatus = (it: ScanItem) => {
       if (statusFilter === "all") return true;
@@ -235,6 +243,11 @@ export default function VeritaScanInspectionProofPage() {
             <h2 className="text-lg font-semibold print:block hidden">
               {a.label} Inspection Coverage
             </h2>
+            {unverifiedRefNote([a.source]) && (
+              <p className="text-xs text-muted-foreground" data-testid={`note-unverified-${a.key}`}>
+                {unverifiedRefNote([a.source])} Every checklist item is listed here until then.
+              </p>
+            )}
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <Card><CardContent className="p-4">
@@ -319,7 +332,7 @@ export default function VeritaScanInspectionProofPage() {
                               const links = linksByItem.get(it.id);
                               const dc = dcByItem.get(it.id);
                               const status = statusOf(links, dc);
-                              const citation = it[accreditorMeta.fieldName] as string;
+                              const citation = citationOf(it, accreditor);
                               return (
                                 <tr key={it.id} className="border-b border-border/40 align-top" data-testid={`row-item-${it.id}`}>
                                   <td className="py-2 pr-3 font-mono">{it.id}</td>

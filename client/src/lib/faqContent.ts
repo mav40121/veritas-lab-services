@@ -397,7 +397,7 @@ export const FAQ_CATEGORIES: FaqCategory[] = [
       },
       {
         q: "What is VeritaScan\u00AE?",
-        a: "VeritaScan\u00AE is a 173-item inspection readiness self-assessment across 10 compliance domains, with TJC, CAP, COLA, AABB, and 42 CFR references where one applies. A passing calibration verification, correlation, precision, reagent lot, or PT/INR study in VeritaCheck\u00AE attaches itself as evidence on the matching VeritaScan\u00AE items, and the lab sets the answer. The calibration verification and correlation items are marked when VeritaCheck\u00AE Coverage shows every nonwaived test is current, unless the lab has already answered them. Built by a former TJC laboratory surveyor with 200+ facility inspections. Includes an executive summary export.",
+        a: "VeritaScan\u00AE is a 173-item inspection readiness self-assessment across 10 compliance domains, with TJC, CAP, and 42 CFR references where one applies; COLA and AABB references are being verified. A passing calibration verification, correlation, precision, reagent lot, or PT/INR study in VeritaCheck\u00AE attaches itself as evidence on the matching VeritaScan\u00AE items, and the lab sets the answer. The calibration verification and correlation items are marked when VeritaCheck\u00AE Coverage shows every nonwaived test is current, unless the lab has already answered them. Built by a former TJC laboratory surveyor with 200+ facility inspections. Includes an executive summary export.",
       },
       {
         q: "What is VeritaTrack\u2122?",
@@ -429,7 +429,7 @@ export const FAQ_CATEGORIES: FaqCategory[] = [
       },
       {
         q: "What is VeritaDC\u2122?",
-        a: "VeritaDC\u2122 is the laboratory's policy and document control module: load policies, procedures, and forms, keep version history, capture director approval, and document periodic reviews. It tracks the policies required under CLIA (42 CFR 493) and crosswalks each one to your accrediting body (CAP, COLA, TJC, or AABB), with N/A controls for requirements that don't apply to your lab, and it generates an inspection-ready compliance report.",
+        a: "VeritaDC\u2122 is the laboratory's policy and document control module: load policies, procedures, and forms, keep version history, capture director approval, and document periodic reviews. It tracks the policies required under CLIA (42 CFR 493) and crosswalks each one to TJC and CAP (COLA and AABB citations are being verified), with N/A controls for requirements that don't apply to your lab, and it generates an inspection-ready compliance report.",
       },
       {
         q: "What is VeritaStaff\u2122?",
@@ -479,7 +479,7 @@ export const FAQ_CATEGORIES: FaqCategory[] = [
     items: [
       {
         q: "Which accreditation programs does VeritaAssure\u00AE support?",
-        a: "VeritaAssure\u00AE aligns with The Joint Commission (TJC), CAP (College of American Pathologists), COLA, and CMS/CLIA requirements. VeritaScan\u00AE items carry TJC, CAP, COLA, AABB, and 42 CFR references where one applies. Reports cite the specific regulation each finding addresses.",
+        a: "VeritaAssure\u00AE aligns with The Joint Commission (TJC), CAP (College of American Pathologists), COLA, and CMS/CLIA requirements. VeritaScan\u00AE items carry TJC, CAP, and 42 CFR references where one applies; COLA and AABB references are being verified. Reports cite the specific regulation each finding addresses.",
       },
       {
         q: "How does VeritaAssure\u00AE handle the CLIA TEa standard?",
@@ -495,7 +495,7 @@ export const FAQ_CATEGORIES: FaqCategory[] = [
       },
       {
         q: "How often is the regulatory data updated?",
-        a: "The 42 CFR Part 493 TEa values are sourced from the CLIA proficiency testing final rule (CMS-3355-F), published July 11, 2022, effective July 11, 2024, and are updated when CMS publishes a Federal Register notice that changes them. TJC, CAP, COLA, AABB, and CMS references are checked against the published standards, and updates reach the platform without action on your part. See /resources/clia-tea-lookup for the live TEa reference tool.",
+        a: "The 42 CFR Part 493 TEa values are sourced from the CLIA proficiency testing final rule (CMS-3355-F), published July 11, 2022, effective July 11, 2024, and are updated when CMS publishes a Federal Register notice that changes them. TJC, CAP, and CMS references are checked against the published standards, and updates reach the platform without action on your part. COLA and AABB reference numbers are being verified and are not shown until they are. See /resources/clia-tea-lookup for the live TEa reference tool.",
       },
     ],
   },

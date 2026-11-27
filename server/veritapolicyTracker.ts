@@ -6,6 +6,7 @@
 // Started and 0% whatever it had entered.
 
 import { VERITAPOLICY_MASTER_LIST } from "./veritapolicyMasterList";
+import { displayRef } from "../shared/accreditorRefs";
 
 const AO_COLUMNS = [
   { flag: "accreditation_tjc", key: "tjc_citations", label: "TJC" },
@@ -55,7 +56,10 @@ export function veritaPolicyTracker(sqlite: any, lab: any, ownerUserId: number) 
       updated_at: us?.updated_at || null,
     };
   };
+  // A custom entry's citations are what the lab typed and print as typed. The master list's are ours, so its COLA and AABB
+  // numbers read "Being verified" until each is checked (BUG-191, shared/accreditorRefs.ts).
   const citations = (source: any) => aoCols.map((a) => ({ label: a.label, value: source[a.key] || "" }));
+  const masterCitations = (p: any) => aoCols.map((a) => ({ label: a.label, value: displayRef(a.label, p[a.key]) || "" }));
 
   const rows: VeritaPolicyTrackerRow[] = VERITAPOLICY_MASTER_LIST.map((p) => ({
     policy_id: p.policy_id,
@@ -65,7 +69,7 @@ export function veritaPolicyTracker(sqlite: any, lab: any, ownerUserId: number) 
     service_line: p.service_line,
     description: p.description,
     cfr_citations: p.cfr_citations,
-    ao_citations: citations(p),
+    ao_citations: masterCitations(p),
     notes: p.notes || "",
     ...overlay(p.policy_id),
     is_custom: false,

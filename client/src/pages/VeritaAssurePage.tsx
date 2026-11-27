@@ -84,7 +84,7 @@ const COMPLIANCE_MODULES = [
     formerly: "Formerly VeritaPolicy",
     desc: "Policy and Document Control",
     detail:
-      "A document control system for the lab: load policies, procedures, and forms, keep version history, capture director approval, and document periodic reviews. Tracks the policies required under CLIA (42 CFR 493) and crosswalks each one to your accrediting body: CAP, COLA, TJC, or AABB. Mark any requirement or a whole section N/A, and enter the same policy name against every requirement it covers. Inspection-ready PDF report with a readiness score.",
+      "A document control system for the lab: load policies, procedures, and forms, keep version history, capture director approval, and document periodic reviews. Tracks the policies required under CLIA (42 CFR 493) and crosswalks each one to TJC and CAP; COLA and AABB citations are being verified. Mark any requirement or a whole section N/A, and enter the same policy name against every requirement it covers. Inspection-ready PDF report with a readiness score.",
     badge: "Live",
     badgeColor: "emerald",
     icon: Shield,

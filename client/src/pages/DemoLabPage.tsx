@@ -15,6 +15,7 @@ import { downloadPdfToken } from "@/lib/utils";
 import { useLabRoute } from "@/hooks/useLabRoute";
 import { saveAs } from "file-saver";
 import { SCAN_ITEMS, DOMAINS, DOMAIN_COLORS, STATUS_COLORS, type ScanStatus, isVeritaCheckEvidence } from "@/lib/veritaScanData";
+import { displayRef } from "@shared/accreditorRefs";
 import { SampleReportsSection } from "@/components/SampleReportsSection";
 import {
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid,
@@ -295,8 +296,8 @@ export default function DemoLabPage() {
           tjc: item.tjc || "",
           cap: item.cap || "",
           cfr: item.cfr || "",
-          aabb: item.aabb || "",
-          cola: item.cola || "",
+          aabb: displayRef("AABB", item.aabb),
+          cola: displayRef("COLA", item.cola),
         }));
       const res = await fetch(`${API_BASE}/api/demo/scan/pdf/${type}`, {
         method: "POST",
