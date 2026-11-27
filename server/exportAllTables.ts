@@ -166,6 +166,10 @@ export const EXPORT_TABLES: Record<string, ExportTable> = {
   policy_share_links: lab("VeritaDC"), // one document's share link (server/policyShareLinks.ts)
   policy_approval_notices: lab("VeritaDC"), // who was emailed that an approval step is theirs (server/policyNotices.ts)
   policy_sign_notices: lab("VeritaDC"), // the weekly read-and-sign emails (server/policyNotices.ts)
+  // System documents (server/policySharedDocuments.ts): lab_id is the receiving laboratory in all three.
+  policy_shared_copies: lab("VeritaDC"), // which of the lab's documents came from a system document, and how it follows it
+  policy_shared_versions: lab("VeritaDC"), // which of the document's versions came from which system version
+  policy_addenda: lab("VeritaDC"), // the lab's own addenda to a system document (each one is a document of the lab)
   veritapolicy_lab_policies: labOrOwner("VeritaDC"),
   veritapolicy_master_status: labOrOwner("VeritaDC"),
   veritapolicy_requirement_status: labOrOwner("VeritaDC"),

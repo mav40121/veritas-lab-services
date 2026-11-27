@@ -407,6 +407,21 @@ export function authorBlockedFromStep(
   return true;
 }
 
+// Whose own work the version in front of the approvers is, for the author rule above. It's the document's owner, as always, except
+// for a version received from the organization's system document (server/policySharedDocuments.ts): nobody in this laboratory
+// wrote that one, so it's the person who wrote it, and the laboratory's document owner may sign like anyone else on the route.
+export function versionAuthorId(sqlite: any, doc: { owner_user_id: number; current_version_id?: number | null }): number {
+  if (doc.current_version_id == null) return doc.owner_user_id;
+  try {
+    const received = sqlite.prepare(
+      "SELECT v.uploaded_by FROM policy_shared_versions sv JOIN policy_versions v ON v.id = sv.version_id WHERE sv.version_id = ?"
+    ).get(doc.current_version_id) as { uploaded_by: number } | undefined;
+    return received ? received.uploaded_by : doc.owner_user_id;
+  } catch {
+    return doc.owner_user_id;
+  }
+}
+
 export function canUserApproveStep(
   sqlite: any,
   args: {
@@ -716,7 +731,7 @@ export function approvalQueueFor(sqlite: any, labId: number, userId: number, tod
     const check = canUserApproveStepDelegated(sqlite, {
       userId,
       labId,
-      documentOwnerId: d.owner_user_id,
+      documentOwnerId: versionAuthorId(sqlite, d),
       stepRow: p.step,
       isMajorRevision,
       manualId: d.manual_id ?? null,

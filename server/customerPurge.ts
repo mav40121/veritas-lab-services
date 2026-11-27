@@ -66,6 +66,11 @@ export const PURGE_OVERRIDES: Record<string, PurgeRule> = {
   // VeritaDC email notices (server/policyNotices.ts) name the person mailed, so they go with the person too.
   policy_approval_notices: del(`lab_id ${IN("labs")} OR user_id ${IN("people")} OR for_user_id ${IN("people")}`),
   policy_sign_notices: del(`lab_id ${IN("labs")} OR user_id ${IN("people")}`),
+  // System documents (server/policySharedDocuments.ts): a laboratory that has since left the purged organization keeps its own
+  // document; the rows saying it came from that organization go.
+  policy_shared_copies: del(`lab_id ${IN("labs")} OR organization_id ${IN("orgs")}`),
+  policy_shared_versions: del(`lab_id ${IN("labs")} OR copy_id IN (SELECT id FROM policy_shared_copies WHERE organization_id ${IN("orgs")})`),
+  policy_addenda: del(`lab_id ${IN("labs")}`),
   // VeritaDC documents linked to a checklist item or a finding (server/inspectionLinks.ts) go with the lab, and a finding's
   // links with the finding.
   veritascan_item_policy_links: del(`lab_id ${IN("labs")}`),

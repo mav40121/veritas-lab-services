@@ -167,7 +167,8 @@ export default function SystemRepositoryPage() {
         </CardContent></Card>
       ) : (
         <>
-          <div className="mb-4 flex justify-end">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm text-muted-foreground min-w-0 flex-1 basis-64">These are shared files and links, with no versions or approval. Procedures your system controls are under <Link href={`/labs/${activeLabId}/readiness/system-documents?org=${orgId}`} className="text-primary hover:underline">System documents</Link>.</p>
             <Button size="sm" hidden={!canManageRepo} onClick={() => setShowAdd(v => !v)}><Plus size={14} className="mr-1" /> Add document</Button>
           </div>
 

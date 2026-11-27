@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { LabGroupsDialog, useLabGroups } from "@/components/LabGroupsDialog";
 import { apiRequest, getQueryFn } from "@/lib/queryClient";
 import { Loader2, Mail, Trash2 } from "lucide-react";
+import { includeAddendaLabel } from "@shared/systemDocuments";
 
 export type ReadSignScopeRef = { type: "document" | "manual" | "lab"; id: number | null; name: string };
 
@@ -24,6 +25,8 @@ type Payload = {
   elsewhere: Row[];
   documents: number;
   unassigned_documents: number;
+  // The document's site addenda, for whoever can assign. Absent when there are none.
+  addenda?: { document_id: number; title: string; in_force: boolean }[];
   groups: { id: number; name: string; people: number }[];
   roster: { id: number; name: string; title: string | null; has_login: boolean }[];
 };
@@ -107,6 +110,7 @@ export function ReadSignDialog({ labId, scope, onClose, onAssignOnePerson }: {
   const [groupIds, setGroupIds] = useState<Set<number>>(new Set());
   const [personIds, setPersonIds] = useState<Set<number>>(new Set());
   const [personQ, setPersonQ] = useState("");
+  const [withAddenda, setWithAddenda] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [noticeOpen, setNoticeOpen] = useState(false);
@@ -134,15 +138,17 @@ export function ReadSignDialog({ labId, scope, onClose, onAssignOnePerson }: {
     mutationFn: async () => {
       const res = await apiRequest("POST", `${base}/read-sign`, {
         scope: scope.type, id: scope.id, everyone, group_ids: Array.from(groupIds), employee_ids: Array.from(personIds),
+        ...(withAddenda && data?.addenda?.length ? { addendum_ids: data.addenda.map((a) => a.document_id) } : {}),
       });
       return res.json();
     },
     onSuccess: (body: any) => {
       setEveryone(false); setGroupIds(new Set()); setPersonIds(new Set()); setProblem(null);
-      setMessage(`${body.added ? `Assigned ${plural(body.added, "new group or person", "new groups or people")}` : "They were already assigned"}. No email was sent.`);
+      const included = body.addenda_assigned ? ` ${plural(body.addenda_assigned, "site addendum was", "site addenda were")} included.` : "";
+      setMessage(`${body.added ? `Assigned ${plural(body.added, "new group or person", "new groups or people")}` : "They were already assigned"}.${included} No email was sent.`);
       refresh();
     },
-    onError: (e) => { setMessage(null); setProblem(errorSentence(e)); },
+    onError: (e) => { setMessage(null); setProblem(errorSentence(e)); refresh(); },
   });
   const remove = useMutation({
     mutationFn: async (id: number) => (await apiRequest("DELETE", `${base}/read-sign/${id}`)).json(),
@@ -285,6 +291,19 @@ export function ReadSignDialog({ labId, scope, onClose, onAssignOnePerson }: {
                       ))}
                     </div>
                   </div>
+                  {!!data.addenda?.length && (
+                    <div className="min-w-0" data-testid="readsign-addenda">
+                      <label className="flex items-center gap-2 text-sm cursor-pointer">
+                        <input type="checkbox" checked={withAddenda} onChange={(e) => setWithAddenda(e.target.checked)} data-testid="readsign-with-addenda" />
+                        {includeAddendaLabel(data.addenda.length)}
+                      </label>
+                      <ul className="ml-6 text-xs text-muted-foreground">
+                        {data.addenda.map((a) => (
+                          <li key={a.document_id} className="[overflow-wrap:anywhere]">{a.title}{a.in_force ? "" : ", its current version isn't approved yet, so nobody signs it until it is"}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                   <p className="text-xs text-muted-foreground" data-testid="readsign-no-email">
                     Assigning sends no email. People see it on their bell and under My sign-offs the next time they sign in.
                   </p>

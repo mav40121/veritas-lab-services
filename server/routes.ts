@@ -270,6 +270,8 @@ import { priorCountsByPerson, priorHow, priorSignatureStillCurrent, priorSignatu
 import { assignedDocumentIds, loadReadSignContext, logStaffDocumentView, lookupDocuments, registerReadSignRoutes, rulesForDocument, targetLabels, veritaDcStaffGuard } from "./policyReadSign";
 import { versionStandings } from "./policyVersionStanding";
 import { archivedDocumentGuard, mayOpenEarlierVersions, registerPolicyDocumentControlRoutes, type ApprovalDecision, type ApprovalDecisionInput } from "./policyDocumentControl";
+import { addendaOf, approvedAddendumAt } from "./policyAddenda";
+import { afterDocumentApproved, followedUploadProblem, forgetDeletedDocument, masterDeleteProblem, noteMasterArchived, registerPolicySharedDocumentRoutes, sharedDetail, sharedMarks, type SharedDeps } from "./policySharedDocuments";
 import { notifyStepSigners } from "./policyNotices";
 import { LIVE_EVENT } from "./equipment";
 import { approvedReadVersionId, approvedReadVersionSql, revisionInProgress, revisionInProgressSql, reviewOverdueSql, surveyorReadVersionId, surveyorReadVersionSql, surveyorReads, surveyorReadsSql } from "./policyApprovedVersion";
@@ -8654,6 +8656,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         file_format: version.file_format,
         file_hash: version.file_hash_sha256,
         version_uploaded_at: version.uploaded_at,
+        // The lab's own addenda to a system document, read and printed after it (server/policySharedDocuments.ts). Absent when there are none.
+        ...(() => { const addenda = addendaOf(sqlite, labId, doc.id, true); return addenda.length ? { addenda: addenda.map((a) => ({ document_id: a.document_id, title: a.title, version_label: a.version_label })) } : {}; })(),
       });
     } catch (err: any) {
       console.error("[staff-portal-session/policies GET one] error:", err);
@@ -40239,6 +40243,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     stepHasSignatures,
     approvalQueueFor,
     isNamedOnRoute,
+    versionAuthorId,
   } = await import("./veritapolicyApproval");
   const { registerLabGroupRoutes } = await import("./labGroups");
   const { registerBulkLoadRoutes, carriedRecordFor } = await import("./veritadcBulkLoad");
@@ -41001,12 +41006,15 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         .all(req.scope.labId) as any[];
       // Sub-manuals: manual_path names the manual by its full path ("Parent › Child"); manual_name stays the leaf name.
       const manualPath = new Map(labManualTree(sqlite, req.scope.labId).map((m) => [m.id, m.path]));
+      // System documents and addenda (server/policySharedDocuments.ts): what their own rows add, nothing for any other row.
+      const marks = sharedMarks(sqlite, req.scope.labId);
       // A limited Staff login's list holds only the approved documents assigned to them, each with where they stand (server/policyReadSign.ts).
       if (req.dcStaff) {
         const mine = assignedDocumentIds(sqlite, req.scope.labId, req.dcStaff);
         const noSign = new Set(labDocTypeRules(sqlite, req.scope.labId).filter((r) => !r.requires_read_and_sign).map((r) => r.doc_type as string));
         const own = rows.filter((r) => r.status === "approved" && mine.has(r.id)).map((r) => ({
           ...r,
+          ...marks?.(r),
           manual_path: r.manual_id != null ? manualPath.get(r.manual_id) ?? r.manual_name ?? null : null,
           my_prior_system: (() => {
             const p = req.dcStaff.employeeId != null ? priorSignatureStillCurrent(sqlite, req.scope.labId, r.id, req.dcStaff.employeeId, r.current_version_id) : null;
@@ -41022,6 +41030,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const enriched = rows.map((row) => {
         const doc = {
           ...row,
+          ...marks?.(row),
           manual_path: row.manual_id != null ? manualPath.get(row.manual_id) ?? row.manual_name ?? null : null,
           read_sign_targets: row.status === "approved" ? targetLabels(readSign, rulesForDocument(readSign, row)) : [],
         };
@@ -41253,6 +41262,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         ...(standings ? { can_open_versions: true } : {}),
         // History carried over from the lab's prior system, or null (server/veritadcBulkLoad.ts).
         carried: carriedRecordFor(sqlite, id),
+        // Where a system document came from, and its addenda (server/policySharedDocuments.ts). Nothing for any other document.
+        ...sharedDetail(sqlite, req.scope.labId, row, !!req.dcStaff),
       });
     }
   );
@@ -42079,6 +42090,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         .get(id) as { lab_id: number; title: string; status: string } | undefined;
       if (!doc) return res.status(404).json({ error: "Not found" });
       if (doc.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
+      const sent = masterDeleteProblem(sqlite, id);
+      if (sent) return res.status(409).json(sent);
       const childTables = [
         "policy_quiz_questions",
         "staff_portal_policy_signatures",
@@ -42091,6 +42104,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         "policy_approval_notices",
         "policy_signoffs",
         "policy_versions",
+        "policy_shared_versions",
         "veritascan_item_policy_links",
         "finding_policy_links",
       ];
@@ -42109,6 +42123,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         for (const t of childTables) {
           sqlite.prepare(`DELETE FROM ${t} WHERE document_id = ?`).run(id);
         }
+        forgetDeletedDocument(sqlite, id);
         sqlite.prepare("DELETE FROM policy_audit_log WHERE document_id = ?").run(id);
         sqlite.prepare("DELETE FROM policy_documents WHERE id = ?").run(id);
       });
@@ -42203,7 +42218,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       const check = canUserApproveStepDelegated(sqlite, {
         userId: req.userId,
         labId: req.scope.labId,
-        documentOwnerId: doc.owner_user_id,
+        documentOwnerId: versionAuthorId(sqlite, doc),
         stepRow: pending.step,
         isMajorRevision,
         manualId: doc.manual_id ?? null,
@@ -42242,6 +42257,19 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // the background and can't fail the request it follows.
   const tellStepSigners = (labId: number, documentIds: number[], actorUserId: number): void => {
     notifyStepSigners((db as any).$client, { labId, documentIds, actorUserId, canEdit: (l, u) => hasModuleEditAccess(l, u, "veritapolicy") });
+  };
+
+  // System documents (B1; server/policySharedDocuments.ts): which laboratories can receive one. The plans are those of VeritaDC's own page.
+  const DC_PLANS = ["annual", "professional", "lab", "complete", "veritamap", "veritascan", "veritacomp", "clinic", "waived", "community", "hospital", "large_hospital", "enterprise"];
+  const sharedDocDeps: SharedDeps = {
+    planHasDc: (plan) => DC_PLANS.includes(String(plan ?? "")),
+    labTakesWrites: (labId) => {
+      const client = (db as any).$client;
+      const lab = client.prepare("SELECT owner_user_id, subscription_expires_at FROM labs WHERE id = ?").get(labId) as any;
+      const level = lab ? getAccessLevel(storage.getUserById(lab.owner_user_id), { subscription_expires_at: laterExpiry(lab.subscription_expires_at, orgSubscriptionExpiryForLab(client, labId)) }) : "locked";
+      return level === "full" || level === "free";
+    },
+    canEdit: (labId, userId) => hasModuleEditAccess(labId, userId, "veritapolicy"),
   };
 
   // Approve or reject a document's pending step. One path for the editor screen and the staff login tile, so the password
@@ -42297,7 +42325,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     const check = canUserApproveStepDelegated(sqlite, {
       userId,
       labId,
-      documentOwnerId: doc.owner_user_id,
+      documentOwnerId: versionAuthorId(sqlite, doc),
       stepRow: pending.step,
       isMajorRevision: isVersionMajorRevision(sqlite, doc.current_version_id),
       manualId: doc.manual_id ?? null,
@@ -42381,6 +42409,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
            WHERE id = ?`
         )
         .run(labToday(), labToday(), id);
+      // A system document's new version goes to the laboratories that follow it; a version waiting behind this one comes in (B1).
+      afterDocumentApproved(sqlite, id, sharedDocDeps);
       return { status: 200, body: { ok: true, status: "approved" } };
     }
     return { status: 200, body: { ok: true, status: "in_review", nextStep: after.step ? after.step.step_name : null } };
@@ -42443,7 +42473,25 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     ).get(item.version_id) as any;
     if (!version) return res.status(404).json({ error: "Document version not found" });
     const doc = sqlite.prepare("SELECT description FROM policy_documents WHERE id = ?").get(item.document_id) as any;
-    res.json({ ...item, description: doc?.description ?? null, version_label: versionLabel(version), file_format: version.file_format, file_hash: version.file_hash_sha256 });
+    // Its site addenda at their approved versions, each opened by its place below. Absent when there are none.
+    const addenda = addendaOf(sqlite, req.staffPortalLabId, item.document_id, true).map((a) => ({ title: a.title, version: a.version_label }));
+    res.json({ ...item, description: doc?.description ?? null, version_label: versionLabel(version), file_format: version.file_format, file_hash: version.file_hash_sha256, ...(addenda.length ? { addenda } : {}) });
+  });
+
+  app.get("/api/staff-portal-session/approvals/:documentId/addenda/:n/render", staffPortalAuthMiddleware, staffApprovalItem, async (req: any, res) => {
+    try {
+      const sqlite = (db as any).$client;
+      const addendum = approvedAddendumAt(sqlite, req.staffPortalLabId, req.approvalItem.document_id, req.params.n);
+      const row = addendum && (sqlite.prepare(
+        "SELECT id AS version_id, file_path, file_format, file_hash_sha256 AS expected_hash FROM policy_versions WHERE id = ? AND document_id = ?"
+      ).get(addendum.version_id, addendum.document_id) as any);
+      if (!row) return res.status(404).json({ error: "Not found" });
+      logStaffDocumentView(sqlite, req.staffPortalLabId, addendum!.document_id, req.staffPortalUserId, req);
+      return await sendStaffVersion(res, row);
+    } catch (err: any) {
+      console.error("[STAFF-APPROVALS] addendum render failed:", err?.message);
+      return res.status(500).json({ error: "Could not open this document" });
+    }
   });
 
   app.get("/api/staff-portal-session/approvals/:documentId/render", staffPortalAuthMiddleware, staffApprovalItem, async (req: any, res) => {
@@ -42567,7 +42615,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         who: stepWhoLabel(sqlite, req.scope.labId, s),
         eligible_count: countEligibleReviewersForStepDelegated(sqlite, {
           labId: req.scope.labId,
-          documentOwnerId: doc.owner_user_id,
+          documentOwnerId: versionAuthorId(sqlite, doc),
           stepRow: s,
           isMajorRevision,
           manualId: doc.manual_id ?? null,
@@ -42613,6 +42661,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         ipAddress: req.ip,
         userAgent: req.headers["user-agent"] as string | undefined,
       });
+      noteMasterArchived(sqlite, id, false);
       res.json({ ok: true, archived: id });
     }
   );
@@ -42911,8 +42960,15 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
           ORDER BY m.display_order ASC, m.name ASC, d.title ASC`
       )
       .all(r.labId) as any[]).map((d) => ({ ...d, revision_in_progress: d.revision_in_progress === 1, review_overdue: d.review_overdue === 1 }));
+    // The lab's own addenda to a system document open with it (server/policySharedDocuments.ts). Absent on every other row.
+    const hasAddenda = !!sqlite.prepare("SELECT 1 FROM policy_addenda WHERE lab_id = ? AND removed_at IS NULL LIMIT 1").get(r.labId);
+    const listed = new Set(docs.map((d) => d.id));
+    const shown = !hasAddenda ? docs : docs.map((d) => {
+      const addenda = addendaOf(sqlite, r.labId, d.id, true).filter((a) => listed.has(a.document_id)).map((a) => ({ document_id: a.document_id, title: a.title, version_label: a.version_label }));
+      return addenda.length ? { ...d, addenda } : d;
+    });
     // Sub-manuals: the inspector sees the lab's manual tree, each document under its manual's full path.
-    res.json({ lab, documents: withManualTree(sqlite, r.labId, withVersionLabel(docs), true) });
+    res.json({ lab, documents: withManualTree(sqlite, r.labId, withVersionLabel(shown), true) });
   });
 
   // GET /api/surveyor/:token/policies/:id/render — render approved policy
@@ -43095,6 +43151,9 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
         .get(id) as any;
       if (!doc) return res.status(404).json({ error: "Not found" });
       if (doc.lab_id !== req.scope.labId) return res.status(403).json({ error: "Wrong lab" });
+      // A document that follows a system document takes its file from the system (B1; server/policySharedDocuments.ts).
+      const followed = followedUploadProblem(sqlite, id);
+      if (followed) return res.status(409).json(followed);
       const nextVer = (sqlite
         .prepare(
           "SELECT COALESCE(MAX(version_number), 0) + 1 AS n FROM policy_versions WHERE document_id = ?"
@@ -44867,6 +44926,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   registerPolicyDocumentControlRoutes(app, {
     sqlite: () => (db as any).$client, authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit, hasModuleEditAccess,
     verifyElectronicSignature, recordApprovalDecision,
+  });
+  // One controlled procedure for several laboratories (B1; server/policySharedDocuments.ts).
+  registerPolicySharedDocumentRoutes(app, {
+    sqlite: () => (db as any).$client, authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit, hasModuleEditAccess,
+    shared: sharedDocDeps, upload: policyUpload, rollupLabsForRequest, today: () => labToday(),
+    stampWorkbook: (wb, req) => applyLicenseToExcelJS(wb, licenseCtxFromReq(req, "VeritaDC™")),
   });
   // VeritaDC read-and-sign by group (Step D; server/policyReadSign.ts).
   registerReadSignRoutes(app, { sqlite: () => (db as any).$client, authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit, hasModuleEditAccess });

@@ -15,6 +15,7 @@ import { Loader2, FileText, ShieldCheck, XCircle, Eye } from "lucide-react";
 import { labLocaleDate } from "@/lib/labDate";
 import { REVISION_IN_PROGRESS_NOTE, reviewOverdueNote } from "@shared/policyApprovedVersion";
 import { CarriedOverPanel, type CarriedRecord } from "@/components/CarriedOverPanel";
+import { AddendaView } from "@/components/AddendaView";
 
 interface SurveyorDoc {
   id: number;
@@ -35,6 +36,8 @@ interface SurveyorDoc {
   revision_in_progress?: boolean;
   // True when the review date has passed; the link shows the document marked Review overdue (BUG-164).
   review_overdue?: boolean;
+  // The laboratory's own approved addenda to a system document, read with it (server/policySharedDocuments.ts).
+  addenda?: Array<{ document_id: number; title: string; version_label: string | null }>;
 }
 
 interface SurveyorListResponse {
@@ -232,6 +235,7 @@ export default function SurveyorViewPage() {
                         {d.doc_number ? `${d.doc_number} · ` : ""}v{d.current_version_label ?? d.current_version_number} {d.current_file_format?.toUpperCase()} ·
                         effective {fmtDate(d.effective_date)} · next review {fmtDate(d.next_review_date)}
                       </div>
+                      {!!d.addenda?.length && <div className="text-[11px] text-muted-foreground" data-testid="surveyor-addenda-row">With site {d.addenda.length === 1 ? "addendum" : "addenda"}: {d.addenda.map((a) => a.title).join(", ")}</div>}
                       {/* BUG-152: while the laboratory revises the document, the link shows the approved version. */}
                       {d.revision_in_progress && (
                         <div className="mt-1 inline-block rounded border border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-200 px-2 py-0.5 text-[11px]" data-testid={`surveyor-revision-note-${d.id}`}>
@@ -407,6 +411,11 @@ export default function SurveyorViewPage() {
                 className="prose prose-sm max-w-none border rounded p-4 bg-white"
                 dangerouslySetInnerHTML={{ __html: viewHtml }}
               />
+            )}
+            {!!viewDoc.addenda?.length && (
+              <div className="mt-3">
+                <AddendaView addenda={viewDoc.addenda.map((a) => ({ key: a.document_id, title: a.title, version: a.version_label, url: `/api/surveyor/${token}/policies/${a.document_id}/render` }))} />
+              </div>
             )}
           </div>
         </div>

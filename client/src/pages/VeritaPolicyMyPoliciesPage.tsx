@@ -35,6 +35,8 @@ import { PolicyShareLinks } from "@/components/PolicyShareLinks";
 import { ArchivedDocumentsDialog, type ArchivedDocument } from "@/components/ArchivedDocumentsDialog";
 import { BulkApproveDialog, type BulkApproveItem } from "@/components/BulkApproveDialog";
 import { DcEmailNotices } from "@/components/DcEmailNotices";
+import { DocumentAddenda, SystemDocumentChip, SystemDocumentPanel, SystemDocumentsNotice, type SharedDetail, type SystemDocumentMark } from "@/components/SystemDocumentPanel";
+import { SendSystemDocumentDialog } from "@/components/SendSystemDocumentDialog";
 import { MarkedDocument, PolicyVersionHistory, VersionBanner, watermarkFor, type PolicyVersionRow } from "@/components/PolicyVersionHistory";
 import { useStaffDocScope } from "@/hooks/useStaffLogin";
 import {
@@ -220,6 +222,9 @@ interface PolicyDocument {
   revision_in_progress?: boolean;
   // Signed in the lab's prior system and carried over, not signed in VeritaAssure.
   my_prior_system?: { system: string; version: string; signed_on: string } | null;
+  // Received from the organization's system documents, or an addendum to one (B1; server/policySharedDocuments.ts).
+  system_document?: SystemDocumentMark;
+  addendum_to?: { document_id: number; title: string };
   created_at: string;
   updated_at: string;
   // Phase 2.1: in_review rows include these so the UI can render
@@ -415,6 +420,17 @@ export default function VeritaPolicyMyPoliciesPage() {
     memberships?.find((m) => m.labId === activeLabId)?.defaultReviewIntervalMonths ?? 24
   );
   const { toast } = useToast();
+  // System documents (B1): only a lab of an organization receives them, and only its repository lab sends them.
+  const membership = memberships?.find((m) => m.labId === activeLabId);
+  const [sendDocId, setSendDocId] = useState<number | null>(null);
+  const { data: mastersData } = useQuery<{ repository: boolean; can_send?: boolean; documents?: Record<number, { sent: number; waiting: number; approved: number }> }>({
+    queryKey: [`/api/labs/${activeLabId}/veritapolicy/shared/masters`],
+    queryFn: getQueryFn({ on401: "throw" }),
+    enabled: !!activeLabId && !!membership?.isRepository && !staffOwnDocs,
+    refetchOnMount: "always",
+    retry: false,
+  });
+  const sendsSystemDocuments = !!mastersData?.repository && !!mastersData.can_send && !isReadOnly;
 
   const invalidateAll = () => {
     queryClient.invalidateQueries({
@@ -423,6 +439,8 @@ export default function VeritaPolicyMyPoliciesPage() {
     queryClient.invalidateQueries({
       queryKey: [`/api/labs/${activeLabId}/veritapolicy/manuals`],
     });
+    queryClient.invalidateQueries({ queryKey: [`/api/labs/${activeLabId}/veritapolicy/shared/received`] });
+    queryClient.invalidateQueries({ queryKey: [`/api/labs/${activeLabId}/veritapolicy/shared/masters`] });
   };
 
   // ── Queries ─────────────────────────────────────────────────────────────
@@ -853,6 +871,8 @@ export default function VeritaPolicyMyPoliciesPage() {
   const [archivedOpen, setArchivedOpen] = useState(false);
   const [bulkItems, setBulkItems] = useState<BulkApproveItem[] | null>(null);
   const [viewCarried, setViewCarried] = useState<CarriedRecord | null>(null);
+  // Where a system document came from, and its addenda (B1).
+  const [viewShared, setViewShared] = useState<SharedDetail>({});
 
   // ── Per-policy notes (discussion thread) ────────────────────────────────
   const [notesDoc, setNotesDoc] = useState<PolicyDocument | null>(null);
@@ -1485,6 +1505,7 @@ export default function VeritaPolicyMyPoliciesPage() {
     setViewSignoffs([]);
     setViewVersions([]);
     setViewCarried(null);
+    setViewShared({});
     try {
       const token = localStorage.getItem("veritas_token") || "";
       // Fire-and-forget signoff history so the audit trail renders alongside.
@@ -1503,6 +1524,7 @@ export default function VeritaPolicyMyPoliciesPage() {
           setViewVersions(body?.versions || []);
           setViewCanOpenVersions(body?.can_open_versions === true);
           setViewCarried(body?.carried || null);
+          setViewShared({ system_document: body?.system_document, addenda: body?.addenda, addendum_to: body?.addendum_to });
         })
         .catch(() => {});
       await loadIntoViewer(`${doc.id}/render`);
@@ -1522,6 +1544,7 @@ export default function VeritaPolicyMyPoliciesPage() {
     setViewSignoffs([]);
     setViewVersions([]);
     setViewCarried(null);
+    setViewShared({});
     setViewVersion(null);
     setViewArchived(false);
   };
@@ -1762,6 +1785,15 @@ export default function VeritaPolicyMyPoliciesPage() {
       )}
 
       {staffOwnDocs && activeLabId && <StaffDocumentLookup labId={activeLabId} onView={(d) => openView(d)} />}
+
+      {!staffOwnDocs && activeLabId && (membership?.organizationId != null || documents.some((d) => d.system_document)) && !membership?.isRepository && (
+        <SystemDocumentsNotice
+          labId={activeLabId}
+          canEdit={!isReadOnly}
+          fmtDate={fmtDate}
+          onView={(id) => { const d = documents.find((x) => x.id === id); if (d) openView(d); }}
+        />
+      )}
 
       {!staffOwnDocs && dueSoonDocs.length > 0 && (
         <Card className="border-amber-300 bg-amber-50/30 dark:border-amber-700">
@@ -2015,6 +2047,13 @@ export default function VeritaPolicyMyPoliciesPage() {
                               {doc.description}
                             </div>
                           )}
+                          {doc.system_document && <SystemDocumentChip mark={doc.system_document} />}
+                          {doc.addendum_to && <div className="text-[11px] text-muted-foreground" data-testid="addendum-chip">Site addendum to {doc.addendum_to.title}</div>}
+                          {!!mastersData?.documents?.[doc.id] && (
+                            <div className="text-[11px] text-muted-foreground" data-testid={`sent-chip-${doc.id}`}>
+                              Sent to {mastersData.documents[doc.id].sent} {mastersData.documents[doc.id].sent === 1 ? "laboratory" : "laboratories"}: {mastersData.documents[doc.id].approved} approved this version, {mastersData.documents[doc.id].waiting} waiting
+                            </div>
+                          )}
                         </td>
                         <td className="py-2 pr-3">
                           <StatusBadge status={doc.status} />
@@ -2141,7 +2180,18 @@ export default function VeritaPolicyMyPoliciesPage() {
                               </Button>
                             </>
                           )}
-                          {doc.owner_user_id === user?.id && (
+                          {sendsSystemDocuments && doc.current_version_id != null && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setSendDocId(doc.id)}
+                              title="Send the approved version to laboratories of your system"
+                              data-testid={`send-${doc.id}`}
+                            >
+                              <Send size={12} className="mr-1" /> Send to laboratories
+                            </Button>
+                          )}
+                          {doc.owner_user_id === user?.id && !["following", "retired"].includes(doc.system_document?.state ?? "") && (
                             <Button hidden={isReadOnly}
                               size="sm"
                               variant="ghost"
@@ -2602,6 +2652,8 @@ export default function VeritaPolicyMyPoliciesPage() {
         />
       )}
 
+      {sendDocId != null && activeLabId && <SendSystemDocumentDialog labId={activeLabId} documentId={sendDocId} onClose={() => setSendDocId(null)} />}
+
       {/* ── View modal ──────────────────────────────────────────────── */}
       <Dialog
         open={!!viewDoc}
@@ -2634,6 +2686,19 @@ export default function VeritaPolicyMyPoliciesPage() {
             <div className="rounded border border-amber-400 bg-amber-50 text-amber-900 p-2 text-sm dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200" role="status" data-testid="archived-banner">
               <span className="font-semibold">Archived.</span> This document is out of use. It is shown for reference only.
             </div>
+          )}
+          {viewDoc && activeLabId && !viewVersion && (
+            <SystemDocumentPanel
+              key={viewDoc.id}
+              labId={activeLabId}
+              documentId={viewDoc.id}
+              detail={viewShared}
+              canEdit={!isReadOnly && !staffOwnDocs && !viewArchived && !membership?.viaVlsSupport}
+              ownDocuments={documents.filter((d) => d.id !== viewDoc.id && (d.status === "approved" || d.status === "expired") && !d.system_document && !d.addendum_to)}
+              fmtDate={fmtDate}
+              onGone={closeView}
+              onChanged={() => openView(viewDoc)}
+            />
           )}
           <PolicyVersionHistory versions={viewVersions} canOpen={viewCanOpenVersions} viewingId={viewVersion?.id ?? null} fmtDate={fmtDate} onOpen={openVersion} />
           {/* A link to this document's current approved version, for people outside the lab. VeritaDC editors only. */}
@@ -2791,6 +2856,7 @@ export default function VeritaPolicyMyPoliciesPage() {
               )}
             </MarkedDocument>
           )}
+          {activeLabId && !viewVersion && !!viewShared.addenda?.length && <DocumentAddenda labId={activeLabId} addenda={viewShared.addenda} />}
           <DialogFooter>
             <Button variant="outline" onClick={closeView}>
               Close

@@ -9115,6 +9115,106 @@ try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS uq_policy_approval_notices 
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_approval_notices_lab ON policy_approval_notices(lab_id)`); } catch {}
 try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_sign_notices_user ON policy_sign_notices(user_id, claimed_at)`); } catch {}
 
+// One controlled procedure for several laboratories (B1; server/policySharedDocuments.ts). The master is an ordinary VeritaDC
+// document in the organization's repository lab. policy_shared_copies: one row per laboratory it was sent to, pointing at that
+// laboratory's own VeritaDC document (document_id is NULL once the laboratory deletes it). policy_shared_versions: which of that
+// document's versions came from which master version. policy_addenda: a laboratory's own addendum, itself a VeritaDC document.
+// Nothing here holds an approval or a signature: those stay in policy_signoffs, on each laboratory's own document.
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS policy_shared_copies (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    organization_id INTEGER NOT NULL,
+    master_lab_id INTEGER NOT NULL,
+    master_document_id INTEGER NOT NULL,
+    -- As they read when last received, so a laboratory's record still says where it came from when the master is gone.
+    master_title TEXT,
+    master_doc_number TEXT,
+    lab_id INTEGER NOT NULL,
+    document_id INTEGER,
+    -- 'following' | 'declined' | 'own_copy'
+    status TEXT NOT NULL DEFAULT 'following',
+    sent_by INTEGER NOT NULL,
+    sent_at TEXT NOT NULL DEFAULT (datetime('now')),
+    -- A newer approved master version that hasn't become a draft here yet, because one is already open.
+    waiting_master_version_id INTEGER,
+    waiting_master_label TEXT,
+    waiting_since TEXT,
+    declined_master_version_id INTEGER,
+    declined_label TEXT,
+    declined_reason TEXT,
+    declined_by INTEGER,
+    declined_at TEXT,
+    detached_by INTEGER,
+    detached_at TEXT,
+    updated_at TEXT
+  )
+`);
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS policy_shared_versions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    copy_id INTEGER NOT NULL,
+    lab_id INTEGER NOT NULL,
+    document_id INTEGER NOT NULL,
+    version_id INTEGER NOT NULL,
+    master_version_id INTEGER NOT NULL,
+    master_label TEXT,
+    -- 'sent' | 'new_version' | 'linked' | 'taken' | 'resumed'
+    how TEXT,
+    received_by INTEGER,
+    received_at TEXT NOT NULL DEFAULT (datetime('now'))
+  )
+`);
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS policy_addenda (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    document_id INTEGER NOT NULL,
+    addendum_document_id INTEGER NOT NULL,
+    created_by INTEGER NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    removed_by INTEGER,
+    removed_at TEXT
+  )
+`);
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(policy_shared_copies)").all() as { name: string }[]).map((c) => c.name);
+  for (const [col, ddl] of [
+    ["organization_id", "INTEGER"], ["master_lab_id", "INTEGER"], ["master_document_id", "INTEGER"], ["master_title", "TEXT"], ["master_doc_number", "TEXT"],
+    ["lab_id", "INTEGER"], ["document_id", "INTEGER"], ["status", "TEXT NOT NULL DEFAULT 'following'"], ["sent_by", "INTEGER"], ["sent_at", "TEXT"],
+    ["waiting_master_version_id", "INTEGER"], ["waiting_master_label", "TEXT"], ["waiting_since", "TEXT"],
+    ["declined_master_version_id", "INTEGER"], ["declined_label", "TEXT"], ["declined_reason", "TEXT"], ["declined_by", "INTEGER"], ["declined_at", "TEXT"],
+    ["detached_by", "INTEGER"], ["detached_at", "TEXT"], ["updated_at", "TEXT"],
+  ] as const) {
+    if (!cols.includes(col)) sqlite.exec(`ALTER TABLE policy_shared_copies ADD COLUMN ${col} ${ddl}`);
+  }
+}
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(policy_shared_versions)").all() as { name: string }[]).map((c) => c.name);
+  for (const [col, ddl] of [
+    ["copy_id", "INTEGER"], ["lab_id", "INTEGER"], ["document_id", "INTEGER"], ["version_id", "INTEGER"], ["master_version_id", "INTEGER"],
+    ["master_label", "TEXT"], ["how", "TEXT"], ["received_by", "INTEGER"], ["received_at", "TEXT"],
+  ] as const) {
+    if (!cols.includes(col)) sqlite.exec(`ALTER TABLE policy_shared_versions ADD COLUMN ${col} ${ddl}`);
+  }
+}
+{
+  const cols = (sqlite.prepare("PRAGMA table_info(policy_addenda)").all() as { name: string }[]).map((c) => c.name);
+  for (const [col, ddl] of [
+    ["lab_id", "INTEGER"], ["document_id", "INTEGER"], ["addendum_document_id", "INTEGER"], ["created_by", "INTEGER"], ["created_at", "TEXT"],
+    ["removed_by", "INTEGER"], ["removed_at", "TEXT"],
+  ] as const) {
+    if (!cols.includes(col)) sqlite.exec(`ALTER TABLE policy_addenda ADD COLUMN ${col} ${ddl}`);
+  }
+}
+try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS uq_policy_shared_copies ON policy_shared_copies(master_document_id, lab_id)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_shared_copies_lab ON policy_shared_copies(lab_id, document_id)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_shared_copies_org ON policy_shared_copies(organization_id)`); } catch {}
+try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS uq_policy_shared_versions_version ON policy_shared_versions(version_id)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_shared_versions_copy ON policy_shared_versions(copy_id, master_version_id)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_shared_versions_doc ON policy_shared_versions(lab_id, document_id)`); } catch {}
+try { sqlite.exec(`CREATE INDEX IF NOT EXISTS idx_policy_addenda_doc ON policy_addenda(lab_id, document_id)`); } catch {}
+try { sqlite.exec(`CREATE UNIQUE INDEX IF NOT EXISTS uq_policy_addenda_addendum ON policy_addenda(addendum_document_id) WHERE removed_at IS NULL`); } catch {}
+
 // Migration sentinel block. Pure read of PRAGMA table_info so the next
 // ALTER TABLE for these tables lands without re-checking column presence.
 // Per CLAUDE.md feedback: NO writes, NO derived-state cascades.
