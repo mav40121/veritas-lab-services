@@ -44,7 +44,9 @@ function percentile(values, pct) {
   return sorted[lo] + (idx - lo) * (sorted[hi] - sorted[lo]);
 }
 
-// EP17-A2 Table A1, transcribed verbatim from calculations.ts.
+// BUG-190 (2026-11-27): this is the factor table calculations.ts used before; no source carries its values. It is now
+// SUPERSEDED_TABLE_2026_05 in shared/lodFactor.ts, kept only to reproduce studies saved with it. New calculations use
+// the CLSI EP17-A2 formula; scripts/verify-lod-cbeta-formula.mts is that receipt.
 const CBETA_TABLE = [
   { n: 5,    c: 2.063 }, { n: 10,   c: 1.831 }, { n: 15,   c: 1.766 },
   { n: 20,   c: 1.749 }, { n: 25,   c: 1.717 }, { n: 30,   c: 1.704 },

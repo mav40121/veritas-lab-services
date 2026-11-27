@@ -1723,6 +1723,8 @@ function generateTroponinSensitivityData() {
       ],
       cvThreshold: 0.20,
       biasThreshold: 0.25,
+      // BUG-190: this fixture is rewritten on every boot, so it shows the EP17-A2 formula a new study uses (shared/lodFactor.ts).
+      cbetaMethod: "ep17_formula",
     },
     results: {
       type: "sensitivity",
@@ -1739,11 +1741,13 @@ function generateTroponinSensitivityData() {
         },
       },
       lod: {
-        value: 0.010992,
+        value: 0.010828,
         lobUsed: 0.007494,
-        cBeta: 1.749,
+        cBeta: 1.667,
         sdLowLevel: 0.002000,
         nLowLevel: 20,
+        nLowLevelSamples: 1,
+        cbetaMethod: "ep17_formula",
       },
       loq: {
         value: 0.025,
@@ -1756,7 +1760,7 @@ function generateTroponinSensitivityData() {
         biasThreshold: 25.0,
       },
       overallPass: true,
-      summary: "Analytical sensitivity established per CLSI EP17-A2. LoB = 0.0075 (parametric, n=20); LoD = 0.0110 (n=20 low-level replicates, Cβ=1.749); LoQ = 0.0250 (criteria: CV ≤ 20%, |bias| ≤ 25%). PASSED the establishment criterion.",
+      summary: "Analytical sensitivity established per CLSI EP17-A2. LoB = 0.0075 (parametric, n=20); LoD = 0.0108 (L = 20 low-level results, K = 1 sample, cp = 1.667); LoQ = 0.0250 (criteria: CV ≤ 20%, |bias| ≤ 25%). PASSED the establishment criterion.",
     },
   };
 }

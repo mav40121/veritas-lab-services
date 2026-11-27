@@ -252,9 +252,13 @@ function serializeSensitivity(raw: unknown): string {
     { key: "run", header: "Run" },
     { key: "value", header: "Value" },
   ];
+  // A low-level result's sample label (BUG-190), as a column only when the study has one.
+  const lowSamples = rowsOf(input.lowLevel).some((r) => r.sample);
   const sections: Array<{ title: string; columns: CsvColumn<any>[]; rows: Row[] }> = [
     { title: "Blank Replicates", columns: repCols, rows: blanks },
-    { title: "Low-Level Replicates (LoD)", columns: repCols, rows: low },
+    lowSamples
+      ? { title: "Low-Level Replicates (LoD)", columns: [{ key: "sample", header: "Sample" }, ...repCols], rows: rowsOf(input.lowLevel).map((r) => ({ sample: r.sample ?? "", ...rep(r) })) }
+      : { title: "Low-Level Replicates (LoD)", columns: repCols, rows: low },
   ];
   if (loq.length > 0) {
     sections.push({ title: "LoQ Levels", columns: [{ key: "expectedConcentration", header: "Expected Concentration" }, ...repCols], rows: loq });

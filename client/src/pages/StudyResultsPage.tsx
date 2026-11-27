@@ -71,6 +71,7 @@ import { labLocaleDate } from "@/lib/labDate";
 import { teaLabelFor } from "@shared/regulatedAnalytes";
 import { printedPresetLabel } from "@shared/studyCriterion";
 import { CLIA_PRESETS } from "@shared/cliaPresets";
+import { LOD_FACTOR_FORMULA, lodFactorWorking } from "@shared/lodFactor";
 // The preset name shown beside a study's criterion, by the PDF's rule (Q275 = 1; shared/studyCriterion.ts printedPresetLabel).
 const presetSuffix = (study: Study): string => { const l = printedPresetLabel(study, CLIA_PRESETS); return l ? ` (${l})` : ""; };
 
@@ -2788,7 +2789,7 @@ function StudyResultsPage() {
                       <td className="p-2 font-medium">LoD (Limit of Detection)</td>
                       <td className="p-2 text-right font-mono">{fmt(sensitivityResults.lod?.value)}</td>
                       <td className="p-2 pl-4 text-muted-foreground">
-                        EP17-A2 single-sample: LoB + cβ·SD(low level)
+                        {sensitivityResults.lod?.cbetaMethod === LOD_FACTOR_FORMULA ? "LoB + cp × SD(low level), CLSI EP17-A2" : "LoB + cβ × SD(low level)"}
                       </td>
                     </tr>
                     {sensitivityResults.loq && (
@@ -2868,26 +2869,36 @@ function StudyResultsPage() {
                 <CardTitle>LoD detail</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid sm:grid-cols-4 gap-3 text-sm">
+                {/* BUG-190: a formula result names L, K and how cp was worked out; a result saved with the superseded
+                    table shows its factor as saved, with no table citation. */}
+                <div className={sensitivityResults.lod.cbetaMethod === LOD_FACTOR_FORMULA ? "grid sm:grid-cols-5 gap-3 text-sm" : "grid sm:grid-cols-4 gap-3 text-sm"}>
                   <div>
                     <div className="text-xs text-muted-foreground">LoB used</div>
                     <div className="font-mono font-semibold">{fmt(sensitivityResults.lod.lobUsed)}</div>
                   </div>
                   <div>
-                    <div className="text-xs text-muted-foreground">cβ (table A1)</div>
-                    <div className="font-mono font-semibold">{fmt(sensitivityResults.lod.cBeta, 3)}</div>
+                    <div className="text-xs text-muted-foreground">{sensitivityResults.lod.cbetaMethod === LOD_FACTOR_FORMULA ? "cp (EP17-A2 formula)" : "cβ (as saved)"}</div>
+                    <div className="font-mono font-semibold" data-testid="text-lod-factor">{fmt(sensitivityResults.lod.cBeta, 3)}</div>
                   </div>
                   <div>
                     <div className="text-xs text-muted-foreground">SD (low level)</div>
                     <div className="font-mono font-semibold">{fmt(sensitivityResults.lod.sdLowLevel, 4)}</div>
                   </div>
                   <div>
-                    <div className="text-xs text-muted-foreground">n (low level)</div>
+                    <div className="text-xs text-muted-foreground">{sensitivityResults.lod.cbetaMethod === LOD_FACTOR_FORMULA ? "L (low-level results)" : "n (low level)"}</div>
                     <div className="font-mono font-semibold">{sensitivityResults.lod.nLowLevel}</div>
                   </div>
+                  {sensitivityResults.lod.cbetaMethod === LOD_FACTOR_FORMULA && (
+                    <div>
+                      <div className="text-xs text-muted-foreground">K (low-level samples)</div>
+                      <div className="font-mono font-semibold">{sensitivityResults.lod.nLowLevelSamples}</div>
+                    </div>
+                  )}
                 </div>
-                <div className="text-xs text-muted-foreground mt-3">
-                  LoD = LoB + cβ × SD(low level). cβ from EP17-A2 Table A1 (α=β=0.05, one-sided).
+                <div className="text-xs text-muted-foreground mt-3" data-testid="text-lod-factor-working">
+                  {lodFactorWorking(sensitivityResults.lod)
+                    ? `LoD = LoB + cp × SD(low level), where ${lodFactorWorking(sensitivityResults.lod)}.${(sensitivityResults.lod.nLowLevelSamples ?? 1) > 1 ? " SD(low level) is pooled within the samples." : ""}`
+                    : "LoD = LoB + cβ × SD(low level). This study was saved with the correction table VeritaCheck® used before it moved to the CLSI EP17-A2 formula, and it keeps the result it was saved with. A new run of the study uses the formula."}
                 </div>
               </CardContent>
             </Card>
@@ -3020,6 +3031,7 @@ function StudyResultsPage() {
                               <tr className="border-b border-border bg-muted/40">
                                 <th className="text-left p-2 font-semibold">#</th>
                                 <th className="text-right p-2 font-semibold">Value</th>
+                                {sensitivityInput.lowLevel.some((r) => r.sample) && <th className="text-left p-2 font-semibold">Sample</th>}
                                 <th className="text-left p-2 font-semibold">Lot</th>
                                 <th className="text-right p-2 font-semibold">Day</th>
                                 <th className="text-right p-2 font-semibold">Run</th>
@@ -3030,6 +3042,7 @@ function StudyResultsPage() {
                                 <tr key={idx} className="border-b border-border">
                                   <td className="p-2 font-mono text-muted-foreground">{idx + 1}</td>
                                   <td className="p-2 text-right font-mono">{fmt(r.value, 4)}</td>
+                                  {sensitivityInput!.lowLevel.some((x) => x.sample) && <td className="p-2 font-mono">{r.sample || ""}</td>}
                                   <td className="p-2 font-mono">{r.lot || "—"}</td>
                                   <td className="p-2 text-right font-mono">{r.day ?? "—"}</td>
                                   <td className="p-2 text-right font-mono">{r.run ?? "—"}</td>

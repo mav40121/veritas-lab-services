@@ -732,3 +732,6 @@ jobs:
       - name: Run hidden COLA and AABB references integration test
         # BUG-191: our unchecked COLA and AABB numbers read "Being verified" on every screen, PDF, workbook and document.
         run: npm run test:accreditor-refs-hidden
+      - name: Run detection-limit factor integration test
+        # BUG-190: new LoD studies use the CLSI EP17-A2 formula with their own L and K; saved studies keep their result.
+        run: npm run test:lod-cbeta-formula

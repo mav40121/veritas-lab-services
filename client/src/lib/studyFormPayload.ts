@@ -14,6 +14,7 @@
 // Run Study's stored shape is unchanged: each builder's non-draft output is the code handleSubmit had inline.
 
 import { isCensored, type CensoredPoint } from "@shared/censoring";
+import { LOD_FACTOR_FORMULA } from "@shared/lodFactor";
 import type { LotToLotDataPoint, QCRangeDataPoint, SensitivityInput } from "./calculations";
 
 export type EntryCell = number | CensoredPoint | null;
@@ -359,6 +360,16 @@ export const parseSensitivityText = (text: string): { value: number; lot?: strin
     const lot = parts[1];
     return [lot ? { value: val, lot } : { value: val }];
   });
+// A low-level line may carry a third value, its sample label: "value,lot,sample" ("0.021,,S2" with no lot), so the LoD
+// counts K distinct samples (BUG-190). A line of one or two values reads as before.
+export const parseLowLevelText = (text: string): { value: number; lot?: string; sample?: string }[] =>
+  text.split(/\r?\n/).flatMap((line) => {
+    const cells = line.split(/[,\t]/).map((p) => p.trim());
+    if (cells.length < 3) return parseSensitivityText(line);
+    const val = parseFloat(cells[0]);
+    if (isNaN(val)) return [];
+    return [{ value: val, ...(cells[1] ? { lot: cells[1] } : {}), ...(cells[2] ? { sample: cells[2] } : {}) }];
+  });
 export function buildSensitivityInput(f: SensitivityForm): SensitivityInput {
   const loqLevels = f.loqLevels
     .map((lvl) => ({ expectedConcentration: parseFloat(lvl.expectedConcentration), replicates: parseSensitivityText(lvl.repsText) }))
@@ -371,11 +382,13 @@ export function buildSensitivityInput(f: SensitivityForm): SensitivityInput {
   return {
     mode: f.mode,
     blanks: parseSensitivityText(f.blanksText),
-    lowLevel: parseSensitivityText(f.lowLevelText),
+    lowLevel: parseLowLevelText(f.lowLevelText),
     loqLevels: loqLevels.length > 0 ? loqLevels : undefined,
     cvThreshold: f.cvThreshold / 100,
     biasThreshold: f.biasThreshold / 100,
     manufacturerClaim: mfgClaim,
+    // Every calculation the form makes uses the EP17-A2 formula (shared/lodFactor.ts), a re-run from Edit included.
+    cbetaMethod: LOD_FACTOR_FORMULA,
   };
 }
 // A draft keeps the form's own text (lines the parser would skip stay) beside the parsed input.
@@ -396,7 +409,7 @@ function readSensitivityForm(dp: unknown, row: any): SensitivityForm | null {
   }
   const input = dp.input;
   if (!isObj(input)) return null;
-  const lines = (reps: unknown) => (Array.isArray(reps) ? reps.filter((r: any) => isObj(r) && isNum(r.value)).map((r: any) => (r.lot ? `${r.value},${r.lot}` : String(r.value))).join("\n") : "");
+  const lines = (reps: unknown) => (Array.isArray(reps) ? reps.filter((r: any) => isObj(r) && isNum(r.value)).map((r: any) => (r.sample ? `${r.value},${r.lot ?? ""},${r.sample}` : r.lot ? `${r.value},${r.lot}` : String(r.value))).join("\n") : "");
   const claim = isObj(input.manufacturerClaim) ? input.manufacturerClaim : {};
   const pct = (v: unknown, dflt: number) => (isNum(v) ? Math.round(v * 100 * 1e6) / 1e6 : dflt);
   return {
