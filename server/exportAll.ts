@@ -29,6 +29,7 @@ import { logAudit } from "./audit";
 import { issuePurposeToken, verifyPurposeToken } from "./sessionAuth";
 import { buildStudyPdf } from "./studyPdf";
 import { labToday, labTimeZoneOf } from "./dateLocal";
+import { slotRowsForExport } from "./verificationLinks";
 
 export const EXPORT_RETENTION_MS = 24 * 60 * 60 * 1000;
 export const WEEKLY_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
@@ -129,7 +130,8 @@ export function selectRecords(sqlite: any, table: string, ctx: ExportCtx): Table
     for (const c of columns) r[c] = scrubJsonText(r[c]);
     return r;
   });
-  return { table, module: spec.module, columns, rows };
+  // A verification slot shows only its own laboratory's study (server/verificationLinks.ts).
+  return { table, module: spec.module, columns, rows: table === "veritacheck_verification_studies" ? slotRowsForExport(sqlite, rows) : rows };
 }
 
 const safeName = (s: string, max = 80) =>

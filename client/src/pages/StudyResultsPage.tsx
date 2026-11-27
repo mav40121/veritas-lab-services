@@ -2289,7 +2289,8 @@ function StudyResultsPage() {
   const isReadOnly = useIsReadOnly("veritacheck");
 
   // Auto-link this study back to a verification package if launched from there
-  // (never for a view-only login: the server would refuse the write).
+  // (never for a view-only login: the server would refuse the write). A package takes only its own lab's studies.
+  const [verifLinkFailed, setVerifLinkFailed] = useState(false);
   useEffect(() => {
     if (isReadOnly) return;
     const p = new URLSearchParams(search);
@@ -2301,7 +2302,7 @@ function StudyResultsPage() {
         method: "PATCH",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({ study_id: id, passed: passed === "1" ? 1 : 0 }),
-      });
+      }).then((r) => setVerifLinkFailed(!r.ok)).catch(() => setVerifLinkFailed(true));
     }
   }, [id, search, isReadOnly]);
 
@@ -3096,7 +3097,7 @@ function StudyResultsPage() {
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
       {verifReturnId && (
         <div className="mb-4 flex items-center justify-between p-3 rounded-lg bg-primary/10 border border-primary/20">
-          <span className="text-sm text-primary font-medium">Study linked to your Instrument Verification Package</span>
+          <span className="text-sm text-primary font-medium" data-testid="verification-link-status">{verifLinkFailed ? "This study could not be linked to your Instrument Verification Package" : "Study linked to your Instrument Verification Package"}</span>
           <button
             onClick={() => navigate(labRoute("/dashboard/verifications"))}
             className="text-sm text-primary underline font-semibold"

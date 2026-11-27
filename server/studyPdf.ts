@@ -12,6 +12,7 @@
 import { generatePDFBuffer } from "./pdfReport";
 import { computeStudyResults, notEvaluableReason } from "../client/src/lib/studyResults";
 import { labLocalDate } from "./dateLocal";
+import { ownMapInstrument } from "./verificationLinks";
 
 export function studyRowToClient(row: any): any {
   if (!row) return row;
@@ -87,13 +88,14 @@ export function studyRowToClient(row: any): any {
   };
 }
 
-export function resolveInstrumentDisplay(sqlite: any, instrumentMeta: any): Record<string, { model: string; nickname: string | null; serial_number: string | null }> | null {
+/** Analyzers as the laboratory's own VeritaMap names them now; one that isn't there prints as it was saved with the study (server/verificationLinks.ts). */
+export function resolveInstrumentDisplay(sqlite: any, instrumentMeta: any, of: { lab_id?: unknown; user_id?: unknown }): Record<string, { model: string; nickname: string | null; serial_number: string | null }> | null {
   try {
     const meta = typeof instrumentMeta === "string" ? JSON.parse(instrumentMeta) : instrumentMeta;
     const resolved: Record<string, { model: string; nickname: string | null; serial_number: string | null }> = {};
     for (const [idx, entry] of Object.entries(meta || {}) as [string, any][]) {
       if (entry?.instrument_id) {
-        const row = sqlite.prepare("SELECT instrument_name, nickname, serial_number FROM veritamap_instruments WHERE id = ?").get(entry.instrument_id) as any;
+        const row = ownMapInstrument(sqlite, of, entry.instrument_id);
         if (row) {
           resolved[idx] = { model: row.instrument_name, nickname: row.nickname || null, serial_number: row.serial_number || null };
         } else {
@@ -123,7 +125,7 @@ export async function buildStudyPdf(sqlite: any, row: any, lab: any, owner: any)
   if (notEvaluable) throw new Error(notEvaluable);
   if (lab?.lab_name) study._labName = lab.lab_name;
   if (study.instrumentMeta) {
-    const resolved = resolveInstrumentDisplay(sqlite, study.instrumentMeta);
+    const resolved = resolveInstrumentDisplay(sqlite, study.instrumentMeta, row);
     if (resolved) study._instrumentDisplay = resolved;
   }
   const standards: string[] = [];
