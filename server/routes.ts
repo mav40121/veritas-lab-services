@@ -904,6 +904,16 @@ export function recomputeAllStudyStatuses(): { fixed: number; skipped: number } 
 import { saveScanItemRows, scanActor, scanExportNotes, scanItemRowsFromBody, SCAN_ITEM_READ_COLUMNS } from "./veritascanItems";
 import { registerVeritaScanCarryRoutes } from "./veritascanCarry";
 import { registerInspectionLinkRoutes } from "./inspectionLinks";
+import { registerPtEventRoutes } from "./ptEvents";
+import { ptUngradedColumns, registerPtEvaluationRoutes } from "./ptEvaluations";
+import { PT_PROGRAM_HOLDS_RECORDS, ptProgramHoldsRecords, ptResultsHoldRecords } from "./ptRecords";
+import { registerPtReviewRoutes } from "./ptReviews";
+import { registerPtBiasRoutes } from "./ptBiasRoutes";
+import { registerPtReportRoutes } from "./ptReport";
+import { registerPtDocumentRoutes } from "./ptDocuments";
+import { ptTrendsForLab } from "./ptTrends";
+import { ptSamplePicks } from "./ptSamples";
+import { PT_AAA_METHODS } from "@shared/ptEvents";
 import { findingStudy, registerInspectionAssignRoutes } from "./inspectionAssign";
 import { autoCompleteVeritaScanItems, autoCompleteCompetencyScanItems, auditScanAutoCompletions, linkVeritaCheckEvidence, syncCoverageScanMarks } from "./integrations";
 import { planMarkCorrection, applyMarkCorrection, CORRECTED_SOURCE, correctionKeepsLink } from "./veritascanMarkCorrection";
@@ -14785,6 +14795,24 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     return null;
   }
 
+  // A record's own laboratory decides who edits it (server/labAccessGuard.ts has the rule for an older seat).
+  function ptRecordEdit(table: "pt_events" | "pt_enrollments_v2" | "aa_records", notFound: string) {
+    return (req: any, res: any, next: any) => {
+      const row = userCanAccessLabRow(table, req.params.id, req);
+      if (!row) return res.status(404).json({ error: notFound });
+      if (editsInRecordLab(req, row, "veritapt")) return next();
+      return res.status(403).json({ error: `You have view-only access to ${seatModuleLabel("veritapt")}. Ask the account owner to grant edit access.` });
+    };
+  }
+  function editsInRecordLab(req: any, row: { user_id: number; lab_id: number | null }, module: string): boolean {
+    if (row.lab_id && hasModuleEditAccess(Number(row.lab_id), req.userId, module)) return true;
+    if (!row.lab_id && Number(row.user_id) === Number(req.userId)) return true;
+    // A record with no lab, or an older seat with no lab membership anywhere, is worked through its owner: that seat decides.
+    const member = row.lab_id && (db as any).$client.prepare("SELECT 1 FROM lab_members WHERE user_id = ? AND status = 'active' LIMIT 1").get(req.userId);
+    return !member && !!req.isSeatUser && ownerMatch(req, row.user_id, row.lab_id)
+      && effectiveSeatPermission(req.seatType, (req.seatPermissions || {}) as SeatPermissions, module) === "edit";
+  }
+
   // lab_certificates additionally has an is_active soft-delete column.
   // Inline the filter into the SELECT so we don't return tombstoned rows
   // even when the caller has access via direct ownership or lab membership.
@@ -22398,11 +22426,12 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   });
 
   // DELETE /api/pt/enrollments/:id
-  app.delete("/api/pt/enrollments/:id", authMiddleware, requireWriteAccess, requireModuleEdit("veritapt"), (req: any, res) => {
+  app.delete("/api/pt/enrollments/:id", authMiddleware, requireWriteAccess, ptRecordEdit("pt_enrollments_v2", "Enrollment not found"), (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user?.userId;
     const existing = userCanAccessLabRow('pt_enrollments_v2', req.params.id, req);
     if (!existing) return res.status(404).json({ error: "Enrollment not found" });
-    (db as any).$client.prepare("DELETE FROM pt_enrollments_v2 WHERE id = ?").run(req.params.id);
+    if (ptProgramHoldsRecords((db as any).$client, existing)) return res.status(409).json(PT_PROGRAM_HOLDS_RECORDS);
+    (db as any).$client.prepare("DELETE FROM pt_enrollments_v2 WHERE id = ?").run(existing.id);
     res.json({ success: true });
   });
 
@@ -22412,11 +22441,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // aa_records table that VeritaPT uses (in #18 Phase 2's matcher extension)
   // to compute a lab's true coverage as PT-covered + AAA-covered + Uncovered.
 
-  const VALID_AAA_METHODS = [
-    'split_sample_external','split_sample_internal','blind_replicate',
-    'calibration_verif_material','peer_group','manufacturer_material',
-    'clinical_correlation','other',
-  ];
+  const VALID_AAA_METHODS = PT_AAA_METHODS.map((m) => m.value);
 
   // GET all AAA records for the active data user
   app.get("/api/pt/aa-records", authMiddleware, (req: any, res) => {
@@ -22476,7 +22501,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   });
 
   // PUT update an AAA record
-  app.put("/api/pt/aa-records/:id", authMiddleware, requireWriteAccess, requireModuleEdit("veritapt"), (req: any, res) => {
+  app.put("/api/pt/aa-records/:id", authMiddleware, requireWriteAccess, ptRecordEdit("aa_records", "AAA record not found"), (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user?.userId;
     const existing = userCanAccessLabRow('aa_records', req.params.id, req);
     if (!existing) return res.status(404).json({ error: "AAA record not found" });
@@ -22525,7 +22550,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   });
 
   // DELETE an AAA record
-  app.delete("/api/pt/aa-records/:id", authMiddleware, requireWriteAccess, requireModuleEdit("veritapt"), (req: any, res) => {
+  app.delete("/api/pt/aa-records/:id", authMiddleware, requireWriteAccess, ptRecordEdit("aa_records", "AAA record not found"), (req: any, res) => {
     const dataUserId = req.ownerUserId ?? req.user?.userId;
     const existing = userCanAccessLabRow('aa_records', req.params.id, req);
     if (!existing) return res.status(404).json({ error: "AAA record not found" });
@@ -22541,7 +22566,7 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // for tests with no PT program). One click opens the finding pre-filled from
   // the AAA context. CMS is always an allowed accreditor (every lab holds CLIA),
   // so the finding gate never blocks this path.
-  app.post("/api/pt/aa-records/:id/escalate-to-response", authMiddleware, requireWriteAccess, requireModuleEdit("veritapt"), (req: any, res) => {
+  app.post("/api/pt/aa-records/:id/escalate-to-response", authMiddleware, requireWriteAccess, ptRecordEdit("aa_records", "AAA record not found"), (req: any, res) => {
     const sqlite = (db as any).$client;
     const dataUserId = req.ownerUserId ?? req.user?.userId;
     if (!userCanAccessLabRow('aa_records', req.params.id, req)) return res.status(404).json({ error: "AAA record not found" });
@@ -22643,10 +22668,11 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   });
   app.delete("/api/labs/:labId/pt/enrollments/:id", authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit("veritapt"), (req: any, res) => {
     const existing = (db as any).$client.prepare(
-      "SELECT id FROM pt_enrollments_v2 WHERE id = ? AND lab_id = ?"
+      "SELECT * FROM pt_enrollments_v2 WHERE id = ? AND lab_id = ?"
     ).get(req.params.id, req.scope.labId);
     if (!existing) return res.status(404).json({ error: "Enrollment not found" });
-    (db as any).$client.prepare("DELETE FROM pt_enrollments_v2 WHERE id = ?").run(req.params.id);
+    if (ptProgramHoldsRecords((db as any).$client, existing)) return res.status(409).json(PT_PROGRAM_HOLDS_RECORDS);
+    (db as any).$client.prepare("DELETE FROM pt_enrollments_v2 WHERE id = ?").run(existing.id);
     res.json({ success: true });
   });
   // ── MLC-1: Equipment / instrument maintenance (VeritaMaintain; server/equipment.ts) ──
@@ -29305,64 +29331,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       } catch { /* swallow */ }
     }
 
-    // Pull this lab's recent PT events. 18 months is the practical
-    // surveyor-defensible window (CMS Subpart H allows the lab to use any
-    // event in the current calendar year; widening to 18 months lets the
-    // LD also reach a late-year event from the prior cycle).
-    const since = new Date();
-    since.setMonth(since.getMonth() - 18);
-    const sinceDate = since.toISOString().split("T")[0];
-    const events = (db as any).$client.prepare(
-      `SELECT e.id, e.event_id, e.event_name, e.event_date, e.analyte, e.your_result, e.your_method,
-              e.acceptable_low, e.acceptable_high, e.sdi, e.pass_fail, e.tested_by_employee_id,
-              (SELECT TRIM(COALESCE(se.last_name, '') || ', ' || COALESCE(se.first_name, '')) FROM staff_employees se
-                WHERE se.id = e.tested_by_employee_id AND se.tier2_lab_id = e.lab_id) AS tested_by_name
-       FROM pt_events e
-       WHERE e.lab_id = @lab AND date(e.event_date) >= date(@since)
-         AND (@mine = 0 OR e.tested_by_employee_id IS NULL OR e.tested_by_employee_id = @person)
-       ORDER BY date(e.event_date) DESC, e.id DESC
-       LIMIT 200`
-    ).all({ lab: req.scope.labId, since: sinceDate, mine: personId != null || staffOwn ? 1 : 0, person: personId }) as Array<{
-      id: number; event_id: string | null; event_name: string | null; event_date: string;
-      analyte: string; your_result: number | null; your_method: string | null;
-      acceptable_low: number | null; acceptable_high: number | null; sdi: number | null;
-      pass_fail: string; tested_by_employee_id: number | null; tested_by_name: string | null;
-    }>;
-
-    // Filter against program analytes when we have them; otherwise return
-    // all. The match is case-insensitive substring both ways so "ALT" in
-    // pt_events.analyte matches "ALT (SGPT)" in program analytes, and
-    // vice versa.
-    const filtered = programAnalytes.size === 0 ? events : events.filter(e => {
-      const a = (e.analyte || "").toLowerCase();
-      for (const pa of programAnalytes) {
-        if (a.includes(pa) || pa.includes(a)) return true;
-      }
-      return false;
-    });
-
-    res.json(filtered.slice(0, 25).map(e => ({
-      id: e.id,
-      eventId: e.event_id,
-      eventName: e.event_name,
-      eventDate: e.event_date,
-      analyte: e.analyte,
-      yourResult: e.your_result,
-      yourMethod: e.your_method,
-      acceptableLow: e.acceptable_low,
-      acceptableHigh: e.acceptable_high,
-      sdi: e.sdi,
-      passFail: e.pass_fail,
-      // Convenience pre-formatted fields the picker can drop straight
-      // into the Element 5 form state.
-      suggestedSampleType: "PT",
-      // The event id and the event name, whichever the lab entered; never a made-up number.
-      suggestedSampleId: [e.event_id, e.event_name].map((v) => String(v ?? "").trim()).filter((v, i, all) => v && all.indexOf(v) === i).join(", "),
-      testedByEmployeeId: staffOwn ? null : e.tested_by_employee_id,
-      testedByName: staffOwn ? null : e.tested_by_name,
-      testedByThisPerson: personId != null && e.tested_by_employee_id === personId,
-      suggestedAcceptable: e.pass_fail === "pass" ? 1 : (e.pass_fail === "fail" ? 0 : null),
-    })));
+    // A limited Staff login reads only its own and unrecorded events and nobody's name (server/ptSamples.ts).
+    res.json(ptSamplePicks((db as any).$client, { labId: req.scope.labId, analytes: programAnalytes, person: personId, leaveOutOthers: personId != null || !!staffOwn, hideTester: !!staffOwn }));
   });
 
   // GET /api/labs/:labId/competency/employees/:id/staff-instruments
@@ -30283,6 +30253,27 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     }
     return assessment;
   };
+
+  // GET /api/labs/:labId/competency/employee/:employeeId/test-system/:instrumentId/pt-samples
+  //
+  // VeritaPT events this person tested, for the analytes of this method (B11, server/ptSamples.ts): what "Fill from VeritaPT" on
+  // Element 5 offers the evaluator. It reads only; the evaluator marks the element, saves and signs.
+  app.get("/api/labs/:labId/competency/employee/:employeeId/test-system/:instrumentId/pt-samples", authMiddleware, labScopeMiddleware, notForStaffLogin, requireModuleEdit('veritacomp'), (req: any, res) => {
+    if (!hasCompetencyAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaComp™ subscription required" });
+    const labId = req.scope.labId, sqlite = (db as any).$client;
+    const empId = Number(req.params.employeeId), instrumentId = Number(req.params.instrumentId);
+    const emp = sqlite.prepare("SELECT id FROM staff_employees WHERE id = ? AND tier2_lab_id = ? AND status = 'active'").get(empId, labId) as any;
+    if (!emp) return res.status(404).json({ error: "Employee not found" });
+    const { memberIds } = methodOf(loadInstrumentGroups(sqlite, labId), instrumentId);
+    const marks = memberIds.map(() => "?").join(",");
+    const mine = sqlite.prepare(
+      `SELECT 1 FROM staff_employee_instruments j JOIN veritamap_instruments i ON i.id = j.instrument_id JOIN veritamap_maps m ON m.id = i.map_id
+        WHERE j.employee_id = ? AND i.id IN (${marks}) AND m.lab_id = ? LIMIT 1`
+    ).get(empId, ...memberIds, labId);
+    if (!mine) return res.status(404).json({ error: "Instrument not assigned to this employee" });
+    const analytes = (sqlite.prepare(`SELECT DISTINCT analyte FROM veritamap_instrument_tests WHERE instrument_id IN (${marks}) AND active = 1`).all(...memberIds) as any[]).map((t) => String(t.analyte || ""));
+    res.json(ptSamplePicks(sqlite, { labId, analytes, person: empId, onlyTheirs: true }));
+  });
 
   // PUT /api/labs/:labId/competency/employee/:employeeId/test-system/:instrumentId/my-data
   //
@@ -33970,66 +33961,6 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     res.json(rows);
   });
 
-  // Create enrollment
-  app.post("/api/veritapt/enrollments", authMiddleware, requireWriteAccess, requireModuleEdit('veritapt'), (req: any, res) => {
-    if (!hasPTAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaPT™ subscription required" });
-    const { analyte, specialty, pt_provider, program_code, enrollment_year, enrollment_date, status } = req.body;
-    if (!analyte?.trim() || !specialty?.trim() || !pt_provider?.trim() || !enrollment_year || !enrollment_date) {
-      return res.status(400).json({ error: "Analyte, specialty, PT provider, enrollment year, and enrollment date are required" });
-    }
-    const now = new Date().toISOString();
-    const dataUserId = req.ownerUserId ?? req.user.userId;
-    const result = (db as any).$client.prepare(
-      "INSERT INTO pt_enrollments (user_id, analyte, specialty, pt_provider, program_code, enrollment_year, enrollment_date, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-    ).run(dataUserId, analyte.trim(), specialty.trim(), pt_provider.trim(), program_code || null, enrollment_year, enrollment_date, status || 'active', now, now);
-    // write-path Shape A (batch 1, docs/shape-a-class-audit-2026-06-09.md): tag
-    // the ACTIVE lab, not the owner's default lab. resolveActiveLabForRequest
-    // falls back to the default lab with no X-Active-Lab-Id header, so single-lab
-    // users are unchanged. This table's reads key on user_id, so nothing hides.
-    try {
-      const activeLab = resolveActiveLabForRequest(req.userId, req);
-      (db as any).$client.prepare("UPDATE pt_enrollments SET lab_id = ? WHERE id = ?").run(activeLab?.id ?? null, result.lastInsertRowid);
-    } catch {}
-    const created = (db as any).$client.prepare("SELECT * FROM pt_enrollments WHERE id = ?").get(Number(result.lastInsertRowid));
-    res.json(created);
-  });
-
-  // Update enrollment
-  app.put("/api/veritapt/enrollments/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritapt'), (req: any, res) => {
-    if (!hasPTAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaPT™ subscription required" });
-    const dataUserId = req.ownerUserId ?? req.user.userId;
-    const existing = userCanAccessLabRow('pt_enrollments', req.params.id, req);
-    if (!existing) return res.status(404).json({ error: "Enrollment not found" });
-    const { analyte, specialty, pt_provider, program_code, enrollment_year, enrollment_date, status } = req.body;
-    const now = new Date().toISOString();
-    (db as any).$client.prepare(
-      "UPDATE pt_enrollments SET analyte = ?, specialty = ?, pt_provider = ?, program_code = ?, enrollment_year = ?, enrollment_date = ?, status = ?, updated_at = ? WHERE id = ?"
-    ).run(
-      analyte ?? existing.analyte, specialty ?? existing.specialty, pt_provider ?? existing.pt_provider,
-      program_code !== undefined ? program_code : existing.program_code,
-      enrollment_year ?? existing.enrollment_year, enrollment_date ?? existing.enrollment_date,
-      status ?? existing.status, now, req.params.id
-    );
-    const updated = (db as any).$client.prepare("SELECT * FROM pt_enrollments WHERE id = ?").get(req.params.id);
-    res.json(updated);
-  });
-
-  // Delete enrollment (cascade: events + their corrective actions)
-  app.delete("/api/veritapt/enrollments/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritapt'), (req: any, res) => {
-    if (!hasPTAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaPT™ subscription required" });
-    const dataUserId = req.ownerUserId ?? req.user.userId;
-    const existing = userCanAccessLabRow('pt_enrollments', req.params.id, req);
-    if (!existing) return res.status(404).json({ error: "Enrollment not found" });
-    // Get event IDs for cascade delete
-    const events = (db as any).$client.prepare("SELECT id FROM pt_events WHERE enrollment_id = ?").all(req.params.id) as any[];
-    for (const ev of events) {
-      (db as any).$client.prepare("DELETE FROM pt_corrective_actions WHERE event_id = ?").run(ev.id);
-    }
-    (db as any).$client.prepare("DELETE FROM pt_events WHERE enrollment_id = ?").run(req.params.id);
-    (db as any).$client.prepare("DELETE FROM pt_enrollments WHERE id = ?").run(req.params.id);
-    res.json({ ok: true });
-  });
-
   // GET /api/veritapt/programs?vendor=API — the vendor program CATALOG that
   // drives the enrollment modal's Program Name dropdown. Returns each program the
   // vendor offers with its PT category and the analytes it includes, so the lab
@@ -34122,6 +34053,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     if (!enrollment_id || !event_date || !analyte?.trim()) {
       return res.status(400).json({ error: "Enrollment, event date, and analyte are required" });
     }
+    const ungraded = ptUngradedColumns(req.body, null, pass_fail || 'pending');
+    if (ungraded.error) return res.status(400).json({ error: ungraded.error, code: ungraded.code });
     // Auto-calculate SDI
     let sdi = null;
     if (your_result != null && peer_mean != null && peer_sd != null && peer_sd !== 0) {
@@ -34138,17 +34071,20 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     try {
       (db as any).$client.prepare("UPDATE pt_events SET lab_id = ? WHERE id = ?").run(resolveLegacyLabId(req) ?? null, result.lastInsertRowid);
     } catch {}
+    if (ungraded.cols.ungraded_reason) (db as any).$client.prepare("UPDATE pt_events SET ungraded_reason = ?, ungraded_reason_text = ? WHERE id = ?").run(ungraded.cols.ungraded_reason, ungraded.cols.ungraded_reason_text, result.lastInsertRowid);
     const created = (db as any).$client.prepare("SELECT * FROM pt_events WHERE id = ?").get(Number(result.lastInsertRowid));
     res.json(created);
   });
 
   // Update event (recalculate SDI if needed)
-  app.put("/api/veritapt/events/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritapt'), (req: any, res) => {
+  app.put("/api/veritapt/events/:id", authMiddleware, requireWriteAccess, ptRecordEdit("pt_events", "Event not found"), (req: any, res) => {
     if (!hasPTAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaPT™ subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const existing = userCanAccessLabRow('pt_events', req.params.id, req);
     if (!existing) return res.status(404).json({ error: "Event not found" });
     const { enrollment_id, event_id, event_name, event_date, analyte, your_result, your_method, peer_mean, peer_sd, peer_n, acceptable_low, acceptable_high, pass_fail, notes, tested_by_employee_id, submission_due_date } = req.body;
+    const ungraded = ptUngradedColumns(req.body, existing, pass_fail ?? existing.pass_fail);
+    if (ungraded.error) return res.status(400).json({ error: ungraded.error, code: ungraded.code });
     const finalResult = your_result !== undefined ? your_result : existing.your_result;
     const finalPeerMean = peer_mean !== undefined ? peer_mean : existing.peer_mean;
     const finalPeerSd = peer_sd !== undefined ? peer_sd : existing.peer_sd;
@@ -34171,18 +34107,20 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       tested_by_employee_id !== undefined ? (tested_by_employee_id ? Number(tested_by_employee_id) : null) : existing.tested_by_employee_id,
       now, req.params.id
     );
+    (db as any).$client.prepare("UPDATE pt_events SET ungraded_reason = ?, ungraded_reason_text = ? WHERE id = ?").run(ungraded.cols.ungraded_reason, ungraded.cols.ungraded_reason_text, req.params.id);
     const updated = (db as any).$client.prepare("SELECT * FROM pt_events WHERE id = ?").get(req.params.id);
     res.json(updated);
   });
 
   // Delete event (cascade: corrective actions)
-  app.delete("/api/veritapt/events/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritapt'), (req: any, res) => {
+  app.delete("/api/veritapt/events/:id", authMiddleware, requireWriteAccess, ptRecordEdit("pt_events", "Event not found"), (req: any, res) => {
     if (!hasPTAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaPT™ subscription required" });
     const dataUserId = req.ownerUserId ?? req.user.userId;
     const existing = userCanAccessLabRow('pt_events', req.params.id, req);
     if (!existing) return res.status(404).json({ error: "Event not found" });
-    (db as any).$client.prepare("DELETE FROM pt_corrective_actions WHERE event_id = ?").run(req.params.id);
-    (db as any).$client.prepare("DELETE FROM pt_events WHERE id = ?").run(req.params.id);
+    if (ptResultsHoldRecords((db as any).$client, [Number(req.params.id)])) return res.status(409).json({ error: "This result has records on file and can't be deleted.", code: "HOLDS_RECORDS" });
+    (db as any).$client.prepare("DELETE FROM pt_corrective_actions WHERE event_id = ? AND lab_id IS ?").run(existing.id, existing.lab_id ?? null);
+    (db as any).$client.prepare("DELETE FROM pt_events WHERE id = ?").run(existing.id);
     res.json({ ok: true });
   });
 
@@ -34211,54 +34149,6 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
       "SELECT * FROM pt_corrective_actions WHERE event_id = ?"
     ).get(req.params.eventId);
     res.json(row || null);
-  });
-
-  // Create corrective action
-  app.post("/api/veritapt/corrective-actions", authMiddleware, requireWriteAccess, requireModuleEdit('veritapt'), (req: any, res) => {
-    if (!hasPTAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaPT™ subscription required" });
-    const { event_id, root_cause, corrective_action, preventive_action, responsible_person, date_initiated, date_completed, status, verified_by, verified_date } = req.body;
-    if (!event_id || !corrective_action?.trim() || !date_initiated) {
-      return res.status(400).json({ error: "Event ID, corrective action, and date initiated are required" });
-    }
-    const now = new Date().toISOString();
-    const dataUserId = req.ownerUserId ?? req.user.userId;
-    const result = (db as any).$client.prepare(
-      "INSERT INTO pt_corrective_actions (event_id, user_id, root_cause, corrective_action, preventive_action, responsible_person, date_initiated, date_completed, status, verified_by, verified_date, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-    ).run(event_id, dataUserId, root_cause || null, corrective_action.trim(), preventive_action || null, responsible_person || null, date_initiated, date_completed || null, status || 'open', verified_by || null, verified_date || null, now, now);
-    // write-path Shape A (resolver unification): tag via resolveLegacyLabId —
-    // the SAME resolver the corrective-actions list read uses (now
-    // active-lab-aware) — so write and read agree in every branch.
-    try {
-      (db as any).$client.prepare("UPDATE pt_corrective_actions SET lab_id = ? WHERE id = ?").run(resolveLegacyLabId(req) ?? null, result.lastInsertRowid);
-    } catch {}
-    const created = (db as any).$client.prepare("SELECT * FROM pt_corrective_actions WHERE id = ?").get(Number(result.lastInsertRowid));
-    res.json(created);
-  });
-
-  // Update corrective action
-  app.put("/api/veritapt/corrective-actions/:id", authMiddleware, requireWriteAccess, requireModuleEdit('veritapt'), (req: any, res) => {
-    if (!hasPTAccess(req.user, req.scope?.lab)) return res.status(403).json({ error: "VeritaPT™ subscription required" });
-    const dataUserId = req.ownerUserId ?? req.user.userId;
-    const existing = userCanAccessLabRow('pt_corrective_actions', req.params.id, req);
-    if (!existing) return res.status(404).json({ error: "Corrective action not found" });
-    const { root_cause, corrective_action, preventive_action, responsible_person, date_initiated, date_completed, status, verified_by, verified_date } = req.body;
-    const now = new Date().toISOString();
-    (db as any).$client.prepare(
-      "UPDATE pt_corrective_actions SET root_cause = ?, corrective_action = ?, preventive_action = ?, responsible_person = ?, date_initiated = ?, date_completed = ?, status = ?, verified_by = ?, verified_date = ?, updated_at = ? WHERE id = ?"
-    ).run(
-      root_cause !== undefined ? root_cause : existing.root_cause,
-      corrective_action ?? existing.corrective_action,
-      preventive_action !== undefined ? preventive_action : existing.preventive_action,
-      responsible_person !== undefined ? responsible_person : existing.responsible_person,
-      date_initiated ?? existing.date_initiated,
-      date_completed !== undefined ? date_completed : existing.date_completed,
-      status ?? existing.status,
-      verified_by !== undefined ? verified_by : existing.verified_by,
-      verified_date !== undefined ? verified_date : existing.verified_date,
-      now, req.params.id
-    );
-    const updated = (db as any).$client.prepare("SELECT * FROM pt_corrective_actions WHERE id = ?").get(req.params.id);
-    res.json(updated);
   });
 
   // Summary stats
@@ -34290,52 +34180,8 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
     // was the one PT read the 2026-06-09 Shape A sweep missed. A null lab
     // (no active lab / legacy account with no membership) yields no rows.
     const labId = resolveLegacyLabId(req);
-    // Only graded events count. Pending events are skipped — they don't
-    // affect state until the PT program sends the result.
-    const events = (db as any).$client.prepare(
-      `SELECT analyte, event_date, pass_fail
-         FROM pt_events
-        WHERE lab_id = ?
-          AND pass_fail IN ('pass', 'fail')
-        ORDER BY analyte ASC, event_date DESC`
-    ).all(labId) as Array<{ analyte: string; event_date: string; pass_fail: string }>;
-
-    // Group by analyte (already sorted within analyte by event_date DESC)
-    const byAnalyte: Record<string, Array<{ event_date: string; pass_fail: string }>> = {};
-    for (const e of events) {
-      if (!byAnalyte[e.analyte]) byAnalyte[e.analyte] = [];
-      byAnalyte[e.analyte].push({ event_date: e.event_date, pass_fail: e.pass_fail });
-    }
-
-    type TrendState = "OK" | "WATCH" | "AT-RISK";
-    type AnalyteTrend = {
-      analyte: string;
-      state: TrendState;
-      last3: Array<{ event_date: string; pass_fail: string }>;
-      fails_in_last_3: number;
-    };
-
-    const trends: AnalyteTrend[] = Object.keys(byAnalyte).map((analyte) => {
-      const last3 = byAnalyte[analyte].slice(0, 3);
-      const failsInLast3 = last3.filter((e) => e.pass_fail === "fail").length;
-      let state: TrendState = "OK";
-      if (failsInLast3 >= 2) state = "AT-RISK";
-      else if (failsInLast3 === 1) state = "WATCH";
-      return { analyte, state, last3, fails_in_last_3: failsInLast3 };
-    });
-
-    // Sort: AT-RISK first, then WATCH, then OK; within each state by analyte name.
-    const stateRank: Record<TrendState, number> = { "AT-RISK": 0, "WATCH": 1, "OK": 2 };
-    trends.sort((a, b) => {
-      const r = stateRank[a.state] - stateRank[b.state];
-      return r !== 0 ? r : a.analyte.localeCompare(b.analyte);
-    });
-
-    const counts = {
-      OK: trends.filter((t) => t.state === "OK").length,
-      WATCH: trends.filter((t) => t.state === "WATCH").length,
-      AT_RISK: trends.filter((t) => t.state === "AT-RISK").length,
-    };
+    // Only graded events count (server/ptTrends.ts; the rule is unchanged, and `history` is every one of them).
+    const { counts, trends } = ptTrendsForLab((db as any).$client, labId);
 
     res.json({
       counts,
@@ -45027,6 +44873,20 @@ It works for 10 minutes. If you did not try to sign in, change your password.`,
   // VeritaDC documents linked to VeritaScan items and findings, and suggested SOPs (B8, server/inspectionLinks.ts).
   // After veritaDcStaffGuard, so the document's own "linked from" read is closed to a limited Staff login.
   registerInspectionLinkRoutes(app, inspectionDeps);
+
+  // VeritaPT events: the list, its export and the result form (B11, server/ptEvents.ts).
+  const ptDeps = { sqlite: () => (db as any).$client, authMiddleware, labScopeMiddleware, requireWriteAccess, requireModuleEdit, hasModuleEditAccess, hasPTAccess, licenseCtxFromReq };
+  registerPtEventRoutes(app, ptDeps);
+  // An ungraded result's own evaluation (B11, server/ptEvaluations.ts).
+  registerPtEvaluationRoutes(app, ptDeps);
+  // The review of a whole event (B11, server/ptReviews.ts).
+  registerPtReviewRoutes(app, ptDeps);
+  // Bias and trend per analyte (B11, server/ptBiasRoutes.ts).
+  registerPtBiasRoutes(app, ptDeps);
+  // The period report: screen, PDF and Excel (B11, server/ptReport.ts).
+  registerPtReportRoutes(app, { ...ptDeps, markLabReportingLocks });
+  // The program's report attached to an event (B11, server/ptDocuments.ts).
+  registerPtDocumentRoutes(app, ptDeps);
 
   // VeritaTrack routes
   const { registerVeritaTrackRoutes } = await import('./veritatrack');

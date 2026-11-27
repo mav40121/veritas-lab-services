@@ -116,7 +116,8 @@ export default function VeritaPTEnrollmentsPage() {
   };
 
   const handleRemove = async (id: number) => {
-    await fetch(`${ptApi}/enrollments/${id}`, { method: "DELETE", headers: authHeaders() });
+    const r = await fetch(`${ptApi}/enrollments/${id}`, { method: "DELETE", headers: authHeaders() });
+    if (!r.ok) { const e = await r.json().catch(() => ({})); toast({ title: "Could not remove the enrollment", description: e.error || `HTTP ${r.status}`, variant: "destructive" }); }
     await load();
   };
 

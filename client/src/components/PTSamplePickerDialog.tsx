@@ -40,20 +40,26 @@ export type PTSample = {
   testedByEmployeeId?: number | null;
   testedByName?: string | null;
   testedByThisPerson?: boolean;
+  statusLabel?: string;
 };
 
 interface Props {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   labId: number | null;
-  programId: number;
+  /** A program's record: events for the program's analytes. */
+  programId?: number;
   // The competency employee the record is for, so events someone else tested aren't offered.
   employeeId?: number | null;
+  /** One method of one person (the person page): events recorded as tested by that person, for the method's analytes. */
+  method?: { employeeId: number; instrumentId: number; personName: string; methodName: string };
   onSelect: (sample: PTSample) => void;
 }
 
-export function PTSamplePickerDialog({ open, onOpenChange, labId, programId, employeeId, onSelect }: Props) {
-  const url = (open && labId) ? `/api/labs/${labId}/veritacomp/programs/${programId}/pt-samples${employeeId ? `?employeeId=${employeeId}` : ""}` : null;
+export function PTSamplePickerDialog({ open, onOpenChange, labId, programId, employeeId, method, onSelect }: Props) {
+  const url = !(open && labId) ? null
+    : method ? `/api/labs/${labId}/competency/employee/${method.employeeId}/test-system/${method.instrumentId}/pt-samples`
+    : `/api/labs/${labId}/veritacomp/programs/${programId}/pt-samples${employeeId ? `?employeeId=${employeeId}` : ""}`;
   const { data: samples = [], isLoading } = useQuery<PTSample[]>({
     queryKey: [url ?? "no-pt-samples"],
     queryFn: async () => {
@@ -66,19 +72,22 @@ export function PTSamplePickerDialog({ open, onOpenChange, labId, programId, emp
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto" data-testid="pt-sample-picker">
         <DialogHeader>
           <DialogTitle>Import PT sample from VeritaPT</DialogTitle>
         </DialogHeader>
         <div className="text-xs text-muted-foreground mb-3">
-          Recent PT events for this lab, filtered to analytes used by this program. {employeeId ? "Events VeritaPT™ records as tested by someone else aren't listed. " : ""}Click Select to fill Element 5 with the event's ID and name. Reg anchor: 42 CFR §493.1451(b)(8)(v) / §493.1413(b)(8)(v).
+          {method
+            ? `VeritaPT™ results recorded as tested by ${method.personName}, for the analytes of ${method.methodName} (last 18 months). It doesn't mark the element or sign anything. `
+            : <>Recent PT events for this lab, filtered to analytes used by this program. {employeeId ? "Events VeritaPT™ records as tested by someone else aren't listed. " : ""}</>}
+          Click Select to fill Element 5 with the event's ID and name. Reg anchor: 42 CFR §493.1451(b)(8)(v) / §493.1413(b)(8)(v).
         </div>
         {isLoading && (
           <div className="text-sm text-muted-foreground py-8 text-center">Loading PT events...</div>
         )}
         {!isLoading && samples.length === 0 && (
           <div className="text-sm text-muted-foreground py-8 text-center">
-            No matching PT events on file in VeritaPT for this program's analytes (last 18 months). Record PT results in VeritaPT first, or fill Element 5 manually.
+            {method ? "No VeritaPT™ result is recorded as tested by this person for this method's analytes (last 18 months). Name who tested it on the result in VeritaPT™ first, or fill Element 5 manually." : "No matching PT events on file in VeritaPT for this program's analytes (last 18 months). Record PT results in VeritaPT first, or fill Element 5 manually."}
           </div>
         )}
         {!isLoading && samples.length > 0 && (
@@ -117,7 +126,7 @@ export function PTSamplePickerDialog({ open, onOpenChange, labId, programId, emp
                       </td>
                       <td className="py-2 pr-3">
                         <Badge className={`text-[10px] border ${passBadge}`}>
-                          {s.passFail === "pass" ? "Pass" : s.passFail === "fail" ? "Fail" : s.passFail}
+                          {s.passFail === "pass" ? "Pass" : s.passFail === "fail" ? "Fail" : s.statusLabel || s.passFail}
                         </Badge>
                       </td>
                       <td className="py-2 pr-3 text-right">
@@ -125,6 +134,7 @@ export function PTSamplePickerDialog({ open, onOpenChange, labId, programId, emp
                           size="sm"
                           variant="outline"
                           className="h-7 px-2 text-xs"
+                          data-testid={`pt-sample-select-${s.id}`}
                           onClick={() => {
                             onSelect(s);
                             onOpenChange(false);

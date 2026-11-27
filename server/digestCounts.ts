@@ -22,7 +22,7 @@ import { competencyDashboardStats } from "./competencyReminders";
 import { nontechnicalDueForLab, readNontechnicalFrequency } from "./competencyNontechnicalDue";
 import { nontechnicalDueCounts } from "@shared/competencyNontechnicalFrequency";
 import { computeCoverageForLab, studiesForMapTest, instLabel } from "./veritacheckCoverage";
-import { ptSummaryForLab } from "./ptSummary";
+import { ptResultCounts, ptSummaryForLab } from "./ptSummary";
 import { policyComplianceHeadline, policyOverdueDocuments } from "./policyComplianceCounts";
 import { readSignTracker } from "./policyReadSign";
 import { certificateExpiryCounts, equipmentDueCounts } from "./labReadiness";
@@ -181,13 +181,13 @@ function build(sqlite: any, labId: number, start: string, end: string, tz: strin
   // event date: unacceptable (graded fail) in the month, acceptable and graded from January 1 through the month's end.
   const pt = section("pt", () => {
     const summary = ptSummaryForLab(sqlite, labId);
-    const count = (sql: string, ...args: unknown[]) => Number((sqlite.prepare(sql).get(labId, ...args) as any)?.n || 0);
-    const yearStart = `${start.slice(0, 4)}-01-01`;
+    // ptResultCounts is the VeritaPT period report's own count (server/ptReport.ts).
+    const year = ptResultCounts(sqlite, labId, `${start.slice(0, 4)}-01-01`, end);
     return {
-      unacceptableInMonth: count("SELECT COUNT(*) AS n FROM pt_events WHERE lab_id = ? AND pass_fail = 'fail' AND substr(event_date, 1, 10) BETWEEN ? AND ?", start, end),
+      unacceptableInMonth: ptResultCounts(sqlite, labId, start, end).unacceptable,
       openCorrectiveActions: Number(summary.openCorrectiveActions || 0),
-      acceptableYearToDate: count("SELECT COUNT(*) AS n FROM pt_events WHERE lab_id = ? AND pass_fail = 'pass' AND substr(event_date, 1, 10) BETWEEN ? AND ?", yearStart, end),
-      gradedYearToDate: count("SELECT COUNT(*) AS n FROM pt_events WHERE lab_id = ? AND pass_fail IN ('pass', 'fail') AND substr(event_date, 1, 10) BETWEEN ? AND ?", yearStart, end),
+      acceptableYearToDate: year.acceptable,
+      gradedYearToDate: year.graded,
     };
   });
 

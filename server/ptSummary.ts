@@ -9,6 +9,21 @@
 // eventsThisYear is every event in the server's calendar year, graded or not; passRate is ALL-TIME graded events, not
 // this year's.
 
+/**
+ * Results by status with an event date from start to end, both inclusive (B11, 2026-11-24). The compliance digest's VeritaPT line
+ * and the period report (server/ptReport.ts) both count with this, so they can't disagree. Graded is 'pass' or 'fail'; 'ungraded'
+ * and everything else ('pending') are beside it, never in it.
+ */
+export function ptResultCounts(sqlite: any, labId: number, start: string, end: string) {
+  const r = sqlite.prepare(
+    `SELECT COUNT(*) AS total, SUM(pass_fail = 'pass') AS acceptable, SUM(pass_fail = 'fail') AS unacceptable, SUM(pass_fail = 'ungraded') AS ungraded
+       FROM pt_events WHERE lab_id = ? AND substr(event_date, 1, 10) BETWEEN ? AND ?`
+  ).get(labId, start, end) as any;
+  const n = (v: unknown) => Number(v || 0);
+  const acceptable = n(r?.acceptable), unacceptable = n(r?.unacceptable), ungraded = n(r?.ungraded);
+  return { acceptable, unacceptable, ungraded, not_graded: n(r?.total) - acceptable - unacceptable - ungraded, graded: acceptable + unacceptable };
+}
+
 export function ptSummaryForLab(sqlite: any, labId: number) {
   const totalEnrollments = (sqlite.prepare(
     "SELECT COUNT(*) as cnt FROM pt_enrollments WHERE lab_id = ? AND status = 'active'"

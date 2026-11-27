@@ -548,6 +548,12 @@ jobs:
         # B8: VeritaDC documents as evidence on a VeritaScan item and linked to a finding, opening the current approved version, flagged
         # when past review or not approved; suggested SOPs with reasons, never linked by themselves; export-all and customer-purge.
         run: npm run test:inspection-links
+      - name: Run VeritaPT events integration test
+        # B11: one list of every event of every enrolled program with its Excel export; recording and editing only in the lab's own
+        # programs with VeritaPT edit; Staff, view-only, another lab and support refused.
+        run: npm run test:pt-events
+      - name: VeritaPT bias and trend math (difference, percent, SDI, the two review flags)
+        run: npm run verify:pt-bias
       - name: Run VeritaResponse legacy cleanup integration test
         # #109: dry run by default; voided-run findings close or flag (the #100 rule); old QC/AAA escalations move to
         # their entry types with due dates kept; idempotent.
