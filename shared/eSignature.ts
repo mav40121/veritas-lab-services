@@ -8,6 +8,8 @@
 // one document or several under one signature (BUG-188, server/policyStaffSign.ts).
 // B5: competency_observation is the observer signing Elements 1 and 4 (one or several at once); competency_method is the
 // evaluator signing one method's competency (shared/competencyObservation.ts).
+// BUG-205: qc_md_cosign is the director's or designee's co-signature on a filed monthly VeritaQC review (the owner override
+// included); finding_signoff is a VeritaResponse finding's sign-off, which closes it.
 
 export const SIGNATURE_PURPOSES = [
   "policy_decision",
@@ -26,6 +28,8 @@ export const SIGNATURE_PURPOSES = [
   "policy_read_sign",
   "competency_observation",
   "competency_method",
+  "qc_md_cosign",
+  "finding_signoff",
 ] as const;
 export type SignaturePurpose = (typeof SIGNATURE_PURPOSES)[number];
 export const isSignaturePurpose = (p: unknown): p is SignaturePurpose =>

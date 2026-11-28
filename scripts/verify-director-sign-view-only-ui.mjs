@@ -4,7 +4,8 @@
 // from the VeritaQC Review & Sign-off screen. LOCAL server on a scratch DB only; made-up lab, people and lots.
 //   1. as the view-only director, the Monthly Review card shows "Co-sign as Medical Director" on a filed review, while File
 //      attestation stays disabled and the co-sign setting isn't offered (their seat edits nothing)
-//   2. the click co-signs: the card reads "Medical Director co-signed by ...", and the stored review names the director
+//   2. the click opens the signing dialog and the director's name and password co-sign (BUG-205): the card reads "Medical
+//      Director co-signed by ...", and the stored review names the director
 //   Screenshots of the card, light and dark, at 1280 and at phone width (390).
 //   3. the same director sees a finding's sign-off button (and it closes the finding) and the monthly record review's Sign review
 // Run: PW_BASE=http://localhost:<port> SCRATCH_DB=<db the server uses> OUT=<dir> node scripts/verify-director-sign-view-only-ui.mjs
@@ -63,6 +64,13 @@ const open = async (scheme, width) => {
   await page.goto(`${BASE}/labs/${lab}/veritaqc-app/review`, { waitUntil: "networkidle" });
   return { ctx, page };
 };
+// BUG-205: the button opens the signing dialog; the director types their name and password and signs there.
+const signInDialog = async (page, prefix, name) => {
+  await page.getByTestId(`${prefix}-name`).waitFor({ timeout: 15000 }).catch(() => {});
+  await page.getByTestId(`${prefix}-name`).fill(name);
+  await page.getByTestId(`${prefix}-password`).fill(PW);
+  await page.getByTestId(`${prefix}-sign`).click();
+};
 // The Monthly Review card itself (the site header is sticky, so a full-page capture would paint it over the middle).
 const card = (page) => page.getByText("Monthly Review & Attestation", { exact: true }).locator("xpath=ancestor::div[contains(@class,'border')][1]");
 const shot = async (page, name) => {
@@ -86,6 +94,7 @@ for (const [scheme, width] of views) {
   await shot(page, `qc-cosign-view-only-${scheme}-${width}`);
   if (scheme === "light" && width === 1280) {
     await button.click();
+    await signInDialog(page, "qc-cosign", "Jordan Ellis, MD");
     const signedLine = page.getByText("Medical Director co-signed by", { exact: false });
     await signedLine.waitFor({ timeout: 20000 }).catch(() => {});
     const text = (await signedLine.count()) ? (await signedLine.innerText()).trim() : "";
@@ -105,6 +114,7 @@ for (const [scheme, width] of views) {
   // The signed state in dark at phone width, after co-signing again.
   const { ctx, page } = await open("dark", 390);
   await page.getByTestId("qc-cosign-button").click();
+  await signInDialog(page, "qc-cosign", "Jordan Ellis, MD");
   await page.getByText("Medical Director co-signed by", { exact: false }).waitFor({ timeout: 20000 }).catch(() => {});
   check("2. dark 390: the co-signed line shows after the click", (await page.getByText("Medical Director co-signed by", { exact: false }).count()) === 1);
   await shot(page, "qc-cosign-view-only-after-dark-390");
@@ -136,7 +146,7 @@ let findingId, equipmentId;
   const fLabel = (await fBtn.count()) ? (await fBtn.innerText()).trim() : "";
   await fBtn.scrollIntoViewIfNeeded().catch(() => {});
   await page.screenshot({ path: `${OUT}/finding-signoff-view-only-light-1280.png` });
-  if (await fBtn.count()) await fBtn.click();
+  if (await fBtn.count()) { await fBtn.click(); await signInDialog(page, "finding-signoff", "Jordan Ellis, MD"); }
   await page.getByText("Signed off by the medical director", { exact: false }).waitFor({ timeout: 20000 }).catch(() => {});
   const d = new Database(process.env.SCRATCH_DB, { readonly: true });
   const f = d.prepare("SELECT status, signoff_role, signed_by FROM findings WHERE id = ?").get(findingId);

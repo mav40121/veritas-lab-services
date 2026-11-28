@@ -88,7 +88,8 @@ async function main() {
     sqlite.prepare("UPDATE labs SET time_zone = 'Pacific/Pago_Pago' WHERE id = ?").run(none.labId);
     const signOff = async (l: any) => {
       const f = await call("POST", `/api/labs/${l.labId}/findings`, { accreditor: "CMS", anchor_date: "2026-10-20", description: "TZ check" }, l.token, l.labId);
-      await call("POST", `/api/labs/${l.labId}/findings/${f.body?.id}/signoff`, {}, l.token, l.labId);
+      // BUG-205: signed with the typed name and the owner's own password.
+      await call("POST", `/api/labs/${l.labId}/findings/${f.body?.id}/signoff`, { signed_by: "IT TZ Owner", password: PW }, l.token, l.labId);
       return (sqlite.prepare("SELECT completion_date FROM findings WHERE id = ?").get(Number(f.body?.id)) as any)?.completion_date;
     };
     const guamDay = await signOff(az), samoaDay = await signOff(none);

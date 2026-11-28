@@ -70,7 +70,8 @@ async function main() {
     // Reset the co-sign so each role's POST is tried on an unsigned review.
     sqlite.prepare("UPDATE qc_period_reviews SET md_signed_at = NULL, md_signed_by_user_id = NULL, md_signed_name = NULL WHERE lab_id = ?").run(labId);
     const p = await fetch(base + `/api/labs/${labId}/qc/period-reviews/md-cosign`, { method: "POST", headers: hdr(u.token),
-      body: JSON.stringify({ control_lot_id: lot, period_year: 2026, period_month: 9 }) });
+      // BUG-205: the co-sign is signed with the typed name and the signer's own password.
+      body: JSON.stringify({ control_lot_id: lot, period_year: 2026, period_month: 9, typed_name: "Made-Up Signer", password: "Testpass123" }) });
     const pb = await j(p);
     const postAs = p.status === 200 ? pb.signed_as : null;
     check(`${n}. ${who}: the page offers ${want ?? "no button"}, and the server agrees`, (g.cosignAs ?? null) === want && postAs === want,

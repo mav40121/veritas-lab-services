@@ -26,10 +26,12 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { SignaturePrompt, useSignatureCredential } from "@/components/SignaturePrompt";
 import { useToast } from "@/hooks/use-toast";
 import {
   Select,
@@ -500,20 +502,33 @@ export default function VeritaResponseFindingPage() {
   // lets the designated medical director or a lab owner/admin sign; the server
   // stamps signed_by/signed_at/signoff_role and closes the finding.
   const [signingOff, setSigningOff] = useState(false);
+  // BUG-205: the sign-off is signed like the VeritaMaintain monthly review: the typed name and the password, or the hospital
+  // sign-in asked for again (components/SignaturePrompt.tsx, server/eSignature.ts).
+  const [signoffOpen, setSignoffOpen] = useState(false);
+  const [signoffTyped, setSignoffTyped] = useState("");
+  const signoffCred = useSignatureCredential("finding_signoff");
+  const signoffLabel = signoffAs === "medical_director" ? "Sign off and close as medical director" : signoffAs === "designee" ? "Sign off and close as designee" : "Sign off and close (owner override)";
+  const signoffCapacity = signoffAs === "medical_director" ? "the medical director" : signoffAs === "designee" ? "the delegated designee" : "the account owner (owner override)";
   const handleSignoff = async () => {
     if (!finding || !id || !activeLabId) return;
+    if (signoffTyped.trim().length < 2) { toast({ variant: "destructive", title: "Type your full name to sign" }); return; }
+    if (!signoffCred.ready) {
+      toast({ variant: "destructive", title: signoffCred.passwordAllowed ? "Enter your password to sign" : `Sign in with ${signoffCred.hospital?.name ?? "your hospital"} to sign` });
+      return;
+    }
     setSigningOff(true);
     try {
       const res = await fetch(`${findingUrl}/signoff`, {
         method: "POST",
         headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ signed_by: (finding.signed_by || "").trim() || null }),
+        body: JSON.stringify({ signed_by: signoffTyped.trim(), ...signoffCred.body("snake") }),
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
         toast({ variant: "destructive", title: "Could not sign off", description: body?.error || `Request failed (${res.status})` });
         return;
       }
+      setSignoffOpen(false); setSignoffTyped(""); signoffCred.reset();
       setFinding(body);
       fetchHistory();
       toast({ title: "Signed off", description: body?.signoff_role === "medical_director" ? "Recorded as the medical director." : body?.signoff_role === "designee" ? "Recorded as the delegated designee." : "Recorded as the account owner (override)." });
@@ -1580,11 +1595,11 @@ export default function VeritaResponseFindingPage() {
                 type="button"
                 size="sm"
                 className="bg-[#006064] hover:bg-[#004d50] text-white"
-                onClick={handleSignoff}
+                onClick={() => setSignoffOpen(true)}
                 disabled={signingOff || !activeLabId}
                 data-testid="finding-signoff-btn"
               >
-                {signingOff ? "Signing..." : signoffAs === "medical_director" ? "Sign off and close as medical director" : signoffAs === "designee" ? "Sign off and close as designee" : "Sign off and close (owner override)"}
+                {signoffLabel}
               </Button>
             )}
             {finding.signoff_role && (
@@ -1597,6 +1612,32 @@ export default function VeritaResponseFindingPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* BUG-205: the sign-off dialog, the VeritaMaintain monthly review's signing dialog with the same fields and words. */}
+      <Dialog open={signoffOpen} onOpenChange={(o) => { if (!signingOff) setSignoffOpen(o); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Sign off and close this finding</DialogTitle>
+            <DialogDescription>You are signing as {signoffCapacity}. Signing closes the finding.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 min-w-0">
+            <SignaturePrompt
+              cred={signoffCred}
+              typedName={signoffTyped}
+              onTypedName={setSignoffTyped}
+              required
+              labelClassName=""
+              labels={{ name: "Type your full name to sign", password: "Password" }}
+              ids={{ name: "finding-signoff-name", password: "finding-signoff-password" }}
+              testIds={{ name: "finding-signoff-name", password: "finding-signoff-password", hospital: "finding-signoff-sign-with-hospital" }}
+            />
+          </div>
+          <div className="flex flex-wrap justify-end gap-2 mt-2">
+            <Button variant="outline" onClick={() => setSignoffOpen(false)} disabled={signingOff}>Cancel</Button>
+            <Button onClick={handleSignoff} disabled={signingOff} data-testid="finding-signoff-sign">{signingOff ? "Signing..." : signoffLabel}</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* BUG-080 (2026-10-27): the finding's history, newest first. */}
       <Card data-testid="finding-history">

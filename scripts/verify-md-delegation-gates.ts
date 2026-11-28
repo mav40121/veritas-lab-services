@@ -123,9 +123,11 @@ async function main() {
   check("finding close: TC designee BLOCKED (no finding_closure + high)", (await signoff("tc")).status === 403);
   check("finding close: plain member BLOCKED", (await signoff("plain")).status === 403);
   check("finding close: non-MD admin BLOCKED (tightened from old owner/admin allowance)", (await signoff("admin")).status === 403);
-  check("finding close: MD allowed (200)", (await signoff("md")).status === 200);
-  check("finding close: TS designee allowed (200)", (await signoff("ts")).status === 200);
-  check("finding close: owner override allowed (200)", (await signoff("owner")).status === 200);
+  // BUG-205: past the gate, the sign-off needs the typed name and the signer's password (tests/integration/cosign-signature-check.test.ts),
+  // so with an empty body the allowed people get 400, not 403.
+  check("finding close: MD passes gate", not403((await signoff("md")).status));
+  check("finding close: TS designee passes gate", not403((await signoff("ts")).status));
+  check("finding close: owner override passes gate", not403((await signoff("owner")).status));
 
   server.close();
   console.log(`\n${fails === 0 ? "ALL PASS" : fails + " FAILED"}`);
